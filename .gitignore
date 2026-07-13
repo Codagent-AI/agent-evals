@@ -1,0 +1,4 @@
+artifacts/
+validator_logs/
+.DS_Store
+node_modules/

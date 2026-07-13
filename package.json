@@ -1,0 +1,10 @@
+{
+  "name": "@codagent/agent-evals",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "check": "bash -n evals/agent-runner/and-scene/run.sh && node --check evals/agent-runner/and-scene/scene-shots.mjs && node --test"
+  }
+}

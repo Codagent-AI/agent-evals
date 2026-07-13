@@ -1,0 +1,20 @@
+cli:
+  default_preference:
+    - codex
+  adapters:
+    codex:
+      allow_tool_use: false
+      thinking_budget: low
+
+entry_points:
+  - path: "."
+    exclude:
+      - .validator
+    checks:
+      - test:
+          command: npm test
+      - syntax:
+          command: bash -n evals/agent-runner/and-scene/run.sh && node --check evals/agent-runner/and-scene/scene-shots.mjs
+    reviews:
+      - all-reviewers:
+          builtin: all-reviewers
