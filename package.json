@@ -5,6 +5,6 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "check": "bash -n evals/agent-runner/and-scene/run.sh && node --check evals/agent-runner/and-scene/scene-shots.mjs && node --test"
+    "check": "bash -n evals/agent-runner/and-scene/run.sh && bash -n evals/agent-runner/and-scene/evidence-repair.sh && node --check evals/agent-runner/and-scene/scene-shots.mjs && node --check evals/agent-runner/and-scene/deterministic-checks.mjs && node --check evals/agent-runner/and-scene/score.mjs && node --test"
   }
 }

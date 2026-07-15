@@ -5,11 +5,10 @@ set -euo pipefail
 REPO="${REPO:-https://github.com/Codagent-AI/and-scene.git}"
 # Pin the fixture to an exact commit, not a moving branch head, so scored runs
 # are reproducible. This is the head of eval/create-and-scene-spec-only as of
-# 2026-07-10; bump it deliberately when the fixture snapshot changes.
-FIXTURE_REF="${FIXTURE_REF:-26d2866e5003f34786fffa528891e6092c87cf8b}"
-# The reference is a tiebreak-only, divergence-tolerant input, so it stays a
-# branch ref rather than a pin.
-REFERENCE_REF="${REFERENCE_REF:-origin/change/create-and-scene}"
+# 2026-07-14; bump it deliberately when the fixture snapshot changes.
+FIXTURE_REF="${FIXTURE_REF:-9e5b2d88c9e93f05f49924eb3a1c3e259f34d0db}"
+# Pin the known-good reference used for calibration and judge tiebreaks.
+REFERENCE_REF="${REFERENCE_REF:-6f0b10e7f1971017b5d6bc0dc014bd4037a2271c}"
 CHANGE_NAME="${CHANGE_NAME:-create-and-scene}"
 DEFAULT_WORKFLOW="/tmp/agent-runner-local/workflows/openspec/implement-change.yaml"
 WORKFLOW="${WORKFLOW:-$DEFAULT_WORKFLOW}"
@@ -23,10 +22,12 @@ AGENT="${AGENT:-claude}"
 MODEL="${MODEL:-}"
 JUDGE_MODEL="${JUDGE_MODEL:-codex-default}"
 JUDGE_COMMAND="${JUDGE_COMMAND:-}"
+CANDIDATE_REF="${CANDIDATE_REF:-}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-}"
 DRY_RUN=0
 PROOF_BROWSER=0
 RUN_AGENT=0
+BENCHMARK=0
 SUITE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 EVALS_ROOT="$(cd -- "$SUITE_DIR/../../.." && pwd)"
 AGENT_RUNNER_DIR="${AGENT_RUNNER_DIR:-$EVALS_ROOT/../agent-runner}"
@@ -63,9 +64,11 @@ Options:
                           run:   artifacts/evals/and-scene/<timestamp>
   --repo URL             and-scene repository URL.
   --fixture-ref REF      Implementation-ready fixture ref.
-                          Default: 26d2866e5003f34786fffa528891e6092c87cf8b
+                          Default: 9e5b2d88c9e93f05f49924eb3a1c3e259f34d0db
   --reference-ref REF    Implemented/reference ref.
-                          Default: origin/change/create-and-scene
+                          Default: 6f0b10e7f1971017b5d6bc0dc014bd4037a2271c
+  --candidate-ref REF    Grade an existing candidate ref without running Agent
+                          Runner. Intended for reference and negative controls.
   --workflow REF         Workflow name or container-visible YAML path for
                           --run-agent. Default:
                           /tmp/agent-runner-local/workflows/openspec/implement-change.yaml
@@ -83,6 +86,8 @@ Options:
   --judge-command CMD    Override the default Codex judge. The command reads the
                           prompt from stdin, writes structured JSON to stdout,
                           and receives every screenshot path as a positional arg.
+  --benchmark            Require explicit implementation and judge models so the
+                          run is comparable and model selection is reproducible.
   --env NAME             Pass through one named environment variable.
                           Repeatable.
   --env-file PATH        Read simple NAME=value or export NAME=value entries
@@ -138,6 +143,10 @@ while (($#)); do
       REFERENCE_REF="${2:?missing value for --reference-ref}"
       shift 2
       ;;
+    --candidate-ref)
+      CANDIDATE_REF="${2:?missing value for --candidate-ref}"
+      shift 2
+      ;;
     --workflow)
       WORKFLOW="${2:?missing value for --workflow}"
       shift 2
@@ -169,6 +178,10 @@ while (($#)); do
     --judge-command)
       JUDGE_COMMAND="${2:?missing value for --judge-command}"
       shift 2
+      ;;
+    --benchmark)
+      BENCHMARK=1
+      shift
       ;;
     --env)
       ENV_ARGS+=(--env "${2:?missing value for --env}")
@@ -229,15 +242,29 @@ if ((PROOF_BROWSER + RUN_AGENT != 1)); then
 fi
 
 if [[ "$RUN_AGENT" == 1 ]]; then
+  if [[ "$BENCHMARK" == 1 ]]; then
+    if [[ "$JUDGE_MODEL" == "codex-default" ]]; then
+      if [[ -n "$CANDIDATE_REF" ]]; then
+        echo "--benchmark requires --judge-model when grading a candidate ref." >&2
+      else
+        echo "--benchmark requires --model and --judge-model." >&2
+      fi
+      exit 2
+    fi
+    if [[ -z "$CANDIDATE_REF" && -z "$MODEL" ]]; then
+      echo "--benchmark requires --model and --judge-model." >&2
+      exit 2
+    fi
+  fi
   case "$AGENT" in
     claude)
-      if [[ "$MOUNT_CLAUDE_AUTH" != 1 ]]; then
+      if [[ -z "$CANDIDATE_REF" && "$MOUNT_CLAUDE_AUTH" != 1 ]]; then
         AUTH_ARGS+=(--mount-claude-auth)
         MOUNT_CLAUDE_AUTH=1
       fi
       ;;
     codex)
-      if [[ "$MOUNT_CODEX_AUTH" != 1 ]]; then
+      if [[ -z "$CANDIDATE_REF" && "$MOUNT_CODEX_AUTH" != 1 ]]; then
         AUTH_ARGS+=(--mount-codex-auth)
         MOUNT_CODEX_AUTH=1
       fi
@@ -253,13 +280,13 @@ if [[ "$RUN_AGENT" == 1 ]]; then
     MOUNT_CODEX_AUTH=1
   fi
 
-  if [[ "${#WORKFLOW_ARGS[@]}" -eq 0 && "$WORKFLOW" == "$DEFAULT_WORKFLOW" ]]; then
+  if [[ -z "$CANDIDATE_REF" && "${#WORKFLOW_ARGS[@]}" -eq 0 && "$WORKFLOW" == "$DEFAULT_WORKFLOW" ]]; then
     WORKFLOW_ARGS+=("change_name=$CHANGE_NAME")
   fi
   if [[ -z "$UNTIL" && "$WORKFLOW" == "$DEFAULT_WORKFLOW" ]]; then
     UNTIL="$DEFAULT_UNTIL"
   fi
-  for workflow_arg in "${WORKFLOW_ARGS[@]}"; do
+  for workflow_arg in "${WORKFLOW_ARGS[@]+"${WORKFLOW_ARGS[@]}"}"; do
     if [[ "$workflow_arg" != *=* || "$workflow_arg" == =* ]]; then
       echo "Invalid --workflow-arg $workflow_arg; expected NAME=VALUE." >&2
       exit 2
@@ -280,6 +307,7 @@ fi
 REPO_Q="$(shell_quote "$REPO")"
 FIXTURE_REF_Q="$(shell_quote "$FIXTURE_REF")"
 REFERENCE_REF_Q="$(shell_quote "$REFERENCE_REF")"
+CANDIDATE_REF_Q="$(shell_quote "$CANDIDATE_REF")"
 CHANGE_NAME_Q="$(shell_quote "$CHANGE_NAME")"
 WORKFLOW_Q="$(shell_quote "$WORKFLOW")"
 UNTIL_Q="$(shell_quote "$UNTIL")"
@@ -287,6 +315,7 @@ AGENT_Q="$(shell_quote "$AGENT")"
 MODEL_Q="$(shell_quote "$MODEL")"
 JUDGE_MODEL_Q="$(shell_quote "$JUDGE_MODEL")"
 JUDGE_COMMAND_Q="$(shell_quote "$JUDGE_COMMAND")"
+BENCHMARK_Q="$(shell_quote "$BENCHMARK")"
 WORKFLOW_ARGS_Q=""
 for workflow_arg in "${WORKFLOW_ARGS[@]+"${WORKFLOW_ARGS[@]}"}"; do
   WORKFLOW_ARGS_Q+="$(shell_quote "$workflow_arg") "
@@ -408,6 +437,7 @@ fi
 REPO=$REPO_Q
 FIXTURE_REF=$FIXTURE_REF_Q
 REFERENCE_REF=$REFERENCE_REF_Q
+CANDIDATE_REF=$CANDIDATE_REF_Q
 CHANGE_NAME=$CHANGE_NAME_Q
 WORKFLOW_PATH=$WORKFLOW_Q
 UNTIL=$UNTIL_Q
@@ -415,6 +445,7 @@ EVAL_AGENT=$AGENT_Q
 EVAL_MODEL=$MODEL_Q
 JUDGE_MODEL=$JUDGE_MODEL_Q
 JUDGE_COMMAND=$JUDGE_COMMAND_Q
+BENCHMARK_MODE=$BENCHMARK_Q
 WORKFLOW_ARGS=($WORKFLOW_ARGS_Q)
 FIXTURE_COMMIT=""
 REFERENCE_COMMIT=""
@@ -426,10 +457,18 @@ NPM_CI_EXIT_CODE=0
 BUILD_EXIT_CODE=0
 VERIFY_EXIT_CODE=0
 SCREENSHOT_CAPTURE_EXIT_CODE=0
-JUDGE_EXIT_CODE=0
+DETERMINISTIC_EXIT_CODE=0
+JUDGE_EXECUTION_EXIT_CODE=0
+SCORER_EXIT_CODE=0
+JUDGE_COMPLETED=false
+CANDIDATE_PASS=false
+IMPLEMENTATION_SKIPPED=false
 TIER2_STATUS="pending"
 EVIDENCE_REPAIR_ATTEMPTED=false
 EVIDENCE_REPAIR_PENALTY=0
+CAPTURE_SCRIPT=/eval-input/scene-shots.mjs
+
+source /eval-input/evidence-repair.sh
 
 configure_github_https_auth() {
   local token="\${GITHUB_TOKEN:-\${GH_TOKEN:-}}"
@@ -511,9 +550,13 @@ capture_run_state() {
 # never lands in the scored diff.
 capture_screenshots() {
   cd /workspace/runs/fixture
-  local script_src="/eval-input/scene-shots.mjs"
+  local script_src="\$CAPTURE_SCRIPT"
+  local log_name=screenshots
+  if [ "\$EVIDENCE_REPAIR_ATTEMPTED" = true ]; then
+    log_name=screenshots-repaired
+  fi
   if [ ! -f "\$script_src" ]; then
-    printf '%s\\n' "scene-shots helper not found at \$script_src" > /artifacts/logs/screenshots.log
+    printf '%s\\n' "scene-shots helper not found at \$script_src" > "/artifacts/logs/\${log_name}.log"
     return 1
   fi
   cp "\$script_src" ./.eval-scene-shots.mjs
@@ -521,7 +564,7 @@ capture_screenshots() {
   SHOTS_OUT=/artifacts/screenshots \\
     SHOTS_MANIFEST=/artifacts/screenshot-manifest.json \\
     node --experimental-strip-types ./.eval-scene-shots.mjs \\
-    > /artifacts/logs/screenshots.log 2>&1
+    > "/artifacts/logs/\${log_name}.log" 2>&1
   local capture_exit=\$?
   set -e
   rm -f ./.eval-scene-shots.mjs
@@ -531,8 +574,6 @@ capture_screenshots() {
 # Give the judge model one bounded chance to repair evidence collection. It may
 # edit only a temporary helper copy; the evaluated fixture remains untouched.
 repair_screenshot_capture() {
-  EVIDENCE_REPAIR_ATTEMPTED=true
-  EVIDENCE_REPAIR_PENALTY=5
   local repair_dir=/tmp/evidence-repair
   rm -rf "\$repair_dir"
   mkdir -p "\$repair_dir"
@@ -579,19 +620,9 @@ PROMPT
   if [ "\$repair_exit" -ne 0 ] || ! node --check "\$repair_dir/scene-shots.mjs" >/dev/null 2>&1; then
     return 1
   fi
-  cd /workspace/runs/fixture
-  cp "\$repair_dir/scene-shots.mjs" ./.eval-scene-shots.mjs
   rm -rf /artifacts/screenshots
   mkdir -p /artifacts/screenshots
-  set +e
-  SHOTS_OUT=/artifacts/screenshots \\
-    SHOTS_MANIFEST=/artifacts/screenshot-manifest.json \\
-    node --experimental-strip-types ./.eval-scene-shots.mjs \\
-    > /artifacts/logs/screenshots-repaired.log 2>&1
-  local capture_exit=\$?
-  set -e
-  rm -f ./.eval-scene-shots.mjs
-  return "\$capture_exit"
+  CAPTURE_SCRIPT="\$repair_dir/scene-shots.mjs"
 }
 
 write_diff() {
@@ -638,25 +669,22 @@ write_judge_schema() {
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["scenarios", "overall_score", "pass", "rationale"],
+  "required": ["scenarios"],
   "properties": {
     "scenarios": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "critical", "verdict", "note"],
+        "required": ["id", "verdict", "note", "evidence"],
         "properties": {
           "id": {"type": "string"},
-          "critical": {"type": "boolean"},
           "verdict": {"type": "string", "enum": ["pass", "fail"]},
-          "note": {"type": "string"}
+          "note": {"type": "string"},
+          "evidence": {"type": "array", "items": {"type": "string"}}
         }
       }
-    },
-    "overall_score": {"type": "integer", "minimum": 0, "maximum": 100},
-    "pass": {"type": "boolean"},
-    "rationale": {"type": "string"}
+    }
   }
 }
 JSON
@@ -675,11 +703,17 @@ write_judge_prompt() {
   {
     printf '%s\n\n' '# And Scene Tier-2 Eval Judge'
     printf '%s\n' 'Grade the produced artifact against the OpenSpec scenarios first. Use the reference implementation only as a tiebreak for scenarios you cannot confidently call from the produced artifact alone. Do not penalize valid divergence from the reference.'
-    printf '%s\n\n' 'Return JSON matching /artifacts/tier2-schema.json. Mark critical=true for verification/render scenarios and core skill-behavior scenarios. pass must be true only when every critical scenario passes.'
+    printf '%s\n' 'The suite owns scenario IDs, evaluator assignment, criticality, weights, scoring, and pass/fail. Return exactly one verdict for every rubric scenario whose evaluator is judge; omit deterministic scenarios and do not invent, rename, or duplicate IDs.'
+    printf '%s\n\n' 'Return JSON matching /artifacts/tier2-schema.json. Cite concise source paths, log paths, or screenshot paths in each evidence array.'
     printf 'Fixture commit: %s\n' "\$FIXTURE_COMMIT"
     printf 'Produced commit: %s\n' "\$FINAL_COMMIT"
     printf 'Reference commit: %s\n' "\$REFERENCE_COMMIT"
     printf 'Tier-1 result path: /artifacts/tier1-result.json\n\n'
+
+    printf '%s\n' '## Suite-Owned Rubric'
+    append_file_block /eval-input/rubric.json
+    printf '%s\n' '## Deterministic Scenario Results'
+    append_file_block /artifacts/tier2-deterministic-result.json
 
     printf '%s\n' '## Spec Files'
     while IFS= read -r file; do
@@ -760,7 +794,7 @@ run_tier2_judge() {
   done < <(find /artifacts/screenshots -type f -print0 | sort -z)
   if [ "\${#screenshots[@]}" -eq 0 ]; then
     printf '%s\\n' 'Tier-2 judging requires at least one render screenshot.' > /artifacts/logs/tier2-judge.log
-    JUDGE_EXIT_CODE=2
+    JUDGE_EXECUTION_EXIT_CODE=2
     TIER2_STATUS="failed"
     return 0
   fi
@@ -769,9 +803,9 @@ run_tier2_judge() {
   if [ -n "\$JUDGE_COMMAND" ]; then
     bash -lc "\$JUDGE_COMMAND" judge-command "\${screenshots[@]}" \\
       < /artifacts/tier2-judge-prompt.md \\
-      > /artifacts/tier2-result.json \\
+      > /artifacts/tier2-judge-raw.json \\
       2> /artifacts/logs/tier2-judge.log
-    JUDGE_EXIT_CODE=\$?
+    JUDGE_EXECUTION_EXIT_CODE=\$?
   else
     judge_args=(
       exec
@@ -780,7 +814,7 @@ run_tier2_judge() {
       --skip-git-repo-check
       --ephemeral
       --output-schema /artifacts/tier2-schema.json
-      --output-last-message /artifacts/tier2-result.json
+      --output-last-message /artifacts/tier2-judge-raw.json
     )
     if [ "\$JUDGE_MODEL" != "codex-default" ]; then
       judge_args+=(--model "\$JUDGE_MODEL")
@@ -792,16 +826,31 @@ run_tier2_judge() {
     codex "\${judge_args[@]}" \\
       < /artifacts/tier2-judge-prompt.md \\
       > /artifacts/logs/tier2-judge.log 2>&1
-    JUDGE_EXIT_CODE=\$?
+    JUDGE_EXECUTION_EXIT_CODE=\$?
   fi
   set -e
-  if [ "\$JUDGE_EXIT_CODE" -eq 0 ] && jq -e '.pass == true' /artifacts/tier2-result.json >/dev/null 2>&1; then
-    TIER2_STATUS="completed"
-  else
-    if [ "\$JUDGE_EXIT_CODE" -eq 0 ]; then
-      JUDGE_EXIT_CODE=1
-    fi
+  if [ "\$JUDGE_EXECUTION_EXIT_CODE" -ne 0 ]; then
     TIER2_STATUS="failed"
+    return 0
+  fi
+
+  set +e
+  node /eval-input/score.mjs \
+    --rubric /eval-input/rubric.json \
+    --deterministic /artifacts/tier2-deterministic-result.json \
+    --judge /artifacts/tier2-judge-raw.json \
+    --output /artifacts/tier2-result.json \
+    > /artifacts/logs/tier2-score.log 2>&1
+  SCORER_EXIT_CODE=\$?
+  set -e
+  if [ "\$SCORER_EXIT_CODE" -ne 0 ]; then
+    TIER2_STATUS="failed"
+    return 0
+  fi
+  JUDGE_COMPLETED=true
+  TIER2_STATUS="completed"
+  if jq -e '.pass == true' /artifacts/tier2-result.json >/dev/null 2>&1; then
+    CANDIDATE_PASS=true
   fi
   return 0
 }
@@ -815,6 +864,7 @@ write_metadata() {
     --arg repo "\$REPO" \\
     --arg fixture_ref "\$FIXTURE_REF" \\
     --arg reference_ref "\$REFERENCE_REF" \\
+    --arg candidate_ref "\$CANDIDATE_REF" \\
     --arg change_name "\$CHANGE_NAME" \\
     --arg workflow "\$WORKFLOW_PATH" \\
     --arg until "\$UNTIL" \\
@@ -822,7 +872,13 @@ write_metadata() {
     --arg agent "\$EVAL_AGENT" \\
     --arg model "\$EVAL_MODEL" \\
     --arg judge_model "\$JUDGE_MODEL" \\
+    --arg implementation_model_selection "\$(if [ "\$IMPLEMENTATION_SKIPPED" = true ]; then printf '%s' skipped; elif [ -n "\$EVAL_MODEL" ]; then printf '%s' explicit; else printf '%s' cli-default; fi)" \\
+    --arg judge_model_selection "\$(if [ "\$JUDGE_MODEL" = codex-default ]; then printf '%s' cli-default; else printf '%s' explicit; fi)" \\
+    --argjson benchmark_mode "\$BENCHMARK_MODE" \\
     --arg judge_status "\$TIER2_STATUS" \\
+    --arg judge_completed "\$JUDGE_COMPLETED" \\
+    --arg candidate_pass "\$CANDIDATE_PASS" \\
+    --arg implementation_skipped "\$IMPLEMENTATION_SKIPPED" \\
     --arg evidence_repair_attempted "\$EVIDENCE_REPAIR_ATTEMPTED" \\
     --arg started_at "\${STARTED_AT}" \\
     --arg ended_at "\$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \\
@@ -837,27 +893,43 @@ write_metadata() {
     --arg run_session_dir "\$RUN_SESSION_DIR" \\
     --arg node_version "\$(node --version 2>/dev/null || true)" \\
     --arg npm_version "\$(npm --version 2>/dev/null || true)" \\
+    --arg agent_runner_version "\$(agent-runner --version 2>/dev/null || true)" \\
+    --arg implementation_cli_version "\$("\$EVAL_AGENT" --version 2>/dev/null | head -n 1 || true)" \\
+    --arg judge_cli_version "\$(codex --version 2>/dev/null | head -n 1 || true)" \\
     --arg playwright_browsers_path "\${PLAYWRIGHT_BROWSERS_PATH:-}" \\
     --argjson agent_runner_exit_code "\$AGENT_RUNNER_EXIT_CODE" \\
     --argjson npm_ci_exit_code "\$NPM_CI_EXIT_CODE" \\
     --argjson build_exit_code "\$BUILD_EXIT_CODE" \\
     --argjson verify_exit_code "\$VERIFY_EXIT_CODE" \\
     --argjson screenshot_capture_exit_code "\$SCREENSHOT_CAPTURE_EXIT_CODE" \\
-    --argjson judge_exit_code "\$JUDGE_EXIT_CODE" \\
+    --argjson deterministic_exit_code "\$DETERMINISTIC_EXIT_CODE" \\
+    --argjson judge_execution_exit_code "\$JUDGE_EXECUTION_EXIT_CODE" \\
+    --argjson scorer_exit_code "\$SCORER_EXIT_CODE" \\
     --argjson evidence_repair_penalty "\$EVIDENCE_REPAIR_PENALTY" \\
     --argjson exit_code "\${EXIT_CODE:-0}" \\
     '{
       repo: \$repo,
       fixture_ref: \$fixture_ref,
       reference_ref: \$reference_ref,
+      candidate_ref: \$candidate_ref,
       change_name: \$change_name,
       workflow: \$workflow,
       until: \$until,
       workflow_args: \$workflow_args,
       agent: \$agent,
       model: \$model,
+      implementation_model_selection: \$implementation_model_selection,
       judge_model: \$judge_model,
+      judge_model_selection: \$judge_model_selection,
+      benchmark_mode: (\$benchmark_mode == 1),
+      implementation_skipped: (\$implementation_skipped == "true"),
       judge_status: \$judge_status,
+      judge: {
+        execution_exit_code: \$judge_execution_exit_code,
+        scorer_exit_code: \$scorer_exit_code,
+        completed: (\$judge_completed == "true"),
+        candidate_pass: (\$candidate_pass == "true")
+      },
       evidence_repair: {
         attempted: (\$evidence_repair_attempted == "true"),
         penalty: \$evidence_repair_penalty
@@ -875,7 +947,10 @@ write_metadata() {
       run_session_dir: \$run_session_dir,
       cli_versions: {
         node: \$node_version,
-        npm: \$npm_version
+        npm: \$npm_version,
+        agent_runner: \$agent_runner_version,
+        implementation_agent: \$implementation_cli_version,
+        judge_codex: \$judge_cli_version
       },
       playwright_browsers_path: \$playwright_browsers_path,
       exit_codes: {
@@ -884,7 +959,9 @@ write_metadata() {
         build: \$build_exit_code,
         verify: \$verify_exit_code,
         screenshot_capture: \$screenshot_capture_exit_code,
-        judge: \$judge_exit_code,
+        deterministic: \$deterministic_exit_code,
+        judge_execution: \$judge_execution_exit_code,
+        scorer: \$scorer_exit_code,
         harness: \$exit_code
       }
     }' > /artifacts/metadata.json
@@ -981,21 +1058,26 @@ cd /workspace/runs/fixture
 git fetch origin 2>&1 | tee -a /artifacts/logs/fixture-clone.log
 git checkout "\$FIXTURE_REF" 2>&1 | tee -a /artifacts/logs/fixture-clone.log
 FIXTURE_COMMIT="\$(git rev-parse HEAD)"
-write_eval_config
-write_user_settings
+if [ -n "\$CANDIDATE_REF" ]; then
+  git checkout "\$CANDIDATE_REF" 2>&1 | tee -a /artifacts/logs/fixture-clone.log
+  IMPLEMENTATION_SKIPPED=true
+else
+  write_eval_config
+  write_user_settings
 
-set +e
-RUN_ARGS=(run "\$WORKFLOW_PATH")
-if [ -n "\$UNTIL" ]; then
-  RUN_ARGS+=(--until "\$UNTIL")
+  set +e
+  RUN_ARGS=(run "\$WORKFLOW_PATH")
+  if [ -n "\$UNTIL" ]; then
+    RUN_ARGS+=(--until "\$UNTIL")
+  fi
+  if [ "\${#WORKFLOW_ARGS[@]}" -gt 0 ]; then
+    RUN_ARGS+=("\${WORKFLOW_ARGS[@]}")
+  fi
+  run_logged agent-runner env AGENT_RUNNER_NO_TUI=1 agent-runner "\${RUN_ARGS[@]}"
+  AGENT_RUNNER_EXIT_CODE=\$?
+  set -e
+  capture_run_state
 fi
-if [ "\${#WORKFLOW_ARGS[@]}" -gt 0 ]; then
-  RUN_ARGS+=("\${WORKFLOW_ARGS[@]}")
-fi
-run_logged agent-runner env AGENT_RUNNER_NO_TUI=1 agent-runner "\${RUN_ARGS[@]}"
-AGENT_RUNNER_EXIT_CODE=\$?
-set -e
-capture_run_state
 
 set +e
 run_logged fixture-npm-ci npm ci
@@ -1005,21 +1087,22 @@ BUILD_EXIT_CODE=\$?
 run_logged fixture-verify npm run verify
 VERIFY_EXIT_CODE=\$?
 set -e
-set +e
-capture_screenshots
-SCREENSHOT_CAPTURE_EXIT_CODE=\$?
-set -e
-if [ "\$SCREENSHOT_CAPTURE_EXIT_CODE" -ne 0 ]; then
-  if repair_screenshot_capture && jq -e '.complete == true' /artifacts/screenshot-manifest.json >/dev/null 2>&1; then
-    SCREENSHOT_CAPTURE_EXIT_CODE=0
-  else
-    SCREENSHOT_CAPTURE_EXIT_CODE=1
-  fi
-elif ! jq -e '.complete == true' /artifacts/screenshot-manifest.json >/dev/null 2>&1; then
+if ensure_complete_evidence capture_screenshots repair_screenshot_capture /artifacts/screenshot-manifest.json; then
+  SCREENSHOT_CAPTURE_EXIT_CODE=0
+else
   SCREENSHOT_CAPTURE_EXIT_CODE=1
 fi
 write_diff
 write_tier1_result
+
+set +e
+node /eval-input/deterministic-checks.mjs \
+  --root /workspace/runs/fixture \
+  --screenshot-manifest /artifacts/screenshot-manifest.json \
+  --output /artifacts/tier2-deterministic-result.json \
+  > /artifacts/logs/tier2-deterministic.log 2>&1
+DETERMINISTIC_EXIT_CODE=\$?
+set -e
 
 git clone "\$REPO" /workspace/runs/reference 2>&1 | tee /artifacts/logs/reference-clone.log
 cd /workspace/runs/reference
@@ -1029,7 +1112,7 @@ REFERENCE_COMMIT="\$(git rev-parse HEAD)"
 
 run_tier2_judge
 
-if [ "\$AGENT_RUNNER_EXIT_CODE" -ne 0 ] || [ "\$NPM_CI_EXIT_CODE" -ne 0 ] || [ "\$BUILD_EXIT_CODE" -ne 0 ] || [ "\$VERIFY_EXIT_CODE" -ne 0 ] || [ "\$SCREENSHOT_CAPTURE_EXIT_CODE" -ne 0 ] || [ "\$JUDGE_EXIT_CODE" -ne 0 ]; then
+if [ "\$AGENT_RUNNER_EXIT_CODE" -ne 0 ] || [ "\$NPM_CI_EXIT_CODE" -ne 0 ] || [ "\$BUILD_EXIT_CODE" -ne 0 ] || [ "\$VERIFY_EXIT_CODE" -ne 0 ] || [ "\$SCREENSHOT_CAPTURE_EXIT_CODE" -ne 0 ] || [ "\$DETERMINISTIC_EXIT_CODE" -ne 0 ] || [ "\$JUDGE_EXECUTION_EXIT_CODE" -ne 0 ] || [ "\$SCORER_EXIT_CODE" -ne 0 ] || [ "\$CANDIDATE_PASS" != true ]; then
   exit 1
 fi
 AGENT

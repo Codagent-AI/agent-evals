@@ -1,0 +1,413 @@
+{
+  "version": 1,
+  "scenarios": [
+    {
+      "id": "scene-step-narration-and-identity",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "scene-order-derived-numbering",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "scene-typed-payload-boundary",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "entity-persisting-morph",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "entity-newcomer-after-settle",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "entity-departing-exit",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "grouped-scene-updates-in-place",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "grouped-continuing-entities-not-newcomers",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "grouped-intentional-composition",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "style-kit-hooks",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "style-unstyled-kit-output",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "style-framework-optional",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "style-coordinate-heavy-diagrams",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "attribution-default-link",
+      "evaluator": "deterministic",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "attribution-styling-hook",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "attribution-top-left-opt-in",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "mode-present-title-focused",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "mode-browse-reading-focused",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "mode-toggle-preserves-position",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "navigation-keyboard",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "navigation-touch-swipe",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "navigation-direct-jump",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "navigation-active-state",
+      "evaluator": "deterministic",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "navigation-controls-keep-keys",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "navigation-clamp-start",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "navigation-clamp-end",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "canvas-uniform-scaling",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "canvas-default-dimensions",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "skill-missing-details-one-at-a-time",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "skill-partial-detail-proceeds",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "skill-complete-prompt-proceeds",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "skill-optional-ascii-mockup",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "skill-empty-directory-scaffold",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "skill-already-scaffolded",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "skill-partial-scaffold",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "skill-scaffold-style-neutral",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "skill-template-path-resolution",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "skill-monorepo-target",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "skill-standalone-target",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "skill-nonempty-confirmation",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "skill-new-presentation-routed",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "skill-presentation-owns-style",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "skill-existing-presentations-preserved",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "skill-modify-ambiguous-target",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "skill-scoped-modification",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "skill-checks-run-before-done",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "skill-failures-fixed-before-success",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "quality-builds-clean",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "quality-renders-without-errors",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "quality-captions-and-navigation",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "quality-visual-composition-inspected",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "quality-project-local-screenshot-helper",
+      "evaluator": "deterministic",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "quality-visual-warnings-reviewed",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "quality-active-chrome-and-attribution-local",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "verification-build-whole-app",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "verification-sample-outline",
+      "evaluator": "deterministic",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "verification-missing-sample-fails",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "verification-every-produced-step-renders",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "verification-ipv4-loopback",
+      "evaluator": "deterministic",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "verification-console-page-error-fails",
+      "evaluator": "judge",
+      "critical": true,
+      "weight": 2
+    },
+    {
+      "id": "verification-step-error-fails",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "verification-clear-outcome",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "visual-helper-captures-steps",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "visual-helper-settled-screenshots",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "visual-helper-overlap-warning",
+      "evaluator": "deterministic",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "visual-helper-allow-overlap",
+      "evaluator": "judge",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "visual-helper-active-state-warning",
+      "evaluator": "deterministic",
+      "critical": false,
+      "weight": 1
+    },
+    {
+      "id": "visual-helper-attribution-warning",
+      "evaluator": "deterministic",
+      "critical": false,
+      "weight": 1
+    }
+  ]
+}
