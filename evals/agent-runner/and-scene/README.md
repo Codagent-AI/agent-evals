@@ -60,7 +60,7 @@ calibrate against the reference branch:
 ```bash
 evals/agent-runner/and-scene/run.sh \
   --run-agent \
-  --candidate-ref 6f0b10e7f1971017b5d6bc0dc014bd4037a2271c \
+  --candidate-ref 171c7def1e12aca2a5f605a5e5feafb20d4e4d19 \
   --benchmark \
   --judge-model <judge-model>
 ```
@@ -97,9 +97,9 @@ Planning artifacts and tasks are already present, so the score does not measure
 proposal, specification, or task generation.
 
 The external fixture is pinned to commit
-`9e5b2d88c9e93f05f49924eb3a1c3e259f34d0db` in
+`c11595651dfb3941e39c703c483ed1a92d152a37` in
 `https://github.com/Codagent-AI/and-scene.git`. The implemented reference commit
-`6f0b10e7f1971017b5d6bc0dc014bd4037a2271c` is available to the judge only as a
+`171c7def1e12aca2a5f605a5e5feafb20d4e4d19` is available to the judge only as a
 tiebreak when the produced artifact and spec do not provide enough evidence.
 It is not a similarity target.
 

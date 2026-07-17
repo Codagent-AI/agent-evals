@@ -5,10 +5,10 @@ set -euo pipefail
 REPO="${REPO:-https://github.com/Codagent-AI/and-scene.git}"
 # Pin the fixture to an exact commit, not a moving branch head, so scored runs
 # are reproducible. This is the head of eval/create-and-scene-spec-only as of
-# 2026-07-14; bump it deliberately when the fixture snapshot changes.
-FIXTURE_REF="${FIXTURE_REF:-9e5b2d88c9e93f05f49924eb3a1c3e259f34d0db}"
+# 2026-07-17; bump it deliberately when the fixture snapshot changes.
+FIXTURE_REF="${FIXTURE_REF:-c11595651dfb3941e39c703c483ed1a92d152a37}"
 # Pin the known-good reference used for calibration and judge tiebreaks.
-REFERENCE_REF="${REFERENCE_REF:-6f0b10e7f1971017b5d6bc0dc014bd4037a2271c}"
+REFERENCE_REF="${REFERENCE_REF:-171c7def1e12aca2a5f605a5e5feafb20d4e4d19}"
 CHANGE_NAME="${CHANGE_NAME:-create-and-scene}"
 DEFAULT_WORKFLOW="/tmp/agent-runner-local/workflows/openspec/implement-change.yaml"
 WORKFLOW="${WORKFLOW:-$DEFAULT_WORKFLOW}"
@@ -64,9 +64,9 @@ Options:
                           run:   artifacts/evals/and-scene/<timestamp>
   --repo URL             and-scene repository URL.
   --fixture-ref REF      Implementation-ready fixture ref.
-                          Default: 9e5b2d88c9e93f05f49924eb3a1c3e259f34d0db
+                          Default: c11595651dfb3941e39c703c483ed1a92d152a37
   --reference-ref REF    Implemented/reference ref.
-                          Default: 6f0b10e7f1971017b5d6bc0dc014bd4037a2271c
+                          Default: 171c7def1e12aca2a5f605a5e5feafb20d4e4d19
   --candidate-ref REF    Grade an existing candidate ref without running Agent
                           Runner. Intended for reference and negative controls.
   --workflow REF         Workflow name or container-visible YAML path for

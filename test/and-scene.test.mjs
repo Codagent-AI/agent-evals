@@ -9,8 +9,8 @@ import { spawnSync } from 'node:child_process'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const runScript = join(root, 'evals/agent-runner/and-scene/run.sh')
 const shotsScript = join(root, 'evals/agent-runner/and-scene/scene-shots.mjs')
-const fixtureSha = '9e5b2d88c9e93f05f49924eb3a1c3e259f34d0db'
-const referenceSha = '6f0b10e7f1971017b5d6bc0dc014bd4037a2271c'
+const fixtureSha = 'c11595651dfb3941e39c703c483ed1a92d152a37'
+const referenceSha = '171c7def1e12aca2a5f605a5e5feafb20d4e4d19'
 
 async function setup() {
   const dir = await mkdtemp(join(tmpdir(), 'agent-evals-'))
