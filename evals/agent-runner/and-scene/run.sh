@@ -560,6 +560,7 @@ capture_screenshots() {
     return 1
   fi
   cp "\$script_src" ./.eval-scene-shots.mjs
+  cp /eval-input/capture-policy.mjs ./.eval-capture-policy.mjs
   set +e
   SHOTS_OUT=/artifacts/screenshots \\
     SHOTS_MANIFEST=/artifacts/screenshot-manifest.json \\
@@ -567,7 +568,7 @@ capture_screenshots() {
     > "/artifacts/logs/\${log_name}.log" 2>&1
   local capture_exit=\$?
   set -e
-  rm -f ./.eval-scene-shots.mjs
+  rm -f ./.eval-scene-shots.mjs ./.eval-capture-policy.mjs
   return "\$capture_exit"
 }
 
@@ -578,6 +579,7 @@ repair_screenshot_capture() {
   rm -rf "\$repair_dir"
   mkdir -p "\$repair_dir"
   cp /eval-input/scene-shots.mjs "\$repair_dir/scene-shots.mjs"
+  cp /eval-input/capture-policy.mjs "\$repair_dir/.eval-capture-policy.mjs"
   # The raw log, slugs, and error messages are fixture-controlled. Reduce the
   # manifest to fixed numeric/boolean fields before it enters an agent prompt.
   jq '{
@@ -759,7 +761,10 @@ write_judge_prompt() {
     printf '%s\\n' 'Every path below is attached to the multimodal judge request.'
     printf 'Evidence repair attempted: %s; score penalty: %s\\n' "\$EVIDENCE_REPAIR_ATTEMPTED" "\$EVIDENCE_REPAIR_PENALTY"
     if [ -f /artifacts/screenshot-manifest.json ]; then
-      append_file_block /artifacts/screenshot-manifest.json
+      node /eval-input/judge-manifest.mjs \
+        --input /artifacts/screenshot-manifest.json \
+        --output /artifacts/screenshot-manifest-judge.json
+      append_file_block /artifacts/screenshot-manifest-judge.json
     fi
     find /artifacts/screenshots -type f | sort || true
 

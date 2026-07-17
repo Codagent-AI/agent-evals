@@ -162,6 +162,9 @@ Start with:
 - `tier2-result.json` for the validated, merged, suite-scored result
 - `rubric.json` in the suite for evaluator assignment, criticality, and weights
 - `screenshot-manifest.json` for expected and captured visual coverage
+- `screenshot-manifest-judge.json` for the bounded coverage summary included in
+  the judge prompt; candidate page text and per-frame metadata stay out of the
+  prompt
 - `implementation.diff` and `diff-hash.txt` for the scored changes
 - `manifest.json` for the size and SHA-256 of every collected file
 

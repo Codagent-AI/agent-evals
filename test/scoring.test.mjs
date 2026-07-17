@@ -127,6 +127,33 @@ test('deterministic evaluator passes a contract-complete candidate', async () =>
   assert.deepEqual([...new Set(results.map(({ verdict }) => verdict))], ['pass'])
 })
 
+test('deterministic evaluator emits exactly the rubric-owned deterministic scenario IDs', async () => {
+  const rubric = await loadRubric()
+  const expected = new Set(
+    rubric.scenarios
+      .filter(({ evaluator }) => evaluator === 'deterministic')
+      .map(({ id }) => id),
+  )
+  const dir = await mkdtemp(join(tmpdir(), 'and-scene-deterministic-ids-'))
+  await writeCandidate(dir)
+
+  const results = await runDeterministicChecks(dir)
+
+  assert.deepEqual(new Set(results.map(({ id }) => id)), expected)
+})
+
+test('deterministic evaluator fails safely when candidate text exceeds its scan budget', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'and-scene-deterministic-budget-'))
+  await writeCandidate(dir, {
+    'src/presentations/oversized.md': 'x'.repeat(600 * 1024),
+  })
+
+  const results = await runDeterministicChecks(dir)
+
+  assert.ok(results.every(({ verdict }) => verdict === 'fail'))
+  assert.ok(results.every(({ note }) => note.includes('scan budget exceeded')))
+})
+
 test('deterministic evaluator accepts the project-local helper in the scaffold template', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'and-scene-template-helper-'))
   await writeCandidate(dir)

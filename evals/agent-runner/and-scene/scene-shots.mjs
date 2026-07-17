@@ -18,17 +18,18 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createServer } from 'node:net'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { chromium } from 'playwright'
+import { parseSettleMs } from './.eval-capture-policy.mjs'
 
 const ROOT = process.cwd()
 const OUT = process.env.SHOTS_OUT || '/artifacts/screenshots'
 const MANIFEST = process.env.SHOTS_MANIFEST || '/artifacts/screenshot-manifest.json'
 const VITE_BIN = join(ROOT, 'node_modules', '.bin', 'vite')
 const MAX_STEPS = 50
-const SHOT_SETTLE_MS = Number(process.env.SHOT_SETTLE_MS || 1000)
+const SHOT_SETTLE_MS = parseSettleMs(process.env.SHOT_SETTLE_MS)
 
 function getFreePort() {
   return new Promise((resolve, reject) => {
@@ -140,8 +141,7 @@ async function shootPresentation(page, port, slug) {
     stepTexts.push(await page.locator('body').innerText())
     const name = `step-${String(i).padStart(2, '0')}.png`
     const screenshotPath = join(dir, name)
-    await page.screenshot({ path: screenshotPath })
-    const bytes = await readFile(screenshotPath)
+    const bytes = await page.screenshot({ path: screenshotPath })
     frames.push({
       index: i,
       path: join(slug || 'index', name),
