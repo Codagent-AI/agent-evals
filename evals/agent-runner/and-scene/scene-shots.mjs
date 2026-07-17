@@ -16,17 +16,20 @@
 // when the step contract, navigation, or capture is incomplete. The harness may
 // then give the judge model one penalized evidence-repair attempt.
 import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { createServer } from 'node:net'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { chromium } from 'playwright'
+import { parseSettleMs } from './.eval-capture-policy.mjs'
 
 const ROOT = process.cwd()
 const OUT = process.env.SHOTS_OUT || '/artifacts/screenshots'
 const MANIFEST = process.env.SHOTS_MANIFEST || '/artifacts/screenshot-manifest.json'
 const VITE_BIN = join(ROOT, 'node_modules', '.bin', 'vite')
 const MAX_STEPS = 50
+const SHOT_SETTLE_MS = parseSettleMs(process.env.SHOT_SETTLE_MS)
 
 function getFreePort() {
   return new Promise((resolve, reject) => {
@@ -47,7 +50,7 @@ async function waitForPreview(port, child, deadlineMs = 30_000) {
       throw new Error(`vite preview exited before ready (code ${child.exitCode})`)
     }
     try {
-      const res = await fetch(`http://localhost:${port}/`)
+      const res = await fetch(`http://127.0.0.1:${port}/`)
       const html = await res.text()
       if (res.ok && html.includes('id="root"')) return
     } catch {
@@ -62,7 +65,7 @@ function startPreview(port) {
   return new Promise((resolve, reject) => {
     const child = spawn(
       VITE_BIN,
-      ['preview', '--port', String(port), '--strictPort', '--host', 'localhost'],
+      ['preview', '--port', String(port), '--strictPort', '--host', '127.0.0.1'],
       { cwd: ROOT, stdio: 'ignore', detached: true },
     )
     child.unref()
@@ -107,13 +110,15 @@ async function shootPresentation(page, port, slug) {
   const route = slug ? `/${slug}` : '/'
   const dir = join(OUT, slug || 'index')
   await mkdir(dir, { recursive: true })
-  await page.goto(`http://localhost:${port}${route}`, { waitUntil: 'load', timeout: 30_000 })
+  await page.goto(`http://127.0.0.1:${port}${route}`, { waitUntil: 'load', timeout: 30_000 })
 
   const progress = page.locator('[data-step-count]')
   let stepCount = 1
   let expectedScreenshots = 1
   let capturedScreenshots = 0
   const errors = []
+  const stepTexts = []
+  const frames = []
   try {
     await progress.waitFor({ timeout: 5_000 })
     const count = Number(await progress.getAttribute('data-step-count'))
@@ -132,9 +137,17 @@ async function shootPresentation(page, port, slug) {
   }
 
   for (let i = 0; i < stepCount; i++) {
-    await page.waitForTimeout(400)
+    await page.waitForTimeout(SHOT_SETTLE_MS)
+    stepTexts.push(await page.locator('body').innerText())
     const name = `step-${String(i).padStart(2, '0')}.png`
-    await page.screenshot({ path: join(dir, name) })
+    const screenshotPath = join(dir, name)
+    const bytes = await page.screenshot({ path: screenshotPath })
+    frames.push({
+      index: i,
+      path: join(slug || 'index', name),
+      bytes: bytes.length,
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+    })
     capturedScreenshots += 1
     if (i < stepCount - 1) {
       await page.keyboard.press('ArrowRight')
@@ -155,11 +168,17 @@ async function shootPresentation(page, port, slug) {
     }
   }
 
+  if (new Set(frames.map(({ sha256 }) => sha256)).size !== frames.length) {
+    errors.push(`duplicate screenshot content detected for ${slug || 'index'}`)
+  }
+
   return {
     slug: slug || 'index',
     expectedScreenshots,
     capturedScreenshots,
     complete: errors.length === 0 && capturedScreenshots === expectedScreenshots,
+    stepTexts,
+    frames,
     errors,
   }
 }
@@ -183,6 +202,8 @@ async function main() {
           expectedScreenshots: 1,
           capturedScreenshots: 0,
           complete: false,
+          stepTexts: [],
+          frames: [],
           errors: [err.message],
         })
       }
