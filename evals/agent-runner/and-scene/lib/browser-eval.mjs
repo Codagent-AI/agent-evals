@@ -42,13 +42,12 @@ const NOISE = new RegExp('[\\u0000-\\u001f\\u007f\\s]+', 'g')
 
 // Candidate text is evidence, never markup and never a prompt instruction.
 export function bounded(value, maxChars = MAX_EVIDENCE_CHARS) {
-  const limit = arguments.length === 2 ? maxChars : MAX_EVIDENCE_CHARS
   const text = typeof value === 'string' ? value : JSON.stringify(value) ?? String(value)
   const escaped = text
     .replace(NOISE, ' ')
     .replace(/[&<>"']/g, (character) => ESCAPES[character])
     .trim()
-  return escaped.length > limit ? `${escaped.slice(0, limit - 1)}…` : escaped
+  return escaped.length > maxChars ? `${escaped.slice(0, maxChars - 1)}…` : escaped
 }
 
 function verdict(id, pass, rationale, evidence = []) {
@@ -56,7 +55,7 @@ function verdict(id, pass, rationale, evidence = []) {
     id,
     verdict: pass ? 'pass' : 'fail',
     rationale: bounded(rationale),
-    evidence: evidence.map(bounded),
+    evidence: evidence.map((item) => bounded(item)),
     observed: true,
   }
 }
@@ -69,7 +68,7 @@ function unobserved(id, rationale, evidence = []) {
     id,
     verdict: null,
     rationale: bounded(rationale),
-    evidence: evidence.map(bounded),
+    evidence: evidence.map((item) => bounded(item)),
     observed: false,
   }
 }

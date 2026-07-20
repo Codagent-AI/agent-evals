@@ -149,7 +149,7 @@ export function parseAmbiguityOutput(text) {
       },
       source: raw.source,
       concern: requireText(raw.concern, 'concern', 'finding'),
-      evidence: raw.evidence.map(bounded),
+      evidence: raw.evidence.map((item) => bounded(item)),
       handling: bounded(raw.handling ?? ''),
       consequence: bounded(raw.consequence ?? ''),
       classification: raw.classification,
@@ -173,7 +173,7 @@ export function parseAmbiguityOutput(text) {
       fixture_target: requireText(raw.fixture_target, 'fixture_target', 'proposal'),
       observed_problem: requireText(raw.observed_problem, 'observed_problem', 'proposal'),
       proposed_clarification: requireText(raw.proposed_clarification, 'proposed_clarification', 'proposal'),
-      evidence: raw.evidence.map(bounded),
+      evidence: raw.evidence.map((item) => bounded(item)),
       // A proposal is a suggestion for a *future* fixture version and is never
       // an input to anything until a human has approved it.
       approved: false,

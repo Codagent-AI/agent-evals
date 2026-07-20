@@ -257,6 +257,13 @@ export async function runEvaluation({
   }
 
   const candidateWorktree = join(runDir, '.runtime/candidate-worktree')
+  const freezeCurrentCandidate = () => freezeCandidate({
+    repo: options.repo,
+    worktree: candidateWorktree,
+    runDir,
+    fixtureRevision: options.fixtureRef,
+    exec,
+  })
   const selectedCandidateRef = mode === 'reference-baseline'
     ? (options.candidateRef ?? options.fixtureRef)
     : options.fixtureRef
@@ -280,13 +287,7 @@ export async function runEvaluation({
   let frozenCandidate = null
   if (mode === 'reference-baseline' || checkpoint?.identity?.candidate_identity) {
     try {
-      frozenCandidate = await freezeCandidate({
-        repo: options.repo,
-        worktree: candidateWorktree,
-        runDir,
-        fixtureRevision: options.fixtureRef,
-        exec,
-      })
+      frozenCandidate = await freezeCurrentCandidate()
     } catch (error) {
       return failure([{ code: 'candidate-freeze', message: error.message }])
     }
@@ -396,6 +397,12 @@ export async function runEvaluation({
     env: { ...process.env, HOME: home, AGENT_RUNNER_NO_TUI: '1' },
   }
 
+  async function persistRunnerState(state) {
+    record.run = { run_id: state.run_id, session_dir: state.session_dir ?? null }
+    checkpoint = { ...checkpoint, agent_runner: record.run }
+    await saveCheckpoint(checkpointPath, checkpoint)
+  }
+
   const handlers = {
     'agent-runner': async () => {
       if (mode === 'reference-baseline') {
@@ -428,9 +435,10 @@ export async function runEvaluation({
         // Adopting a persisted run records its identity before any further
         // work, so a second interruption cannot lose it again.
         if (decision.adopted && decision.run_id) {
-          record.run = { run_id: decision.run_id, session_dir: state?.session_dir ?? null }
-          checkpoint = { ...checkpoint, agent_runner: record.run }
-          await saveCheckpoint(checkpointPath, checkpoint)
+          await persistRunnerState({
+            run_id: decision.run_id,
+            session_dir: state?.session_dir ?? null,
+          })
         }
 
         let waitedState = null
@@ -471,15 +479,11 @@ export async function runEvaluation({
           )
         }
         if (decision.action !== 'error') {
-          record.run = { run_id: state.run_id, session_dir: state.session_dir ?? null }
-          checkpoint = { ...checkpoint, agent_runner: record.run }
-          await saveCheckpoint(checkpointPath, checkpoint)
+          await persistRunnerState(state)
         }
       }
       if (state?.run_id && record.run?.run_id !== state.run_id) {
-        record.run = { run_id: state.run_id, session_dir: state.session_dir ?? null }
-        checkpoint = { ...checkpoint, agent_runner: record.run }
-        await saveCheckpoint(checkpointPath, checkpoint)
+        await persistRunnerState(state)
       }
       record.events.push({ event: 'continue', status: decision.status, reason: null, adopted: false })
 
@@ -498,13 +502,7 @@ export async function runEvaluation({
       // Reaching the boundary is where the delivered product becomes the
       // immutable candidate. A dirty worktree is not a reproducible result and
       // must stop before any product judge sees it.
-      record.candidate = await freezeCandidate({
-        repo: options.repo,
-        worktree: candidateWorktree,
-        runDir,
-        fixtureRevision: options.fixtureRef,
-        exec,
-      })
+      record.candidate = await freezeCurrentCandidate()
       checkpoint = {
         ...checkpoint,
         identity: {

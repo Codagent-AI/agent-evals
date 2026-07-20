@@ -57,18 +57,19 @@ export async function runCandidateVerification({
   const verificationCommand = verification
     ? commandResult(verification)
     : skipped(build ? 'candidate build failed' : 'dependency installation failed')
+  const installCommand = commandResult(install)
   const buildOk = install.ok && build?.ok === true
   const verificationOk = buildOk && verification?.ok === true
 
   return {
     commands: {
-      install: commandResult(install),
+      install: installCommand,
       build: buildCommand,
       verification: verificationCommand,
     },
     build: {
       ok: buildOk,
-      log: buildCommand.log || commandResult(install).log || buildCommand.reason,
+      log: buildCommand.log || installCommand.log || buildCommand.reason,
     },
     verification: {
       machine_readable: true,

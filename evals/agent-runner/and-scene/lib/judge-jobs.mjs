@@ -79,7 +79,7 @@ export const JUDGE_RESULT_SCHEMA = {
 
 function quoteEvidence(evidence) {
   return evidence.slice(0, MAX_EVIDENCE_ITEMS).map((entry) => {
-    const cited = (entry.evidence ?? []).slice(0, 5).map(bounded).join(', ')
+    const cited = (entry.evidence ?? []).slice(0, 5).map((item) => bounded(item)).join(', ')
     return `- ${bounded(entry.id)}: ${bounded(entry.verdict ?? 'unknown')} — ${bounded(entry.note ?? '')}${cited ? ` [${cited}]` : ''}`
   }).join('\n')
 }
@@ -172,7 +172,7 @@ export function parseJudgeOutput(text, expectedIds, job) {
       id: result.id,
       verdict: result.verdict,
       rationale: bounded(result.rationale, MAX_RATIONALE_CHARS),
-      evidence: result.evidence.map(bounded),
+      evidence: result.evidence.map((item) => bounded(item)),
     })
   }
   if (duplicates.length > 0) {

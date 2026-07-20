@@ -43,7 +43,28 @@ function rejected(reason, source = null) {
   }
 }
 
-const IMPLEMENTOR_STEPS = new Set(['generate-code', 'commit-leftovers-if-needed', 'session-report', 'fix-violations'])
+const IMPLEMENTOR_STEPS = new Set([
+  'generate-code',
+  'commit-leftovers-if-needed',
+  'session-report',
+  'fix-violations',
+])
+
+function nonEmptyString(value) {
+  return typeof value === 'string' && value.length > 0
+}
+
+function attemptIdOf(raw, index) {
+  if (nonEmptyString(raw.attempt_id)) return raw.attempt_id
+  if (nonEmptyString(raw.record_id)) return raw.record_id
+  return `attempt-${index}`
+}
+
+function usageStateOf(usage, invokedCli) {
+  if (usage?.status === 'collected') return PRESENT
+  if (usage?.status === 'unavailable') return 'unavailable'
+  return invokedCli ? 'unavailable' : 'not-applicable'
+}
 
 function agentRole(raw) {
   if (!raw.agent_invoked) return null
@@ -73,18 +94,15 @@ function normalizeAttempt(raw, index) {
   if (!raw || typeof raw !== 'object') {
     throw new Error(`attempt ${index} is not an object`)
   }
-  const attemptId = typeof raw.attempt_id === 'string' && raw.attempt_id.length > 0
-    ? raw.attempt_id
-    : (typeof raw.record_id === 'string' && raw.record_id.length > 0 ? raw.record_id : `attempt-${index}`)
+  const attemptId = attemptIdOf(raw, index)
   const invokedCli = raw.agent_invoked === true
   if (raw.usage !== null && raw.usage !== undefined && typeof raw.usage !== 'object') {
     throw new Error(`attempt ${attemptId} has malformed usage`)
   }
   const rawUsage = raw.usage ?? null
-  const usageState = rawUsage?.status === 'collected'
-    ? PRESENT
-    : (rawUsage?.status === 'unavailable' ? 'unavailable' : (invokedCli ? 'unavailable' : 'not-applicable'))
+  const usageState = usageStateOf(rawUsage, invokedCli)
   const reportedCost = Number.isFinite(raw.estimated_api_cost_usd) && raw.estimated_api_cost_usd >= 0
+  const missingCostState = invokedCli ? 'unavailable' : 'not-applicable'
 
   return {
     attempt_id: attemptId,
@@ -108,8 +126,8 @@ function normalizeAttempt(raw, index) {
       completeness: rawUsage?.completeness ?? null,
     },
     cost: {
-      state: reportedCost ? PRESENT : (invokedCli ? 'unavailable' : 'not-applicable'),
-      reason: reportedCost ? null : (invokedCli ? 'agent runner reported no cost' : null),
+      state: reportedCost ? PRESENT : missingCostState,
+      reason: !reportedCost && invokedCli ? 'agent runner reported no cost' : null,
       estimated_api_cost_usd: reportedCost ? raw.estimated_api_cost_usd : null,
     },
   }
