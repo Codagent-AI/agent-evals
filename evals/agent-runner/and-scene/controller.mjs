@@ -274,6 +274,7 @@ export async function runEvaluation({
       worktree: candidateWorktree,
       ref: selectedCandidateRef,
       resume: options.resume,
+      expectedSource: checkpoint?.candidate_source ?? null,
       exec,
     })
   } catch (error) {
@@ -295,7 +296,7 @@ export async function runEvaluation({
 
   const identity = {
     candidate_identity: frozenCandidate?.candidate_identity ?? null,
-    fixture_revision: frozenCandidate?.fixture_commit ?? candidateSource.commit,
+    fixture_revision: frozenCandidate?.fixture_commit ?? candidateSource.fixture_commit,
     agent_runner_provenance: hashJson({
       commit: provenance?.commit ?? null,
       workflow_sha256: provenance?.workflow_sha256 ?? null,
@@ -329,6 +330,10 @@ export async function runEvaluation({
       ...createCheckpoint({ run_id: runId, identity }),
       role_profiles: validation.profiles,
       agent_runner_provenance: provenance,
+      candidate_source: {
+        repository: candidateSource.repository,
+        fixture_commit: candidateSource.fixture_commit,
+      },
       boundary,
       agent_runner: null,
     }

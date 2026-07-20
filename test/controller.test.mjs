@@ -53,6 +53,10 @@ async function environment({
     if (command === 'git') {
       const verb = args.join(' ')
       if (verb.includes('--is-inside-work-tree')) return { status: 0, stdout: 'true\n' }
+      if (verb.includes('remote get-url origin')) {
+        return { status: 0, stdout: 'https://github.com/Codagent-AI/and-scene.git\n' }
+      }
+      if (verb.includes('merge-base --is-ancestor')) return { status: 0, stdout: '' }
       if (verb.includes('status --porcelain')) return { status: 0, stdout: dirty }
       if (verb.includes('rev-parse')) return { status: 0, stdout: `${commit}\n` }
     }
@@ -469,6 +473,18 @@ test('phase completion is recorded durably in the checkpoint', async () => {
   const checkpoint = await loadCheckpoint(join(context.runDir, 'checkpoint.json'))
   assert.equal(checkpoint.phases['product-judging'].state, 'complete')
   assert.equal(typeof checkpoint.phases['product-judging'].completed_at, 'string')
+})
+
+test('candidate repository and fixture provenance are checkpointed before Agent Runner starts', async () => {
+  const context = await environment()
+
+  await evaluate(context, ['--skip-validator', ...profileArgs])
+
+  const checkpoint = await loadCheckpoint(join(context.runDir, 'checkpoint.json'))
+  assert.deepEqual(checkpoint.candidate_source, {
+    repository: 'github.com/Codagent-AI/and-scene',
+    fixture_commit: 'a'.repeat(40),
+  })
 })
 
 test('a capabilities file that cannot be read is a clean argument failure', async () => {

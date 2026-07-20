@@ -8,6 +8,27 @@ import { spawnSync } from 'node:child_process'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 
+const JUDGE_ENV_ALLOWLIST = [
+  'HOME',
+  'CODEX_HOME',
+  'PATH',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'TZ',
+  'TMPDIR',
+  'SSL_CERT_FILE',
+  'SSL_CERT_DIR',
+  'NODE_EXTRA_CA_CERTS',
+  'NO_COLOR',
+]
+
+function judgeEnvironment(source) {
+  return Object.fromEntries(JUDGE_ENV_ALLOWLIST.flatMap((name) => (
+    typeof source?.[name] === 'string' ? [[name, source[name]]] : []
+  )))
+}
+
 function safeJobName(value) {
   return String(value ?? 'judge').replace(/[^a-zA-Z0-9_-]+/g, '-').slice(0, 80) || 'judge'
 }
@@ -19,7 +40,9 @@ function detail(result) {
 export function createCodexJudgeInvoker({
   runDir,
   candidateWorktree,
-  command = 'codex',
+  // The sandbox installs `codex` as a yolo wrapper for implementation agents.
+  // Judges must bypass that wrapper and invoke the real, sandboxed CLI.
+  command = '/usr/bin/codex',
   spawnImpl = spawnSync,
   env = process.env,
 } = {}) {
@@ -45,6 +68,11 @@ export function createCodexJudgeInvoker({
       '--ignore-user-config',
       '--ignore-rules',
       '--strict-config',
+      // Codex itself receives the isolated home so it can authenticate, but
+      // model-generated shell commands inherit none of the parent environment.
+      // Candidate prompt injection therefore cannot print evaluator or harness
+      // credentials with `env`.
+      '--config', 'shell_environment_policy.inherit="none"',
       '--config', `web_search="${request.web_search === true || request.web_search === 'authorized' ? 'live' : 'disabled'}"`,
       '--output-schema', schemaPath,
       '--output-last-message', outputPath,
@@ -56,7 +84,7 @@ export function createCodexJudgeInvoker({
 
     const result = spawnImpl(command, args, {
       cwd,
-      env,
+      env: judgeEnvironment(env),
       encoding: 'utf8',
       input: request.prompt,
       maxBuffer: 16 * 1024 * 1024,

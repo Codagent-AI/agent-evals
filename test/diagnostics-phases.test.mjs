@@ -107,6 +107,10 @@ async function environment({ metrics = runMetrics(), sessionFiles = {} } = {}) {
     if (command === 'git') {
       const verb = args.join(' ')
       if (verb.includes('--is-inside-work-tree')) return { status: 0, stdout: 'true\n' }
+      if (verb.includes('remote get-url origin')) {
+        return { status: 0, stdout: 'https://github.com/Codagent-AI/and-scene.git\n' }
+      }
+      if (verb.includes('merge-base --is-ancestor')) return { status: 0, stdout: '' }
       if (verb.includes('status --porcelain')) return { status: 0, stdout: '' }
       if (verb.includes('rev-parse')) return { status: 0, stdout: `${'a'.repeat(40)}\n` }
     }

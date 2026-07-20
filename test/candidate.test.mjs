@@ -49,9 +49,72 @@ test('fresh scored candidates clone and check out the fixture while baselines se
   })
 
   assert.equal(scoredState.commit, repo.fixture)
+  assert.equal(scoredState.fixture_commit, repo.fixture)
+  assert.equal(scoredState.repository, repo.source)
   assert.equal(baselineState.commit, repo.reference)
   assert.equal(git(scored, 'rev-parse', 'HEAD'), repo.fixture)
   assert.equal(git(baseline, 'rev-parse', 'HEAD'), repo.reference)
+})
+
+test('resume rejects repository or fixture provenance that differs from the recorded source', async () => {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
+  const prepared = await prepareCandidateWorktree({
+    repo: repo.source, worktree, ref: repo.fixture, resume: false, exec,
+  })
+  const expectedSource = {
+    repository: prepared.repository,
+    fixture_commit: prepared.fixture_commit,
+  }
+
+  await assert.rejects(
+    prepareCandidateWorktree({
+      repo: repo.source,
+      worktree,
+      ref: repo.reference,
+      resume: true,
+      expectedSource,
+      exec,
+    }),
+    /fixture.*recorded|recorded.*fixture/i,
+  )
+
+  const other = await repository()
+  await assert.rejects(
+    prepareCandidateWorktree({
+      repo: other.source,
+      worktree,
+      ref: repo.fixture,
+      resume: true,
+      expectedSource,
+      exec,
+    }),
+    /repository.*recorded|recorded.*repository/i,
+  )
+})
+
+test('resume rejects a candidate checkout whose origin no longer matches the recorded repository', async () => {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
+  const prepared = await prepareCandidateWorktree({
+    repo: repo.source, worktree, ref: repo.fixture, resume: false, exec,
+  })
+  git(worktree, 'remote', 'set-url', 'origin', join(repo.root, 'elsewhere'))
+
+  await assert.rejects(
+    prepareCandidateWorktree({
+      repo: repo.source,
+      worktree,
+      ref: repo.fixture,
+      resume: true,
+      expectedSource: {
+        repository: prepared.repository,
+        fixture_commit: prepared.fixture_commit,
+      },
+      exec,
+    }),
+    /origin.*repository|repository.*origin/i,
+  )
 })
 
 test('resume requires the already-cloned candidate worktree', async () => {
@@ -59,9 +122,42 @@ test('resume requires the already-cloned candidate worktree', async () => {
 
   await assert.rejects(
     prepareCandidateWorktree({
-      repo: repo.source, worktree: join(repo.root, 'missing'), ref: repo.fixture, resume: true, exec,
+      repo: repo.source,
+      worktree: join(repo.root, 'missing'),
+      ref: repo.fixture,
+      resume: true,
+      expectedSource: { repository: repo.source, fixture_commit: repo.fixture },
+      exec,
     }),
     /resume.*candidate worktree/i,
+  )
+})
+
+test('resume rejects a clean HEAD unrelated to the recorded fixture', async () => {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
+  const prepared = await prepareCandidateWorktree({
+    repo: repo.source, worktree, ref: repo.fixture, resume: false, exec,
+  })
+  git(worktree, 'checkout', '--orphan', 'unrelated')
+  git(worktree, 'rm', '-qf', 'README.md')
+  await writeFile(join(worktree, 'OTHER.md'), 'not descended from the fixture\n')
+  git(worktree, 'add', 'OTHER.md')
+  git(worktree, 'commit', '-qm', 'unrelated clean commit')
+
+  await assert.rejects(
+    prepareCandidateWorktree({
+      repo: repo.source,
+      worktree,
+      ref: repo.fixture,
+      resume: true,
+      expectedSource: {
+        repository: prepared.repository,
+        fixture_commit: prepared.fixture_commit,
+      },
+      exec,
+    }),
+    /does not descend from recorded fixture/i,
   )
 })
 
@@ -106,4 +202,21 @@ test('freezing rejects uncommitted candidate changes', async () => {
     freezeCandidate({ repo: repo.source, worktree, runDir, fixtureRevision: repo.fixture, exec }),
     /uncommitted changes/i,
   )
+})
+
+test('freezing preserves tracked filenames containing newlines', async () => {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
+  const runDir = join(repo.root, 'run')
+  const unusualPath = 'line\nbreak.txt'
+  await mkdir(runDir)
+  await prepareCandidateWorktree({ repo: repo.source, worktree, ref: repo.fixture, resume: false, exec })
+  await writeFile(join(worktree, unusualPath), 'tracked despite the newline\n')
+  git(worktree, 'add', '--', unusualPath)
+  git(worktree, 'commit', '-qm', 'add unusual filename')
+
+  await freezeCandidate({ repo: repo.source, worktree, runDir, fixtureRevision: repo.fixture, exec })
+
+  const manifest = JSON.parse(await readFile(join(runDir, 'candidate-source-manifest.json'), 'utf8'))
+  assert.ok(manifest.tracked_files.some(({ path }) => path === unusualPath))
 })

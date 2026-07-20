@@ -5,8 +5,9 @@
 // while cleanliness still covers every other tracked and untracked candidate
 // file.
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 
 import { hashJson, hashString, writeJsonAtomic } from './persistence.mjs'
 
@@ -25,6 +26,34 @@ function run(exec, command, args, options, label, { trim = true } = {}) {
   }
   const stdout = result.stdout ?? ''
   return trim ? stdout.trim() : stdout
+}
+
+function repositoryPath(path) {
+  return path.replace(/^\/+|\/+$/g, '').replace(/\.git$/i, '')
+}
+
+// Compare repository identity rather than transport spelling, so the same
+// GitHub repository expressed as HTTPS or SSH remains the same source while a
+// different host/path cannot be smuggled into a resumed run.
+function normalizeRepository(repository) {
+  const value = String(repository).trim()
+  const scp = value.match(/^(?:[^@/]+@)?([^/:]+):(.+)$/)
+  if (scp && !value.includes('://')) {
+    return `${scp[1].toLowerCase()}/${repositoryPath(scp[2])}`
+  }
+  try {
+    const url = new URL(value)
+    if (url.protocol === 'file:') return resolve(fileURLToPath(url))
+    return `${url.host.toLowerCase()}/${repositoryPath(url.pathname)}`
+  } catch {
+    return resolve(value)
+  }
+}
+
+function assertSame(label, current, recorded) {
+  if (current !== recorded) {
+    throw new Error(`${label} ${current} does not match recorded ${label} ${recorded}`)
+  }
 }
 
 async function installEvalExcludes(worktree) {
@@ -46,39 +75,81 @@ export async function prepareCandidateWorktree({
   worktree,
   ref,
   resume,
+  expectedSource = null,
   exec = defaultExec,
 }) {
   if (!repo) throw new Error('candidate repository is required')
   if (!ref) throw new Error('candidate ref is required')
+  const repository = normalizeRepository(repo)
 
   if (resume) {
+    if (!expectedSource?.repository || !expectedSource?.fixture_commit) {
+      throw new Error('resume requires recorded candidate repository and fixture provenance')
+    }
+    assertSame('candidate repository', repository, expectedSource.repository)
     const inside = exec('git', ['-C', worktree, 'rev-parse', '--is-inside-work-tree'], { encoding: 'utf8' })
     if (inside.status !== 0 || (inside.stdout ?? '').trim() !== 'true') {
       throw new Error(`resume requires the existing candidate worktree at ${worktree}`)
     }
   } else {
     run(exec, 'git', ['clone', '--no-checkout', '--', repo, worktree], {}, 'candidate clone')
-    const commit = run(
-      exec,
-      'git',
-      ['-C', worktree, 'rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`],
-      {},
-      `candidate ref lookup ${ref}`,
-    )
-    run(exec, 'git', ['-C', worktree, 'checkout', '--detach', commit], {}, `candidate checkout ${ref}`)
+  }
+
+  const origin = normalizeRepository(run(
+    exec,
+    'git',
+    ['-C', worktree, 'remote', 'get-url', 'origin'],
+    {},
+    'candidate origin lookup',
+  ))
+  assertSame('candidate origin repository', origin, repository)
+
+  const fixtureCommit = run(
+    exec,
+    'git',
+    ['-C', worktree, 'rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`],
+    {},
+    `candidate ref lookup ${ref}`,
+  )
+  if (resume) {
+    assertSame('candidate fixture commit', fixtureCommit, expectedSource.fixture_commit)
+  } else {
+    run(exec, 'git', ['-C', worktree, 'checkout', '--detach', fixtureCommit], {}, `candidate checkout ${ref}`)
   }
 
   await installEvalExcludes(worktree)
-  const commit = run(exec, 'git', ['-C', worktree, 'rev-parse', 'HEAD'], {}, 'candidate commit lookup')
-  return { commit, worktree }
+  const headCommit = run(exec, 'git', ['-C', worktree, 'rev-parse', 'HEAD'], {}, 'candidate commit lookup')
+  if (resume) {
+    const ancestry = exec(
+      'git',
+      ['-C', worktree, 'merge-base', '--is-ancestor', fixtureCommit, headCommit],
+      { encoding: 'utf8' },
+    )
+    if (ancestry.status !== 0 || ancestry.error) {
+      throw new Error(`candidate HEAD ${headCommit} does not descend from recorded fixture ${fixtureCommit}`)
+    }
+  }
+  return {
+    commit: fixtureCommit,
+    fixture_commit: fixtureCommit,
+    head_commit: headCommit,
+    repository,
+    worktree,
+  }
 }
 
 function parseTrackedFiles(text) {
   if (!text) return []
-  return text.split('\n').map((line) => {
-    const matched = line.match(/^(\d+)\s+(\S+)\s+([0-9a-f]+)\t(.*)$/)
-    if (!matched) throw new Error(`cannot parse tracked source entry: ${line}`)
-    return { mode: matched[1], type: matched[2], object: matched[3], path: matched[4] }
+  return text.split('\0').filter(Boolean).map((entry) => {
+    const separator = entry.indexOf('\t')
+    const metadata = separator === -1 ? [] : entry.slice(0, separator).split(/\s+/)
+    if (metadata.length !== 3) throw new Error(`cannot parse tracked source entry: ${entry}`)
+    return {
+      mode: metadata[0],
+      type: metadata[1],
+      object: metadata[2],
+      path: entry.slice(separator + 1),
+    }
   })
 }
 
@@ -119,9 +190,10 @@ export async function freezeCandidate({
   const trackedFiles = parseTrackedFiles(run(
     exec,
     'git',
-    ['-C', worktree, 'ls-tree', '-r', '--full-tree', producedCommit],
+    ['-C', worktree, 'ls-tree', '-rz', '--full-tree', producedCommit],
     {},
     'candidate source manifest',
+    { trim: false },
   ))
   const identityInput = {
     fixture_commit: fixtureCommit,

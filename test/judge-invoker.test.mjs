@@ -17,7 +17,20 @@ test('Codex judge invoker enforces the schema and scopes web access per job', as
     writeFileSync(outputPath, '{"results":[]}')
     return { status: 0, stdout: '', stderr: '' }
   }
-  const invoke = createCodexJudgeInvoker({ runDir, candidateWorktree, spawnImpl })
+  const invoke = createCodexJudgeInvoker({
+    runDir,
+    candidateWorktree,
+    spawnImpl,
+    env: {
+      HOME: '/isolated/home',
+      CODEX_HOME: '/isolated/home/.codex',
+      PATH: '/safe/bin',
+      LANG: 'C.UTF-8',
+      GITHUB_TOKEN: 'must-not-leak',
+      AWS_SECRET_ACCESS_KEY: 'must-not-leak',
+      OPENAI_API_KEY: 'must-not-leak',
+    },
+  })
 
   const output = await invoke({
     job: 'scene-kit',
@@ -28,10 +41,17 @@ test('Codex judge invoker enforces the schema and scopes web access per job', as
   })
 
   assert.equal(output, '{"results":[]}')
-  assert.equal(calls[0].command, 'codex')
+  assert.equal(calls[0].command, '/usr/bin/codex')
   assert.equal(calls[0].options.cwd, candidateWorktree)
   assert.equal(calls[0].options.input, 'judge this')
+  assert.deepEqual(calls[0].options.env, {
+    HOME: '/isolated/home',
+    CODEX_HOME: '/isolated/home/.codex',
+    PATH: '/safe/bin',
+    LANG: 'C.UTF-8',
+  })
   assert.ok(calls[0].args.includes('web_search="disabled"'))
+  assert.ok(calls[0].args.includes('shell_environment_policy.inherit="none"'))
   assert.ok(calls[0].args.includes('gpt-5.2'))
   const schemaPath = calls[0].args[calls[0].args.indexOf('--output-schema') + 1]
   assert.deepEqual(JSON.parse(await readFile(schemaPath, 'utf8')), { type: 'object' })
