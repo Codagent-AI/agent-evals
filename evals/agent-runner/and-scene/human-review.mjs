@@ -20,11 +20,13 @@ import { basename, join, resolve } from 'node:path'
 
 import { compareToBaseline } from './lib/baseline.mjs'
 import { ensureCandidateServer, stopCandidateServer } from './lib/candidate-server.mjs'
+import { createHostCandidateServer } from './lib/candidate-server-host.mjs'
 import { loadCheckpoint, saveCheckpoint } from './lib/checkpoint.mjs'
 import {
   checkReviewProvenance,
   createReviewState,
   runInterview,
+  validateSavedReview,
 } from './lib/human-review.mjs'
 import { applyOutcomeEvent, createOutcome, outcomeLabel } from './lib/outcomes.mjs'
 import { HUMAN_REVIEW_PHASES, runPhases } from './lib/phases.mjs'
@@ -109,6 +111,15 @@ async function openRun({ runDir, rubrics }) {
         errors: mismatches.map((mismatch) => ({ code: 'resume-provenance', run_id: runId, ...mismatch })),
       }
     }
+    // A saved review can be edited, truncated, or corrupted between sessions.
+    // Answers that no longer satisfy the rubric are refused outright rather than
+    // silently resumed, so nothing invalid can reach the point arithmetic.
+    const problems = validateSavedReview(rubrics.human.rubric, saved)
+    if (problems.length > 0) {
+      return {
+        errors: problems.map((message) => ({ code: 'invalid-saved-review', run_id: runId, message })),
+      }
+    }
   }
 
   return {
@@ -179,7 +190,10 @@ async function reviewRun({
   run,
   rubrics,
   io,
-  candidateServer,
+  // Either one adapter, or a factory called per run. Paired mode needs the
+  // latter: the baseline and the candidate are different builds in different
+  // run directories, and each must be served from its own.
+  candidateServer: adapterFor,
   isProcessAlive,
   baselineResult,
   renderReportImpl,
@@ -192,6 +206,7 @@ async function reviewRun({
   let humanReview = null
   let server = run.checkpoint?.candidate_server ?? null
   let assembled = null
+  const candidateServer = typeof adapterFor === 'function' ? adapterFor(run) : adapterFor
 
   // Start from the outcome the automated run durably recorded, so this command
   // extends that history rather than inventing a fresh one.
@@ -423,11 +438,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         return answer === undefined ? null : answer
       },
     },
-    candidateServer: {
-      probe: async () => ({ ok: false, error: 'no candidate-server adapter is configured' }),
-      start: async () => { throw new Error('no candidate-server adapter is configured') },
-      stop: async () => {},
-    },
+    // The automated run normally stops its candidate server before handing off,
+    // so the review starts its own against the frozen build in that run's own
+    // directory.
+    candidateServer: (run) => createHostCandidateServer({ runDir: run.runDir }),
     log: (line) => console.error(line),
   })
   rl.close()

@@ -128,6 +128,7 @@ focused modules under `lib/`:
 | `lib/phases.mjs` | The ordered lifecycle and its failure ownership |
 | `lib/human-review.mjs` | The 13 versioned questions, anchored responses, and the 30-point calculation |
 | `lib/candidate-server.mjs` | Candidate-server identity, provenance-safe reuse, and cleanup |
+| `lib/candidate-server-host.mjs` | Launching and probing the host candidate server |
 | `lib/result.mjs` | Result assembly, the artifact manifest, and the durable artifact set |
 | `lib/baseline.mjs` | Reference-baseline comparison and its rubric-match refusal |
 | `lib/report.mjs` | The offline, escaped HTML report |
@@ -218,6 +219,13 @@ interaction usability, 4 for responsive visual quality, and 7 for overall
 cohesion and polish. Each rating `r` earns `(r - 1) / 4` of its points, summed
 without intermediate rounding. The component gate passes only at 15 or more with
 no individual rating of 1.
+
+The review serves the candidate itself. `serve-candidate.mjs` is a dependency-free
+static server for the build at `.runtime/candidate-worktree/dist`, bound to a
+port the operating system chooses. It exposes one endpoint of its own,
+`/.candidate-identity`, returning the candidate revision it was started for.
+That token is what ties an endpoint to a candidate: an unrelated process on a
+recycled port cannot produce it.
 
 A candidate server is only reused, or stopped, when both its process and its
 endpoint prove it is still that server for the evaluated candidate. A recycled

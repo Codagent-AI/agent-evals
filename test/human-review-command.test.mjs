@@ -447,3 +447,61 @@ test('a human rubric edited since the automated run is refused before any questi
   assert.ok(outcome.errors.some(({ code }) => code === 'resume-provenance'), JSON.stringify(outcome.errors))
   assert.deepEqual(asked, [])
 })
+
+test('a corrupted saved review is refused before any question is asked', async () => {
+  const directory = await root()
+  const run = await pendingRun({ root: directory })
+
+  const first = scriptedIo(['yes', '5', '', '4', ''])
+  await runHumanReview({ argv: ['--run-dir', run.runDir], io: first.io, ...servers() })
+
+  // An out-of-range rating can only arrive by editing the artifact, and it must
+  // never reach the point arithmetic.
+  const review = await readJson(join(run.runDir, 'human-review.json'))
+  review.responses[0].rating = 999
+  await writeJsonAtomic(join(run.runDir, 'human-review.json'), review)
+
+  const second = scriptedIo(answers())
+  const outcome = await runHumanReview({ argv: ['--run-dir', run.runDir], io: second.io, ...servers() })
+
+  assert.equal(outcome.exitCode, 1)
+  assert.ok(outcome.errors.some(({ code }) => code === 'invalid-saved-review'), JSON.stringify(outcome.errors))
+  assert.deepEqual(second.asked, [])
+  const untouched = await readJson(join(run.runDir, 'result.json'))
+  assert.equal(untouched.evaluation_status, 'pending-human-review')
+  assert.equal(untouched.official_score, null)
+})
+
+test('a paired review serves each run from its own run directory', async () => {
+  const directory = await root()
+  const baseline = await pendingRun({
+    root: directory, name: 'baseline-1', mode: 'reference-baseline', candidate: 'reference-xyz',
+  })
+  const candidate = await pendingRun({ root: directory, name: 'run-1' })
+
+  const built = []
+  // An adapter per run: each serves the frozen build inside its own directory.
+  const factory = (run) => ({
+    probe: async (url) => (url === `http://127.0.0.1/${run.runId}/`
+      ? { ok: true, candidate_identity: run.candidate }
+      : { ok: false, error: 'connection refused' }),
+    start: async ({ candidate: identity }) => {
+      built.push([run.runDir, identity])
+      return { pid: 6000 + built.length, url: `http://127.0.0.1/${run.runId}/` }
+    },
+    stop: async () => {},
+  })
+
+  const outcome = await runHumanReview({
+    argv: ['--run-dir', candidate.runDir, '--baseline-run-dir', baseline.runDir],
+    io: scriptedIo([...answers({ rating: 5 }), ...answers({ rating: 4 })]).io,
+    isProcessAlive: () => true,
+    candidateServer: factory,
+  })
+
+  assert.equal(outcome.exitCode, 0, JSON.stringify(outcome.errors))
+  assert.deepEqual(built, [
+    [baseline.runDir, 'reference-xyz'],
+    [candidate.runDir, 'candidate-abc'],
+  ])
+})

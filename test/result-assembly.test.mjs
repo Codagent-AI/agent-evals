@@ -237,3 +237,17 @@ test('a failed report leaves the durable verdict intact and records the missing 
   assert.equal(result.report.written, false)
   assert.match(result.report.error, /template exploded/)
 })
+
+test('a failure with no scored components is incomplete rather than vacuously complete', () => {
+  const result = assemble({
+    outcome: applyOutcomeEvent(createOutcome(), {
+      type: 'harness-failure', phase: 'browser-evaluation', reason: 'driver crashed',
+    }),
+    score: null,
+  })
+
+  assert.equal(result.completeness.score, 'incomplete')
+  assert.equal(result.completeness.evidence, 'incomplete')
+  assert.equal(result.automated_subtotal, null)
+  assert.deepEqual(result.available_component_scores, [])
+})

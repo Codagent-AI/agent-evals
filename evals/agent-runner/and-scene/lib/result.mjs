@@ -39,7 +39,11 @@ function notApplicable(baselineRun, value) {
 }
 
 function completenessOf({ mode, score, humanReview, cost, pricing, metrics, timing, evidence }) {
-  const automatedComplete = (score?.components ?? []).every(({ complete }) => complete)
+  // An empty component set is no evidence at all, not evidence that everything
+  // passed. A scoring phase that failed before producing components must not
+  // report itself complete on the strength of a vacuous `every`.
+  const components = score?.components ?? []
+  const automatedComplete = components.length > 0 && components.every(({ complete }) => complete)
   return {
     score: score?.official_score === null || score?.official_score === undefined
       ? (automatedComplete ? 'automated-complete' : 'incomplete')

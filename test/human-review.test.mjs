@@ -10,6 +10,7 @@ import {
   runInterview,
   scoreHumanReview,
   validateResponse,
+  validateSavedReview,
 } from '../evals/agent-runner/and-scene/lib/human-review.mjs'
 import { loadRubrics } from '../evals/agent-runner/and-scene/lib/rubric.mjs'
 
@@ -345,4 +346,38 @@ test('a closed input stream interrupts the review without discarding saved answe
   assert.equal(result.state.complete, false)
   assert.equal(result.state.responses.length, 2)
   assert.equal(persisted.length, 2)
+})
+
+// --- Corrupted or externally edited saved reviews --------------------------
+
+test('a saved rating outside the rubric scale never scores', () => {
+  const state = fill(createReviewState(provenance()), Array(13).fill(5))
+  state.responses[2].rating = 999
+
+  const score = scoreHumanReview(rubric, state)
+
+  assert.equal(score.complete, false)
+  assert.equal(score.total, null)
+  assert.equal(score.gate_passed, null)
+})
+
+test('a saved low rating whose rationale was stripped never scores', () => {
+  const state = fill(createReviewState(provenance()), Array(13).fill(3))
+  state.responses[0].rationale = ''
+
+  assert.equal(scoreHumanReview(rubric, state).complete, false)
+})
+
+test('validateSavedReview names every way a persisted review is unusable', () => {
+  assert.deepEqual(validateSavedReview(rubric, fill(createReviewState(provenance()), Array(13).fill(4))), [])
+
+  const corrupted = fill(createReviewState(provenance()), Array(13).fill(4))
+  corrupted.responses[1].rating = -10
+  corrupted.responses[4].id = 'step-1'
+  corrupted.responses.push({ id: 'not-a-question', number: 99, rating: 4, rationale: '' })
+
+  const problems = validateSavedReview(rubric, corrupted)
+  assert.ok(problems.some((problem) => problem.includes('step-2')), problems.join('; '))
+  assert.ok(problems.some((problem) => problem.includes('duplicate')), problems.join('; '))
+  assert.ok(problems.some((problem) => problem.includes('not-a-question')), problems.join('; '))
 })

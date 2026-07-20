@@ -106,10 +106,38 @@ function subtotalNumerator({ dimension, ratings }, scale) {
   return { numerator: earned * dimension.points, denominator: span * ratings.length }
 }
 
+// Everything a persisted review must satisfy before it can be scored. A
+// human-review.json can be edited, truncated, or corrupted between sessions, so
+// the saved answers are re-validated against the rubric rather than trusted for
+// having once been accepted.
+export function validateSavedReview(rubric, state) {
+  const problems = []
+  const responses = state?.responses ?? []
+  if (!Array.isArray(state?.responses)) return ['the saved review has no responses array']
+
+  const seen = new Set()
+  for (const response of responses) {
+    const question = questionById(rubric, response?.id)
+    if (!question) {
+      problems.push(`saved response ${JSON.stringify(response?.id ?? null)} is not a question in this rubric`)
+      continue
+    }
+    if (seen.has(question.id)) problems.push(`duplicate saved response for ${question.id}`)
+    seen.add(question.id)
+    const outcome = validateResponse(rubric, response)
+    if (!outcome.ok) problems.push(`saved response for ${question.id} is invalid: ${outcome.error}`)
+  }
+  return problems
+}
+
 export function scoreHumanReview(rubric, state) {
   const responses = state.responses ?? []
   const grouped = dimensionRatings(rubric, responses)
+  // A review is complete only when every rubric question has a saved answer that
+  // is still valid under the rubric. An out-of-range rating reached by editing
+  // the artifact must never reach the point arithmetic.
   const complete = responses.length === rubric.question_count
+    && validateSavedReview(rubric, state).length === 0
     && grouped.every(({ ratings }) => ratings.every((rating) => Number.isInteger(rating)))
 
   if (!complete) {
