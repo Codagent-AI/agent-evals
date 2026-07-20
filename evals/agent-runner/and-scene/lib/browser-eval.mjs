@@ -157,13 +157,22 @@ export async function runBrowserEvaluation({
     'demo-required-scene-content': async () => {
       await session()
       const states = await walk()
-      const empty = states.findIndex(
-        (state) => !state.caption?.trim() || !(state.entityIds ?? []).length,
+      const mismatch = states.findIndex(
+        (state, position) => state.caption?.trim() !== contract.step_captions[position]
+          || !(state.entityIds ?? []).length,
       )
-      if (empty !== -1) {
-        return [false, `step ${empty + 1} has no caption or no scene content`, [states[empty]?.title ?? '']]
+      if (mismatch !== -1) {
+        return [
+          false,
+          `step ${mismatch + 1} does not expose its normative caption or scene content`,
+          [
+            `expected caption: ${contract.step_captions[mismatch]}`,
+            `observed caption: ${states[mismatch]?.caption ?? '(none)'}`,
+            states[mismatch]?.title ?? '',
+          ],
+        ]
       }
-      return [true, 'every step renders a caption and scene content', []]
+      return [true, 'every step renders its normative caption and scene content', contract.step_captions]
     },
 
     'demo-evolving-scene-structure': async () => {

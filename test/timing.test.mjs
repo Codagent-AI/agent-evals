@@ -69,6 +69,16 @@ test('a human-review interval is refused rather than recorded', () => {
   assert.ok(HUMAN_TIMED_PHASES.includes('human-review'))
 })
 
+test('official result assembly is machine work, not excluded human time', () => {
+  const ledger = recordMachineInterval(createTimingLedger(), {
+    phase: 'official-result',
+    duration_ms: 25,
+  })
+
+  assert.equal(HUMAN_TIMED_PHASES.includes('official-result'), false)
+  assert.equal(ledger.intervals[0].phase, 'official-result')
+})
+
 test('pending human review contributes to no reported duration', () => {
   const ledger = ledgerWith([['product-judging', 5000]])
 

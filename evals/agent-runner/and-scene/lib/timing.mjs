@@ -11,7 +11,7 @@
 // "total" later, and the total is meant to describe machine work only.
 import { AUTOMATED_PHASES } from './phases.mjs'
 
-export const HUMAN_TIMED_PHASES = ['human-review', 'official-result']
+export const HUMAN_TIMED_PHASES = ['human-review']
 
 // Derived from the lifecycle rather than written out separately. The controller
 // records intervals under each phase's own name, so an independent vocabulary

@@ -19,7 +19,7 @@ function createDemo(knobs = {}) {
     route = DEMO_CONTRACT.route,
     titles = TITLES,
     stepCount = titles.length,
-    captions = titles.map((title) => `Caption for ${title}`),
+    captions = DEMO_CONTRACT.step_captions,
     perStepSceneId = false,
     replaceEntities = false,
     clampStart = true,
@@ -182,6 +182,11 @@ test('each broken demo behaviour fails its own criterion', async () => {
     ['demo-nine-step-content-and-order', { titles: [...TITLES].reverse() }],
     ['demo-nine-step-content-and-order', { titles: TITLES.slice(0, 5), stepCount: 5 }],
     ['demo-required-scene-content', { captions: TITLES.map(() => '') }],
+    ['demo-required-scene-content', {
+      captions: DEMO_CONTRACT.step_captions.map((caption, index) => (
+        index === 4 ? 'A plausible but non-normative caption.' : caption
+      )),
+    }],
     ['demo-evolving-scene-structure', { perStepSceneId: true }],
     ['demo-evolving-scene-structure', { replaceEntities: true }],
     ['quality-captions-and-navigation', { controlCount: 0 }],
