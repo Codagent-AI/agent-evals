@@ -13,7 +13,10 @@ export const AUTOMATED_PHASES = [
   // recorded run already reached its boundary.
   { name: 'agent-runner', owner: 'implementation-workflow', alwaysVerify: true },
   { name: 'verification', owner: 'evaluation-harness' },
-  { name: 'candidate-server', owner: 'evaluation-harness' },
+  // The candidate server is a process-local resource. A durable phase
+  // checkpoint from an earlier process proves nothing about whether it is
+  // running now, so it is always restarted or health-checked on resume.
+  { name: 'candidate-server', owner: 'evaluation-harness', alwaysVerify: true },
   { name: 'browser-evaluation', owner: 'evaluation-harness', requiresServer: true },
   { name: 'product-judging', owner: 'evaluation-harness' },
   { name: 'ambiguity-diagnostics', owner: 'evaluation-harness' },
@@ -26,7 +29,7 @@ export const AUTOMATED_PHASES = [
 ]
 
 export const HUMAN_REVIEW_PHASES = [
-  { name: 'candidate-server', owner: 'evaluation-harness' },
+  { name: 'candidate-server', owner: 'evaluation-harness', alwaysVerify: true },
   { name: 'human-review', owner: 'evaluation-harness', requiresServer: true },
   { name: 'official-result', owner: 'evaluation-harness' },
   { name: 'final-report', owner: 'evaluation-harness' },

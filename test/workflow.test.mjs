@@ -92,6 +92,54 @@ test('no recorded run starts a fresh Agent Runner run', () => {
   assert.equal(decision.action, 'start')
 })
 
+test('an unrecorded but persisted run is adopted rather than duplicated', () => {
+  // The controller can be interrupted after Agent Runner persisted its run but
+  // before the identity reached the checkpoint.
+  const decision = classifyRunnerRun({
+    recorded: null,
+    discovered: { run_id: 'run-7', status: 'running', last_step: 'implement-tasks' },
+    boundaryStep: 'simplify',
+    isProcessAlive: () => false,
+  })
+
+  assert.equal(decision.status, 'inactive-unfinished')
+  assert.equal(decision.action, 'resume')
+  assert.deepEqual(decision.command, ['agent-runner', '--resume', 'run-7'])
+  assert.equal(decision.adopted, true)
+})
+
+test('an unrecorded but persisted active run is waited for, not duplicated', () => {
+  const decision = classifyRunnerRun({
+    recorded: null,
+    discovered: { run_id: 'run-7', status: 'running', lock: { pid: 4242, run_id: 'run-7' } },
+    boundaryStep: 'simplify',
+    isProcessAlive: (pid) => pid === 4242,
+  })
+
+  assert.equal(decision.action, 'wait')
+  assert.equal(decision.adopted, true)
+})
+
+test('an unrecorded persisted run that already reached the boundary is continued', () => {
+  const decision = classifyRunnerRun({
+    recorded: null,
+    discovered: { run_id: 'run-7', status: 'completed', last_step: 'simplify' },
+    boundaryStep: 'simplify',
+    isProcessAlive: () => false,
+  })
+
+  assert.equal(decision.action, 'continue')
+  assert.equal(decision.adopted, true)
+})
+
+test('no recorded and no discovered run starts a fresh run', () => {
+  const decision = classifyRunnerRun({
+    recorded: null, discovered: null, isProcessAlive: () => false,
+  })
+
+  assert.equal(decision.action, 'start')
+})
+
 test('a recorded run owned by a live process is waited for, not relaunched', () => {
   const decision = classifyRunnerRun({
     recorded: { run_id: 'run-7' },

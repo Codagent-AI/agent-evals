@@ -157,6 +157,24 @@ test('completed phases are skipped on resume without rerunning their work', asyn
   assert.equal(result.failed, null)
 })
 
+test('the candidate server is restarted on resume rather than reused from a checkpoint', async () => {
+  // The server is a process-local resource: a durable phase checkpoint from an
+  // earlier process says nothing about whether it is running now.
+  const { order, map } = handlers(AUTOMATED_PHASES, { effects: serverUp })
+
+  const result = await runPhases({
+    phases: AUTOMATED_PHASES,
+    handlers: map,
+    outcome: createOutcome(),
+    isComplete: (name) => ['candidate-server'].includes(name),
+  })
+
+  assert.ok(order.includes('candidate-server'), order.join(','))
+  assert.ok(!result.reused.includes('candidate-server'))
+  assert.equal(result.failed, null)
+  assert.ok(order.includes('browser-evaluation'), order.join(','))
+})
+
 test('the Agent Runner phase always re-verifies rather than trusting a checkpoint', async () => {
   const { order, map } = handlers(AUTOMATED_PHASES, { effects: serverUp })
 
@@ -168,8 +186,9 @@ test('the Agent Runner phase always re-verifies rather than trusting a checkpoin
   })
 
   // Resume must consult Agent Runner's own state before acting, so its phase is
-  // never short-circuited by an eval-side checkpoint.
-  assert.deepEqual(order, ['agent-runner'])
+  // never short-circuited by an eval-side checkpoint. The candidate server is
+  // likewise always re-verified.
+  assert.deepEqual(order, ['agent-runner', 'candidate-server'])
   assert.ok(!result.reused.includes('agent-runner'))
   assert.ok(result.reused.includes('product-judging'))
 })

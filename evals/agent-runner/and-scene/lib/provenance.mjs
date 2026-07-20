@@ -31,8 +31,16 @@ export async function readWorkflowProvenance({ agentRunnerDir, exec = defaultExe
     )
   }
 
-  // `--porcelain` covers staged, unstaged, and untracked entries alike.
+  // `--porcelain` covers staged, unstaged, and untracked entries alike. A
+  // failed status command means cleanliness was never established, so it must
+  // not be read as an empty (clean) result.
   const status = exec('git', ['-C', agentRunnerDir, 'status', '--porcelain'])
+  if (status.status !== 0) {
+    throw provenanceError(
+      'git-status-failed',
+      `Cannot determine Agent Runner checkout status: ${agentRunnerDir}\n${(status.stderr ?? '').trim().slice(0, 500)}`,
+    )
+  }
   const dirty = (status.stdout ?? '').trim()
   if (dirty) {
     throw provenanceError(

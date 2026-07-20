@@ -123,6 +123,7 @@ focused modules under `lib/`:
 | `lib/provenance.mjs` | Clean-checkout, workflow-hash, and CLI-version provenance |
 | `lib/profiles.mjs` | Role profile validation, eval-scoped config, effective-profile reconciliation |
 | `lib/workflow.mjs` | Stop boundary, workflow contract, Agent Runner run classification |
+| `lib/runner-state.mjs` | Reading Agent Runner run state by identifier or newest timestamp |
 | `lib/outcomes.mjs` | Evaluation status and product verdict model |
 | `lib/phases.mjs` | The ordered lifecycle and its failure ownership |
 
@@ -140,14 +141,16 @@ artifacts/evals/and-scene/<run-id>/
 ├── phases/
 └── .runtime/
     ├── candidate-worktree/
-    ├── agent-runner-projects/
-    └── agent-runner-config/config.yaml
+    │   └── .agent-runner/config.yaml
+    └── agent-runner-projects/
 ```
 
-`.runtime/` persists across disposable containers. The eval-scoped Agent Runner
-profile is materialized there and nowhere else: the user's global and project
-Agent Runner configuration is never read or modified. Credentials stay in the
-ephemeral container home and are never written into the run directory.
+`.runtime/` persists across disposable containers. Agent Runner layers built-in
+defaults, the global config, then the project config it discovers at
+`<cwd>/.agent-runner/config.yaml`, so the eval-scoped profile is written into
+the candidate worktree and Agent Runner is invoked from there. Nothing outside
+this run directory is read or modified. Credentials stay in the ephemeral
+container home and are never written into the run directory.
 
 ## Lifecycle
 

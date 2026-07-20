@@ -63,8 +63,22 @@ export function verifyWorkflowContract(text, boundary) {
 
 // The outer eval process restarting must never launch a second implementation
 // run, so every recorded run resolves to wait, continue, resume, or error.
-export function classifyRunnerRun({ recorded, state, boundaryStep, isProcessAlive }) {
-  if (!recorded?.run_id) return { status: 'none', action: 'start', reason: null }
+export function classifyRunnerRun({ recorded, state, discovered, boundaryStep, isProcessAlive }) {
+  // The controller can be interrupted after Agent Runner persisted a run but
+  // before that identity reached the checkpoint. Adopt the persisted run rather
+  // than starting a duplicate implementation workflow.
+  if (!recorded?.run_id) {
+    if (!discovered?.run_id) return { status: 'none', action: 'start', reason: null }
+    return {
+      ...classifyRunnerRun({
+        recorded: { run_id: discovered.run_id },
+        state: discovered,
+        boundaryStep,
+        isProcessAlive,
+      }),
+      adopted: true,
+    }
+  }
 
   if (!state) {
     return {

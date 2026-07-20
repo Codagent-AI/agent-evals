@@ -100,6 +100,24 @@ test('an untracked file stops the evaluation before Agent Runner', async () => {
   )
 })
 
+test('a failing git status is an error rather than an assumed clean checkout', async () => {
+  const dir = await checkout()
+
+  await assert.rejects(
+    () => readWorkflowProvenance({
+      agentRunnerDir: dir,
+      exec: execStub({
+        'git status --porcelain': { status: 128, stdout: '', stderr: 'fatal: not a git repository\n' },
+      }),
+    }),
+    (error) => {
+      assert.equal(error.code, 'git-status-failed')
+      assert.match(error.message, /not a git repository/)
+      return true
+    },
+  )
+})
+
 test('a non-worktree checkout is rejected', async () => {
   const dir = await checkout()
 

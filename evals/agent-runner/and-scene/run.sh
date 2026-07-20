@@ -266,22 +266,30 @@ require_role_profile() {
 }
 
 if [[ "$RUN_AGENT" == 1 ]]; then
-  # The suite requires a clean recorded Agent Runner revision before any
-  # workflow starts or resumes; a dirty checkout stops the run here on the host.
-  if ! git -C "$AGENT_RUNNER_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    echo "Agent Runner checkout is not a Git worktree: $AGENT_RUNNER_DIR" >&2
-    exit 2
-  fi
-  if [[ -n "$(git -C "$AGENT_RUNNER_DIR" status --porcelain 2>/dev/null)" ]]; then
-    echo "Agent Runner checkout has uncommitted changes: $AGENT_RUNNER_DIR" >&2
-    exit 2
-  fi
-  if [[ ! -f "$AGENT_RUNNER_DIR/$WORKFLOW_RELATIVE_PATH" ]]; then
-    echo "Agent Runner checkout does not contain $WORKFLOW_RELATIVE_PATH: $AGENT_RUNNER_DIR" >&2
-    exit 2
-  fi
-
+  # A reference baseline evaluates an existing candidate without invoking Agent
+  # Runner, so its workflow contract and worktree cleanliness do not apply. Only
+  # the sandbox adapter, checked above, is required to launch it.
   if [[ "$REFERENCE_BASELINE" != 1 ]]; then
+    # The suite requires a clean recorded Agent Runner revision before any
+    # workflow starts or resumes; a dirty checkout stops the run here on the
+    # host.
+    if ! git -C "$AGENT_RUNNER_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      echo "Agent Runner checkout is not a Git worktree: $AGENT_RUNNER_DIR" >&2
+      exit 2
+    fi
+    if ! git -C "$AGENT_RUNNER_DIR" status --porcelain >/dev/null 2>&1; then
+      echo "Cannot determine Agent Runner checkout status: $AGENT_RUNNER_DIR" >&2
+      exit 2
+    fi
+    if [[ -n "$(git -C "$AGENT_RUNNER_DIR" status --porcelain)" ]]; then
+      echo "Agent Runner checkout has uncommitted changes: $AGENT_RUNNER_DIR" >&2
+      exit 2
+    fi
+    if [[ ! -f "$AGENT_RUNNER_DIR/$WORKFLOW_RELATIVE_PATH" ]]; then
+      echo "Agent Runner checkout does not contain $WORKFLOW_RELATIVE_PATH: $AGENT_RUNNER_DIR" >&2
+      exit 2
+    fi
+
     require_role_profile "lead-agent" "$LEAD_CLI" "$LEAD_MODEL" "$LEAD_EFFORT"
     require_role_profile "task-implementor" "$IMPLEMENTOR_CLI" "$IMPLEMENTOR_MODEL" "$IMPLEMENTOR_EFFORT"
 

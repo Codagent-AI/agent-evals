@@ -153,6 +153,21 @@ test('a reference baseline requires no role profiles', async () => {
   assert.ok(result.output.includes('--candidate-ref'), result.output)
 })
 
+test('a reference baseline does not require a clean Agent Runner checkout', async () => {
+  // Reference baselines never invoke Agent Runner, so its workflow contract and
+  // worktree cleanliness are irrelevant to them.
+  const dirty = await setup({ dirty: true })
+  const missingWorkflow = await setup({ workflow: null })
+
+  const dirtyResult = await scored(dirty, ['--skip-validator', '--reference-baseline', '--candidate-ref', 'origin/reference'])
+  const missingResult = await scored(missingWorkflow, [
+    '--skip-validator', '--reference-baseline', '--candidate-ref', 'origin/reference',
+  ])
+
+  assert.equal(dirtyResult.status, 0, dirtyResult.output)
+  assert.equal(missingResult.status, 0, missingResult.output)
+})
+
 test('a dirty Agent Runner checkout is rejected on the host before the sandbox runs', async () => {
   const context = await setup({ dirty: true })
 

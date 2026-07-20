@@ -9,7 +9,7 @@
 // human review, reporting) are registered here as explicit placeholders so the
 // ordering, checkpointing, and outcome contracts can be exercised now and the
 // handlers replaced without touching the lifecycle.
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -29,6 +29,7 @@ import {
   validateRoleProfiles,
 } from './lib/profiles.mjs'
 import { compareProvenance, readWorkflowProvenance } from './lib/provenance.mjs'
+import { readRunnerState as readPersistedRunnerState, resolveProjectsDir } from './lib/runner-state.mjs'
 import { runTimed, summarizeTimings } from './lib/subprocess.mjs'
 import {
   checkBoundary,
@@ -106,38 +107,9 @@ async function prepareRunDirectory(runDir) {
     // ephemeral container home and are never copied here.
     '.runtime/candidate-worktree',
     '.runtime/agent-runner-projects',
-    '.runtime/agent-runner-config',
   ]) {
     await mkdir(join(runDir, relative), { recursive: true })
   }
-}
-
-// Agent Runner owns its run state; the controller only reads it to decide
-// whether to start, wait for, resume, or continue past the recorded run.
-async function defaultReadRunnerState(runDir) {
-  const projects = join(runDir, '.runtime/agent-runner-projects')
-  let newest = null
-  const visit = async (dir, depth) => {
-    let entries
-    try {
-      entries = await readdir(dir, { withFileTypes: true })
-    } catch {
-      return
-    }
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue
-      const path = join(dir, entry.name)
-      if (depth === 0) {
-        const state = await readJson(join(path, 'state.json'), null)
-        if (state) newest = state
-        continue
-      }
-      await visit(path, depth - 1)
-    }
-  }
-  // <projects>/<project>/runs/<run-id>/state.json
-  await visit(projects, 2)
-  return newest
 }
 
 function failure(errors) {
@@ -152,6 +124,12 @@ export async function runEvaluation({
   observedSteps,
   waitForRun = () => {},
   handlers: handlerOverrides = {},
+  // Agent Runner resolves its run store from $HOME. The controller must read
+  // the same store the spawned runner writes to, so the home is explicit and
+  // is passed through to the child rather than being inherited implicitly.
+  // Linking a run store into a home is also a real side effect, so library
+  // callers name the home they mean instead of inheriting the ambient one.
+  home = null,
   log = () => {},
 }) {
   let options
@@ -194,6 +172,14 @@ export async function runEvaluation({
   if (mode === 'agent-runner') {
     if (!options.agentRunnerDir) {
       return failure([{ code: 'invalid-arguments', message: '--agent-runner-dir is required' }])
+    }
+    // Without a home the controller and Agent Runner would read and write
+    // different run stores, so a run identity could be silently lost.
+    if (!home) {
+      return failure([{
+        code: 'unresolvable-home',
+        message: 'cannot resolve a home directory for Agent Runner run state; set HOME',
+      }])
     }
     try {
       provenance = await readWorkflowProvenance({ agentRunnerDir: resolve(options.agentRunnerDir), exec })
@@ -259,11 +245,16 @@ export async function runEvaluation({
     await saveCheckpoint(checkpointPath, checkpoint)
   }
 
-  // The evaluation profile lives only in the run directory; the user's global
-  // and project Agent Runner configuration is never read or modified.
+  // Agent Runner layers built-in defaults, the global config, then the project
+  // config it discovers at <cwd>/.agent-runner/config.yaml. Writing the
+  // evaluation profile there and running Agent Runner from the candidate
+  // worktree is what actually makes the selected roles take effect; the user's
+  // own configuration outside this run directory is never read or modified.
+  const candidateWorktree = join(runDir, '.runtime/candidate-worktree')
   if (mode === 'agent-runner') {
+    await mkdir(join(candidateWorktree, '.agent-runner'), { recursive: true })
     await writeFile(
-      join(runDir, '.runtime/agent-runner-config/config.yaml'),
+      join(candidateWorktree, '.agent-runner/config.yaml'),
       renderEvalConfig(validation.profiles),
     )
   }
@@ -275,8 +266,19 @@ export async function runEvaluation({
     run: checkpoint.agent_runner,
     timings: [],
   }
-  const readState = readRunnerState ?? (() => defaultReadRunnerState(runDir))
+  // Link the persistent run store into the container home so Agent Runner
+  // writes where the controller reads, then read from whichever store is
+  // actually in effect.
+  const projectsDir = await resolveProjectsDir({ runDir, home })
+  const readState = readRunnerState ?? ((runIdentifier) => readPersistedRunnerState(projectsDir, runIdentifier))
   const readSteps = observedSteps ?? ((state) => state?.steps ?? [])
+  // Agent Runner must run in the candidate worktree so it discovers the
+  // eval-scoped project config, and under the same home the controller reads
+  // run state from so both agree on the run store.
+  const runnerSpawnOptions = {
+    cwd: candidateWorktree,
+    env: { ...process.env, HOME: home },
+  }
 
   const handlers = {
     'agent-runner': async () => {
@@ -285,28 +287,47 @@ export async function runEvaluation({
         return
       }
 
+      const recorded = checkpoint.agent_runner
+      const observedState = await readState(recorded?.run_id ?? null)
       const decision = classifyRunnerRun({
-        recorded: checkpoint.agent_runner,
-        state: await readState(),
+        recorded,
+        state: observedState,
+        // With no checkpointed identity, an already-persisted run means a
+        // previous process was interrupted mid-flight; adopt it rather than
+        // starting a second implementation workflow.
+        discovered: recorded?.run_id ? null : observedState,
         boundaryStep: boundary.stop_step,
         isProcessAlive,
       })
-      record.events.push({ event: decision.action, status: decision.status, reason: decision.reason })
+      record.events.push({
+        event: decision.action,
+        status: decision.status,
+        reason: decision.reason,
+        adopted: decision.adopted ?? false,
+      })
       log(`agent-runner: ${decision.action}`)
 
       if (decision.action === 'error') throw new Error(decision.reason)
+
+      // Adopting a persisted run records its identity before any further work,
+      // so a second interruption cannot lose it again.
+      if (decision.adopted && decision.run_id) {
+        record.run = { run_id: decision.run_id, session_dir: observedState?.session_dir ?? null }
+        checkpoint = { ...checkpoint, agent_runner: record.run }
+        await saveCheckpoint(checkpointPath, checkpoint)
+      }
 
       if (decision.action === 'start') {
         const timing = runTimed('agent-runner', [
           'run', provenance.workflow_path,
           '--until', boundary.stop_step,
           ...boundary.workflow_arguments,
-        ], { label: 'agent-runner', exec })
+        ], { label: 'agent-runner', exec, ...runnerSpawnOptions })
         record.timings.push(timing)
         if (!timing.ok) throw new Error(`agent-runner exited ${timing.status}`)
       } else if (decision.action === 'resume') {
         const [command, ...args] = decision.command
-        const timing = runTimed(command, args, { label: 'agent-runner-resume', exec })
+        const timing = runTimed(command, args, { label: 'agent-runner-resume', exec, ...runnerSpawnOptions })
         record.timings.push(timing)
         if (!timing.ok) throw new Error(`agent-runner resume exited ${timing.status}`)
       } else if (decision.action === 'wait') {
@@ -315,7 +336,7 @@ export async function runEvaluation({
 
       // Record the run identity durably as soon as it becomes available so a
       // restarted outer process never launches a duplicate implementation run.
-      const state = await readState()
+      const state = await readState(record.run?.run_id ?? decision.run_id ?? null)
       if (state?.run_id) {
         record.run = { run_id: state.run_id, session_dir: state.session_dir ?? null }
         checkpoint = { ...checkpoint, agent_runner: record.run }
@@ -424,7 +445,11 @@ export async function runEvaluation({
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const result = await runEvaluation({ argv: process.argv.slice(2), log: (line) => console.error(line) })
+  const result = await runEvaluation({
+    argv: process.argv.slice(2),
+    home: process.env.HOME ?? null,
+    log: (line) => console.error(line),
+  })
   for (const error of result.errors ?? []) console.error(JSON.stringify(error))
   process.exit(result.exitCode)
 }

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, readlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -55,11 +55,24 @@ async function environment({ workflow = workflowYaml, dirty = '', commit = 'a'.r
     return { status: 0, stdout: '' }
   }
 
-  return { root, agentRunnerDir, exec, invocations, runDir: join(root, 'run-1') }
+  const home = join(root, 'container-home')
+  await mkdir(home, { recursive: true })
+
+  return { root, agentRunnerDir, exec, invocations, home, runDir: join(root, 'run-1') }
 }
 
 function runnerInvocations(invocations) {
   return invocations.filter(([command, first]) => command === 'agent-runner' && first !== '--version')
+}
+
+// A fresh run has no persisted Agent Runner state until the workflow has been
+// launched; only afterwards does state.json exist.
+function statefulReader(context, lastStep) {
+  return () => (
+    runnerInvocations(context.invocations).length === 0
+      ? null
+      : { run_id: 'run-7', session_dir: '/sessions/run-7', status: 'completed', last_step: lastStep }
+  )
 }
 
 async function evaluate(context, extraArgs = [], overrides = {}) {
@@ -74,7 +87,8 @@ async function evaluate(context, extraArgs = [], overrides = {}) {
     ],
     exec: context.exec,
     isProcessAlive: () => false,
-    readRunnerState: () => ({ run_id: 'run-7', session_dir: '/sessions/run-7', status: 'completed', last_step: lastStep }),
+    home: context.home,
+    readRunnerState: statefulReader(context, lastStep),
     observedSteps: () => steps,
     ...rest,
   })
@@ -173,17 +187,99 @@ test('a reference baseline needs no role profiles and never invokes Agent Runner
   assert.equal(written.role_configuration.roles.lead.configured, 'not-applicable')
 })
 
-test('the eval-scoped config materializes both roles inside the run directory only', async () => {
+test('the eval-scoped config is written where Agent Runner discovers project config', async () => {
   const context = await environment()
 
   await evaluate(context, ['--skip-validator', ...profileArgs])
 
-  const config = await readFile(join(context.runDir, '.runtime/agent-runner-config/config.yaml'), 'utf8')
+  // Agent Runner layers global then project config, discovering the project
+  // layer at <cwd>/.agent-runner/config.yaml.
+  const config = await readFile(
+    join(context.runDir, '.runtime/candidate-worktree/.agent-runner/config.yaml'),
+    'utf8',
+  )
   assert.match(config, /active_profile: eval/)
   assert.match(config, /planner:/)
   assert.match(config, /implementor:/)
   assert.match(config, /model: opus/)
   assert.match(config, /model: sonnet/)
+})
+
+test('Agent Runner runs in the candidate worktree so it reads the eval config', async () => {
+  const context = await environment()
+  const spawns = []
+
+  await runEvaluation({
+    argv: [
+      '--run-dir', context.runDir, '--agent-runner-dir', context.agentRunnerDir,
+      '--change-name', 'create-and-scene', '--skip-validator', ...profileArgs,
+    ],
+    exec: (command, args, options) => {
+      spawns.push({ command, args, cwd: options?.cwd })
+      return context.exec(command, args)
+    },
+    isProcessAlive: () => false,
+    home: context.home,
+    readRunnerState: statefulReader(context, 'simplify'),
+    observedSteps: () => ['plan', 'simplify'],
+  })
+
+  const started = spawns.find(({ command, args }) => command === 'agent-runner' && args[0] === 'run')
+  assert.ok(started, JSON.stringify(spawns))
+  assert.equal(started.cwd, join(context.runDir, '.runtime/candidate-worktree'))
+})
+
+test('a resumed Agent Runner run uses the same candidate worktree', async () => {
+  const context = await environment()
+  await evaluate(context, ['--skip-validator', ...profileArgs])
+  const spawns = []
+
+  await runEvaluation({
+    argv: [
+      '--run-dir', context.runDir, '--agent-runner-dir', context.agentRunnerDir,
+      '--change-name', 'create-and-scene', '--skip-validator', '--resume', ...profileArgs,
+    ],
+    exec: (command, args, options) => {
+      spawns.push({ command, args, cwd: options?.cwd })
+      return context.exec(command, args)
+    },
+    isProcessAlive: () => false,
+    home: context.home,
+    readRunnerState: () => ({ run_id: 'run-7', status: 'failed', last_step: 'implement-tasks' }),
+    observedSteps: () => ['plan'],
+  })
+
+  const resumed = spawns.find(({ command, args }) => command === 'agent-runner' && args[0] === '--resume')
+  assert.ok(resumed, JSON.stringify(spawns))
+  assert.equal(resumed.cwd, join(context.runDir, '.runtime/candidate-worktree'))
+})
+
+test('an unrecorded run persisted by Agent Runner is adopted instead of duplicated', async () => {
+  const context = await environment()
+  let calls = 0
+
+  const result = await runEvaluation({
+    argv: [
+      '--run-dir', context.runDir, '--agent-runner-dir', context.agentRunnerDir,
+      '--change-name', 'create-and-scene', '--skip-validator', ...profileArgs,
+    ],
+    exec: context.exec,
+    isProcessAlive: () => false,
+    home: context.home,
+    // No checkpointed identity, but Agent Runner already persisted a run: the
+    // previous process was interrupted mid-flight.
+    readRunnerState: () => {
+      calls += 1
+      return { run_id: 'run-9', session_dir: '/sessions/run-9', status: 'failed', last_step: 'implement-tasks' }
+    },
+    observedSteps: () => ['plan', 'simplify'],
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const invocations = runnerInvocations(context.invocations)
+  assert.equal(invocations.length, 1, JSON.stringify(invocations))
+  assert.deepEqual(invocations[0], ['agent-runner', '--resume', 'run-9'])
+  assert.ok(calls > 0)
 })
 
 test('no credential material is persisted into the run directory', async () => {
@@ -295,6 +391,7 @@ test('resume with changed Agent Runner provenance reports a resume-provenance er
     ],
     exec: moved.exec,
     isProcessAlive: () => false,
+    home: context.home,
     readRunnerState: () => ({ run_id: 'run-7', status: 'completed', last_step: 'simplify' }),
   })
 
@@ -364,6 +461,88 @@ test('a capabilities file that cannot be read is a clean argument failure', asyn
 
   assert.equal(result.exitCode, 2)
   assert.match(JSON.stringify(result.errors), /capabilit/i)
+})
+
+test('the run store is linked into an explicitly supplied home only', async () => {
+  const context = await environment()
+  const home = context.home
+
+  await runEvaluation({
+    argv: [
+      '--run-dir', context.runDir, '--agent-runner-dir', context.agentRunnerDir,
+      '--change-name', 'create-and-scene', '--skip-validator', ...profileArgs,
+    ],
+    exec: context.exec,
+    isProcessAlive: () => false,
+    home,
+    readRunnerState: statefulReader(context, 'simplify'),
+    observedSteps: () => ['plan', 'simplify'],
+  })
+
+  // Agent Runner resolves its run store from $HOME, so the persistent run
+  // directory store is linked there.
+  assert.equal(
+    await readlink(join(home, '.agent-runner/projects')),
+    join(context.runDir, '.runtime/agent-runner-projects'),
+  )
+})
+
+test('Agent Runner is spawned with the same home the controller reads from', async () => {
+  const context = await environment()
+  const spawns = []
+
+  await runEvaluation({
+    argv: [
+      '--run-dir', context.runDir, '--agent-runner-dir', context.agentRunnerDir,
+      '--change-name', 'create-and-scene', '--skip-validator', ...profileArgs,
+    ],
+    exec: (command, args, options) => {
+      spawns.push({ command, args, env: options?.env })
+      return context.exec(command, args)
+    },
+    isProcessAlive: () => false,
+    home: context.home,
+    readRunnerState: statefulReader(context, 'simplify'),
+    observedSteps: () => ['plan', 'simplify'],
+  })
+
+  const started = spawns.find(({ command, args }) => command === 'agent-runner' && args[0] === 'run')
+  assert.ok(started, JSON.stringify(spawns.map((s) => s.command)))
+  assert.equal(started.env.HOME, context.home)
+})
+
+test('an unresolvable home is rejected before Agent Runner runs', async () => {
+  const context = await environment()
+
+  const result = await runEvaluation({
+    argv: [
+      '--run-dir', context.runDir, '--agent-runner-dir', context.agentRunnerDir,
+      '--change-name', 'create-and-scene', '--skip-validator', ...profileArgs,
+    ],
+    exec: context.exec,
+    isProcessAlive: () => false,
+    home: null,
+  })
+
+  assert.equal(result.exitCode, 2)
+  assert.deepEqual(runnerInvocations(context.invocations), [])
+  assert.match(JSON.stringify(result.errors), /home/i)
+})
+
+test('a reference baseline needs no home because it never spawns Agent Runner', async () => {
+  const context = await environment()
+
+  const result = await runEvaluation({
+    argv: [
+      '--run-dir', context.runDir, '--agent-runner-dir', context.agentRunnerDir,
+      '--change-name', 'create-and-scene', '--skip-validator', '--reference-baseline',
+    ],
+    exec: context.exec,
+    isProcessAlive: () => false,
+    home: null,
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
 })
 
 test('the run directory is reopened rather than recreated on resume', async () => {
