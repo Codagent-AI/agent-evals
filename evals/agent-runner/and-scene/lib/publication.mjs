@@ -134,19 +134,6 @@ function createPublicationCheckpoint(runId) {
 export async function copySnapshot({ runDir, runId, repoDir }) {
   const destination = resultsDirFor({ repoDir, runId })
 
-  // Anything already in the results directory that is not a curated artifact —
-  // stale, accidental, or planted — stops publication here. Copying over the
-  // curated names would leave it in place beside them, and it would then be
-  // published as part of this run's permanent record.
-  const existing = await readdir(destination).catch(() => [])
-  const uncurated = existing.filter((name) => !CURATED_ARTIFACTS.includes(name))
-  if (uncurated.length > 0) {
-    throw new PublicationError(
-      `cannot publish ${runId}: ${destination} contains uncurated entries: ${uncurated.join(', ')}`,
-      { stage: 'snapshot' },
-    )
-  }
-
   const files = []
   const absent = []
   for (const name of CURATED_ARTIFACTS) {
@@ -163,6 +150,31 @@ export async function copySnapshot({ runDir, runId, repoDir }) {
       continue
     }
     files.push(name)
+  }
+
+  // Nothing may survive this copy that the copy does not replace. An entry the
+  // snapshot is about to overwrite is fine — that is an ordinary resume — but
+  // anything else would remain in the published directory: an uncurated file
+  // that was never part of any snapshot, or a curated artifact left by an
+  // earlier publication under this run id that this run does not produce. Either
+  // way the permanent record would end up describing two different runs, so
+  // publication stops before it copies or stages anything.
+  //
+  // Comparing names is enough. Every entry that survives is rewritten from this
+  // run's artifacts, so its previous content cannot reach the commit.
+  const existing = await readdir(destination).catch(() => [])
+  const stale = existing.filter((name) => !files.includes(name))
+  if (stale.length > 0) {
+    const uncurated = stale.filter((name) => !CURATED_ARTIFACTS.includes(name))
+    const superseded = stale.filter((name) => CURATED_ARTIFACTS.includes(name))
+    throw new PublicationError(
+      `cannot publish ${runId}: ${destination} contains entries this snapshot does not replace`
+      + (uncurated.length > 0 ? `; uncurated: ${uncurated.join(', ')}` : '')
+      + (superseded.length > 0
+        ? `; from an earlier publication of this run id: ${superseded.join(', ')}`
+        : ''),
+      { stage: 'snapshot' },
+    )
   }
 
   await mkdir(destination, { recursive: true })

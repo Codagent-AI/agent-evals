@@ -360,10 +360,13 @@ cloned repositories, dependency and build output, Agent Runner session state and
 transcripts, raw model output, logs, screenshots, traces, raw pricing catalogs,
 and credentials all stay in the ignored run directory.
 
-If the destination already holds anything that is not a curated artifact —
-stale, accidental, or planted — publication stops before it copies or stages
-anything, because copying over the curated names would leave that file in place
-to be published beside them.
+Nothing may survive the copy that the copy does not replace. If the destination
+holds an entry this snapshot will not overwrite — an uncurated file that was
+never part of any snapshot, or a curated artifact left by an earlier publication
+under the same run id that this run does not produce — publication stops before
+it copies or stages anything, because that entry would otherwise remain and the
+permanent record would describe two different runs. A destination whose every
+entry is being rewritten is an ordinary resume and proceeds.
 
 From the agent-evals working directory the command then stages and commits those
 curated files with `chore: record and-scene eval <run-id>` and runs an ordinary

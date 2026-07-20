@@ -288,6 +288,49 @@ test('an uncurated file already in the results directory stops publication', asy
   assert.equal((await readJson(join(runDir, 'publication.json'), null)).stage, 'snapshot')
 })
 
+test('a stale artifact this run does not produce stops publication', async () => {
+  const { repo, dir } = await disposableRepo()
+  // This run has no ambiguity ledger, but a previous publication under the same
+  // run id left one behind. Copying the curated names would not overwrite it, so
+  // the published record would mix two runs.
+  const { runDir, runId, result } = await finalizedRun(dir, { omit: ['ambiguity-ledger.json'] })
+  const before = git(repo, 'rev-parse', 'HEAD')
+
+  const { mkdir } = await import('node:fs/promises')
+  await mkdir(join(repo, RESULTS_RELATIVE_DIR, runId), { recursive: true })
+  await writeFile(
+    join(repo, RESULTS_RELATIVE_DIR, runId, 'ambiguity-ledger.json'),
+    JSON.stringify({ findings: ['from an earlier run'] }),
+  )
+
+  const { git: spy, calls } = recordingGit()
+  await assert.rejects(
+    publishRun({ runDir, runId, result, repoDir: repo, git: spy }),
+    /ambiguity-ledger\.json/,
+  )
+
+  assert.deepEqual(calls, [])
+  assert.equal(git(repo, 'rev-parse', 'HEAD'), before)
+  assert.equal((await readJson(join(runDir, 'publication.json'), null)).stage, 'snapshot')
+})
+
+test('a resume republishes over a destination it fully overwrites', async () => {
+  const { repo, remote, dir } = await disposableRepo()
+  const { runDir, runId, result } = await finalizedRun(dir)
+
+  // The commit fails once, leaving the copied snapshot behind in the destination.
+  const { git: spy } = recordingGit({ fail: (args) => (args[0] === 'commit' ? 'index.lock exists' : null) })
+  await assert.rejects(publishRun({ runDir, runId, result, repoDir: repo, git: spy }), /index\.lock/)
+  const { readdir } = await import('node:fs/promises')
+  assert.deepEqual((await readdir(join(repo, RESULTS_RELATIVE_DIR, runId))).sort(), [...CURATED_ARTIFACTS].sort())
+
+  // Every entry it finds is one this snapshot replaces, so the retry proceeds.
+  const outcome = await publishRun({ runDir, runId, result, repoDir: repo })
+
+  assert.equal(outcome.published, true)
+  assert.equal(git(remote, 'log', '-1', '--format=%s'), `chore: record and-scene eval ${runId}`)
+})
+
 test('an existing result commit is reused rather than duplicated', async () => {
   const { repo, dir } = await disposableRepo()
   const { runDir, runId, result } = await finalizedRun(dir)
