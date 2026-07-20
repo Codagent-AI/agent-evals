@@ -2,4 +2,4 @@
 - [x] [Replace product evaluation and scoring](tasks/02-product-evaluation-scoring.md)
 - [x] [Add metrics and ambiguity diagnostics](tasks/03-metrics-ambiguity-diagnostics.md)
 - [ ] [Finalize human review and reporting](tasks/04-human-review-reporting.md)
-- [ ] [Publish, calibrate, and cut over](tasks/05-publication-calibration-cutover.md)
+- [x] [Publish, calibrate, and cut over](tasks/05-publication-calibration-cutover.md)

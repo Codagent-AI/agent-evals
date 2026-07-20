@@ -31,11 +31,22 @@ repository-scoped token with `--env GITHUB_TOKEN` or an env file.
 
 ## Run the suite
 
+The supported order is: browser proof, calibration, reference baseline, full
+candidate run, paired human review, publication.
+
 First prove the sandbox can build the fixture, launch Chromium, and inspect the
 reference app through `chrome-devtools-axi`:
 
 ```bash
 evals/agent-runner/and-scene/run.sh --proof-browser
+```
+
+Then calibrate. A full `--run-agent` evaluation is blocked until calibration
+passes, because a run that costs real model time should not be the thing that
+discovers the harness scores the wrong component:
+
+```bash
+evals/agent-runner/and-scene/run.sh --calibrate
 ```
 
 Run the evaluation. Both role profiles are required and each independently
@@ -86,8 +97,86 @@ evals/agent-runner/and-scene/run.sh --run-agent --dry-run ...
 ```
 
 Proof artifacts default to `artifacts/evals/and-scene-proof/<timestamp>/`. Run
-directories default to `artifacts/evals/and-scene/<timestamp>/`. Use
+directories default to `artifacts/evals/and-scene/<timestamp>/`. Calibration
+artifacts default to `artifacts/evals/and-scene-calibration/<timestamp>/`. Use
 `--artifact-dir PATH` for a stable location; its basename is the run identity.
+
+## Calibration
+
+Calibration is the rollout gate, not a score. It runs on the host and invokes no
+sandbox, no Agent Runner, no browser, and no human.
+
+It evaluates the known-good reference and a suite-owned set of degraded
+mutations against the real rubric, judge-job, scoring, gate, result, and report
+path. The mutations are applied to evaluator output rather than to a candidate
+checkout: what is being calibrated is whether the harness attributes quality to
+the right place, and mutating a checkout would test the demo instead while
+costing a build and a browser for every case.
+
+Calibration asserts that:
+
+- the reference earns the full automated 70, opens all four hard gates, and
+  reaches an official pass;
+- each approved mutation degrades exactly the component or gate it targets,
+  degrades nothing else, and stays a product regression rather than becoming a
+  harness failure;
+- the four product judge jobs all run and none fails; and
+- synthetic human answers exercise rating validation, the 30-point arithmetic,
+  the human gates, resume at the first unanswered question, refusal of an edited
+  saved review, and report rendering.
+
+The case set is derived from the rubric, so a rubric edit cannot silently leave
+a component or gate uncalibrated. Synthetic answers exist only to exercise those
+paths; no human rating is ever fabricated for a real run.
+
+`calibration.json` records every case, its target, its problems, and any
+unintended regression, and `cases/<case-id>/` holds each case's diagnostic
+`result.json` and `report.html`. All of it is ignored diagnostics. Every
+calibration result carries `mode: calibration`, which publication refuses by
+name, so no calibration artifact can become a permanent record.
+
+The durable pass/fail record defaults to
+`artifacts/evals/and-scene-calibration/latest.json` and is what `--run-agent`
+consults. Override it with `--calibration-record PATH`. A missing or failed
+record stops a full evaluation with exit 2 before any container starts. A
+reference baseline invokes no Agent Runner and is exempt.
+
+If calibration exposes a rubric defect rather than a harness defect, revise the
+spec and rubric through review and calibrate again.
+
+## First benchmark rollout
+
+After calibration passes, the two runs the paired human review needs are
+produced without any human input:
+
+```bash
+# 1. The pending reference baseline for the existing implementation.
+evals/agent-runner/and-scene/run.sh \
+  --run-agent --reference-baseline \
+  --candidate-ref 171c7def1e12aca2a5f605a5e5feafb20d4e4d19 \
+  --artifact-dir artifacts/evals/and-scene/reference-baseline
+
+# 2. The first full candidate run.
+evals/agent-runner/and-scene/run.sh \
+  --run-agent --skip-validator \
+  --artifact-dir artifacts/evals/and-scene/candidate-1 \
+  --lead-cli claude --lead-model opus --lead-effort high \
+  --implementor-cli claude --implementor-model sonnet --implementor-effort medium
+```
+
+Both stop at `pending-human-review`. The paired review that turns them into
+official scores is explicitly human and is never performed by an implementation
+workflow:
+
+```bash
+evals/agent-runner/and-scene/human-review.sh \
+  --baseline-run-dir artifacts/evals/and-scene/reference-baseline \
+  --run-dir artifacts/evals/and-scene/candidate-1
+```
+
+After publication, the regenerable dependency and build output under `.runtime/`
+can be removed; keep the candidate Git tree and Agent Runner state for audit or
+retry.
 
 ## What it evaluates
 
@@ -132,6 +221,12 @@ focused modules under `lib/`:
 | `lib/result.mjs` | Result assembly, the artifact manifest, and the durable artifact set |
 | `lib/baseline.mjs` | Reference-baseline comparison and its rubric-match refusal |
 | `lib/report.mjs` | The offline, escaped HTML report |
+| `lib/publication.mjs` | The curated snapshot, path-limited commit, and retryable push |
+| `lib/calibration.mjs` | Known-good/degraded calibration cases and their expectations |
+
+`calibrate.mjs` is the third entry point. It runs the calibration on the host
+and also owns the gate `run.sh` consults, so the rule that blocks an expensive
+run is the same code that wrote the record.
 
 `human-review.sh` is the second thin host entry point, for the literal human
 review; `human-review.mjs` owns its lifecycle. It runs on the host rather than
@@ -151,6 +246,7 @@ artifacts/evals/and-scene/<run-id>/
 ├── artifact-manifest.json
 ├── human-review.json
 ├── ambiguity-ledger.json
+├── publication.json
 ├── logs/
 ├── evidence/
 ├── phases/
@@ -208,6 +304,9 @@ URL and readiness confirmation presented again. Nothing becomes official until
 the reviewer explicitly confirms the full summary; before that the run stays
 `pending-human-review`.
 
+Once the reviewer confirms, the run is finalized and published; see
+[Publication](#publication).
+
 Pass `--baseline-run-dir` to review a pending reference baseline first. Each run
 keeps its own candidate, rubric, response, score, and completion state, and the
 candidate's result records baseline totals, component, subcomponent, and gate
@@ -231,6 +330,44 @@ A candidate server is only reused, or stopped, when both its process and its
 endpoint prove it is still that server for the evaluated candidate. A recycled
 process identifier or an occupied port is never treated as proof: the unverified
 process is left running and untouched, and a new server is started elsewhere.
+
+## Publication
+
+A normal automated run ends at `pending-human-review` and is never published.
+Once the review finalizes a `complete` result with a `pass` or `fail` product
+verdict, the review command copies exactly these six files into
+`evals/agent-runner/and-scene/results/<run-id>/`:
+
+```text
+result.json  report.html  human-review.json
+ambiguity-ledger.json  implementation.diff  artifact-manifest.json
+```
+
+`result.json`, `report.html`, `human-review.json`, and `artifact-manifest.json`
+are required; the ledger and the diff are copied when the run produced them and
+recorded as absent when it did not, so a completed verdict is never held back by
+a missing diagnostic. Nothing outside that list is ever copied: `.runtime`,
+cloned repositories, dependency and build output, Agent Runner session state and
+transcripts, raw model output, logs, screenshots, traces, raw pricing catalogs,
+and credentials all stay in the ignored run directory.
+
+From the agent-evals working directory the command then stages and commits only
+that exact result directory with `chore: record and-scene eval <run-id>` and
+runs an ordinary `git push` on the current branch's configured upstream. Every
+staging and commit command is limited to that one generated pathspec, so an
+unrelated dirty working tree is never swept in. There is no force flag anywhere
+in the publication path.
+
+Pending, implementation-workflow-failed, evaluation-harness-failed, and
+calibration runs are all refused by name and publish nothing.
+
+Publication is delivery, not evaluation, and it is independently retryable. The
+completed product result is already durable when it begins, so a commit or push
+failure leaves that result untouched, records its stage in `publication.json`,
+and exits nonzero. Re-running the review command against the finalized run asks
+no question and reruns no evaluation: it resumes at the recorded stage, reuses an
+existing result commit rather than creating a second one, and retries only the
+unfinished push.
 
 ## Outcomes
 
@@ -311,6 +448,10 @@ failure list only proves clean rendering when the failure list was readable.
   policy every result cites by version and hash
 - `agent-runner-capabilities.json` in the suite for the role capabilities that
   profile validation checks against
+- `publication.json` for the publication stage, its result commit, which curated
+  files were published, and any retryable error
+- `results/<run-id>/` in the suite for the permanent published record of a
+  finalized run
 
 Supporting evidence is under `logs/`, `evidence/`, and `phases/`. The browser
 proof writes `proof-metadata.json`, `tier1-result.txt`, and logs without running
@@ -341,6 +482,16 @@ dirty Agent Runner checkout, a missing or non-conforming
 role-profile mismatch on resume, a resume-provenance change, or a stale
 checkpoint identity.
 
+For a blocked full evaluation, run `--calibrate` and read `calibration.json`.
+Its `failures` name the case and the exact expectation that broke, and each
+case's `problems` and `unintended_regressions` say whether the harness scored
+the wrong component, opened the wrong gate, or turned a product regression into
+a harness failure.
+
+For publication failures, `publication.json` records the stage, the result
+commit if one exists, and the git error. Re-run the review command against the
+same run directory to retry only the unfinished work.
+
 For implementation failures, `result.json` records the Agent Runner run
 identifier, session directory, configured and observed stop boundaries, and
 every observed step. A step observed beyond the configured boundary is reported
@@ -351,5 +502,11 @@ as a workflow-boundary failure with the unexpected step named.
 Update the fixture SHA deliberately when the implementation-ready snapshot
 changes. Keep runs pinned to exact commits, and update
 `agent-runner-capabilities.json` when the recorded Agent Runner revision changes
-its supported adapters, models, or efforts. Run targeted tests during
+its supported adapters, models, or efforts. Recalibrate after any rubric,
+scorer, gate, or reporting change: the record is what unblocks the next full
+evaluation, and a stale one is worth nothing. Run targeted tests during
 development and `npm run check` before trusting a change.
+
+Published result directories are immutable historical records. Correct an
+erroneous publication with a later revert commit rather than by rewriting
+history.

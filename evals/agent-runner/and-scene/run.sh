@@ -30,8 +30,12 @@ REFERENCE_BASELINE=0
 DRY_RUN=0
 PROOF_BROWSER=0
 RUN_AGENT=0
+CALIBRATE=0
 SUITE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 EVALS_ROOT="$(cd -- "$SUITE_DIR/../../.." && pwd)"
+# The durable record of the last calibration. A full Agent Runner evaluation is
+# blocked until it says calibration passed.
+CALIBRATION_RECORD="${CALIBRATION_RECORD:-$EVALS_ROOT/artifacts/evals/and-scene-calibration/latest.json}"
 AGENT_RUNNER_DIR="${AGENT_RUNNER_DIR:-$EVALS_ROOT/../agent-runner}"
 SANDBOX_RUNNER="${SANDBOX_RUNNER:-}"
 ENV_ARGS=()
@@ -42,7 +46,7 @@ MOUNT_CLAUDE_AUTH=0
 
 usage() {
   cat <<'USAGE'
-Usage: evals/agent-runner/and-scene/run.sh (--proof-browser | --run-agent) [options]
+Usage: evals/agent-runner/and-scene/run.sh (--proof-browser | --run-agent | --calibrate) [options]
 
 Runs the and-scene evaluation through Agent Runner's sandbox adapter.
 
@@ -57,6 +61,11 @@ the persistent run directory.
 Modes:
   --proof-browser        Run the narrow container/browser proof.
   --run-agent            Run the Agent Runner evaluation harness.
+  --calibrate            Run autonomous known-good/degraded calibration on the
+                          host. It invokes no sandbox, no Agent Runner, no
+                          browser, and no human, and its artifacts are ignored
+                          diagnostics that are never published. A full
+                          --run-agent evaluation is blocked until it passes.
 
 Options:
   --dry-run              Print the sandbox command instead of running it.
@@ -90,6 +99,10 @@ Options:
   --implementor-effort EFFORT
                           Task-implementor effort.
   --judge-model MODEL    Eval-owned judge model. Default: the Codex CLI default.
+  --calibration-record PATH
+                          Durable calibration pass/fail record. Written by
+                          --calibrate and required by --run-agent. Default:
+                          artifacts/evals/and-scene-calibration/latest.json
   --env NAME             Pass through one named environment variable.
                           Repeatable.
   --env-file PATH        Read simple NAME=value or export NAME=value entries
@@ -120,6 +133,14 @@ while (($#)); do
     --run-agent)
       RUN_AGENT=1
       shift
+      ;;
+    --calibrate)
+      CALIBRATE=1
+      shift
+      ;;
+    --calibration-record)
+      CALIBRATION_RECORD="${2:?missing value for --calibration-record}"
+      shift 2
       ;;
     --dry-run)
       DRY_RUN=1
@@ -223,6 +244,29 @@ while (($#)); do
   esac
 done
 
+if ((PROOF_BROWSER + RUN_AGENT + CALIBRATE != 1)); then
+  echo "Choose exactly one mode: --proof-browser, --run-agent, or --calibrate." >&2
+  usage >&2
+  exit 2
+fi
+
+# Calibration runs entirely on the host: no sandbox, no Agent Runner checkout,
+# no credentials. It is handled before every check those things require.
+if [[ "$CALIBRATE" == 1 ]]; then
+  if [[ -z "$ARTIFACT_DIR" ]]; then
+    ARTIFACT_DIR="$EVALS_ROOT/artifacts/evals/and-scene-calibration/$(timestamp)"
+  elif [[ "$ARTIFACT_DIR" != /* ]]; then
+    ARTIFACT_DIR="$EVALS_ROOT/$ARTIFACT_DIR"
+  fi
+  calibrate_command=(node "$SUITE_DIR/calibrate.mjs" --out "$ARTIFACT_DIR" --record "$CALIBRATION_RECORD")
+  if [[ "$DRY_RUN" == 1 ]]; then
+    printf '%q ' "${calibrate_command[@]}"
+    printf '\n'
+    exit 0
+  fi
+  exec "${calibrate_command[@]}"
+fi
+
 if [[ ! -d "$AGENT_RUNNER_DIR" ]]; then
   echo "Agent Runner directory does not exist: $AGENT_RUNNER_DIR" >&2
   exit 2
@@ -245,12 +289,6 @@ fi
 export AGENT_EVALS_SOURCE_COMMIT AGENT_EVALS_SOURCE_DIRTY
 ENV_ARGS+=(--env AGENT_EVALS_SOURCE_COMMIT --env AGENT_EVALS_SOURCE_DIRTY)
 
-if ((PROOF_BROWSER + RUN_AGENT != 1)); then
-  echo "Choose exactly one mode: --proof-browser or --run-agent." >&2
-  usage >&2
-  exit 2
-fi
-
 # Reject a role profile that is only partially specified rather than silently
 # filling in a default the result would misreport.
 require_role_profile() {
@@ -270,6 +308,15 @@ if [[ "$RUN_AGENT" == 1 ]]; then
   # Runner, so its workflow contract and worktree cleanliness do not apply. Only
   # the sandbox adapter, checked above, is required to launch it.
   if [[ "$REFERENCE_BASELINE" != 1 ]]; then
+    # A full Agent Runner evaluation costs real model time, so it does not start
+    # until calibration has proved the harness attributes quality to the right
+    # component and gate. The record is read by calibrate.mjs rather than parsed
+    # here, so the rule that blocks the run is the code that wrote it.
+    if ! node "$SUITE_DIR/calibrate.mjs" --check-record "$CALIBRATION_RECORD"; then
+      echo "Run calibration first: evals/agent-runner/and-scene/run.sh --calibrate" >&2
+      exit 2
+    fi
+
     # The suite requires a clean recorded Agent Runner revision before any
     # workflow starts or resumes; a dirty checkout stops the run here on the
     # host.

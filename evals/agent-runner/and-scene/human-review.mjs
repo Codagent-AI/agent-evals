@@ -16,7 +16,8 @@
 // completion state for each, so one baseline can anchor the candidate's deltas
 // without either review contaminating the other.
 import { createInterface } from 'node:readline/promises'
-import { basename, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { compareToBaseline } from './lib/baseline.mjs'
 import { ensureCandidateServer, stopCandidateServer } from './lib/candidate-server.mjs'
@@ -31,10 +32,15 @@ import {
 import { applyOutcomeEvent, createOutcome, outcomeLabel } from './lib/outcomes.mjs'
 import { HUMAN_REVIEW_PHASES, runPhases } from './lib/phases.mjs'
 import { hashJson, readJson, writeJsonAtomic } from './lib/persistence.mjs'
+import { publishRun } from './lib/publication.mjs'
 import { renderReport } from './lib/report.mjs'
 import { assembleResult, writeManifest, writeReport, writeResult } from './lib/result.mjs'
 import { loadRubrics, rubricProvenance } from './lib/rubric.mjs'
 import { scoreProduct } from './lib/scorer.mjs'
+
+const SUITE_DIR = dirname(fileURLToPath(import.meta.url))
+// The agent-evals working directory publication commits and pushes from.
+const AGENT_EVALS_DIR = resolve(SUITE_DIR, '../../..')
 
 const VALUES = new Map([
   ['--run-dir', 'runDir'],
@@ -197,6 +203,7 @@ async function reviewRun({
   isProcessAlive,
   baselineResult,
   renderReportImpl,
+  publish,
   log,
 }) {
   const reviewPath = join(run.runDir, 'human-review.json')
@@ -326,9 +333,10 @@ async function reviewRun({
       assembled = refreshed
     },
 
-    // Owned by the publication task; registered so the lifecycle stays honest
-    // about where it belongs.
-    publication: async () => {},
+    // Publication is delivery, not evaluation. It runs last, after the official
+    // result and its report are already durable, so a commit or push failure
+    // fails the command without touching the completed product result.
+    publication: async () => { await publish({ runDir: run.runDir, runId: run.runId, result: assembled }) },
   }
 
   const lifecycle = await runPhases({
@@ -374,6 +382,10 @@ export async function runHumanReview({
   candidateServer,
   isProcessAlive = (pid) => { try { process.kill(pid, 0); return true } catch { return false } },
   renderReportImpl = renderReport,
+  // Publishing is an external side effect on a real repository, so it happens
+  // only against a target the caller names. A library caller that names none
+  // finalizes the review and publishes nothing.
+  publication = null,
   onRunStart = () => {},
   log = () => {},
 }) {
@@ -405,17 +417,39 @@ export async function runHumanReview({
     opened.push(run)
   }
 
+  // Publish one finalized run, or record that no target was configured. An
+  // unpublishable run is skipped by `publishRun` itself, so the caller never has
+  // to decide what "finalized" means twice.
+  const publish = async ({ runDir, runId, result }) => {
+    if (!publication || !result) return null
+    const outcome = await publishRun({ runDir, runId, result, log, ...publication })
+    if (outcome.skipped) log(`publication: skipped ${runId} (${outcome.reason})`)
+    return outcome
+  }
+
   const runs = []
   let baselineResult = null
   for (const run of opened) {
     if (run.finalized) {
+      // A review already finalized in an earlier session is a finished result,
+      // never work to redo. Its publication, however, may still be unfinished,
+      // so resume retries exactly that and nothing else.
+      try {
+        await publish({ runDir: run.runDir, runId: run.runId, result: run.result })
+      } catch (error) {
+        return {
+          exitCode: 1,
+          errors: [{ code: 'publication', run_id: run.runId, message: error.message }],
+          runs,
+        }
+      }
       runs.push({ runId: run.runId, runDir: run.runDir, mode: run.mode, confirmed: true, result: run.result })
       if (run.mode === 'reference-baseline') baselineResult = run.result
       continue
     }
     onRunStart(run)
     const reviewed = await reviewRun({
-      run, rubrics, io, candidateServer, isProcessAlive, baselineResult, renderReportImpl, log,
+      run, rubrics, io, candidateServer, isProcessAlive, baselineResult, renderReportImpl, publish, log,
     })
     runs.push(reviewed)
     if (run.mode === 'reference-baseline' && reviewed.result) baselineResult = reviewed.result
@@ -442,6 +476,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     // so the review starts its own against the frozen build in that run's own
     // directory.
     candidateServer: (run) => createHostCandidateServer({ runDir: run.runDir }),
+    publication: { repoDir: AGENT_EVALS_DIR },
     log: (line) => console.error(line),
   })
   rl.close()

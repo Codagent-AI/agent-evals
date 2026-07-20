@@ -46,11 +46,20 @@ async function setup({ workflow = 'name: implement-change2\n', dirty = false } =
   git(runner, 'add', '-A')
   git(runner, 'commit', '-qm', 'runner')
   if (dirty) await writeFile(join(runner, 'scratch.txt'), 'uncommitted\n')
-  return { dir, runner, home }
+  // A full Agent Runner evaluation is gated on a passing calibration record, so
+  // the scored launcher tests supply one exactly as a calibrated host would.
+  const record = join(dir, 'calibration-record.json')
+  await writeFile(record, JSON.stringify({ passed: true, failures: [] }))
+  return { dir, runner, home, record }
 }
 
 async function run(args, options = {}) {
-  const env = { ...process.env, HOME: options.home, SANDBOX_SECRETS_FILE: join(options.dir, 'missing.env') }
+  const env = {
+    ...process.env,
+    HOME: options.home,
+    SANDBOX_SECRETS_FILE: join(options.dir, 'missing.env'),
+    CALIBRATION_RECORD: options.record,
+  }
   const result = spawnSync('bash', [runScript, ...args], { cwd: root, env, encoding: 'utf8' })
   return { ...result, output: result.stdout + result.stderr }
 }
@@ -338,4 +347,50 @@ test('help documents the exact fixture pin, role profiles, and validator option'
   assert.ok(result.stdout.includes('--skip-validator'))
   assert.ok(result.stdout.includes('--lead-cli'))
   assert.ok(result.stdout.includes('--implementor-cli'))
+  assert.ok(result.stdout.includes('--calibrate'))
+})
+
+test('calibration runs the reference and degraded mutations without Docker or Agent Runner', async () => {
+  const context = await setup()
+  const artifacts = join(context.dir, 'calibration')
+  const record = join(context.dir, 'calibration-record.json')
+
+  const result = await run(['--calibrate', '--artifact-dir', artifacts], { ...context, record })
+
+  assert.equal(result.status, 0, result.output)
+  // The sandbox adapter echoes whatever it is handed; calibration must not hand
+  // it anything.
+  assert.ok(!result.output.includes('--input-dir'), result.output)
+  const ledger = JSON.parse(await readFile(join(artifacts, 'calibration.json'), 'utf8'))
+  assert.equal(ledger.passed, true, JSON.stringify(ledger.failures))
+  assert.ok(ledger.cases.length >= 9)
+  assert.equal(JSON.parse(await readFile(record, 'utf8')).passed, true)
+})
+
+test('a full Agent Runner evaluation is blocked until calibration passes', async () => {
+  const context = await setup()
+  const record = join(context.dir, 'missing-calibration.json')
+
+  const missing = await scored({ ...context, record }, ['--skip-validator', ...profileArgs])
+  assert.equal(missing.status, 2, missing.output)
+  assert.match(missing.output, /calibration/i)
+  assert.match(missing.output, /--calibrate/)
+
+  await writeFile(record, JSON.stringify({ passed: false, failures: [{ case: 'reference' }] }))
+  const failed = await scored({ ...context, record }, ['--skip-validator', ...profileArgs])
+  assert.equal(failed.status, 2, failed.output)
+  assert.match(failed.output, /calibration/i)
+})
+
+test('a reference baseline is exempt from the calibration gate', async () => {
+  const context = await setup()
+  const record = join(context.dir, 'missing-calibration.json')
+
+  const result = await scored(
+    { ...context, record },
+    ['--skip-validator', '--reference-baseline', '--candidate-ref', referenceSha],
+  )
+
+  assert.equal(result.status, 0, result.output)
+  assert.match(result.output, /--reference-baseline/)
 })
