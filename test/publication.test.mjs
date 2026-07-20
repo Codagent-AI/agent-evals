@@ -250,21 +250,23 @@ test('publication never force-pushes and always commits a limited pathspec', asy
   }
 })
 
-test('a missing required artifact stops publication before any commit', async () => {
-  const { repo, dir } = await disposableRepo()
-  const { runDir, runId, result } = await finalizedRun(dir, { omit: ['human-review.json'] })
-  const before = git(repo, 'rev-parse', 'HEAD')
+for (const missing of CURATED_ARTIFACTS) {
+  test(`a missing ${missing} stops publication before any commit`, async () => {
+    const { repo, dir } = await disposableRepo()
+    const { runDir, runId, result } = await finalizedRun(dir, { omit: [missing] })
+    const before = git(repo, 'rev-parse', 'HEAD')
 
-  const { git: spy, calls } = recordingGit()
-  await assert.rejects(
-    publishRun({ runDir, runId, result, repoDir: repo, git: spy }),
-    /human-review\.json/,
-  )
-  assert.deepEqual(calls, [])
-  assert.equal(git(repo, 'rev-parse', 'HEAD'), before)
-  const checkpoint = await readJson(join(runDir, 'publication.json'), null)
-  assert.equal(checkpoint.stage, 'snapshot')
-})
+    const { git: spy, calls } = recordingGit()
+    await assert.rejects(
+      publishRun({ runDir, runId, result, repoDir: repo, git: spy }),
+      new RegExp(missing.replace('.', '\\.')),
+    )
+    assert.deepEqual(calls, [])
+    assert.equal(git(repo, 'rev-parse', 'HEAD'), before)
+    const checkpoint = await readJson(join(runDir, 'publication.json'), null)
+    assert.equal(checkpoint.stage, 'snapshot')
+  })
+}
 
 test('an uncurated file already in the results directory stops publication', async () => {
   const { repo, dir } = await disposableRepo()

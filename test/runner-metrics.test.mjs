@@ -15,25 +15,30 @@ import {
 const RUN_ID = 'run-7f3a'
 const WORKFLOW = 'implement-change2'
 
-function attempt(overrides = {}) {
+function step(overrides = {}) {
   return {
-    attempt_id: 'implement-task#1',
-    step: 'implement-task',
-    agent_role: 'task-implementor',
-    invoked_cli: true,
-    cli: 'codex',
-    provider: 'openai',
-    model: 'gpt-5-codex',
-    usage_source: 'codex-json',
-    usage_source_version: '0.4.0',
-    session: 'session-1',
+    record_id: 'implement-task#1',
+    prefix: 'implement-tasks[0]/implement-single-task',
+    id: 'generate-code',
+    kind: 'step',
+    type: 'agent',
+    attempt: 1,
+    iteration: null,
+    outcome: 'success',
+    agent_invoked: true,
+    session_id: 'session-1',
     duration_ms: 1200,
     usage: {
-      state: 'available',
-      reason: null,
-      tokens: { input: 1000, cached_input: 200, output: 300, reasoning_output: 50 },
+      status: 'collected',
+      cli: 'codex',
+      provider: 'openai',
+      model: 'gpt-5-codex',
+      source: 'codex:turn.completed',
+      completeness: 'complete',
+      tokens: { input: 1000, cached_input: 200, output: 300, reasoning: 50 },
+      token_totals: { input: 1000, output: 300, total: 1300 },
     },
-    cost: { state: 'available', reason: null, estimated_api_cost_usd: 0.0125 },
+    estimated_api_cost_usd: 0.0125,
     ...overrides,
   }
 }
@@ -44,7 +49,17 @@ function metrics(overrides = {}) {
     run_id: RUN_ID,
     workflow: WORKFLOW,
     history_complete: true,
-    attempts: [attempt()],
+    sessions: [{ started_at: '2026-07-20T12:00:00Z', last_observed_at: '2026-07-20T12:00:01Z', duration_ms: 1000, status: 'closed' }],
+    steps: [step()],
+    totals: {
+      active_duration_ms: 45_000,
+      tokens: { input: 1000, cached_input: 200, output: 300, reasoning: 50 },
+      usage_coverage: 'complete',
+      token_totals: { input: 1000, output: 300, total: 1300 },
+      token_total_coverage: 'complete',
+      estimated_api_cost_usd: 0.0125,
+      cost_coverage: 'complete',
+    },
     ...overrides,
   }
 }
@@ -70,10 +85,10 @@ test('valid schema-v1 metrics are ingested with every attempt preserved', () => 
   assert.equal(ingested.source.schema_version, 1)
   assert.equal(ingested.attempts.length, 1)
   assert.deepEqual(ingested.attempts[0].usage.tokens, {
-    input: 1000,
-    cached_input: 200,
-    output: 300,
-    reasoning_output: 50,
+    input: 1000, cached_input: 200, output: 300, reasoning: 50,
+  })
+  assert.deepEqual(ingested.attempts[0].usage.billing_tokens, {
+    input: 800, cached_input: 200, output: 300,
   })
   assert.equal(ingested.attempts[0].cost.estimated_api_cost_usd, 0.0125)
   assert.equal(ingested.attempts[0].duration_ms, 1200)
@@ -81,11 +96,15 @@ test('valid schema-v1 metrics are ingested with every attempt preserved', () => 
 
 test('the reported implementation active duration is preserved', () => {
   const withDuration = ingestRunnerMetrics({
-    text: JSON.stringify(metrics({ active_duration_ms: 45_000 })),
+    text: JSON.stringify(metrics()),
     runId: RUN_ID,
     workflow: WORKFLOW,
   })
-  const without = ingestRunnerMetrics({ text: JSON.stringify(metrics()), runId: RUN_ID, workflow: WORKFLOW })
+  const without = ingestRunnerMetrics({
+    text: JSON.stringify(metrics({ totals: { ...metrics().totals, active_duration_ms: null } })),
+    runId: RUN_ID,
+    workflow: WORKFLOW,
+  })
 
   assert.equal(withDuration.active_duration_ms, 45_000)
   // Unmeasured stays unmeasured: a zero would read as an instant workflow.
@@ -94,9 +113,9 @@ test('the reported implementation active duration is preserved', () => {
 
 test('an unavailable usage or cost keeps its reason and never becomes zero', () => {
   const text = JSON.stringify(metrics({
-    attempts: [attempt({
-      usage: { state: 'unavailable', reason: 'cli reported no usage', tokens: null },
-      cost: { state: 'unavailable', reason: 'no pricing catalog entry', estimated_api_cost_usd: null },
+    steps: [step({
+      usage: { status: 'unavailable', reason: 'cli reported no usage', cli: 'codex', source: 'agent-runner' },
+      estimated_api_cost_usd: null,
     })],
   }))
 
@@ -149,27 +168,26 @@ test('unreadable metrics are rejected rather than reconstructed', () => {
   assert.equal(ingested.history_complete, null)
 })
 
-test('an attempt without provider or model identity is rejected', () => {
-  const text = JSON.stringify(metrics({ attempts: [attempt({ model: null })] }))
+test('an invoked agent step without effective model evidence stays explicit and incomplete', () => {
+  const text = JSON.stringify(metrics({ steps: [step({ usage: { ...step().usage, model: null } })] }))
 
   const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
 
-  assert.equal(ingested.state, 'rejected')
-  assert.match(ingested.reason, /model/)
+  assert.equal(ingested.state, 'ingested')
+  assert.equal(ingested.attempts[0].model, null)
+  assert.equal(ingested.coverage.effective_profile_incomplete, 1)
 })
 
 test('a non-CLI step may report no provider or model and still be ingested', () => {
   const text = JSON.stringify(metrics({
-    attempts: [attempt({
-      attempt_id: 'shell#1',
-      step: 'build',
-      agent_role: null,
-      invoked_cli: false,
-      cli: null,
-      provider: null,
-      model: null,
-      usage: { state: 'not-applicable', reason: 'shell step', tokens: null },
-      cost: { state: 'not-applicable', reason: 'shell step', estimated_api_cost_usd: null },
+    steps: [step({
+      record_id: 'shell#1',
+      id: 'build',
+      type: 'shell',
+      agent_invoked: false,
+      session_id: '',
+      usage: null,
+      estimated_api_cost_usd: null,
     })],
   }))
 
@@ -181,7 +199,7 @@ test('a non-CLI step may report no provider or model and still be ingested', () 
 
 test('duplicate attempt identifiers are rejected rather than silently collapsed', () => {
   const text = JSON.stringify(metrics({
-    attempts: [attempt({ attempt_id: 'implement-task#1' }), attempt({ attempt_id: 'implement-task#1' })],
+    steps: [step({ record_id: 'implement-task#1' }), step({ record_id: 'implement-task#1' })],
   }))
 
   const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
@@ -195,9 +213,9 @@ test('duplicate attempt identifiers are rejected rather than silently collapsed'
 
 test('resumed attempts are retained alongside the earlier ones', () => {
   const text = JSON.stringify(metrics({
-    attempts: [
-      attempt({ attempt_id: 'implement-task#1', session: 'session-1' }),
-      attempt({ attempt_id: 'implement-task#2', session: 'session-2' }),
+    steps: [
+      step({ record_id: 'implement-task#1', session_id: 'session-1' }),
+      step({ record_id: 'implement-task#2', session_id: 'session-2' }),
     ],
   }))
 

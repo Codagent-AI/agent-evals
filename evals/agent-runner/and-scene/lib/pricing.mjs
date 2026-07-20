@@ -116,6 +116,12 @@ function billedCategories(tokens) {
   return Object.entries(tokens ?? {}).filter(([, value]) => nonNegative(value) && value > 0)
 }
 
+function attemptBillingTokens(attempt) {
+  return Object.hasOwn(attempt.usage ?? {}, 'billing_tokens')
+    ? attempt.usage.billing_tokens
+    : attempt.usage?.tokens
+}
+
 export function calculateCatalogCost({ entry, tokens }) {
   if (!entry) return unavailable('no exact models.dev provider/model match')
   const malformed = malformedCategory(tokens)
@@ -148,7 +154,7 @@ export function calculateCatalogCost({ entry, tokens }) {
 }
 
 export function buildPricingRequest({ attempt, authority }) {
-  const categories = billedCategories(attempt.usage?.tokens).map(([category]) => category)
+  const categories = billedCategories(attemptBillingTokens(attempt)).map(([category]) => category)
   const prompt = [
     'Find published API pricing for one exact provider and model.',
     '',
@@ -238,7 +244,7 @@ export async function resolveAttemptCost({ attempt, catalog, invoke, authority =
     }
   }
 
-  const tokens = attempt.usage?.state === 'available' ? attempt.usage.tokens : null
+  const tokens = attempt.usage?.state === 'available' ? attemptBillingTokens(attempt) : null
   if (billedCategories(tokens).length === 0) {
     return {
       ...base,

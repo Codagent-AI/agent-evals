@@ -31,7 +31,7 @@ export function parseWorkflowContract(text) {
 
   for (const rawLine of text.split('\n')) {
     if (/^\S/.test(rawLine)) {
-      section = rawLine.startsWith('parameters:') ? 'parameters'
+      section = /^(?:params|parameters):/.test(rawLine) ? 'parameters'
         : rawLine.startsWith('steps:') ? 'steps'
           : null
       continue

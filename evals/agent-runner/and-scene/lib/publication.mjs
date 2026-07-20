@@ -40,17 +40,9 @@ export const CURATED_ARTIFACTS = [
   'artifact-manifest.json',
 ]
 
-// The artifacts a finalized review always produces. A snapshot missing one of
-// them does not describe a finalized run, so it is refused before any commit.
-// The remaining two are diagnostics of the run rather than of its verdict: a
-// completed result is not held back because one of them was never produced, and
-// the checkpoint records which were absent.
-export const REQUIRED_ARTIFACTS = [
-  'result.json',
-  'report.html',
-  'human-review.json',
-  'artifact-manifest.json',
-]
+// The approved permanent-record contract is exact: every completed run carries
+// all six artifacts, and a partial snapshot is never committed as if complete.
+export const REQUIRED_ARTIFACTS = [...CURATED_ARTIFACTS]
 
 export const PUBLICATION_STAGES = ['snapshot', 'commit', 'push', 'published']
 

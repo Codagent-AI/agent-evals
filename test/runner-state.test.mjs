@@ -121,28 +121,23 @@ test('an existing link to the same run directory is reused', async () => {
   assert.equal(resolved, persistent)
 })
 
-test('a real projects directory in the home is never replaced', async () => {
-  // Never destroy a genuine user store; read where Agent Runner actually writes.
+test('a real projects directory fails instead of silently losing durable run state', async () => {
   const { runDir, home } = await homes()
   const real = join(home, '.agent-runner/projects')
   await mkdir(real, { recursive: true })
 
-  const resolved = await resolveProjectsDir({ runDir, home })
-
-  assert.equal(resolved, real)
+  await assert.rejects(resolveProjectsDir({ runDir, home }), /persistent Agent Runner projects store/)
   assert.equal((await lstat(real)).isSymbolicLink(), false)
 })
 
-test('a link pointing somewhere else is left alone and read from', async () => {
+test('a link pointing somewhere else fails instead of silently using another run store', async () => {
   const { dir, runDir, home } = await homes()
   const foreign = join(dir, 'foreign-projects')
   await mkdir(foreign, { recursive: true })
   await mkdir(join(home, '.agent-runner'), { recursive: true })
   await symlink(foreign, join(home, '.agent-runner/projects'))
 
-  const resolved = await resolveProjectsDir({ runDir, home })
-
-  assert.equal(resolved, join(home, '.agent-runner/projects'))
+  await assert.rejects(resolveProjectsDir({ runDir, home }), /persistent Agent Runner projects store/)
   assert.equal(await readlink(join(home, '.agent-runner/projects')), foreign)
 })
 

@@ -352,10 +352,9 @@ result.json  report.html  human-review.json
 ambiguity-ledger.json  implementation.diff  artifact-manifest.json
 ```
 
-`result.json`, `report.html`, `human-review.json`, and `artifact-manifest.json`
-are required; the ledger and the diff are copied when the run produced them and
-recorded as absent when it did not, so a completed verdict is never held back by
-a missing diagnostic. Nothing outside that list is ever copied: `.runtime`,
+All six files are required; publication stops before committing if any is
+missing, so the permanent record is never a partial snapshot. Nothing outside
+that list is ever copied: `.runtime`,
 cloned repositories, dependency and build output, Agent Runner session state and
 transcripts, raw model output, logs, screenshots, traces, raw pricing catalogs,
 and credentials all stay in the ignored run directory.

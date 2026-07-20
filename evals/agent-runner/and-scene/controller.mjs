@@ -47,6 +47,7 @@ import {
   compareRoleSelections,
   reconcileRoleAttempts,
   renderEvalConfig,
+  renderEvalSettings,
   validateRoleProfiles,
 } from './lib/profiles.mjs'
 import { compareProvenance, readWorkflowProvenance } from './lib/provenance.mjs'
@@ -298,6 +299,8 @@ export async function runEvaluation({
       join(candidateWorktree, '.agent-runner/config.yaml'),
       renderEvalConfig(validation.profiles),
     )
+    await mkdir(join(home, '.agent-runner'), { recursive: true })
+    await writeFile(join(home, '.agent-runner/settings.yaml'), renderEvalSettings())
   }
 
   const record = {

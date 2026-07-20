@@ -59,6 +59,12 @@ test('a list-style parameter block is also understood', () => {
   assert.deepEqual(contract.parameters, ['change_name', 'skip_validator'])
 })
 
+test('the real Agent Runner params key is understood', () => {
+  const contract = parseWorkflowContract('params:\n  - name: change_name\n  - name: skip_validator\nsteps:\n  - id: simplify\n')
+
+  assert.deepEqual(contract.parameters, ['change_name', 'skip_validator'])
+})
+
 test('a workflow providing the parameter and stop step is accepted', () => {
   const result = verifyWorkflowContract(workflowYaml, resolveBoundary({ skipValidator: true, changeName: 'c' }))
 

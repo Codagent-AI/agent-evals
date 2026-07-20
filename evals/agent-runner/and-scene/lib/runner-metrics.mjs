@@ -43,17 +43,30 @@ function rejected(reason, source = null) {
   }
 }
 
-// Preserve the reported shape rather than normalizing it into a denser one: the
-// artifact is evidence, and a reader comparing the result against Agent Runner's
-// own output must see the same states, reasons, and token categories.
-function normalizeMeasurement(value, field, attemptId) {
-  if (value === null || value === undefined) {
-    return { state: 'unavailable', reason: `agent runner reported no ${field}`, tokens: null }
-  }
-  if (typeof value !== 'object') {
-    throw new Error(`attempt ${attemptId} has a malformed ${field}`)
-  }
-  return value
+const IMPLEMENTOR_STEPS = new Set(['generate-code', 'commit-leftovers-if-needed', 'session-report', 'fix-violations'])
+
+function agentRole(raw) {
+  if (!raw.agent_invoked) return null
+  return IMPLEMENTOR_STEPS.has(raw.id) ? 'task-implementor' : 'lead-agent'
+}
+
+// Agent Runner preserves category details and separately provides canonical
+// input/output totals. Cache and reasoning categories overlap those totals, so
+// pricing the raw map directly would double-charge them. Keep the raw evidence
+// and derive a non-overlapping billing map only when canonical totals exist.
+function billingTokens(usage) {
+  const totals = usage?.token_totals
+  if (!totals || !Number.isFinite(totals.input) || !Number.isFinite(totals.output)) return null
+  const cached = Number.isFinite(usage.tokens?.cached_input) ? usage.tokens.cached_input : 0
+  const written = Number.isFinite(usage.tokens?.cache_write) ? usage.tokens.cache_write : 0
+  const ordinary = totals.input - cached - written
+  if (ordinary < 0 || totals.output < 0) return null
+  return Object.fromEntries(Object.entries({
+    input: ordinary,
+    cached_input: cached,
+    cache_write: written,
+    output: totals.output,
+  }).filter(([, count]) => count > 0))
 }
 
 function normalizeAttempt(raw, index) {
@@ -62,47 +75,42 @@ function normalizeAttempt(raw, index) {
   }
   const attemptId = typeof raw.attempt_id === 'string' && raw.attempt_id.length > 0
     ? raw.attempt_id
-    : `attempt-${index}`
-  const invokedCli = raw.invoked_cli === true
-
-  // Only CLI attempts are priced and aggregated, so only they must carry the
-  // provider/model identity that aggregation keys on. Demanding it of shell
-  // steps would reject a well-formed artifact.
-  if (invokedCli) {
-    for (const field of ['provider', 'model']) {
-      if (typeof raw[field] !== 'string' || raw[field].length === 0) {
-        throw new Error(`attempt ${attemptId} invoked a CLI without a ${field}`)
-      }
-    }
+    : (typeof raw.record_id === 'string' && raw.record_id.length > 0 ? raw.record_id : `attempt-${index}`)
+  const invokedCli = raw.agent_invoked === true
+  if (raw.usage !== null && raw.usage !== undefined && typeof raw.usage !== 'object') {
+    throw new Error(`attempt ${attemptId} has malformed usage`)
   }
-
-  const usage = normalizeMeasurement(raw.usage, 'usage', attemptId)
-  const cost = normalizeMeasurement(raw.cost, 'cost', attemptId)
+  const rawUsage = raw.usage ?? null
+  const usageState = rawUsage?.status === 'collected'
+    ? PRESENT
+    : (rawUsage?.status === 'unavailable' ? 'unavailable' : (invokedCli ? 'unavailable' : 'not-applicable'))
+  const reportedCost = Number.isFinite(raw.estimated_api_cost_usd) && raw.estimated_api_cost_usd >= 0
 
   return {
     attempt_id: attemptId,
-    step: raw.step ?? null,
-    agent_role: raw.agent_role ?? null,
+    step: raw.id ?? raw.step ?? null,
+    prefix: raw.prefix ?? null,
+    agent_role: raw.agent_role ?? agentRole(raw),
     invoked_cli: invokedCli,
-    cli: raw.cli ?? null,
-    provider: raw.provider ?? null,
-    model: raw.model ?? null,
-    usage_source: raw.usage_source ?? null,
-    usage_source_version: raw.usage_source_version ?? null,
-    session: raw.session ?? null,
+    cli: rawUsage?.cli ?? raw.cli ?? null,
+    provider: rawUsage?.provider ?? raw.provider ?? null,
+    model: rawUsage?.model ?? raw.model ?? null,
+    usage_source: rawUsage?.source ?? raw.usage_source ?? null,
+    usage_source_version: null,
+    session: raw.session_id ?? raw.session ?? null,
     duration_ms: Number.isFinite(raw.duration_ms) ? raw.duration_ms : null,
     usage: {
-      state: usage.state ?? 'unavailable',
-      reason: usage.reason ?? null,
-      // `tokens` stays exactly as reported. An absent category is absent, not
-      // zero, so a later calculation can tell "no cached input" from "cached
-      // input was never measured".
-      tokens: usage.tokens ?? null,
+      state: usageState,
+      reason: rawUsage?.reason ?? (invokedCli && !rawUsage ? 'agent runner reported no usage' : null),
+      tokens: rawUsage?.tokens ?? null,
+      token_totals: rawUsage?.token_totals ?? null,
+      billing_tokens: usageState === PRESENT ? billingTokens(rawUsage) : null,
+      completeness: rawUsage?.completeness ?? null,
     },
     cost: {
-      state: cost.state ?? 'unavailable',
-      reason: cost.reason ?? null,
-      estimated_api_cost_usd: cost.estimated_api_cost_usd ?? null,
+      state: reportedCost ? PRESENT : (invokedCli ? 'unavailable' : 'not-applicable'),
+      reason: reportedCost ? null : (invokedCli ? 'agent runner reported no cost' : null),
+      estimated_api_cost_usd: reportedCost ? raw.estimated_api_cost_usd : null,
     },
   }
 }
@@ -158,23 +166,30 @@ export function ingestRunnerMetrics({ text, runId, workflow, path = null }) {
       source,
     )
   }
-  if (!Array.isArray(payload.attempts)) {
-    return rejected('run-metrics.json has no attempts array', source)
+  if (!Array.isArray(payload.steps)) {
+    return rejected('run-metrics.json has no steps array', source)
   }
 
   let attempts
   try {
-    attempts = payload.attempts.map(normalizeAttempt)
+    attempts = payload.steps.map(normalizeAttempt)
     assertUniqueAttemptIds(attempts)
   } catch (error) {
     return rejected(`run-metrics.json is malformed: ${error.message}`, source)
   }
 
+  const cliAttempts = attempts.filter((entry) => entry.invoked_cli)
   const coverage = {
-    usage_available: attempts.filter((entry) => entry.usage.state === PRESENT).length,
-    usage_unavailable: attempts.filter((entry) => entry.usage.state === 'unavailable').length,
-    cost_available: attempts.filter((entry) => entry.cost.state === PRESENT).length,
-    cost_unavailable: attempts.filter((entry) => entry.cost.state === 'unavailable').length,
+    usage_available: cliAttempts.filter((entry) => entry.usage.state === PRESENT).length,
+    usage_unavailable: cliAttempts.filter((entry) => entry.usage.state === 'unavailable').length,
+    cost_available: cliAttempts.filter((entry) => entry.cost.state === PRESENT).length,
+    cost_unavailable: cliAttempts.filter((entry) => entry.cost.state === 'unavailable').length,
+    effective_profile_incomplete: cliAttempts.filter((entry) => !entry.cli || !entry.provider || !entry.model).length,
+    reported: {
+      usage: payload.totals?.usage_coverage ?? null,
+      token_totals: payload.totals?.token_total_coverage ?? null,
+      cost: payload.totals?.cost_coverage ?? null,
+    },
   }
 
   const historyComplete = payload.history_complete === true
@@ -188,7 +203,9 @@ export function ingestRunnerMetrics({ text, runId, workflow, path = null }) {
     history_complete: payload.history_complete ?? null,
     // Agent Runner's own measure of how long its workflow was actively running.
     // Absent means unmeasured, never instant.
-    active_duration_ms: Number.isFinite(payload.active_duration_ms) ? payload.active_duration_ms : null,
+    active_duration_ms: Number.isFinite(payload.totals?.active_duration_ms)
+      ? payload.totals.active_duration_ms
+      : null,
     source,
     attempts,
     attempt_count: attempts.length,

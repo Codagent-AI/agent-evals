@@ -274,7 +274,7 @@ export async function collectAmbiguityArtifacts({ sessionDir }) {
 
 export function buildAmbiguityRequest({ artifacts, productEvidence = [], authority }) {
   const quoted = artifacts.files
-    .map((file) => `## ${bounded(file.path)}\n${bounded(file.text.slice(0, MAX_QUOTED_CHARS))}`)
+    .map((file) => `## ${bounded(file.path)}\n${bounded(file.text, MAX_QUOTED_CHARS)}`)
     .join('\n\n')
   const evidence = productEvidence.slice(0, MAX_EVIDENCE_ROWS)
     .map((entry) => `- ${bounded(entry.id)}: ${bounded(entry.verdict ?? 'unknown')} — ${bounded(entry.note ?? '')}`)

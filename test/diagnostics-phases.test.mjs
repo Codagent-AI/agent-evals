@@ -42,17 +42,24 @@ const CATALOG_BODY = JSON.stringify({
 
 function attempt(overrides = {}) {
   return {
-    attempt_id: 'implement-tasks#1',
-    step: 'implement-tasks',
-    agent_role: 'task-implementor',
-    invoked_cli: true,
-    cli: 'claude',
-    provider: 'anthropic',
-    model: 'sonnet',
-    session: 'session-1',
+    record_id: 'implement-tasks#1',
+    prefix: 'implement-tasks[0]/implement-single-task',
+    id: 'generate-code',
+    kind: 'step',
+    type: 'agent',
+    attempt: 1,
+    iteration: null,
+    outcome: 'success',
+    agent_invoked: true,
+    session_id: 'session-1',
     duration_ms: 1000,
-    usage: { state: 'available', reason: null, tokens: { input: 1_000_000, output: 100_000 } },
-    cost: { state: 'unavailable', reason: 'no catalog', estimated_api_cost_usd: null },
+    usage: {
+      status: 'collected', cli: 'claude', provider: 'anthropic', model: 'sonnet',
+      source: 'claude:result', completeness: 'complete',
+      tokens: { input: 1_000_000, output: 100_000 },
+      token_totals: { input: 1_000_000, output: 100_000, total: 1_100_000 },
+    },
+    estimated_api_cost_usd: null,
     ...overrides,
   }
 }
@@ -63,8 +70,17 @@ function runMetrics(overrides = {}) {
     run_id: 'run-7',
     workflow: 'implement-change2',
     history_complete: true,
-    active_duration_ms: 120_000,
-    attempts: [attempt()],
+    sessions: [{ duration_ms: 120_000, status: 'closed' }],
+    steps: [attempt()],
+    totals: {
+      active_duration_ms: 120_000,
+      tokens: { input: 1_000_000, output: 100_000 },
+      usage_coverage: 'complete',
+      token_totals: { input: 1_000_000, output: 100_000, total: 1_100_000 },
+      token_total_coverage: 'complete',
+      estimated_api_cost_usd: null,
+      cost_coverage: 'none',
+    },
     ...overrides,
   }
 }
@@ -181,9 +197,9 @@ test('an attempt priced from models.dev reports its rates and catalog hash', asy
 test('an unpriceable attempt leaves the total unavailable with a known subtotal', async () => {
   const context = await environment({
     metrics: runMetrics({
-      attempts: [
-        attempt({ attempt_id: 'a1', cost: { state: 'available', reason: null, estimated_api_cost_usd: 2 } }),
-        attempt({ attempt_id: 'a2', model: 'unknown-model' }),
+      steps: [
+        attempt({ record_id: 'a1', estimated_api_cost_usd: 2 }),
+        attempt({ record_id: 'a2', usage: { ...attempt().usage, model: 'unknown-model' } }),
       ],
     }),
   })
@@ -202,8 +218,12 @@ test('cost is reported without changing the product score or verdict', async () 
   const cheap = await environment()
   const expensive = await environment({
     metrics: runMetrics({
-      attempts: [attempt({
-        usage: { state: 'available', reason: null, tokens: { input: 50_000_000, output: 5_000_000 } },
+      steps: [attempt({
+        usage: {
+          ...attempt().usage,
+          tokens: { input: 50_000_000, output: 5_000_000 },
+          token_totals: { input: 50_000_000, output: 5_000_000, total: 55_000_000 },
+        },
       })],
     }),
   })
@@ -469,7 +489,7 @@ test('a resumed run preserves prior ledger findings instead of duplicating them'
 
 test('the pricing and ambiguity jobs reuse the recorded judge authority', async () => {
   const context = await environment({
-    metrics: runMetrics({ attempts: [attempt({ model: 'unknown-model' })] }),
+    metrics: runMetrics({ steps: [attempt({ usage: { ...attempt().usage, model: 'unknown-model' } })] }),
     sessionFiles: { 'assumptions.md': 'x' },
   })
   const seen = []
@@ -494,7 +514,7 @@ test('the pricing and ambiguity jobs reuse the recorded judge authority', async 
 test('no catalog is fetched when no attempt needs one', async () => {
   const context = await environment({
     metrics: runMetrics({
-      attempts: [attempt({ cost: { state: 'available', reason: null, estimated_api_cost_usd: 2 } })],
+      steps: [attempt({ estimated_api_cost_usd: 2 })],
     }),
   })
   let fetched = 0

@@ -21,6 +21,7 @@ export const JUDGE_ATTEMPTS = 2
 // escaped and truncated before it is ever concatenated into a prompt.
 const MAX_EVIDENCE_ITEMS = 60
 const MAX_SOURCE_PATHS = 200
+const MAX_RATIONALE_CHARS = 4000
 
 export const PRODUCT_JUDGE_JOB_IDS = [
   'demo-integration',
@@ -170,7 +171,7 @@ export function parseJudgeOutput(text, expectedIds, job) {
     seen.set(result.id, {
       id: result.id,
       verdict: result.verdict,
-      rationale: bounded(result.rationale),
+      rationale: bounded(result.rationale, MAX_RATIONALE_CHARS),
       evidence: result.evidence.map(bounded),
     })
   }

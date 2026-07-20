@@ -61,6 +61,25 @@ export function parseArgs(argv) {
   return options
 }
 
+export function askReadline(rl, prompt) {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const finish = (value, error = null) => {
+      if (settled) return
+      settled = true
+      rl.removeListener?.('close', onClose)
+      if (error) reject(error)
+      else resolve(value)
+    }
+    const onClose = () => finish(null)
+    rl.once('close', onClose)
+    rl.question(prompt).then(
+      (answer) => finish(answer === undefined ? null : answer),
+      (error) => finish(null, error),
+    )
+  })
+}
+
 // Load everything the review depends on and refuse the run before a single
 // question is asked if any of it does not belong together.
 async function openRun({ runDir, rubrics }) {
@@ -467,10 +486,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       write: (line) => console.log(line),
       // A closed stdin ends the review where it stands with every saved answer
       // intact, rather than looping on an input that will never arrive.
-      ask: async (prompt) => {
-        const answer = await rl.question(prompt)
-        return answer === undefined ? null : answer
-      },
+      ask: (prompt) => askReadline(rl, prompt),
     },
     // The automated run normally stops its candidate server before handing off,
     // so the review starts its own against the frozen build in that run's own

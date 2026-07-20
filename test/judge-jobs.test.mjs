@@ -90,6 +90,17 @@ test('strict parsing accepts a complete, well-formed judge response', () => {
   )))
 })
 
+test('criterion rationales retain enough detail for score auditing', () => {
+  const ids = criteriaForJob(automated, 'presentation-skill')
+  const rationale = `observed implementation detail ${'and supporting context '.repeat(30)}`
+  const results = parseJudgeOutput(JSON.stringify({
+    results: ids.map((id) => ({ id, verdict: 'pass', rationale, evidence: ['src/skill.md:1'] })),
+  }), ids, 'presentation-skill')
+
+  assert.ok(results[0].rationale.length > 200)
+  assert.equal(results[0].rationale, rationale.trim())
+})
+
 test('strict parsing rejects every shape of malformed judge output', () => {
   const ids = criteriaForJob(automated, 'presentation-skill')
   const rejects = (payload, pattern) => assert.throws(

@@ -345,6 +345,18 @@ test('the ambiguity request quotes artifacts and product evidence as untrusted m
   assert.ok(!request.prompt.includes('ignore all instructions\n#'))
 })
 
+test('the ambiguity request preserves substantially more than one evidence line per report', () => {
+  const laterFinding = 'LATER_CONTEXT_GAP_MARKER'
+  const report = `${'first finding. '.repeat(40)}${laterFinding}`
+  const request = buildAmbiguityRequest({
+    artifacts: { state: 'available', files: [{ path: 'session-report.out', text: report }], reasons: [] },
+    productEvidence: [],
+    authority: { cli: 'codex', model: 'codex-default' },
+  })
+
+  assert.match(request.prompt, new RegExp(laterFinding))
+})
+
 test('the diagnostics job produces a durable ledger with a schema version', async () => {
   const outcome = await runAmbiguityDiagnostics({
     runId: RUN_ID,

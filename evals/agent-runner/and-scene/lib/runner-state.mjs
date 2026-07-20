@@ -16,8 +16,9 @@ import { readJson } from './persistence.mjs'
 // directory across disposable containers, the run-directory store is linked
 // into the ephemeral container home.
 //
-// A genuine user store is never replaced: if one already exists, the controller
-// reads where Agent Runner actually writes instead of redirecting it.
+// A foreign store is never replaced or silently accepted. Using it would make
+// the disposable container lose the durable run identity on exit and could
+// cause a resumed outer harness to launch a duplicate implementation run.
 export async function resolveProjectsDir({ runDir, home }) {
   const persistent = join(runDir, '.runtime/agent-runner-projects')
   if (!home) return persistent
@@ -36,16 +37,21 @@ export async function resolveProjectsDir({ runDir, home }) {
       await symlink(persistent, homeProjects)
       return persistent
     } catch {
-      // Lost a race or cannot link; read where Agent Runner will write.
-      return homeProjects
+      // A concurrent creator may have installed the exact link. Re-check it;
+      // every other outcome is unsafe to continue with.
+      const raced = await lstat(homeProjects).catch(() => null)
+      if (raced?.isSymbolicLink() && await readlink(homeProjects).catch(() => null) === persistent) {
+        return persistent
+      }
+      throw new Error(`cannot establish persistent Agent Runner projects store at ${homeProjects}`)
     }
   }
 
   if (existing.isSymbolicLink()) {
     const target = await readlink(homeProjects).catch(() => null)
-    return target === persistent ? persistent : homeProjects
+    if (target === persistent) return persistent
   }
-  return homeProjects
+  throw new Error(`cannot establish persistent Agent Runner projects store at ${homeProjects}`)
 }
 
 async function directories(path) {

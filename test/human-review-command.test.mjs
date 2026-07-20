@@ -3,8 +3,9 @@ import { mkdir, mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { EventEmitter } from 'node:events'
 
-import { runHumanReview } from '../evals/agent-runner/and-scene/human-review.mjs'
+import { askReadline, runHumanReview } from '../evals/agent-runner/and-scene/human-review.mjs'
 import { assembleResult } from '../evals/agent-runner/and-scene/lib/result.mjs'
 import { createCheckpoint, saveCheckpoint } from '../evals/agent-runner/and-scene/lib/checkpoint.mjs'
 import { createOutcome, applyOutcomeEvent } from '../evals/agent-runner/and-scene/lib/outcomes.mjs'
@@ -14,6 +15,16 @@ import { scoreProduct } from '../evals/agent-runner/and-scene/lib/scorer.mjs'
 
 const rubrics = await loadRubrics()
 const humanRubric = rubrics.human.rubric
+
+test('readline EOF resolves as an interrupted answer even when question never settles', async () => {
+  const rl = new EventEmitter()
+  rl.question = () => new Promise(() => {})
+
+  const answer = askReadline(rl, 'Rating? ')
+  rl.emit('close')
+
+  assert.equal(await answer, null)
+})
 
 // A fully observed automated evaluation, generated from the rubric itself so
 // the fixture cannot drift away from the criterion set the scorer requires.

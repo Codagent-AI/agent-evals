@@ -41,13 +41,14 @@ const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&
 const NOISE = new RegExp('[\\u0000-\\u001f\\u007f\\s]+', 'g')
 
 // Candidate text is evidence, never markup and never a prompt instruction.
-export function bounded(value) {
+export function bounded(value, maxChars = MAX_EVIDENCE_CHARS) {
+  const limit = arguments.length === 2 ? maxChars : MAX_EVIDENCE_CHARS
   const text = typeof value === 'string' ? value : JSON.stringify(value) ?? String(value)
   const escaped = text
     .replace(NOISE, ' ')
     .replace(/[&<>"']/g, (character) => ESCAPES[character])
     .trim()
-  return escaped.length > MAX_EVIDENCE_CHARS ? `${escaped.slice(0, MAX_EVIDENCE_CHARS - 1)}…` : escaped
+  return escaped.length > limit ? `${escaped.slice(0, limit - 1)}…` : escaped
 }
 
 function verdict(id, pass, rationale, evidence = []) {

@@ -6,6 +6,7 @@ import {
   compareRoleSelections,
   reconcileRoleAttempts,
   renderEvalConfig,
+  renderEvalSettings,
   validateRoleProfiles,
 } from '../evals/agent-runner/and-scene/lib/profiles.mjs'
 
@@ -121,6 +122,10 @@ test('renderEvalConfig never inherits host or project Agent Runner settings', ()
   assert.ok(!config.includes('include'), config)
   assert.ok(!config.includes('~'), config)
   assert.equal(config.match(/^profiles:$/gm).length, 1)
+})
+
+test('the disposable Agent Runner home grants autonomous agents container-level authority', () => {
+  assert.equal(renderEvalSettings(), 'autonomous_permission_mode: yolo\n')
 })
 
 test('resume with matching selections reports no mismatch', () => {

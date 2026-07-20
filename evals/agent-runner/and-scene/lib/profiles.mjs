@@ -98,6 +98,14 @@ export function renderEvalConfig(profiles) {
   return `${lines.join('\n')}\n`
 }
 
+// Agent Runner's conservative Codex mode shells out to bubblewrap. The eval is
+// already isolated by Agent Runner's disposable sandbox, where nested user
+// namespaces are unavailable, so the sandbox's private home opts autonomous
+// agents into direct command execution.
+export function renderEvalSettings() {
+  return 'autonomous_permission_mode: yolo\n'
+}
+
 export function compareRoleSelections(recorded, requested) {
   return ['lead', 'implementor'].flatMap((role) => {
     const before = recorded?.[role]
