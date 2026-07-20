@@ -21,11 +21,14 @@ export const AUTOMATED_PHASES = [
   { name: 'product-judging', owner: 'evaluation-harness' },
   { name: 'ambiguity-diagnostics', owner: 'evaluation-harness' },
   { name: 'metrics-pricing', owner: 'evaluation-harness' },
-  { name: 'pending-result', owner: 'evaluation-harness', final: true },
+  // Always rewritten: the result artifact renders the run as it now stands, so
+  // reusing a checkpointed completion would leave `result.json` describing an
+  // earlier session and silently omit everything a resume just computed.
+  { name: 'pending-result', owner: 'evaluation-harness', final: true, alwaysVerify: true },
   // Cleanup after a durably written pending result is a handoff detail: it is
   // recorded diagnostically and the command still exits successfully.
   { name: 'cleanup', owner: 'evaluation-harness', final: true, cleanup: 'handoff' },
-  { name: 'cleanup-result', owner: 'evaluation-harness', final: true },
+  { name: 'cleanup-result', owner: 'evaluation-harness', final: true, alwaysVerify: true },
 ]
 
 export const HUMAN_REVIEW_PHASES = [

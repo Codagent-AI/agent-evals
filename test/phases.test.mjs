@@ -157,6 +157,15 @@ test('completed phases are skipped on resume without rerunning their work', asyn
   assert.equal(result.failed, null)
 })
 
+test('result-writing phases always rerun so a resumed result is never stale', () => {
+  for (const name of ['pending-result', 'cleanup-result']) {
+    const phase = AUTOMATED_PHASES.find((entry) => entry.name === name)
+    // These phases render whatever the run now knows. Reusing a checkpoint would
+    // leave result.json describing an earlier session's state.
+    assert.equal(phase.alwaysVerify, true, name)
+  }
+})
+
 test('the candidate server is restarted on resume rather than reused from a checkpoint', async () => {
   // The server is a process-local resource: a durable phase checkpoint from an
   // earlier process says nothing about whether it is running now.
@@ -187,8 +196,9 @@ test('the Agent Runner phase always re-verifies rather than trusting a checkpoin
 
   // Resume must consult Agent Runner's own state before acting, so its phase is
   // never short-circuited by an eval-side checkpoint. The candidate server is
-  // likewise always re-verified.
-  assert.deepEqual(order, ['agent-runner', 'candidate-server'])
+  // likewise always re-verified, and the result artifacts are always rewritten
+  // so they describe this session rather than an earlier one.
+  assert.deepEqual(order, ['agent-runner', 'candidate-server', 'pending-result', 'cleanup-result'])
   assert.ok(!result.reused.includes('agent-runner'))
   assert.ok(result.reused.includes('product-judging'))
 })

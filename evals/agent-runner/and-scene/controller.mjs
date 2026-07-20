@@ -14,11 +14,24 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
+  collectAmbiguityArtifacts,
+  runAmbiguityDiagnostics,
+} from './lib/ambiguity.mjs'
+import {
   createCheckpoint,
   loadCheckpoint,
   saveCheckpoint,
   validateCheckpointIdentity,
 } from './lib/checkpoint.mjs'
+import { aggregateImplementationCost, summarizeEvalOwnedUsage } from './lib/cost.mjs'
+import { fetchPricingCatalog, needsPricingLookup, resolveImplementationPricing } from './lib/pricing.mjs'
+import { readRunnerMetrics } from './lib/runner-metrics.mjs'
+import {
+  createTimingLedger,
+  mergeTimingLedgers,
+  recordMachineInterval,
+  summarizeMachineTiming,
+} from './lib/timing.mjs'
 import { collectSourceEvidence } from './deterministic-checks.mjs'
 import { runBrowserEvaluation } from './lib/browser-eval.mjs'
 import { runProductJudging } from './lib/judge-jobs.mjs'
@@ -136,6 +149,9 @@ export async function runEvaluation({
   judgeInvoke = null,
   buildResult = null,
   verificationResult = null,
+  // The live models.dev catalog. Injected so pricing is exercisable offline and
+  // so a test never depends on today's published rates.
+  pricingFetch = null,
   // Agent Runner resolves its run store from $HOME. The controller must read
   // the same store the spawned runner writes to, so the home is explicit and
   // is passed through to the child rather than being inherited implicitly.
@@ -289,7 +305,27 @@ export async function runEvaluation({
     sourceEvidence: null,
     judging: null,
     score: null,
+    metrics: null,
+    pricing: null,
+    cost: null,
+    ambiguity: null,
+    // Measured durations only. See lib/timing.mjs: nothing here holds a
+    // wall-clock stamp, so no stopped-process or human-review gap can reach a
+    // reported total. Earlier sessions' intervals are carried forward from the
+    // checkpoint so a resumed run reports total active machine time rather than
+    // only the last session's share of it.
+    timing: mergeTimingLedgers(checkpoint.timing, createTimingLedger()),
   }
+
+  // Pricing and ambiguity are eval-owned judge jobs and reuse the single
+  // recorded Codex authority rather than selecting one of their own.
+  const judgeAuthority = { cli: 'codex', model: options.judgeModel }
+
+  // Each execution session gets its own label so the reported total reads as a
+  // sum of recorded machine sessions rather than one uninterrupted stretch.
+  const executionSession = `${runId}#${new Set(
+    record.timing.intervals.map((interval) => interval.session),
+  ).size + 1}`
   // Link the persistent run store into the container home so Agent Runner
   // writes where the controller reads, then read from whichever store is
   // actually in effect.
@@ -454,8 +490,68 @@ export async function runEvaluation({
       }]
     },
 
-    'ambiguity-diagnostics': async () => {},
-    'metrics-pricing': async () => {},
+    // Both diagnostic phases are deliberately terminal in their own scope: they
+    // return no outcome events, so nothing they observe can move a point, open a
+    // gate, or change the product verdict.
+    'ambiguity-diagnostics': async () => {
+      const ledgerPath = join(runDir, 'ambiguity-ledger.json')
+      const artifacts = await collectAmbiguityArtifacts({ sessionDir: record.run?.session_dir ?? null })
+      // A ledger written by an earlier session is the record of what was already
+      // observed; this run adds to it rather than replacing it.
+      const previous = await readJson(ledgerPath, null)
+
+      const { ledger } = await runAmbiguityDiagnostics({
+        runId: record.run?.run_id ?? runId,
+        artifacts,
+        productEvidence: [
+          ...(record.sourceEvidence?.evidence ?? []),
+          ...(record.browser?.criteria ?? []),
+          ...(record.browser?.gates ?? []),
+        ],
+        authority: judgeAuthority,
+        invoke: judgeInvoke,
+        previous,
+      })
+
+      record.ambiguity = ledger
+      await writeJsonAtomic(ledgerPath, ledger)
+      await writeJsonAtomic(join(runDir, 'phases/ambiguity-diagnostics.json'), ledger)
+    },
+
+    'metrics-pricing': async () => {
+      record.metrics = await readRunnerMetrics({
+        sessionDir: record.run?.session_dir ?? null,
+        runId: record.run?.run_id ?? runId,
+        workflow: boundary.workflow,
+      })
+
+      const catalog = needsPricingLookup(record.metrics.attempts)
+        ? await fetchPricingCatalog(pricingFetch ? { fetchImpl: pricingFetch } : {})
+        : null
+      record.pricing = await resolveImplementationPricing({
+        attempts: record.metrics.attempts,
+        catalog,
+        invoke: judgeInvoke,
+        authority: judgeAuthority,
+      })
+      record.cost = {
+        ...aggregateImplementationCost({
+          attempts: record.metrics.attempts,
+          costs: record.pricing.costs,
+          // Rejected or partial Runner metrics mean the set of attempts is
+          // unknown, so no total computed from them can be presented as final.
+          attemptsComplete: record.metrics.complete,
+        }),
+        // Reported beside implementation cost and never inside it.
+        eval_owned: summarizeEvalOwnedUsage([]),
+      }
+
+      await writeJsonAtomic(join(runDir, 'phases/metrics-pricing.json'), {
+        metrics: record.metrics,
+        pricing: record.pricing,
+        cost: record.cost,
+      })
+    },
 
     'pending-result': async (context) => { await writeResult(context.outcome) },
     cleanup: async (context) => { context.serverRunning = false },
@@ -497,6 +593,25 @@ export async function runEvaluation({
         provenance,
         events: record.events,
       },
+      implementation_metrics: record.metrics,
+      cost: record.cost,
+      pricing: record.pricing,
+      // Summarized at write time so the reported total covers every automated
+      // phase that had actually run when the result was written.
+      timing: summarizeMachineTiming({
+        ledger: record.timing,
+        implementationMs: record.metrics?.active_duration_ms ?? null,
+      }),
+      ambiguity: record.ambiguity ? {
+        artifact: 'ambiguity-ledger.json',
+        coverage: record.ambiguity.coverage,
+        finding_count: record.ambiguity.findings.length,
+        classifications: record.ambiguity.findings.map(({ id, classification, consequence }) => ({
+          id, classification, consequence,
+        })),
+        fixture_improvement_proposals: record.ambiguity.fixture_improvement_proposals,
+        scoring_effect: 'none',
+      } : null,
       role_configuration: reconcileRoleAttempts(validation.profiles, []),
       timings: summarizeTimings(record.timings),
     })
@@ -508,6 +623,26 @@ export async function runEvaluation({
       .map(([name]) => name),
   )
 
+  // A reused phase runs no handler, so its findings would be absent from the
+  // record the result is rendered from. Rehydrating from the durable phase
+  // artifacts is what makes a resumed `result.json` describe the whole
+  // evaluation rather than only the phases this session happened to execute.
+  for (const [phase, load] of [
+    ['browser-evaluation', (value) => { record.browser = value }],
+    ['source-evidence', (value) => { record.sourceEvidence = value }],
+    ['product-judging', (value) => { record.judging = value }],
+    ['score', (value) => { record.score = value }],
+    ['ambiguity-diagnostics', (value) => { record.ambiguity = value }],
+    ['metrics-pricing', (value) => {
+      record.metrics = value.metrics
+      record.pricing = value.pricing
+      record.cost = value.cost
+    }],
+  ]) {
+    const persisted = await readJson(join(runDir, `phases/${phase}.json`), null)
+    if (persisted) load(persisted)
+  }
+
   // Record phase completion durably as each phase finishes, so an interrupted
   // run resumes at the first incomplete phase instead of repeating valid work.
   const tracked = {}
@@ -515,9 +650,21 @@ export async function runEvaluation({
     const handler = handlers[phase.name]
     if (!handler) continue
     tracked[phase.name] = async (context) => {
+      const start = process.hrtime.bigint()
       const events = await handler(context)
+      // Only the phase's own active execution is measured. The implementation
+      // workflow's duration comes from Agent Runner's own metrics instead, so it
+      // is not double-counted here.
+      if (phase.owner === 'evaluation-harness') {
+        record.timing = recordMachineInterval(record.timing, {
+          phase: phase.name,
+          duration_ms: Number(process.hrtime.bigint() - start) / 1e6,
+          session: executionSession,
+        })
+      }
       checkpoint = {
         ...checkpoint,
+        timing: record.timing,
         phases: {
           ...checkpoint.phases,
           [phase.name]: {
