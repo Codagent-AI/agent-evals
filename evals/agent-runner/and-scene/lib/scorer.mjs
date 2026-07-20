@@ -32,7 +32,7 @@ export class RubricValidationError extends Error {
 // Validate one evaluator's output against the exact criterion set it owns.
 // Coverage must be exact in both directions: the scorer never changes the
 // denominator to accommodate what an evaluator happened to return.
-function indexResults(source, results, expectedIds) {
+function indexResults(source, results, expectedIds, { allowUnobserved = false } = {}) {
   const indexed = new Map()
   const duplicates = []
   const unknown = []
@@ -44,20 +44,27 @@ function indexResults(source, results, expectedIds) {
     if (!result || typeof result.id !== 'string' || result.id.length === 0) {
       throw new RubricValidationError(`malformed criterion result from ${source}: missing id`)
     }
-    if (!VERDICTS.includes(result.verdict)) {
-      throw new RubricValidationError(
-        `malformed criterion result from ${source}: ${result.id} has verdict ${JSON.stringify(result.verdict)}`,
-      )
-    }
-    if (typeof result.rationale !== 'string' || result.rationale.trim().length === 0) {
-      throw new RubricValidationError(
-        `malformed criterion result from ${source}: ${result.id} has no rationale`,
-      )
-    }
-    if (!Array.isArray(result.evidence)) {
-      throw new RubricValidationError(
-        `malformed criterion result from ${source}: ${result.id} has no cited evidence`,
-      )
+    // A null verdict means the evidence was never collected. It is accepted
+    // only where the reader can act on it — the hard gates, which become
+    // incomplete rather than failing. A scored criterion must still be decided,
+    // and any other verdict value is malformed everywhere.
+    const isUnobserved = allowUnobserved && result.verdict === null
+    if (!isUnobserved) {
+      if (!VERDICTS.includes(result.verdict)) {
+        throw new RubricValidationError(
+          `malformed criterion result from ${source}: ${result.id} has verdict ${JSON.stringify(result.verdict)}`,
+        )
+      }
+      if (typeof result.rationale !== 'string' || result.rationale.trim().length === 0) {
+        throw new RubricValidationError(
+          `malformed criterion result from ${source}: ${result.id} has no rationale`,
+        )
+      }
+      if (!Array.isArray(result.evidence)) {
+        throw new RubricValidationError(
+          `malformed criterion result from ${source}: ${result.id} has no cited evidence`,
+        )
+      }
     }
     if (indexed.has(result.id)) duplicates.push(result.id)
     else if (!expected.has(result.id)) unknown.push(result.id)
@@ -197,18 +204,21 @@ function scoreGates(gates, results) {
   if (results === null || results === undefined) {
     return { gates: gates.map(({ id, requirement }) => ({ id, requirement, verdict: null, rationale: null, evidence: [], observed: false })), passed: null }
   }
-  const indexed = indexResults('hard-gates', results, gates.map(({ id }) => id))
+  const indexed = indexResults('hard-gates', results, gates.map(({ id }) => id), { allowUnobserved: true })
   const rows = gates.map(({ id, requirement }) => {
     const result = indexed.get(id)
     return {
       id,
       requirement,
-      verdict: result.verdict,
-      rationale: result.rationale,
-      evidence: result.evidence,
-      observed: true,
+      verdict: result.verdict ?? null,
+      rationale: result.rationale ?? null,
+      evidence: result.evidence ?? [],
+      observed: result.verdict !== null && result.verdict !== undefined,
     }
   })
+  // A gate whose evidence was never observed makes the whole gate set
+  // unavailable. It is never counted as a gate the candidate failed.
+  if (rows.some(({ observed }) => !observed)) return { gates: rows, passed: null }
   return { gates: rows, passed: rows.every(({ verdict }) => verdict === 'pass') }
 }
 

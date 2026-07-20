@@ -19,6 +19,7 @@ import {
   saveCheckpoint,
   validateCheckpointIdentity,
 } from './lib/checkpoint.mjs'
+import { collectSourceEvidence } from './deterministic-checks.mjs'
 import { runBrowserEvaluation } from './lib/browser-eval.mjs'
 import { runProductJudging } from './lib/judge-jobs.mjs'
 import { applyOutcomeEvent, createOutcome, outcomeLabel } from './lib/outcomes.mjs'
@@ -285,6 +286,7 @@ export async function runEvaluation({
     run: checkpoint.agent_runner,
     timings: [],
     browser: null,
+    sourceEvidence: null,
     judging: null,
     score: null,
   }
@@ -401,17 +403,32 @@ export async function runEvaluation({
     },
 
     'product-judging': async () => {
-      if (judgeInvoke) {
+      // The judges answer source-review criteria, so they must be shown the
+      // delivered source. Collecting it here also bounds it: the scan budget
+      // caps how much candidate-controlled text can reach a prompt.
+      record.sourceEvidence = await collectSourceEvidence(candidateWorktree)
+      await writeJsonAtomic(join(runDir, 'phases/source-evidence.json'), record.sourceEvidence)
+
+      if (!judgeInvoke) {
+        record.events.push({ event: 'skipped', reason: 'no judge invoker configured' })
+      } else if (record.sourceEvidence.files.length === 0) {
+        // A judge shown no source cannot support a verdict about that source.
+        // Asking anyway would buy verdicts with no evidence behind them, so the
+        // components stay unobserved instead.
+        record.events.push({ event: 'skipped', reason: 'no candidate source available to review' })
+      } else {
         record.judging = await runProductJudging({
           rubrics,
           authority: { cli: 'codex', model: options.judgeModel },
-          evidence: [...(record.browser?.criteria ?? []), ...(record.browser?.gates ?? [])],
-          sources: [],
+          evidence: [
+            ...record.sourceEvidence.evidence,
+            ...(record.browser?.criteria ?? []),
+            ...(record.browser?.gates ?? []),
+          ],
+          sources: record.sourceEvidence.files,
           invoke: judgeInvoke,
         })
         await writeJsonAtomic(join(runDir, 'phases/product-judging.json'), record.judging)
-      } else {
-        record.events.push({ event: 'skipped', reason: 'no judge invoker configured' })
       }
 
       record.score = scoreProduct({
@@ -426,6 +443,7 @@ export async function runEvaluation({
           judge_retries: record.judging?.retries ?? {},
           failed_judge_jobs: record.judging?.failed_jobs ?? [],
           browser_bounds_exceeded: record.browser?.bounds_exceeded ?? [],
+          source_scan_budget_exceeded: record.sourceEvidence?.budget_exceeded ?? [],
         },
         mode,
       })
@@ -464,6 +482,7 @@ export async function runEvaluation({
       rubrics: provenanceOfRubrics,
       score: record.score,
       browser_evaluation: record.browser,
+      source_evidence: record.sourceEvidence,
       judging: record.judging,
       workflow: {
         workflow: boundary.workflow,

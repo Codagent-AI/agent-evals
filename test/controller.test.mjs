@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, readFile, readdir, readlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 
 import { runEvaluation } from '../evals/agent-runner/and-scene/controller.mjs'
@@ -640,6 +640,7 @@ test('the run identity and result record both rubric versions and hashes', async
 
 test('a complete automated run reports the 70-point subtotal and no official verdict', async () => {
   const context = await environment()
+  await writeCandidateSource(context.runDir)
 
   const result = await evaluate(context, ['--skip-validator', ...profileArgs], {
     browserDriver: conformingDriver(),
@@ -679,6 +680,7 @@ test('missing browser and judge evidence is reported incomplete rather than as p
 
 test('a judge job that never returns usable output does not fail the run', async () => {
   const context = await environment()
+  await writeCandidateSource(context.runDir)
 
   const result = await evaluate(context, ['--skip-validator', ...profileArgs], {
     browserDriver: conformingDriver(),
@@ -696,4 +698,73 @@ test('a judge job that never returns usable output does not fail the run', async
   assert.ok(record.score.incomplete.includes('scene-kit-correctness'))
   // Retries are harness activity and cost the candidate nothing.
   assert.equal(record.score.components.find(({ id }) => id === 'demo-technical-quality').points_awarded, 25)
+})
+
+async function writeCandidateSource(runDir) {
+  const worktree = join(runDir, '.runtime/candidate-worktree')
+  const files = {
+    'src/presentations/how-to-make-a-presentation/steps.tsx': DEMO_CONTRACT.step_titles.join('\n'),
+    'src/presentation-kit/Attribution.tsx': 'made by and-scene https://github.com/Codagent-AI/and-scene',
+    'scripts/verify.mjs': 'http://127.0.0.1:4319 data-step-count',
+  }
+  for (const [path, contents] of Object.entries(files)) {
+    const target = join(worktree, path)
+    await mkdir(dirname(target), { recursive: true })
+    await writeFile(target, contents)
+  }
+}
+
+test('product judges receive the candidate source paths and its source evidence', async () => {
+  const context = await environment()
+  await mkdir(join(context.runDir, '.runtime'), { recursive: true })
+  await writeCandidateSource(context.runDir)
+  const seen = []
+
+  const result = await evaluate(context, ['--skip-validator', ...profileArgs], {
+    browserDriver: conformingDriver(),
+    judgeInvoke: async (request) => {
+      seen.push(request)
+      return JSON.stringify({
+        results: request.criteria.map((id) => ({
+          id, verdict: 'pass', rationale: 'reviewed the delivered source', evidence: ['src/x.tsx'],
+        })),
+      })
+    },
+    buildResult: { ok: true },
+    verificationResult: { machine_readable: true, passed: true },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.equal(seen.length, 4)
+  for (const request of seen) {
+    assert.ok(request.prompt.includes('scripts/verify.mjs'), request.job)
+    assert.ok(request.prompt.includes('src/presentation-kit/Attribution.tsx'), request.job)
+  }
+  const record = await readJson(join(context.runDir, 'result.json'))
+  assert.ok(record.source_evidence.files.includes('scripts/verify.mjs'))
+})
+
+test('judging is skipped rather than run blind when no candidate source is available', async () => {
+  const context = await environment()
+  let invoked = 0
+
+  const result = await evaluate(context, ['--skip-validator', ...profileArgs], {
+    browserDriver: conformingDriver(),
+    judgeInvoke: async () => { invoked += 1; return '{}' },
+    buildResult: { ok: true },
+    verificationResult: { machine_readable: true, passed: true },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  // A judge shown no source cannot support a verdict, so it is never asked.
+  assert.equal(invoked, 0)
+  const record = await readJson(join(context.runDir, 'result.json'))
+  for (const component of [
+    'scene-kit-correctness', 'presentation-skill-correctness', 'verification-tool-correctness',
+  ]) assert.ok(record.score.incomplete.includes(component), component)
+  // The deterministic browser criteria were still observed and still count.
+  assert.equal(
+    record.score.components.find(({ id }) => id === 'demo-technical-quality').points_observed,
+    14,
+  )
 })

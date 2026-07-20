@@ -221,10 +221,17 @@ erasing the numerical score. An official pass needs at least 70 overall, 15 of
 review, no individual human rating of 1, all four gates, and every required
 phase complete.
 
-Evidence that was never observed — a judge job that never returned usable
-output, a browser evaluation that never ran — leaves its component incomplete
-and the verdict unavailable. It is never converted into product failures or
-rescaled away.
+Judges are given the bounded list of delivered source paths alongside the
+deterministic source evidence. When no candidate source is available they are
+not invoked at all, because a judge shown no source cannot support a verdict
+about it.
+
+Evidence that was never observed leaves its component or gate incomplete and the
+verdict unavailable. It is never converted into product failures or rescaled
+away. This covers a judge job that never returned usable output, a browser
+evaluation that never ran, a build or verification result that was never
+recorded, and a run where runtime failures could not be read back — an empty
+failure list only proves clean rendering when the failure list was readable.
 
 ## Artifacts
 

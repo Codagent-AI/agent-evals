@@ -56,6 +56,20 @@ function verdict(id, pass, rationale, evidence = []) {
     verdict: pass ? 'pass' : 'fail',
     rationale: bounded(rationale),
     evidence: evidence.map(bounded),
+    observed: true,
+  }
+}
+
+// Evidence that was never collected. A null verdict is not a failure: it makes
+// the hard gates incomplete so the official verdict becomes unavailable, rather
+// than blaming the candidate for something the harness could not observe.
+function unobserved(id, rationale, evidence = []) {
+  return {
+    id,
+    verdict: null,
+    rationale: bounded(rationale),
+    evidence: evidence.map(bounded),
+    observed: false,
   }
 }
 
@@ -71,6 +85,7 @@ export async function runBrowserEvaluation({
 }) {
   const boundsExceeded = []
   const failures = new Set()
+  let failureReportingAvailable = true
 
   // One session per probe, so a probe that leaves the demo mid-navigation
   // cannot make the next probe's result depend on execution order.
@@ -350,47 +365,67 @@ export async function runBrowserEvaluation({
     try {
       for (const failure of await driver.failures()) failures.add(bounded(failure))
     } catch {
-      // A driver that cannot report failures is already reflected in the
-      // criterion above; the renders gate falls back to what was collected.
+      // An empty failure set only proves clean rendering when the failure list
+      // could actually be read. Losing the page or the console log means the
+      // evidence is missing, so the renders gate goes unobserved rather than
+      // passing on the strength of what was never collected.
+      failureReportingAvailable = false
     }
   }
 
   const passed = (id) => criteria.find((entry) => entry.id === id)?.verdict === 'pass'
+  const clearOutcome = verification?.machine_readable === true && typeof verification?.passed === 'boolean'
+
   const gates = [
-    verdict(
-      'verification-build-whole-app',
-      build?.ok === true,
-      build?.ok === true ? 'the complete application built successfully' : `the build did not succeed: ${bounded(build?.log ?? 'no build result')}`,
-      build?.log ? [build.log] : [],
-    ),
+    // A build result that was never produced is missing evidence, not a failed
+    // build, so it leaves the gate unobserved and the verdict unavailable.
+    build === null || build === undefined
+      ? unobserved('verification-build-whole-app', 'no build result was recorded for this run')
+      : verdict(
+        'verification-build-whole-app',
+        build.ok === true,
+        build.ok === true
+          ? 'the complete application built successfully'
+          : `the build did not succeed: ${bounded(build.log ?? 'no build log')}`,
+        build.log ? [build.log] : [],
+      ),
     verdict(
       'verification-sample-outline',
       passed('demo-route-and-registration') && passed('demo-nine-step-content-and-order'),
       'the canonical nine-step sample must be registered, reachable, and match its outline',
       [contract.route],
     ),
-    verdict(
-      'verification-every-produced-step-renders',
-      failures.size === 0,
-      failures.size === 0
-        ? 'every produced step rendered without runtime or console errors'
-        : `${failures.size} runtime or console failure(s) occurred while stepping the demo`,
-      [...failures].slice(0, 10),
-    ),
-    verdict(
-      'verification-clear-outcome',
-      verification?.machine_readable === true && typeof verification?.passed === 'boolean',
-      verification?.machine_readable === true && typeof verification?.passed === 'boolean'
-        ? `verification produced a machine-readable ${verification.passed ? 'pass' : 'fail'} result`
-        : 'verification did not produce an unambiguous machine-readable result',
-      verification?.artifact ? [verification.artifact] : [],
-    ),
+    failureReportingAvailable
+      ? verdict(
+        'verification-every-produced-step-renders',
+        failures.size === 0,
+        failures.size === 0
+          ? 'every produced step rendered without runtime or console errors'
+          : `${failures.size} runtime or console failure(s) occurred while stepping the demo`,
+        [...failures].slice(0, 10),
+      )
+      : unobserved(
+        'verification-every-produced-step-renders',
+        'runtime and console failures could not be observed, so clean rendering is unproven',
+        [...failures].slice(0, 10),
+      ),
+    verification === null || verification === undefined
+      ? unobserved('verification-clear-outcome', 'no verification result was recorded for this run')
+      : verdict(
+        'verification-clear-outcome',
+        clearOutcome,
+        clearOutcome
+          ? `verification produced a machine-readable ${verification.passed ? 'pass' : 'fail'} result`
+          : 'verification did not produce an unambiguous machine-readable result',
+        verification.artifact ? [verification.artifact] : [],
+      ),
   ]
 
   return {
     criteria,
     gates,
     failures: [...failures],
+    failure_reporting_available: failureReportingAvailable,
     bounds_exceeded: [...new Set(boundsExceeded)],
   }
 }

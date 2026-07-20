@@ -264,3 +264,33 @@ test('a driver error fails only the affected criterion rather than aborting the 
   assert.equal(verdictOf(result, 'demo-control-semantics'), 'pass')
   assert.equal(result.criteria.length, DETERMINISTIC_BROWSER_CRITERIA.length)
 })
+
+test('an absent build result leaves its gate unobserved rather than failed', async () => {
+  const result = await evaluate({}, { build: null })
+  const gate = result.gates.find(({ id }) => id === 'verification-build-whole-app')
+
+  // Never observing a build is missing evidence, not a build that failed.
+  assert.equal(gate.verdict, null)
+  assert.equal(gate.observed, false)
+  assert.equal(verdictOf(await evaluate({}, { build: { ok: false, log: 'tsc exited 2' } }), 'verification-build-whole-app'), 'fail')
+})
+
+test('an absent verification result leaves its gate unobserved rather than failed', async () => {
+  const result = await evaluate({}, { verification: null })
+  const gate = result.gates.find(({ id }) => id === 'verification-clear-outcome')
+
+  assert.equal(gate.verdict, null)
+  assert.equal(gate.observed, false)
+})
+
+test('unavailable failure reporting leaves the renders gate unobserved rather than passing', async () => {
+  const result = await evaluate({ throwOn: 'failures' })
+  const gate = result.gates.find(({ id }) => id === 'verification-every-produced-step-renders')
+
+  // An empty failure set only proves clean rendering when the evaluator could
+  // actually read the failure list.
+  assert.equal(gate.verdict, null)
+  assert.equal(gate.observed, false)
+  assert.match(gate.rationale, /could not be observed|unavailable/i)
+  assert.equal(result.failure_reporting_available, false)
+})

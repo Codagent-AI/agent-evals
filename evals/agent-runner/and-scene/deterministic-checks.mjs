@@ -82,11 +82,29 @@ function hasTokens(text, tokens) {
   return tokens.every((token) => lower.includes(token.toLowerCase()))
 }
 
-export async function runDeterministicChecks(root, { screenshotManifest } = {}) {
+// The full scan: the evidence rows plus the bounded list of candidate source
+// paths that produced them. Judges need the paths to know what there is to
+// review; without them a judge would be answering source-review criteria having
+// been shown no source at all.
+export async function collectSourceEvidence(root, options = {}) {
   const scanBudget = { entries: 0, files: 0, bytes: 0, exceeded: [] }
+  const evidence = await runDeterministicChecks(root, { ...options, scanBudget })
+  return {
+    evidence,
+    files: scanBudget.paths,
+    budget_exceeded: [...new Set(scanBudget.exceeded)],
+  }
+}
+
+export async function runDeterministicChecks(root, { screenshotManifest, scanBudget: injected } = {}) {
+  const scanBudget = injected ?? { entries: 0, files: 0, bytes: 0, exceeded: [] }
+  scanBudget.paths = []
   const sourceFiles = await textFiles(root, 'src', scanBudget)
   const scriptFiles = await textFiles(root, 'scripts', scanBudget)
   const skillFiles = await textFiles(root, 'skills', scanBudget)
+  scanBudget.paths = [...sourceFiles, ...scriptFiles, ...skillFiles]
+    .map(({ path }) => path)
+    .sort()
   const source = sourceFiles.map(({ text }) => text).join('\n')
   const verify = scriptFiles.find(({ path }) => path === 'scripts/verify.mjs')?.text || ''
   const screenshotFile = [...scriptFiles, ...skillFiles]

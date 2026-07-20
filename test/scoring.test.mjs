@@ -300,3 +300,37 @@ test('a reference baseline is scored with the same rubric, weights, gates, and t
     { ...candidate, mode: null },
   )
 })
+
+test('a gate whose evidence was never observed blocks the verdict without failing', () => {
+  const base = inputs({ humanReview: fullHumanReview })
+  const result = scoreProduct({
+    ...base,
+    gates: base.gates.map((gate) => gate.id === 'verification-build-whole-app'
+      ? { id: gate.id, verdict: null, rationale: 'no build result was recorded', evidence: [], observed: false }
+      : gate),
+  })
+
+  assert.equal(result.gates_passed, null)
+  assert.equal(result.official_pass, null)
+  assert.equal(result.official_score, null)
+  assert.ok(result.incomplete.includes('hard-gates'))
+  // An unobserved gate is never reported as a gate the candidate failed.
+  assert.deepEqual(result.pass_failures, [])
+  // Points supported by observed evidence survive.
+  assert.equal(result.automated_subtotal.points, 70)
+})
+
+test('a malformed gate result still fails validation', () => {
+  const base = inputs({ humanReview: fullHumanReview })
+  assert.throws(
+    () => scoreProduct({
+      ...base,
+      gates: base.gates.map((gate, index) => index === 0 ? { ...gate, verdict: 'probably' } : gate),
+    }),
+    /malformed criterion result/,
+  )
+  assert.throws(
+    () => scoreProduct({ ...base, gates: base.gates.slice(1) }),
+    /missing criterion results for hard-gates/,
+  )
+})

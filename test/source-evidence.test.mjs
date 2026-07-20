@@ -121,3 +121,26 @@ test('deterministic sample check requires browser evidence in canonical title or
   const results = await runDeterministicChecks(dir, { screenshotManifest: manifest })
   assert.equal(results.find(({ id }) => id === 'verification-sample-outline')?.verdict, 'fail')
 })
+
+test('source-evidence collection reports the scanned files alongside the evidence', async () => {
+  const { collectSourceEvidence } = await import('../evals/agent-runner/and-scene/deterministic-checks.mjs')
+  const dir = await mkdtemp(join(tmpdir(), 'and-scene-source-collect-'))
+  await writeCandidate(dir)
+
+  const collected = await collectSourceEvidence(dir)
+
+  assert.ok(collected.evidence.length > 0)
+  assert.ok(collected.files.includes('scripts/verify.mjs'))
+  assert.ok(collected.files.includes('src/presentation-kit/Attribution.tsx'))
+  assert.deepEqual(collected.files, [...collected.files].sort())
+  assert.deepEqual(collected.budget_exceeded, [])
+})
+
+test('an unreadable candidate tree yields no source files rather than throwing', async () => {
+  const { collectSourceEvidence } = await import('../evals/agent-runner/and-scene/deterministic-checks.mjs')
+  const dir = await mkdtemp(join(tmpdir(), 'and-scene-source-empty-'))
+
+  const collected = await collectSourceEvidence(dir)
+
+  assert.deepEqual(collected.files, [])
+})
