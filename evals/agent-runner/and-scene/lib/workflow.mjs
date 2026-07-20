@@ -63,7 +63,14 @@ export function verifyWorkflowContract(text, boundary) {
 
 // The outer eval process restarting must never launch a second implementation
 // run, so every recorded run resolves to wait, continue, resume, or error.
-export function classifyRunnerRun({ recorded, state, discovered, boundaryStep, isProcessAlive }) {
+export function classifyRunnerRun({
+  recorded,
+  state,
+  discovered,
+  boundaryStep,
+  isProcessAlive,
+  workflowName = IMPLEMENTATION_WORKFLOW,
+}) {
   // The controller can be interrupted after Agent Runner persisted a run but
   // before that identity reached the checkpoint. Adopt the persisted run rather
   // than starting a duplicate implementation workflow.
@@ -75,6 +82,7 @@ export function classifyRunnerRun({ recorded, state, discovered, boundaryStep, i
         state: discovered,
         boundaryStep,
         isProcessAlive,
+        workflowName,
       }),
       adopted: true,
     }
@@ -94,9 +102,16 @@ export function classifyRunnerRun({ recorded, state, discovered, boundaryStep, i
       reason: `Agent Runner state describes run ${state.run_id}, not recorded run ${recorded.run_id}`,
     }
   }
+  if (state.workflow_name && state.workflow_name !== workflowName) {
+    return {
+      status: 'unverifiable',
+      action: 'error',
+      reason: `Agent Runner run ${recorded.run_id} is ${state.workflow_name}, not ${workflowName}`,
+    }
+  }
 
   const lock = state.lock
-  if (lock && isProcessAlive(lock.pid)) {
+  if (Number.isInteger(lock?.pid) && lock.pid > 0 && isProcessAlive(lock.pid)) {
     if (lock.run_id !== recorded.run_id) {
       return {
         status: 'unverifiable',
@@ -107,7 +122,10 @@ export function classifyRunnerRun({ recorded, state, discovered, boundaryStep, i
     return { status: 'active', action: 'wait', reason: null, run_id: recorded.run_id }
   }
 
-  if (state.status === 'completed' && state.last_step === boundaryStep) {
+  // `--until` intentionally leaves the overall workflow incomplete because
+  // later steps remain. Reaching the eval boundary is represented by the
+  // current top-level step itself being complete, not by a synthetic status.
+  if (state.last_step === boundaryStep && state.step_completed === true) {
     return { status: 'completed', action: 'continue', reason: null, run_id: recorded.run_id }
   }
 

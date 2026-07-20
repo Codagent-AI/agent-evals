@@ -103,7 +103,7 @@ test('an unrecorded but persisted run is adopted rather than duplicated', () => 
   // before the identity reached the checkpoint.
   const decision = classifyRunnerRun({
     recorded: null,
-    discovered: { run_id: 'run-7', status: 'running', last_step: 'implement-tasks' },
+    discovered: { run_id: 'run-7', last_step: 'implement-tasks', step_completed: false },
     boundaryStep: 'simplify',
     isProcessAlive: () => false,
   })
@@ -117,7 +117,7 @@ test('an unrecorded but persisted run is adopted rather than duplicated', () => 
 test('an unrecorded but persisted active run is waited for, not duplicated', () => {
   const decision = classifyRunnerRun({
     recorded: null,
-    discovered: { run_id: 'run-7', status: 'running', lock: { pid: 4242, run_id: 'run-7' } },
+    discovered: { run_id: 'run-7', lock: { pid: 4242, run_id: 'run-7' } },
     boundaryStep: 'simplify',
     isProcessAlive: (pid) => pid === 4242,
   })
@@ -129,7 +129,7 @@ test('an unrecorded but persisted active run is waited for, not duplicated', () 
 test('an unrecorded persisted run that already reached the boundary is continued', () => {
   const decision = classifyRunnerRun({
     recorded: null,
-    discovered: { run_id: 'run-7', status: 'completed', last_step: 'simplify' },
+    discovered: { run_id: 'run-7', last_step: 'simplify', step_completed: true },
     boundaryStep: 'simplify',
     isProcessAlive: () => false,
   })
@@ -149,7 +149,7 @@ test('no recorded and no discovered run starts a fresh run', () => {
 test('a recorded run owned by a live process is waited for, not relaunched', () => {
   const decision = classifyRunnerRun({
     recorded: { run_id: 'run-7' },
-    state: { run_id: 'run-7', status: 'running', lock: { pid: 4242, run_id: 'run-7' } },
+    state: { run_id: 'run-7', lock: { pid: 4242, run_id: 'run-7' } },
     isProcessAlive: (pid) => pid === 4242,
   })
 
@@ -160,7 +160,7 @@ test('a recorded run owned by a live process is waited for, not relaunched', () 
 test('a completed run through its boundary continues to the next eval phase', () => {
   const decision = classifyRunnerRun({
     recorded: { run_id: 'run-7' },
-    state: { run_id: 'run-7', status: 'completed', last_step: 'simplify' },
+    state: { run_id: 'run-7', last_step: 'simplify', step_completed: true },
     boundaryStep: 'simplify',
     isProcessAlive: () => false,
   })
@@ -172,7 +172,7 @@ test('a completed run through its boundary continues to the next eval phase', ()
 test('an inactive unfinished run is resumed by its exact run identifier', () => {
   const decision = classifyRunnerRun({
     recorded: { run_id: 'run-7' },
-    state: { run_id: 'run-7', status: 'running', last_step: 'implement-tasks', lock: { pid: 4242, run_id: 'run-7' } },
+    state: { run_id: 'run-7', last_step: 'implement-tasks', step_completed: false, lock: { pid: 4242, run_id: 'run-7' } },
     boundaryStep: 'simplify',
     isProcessAlive: () => false,
   })
@@ -185,7 +185,7 @@ test('an inactive unfinished run is resumed by its exact run identifier', () => 
 test('a run that stopped short of its boundary is resumed rather than accepted', () => {
   const decision = classifyRunnerRun({
     recorded: { run_id: 'run-7' },
-    state: { run_id: 'run-7', status: 'completed', last_step: 'review-assumptions' },
+    state: { run_id: 'run-7', last_step: 'review-assumptions', step_completed: true },
     boundaryStep: 'simplify',
     isProcessAlive: () => false,
   })
@@ -225,6 +225,20 @@ test('state describing a different run stops with a workflow error', () => {
   })
 
   assert.equal(decision.action, 'error')
+})
+
+test('state for another workflow is never adopted as this evaluation run', () => {
+  const decision = classifyRunnerRun({
+    recorded: { run_id: 'run-7' },
+    state: {
+      run_id: 'run-7', workflow_name: 'accept-change', last_step: 'simplify', step_completed: true,
+    },
+    boundaryStep: 'simplify',
+    isProcessAlive: () => false,
+  })
+
+  assert.equal(decision.action, 'error')
+  assert.match(decision.reason, /accept-change.*implement-change2/)
 })
 
 test('the outer process restarting never starts a duplicate implementation run', () => {

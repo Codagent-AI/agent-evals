@@ -32,7 +32,12 @@ const profileArgs = [
   '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
 ]
 
-async function environment({ workflow = workflowYaml, dirty = '', commit = 'a'.repeat(40) } = {}) {
+async function environment({
+  workflow = workflowYaml,
+  dirty = '',
+  commit = 'a'.repeat(40),
+  candidateSource = true,
+} = {}) {
   const root = await mkdtemp(join(tmpdir(), 'agent-evals-controller-'))
   const agentRunnerDir = join(root, 'agent-runner')
   if (workflow !== null) {
@@ -49,7 +54,7 @@ async function environment({ workflow = workflowYaml, dirty = '', commit = 'a'.r
       const verb = args.join(' ')
       if (verb.includes('--is-inside-work-tree')) return { status: 0, stdout: 'true\n' }
       if (verb.includes('status --porcelain')) return { status: 0, stdout: dirty }
-      if (verb.includes('rev-parse HEAD')) return { status: 0, stdout: `${commit}\n` }
+      if (verb.includes('rev-parse')) return { status: 0, stdout: `${commit}\n` }
     }
     if (command === 'agent-runner' && args[0] === '--version') {
       return { status: 0, stdout: 'agent-runner 2.4.0\n' }
@@ -60,7 +65,14 @@ async function environment({ workflow = workflowYaml, dirty = '', commit = 'a'.r
   const home = join(root, 'container-home')
   await mkdir(home, { recursive: true })
 
-  return { root, agentRunnerDir, exec, invocations, home, runDir: join(root, 'run-1') }
+  const runDir = join(root, 'run-1')
+  if (candidateSource) {
+    const source = join(runDir, '.runtime/candidate-worktree/src/index.ts')
+    await mkdir(dirname(source), { recursive: true })
+    await writeFile(source, 'export const fixture = true\n')
+  }
+
+  return { root, agentRunnerDir, exec, invocations, home, runDir }
 }
 
 function runnerInvocations(invocations) {
@@ -73,7 +85,7 @@ function statefulReader(context, lastStep) {
   return () => (
     runnerInvocations(context.invocations).length === 0
       ? null
-      : { run_id: 'run-7', session_dir: '/sessions/run-7', status: 'completed', last_step: lastStep }
+      : { run_id: 'run-7', session_dir: '/sessions/run-7', last_step: lastStep, step_completed: true }
   )
 }
 
@@ -247,7 +259,7 @@ test('a resumed Agent Runner run uses the same candidate worktree', async () => 
     },
     isProcessAlive: () => false,
     home: context.home,
-    readRunnerState: () => ({ run_id: 'run-7', status: 'failed', last_step: 'implement-tasks' }),
+    readRunnerState: () => ({ run_id: 'run-7', last_step: 'implement-tasks', step_completed: false }),
     observedSteps: () => ['plan'],
   })
 
@@ -272,7 +284,9 @@ test('an unrecorded run persisted by Agent Runner is adopted instead of duplicat
     // previous process was interrupted mid-flight.
     readRunnerState: () => {
       calls += 1
-      return { run_id: 'run-9', session_dir: '/sessions/run-9', status: 'failed', last_step: 'implement-tasks' }
+      return runnerInvocations(context.invocations).length === 0
+        ? { run_id: 'run-9', session_dir: '/sessions/run-9', last_step: 'implement-tasks', step_completed: false }
+        : { run_id: 'run-9', session_dir: '/sessions/run-9', last_step: 'simplify', step_completed: true }
     },
     observedSteps: () => ['plan', 'simplify'],
   })
@@ -321,8 +335,11 @@ test('resume with an active run waits and does not launch a second workflow', as
   const waits = []
   await evaluate(context, ['--skip-validator', ...profileArgs, '--resume'], {
     isProcessAlive: () => true,
-    readRunnerState: () => ({ run_id: 'run-7', session_dir: '/sessions/run-7', status: 'running', lock: { pid: 99, run_id: 'run-7' } }),
-    waitForRun: (runId) => { waits.push(runId) },
+    readRunnerState: () => ({ run_id: 'run-7', session_dir: '/sessions/run-7', lock: { pid: 99, run_id: 'run-7' } }),
+    waitForRun: (runId) => {
+      waits.push(runId)
+      return { run_id: runId, session_dir: '/sessions/run-7', last_step: 'simplify', step_completed: true }
+    },
   })
 
   assert.deepEqual(waits, ['run-7'])
@@ -346,7 +363,7 @@ test('resume with an inactive unfinished run resumes that exact run identifier',
   const before = runnerInvocations(context.invocations).length
 
   await evaluate(context, ['--skip-validator', ...profileArgs, '--resume'], {
-    readRunnerState: () => ({ run_id: 'run-7', session_dir: '/sessions/run-7', status: 'failed', last_step: 'implement-tasks' }),
+    readRunnerState: () => ({ run_id: 'run-7', session_dir: '/sessions/run-7', last_step: 'implement-tasks', step_completed: false }),
   })
 
   const added = runnerInvocations(context.invocations).slice(before)
@@ -511,6 +528,7 @@ test('Agent Runner is spawned with the same home the controller reads from', asy
   const started = spawns.find(({ command, args }) => command === 'agent-runner' && args[0] === 'run')
   assert.ok(started, JSON.stringify(spawns.map((s) => s.command)))
   assert.equal(started.env.HOME, context.home)
+  assert.equal(started.env.AGENT_RUNNER_NO_TUI, '1')
 })
 
 test('an unresolvable home is rejected before Agent Runner runs', async () => {
@@ -585,7 +603,7 @@ function conformingDriver() {
       stepCount: titles.length,
       mode,
       title: titles[index],
-      caption: `Caption ${index}`,
+      caption: DEMO_CONTRACT.step_captions[index],
       sceneId: 'demo-scene',
       entityIds: ['stage', `beat-${index}`, `beat-${index + 1}`],
       titleProminent: mode === 'present',
@@ -658,6 +676,11 @@ test('a complete automated run reports the 70-point subtotal and no official ver
   assert.equal(record.product_verdict, 'unavailable')
   assert.equal(record.evaluation_status, 'pending-human-review')
   assert.deepEqual(record.score.incomplete, ['human-review'])
+  assert.equal(record.candidate_identity, record.candidate_source.candidate_identity)
+  assert.equal(record.candidate_source.source_manifest, 'candidate-source-manifest.json')
+  assert.equal(typeof await readFile(join(context.runDir, 'implementation.diff'), 'utf8'), 'string')
+  const sourceManifest = await readJson(join(context.runDir, 'candidate-source-manifest.json'))
+  assert.equal(sourceManifest.candidate_identity, record.candidate_identity)
 })
 
 test('missing browser and judge evidence is reported incomplete rather than as product failures', async () => {
@@ -744,8 +767,8 @@ test('product judges receive the candidate source paths and its source evidence'
   assert.ok(record.source_evidence.files.includes('scripts/verify.mjs'))
 })
 
-test('judging is skipped rather than run blind when no candidate source is available', async () => {
-  const context = await environment()
+test('empty candidate source is a harness failure rather than a plausible partial score', async () => {
+  const context = await environment({ candidateSource: false })
   let invoked = 0
 
   const result = await evaluate(context, ['--skip-validator', ...profileArgs], {
@@ -755,16 +778,11 @@ test('judging is skipped rather than run blind when no candidate source is avail
     verificationResult: { machine_readable: true, passed: true },
   })
 
-  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.equal(result.exitCode, 1, JSON.stringify(result.errors))
   // A judge shown no source cannot support a verdict, so it is never asked.
   assert.equal(invoked, 0)
   const record = await readJson(join(context.runDir, 'result.json'))
-  for (const component of [
-    'scene-kit-correctness', 'presentation-skill-correctness', 'verification-tool-correctness',
-  ]) assert.ok(record.score.incomplete.includes(component), component)
-  // The deterministic browser criteria were still observed and still count.
-  assert.equal(
-    record.score.components.find(({ id }) => id === 'demo-technical-quality').points_observed,
-    14,
-  )
+  assert.equal(record.evaluation_status, 'evaluation-harness-failed')
+  assert.equal(record.failed_phase, 'product-judging')
+  assert.match(record.failure.reason, /candidate source is empty/i)
 })

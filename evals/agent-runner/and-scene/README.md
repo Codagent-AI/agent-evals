@@ -255,6 +255,8 @@ artifacts/evals/and-scene/<run-id>/
 ├── artifact-manifest.json
 ├── human-review.json
 ├── ambiguity-ledger.json
+├── implementation.diff
+├── candidate-source-manifest.json
 ├── publication.json
 ├── logs/
 ├── evidence/
@@ -268,9 +270,12 @@ artifacts/evals/and-scene/<run-id>/
 `.runtime/` persists across disposable containers. Agent Runner layers built-in
 defaults, the global config, then the project config it discovers at
 `<cwd>/.agent-runner/config.yaml`, so the eval-scoped profile is written into
-the candidate worktree and Agent Runner is invoked from there. Nothing outside
-this run directory is read or modified. Credentials stay in the ephemeral
-container home and are never written into the run directory.
+the candidate worktree and Agent Runner is invoked from there. Fresh runs clone
+and check out the pinned fixture there; resumes require that exact worktree.
+The eval config is excluded through `.git/info/exclude`, and reaching the Runner
+boundary requires a clean candidate before the produced commit, normalized
+`implementation.diff`, and tracked-source manifest are frozen. Credentials stay
+in the ephemeral container home and are never written into the run directory.
 
 ## Lifecycle
 

@@ -101,6 +101,7 @@ test('scored mode delegates the lifecycle to the suite controller', async () => 
   assert.equal(result.status, 0, result.output)
   for (const expected of [
     '/eval-input/controller.mjs', '--run-dir', '/artifacts',
+    'AGENT_RUNNER_NO_TUI=1', '--repo',
     '--skip-validator', '--change-name', 'create-and-scene',
     '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
     '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
@@ -165,6 +166,16 @@ test('a reference baseline requires no role profiles', async () => {
   assert.equal(result.status, 0, result.output)
   assert.ok(result.output.includes('--reference-baseline'), result.output)
   assert.ok(result.output.includes('--candidate-ref'), result.output)
+})
+
+test('a reference baseline defaults to the pinned known-good candidate', async () => {
+  const context = await setup()
+
+  const result = await scored(context, ['--skip-validator', '--reference-baseline'])
+
+  assert.equal(result.status, 0, result.output)
+  assert.ok(result.output.includes('--candidate-ref'), result.output)
+  assert.ok(result.output.includes(referenceSha), result.output)
 })
 
 test('a reference baseline does not require a clean Agent Runner checkout', async () => {

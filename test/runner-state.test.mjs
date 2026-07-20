@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { lstat, readlink, symlink } from 'node:fs/promises'
 
-import { readRunnerState, resolveProjectsDir } from '../evals/agent-runner/and-scene/lib/runner-state.mjs'
+import {
+  readRunnerState,
+  resolveProjectsDir,
+  waitForRunnerRun,
+} from '../evals/agent-runner/and-scene/lib/runner-state.mjs'
 
 // Agent Runner lays out run state as
 // <projects>/<encoded-project>/runs/<session-id>/state.json.
@@ -20,20 +24,22 @@ async function projects(runs) {
   return dir
 }
 
-test('a recorded run is selected by its exact identifier', async () => {
+test('a recorded run is selected by its session-directory identifier and current Agent Runner schema', async () => {
   const dir = await projects({
-    'run-a': { run_id: 'run-a', status: 'completed', started_at: '2026-07-01T00:00:00Z' },
-    'run-b': { run_id: 'run-b', status: 'running', started_at: '2026-07-02T00:00:00Z' },
+    'run-a': { workflowName: 'implement-change2', currentStep: { stepId: 'simplify', completed: true } },
+    'run-b': { workflowName: 'implement-change2', currentStep: { stepId: 'implement-tasks' } },
   })
 
   const state = await readRunnerState(dir, 'run-a')
 
   assert.equal(state.run_id, 'run-a')
-  assert.equal(state.status, 'completed')
+  assert.equal(state.workflow_name, 'implement-change2')
+  assert.equal(state.last_step, 'simplify')
+  assert.equal(state.step_completed, true)
 })
 
 test('the session directory is reported alongside the state', async () => {
-  const dir = await projects({ 'run-a': { run_id: 'run-a', status: 'running' } })
+  const dir = await projects({ 'run-a': { workflowName: 'implement-change2', currentStep: 'plan' } })
 
   const state = await readRunnerState(dir, 'run-a')
 
@@ -46,27 +52,49 @@ test('a recorded run that is absent reports null rather than an unrelated run', 
   assert.equal(await readRunnerState(dir, 'run-a'), null)
 })
 
-test('discovery without a recorded identifier selects the newest run by timestamp', async () => {
+test('discovery without a recorded identifier selects the newest session by filesystem timestamp', async () => {
   const dir = await projects({
-    'run-old': { run_id: 'run-old', status: 'completed', started_at: '2026-07-01T00:00:00Z' },
-    'run-new': { run_id: 'run-new', status: 'running', started_at: '2026-07-05T00:00:00Z' },
-    'run-mid': { run_id: 'run-mid', status: 'failed', started_at: '2026-07-03T00:00:00Z' },
+    'run-old': { workflowName: 'implement-change2', currentStep: 'plan' },
+    'run-new': { workflowName: 'implement-change2', currentStep: 'simplify' },
   })
+  await utimes(join(dir, 'encoded-project/runs/run-old/state.json'), new Date('2026-07-01'), new Date('2026-07-01'))
+  await utimes(join(dir, 'encoded-project/runs/run-new/state.json'), new Date('2026-07-05'), new Date('2026-07-05'))
 
   const state = await readRunnerState(dir, null)
 
   assert.equal(state.run_id, 'run-new')
 })
 
-test('discovery ignores runs whose timestamp cannot be validated', async () => {
+test('the separate Agent Runner lock file is normalized onto discovered state', async () => {
   const dir = await projects({
-    'run-good': { run_id: 'run-good', status: 'running', started_at: '2026-07-01T00:00:00Z' },
-    'run-bad': { run_id: 'run-bad', status: 'running', started_at: 'not-a-timestamp' },
+    'run-active': { workflowName: 'implement-change2', currentStep: { stepId: 'implement-tasks' } },
+  })
+  await writeFile(join(dir, 'encoded-project/runs/run-active/lock'), '4321\n')
+
+  const state = await readRunnerState(dir, 'run-active')
+
+  assert.deepEqual(state.lock, { pid: 4321, run_id: 'run-active' })
+})
+
+test('production waiting polls until Agent Runner releases its run lock', async () => {
+  let reads = 0
+  let sleeps = 0
+  const state = await waitForRunnerRun({
+    runId: 'run-active',
+    readState: async () => {
+      reads += 1
+      return reads < 3
+        ? { run_id: 'run-active', lock: { pid: 4321, run_id: 'run-active' } }
+        : { run_id: 'run-active', lock: null, last_step: 'simplify', step_completed: true }
+    },
+    isProcessAlive: () => true,
+    intervalMs: 0,
+    sleep: async () => { sleeps += 1 },
   })
 
-  const state = await readRunnerState(dir, null)
-
-  assert.equal(state.run_id, 'run-good')
+  assert.equal(reads, 3)
+  assert.equal(sleeps, 2)
+  assert.equal(state.step_completed, true)
 })
 
 test('an empty projects directory reports null', async () => {
@@ -80,7 +108,7 @@ test('a missing projects directory reports null rather than throwing', async () 
 })
 
 test('malformed run state is skipped rather than failing discovery', async () => {
-  const dir = await projects({ 'run-good': { run_id: 'run-good', status: 'running', started_at: '2026-07-01T00:00:00Z' } })
+  const dir = await projects({ 'run-good': { workflowName: 'implement-change2', currentStep: 'plan' } })
   const broken = join(dir, 'encoded-project', 'runs', 'run-broken')
   await mkdir(broken, { recursive: true })
   await writeFile(join(broken, 'state.json'), '{not json')

@@ -43,19 +43,24 @@ async function environment() {
       const verb = args.join(' ')
       if (verb.includes('--is-inside-work-tree')) return { status: 0, stdout: 'true\n' }
       if (verb.includes('status --porcelain')) return { status: 0, stdout: '' }
-      if (verb.includes('rev-parse HEAD')) return { status: 0, stdout: `${'a'.repeat(40)}\n` }
+      if (verb.includes('rev-parse')) return { status: 0, stdout: `${'a'.repeat(40)}\n` }
     }
     if (command === 'agent-runner' && args[0] === '--version') return { status: 0, stdout: 'agent-runner 2.4.0\n' }
     return { status: 0, stdout: '' }
   }
 
-  return { root, agentRunnerDir, exec, home, runDir: join(root, 'run-1') }
+  const runDir = join(root, 'run-1')
+  const source = join(runDir, '.runtime/candidate-worktree/src/index.ts')
+  await mkdir(join(source, '..'), { recursive: true })
+  await writeFile(source, 'export const fixture = true\n')
+  return { root, agentRunnerDir, exec, home, runDir }
 }
 
 function candidateServer({ stopFails = false } = {}) {
   const started = []
   const stopped = []
   const live = new Set()
+  let servedIdentity = null
   return {
     started,
     stopped,
@@ -63,10 +68,11 @@ function candidateServer({ stopFails = false } = {}) {
     candidateServer: {
       start: async (request) => {
         started.push(request)
+        servedIdentity = request.candidate
         live.add(9001)
         return { pid: 9001, url: 'http://127.0.0.1:4173/' }
       },
-      probe: async () => ({ ok: true, candidate_identity: 'candidate-abc' }),
+      probe: async () => ({ ok: true, candidate_identity: servedIdentity }),
       stop: async (server) => {
         if (stopFails) throw new Error('permission denied')
         stopped.push(server.pid)
@@ -88,7 +94,9 @@ async function evaluate(context, extra = {}) {
     ],
     exec: context.exec,
     home: context.home,
-    readRunnerState: () => ({ run_id: 'run-7', session_dir: '/sessions/run-7', status: 'completed', last_step: 'simplify' }),
+    readRunnerState: () => ({
+      run_id: 'run-7', session_dir: '/sessions/run-7', last_step: 'simplify', step_completed: true,
+    }),
     observedSteps: () => ['plan', 'implement-tasks', 'review-assumptions', 'simplify'],
     isProcessAlive: () => false,
     ...extra,
@@ -126,7 +134,9 @@ test('the candidate server is recorded durably and stopped before the command ex
 
   const checkpoint = await loadCheckpoint(join(context.runDir, 'checkpoint.json'))
   assert.deepEqual(checkpoint.candidate_server, {
-    pid: 9001, url: 'http://127.0.0.1:4173/', candidate_identity: 'candidate-abc',
+    pid: 9001,
+    url: 'http://127.0.0.1:4173/',
+    candidate_identity: infra.started[0].candidate,
   })
   assert.deepEqual(infra.stopped, [9001])
   const written = await readJson(join(context.runDir, 'result.json'))

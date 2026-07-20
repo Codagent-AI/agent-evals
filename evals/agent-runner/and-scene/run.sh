@@ -363,6 +363,10 @@ if [[ "$RUN_AGENT" == 1 ]]; then
     done
   fi
 
+  if [[ "$REFERENCE_BASELINE" == 1 && -z "$CANDIDATE_REF" ]]; then
+    CANDIDATE_REF="$REFERENCE_REF"
+  fi
+
   # Eval-owned judging always runs through Codex.
   if [[ "$MOUNT_CODEX_AUTH" != 1 ]]; then
     AUTH_ARGS+=(--mount-codex-auth)
@@ -397,7 +401,7 @@ CONTAINER_AGENT_RUNNER_DIR_Q="$(shell_quote "$CONTAINER_AGENT_RUNNER_DIR")"
 
 # Assemble the controller argument list on the host so the container script
 # stays a fixed, quoted invocation rather than string-built shell.
-CONTROLLER_ARGS=(--run-dir /artifacts --agent-runner-dir "$CONTAINER_AGENT_RUNNER_DIR")
+CONTROLLER_ARGS=(--run-dir /artifacts --agent-runner-dir "$CONTAINER_AGENT_RUNNER_DIR" --repo "$REPO")
 CONTROLLER_ARGS+=(--change-name "$CHANGE_NAME" --fixture-ref "$FIXTURE_REF" --judge-model "$JUDGE_MODEL")
 if [[ -n "$CANDIDATE_REF" ]]; then
   CONTROLLER_ARGS+=(--candidate-ref "$CANDIDATE_REF")
@@ -528,6 +532,7 @@ PROOF
 agent_script=$(cat <<AGENT
 set -euo pipefail
 mkdir -p /artifacts/logs
+export AGENT_RUNNER_NO_TUI=1
 if [[ " \${NODE_OPTIONS:-} " != *" --dns-result-order="* ]]; then
   export NODE_OPTIONS="\${NODE_OPTIONS:-} --dns-result-order=ipv4first"
 fi
@@ -543,6 +548,21 @@ CHANGE_NAME=$CHANGE_NAME_Q
 JUDGE_MODEL=$JUDGE_MODEL_Q
 AGENT_RUNNER_DIR=$CONTAINER_AGENT_RUNNER_DIR_Q
 export REPO FIXTURE_REF REFERENCE_REF CANDIDATE_REF CHANGE_NAME JUDGE_MODEL IMPLEMENTATION_WORKFLOW
+
+token="\${GITHUB_TOKEN:-\${GH_TOKEN:-}}"
+if [ -n "\$token" ]; then
+  {
+    printf '%s\n' '#!/usr/bin/env sh'
+    printf '%s\n' 'case "\$1" in'
+    printf '%s\n' '  *Username*) printf "%s\n" x-access-token ;;'
+    printf '%s\n' '  *Password*) printf "%s\n" "\${GITHUB_TOKEN:-\${GH_TOKEN:-}}" ;;'
+    printf '%s\n' '  *) printf "\n" ;;'
+    printf '%s\n' 'esac'
+  } > "\$HOME/.git-askpass"
+  chmod 700 "\$HOME/.git-askpass"
+  export GIT_ASKPASS="\$HOME/.git-askpass"
+  export GIT_TERMINAL_PROMPT=0
+fi
 
 exec node /eval-input/controller.mjs $CONTROLLER_ARGS_Q
 AGENT

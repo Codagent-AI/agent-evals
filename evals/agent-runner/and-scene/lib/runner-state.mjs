@@ -5,8 +5,8 @@
 // iteration order is not a recency guarantee, so a recorded run is always
 // selected by its exact identifier and discovery falls back to a validated
 // timestamp.
-import { lstat, mkdir, readdir, readlink, symlink } from 'node:fs/promises'
-import { join } from 'node:path'
+import { lstat, mkdir, readdir, readFile, readlink, stat, symlink } from 'node:fs/promises'
+import { basename, join } from 'node:path'
 
 import { readJson } from './persistence.mjs'
 
@@ -69,15 +69,52 @@ async function* sessions(projectsDir) {
     const runsDir = join(projectsDir, project, 'runs')
     for (const session of await directories(runsDir)) {
       const sessionDir = join(runsDir, session)
-      const state = await readJson(join(sessionDir, 'state.json'), null).catch(() => null)
-      if (state) yield { ...state, session_dir: sessionDir }
+      const statePath = join(sessionDir, 'state.json')
+      const state = await readJson(statePath, null).catch(() => null)
+      if (!state) continue
+      const lock = await readLock(sessionDir, session)
+      const info = await stat(statePath).catch(() => null)
+      yield normalizeState(state, {
+        runId: basename(sessionDir),
+        sessionDir,
+        lock,
+        modifiedAtMs: info?.mtimeMs ?? null,
+      })
     }
   }
 }
 
-function timestamp(state) {
-  const value = Date.parse(state.started_at ?? '')
-  return Number.isNaN(value) ? null : value
+async function readLock(sessionDir, runId) {
+  const text = await readFile(join(sessionDir, 'lock'), 'utf8').catch(() => null)
+  if (text === null) return null
+  const pid = Number.parseInt(text.trim(), 10)
+  return Number.isInteger(pid) && pid > 0 ? { pid, run_id: runId } : { pid: null, run_id: runId }
+}
+
+function currentStep(state) {
+  if (typeof state.currentStep === 'string') {
+    return { id: state.currentStep || null, completed: false }
+  }
+  return {
+    id: state.currentStep?.stepId ?? null,
+    completed: state.currentStep?.completed === true,
+  }
+}
+
+function normalizeState(state, { runId, sessionDir, lock, modifiedAtMs }) {
+  const step = currentStep(state)
+  return {
+    ...state,
+    run_id: runId,
+    session_dir: sessionDir,
+    workflow_name: state.workflowName ?? null,
+    last_step: step.id,
+    step_completed: step.completed,
+    workflow_completed: state.completed === true,
+    lock,
+    modified_at_ms: modifiedAtMs,
+    steps: step.id ? [step.id] : [],
+  }
 }
 
 export async function readRunnerState(projectsDir, runId) {
@@ -93,7 +130,7 @@ export async function readRunnerState(projectsDir, runId) {
   let newest = null
   let newestAt = null
   for await (const state of sessions(projectsDir)) {
-    const at = timestamp(state)
+    const at = state.modified_at_ms
     if (at === null) continue
     if (newestAt === null || at > newestAt) {
       newest = state
@@ -101,4 +138,23 @@ export async function readRunnerState(projectsDir, runId) {
     }
   }
   return newest
+}
+
+// Production waiting is a real poll of Agent Runner's separate lock file. The
+// default has no deadline because an active implementation workflow may take
+// hours; the outer eval resumes only after Agent Runner releases its lock.
+export async function waitForRunnerRun({
+  readState,
+  runId,
+  isProcessAlive,
+  intervalMs = 1000,
+  sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+}) {
+  while (true) {
+    const state = await readState(runId)
+    if (!state) throw new Error(`cannot verify the status of Agent Runner run ${runId} while waiting`)
+    const pid = state.lock?.pid
+    if (!Number.isInteger(pid) || !isProcessAlive(pid)) return state
+    await sleep(intervalMs)
+  }
 }

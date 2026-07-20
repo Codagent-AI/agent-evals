@@ -24,6 +24,7 @@ import {
   saveCheckpoint,
   validateCheckpointIdentity,
 } from './lib/checkpoint.mjs'
+import { freezeCandidate, prepareCandidateWorktree } from './lib/candidate.mjs'
 import { aggregateImplementationCost, summarizeEvalOwnedUsage } from './lib/cost.mjs'
 import { fetchPricingCatalog, needsPricingLookup, resolveImplementationPricing } from './lib/pricing.mjs'
 import { readRunnerMetrics } from './lib/runner-metrics.mjs'
@@ -51,7 +52,11 @@ import {
   validateRoleProfiles,
 } from './lib/profiles.mjs'
 import { compareProvenance, readWorkflowProvenance } from './lib/provenance.mjs'
-import { readRunnerState as readPersistedRunnerState, resolveProjectsDir } from './lib/runner-state.mjs'
+import {
+  readRunnerState as readPersistedRunnerState,
+  resolveProjectsDir,
+  waitForRunnerRun,
+} from './lib/runner-state.mjs'
 import { runTimed, summarizeTimings } from './lib/subprocess.mjs'
 import {
   checkBoundary,
@@ -71,6 +76,7 @@ const FLAGS = new Map([
 ])
 const VALUES = new Map([
   ['--run-dir', 'runDir'],
+  ['--repo', 'repo'],
   ['--agent-runner-dir', 'agentRunnerDir'],
   ['--change-name', 'changeName'],
   ['--fixture-ref', 'fixtureRef'],
@@ -92,6 +98,8 @@ export function parseArgs(argv) {
     referenceBaseline: false,
     changeName: 'create-and-scene',
     judgeModel: 'codex-default',
+    repo: 'https://github.com/Codagent-AI/and-scene.git',
+    fixtureRef: 'c11595651dfb3941e39c703c483ed1a92d152a37',
     capabilitiesPath: DEFAULT_CAPABILITIES,
   }
   for (let index = 0; index < argv.length; index += 1) {
@@ -142,7 +150,7 @@ export async function runEvaluation({
   isProcessAlive = (pid) => { try { process.kill(pid, 0); return true } catch { return false } },
   readRunnerState,
   observedSteps,
-  waitForRun = () => {},
+  waitForRun = null,
   handlers: handlerOverrides = {},
   // Product evidence sources. Each is injected so the whole scored lifecycle is
   // exercisable without a browser or a model call, and so a source that is
@@ -235,9 +243,54 @@ export async function runEvaluation({
     }
   }
 
+  await prepareRunDirectory(runDir)
+  const checkpointPath = join(runDir, 'checkpoint.json')
+  let checkpoint
+  try {
+    checkpoint = await loadCheckpoint(checkpointPath)
+  } catch (error) {
+    return failure([{ code: 'checkpoint-schema', message: error.message }])
+  }
+
+  const candidateWorktree = join(runDir, '.runtime/candidate-worktree')
+  const selectedCandidateRef = mode === 'reference-baseline'
+    ? (options.candidateRef ?? options.fixtureRef)
+    : options.fixtureRef
+  let candidateSource
+  try {
+    candidateSource = await prepareCandidateWorktree({
+      repo: options.repo,
+      worktree: candidateWorktree,
+      ref: selectedCandidateRef,
+      resume: options.resume,
+      exec,
+    })
+  } catch (error) {
+    return failure([{ code: 'candidate-worktree', message: error.message }])
+  }
+
+  // A baseline is immutable as soon as it is checked out. An implementation
+  // candidate becomes immutable only after Agent Runner reaches the configured
+  // boundary; on resume, a previously frozen identity is re-derived rather
+  // than trusted from the checkpoint alone.
+  let frozenCandidate = null
+  if (mode === 'reference-baseline' || checkpoint?.identity?.candidate_identity) {
+    try {
+      frozenCandidate = await freezeCandidate({
+        repo: options.repo,
+        worktree: candidateWorktree,
+        runDir,
+        fixtureRevision: options.fixtureRef,
+        exec,
+      })
+    } catch (error) {
+      return failure([{ code: 'candidate-freeze', message: error.message }])
+    }
+  }
+
   const identity = {
-    candidate_identity: options.candidateRef ?? null,
-    fixture_revision: options.fixtureRef ?? null,
+    candidate_identity: frozenCandidate?.candidate_identity ?? null,
+    fixture_revision: frozenCandidate?.fixture_commit ?? candidateSource.commit,
     agent_runner_provenance: hashJson({
       commit: provenance?.commit ?? null,
       workflow_sha256: provenance?.workflow_sha256 ?? null,
@@ -249,16 +302,6 @@ export async function runEvaluation({
     // A rubric edit changes what the score means, so it invalidates a resumed
     // run rather than being blended into half-scored results.
     rubric_provenance: hashJson(provenanceOfRubrics),
-  }
-
-  await prepareRunDirectory(runDir)
-  const checkpointPath = join(runDir, 'checkpoint.json')
-
-  let checkpoint
-  try {
-    checkpoint = await loadCheckpoint(checkpointPath)
-  } catch (error) {
-    return failure([{ code: 'checkpoint-schema', message: error.message }])
   }
 
   if (checkpoint) {
@@ -292,7 +335,6 @@ export async function runEvaluation({
   // evaluation profile there and running Agent Runner from the candidate
   // worktree is what actually makes the selected roles take effect; the user's
   // own configuration outside this run directory is never read or modified.
-  const candidateWorktree = join(runDir, '.runtime/candidate-worktree')
   if (mode === 'agent-runner') {
     await mkdir(join(candidateWorktree, '.agent-runner'), { recursive: true })
     await writeFile(
@@ -318,6 +360,7 @@ export async function runEvaluation({
     cost: null,
     ambiguity: null,
     candidateServer: null,
+    candidate: frozenCandidate,
     // Measured durations only. See lib/timing.mjs: nothing here holds a
     // wall-clock stamp, so no stopped-process or human-review gap can reach a
     // reported total. Earlier sessions' intervals are carried forward from the
@@ -346,7 +389,7 @@ export async function runEvaluation({
   // run state from so both agree on the run store.
   const runnerSpawnOptions = {
     cwd: candidateWorktree,
-    env: { ...process.env, HOME: home },
+    env: { ...process.env, HOME: home, AGENT_RUNNER_NO_TUI: '1' },
   }
 
   const handlers = {
@@ -356,61 +399,85 @@ export async function runEvaluation({
         return
       }
 
-      const recorded = checkpoint.agent_runner
-      const observedState = await readState(recorded?.run_id ?? null)
-      const decision = classifyRunnerRun({
-        recorded,
-        state: observedState,
+      let state = await readState(checkpoint.agent_runner?.run_id ?? null)
+      let decision = classifyRunnerRun({
+        recorded: checkpoint.agent_runner,
+        state,
         // With no checkpointed identity, an already-persisted run means a
         // previous process was interrupted mid-flight; adopt it rather than
         // starting a second implementation workflow.
-        discovered: recorded?.run_id ? null : observedState,
+        discovered: checkpoint.agent_runner?.run_id ? null : state,
         boundaryStep: boundary.stop_step,
         isProcessAlive,
       })
-      record.events.push({
-        event: decision.action,
-        status: decision.status,
-        reason: decision.reason,
-        adopted: decision.adopted ?? false,
-      })
-      log(`agent-runner: ${decision.action}`)
+      while (decision.action !== 'continue') {
+        const action = decision.action
+        record.events.push({
+          event: action,
+          status: decision.status,
+          reason: decision.reason,
+          adopted: decision.adopted ?? false,
+        })
+        log(`agent-runner: ${action}`)
+        if (action === 'error') throw new Error(decision.reason)
 
-      if (decision.action === 'error') throw new Error(decision.reason)
+        // Adopting a persisted run records its identity before any further
+        // work, so a second interruption cannot lose it again.
+        if (decision.adopted && decision.run_id) {
+          record.run = { run_id: decision.run_id, session_dir: state?.session_dir ?? null }
+          checkpoint = { ...checkpoint, agent_runner: record.run }
+          await saveCheckpoint(checkpointPath, checkpoint)
+        }
 
-      // Adopting a persisted run records its identity before any further work,
-      // so a second interruption cannot lose it again.
-      if (decision.adopted && decision.run_id) {
-        record.run = { run_id: decision.run_id, session_dir: observedState?.session_dir ?? null }
-        checkpoint = { ...checkpoint, agent_runner: record.run }
-        await saveCheckpoint(checkpointPath, checkpoint)
+        let waitedState = null
+        if (action === 'start') {
+          const timing = runTimed('agent-runner', [
+            'run', provenance.workflow_path,
+            '--until', boundary.stop_step,
+            ...boundary.workflow_arguments,
+          ], { label: 'agent-runner', exec, ...runnerSpawnOptions })
+          record.timings.push(timing)
+          if (!timing.ok) throw new Error(`agent-runner exited ${timing.status}`)
+        } else if (action === 'resume') {
+          const [command, ...args] = decision.command
+          const timing = runTimed(command, args, { label: 'agent-runner-resume', exec, ...runnerSpawnOptions })
+          record.timings.push(timing)
+          if (!timing.ok) throw new Error(`agent-runner resume exited ${timing.status}`)
+        } else if (action === 'wait') {
+          waitedState = waitForRun
+            ? await waitForRun(decision.run_id)
+            : await waitForRunnerRun({ readState, runId: decision.run_id, isProcessAlive })
+        }
+
+        state = waitedState ?? await readState(record.run?.run_id ?? decision.run_id ?? null)
+        if (!state?.run_id) {
+          throw new Error('Agent Runner exited without a discoverable persisted run state')
+        }
+
+        const observedRun = { run_id: state.run_id }
+        decision = classifyRunnerRun({
+          recorded: observedRun,
+          state,
+          boundaryStep: boundary.stop_step,
+          isProcessAlive,
+        })
+        if (decision.action === 'resume' && action !== 'wait') {
+          throw new Error(
+            `Agent Runner ${action} exited before completing boundary step ${boundary.stop_step}`,
+          )
+        }
+        if (decision.action !== 'error') {
+          record.run = { run_id: state.run_id, session_dir: state.session_dir ?? null }
+          checkpoint = { ...checkpoint, agent_runner: record.run }
+          await saveCheckpoint(checkpointPath, checkpoint)
+        }
       }
-
-      if (decision.action === 'start') {
-        const timing = runTimed('agent-runner', [
-          'run', provenance.workflow_path,
-          '--until', boundary.stop_step,
-          ...boundary.workflow_arguments,
-        ], { label: 'agent-runner', exec, ...runnerSpawnOptions })
-        record.timings.push(timing)
-        if (!timing.ok) throw new Error(`agent-runner exited ${timing.status}`)
-      } else if (decision.action === 'resume') {
-        const [command, ...args] = decision.command
-        const timing = runTimed(command, args, { label: 'agent-runner-resume', exec, ...runnerSpawnOptions })
-        record.timings.push(timing)
-        if (!timing.ok) throw new Error(`agent-runner resume exited ${timing.status}`)
-      } else if (decision.action === 'wait') {
-        await waitForRun(decision.run_id)
-      }
-
-      // Record the run identity durably as soon as it becomes available so a
-      // restarted outer process never launches a duplicate implementation run.
-      const state = await readState(record.run?.run_id ?? decision.run_id ?? null)
-      if (state?.run_id) {
+      if (state?.run_id && record.run?.run_id !== state.run_id) {
         record.run = { run_id: state.run_id, session_dir: state.session_dir ?? null }
         checkpoint = { ...checkpoint, agent_runner: record.run }
         await saveCheckpoint(checkpointPath, checkpoint)
       }
+      record.events.push({ event: 'continue', status: decision.status, reason: null, adopted: false })
 
       record.observed_steps = await readSteps(state)
       record.boundary = checkBoundary({
@@ -423,6 +490,27 @@ export async function runEvaluation({
           `workflow boundary violated: ${record.boundary.unexpected_step} executed after ${boundary.stop_step}`,
         )
       }
+
+      // Reaching the boundary is where the delivered product becomes the
+      // immutable candidate. A dirty worktree is not a reproducible result and
+      // must stop before any product judge sees it.
+      record.candidate = await freezeCandidate({
+        repo: options.repo,
+        worktree: candidateWorktree,
+        runDir,
+        fixtureRevision: options.fixtureRef,
+        exec,
+      })
+      checkpoint = {
+        ...checkpoint,
+        identity: {
+          ...checkpoint.identity,
+          candidate_identity: record.candidate.candidate_identity,
+          fixture_revision: record.candidate.fixture_commit,
+        },
+        candidate: record.candidate,
+      }
+      await saveCheckpoint(checkpointPath, checkpoint)
     },
 
     // Placeholder owned by task 03's browser work; it keeps the lifecycle honest
@@ -436,7 +524,7 @@ export async function runEvaluation({
       }
       const outcome = await ensureCandidateServer({
         recorded: checkpoint.candidate_server ?? null,
-        candidate: options.candidateRef ?? null,
+        candidate: record.candidate?.candidate_identity ?? checkpoint.identity.candidate_identity,
         isProcessAlive,
         probe: candidateServer.probe,
         start: candidateServer.start,
@@ -474,13 +562,10 @@ export async function runEvaluation({
       record.sourceEvidence = await collectSourceEvidence(candidateWorktree)
       await writeJsonAtomic(join(runDir, 'phases/source-evidence.json'), record.sourceEvidence)
 
-      if (!judgeInvoke) {
+      if (record.sourceEvidence.files.length === 0) {
+        throw new Error('candidate source is empty; product judging cannot produce an evidence-backed result')
+      } else if (!judgeInvoke) {
         record.events.push({ event: 'skipped', reason: 'no judge invoker configured' })
-      } else if (record.sourceEvidence.files.length === 0) {
-        // A judge shown no source cannot support a verdict about that source.
-        // Asking anyway would buy verdicts with no evidence behind them, so the
-        // components stay unobserved instead.
-        record.events.push({ event: 'skipped', reason: 'no candidate source available to review' })
       } else {
         record.judging = await runProductJudging({
           rubrics,
@@ -660,6 +745,8 @@ export async function runEvaluation({
         roleConfiguration: reconcileRoleAttempts(validation.profiles, []),
         timings: summarizeTimings(record.timings),
       }),
+      candidate_identity: record.candidate?.candidate_identity ?? checkpoint.identity.candidate_identity,
+      candidate_source: record.candidate ?? checkpoint.candidate ?? null,
       // The endpoint the reviewer is handed. Null when no server was started, so
       // the human-review command starts one rather than trusting a stale URL.
       candidate_server: record.candidateServer,

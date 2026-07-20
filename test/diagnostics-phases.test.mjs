@@ -108,7 +108,7 @@ async function environment({ metrics = runMetrics(), sessionFiles = {} } = {}) {
       const verb = args.join(' ')
       if (verb.includes('--is-inside-work-tree')) return { status: 0, stdout: 'true\n' }
       if (verb.includes('status --porcelain')) return { status: 0, stdout: '' }
-      if (verb.includes('rev-parse HEAD')) return { status: 0, stdout: `${'a'.repeat(40)}\n` }
+      if (verb.includes('rev-parse')) return { status: 0, stdout: `${'a'.repeat(40)}\n` }
     }
     if (command === 'agent-runner' && args[0] === '--version') {
       return { status: 0, stdout: 'agent-runner 2.4.0\n' }
@@ -118,7 +118,11 @@ async function environment({ metrics = runMetrics(), sessionFiles = {} } = {}) {
 
   const home = join(root, 'container-home')
   await mkdir(home, { recursive: true })
-  return { root, agentRunnerDir, exec, invocations, home, sessionDir, runDir: join(root, 'run-1') }
+  const runDir = join(root, 'run-1')
+  const source = join(runDir, '.runtime/candidate-worktree/src/index.ts')
+  await mkdir(join(source, '..'), { recursive: true })
+  await writeFile(source, 'export const fixture = true\n')
+  return { root, agentRunnerDir, exec, invocations, home, sessionDir, runDir }
 }
 
 function catalogFetch(body = CATALOG_BODY) {
@@ -140,8 +144,8 @@ async function evaluate(context, overrides = {}) {
     readRunnerState: () => ({
       run_id: 'run-7',
       session_dir: context.sessionDir,
-      status: 'completed',
       last_step: 'simplify',
+      step_completed: true,
     }),
     observedSteps: () => ['plan', 'implement-tasks', 'simplify'],
     pricingFetch: catalogFetch(),
