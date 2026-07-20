@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
+import { AUTOMATED_PHASES } from '../evals/agent-runner/and-scene/lib/phases.mjs'
 import {
   AUTOMATED_TIMED_PHASES,
   HUMAN_TIMED_PHASES,
@@ -96,21 +97,21 @@ test('a negative or non-finite duration is refused', () => {
   assert.throws(() => recordMachineInterval(createTimingLedger(), { phase: 'scoring', duration_ms: null }), /duration/)
 })
 
-test('the expected automated phases cover the eval work the spec names', () => {
-  for (const phase of [
-    'install',
-    'build',
-    'verification',
-    'candidate-server',
-    'browser-evaluation',
-    'evidence-repair',
-    'product-judging',
-    'ambiguity-diagnostics',
-    'metrics-pricing',
-    'scoring',
-    'report-generation',
-  ]) {
-    assert.ok(AUTOMATED_TIMED_PHASES.includes(phase), `${phase} is a timed automated phase`)
+test('the timed phases are exactly the automated eval-owned lifecycle phases', () => {
+  const expected = AUTOMATED_PHASES
+    .filter((phase) => phase.owner === 'evaluation-harness' && !HUMAN_TIMED_PHASES.includes(phase.name))
+    .map((phase) => phase.name)
+
+  // Coverage is reported against the names the controller actually records. A
+  // separate aspirational vocabulary would report real work as unobserved and
+  // file its duration under a name nothing ever emits.
+  assert.deepEqual([...AUTOMATED_TIMED_PHASES].sort(), [...new Set(expected)].sort())
+})
+
+test('every recordable phase name is one the coverage list knows', () => {
+  for (const phase of AUTOMATED_PHASES) {
+    if (phase.owner !== 'evaluation-harness' || HUMAN_TIMED_PHASES.includes(phase.name)) continue
+    assert.ok(AUTOMATED_TIMED_PHASES.includes(phase.name), `${phase.name} is a timed automated phase`)
   }
 })
 

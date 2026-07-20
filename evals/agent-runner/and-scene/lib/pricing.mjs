@@ -51,14 +51,21 @@ function unavailable(reason, extra = {}) {
   return { state: 'unavailable', amount_usd: null, reason, ...extra }
 }
 
+// Pricing is a diagnostic, so a stalled catalog request must degrade to an
+// unavailable catalog rather than hold the whole evaluation open indefinitely.
+export const CATALOG_TIMEOUT_MS = 15_000
+
 export async function fetchPricingCatalog({
   fetchImpl = globalThis.fetch,
   now = () => new Date().toISOString(),
+  timeoutMs = CATALOG_TIMEOUT_MS,
 } = {}) {
   const retrievedAt = now()
   const base = { url: MODELS_DEV_URL, retrieved_at: retrievedAt, sha256: null, entries: null }
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const response = await fetchImpl(MODELS_DEV_URL)
+    const response = await fetchImpl(MODELS_DEV_URL, { signal: controller.signal })
     if (!response.ok) {
       return { ...base, state: 'unavailable', reason: `models.dev responded ${response.status}` }
     }
@@ -74,6 +81,10 @@ export async function fetchPricingCatalog({
     }
   } catch (error) {
     return { ...base, state: 'unavailable', reason: `models.dev is unavailable: ${error.message}` }
+  } finally {
+    // Cleared whichever way the request settled, so a completed fetch never
+    // leaves a pending timer holding the process open.
+    clearTimeout(timer)
   }
 }
 
@@ -87,12 +98,28 @@ export function lookupCatalogEntry(catalog, provider, model) {
   return { provider, model, cost: entry.cost }
 }
 
+// Money and token counts are never negative. A negative value is malformed data,
+// not a discount and not an absence, so it is refused everywhere rather than
+// flowing into a total that would end up understated or inverted.
+function nonNegative(value) {
+  return Number.isFinite(value) && value >= 0
+}
+
+// The first reported category whose count is not a non-negative number, or null
+// when the usage is well formed. Silently skipping such a category would be the
+// same omission this module refuses elsewhere.
+function malformedCategory(tokens) {
+  return Object.entries(tokens ?? {}).find(([, value]) => !nonNegative(value))?.[0] ?? null
+}
+
 function billedCategories(tokens) {
-  return Object.entries(tokens ?? {}).filter(([, value]) => Number.isFinite(value) && value > 0)
+  return Object.entries(tokens ?? {}).filter(([, value]) => nonNegative(value) && value > 0)
 }
 
 export function calculateCatalogCost({ entry, tokens }) {
   if (!entry) return unavailable('no exact models.dev provider/model match')
+  const malformed = malformedCategory(tokens)
+  if (malformed) return unavailable(`token category ${malformed} has an unusable count`)
   const billed = billedCategories(tokens)
   if (billed.length === 0) return unavailable('no billable token usage was reported')
 
@@ -101,7 +128,7 @@ export function calculateCatalogCost({ entry, tokens }) {
   for (const [category, count] of billed) {
     const rateKey = CATEGORY_RATE_KEYS[category]
     const rate = rateKey ? entry.cost[rateKey] : undefined
-    if (!Number.isFinite(rate)) {
+    if (!nonNegative(rate)) {
       // Every reported category must be priced. Omitting this one would produce
       // a complete-looking estimate that silently undercounts.
       return unavailable(`models.dev has no rate for token category ${category}`)
@@ -186,7 +213,7 @@ function calculateFindingCost({ finding, tokens }) {
     // The finding is keyed by Agent Runner's own category names; the judge is
     // asked for exactly those, so no cross-vocabulary mapping happens here.
     const rate = finding.rates?.[category] ?? finding.rates?.[CATEGORY_RATE_KEYS[category]]
-    if (!Number.isFinite(rate)) {
+    if (!nonNegative(rate)) {
       return unavailable(`the judge pricing finding has no rate for token category ${category}`)
     }
     rates[category] = rate
@@ -200,7 +227,7 @@ export async function resolveAttemptCost({ attempt, catalog, invoke, authority =
 
   // Agent Runner's own reported cost wins outright: it measured the attempt, and
   // a lookup could only second-guess it with less information.
-  if (attempt.cost?.state === 'available' && Number.isFinite(attempt.cost.estimated_api_cost_usd)) {
+  if (attempt.cost?.state === 'available' && nonNegative(attempt.cost.estimated_api_cost_usd)) {
     return {
       ...base,
       state: 'resolved',
@@ -308,7 +335,7 @@ export async function resolveAttemptCost({ attempt, catalog, invoke, authority =
 export function needsPricingLookup(attempts = []) {
   return attempts.some((attempt) => (
     attempt.invoked_cli
-    && !(attempt.cost?.state === 'available' && Number.isFinite(attempt.cost.estimated_api_cost_usd))
+    && !(attempt.cost?.state === 'available' && nonNegative(attempt.cost.estimated_api_cost_usd))
   ))
 }
 

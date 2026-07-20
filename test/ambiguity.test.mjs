@@ -148,6 +148,23 @@ test('missing workflow artifacts mark coverage incomplete rather than claiming n
   assert.notEqual(ledger.coverage.state, 'complete')
 })
 
+test('a truncated artifact scan cannot report complete coverage', () => {
+  const ledger = buildAmbiguityLedger({
+    runId: RUN_ID,
+    // Files were found, but the scan hit its bound, so some evidence went
+    // unread. That is not a complete examination of the artifacts.
+    artifacts: {
+      state: 'available',
+      files: [{ path: 'assumptions.md', text: 'x' }],
+      reasons: ['ambiguity artifact scan stopped after 1000 entries'],
+    },
+    parsed: parseAmbiguityOutput(judgeOutput({ findings: [], coverage: 'complete' })),
+  })
+
+  assert.equal(ledger.coverage.state, 'incomplete')
+  assert.match(ledger.coverage.reasons.join(' '), /stopped after/)
+})
+
 test('the ledger is diagnostic only and carries no points or gate', () => {
   const ledger = buildAmbiguityLedger({
     runId: RUN_ID,
@@ -267,6 +284,32 @@ test('artifact collection reads assumption and session-report files under the se
     'assumptions.json',
     'session-reports/02-scene-kit.md',
   ])
+})
+
+test('a deeply nested session tree is bounded rather than walked to exhaustion', async () => {
+  const deep = Array.from({ length: 60 }, (_, index) => `d${index}`).join('/')
+  const dir = await artifactDir({
+    'assumptions.md': 'a reported gap',
+    [`${deep}/assumptions.md`]: 'buried past the depth bound',
+  })
+
+  const artifacts = await collectAmbiguityArtifacts({ sessionDir: dir })
+
+  assert.equal(artifacts.state, 'available')
+  assert.deepEqual(artifacts.files.map((file) => file.path), ['assumptions.md'])
+  assert.match(artifacts.reasons.join(' '), /depth/)
+})
+
+test('a wide session tree stops after the entry budget and says so', async () => {
+  const files = { 'assumptions.md': 'a reported gap' }
+  for (let index = 0; index < 1200; index += 1) files[`noise/file-${index}.txt`] = 'x'
+
+  const dir = await artifactDir(files)
+  const artifacts = await collectAmbiguityArtifacts({ sessionDir: dir })
+
+  // Bounded work regardless of what the tree contains; the cap is reported so a
+  // truncated scan never reads as a complete one.
+  assert.match(artifacts.reasons.join(' '), /entries/)
 })
 
 test('an absent session directory leaves artifact coverage unavailable', async () => {

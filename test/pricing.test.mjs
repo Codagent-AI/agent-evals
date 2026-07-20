@@ -60,6 +60,39 @@ test('the catalog fetch records retrieval time and response hash', async () => {
   assert.equal(catalog.sha256, hashString(CATALOG_BODY))
 })
 
+test('a stalled catalog request aborts instead of hanging the evaluation', async () => {
+  let signal = null
+  const catalog = await fetchPricingCatalog({
+    timeoutMs: 20,
+    fetchImpl: (url, options) => {
+      signal = options?.signal
+      // Never settles on its own; only the timeout can end this.
+      return new Promise((resolve, reject) => {
+        options?.signal?.addEventListener('abort', () => reject(new Error('aborted')))
+      })
+    },
+  })
+
+  assert.equal(catalog.state, 'unavailable')
+  assert.equal(signal?.aborted, true)
+  assert.equal(catalog.entries, null)
+})
+
+test('a catalog fetch that returns in time is not aborted', async () => {
+  let aborted = null
+  const catalog = await fetchPricingCatalog({
+    timeoutMs: 5000,
+    fetchImpl: async (url, options) => {
+      aborted = () => options?.signal?.aborted
+      return { ok: true, status: 200, text: async () => CATALOG_BODY }
+    },
+  })
+
+  assert.equal(catalog.state, 'available')
+  // The timer must be cleared, not left pending against a settled request.
+  assert.equal(aborted(), false)
+})
+
 test('an unreachable catalog is unavailable rather than empty', async () => {
   const catalog = await fetchPricingCatalog({
     fetchImpl: async () => { throw new Error('getaddrinfo ENOTFOUND') },
@@ -137,6 +170,68 @@ test('reported cost is used without any pricing lookup', async () => {
   assert.equal(resolution.amount_usd, 0.42)
   assert.equal(resolution.source, 'agent-runner-reported')
   assert.equal(resolution.verification, 'reported')
+})
+
+test('a negative reported cost is refused rather than subtracted from the total', async () => {
+  const catalog = await loadedCatalog()
+
+  const resolution = await resolveAttemptCost({
+    attempt: attempt({ cost: { state: 'available', reason: null, estimated_api_cost_usd: -5 } }),
+    catalog,
+    invoke: null,
+  })
+
+  // A negative cost cannot be a real charge; accepting it would let a malformed
+  // artifact understate or invert the implementation total.
+  assert.notEqual(resolution.amount_usd, -5)
+  assert.equal(resolution.source, 'models.dev')
+})
+
+test('a negative token count is not billable usage', async () => {
+  const catalog = await loadedCatalog()
+  const entry = lookupCatalogEntry(catalog, 'openai', 'gpt-5-codex')
+
+  const calculated = calculateCatalogCost({ entry, tokens: { input: -1000, output: 500 } })
+
+  assert.equal(calculated.state, 'unavailable')
+  assert.match(calculated.reason, /input/)
+})
+
+test('a negative catalog rate cannot price an attempt', async () => {
+  const catalog = await fetchPricingCatalog({
+    fetchImpl: catalogFetch(JSON.stringify({
+      openai: { id: 'openai', models: { 'gpt-5-codex': { cost: { input: -1, output: 10 } } } },
+    })),
+  })
+  const entry = lookupCatalogEntry(catalog, 'openai', 'gpt-5-codex')
+
+  const calculated = calculateCatalogCost({ entry, tokens: { input: 1000, output: 500 } })
+
+  assert.equal(calculated.state, 'unavailable')
+  assert.match(calculated.reason, /input/)
+})
+
+test('a negative judge-found rate is refused', async () => {
+  const catalog = await loadedCatalog()
+  const invoke = async () => JSON.stringify({
+    found: true,
+    source_url: 'https://example.test/pricing',
+    matched_provider: 'anthropic',
+    matched_model: 'claude-opus-4-8',
+    unit: 'usd_per_million_tokens',
+    rates: { input: -5, output: 25 },
+    rationale: 'the vendor page lists this model',
+    judge_model: 'codex-default',
+  })
+
+  const resolution = await resolveAttemptCost({
+    attempt: attempt({ provider: 'anthropic', model: 'claude-opus-4-8' }),
+    catalog,
+    invoke,
+  })
+
+  assert.equal(resolution.state, 'unavailable')
+  assert.match(resolution.reason, /input/)
 })
 
 test('an exact catalog match prices the attempt and records the match details', async () => {

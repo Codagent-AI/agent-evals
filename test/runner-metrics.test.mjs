@@ -179,6 +179,20 @@ test('a non-CLI step may report no provider or model and still be ingested', () 
   assert.equal(ingested.attempts[0].invoked_cli, false)
 })
 
+test('duplicate attempt identifiers are rejected rather than silently collapsed', () => {
+  const text = JSON.stringify(metrics({
+    attempts: [attempt({ attempt_id: 'implement-task#1' }), attempt({ attempt_id: 'implement-task#1' })],
+  }))
+
+  const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
+
+  // Costs are resolved per attempt id. Two attempts sharing one id would have
+  // a single resolution counted twice, silently inflating the total.
+  assert.equal(ingested.state, 'rejected')
+  assert.equal(ingested.attempts.length, 0)
+  assert.match(ingested.reason, /implement-task#1/)
+})
+
 test('resumed attempts are retained alongside the earlier ones', () => {
   const text = JSON.stringify(metrics({
     attempts: [

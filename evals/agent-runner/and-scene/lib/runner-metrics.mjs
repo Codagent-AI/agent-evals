@@ -107,6 +107,20 @@ function normalizeAttempt(raw, index) {
   }
 }
 
+// Attempt ids are the key every downstream cost resolution is looked up by. Two
+// attempts sharing one id would share one resolution, and that resolution would
+// then be counted once per duplicate — a silently wrong total that looks
+// perfectly well-formed. The artifact is rejected instead.
+function assertUniqueAttemptIds(attempts) {
+  const seen = new Set()
+  for (const attempt of attempts) {
+    if (seen.has(attempt.attempt_id)) {
+      throw new Error(`duplicate attempt id ${attempt.attempt_id}`)
+    }
+    seen.add(attempt.attempt_id)
+  }
+}
+
 export function ingestRunnerMetrics({ text, runId, workflow, path = null }) {
   const source = {
     path,
@@ -151,6 +165,7 @@ export function ingestRunnerMetrics({ text, runId, workflow, path = null }) {
   let attempts
   try {
     attempts = payload.attempts.map(normalizeAttempt)
+    assertUniqueAttemptIds(attempts)
   } catch (error) {
     return rejected(`run-metrics.json is malformed: ${error.message}`, source)
   }

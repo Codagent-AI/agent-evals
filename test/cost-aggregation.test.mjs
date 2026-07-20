@@ -185,6 +185,17 @@ test('steps that never invoked a CLI are excluded from cost aggregation', () => 
   assert.equal(total.estimated_api_cost_usd, 0.01)
 })
 
+test('a negative resolved amount is treated as unresolved, not as a credit', () => {
+  const { total } = aggregateImplementationCost({
+    attempts: [attempt({ attempt_id: 'a1' })],
+    costs: [resolved('a1', -3)],
+  })
+
+  assert.equal(total.state, 'unavailable')
+  assert.equal(total.known_cost_subtotal_usd, 0)
+  assert.deepEqual(total.unresolved_attempts, ['a1'])
+})
+
 test('an incomplete attempt history cannot produce a numeric total', () => {
   const { total } = aggregateImplementationCost({
     attempts: [attempt({ attempt_id: 'a1' })],

@@ -79,7 +79,9 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
     }
 
     const resolution = byAttempt.get(attempt.attempt_id)
-    if (resolution?.state === 'resolved' && Number.isFinite(resolution.amount_usd)) {
+    // Non-negative, not merely finite: a negative amount is malformed data, and
+    // admitting one would let a single bad row silently reduce the total.
+    if (resolution?.state === 'resolved' && Number.isFinite(resolution.amount_usd) && resolution.amount_usd >= 0) {
       row.resolved_amount_usd += resolution.amount_usd
       row.resolved_count += 1
       knownSubtotal += resolution.amount_usd

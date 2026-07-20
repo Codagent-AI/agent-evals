@@ -36,6 +36,12 @@ const UNRESOLVED = 'unresolved-insufficient-evidence'
 // Bounds on candidate- and agent-controlled text reaching a prompt.
 const MAX_ARTIFACT_FILES = 40
 const MAX_ARTIFACT_BYTES = 200_000
+// The session tree is written by the evaluated workflow, so its shape is not
+// ours to trust. These bound the traversal itself — a tree with few matching
+// files can still be enormous or deep enough to exhaust the call stack, and the
+// file and byte caps below only apply once a match is already in hand.
+const MAX_VISITED_ENTRIES = 1000
+const MAX_WALK_DEPTH = 12
 const MAX_QUOTED_CHARS = 4000
 const MAX_EVIDENCE_ROWS = 60
 
@@ -207,8 +213,15 @@ export async function collectAmbiguityArtifacts({ sessionDir }) {
   const files = []
   const reasons = []
   let bytes = 0
+  let visited = 0
+  let exhausted = false
 
-  async function walk(current) {
+  async function walk(current, depth) {
+    if (exhausted) return
+    if (depth > MAX_WALK_DEPTH) {
+      reasons.push(`ambiguity artifact scan stopped at depth ${MAX_WALK_DEPTH}`)
+      return
+    }
     let entries
     try {
       entries = await readdir(current, { withFileTypes: true })
@@ -217,9 +230,18 @@ export async function collectAmbiguityArtifacts({ sessionDir }) {
       return
     }
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      visited += 1
+      if (visited > MAX_VISITED_ENTRIES) {
+        // Global, not per-directory: a wide tree must not be able to restart the
+        // budget in every sibling directory.
+        exhausted = true
+        reasons.push(`ambiguity artifact scan stopped after ${MAX_VISITED_ENTRIES} entries`)
+        return
+      }
       const path = join(current, entry.name)
       if (entry.isDirectory()) {
-        await walk(path)
+        await walk(path, depth + 1)
+        if (exhausted) return
         continue
       }
       // Match on the path, not just the filename: agents write per-task reports
@@ -240,7 +262,7 @@ export async function collectAmbiguityArtifacts({ sessionDir }) {
     }
   }
 
-  await walk(sessionDir)
+  await walk(sessionDir, 0)
 
   if (files.length === 0) {
     // No artifacts is missing evidence, not evidence of a clean run.
@@ -307,7 +329,10 @@ export function buildAmbiguityLedger({ runId, artifacts, parsed, previous = null
 
   const coverageReasons = [
     ...(previous?.coverage?.reasons ?? []),
-    ...(artifacts.state === 'available' ? [] : artifacts.reasons),
+    // Every reason counts, including ones raised while artifacts *were* found: a
+    // scan that hit its traversal bound left evidence unread, so it cannot claim
+    // to have examined the artifacts completely.
+    ...artifacts.reasons,
     ...reasons,
   ]
   const complete = artifacts.state === 'available' && parsed !== null && parsed.coverage === 'complete'

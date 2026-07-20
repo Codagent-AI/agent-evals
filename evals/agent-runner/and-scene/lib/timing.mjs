@@ -9,23 +9,21 @@
 // Human review is not timed at all. Not recorded and reported as excluded —
 // recorded, because a stored reviewer duration invites someone to add it to a
 // "total" later, and the total is meant to describe machine work only.
-
-export const AUTOMATED_TIMED_PHASES = [
-  'install',
-  'build',
-  'verification',
-  'candidate-server',
-  'browser-evaluation',
-  'evidence-capture',
-  'evidence-repair',
-  'product-judging',
-  'ambiguity-diagnostics',
-  'metrics-pricing',
-  'scoring',
-  'report-generation',
-]
+import { AUTOMATED_PHASES } from './phases.mjs'
 
 export const HUMAN_TIMED_PHASES = ['human-review', 'official-result']
+
+// Derived from the lifecycle rather than written out separately. The controller
+// records intervals under each phase's own name, so an independent vocabulary
+// here would silently report finished work as unobserved while filing its
+// duration under a name nothing ever emits. The spec's categories — install,
+// build, verification, browser evaluation, judging, scoring, reporting — are
+// covered by whichever lifecycle phase currently performs them.
+export const AUTOMATED_TIMED_PHASES = [...new Set(
+  AUTOMATED_PHASES
+    .filter((phase) => phase.owner === 'evaluation-harness' && !HUMAN_TIMED_PHASES.includes(phase.name))
+    .map((phase) => phase.name),
+)]
 
 export function createTimingLedger() {
   return { intervals: [] }
