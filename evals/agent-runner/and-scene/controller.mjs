@@ -25,6 +25,8 @@ import {
   validateCheckpointIdentity,
 } from './lib/checkpoint.mjs'
 import { freezeCandidate, prepareCandidateWorktree } from './lib/candidate.mjs'
+import { runCandidateVerification } from './lib/candidate-verification.mjs'
+import { createHostCandidateServer } from './lib/candidate-server-host.mjs'
 import { aggregateImplementationCost, summarizeEvalOwnedUsage } from './lib/cost.mjs'
 import { fetchPricingCatalog, needsPricingLookup, resolveImplementationPricing } from './lib/pricing.mjs'
 import { readRunnerMetrics } from './lib/runner-metrics.mjs'
@@ -38,6 +40,7 @@ import { collectSourceEvidence } from './deterministic-checks.mjs'
 import { runBrowserEvaluation } from './lib/browser-eval.mjs'
 import { ensureCandidateServer, stopCandidateServer } from './lib/candidate-server.mjs'
 import { assembleResult, writeResultArtifacts } from './lib/result.mjs'
+import { createCodexJudgeInvoker } from './lib/judge-invoker.mjs'
 import { runProductJudging } from './lib/judge-jobs.mjs'
 import { applyOutcomeEvent, createOutcome } from './lib/outcomes.mjs'
 import { loadRubrics, rubricProvenance } from './lib/rubric.mjs'
@@ -161,6 +164,7 @@ export async function runEvaluation({
   // pending result; it simply has no server to hand the reviewer, and says so
   // rather than pretending it started one.
   candidateServer = null,
+  verifyCandidate = null,
   buildResult = null,
   verificationResult = null,
   // The live models.dev catalog. Injected so pricing is exercisable offline and
@@ -513,9 +517,14 @@ export async function runEvaluation({
       await saveCheckpoint(checkpointPath, checkpoint)
     },
 
-    // Placeholder owned by task 03's browser work; it keeps the lifecycle honest
-    // about ordering without claiming work it does not do.
-    verification: async () => {},
+    verification: async () => {
+      if (!verifyCandidate) return
+      const verified = await verifyCandidate({ worktree: candidateWorktree, runDir, exec })
+      buildResult = verified.build
+      verificationResult = verified.verification
+      record.timings.push(...(verified.timings ?? []))
+      await writeJsonAtomic(join(runDir, 'phases/verification.json'), verified)
+    },
 
     'candidate-server': async (context) => {
       if (!candidateServer) {
@@ -765,6 +774,11 @@ export async function runEvaluation({
   // artifacts is what makes a resumed `result.json` describe the whole
   // evaluation rather than only the phases this session happened to execute.
   for (const [phase, load] of [
+    ['verification', (value) => {
+      buildResult = value.build
+      verificationResult = value.verification
+      record.timings.push(...(value.timings ?? []))
+    }],
     ['browser-evaluation', (value) => { record.browser = value }],
     ['source-evidence', (value) => { record.sourceEvidence = value }],
     ['product-judging', (value) => { record.judging = value }],
@@ -827,9 +841,24 @@ export async function runEvaluation({
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  const argv = process.argv.slice(2)
+  const runDirIndex = argv.indexOf('--run-dir')
+  const productionRunDir = runDirIndex === -1 ? null : argv[runDirIndex + 1]
+  const candidateWorktree = productionRunDir
+    ? join(resolve(productionRunDir), '.runtime/candidate-worktree')
+    : null
   const result = await runEvaluation({
-    argv: process.argv.slice(2),
+    argv,
     home: process.env.HOME ?? null,
+    verifyCandidate: productionRunDir
+      ? ({ worktree, exec }) => runCandidateVerification({ worktree, exec })
+      : null,
+    candidateServer: productionRunDir
+      ? createHostCandidateServer({ runDir: productionRunDir })
+      : null,
+    judgeInvoke: productionRunDir
+      ? createCodexJudgeInvoker({ runDir: productionRunDir, candidateWorktree })
+      : null,
     log: (line) => console.error(line),
   })
   for (const error of result.errors ?? []) console.error(JSON.stringify(error))

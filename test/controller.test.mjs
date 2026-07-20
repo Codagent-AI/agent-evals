@@ -683,6 +683,39 @@ test('a complete automated run reports the 70-point subtotal and no official ver
   assert.equal(sourceManifest.candidate_identity, record.candidate_identity)
 })
 
+test('the production verification adapter runs before browser evaluation and persists its evidence', async () => {
+  const context = await environment()
+  await writeCandidateSource(context.runDir)
+  const calls = []
+
+  const result = await evaluate(context, ['--skip-validator', ...profileArgs], {
+    verifyCandidate: async ({ worktree }) => {
+      calls.push(worktree)
+      return {
+        commands: {
+          install: { state: 'complete', ok: true },
+          build: { state: 'complete', ok: true },
+          verification: { state: 'complete', ok: true },
+        },
+        build: { ok: true, log: 'build passed' },
+        verification: { machine_readable: true, passed: true, artifact: 'phases/verification.json' },
+        timings: [],
+      }
+    },
+    browserDriver: conformingDriver(),
+    judgeInvoke: passingJudge(),
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.deepEqual(calls, [join(context.runDir, '.runtime/candidate-worktree')])
+  const phase = await readJson(join(context.runDir, 'phases/verification.json'))
+  assert.equal(phase.build.ok, true)
+  assert.equal(phase.verification.passed, true)
+  const record = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(record.score.gates.find(({ id }) => id === 'verification-build-whole-app').verdict, 'pass')
+  assert.equal(record.score.gates.find(({ id }) => id === 'verification-clear-outcome').verdict, 'pass')
+})
+
 test('missing browser and judge evidence is reported incomplete rather than as product failures', async () => {
   const context = await environment()
 
