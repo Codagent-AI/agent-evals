@@ -81,7 +81,12 @@ export async function runPhases({ phases, handlers, outcome, context = {}, isCom
     try {
       // Result-writing phases render the outcome as it stands when they run.
       state.outcome = current
-      await handler(state)
+      // A phase that establishes an outcome fact — a scored subtotal, a product
+      // verdict — returns it as events rather than mutating the outcome, so the
+      // lifecycle stays the single place the outcome is advanced.
+      for (const event of (await handler(state)) ?? []) {
+        current = applyOutcomeEvent(current, event)
+      }
       completed.push(phase.name)
       if (current.failed_phase === phase.name) {
         current = applyOutcomeEvent(current, { type: 'phase-recovered', phase: phase.name })

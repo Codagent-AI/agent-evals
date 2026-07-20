@@ -6,7 +6,9 @@ import { test } from 'node:test'
 
 import { runEvaluation } from '../evals/agent-runner/and-scene/controller.mjs'
 import { loadCheckpoint } from '../evals/agent-runner/and-scene/lib/checkpoint.mjs'
-import { readJson } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
+import { DEMO_CONTRACT } from '../evals/agent-runner/and-scene/lib/demo-contract.mjs'
+import { hashJson, readJson } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
+import { loadRubrics, rubricProvenance } from '../evals/agent-runner/and-scene/lib/rubric.mjs'
 import { WORKFLOW_RELATIVE_PATH } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
 
 const workflowYaml = `name: implement-change2
@@ -565,4 +567,133 @@ test('a changed score-affecting checkpoint identity is rejected on resume', asyn
 
   assert.equal(result.exitCode, 2)
   assert.match(JSON.stringify(result.errors), /workflow_arguments|provenance/i)
+})
+
+// A conforming stand-in for the built demo. The exhaustive per-behaviour
+// variants live in browser-eval.test.mjs; here it only has to be good enough
+// that the controller can score a complete automated run.
+function conformingDriver() {
+  let index = 0
+  let mode = 'present'
+  let focused = null
+  const titles = DEMO_CONTRACT.step_titles
+  return {
+    routes: async () => [DEMO_CONTRACT.route],
+    open: async () => { index = 0; mode = 'present'; focused = null },
+    state: async () => ({
+      stepIndex: index,
+      stepCount: titles.length,
+      mode,
+      title: titles[index],
+      caption: `Caption ${index}`,
+      sceneId: 'demo-scene',
+      entityIds: ['stage', `beat-${index}`, `beat-${index + 1}`],
+      titleProminent: mode === 'present',
+      captionVisible: mode === 'browse',
+      controls: titles.map((_, position) => ({
+        name: `Step ${position + 1}`, role: 'button',
+        ariaCurrent: position === index, focusable: true,
+      })),
+      focused,
+    }),
+    press: async (key) => {
+      if (key === 'ArrowRight') index = Math.min(index + 1, titles.length - 1)
+      if (key === 'ArrowLeft') index = Math.max(index - 1, 0)
+    },
+    activate: async (name) => { focused = name; index = Number(name.replace('Step ', '')) - 1 },
+    focus: async (name) => { focused = name },
+    swipe: async (direction) => {
+      index = direction === 'left'
+        ? Math.min(index + 1, titles.length - 1)
+        : Math.max(index - 1, 0)
+    },
+    toggleMode: async () => { mode = mode === 'present' ? 'browse' : 'present' },
+    failures: async () => [],
+  }
+}
+
+function passingJudge() {
+  return async ({ criteria }) => JSON.stringify({
+    results: criteria.map((id) => ({
+      id, verdict: 'pass',
+      rationale: 'the delivered source satisfies this contract',
+      evidence: ['src/presentation-kit/Scene.tsx:1'],
+    })),
+  })
+}
+
+test('the run identity and result record both rubric versions and hashes', async () => {
+  const context = await environment()
+  const rubrics = await loadRubrics()
+
+  await evaluate(context, ['--skip-validator', ...profileArgs])
+
+  const checkpoint = await loadCheckpoint(join(context.runDir, 'checkpoint.json'))
+  assert.equal(checkpoint.identity.rubric_provenance, hashJson(rubricProvenance(rubrics)))
+
+  const result = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(result.rubrics.automated.version, rubrics.automated.version)
+  assert.equal(result.rubrics.automated.sha256, rubrics.automated.sha256)
+  assert.equal(result.rubrics.human.version, rubrics.human.version)
+  assert.equal(result.rubrics.human.sha256, rubrics.human.sha256)
+})
+
+test('a complete automated run reports the 70-point subtotal and no official verdict', async () => {
+  const context = await environment()
+
+  const result = await evaluate(context, ['--skip-validator', ...profileArgs], {
+    browserDriver: conformingDriver(),
+    judgeInvoke: passingJudge(),
+    buildResult: { ok: true, log: 'build succeeded' },
+    verificationResult: { machine_readable: true, passed: true, artifact: 'verify-result.json' },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const record = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(record.automated_subtotal, 70)
+  assert.equal(record.score.automated_subtotal.complete, true)
+  assert.equal(record.score.gates_passed, true)
+  assert.equal(record.official_score, null)
+  assert.equal(record.product_verdict, 'unavailable')
+  assert.equal(record.evaluation_status, 'pending-human-review')
+  assert.deepEqual(record.score.incomplete, ['human-review'])
+})
+
+test('missing browser and judge evidence is reported incomplete rather than as product failures', async () => {
+  const context = await environment()
+
+  const result = await evaluate(context, ['--skip-validator', ...profileArgs])
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const record = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(record.score.automated_subtotal.points, 0)
+  assert.equal(record.score.automated_subtotal.complete, false)
+  assert.equal(record.score.official_pass, null)
+  // No component was observed, so none of them may be reported as failing.
+  assert.equal(
+    record.score.components.every(({ complete, points_awarded }) => !complete && points_awarded === null),
+    true,
+  )
+  assert.equal(record.evaluation_status, 'pending-human-review')
+})
+
+test('a judge job that never returns usable output does not fail the run', async () => {
+  const context = await environment()
+
+  const result = await evaluate(context, ['--skip-validator', ...profileArgs], {
+    browserDriver: conformingDriver(),
+    judgeInvoke: async ({ job, criteria }) => job === 'scene-kit' ? 'garbage' : JSON.stringify({
+      results: criteria.map((id) => ({ id, verdict: 'pass', rationale: 'ok', evidence: [] })),
+    }),
+    buildResult: { ok: true },
+    verificationResult: { machine_readable: true, passed: true },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const record = await readJson(join(context.runDir, 'result.json'))
+  assert.deepEqual(record.judging.failed_jobs, ['scene-kit'])
+  assert.equal(record.judging.retries['scene-kit'], 1)
+  assert.ok(record.score.incomplete.includes('scene-kit-correctness'))
+  // Retries are harness activity and cost the candidate nothing.
+  assert.equal(record.score.components.find(({ id }) => id === 'demo-technical-quality').points_awarded, 25)
 })

@@ -19,7 +19,11 @@ import {
   saveCheckpoint,
   validateCheckpointIdentity,
 } from './lib/checkpoint.mjs'
+import { runBrowserEvaluation } from './lib/browser-eval.mjs'
+import { runProductJudging } from './lib/judge-jobs.mjs'
 import { applyOutcomeEvent, createOutcome, outcomeLabel } from './lib/outcomes.mjs'
+import { loadRubrics, rubricProvenance } from './lib/rubric.mjs'
+import { scoreProduct } from './lib/scorer.mjs'
 import { AUTOMATED_PHASES, runPhases } from './lib/phases.mjs'
 import { hashJson, readJson, writeJsonAtomic } from './lib/persistence.mjs'
 import {
@@ -124,6 +128,13 @@ export async function runEvaluation({
   observedSteps,
   waitForRun = () => {},
   handlers: handlerOverrides = {},
+  // Product evidence sources. Each is injected so the whole scored lifecycle is
+  // exercisable without a browser or a model call, and so a source that is
+  // absent leaves its component unobserved rather than failing the candidate.
+  browserDriver = null,
+  judgeInvoke = null,
+  buildResult = null,
+  verificationResult = null,
   // Agent Runner resolves its run store from $HOME. The controller must read
   // the same store the spawned runner writes to, so the home is explicit and
   // is passed through to the child rather than being inherited implicitly.
@@ -165,6 +176,14 @@ export async function runEvaluation({
 
   const boundary = resolveBoundary({ skipValidator: options.skipValidator, changeName: options.changeName })
 
+  let rubrics
+  try {
+    rubrics = await loadRubrics()
+  } catch (error) {
+    return failure([{ code: 'invalid-rubric', message: error.message }])
+  }
+  const provenanceOfRubrics = rubricProvenance(rubrics)
+
   // A reference baseline evaluates an existing candidate without invoking Agent
   // Runner, so it needs no clean checkout or workflow contract.
   let provenance = null
@@ -204,9 +223,9 @@ export async function runEvaluation({
     workflow_arguments: hashJson(boundary.workflow_arguments),
     agent_configuration: hashJson(validation.profiles),
     evaluator_configuration: options.judgeModel,
-    // Owned by the product-scoring task; recorded here so resume already
-    // rejects a rubric change.
-    rubric_provenance: null,
+    // A rubric edit changes what the score means, so it invalidates a resumed
+    // run rather than being blended into half-scored results.
+    rubric_provenance: hashJson(provenanceOfRubrics),
   }
 
   await prepareRunDirectory(runDir)
@@ -265,6 +284,9 @@ export async function runEvaluation({
     events: [],
     run: checkpoint.agent_runner,
     timings: [],
+    browser: null,
+    judging: null,
+    score: null,
   }
   // Link the persistent run store into the container home so Agent Runner
   // writes where the controller reads, then read from whichever store is
@@ -356,12 +378,64 @@ export async function runEvaluation({
       }
     },
 
-    // Placeholders owned by tasks 02-04. They keep the lifecycle honest about
+    // Placeholders owned by tasks 03-04. They keep the lifecycle honest about
     // ordering and server dependency without claiming work they do not do.
     verification: async () => {},
     'candidate-server': async (context) => { context.serverRunning = true },
-    'browser-evaluation': async () => {},
-    'product-judging': async () => {},
+
+    'browser-evaluation': async () => {
+      if (!browserDriver) {
+        // Without a driver the live demo was never observed. That is missing
+        // evidence, not a demo that misbehaved, so nothing is recorded against
+        // the candidate.
+        record.events.push({ event: 'skipped', reason: 'no browser driver configured' })
+        return
+      }
+      const evaluation = await runBrowserEvaluation({
+        driver: browserDriver,
+        build: buildResult,
+        verification: verificationResult,
+      })
+      record.browser = evaluation
+      await writeJsonAtomic(join(runDir, 'phases/browser-evaluation.json'), evaluation)
+    },
+
+    'product-judging': async () => {
+      if (judgeInvoke) {
+        record.judging = await runProductJudging({
+          rubrics,
+          authority: { cli: 'codex', model: options.judgeModel },
+          evidence: [...(record.browser?.criteria ?? []), ...(record.browser?.gates ?? [])],
+          sources: [],
+          invoke: judgeInvoke,
+        })
+        await writeJsonAtomic(join(runDir, 'phases/product-judging.json'), record.judging)
+      } else {
+        record.events.push({ event: 'skipped', reason: 'no judge invoker configured' })
+      }
+
+      record.score = scoreProduct({
+        rubrics,
+        deterministic: record.browser?.criteria ?? null,
+        judges: record.judging?.judges ?? {},
+        gates: record.browser?.gates ?? null,
+        humanReview: null,
+        // Retries, repair, and boundary events are diagnostic context for the
+        // reader; the scorer never turns any of them into points.
+        harness: {
+          judge_retries: record.judging?.retries ?? {},
+          failed_judge_jobs: record.judging?.failed_jobs ?? [],
+          browser_bounds_exceeded: record.browser?.bounds_exceeded ?? [],
+        },
+        mode,
+      })
+      await writeJsonAtomic(join(runDir, 'phases/score.json'), record.score)
+      return [{
+        type: 'automated-scoring-complete',
+        automated_subtotal: record.score.automated_subtotal.points,
+      }]
+    },
+
     'ambiguity-diagnostics': async () => {},
     'metrics-pricing': async () => {},
 
@@ -387,6 +461,10 @@ export async function runEvaluation({
       resumable: outcome.resumable,
       cleanup: outcome.cleanup,
       history: outcome.history,
+      rubrics: provenanceOfRubrics,
+      score: record.score,
+      browser_evaluation: record.browser,
+      judging: record.judging,
       workflow: {
         workflow: boundary.workflow,
         skip_validator: boundary.skip_validator,
@@ -418,7 +496,7 @@ export async function runEvaluation({
     const handler = handlers[phase.name]
     if (!handler) continue
     tracked[phase.name] = async (context) => {
-      await handler(context)
+      const events = await handler(context)
       checkpoint = {
         ...checkpoint,
         phases: {
@@ -431,6 +509,7 @@ export async function runEvaluation({
         },
       }
       await saveCheckpoint(checkpointPath, checkpoint)
+      return events
     }
   }
 

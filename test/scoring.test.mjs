@@ -1,208 +1,302 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 
-import { runDeterministicChecks } from '../evals/agent-runner/and-scene/deterministic-checks.mjs'
-import { scoreEvaluation } from '../evals/agent-runner/and-scene/score.mjs'
+import { criteriaForJob, deterministicCriteria, loadRubrics } from '../evals/agent-runner/and-scene/lib/rubric.mjs'
+import { scoreProduct } from '../evals/agent-runner/and-scene/lib/scorer.mjs'
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const rubricPath = join(root, 'evals/agent-runner/and-scene/rubric.json')
+const rubrics = await loadRubrics()
+const automated = rubrics.automated.rubric
 
-async function loadRubric() {
-  return JSON.parse(await readFile(rubricPath, 'utf8'))
+const JOBS = ['demo-integration', 'scene-kit', 'presentation-skill', 'verification-tooling']
+const GATE_IDS = automated.gates.map(({ id }) => id)
+
+function verdicts(ids, failures) {
+  return ids.map((id) => ({
+    id,
+    verdict: failures.includes(id) ? 'fail' : 'pass',
+    rationale: 'observed in the delivered implementation',
+    evidence: ['src/example.tsx:1'],
+  }))
 }
 
-function passingResults(scenarios) {
-  return scenarios.map(({ id }) => ({ id, verdict: 'pass', note: 'verified', evidence: ['test'] }))
+function inputs({ failures = [], gateFailures = [], omit = [], humanReview = null } = {}) {
+  const absent = new Set(omit)
+  const judges = {}
+  for (const job of JOBS) {
+    judges[job] = absent.has(job) ? null : verdicts(criteriaForJob(automated, job), failures)
+  }
+  return {
+    rubrics,
+    deterministic: absent.has('deterministic') ? null : verdicts(deterministicCriteria(automated), failures),
+    judges,
+    gates: absent.has('gates') ? null : verdicts(GATE_IDS, gateFailures),
+    humanReview,
+  }
 }
 
-test('rubric owns a unique evaluator and fixed scoring policy for every scenario', async () => {
-  const rubric = await loadRubric()
-  assert.equal(rubric.version, 1)
-  assert.ok(rubric.scenarios.length >= 60)
-  assert.equal(new Set(rubric.scenarios.map(({ id }) => id)).size, rubric.scenarios.length)
-  assert.ok(rubric.scenarios.every(({ evaluator }) => ['deterministic', 'judge'].includes(evaluator)))
-  assert.ok(rubric.scenarios.every(({ critical }) => typeof critical === 'boolean'))
-  assert.ok(rubric.scenarios.every(({ weight }) => Number.isFinite(weight) && weight > 0))
-  assert.ok(rubric.scenarios.filter(({ critical }) => critical).length < rubric.scenarios.length / 2)
-})
+const fullHumanReview = { total: 30, ratings: Array.from({ length: 13 }, () => 5) }
 
-test('scorer computes pass and score from rubric-owned fields', async () => {
-  const rubric = await loadRubric()
-  const deterministic = rubric.scenarios.filter(({ evaluator }) => evaluator === 'deterministic')
-  const judged = rubric.scenarios.filter(({ evaluator }) => evaluator === 'judge')
-  const result = scoreEvaluation({
-    rubric,
-    deterministicResults: passingResults(deterministic),
-    judgeResults: passingResults(judged),
-  })
-  assert.equal(result.overall_score, 100)
-  assert.equal(result.pass, true)
-  assert.equal(result.scenarios.length, rubric.scenarios.length)
+function component(result, id) {
+  return result.components.find((entry) => entry.id === id)
+}
+
+test('an all-pass automated evaluation scores the full 70-point subtotal', () => {
+  const result = scoreProduct(inputs())
+
+  assert.equal(result.automated_subtotal.points, 70)
+  assert.equal(result.automated_subtotal.possible, 70)
+  assert.equal(result.automated_subtotal.complete, true)
   assert.deepEqual(
-    result.scenarios.map(({ id, critical, weight, evaluator }) => ({ id, critical, weight, evaluator })),
-    rubric.scenarios.map(({ id, critical, weight, evaluator }) => ({ id, critical, weight, evaluator })),
+    result.components.map(({ id, points_awarded }) => [id, points_awarded]),
+    [
+      ['demo-technical-quality', 25],
+      ['scene-kit-correctness', 25],
+      ['presentation-skill-correctness', 10],
+      ['verification-tool-correctness', 10],
+    ],
   )
+  assert.ok(result.components.every(({ complete }) => complete))
+  assert.equal(result.gates_passed, true)
 })
 
-test('scorer rejects missing, duplicate, and unknown judge scenario IDs', async () => {
-  const rubric = await loadRubric()
-  const deterministic = rubric.scenarios.filter(({ evaluator }) => evaluator === 'deterministic')
-  const judged = rubric.scenarios.filter(({ evaluator }) => evaluator === 'judge')
-  const base = {
-    rubric,
-    deterministicResults: passingResults(deterministic),
-  }
-  assert.throws(
-    () => scoreEvaluation({ ...base, judgeResults: passingResults(judged.slice(1)) }),
-    /missing judge scenario IDs/,
-  )
-  assert.throws(
-    () => scoreEvaluation({ ...base, judgeResults: [...passingResults(judged), passingResults(judged.slice(0, 1))[0]] }),
-    /duplicate judge scenario IDs/,
-  )
-  assert.throws(
-    () => scoreEvaluation({ ...base, judgeResults: [...passingResults(judged), { id: 'invented', verdict: 'pass', note: '', evidence: [] }] }),
-    /unknown judge scenario IDs/,
-  )
+test('a pending human review reports the subtotal but no official total or verdict', () => {
+  const result = scoreProduct(inputs())
+
+  assert.equal(result.human_review, null)
+  assert.equal(result.official_score, null)
+  assert.equal(result.official_pass, null)
+  assert.deepEqual(result.incomplete, ['human-review'])
 })
 
-test('a failed critical scenario fails the candidate while a noncritical failure only lowers score', async () => {
-  const rubric = await loadRubric()
-  const deterministic = passingResults(rubric.scenarios.filter(({ evaluator }) => evaluator === 'deterministic'))
-  const judgedScenarios = rubric.scenarios.filter(({ evaluator }) => evaluator === 'judge')
-  const critical = judgedScenarios.find(({ critical: value }) => value)
-  const noncritical = judgedScenarios.find(({ critical: value }) => !value)
-  const judgeResults = passingResults(judgedScenarios)
+test('a completed human review produces the official 100-point score and pass verdict', () => {
+  const result = scoreProduct(inputs({ humanReview: fullHumanReview }))
 
-  const criticalResult = scoreEvaluation({
-    rubric,
-    deterministicResults: deterministic,
-    judgeResults: judgeResults.map((item) => item.id === critical.id ? { ...item, verdict: 'fail' } : item),
-  })
-  assert.equal(criticalResult.pass, false)
-  assert.ok(criticalResult.overall_score < 100)
-
-  const noncriticalResult = scoreEvaluation({
-    rubric,
-    deterministicResults: deterministic,
-    judgeResults: judgeResults.map((item) => item.id === noncritical.id ? { ...item, verdict: 'fail' } : item),
-  })
-  assert.equal(noncriticalResult.pass, true)
-  assert.ok(noncriticalResult.overall_score < 100)
+  assert.equal(result.human_review.points, 30)
+  assert.equal(result.official_score, 100)
+  assert.equal(result.official_pass, true)
+  assert.deepEqual(result.pass_failures, [])
+  assert.deepEqual(result.incomplete, [])
 })
 
-async function writeCandidate(rootDir, overrides = {}) {
-  const files = {
-    'src/presentations/how-to-make-a-presentation/steps.tsx': [
-      'You have a topic', 'The skill interviews you', 'Answers become steps',
-      'The deck grows', 'You set the depth', 'It assembles the scene',
-      'It checks its own work', 'Changed your mind? Loop it.', "You're looking at one",
-    ].join('\n'),
-    'src/presentation-kit/Attribution.tsx': 'made by and-scene https://github.com/Codagent-AI/and-scene',
-    'src/presentation-kit/Toc.tsx': 'aria-current data-active',
-    'scripts/verify.mjs': 'http://127.0.0.1:4319 data-step-count data-step-index',
-    'scripts/screenshot.mjs': [
-      'playwright screenshot data-allow-overlap overlap warning',
-      'getComputedStyle active inactive aria-current warning',
-      'made by and-scene missing attribution fontSize textDecoration warning',
-    ].join('\n'),
-    ...overrides,
-  }
-  for (const [path, contents] of Object.entries(files)) {
-    const target = join(rootDir, path)
-    await mkdir(dirname(target), { recursive: true })
-    await writeFile(target, contents)
-  }
-}
+test('a subcomponent divides its points equally among its criteria without rounding', () => {
+  const result = scoreProduct(inputs({ failures: ['entity-departing-exit'] }))
+  const transitions = component(result, 'scene-kit-correctness')
+    .subcomponents.find(({ id }) => id === 'scene-entity-transitions')
 
-test('deterministic evaluator passes a contract-complete candidate', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'and-scene-deterministic-'))
-  await writeCandidate(dir)
-  const results = await runDeterministicChecks(dir)
-  assert.ok(results.length >= 7)
-  assert.deepEqual([...new Set(results.map(({ verdict }) => verdict))], ['pass'])
+  assert.equal(transitions.points_possible, 7)
+  // Five of six criteria pass, so the row is worth exactly 35/6 — not a rounded
+  // 5.83, and not a float built by adding five separate 7/6 shares.
+  assert.equal(transitions.points_awarded, 35 / 6)
+  assert.equal(transitions.criteria.find(({ id }) => id === 'entity-departing-exit').points_awarded, 0)
+  assert.equal(component(result, 'scene-kit-correctness').points_awarded, 25 - 7 / 6)
+  assert.equal(result.automated_subtotal.points, 70 - 7 / 6)
 })
 
-test('deterministic evaluator emits exactly the rubric-owned deterministic scenario IDs', async () => {
-  const rubric = await loadRubric()
-  const expected = new Set(
-    rubric.scenarios
-      .filter(({ evaluator }) => evaluator === 'deterministic')
-      .map(({ id }) => id),
-  )
-  const dir = await mkdtemp(join(tmpdir(), 'and-scene-deterministic-ids-'))
-  await writeCandidate(dir)
+test('every criterion result records its identifier, verdict, rationale, and cited evidence', () => {
+  const result = scoreProduct(inputs())
+  const criteria = result.components.flatMap((entry) => entry.subcomponents.flatMap(({ criteria: rows }) => rows))
 
-  const results = await runDeterministicChecks(dir)
-
-  assert.deepEqual(new Set(results.map(({ id }) => id)), expected)
+  assert.equal(criteria.length, 78)
+  assert.ok(criteria.every(({ id, verdict, rationale, evidence }) => (
+    typeof id === 'string' && ['pass', 'fail'].includes(verdict)
+      && rationale.length > 0 && Array.isArray(evidence)
+  )))
 })
 
-test('deterministic evaluator fails safely when candidate text exceeds its scan budget', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'and-scene-deterministic-budget-'))
-  await writeCandidate(dir, {
-    'src/presentations/oversized.md': 'x'.repeat(600 * 1024),
-  })
-
-  const results = await runDeterministicChecks(dir)
-
-  assert.ok(results.every(({ verdict }) => verdict === 'fail'))
-  assert.ok(results.every(({ note }) => note.includes('scan budget exceeded')))
-})
-
-test('deterministic evaluator accepts the project-local helper in the scaffold template', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'and-scene-template-helper-'))
-  await writeCandidate(dir)
-  const rootHelper = join(dir, 'scripts/screenshot.mjs')
-  const templateHelper = join(dir, 'skills/presentation/templates/bootstrap/scripts/inspect-presentation.mjs')
-  await mkdir(dirname(templateHelper), { recursive: true })
-  await writeFile(templateHelper, await readFile(rootHelper, 'utf8'))
-  await rm(rootHelper)
-  const results = await runDeterministicChecks(dir)
-  for (const id of [
-    'quality-project-local-screenshot-helper', 'visual-helper-overlap-warning',
-    'visual-helper-active-state-warning', 'visual-helper-attribution-warning',
-  ]) assert.equal(results.find((item) => item.id === id)?.verdict, 'pass', id)
-})
-
-test('deterministic evaluator catches known sample, loopback, attribution, active-state, and screenshot-helper mutations', async () => {
-  const mutations = [
-    ['verification-sample-outline', { 'src/presentations/how-to-make-a-presentation/steps.tsx': 'You have a topic\nThe skill interviews you' }],
-    ['verification-ipv4-loopback', { 'scripts/verify.mjs': 'http://localhost:4319 data-step-count data-step-index' }],
-    ['attribution-default-link', { 'src/presentation-kit/Attribution.tsx': 'no attribution' }],
-    ['navigation-active-state', { 'src/presentation-kit/Toc.tsx': 'className active' }],
-    ['visual-helper-overlap-warning', { 'scripts/screenshot.mjs': 'playwright getComputedStyle active inactive aria-current made by and-scene attribution font-size text-decoration warning' }],
-    ['visual-helper-active-state-warning', { 'scripts/screenshot.mjs': 'playwright data-allow-overlap overlap warning made by and-scene attribution font-size text-decoration warning' }],
-    ['visual-helper-attribution-warning', { 'scripts/screenshot.mjs': 'playwright data-allow-overlap overlap warning getComputedStyle active inactive aria-current warning' }],
+test('a total below the pass threshold fails the official verdict', () => {
+  // Drop the whole skill and verification components plus most of the scene kit.
+  const failures = [
+    ...criteriaForJob(automated, 'presentation-skill'),
+    ...criteriaForJob(automated, 'verification-tooling'),
+    ...criteriaForJob(automated, 'scene-kit').slice(0, 20),
   ]
-  for (const [expectedFailure, override] of mutations) {
-    const dir = await mkdtemp(join(tmpdir(), 'and-scene-mutant-'))
-    await writeCandidate(dir, override)
-    const results = await runDeterministicChecks(dir)
-    assert.equal(results.find(({ id }) => id === expectedFailure)?.verdict, 'fail', expectedFailure)
+  const result = scoreProduct(inputs({ failures, humanReview: fullHumanReview }))
+
+  assert.ok(result.official_score < 70)
+  assert.equal(result.official_pass, false)
+  assert.ok(result.pass_failures.some((entry) => entry.rule === 'total'))
+})
+
+test('missing a component floor fails the official verdict even above the total threshold', () => {
+  const demoFloor = scoreProduct(inputs({
+    failures: deterministicCriteria(automated),
+    humanReview: fullHumanReview,
+  }))
+  assert.ok(component(demoFloor, 'demo-technical-quality').points_awarded < 15)
+  assert.ok(demoFloor.official_score >= 70)
+  assert.equal(demoFloor.official_pass, false)
+  assert.ok(demoFloor.pass_failures.some((entry) => entry.rule === 'component-floor'))
+
+  const kitFloor = scoreProduct(inputs({
+    failures: criteriaForJob(automated, 'scene-kit').slice(0, 24),
+    humanReview: fullHumanReview,
+  }))
+  assert.ok(component(kitFloor, 'scene-kit-correctness').points_awarded < 15)
+  assert.equal(kitFloor.official_pass, false)
+
+  const humanFloor = scoreProduct(inputs({
+    humanReview: { total: 14, ratings: Array.from({ length: 13 }, () => 3) },
+  }))
+  assert.equal(humanFloor.official_score, 84)
+  assert.equal(humanFloor.official_pass, false)
+  assert.ok(humanFloor.pass_failures.some((entry) => entry.rule === 'human-floor'))
+})
+
+test('any individual human rating of one fails the official verdict', () => {
+  const ratings = Array.from({ length: 13 }, () => 5)
+  ratings[6] = 1
+  const result = scoreProduct(inputs({ humanReview: { total: 28, ratings } }))
+
+  assert.equal(result.official_score, 98)
+  assert.equal(result.official_pass, false)
+  assert.ok(result.pass_failures.some((entry) => entry.rule === 'human-rating-one'))
+})
+
+test('each hard gate blocks an official pass while preserving the numerical score', () => {
+  for (const gate of GATE_IDS) {
+    const result = scoreProduct(inputs({ gateFailures: [gate], humanReview: fullHumanReview }))
+    assert.equal(result.official_pass, false, gate)
+    assert.ok(result.pass_failures.some((entry) => entry.rule === 'hard-gate' && entry.id === gate), gate)
+    assert.equal(result.official_score, 100, gate)
+    assert.equal(result.automated_subtotal.points, 70, gate)
   }
 })
 
-test('deterministic sample check requires browser evidence in canonical title order', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'and-scene-order-'))
-  await writeCandidate(dir)
-  const manifest = join(dir, 'screenshot-manifest.json')
-  await writeFile(manifest, `${JSON.stringify({
-    expectedScreenshots: 9,
-    capturedScreenshots: 9,
-    presentations: [{
-      slug: 'how-to-make-a-presentation',
-      stepTexts: [
-        'You have a topic', 'Answers become steps', 'The skill interviews you',
-        'The deck grows', 'You set the depth', 'It assembles the scene',
-        'It checks its own work', 'Changed your mind? Loop it.', "You're looking at one",
-      ],
-    }],
-  })}\n`)
-  const results = await runDeterministicChecks(dir, { screenshotManifest: manifest })
-  assert.equal(results.find(({ id }) => id === 'verification-sample-outline')?.verdict, 'fail')
+test('scored criteria never include the four hard gates', () => {
+  const result = scoreProduct(inputs())
+  const scored = result.components
+    .flatMap((entry) => entry.subcomponents.flatMap(({ criteria }) => criteria.map(({ id }) => id)))
+
+  for (const gate of GATE_IDS) assert.equal(scored.includes(gate), false, gate)
+})
+
+test('missing, duplicate, unknown, and malformed criterion results fail validation', () => {
+  const kitCriteria = criteriaForJob(automated, 'scene-kit')
+  const withJudges = (results) => {
+    const base = inputs()
+    return { ...base, judges: { ...base.judges, 'scene-kit': results } }
+  }
+
+  assert.throws(
+    () => scoreProduct(withJudges(verdicts(kitCriteria.slice(1), []))),
+    /missing criterion results for scene-kit: scene-step-narration-and-identity/,
+  )
+  assert.throws(
+    () => scoreProduct(withJudges([...verdicts(kitCriteria, []), ...verdicts(kitCriteria.slice(0, 1), [])])),
+    /duplicate criterion results for scene-kit/,
+  )
+  assert.throws(
+    () => scoreProduct(withJudges([
+      ...verdicts(kitCriteria, []),
+      { id: 'demo-scope-discipline', verdict: 'pass', rationale: 'r', evidence: [] },
+    ])),
+    /unknown criterion results for scene-kit: demo-scope-discipline/,
+  )
+  assert.throws(
+    () => scoreProduct(withJudges(
+      verdicts(kitCriteria, []).map((row, index) => index === 0 ? { ...row, verdict: 'maybe' } : row),
+    )),
+    /malformed criterion result/,
+  )
+  assert.throws(
+    () => scoreProduct(withJudges(
+      verdicts(kitCriteria, []).map((row, index) => index === 0 ? { ...row, rationale: '' } : row),
+    )),
+    /malformed criterion result/,
+  )
+})
+
+test('unobserved evaluator output leaves its component incomplete instead of failing it', () => {
+  const result = scoreProduct(inputs({ omit: ['scene-kit'] }))
+
+  assert.equal(component(result, 'scene-kit-correctness').complete, false)
+  assert.equal(component(result, 'scene-kit-correctness').points_awarded, null)
+  // Components with complete evidence keep their scores.
+  assert.equal(component(result, 'demo-technical-quality').points_awarded, 25)
+  assert.equal(result.automated_subtotal.points, 45)
+  assert.equal(result.automated_subtotal.possible, 70)
+  assert.equal(result.automated_subtotal.complete, false)
+  // The observed subtotal is never rescaled to hide the missing evidence.
+  assert.equal(result.automated_subtotal.observed_possible, 45)
+  assert.equal(result.official_score, null)
+  assert.equal(result.official_pass, null)
+  assert.ok(result.incomplete.includes('scene-kit-correctness'))
+})
+
+test('a partially observed component keeps its deterministic score and marks judging incomplete', () => {
+  const result = scoreProduct(inputs({ omit: ['demo-integration'] }))
+  const demo = component(result, 'demo-technical-quality')
+
+  assert.equal(demo.complete, false)
+  assert.equal(demo.points_awarded, null)
+  assert.equal(demo.points_observed, 14)
+  assert.equal(
+    demo.subcomponents.find(({ id }) => id === 'demo-canonical-content').points_awarded,
+    5,
+  )
+  assert.equal(demo.subcomponents.find(({ id }) => id === 'demo-scope-discipline').points_awarded, null)
+})
+
+test('unobserved gates make the verdict unavailable without failing the gates', () => {
+  const result = scoreProduct(inputs({ omit: ['gates'], humanReview: fullHumanReview }))
+
+  assert.equal(result.gates_passed, null)
+  assert.equal(result.official_pass, null)
+  assert.ok(result.incomplete.includes('hard-gates'))
+})
+
+test('harness activity is recorded diagnostically and changes no product points', () => {
+  const baseline = scoreProduct(inputs({ humanReview: fullHumanReview }))
+  const withHarnessActivity = scoreProduct({
+    ...inputs({ humanReview: fullHumanReview }),
+    harness: {
+      evidence_repair: { attempted: true, succeeded: false },
+      judge_retries: { 'scene-kit': 2 },
+      workflow_failures: 1,
+    },
+  })
+
+  assert.equal(withHarnessActivity.automated_subtotal.points, baseline.automated_subtotal.points)
+  assert.equal(withHarnessActivity.official_score, baseline.official_score)
+  assert.equal(withHarnessActivity.official_pass, baseline.official_pass)
+  assert.deepEqual(withHarnessActivity.harness, {
+    evidence_repair: { attempted: true, succeeded: false },
+    judge_retries: { 'scene-kit': 2 },
+    workflow_failures: 1,
+  })
+})
+
+test('the result records both rubric versions and hashes', () => {
+  const result = scoreProduct(inputs())
+
+  assert.equal(result.rubrics.automated.version, rubrics.automated.version)
+  assert.equal(result.rubrics.automated.sha256, rubrics.automated.sha256)
+  assert.equal(result.rubrics.human.version, rubrics.human.version)
+  assert.equal(result.rubrics.human.sha256, rubrics.human.sha256)
+  assert.notEqual(result.rubrics.automated.rubric_id, result.rubrics.human.rubric_id)
+})
+
+test('a malformed human review is rejected rather than scored', () => {
+  assert.throws(
+    () => scoreProduct(inputs({ humanReview: { total: 31, ratings: Array.from({ length: 13 }, () => 5) } })),
+    /human review total/,
+  )
+  assert.throws(
+    () => scoreProduct(inputs({ humanReview: { total: 20, ratings: Array.from({ length: 12 }, () => 4) } })),
+    /human review requires 13 ratings/,
+  )
+  assert.throws(
+    () => scoreProduct(inputs({ humanReview: { total: 20, ratings: Array.from({ length: 13 }, () => 9) } })),
+    /human review rating/,
+  )
+})
+
+test('a reference baseline is scored with the same rubric, weights, gates, and thresholds', () => {
+  const candidate = scoreProduct({ ...inputs({ humanReview: fullHumanReview }), mode: 'agent-runner' })
+  const baseline = scoreProduct({ ...inputs({ humanReview: fullHumanReview }), mode: 'reference-baseline' })
+
+  assert.deepEqual(
+    { ...baseline, mode: null },
+    { ...candidate, mode: null },
+  )
 })

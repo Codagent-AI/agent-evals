@@ -258,13 +258,16 @@ bash -n -c "$1"
   assert.equal(scoredRun.status, 0, scoredRun.output)
 })
 
-test('repair policy retries incomplete evidence once and always charges the penalty', async () => {
-  const policy = join(root, 'evals/agent-runner/and-scene/evidence-repair.sh')
+const repairPolicy = join(root, 'evals/agent-runner/and-scene/evidence-repair.sh')
+
+test('evidence repair runs at most once and deducts no product points', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'evidence-repair-'))
   const manifest = join(dir, 'manifest.json')
+  const helper = join(dir, 'screenshot.mjs')
+  await writeFile(helper, 'original helper\n')
   const script = `
 set -euo pipefail
-source ${JSON.stringify(policy)}
+source ${JSON.stringify(repairPolicy)}
 captures=0
 repairs=0
 capture() {
@@ -276,12 +279,38 @@ capture() {
   printf '%s\\n' '{"complete":true}' > ${JSON.stringify(manifest)}
 }
 repair() { repairs=$((repairs + 1)); }
-ensure_complete_evidence capture repair ${JSON.stringify(manifest)}
-printf '%s %s %s %s\\n' "$captures" "$repairs" "$EVIDENCE_REPAIR_ATTEMPTED" "$EVIDENCE_REPAIR_PENALTY"
+ensure_complete_evidence capture repair ${JSON.stringify(manifest)} ${JSON.stringify(helper)}
+printf '%s %s %s %s %s\\n' "$captures" "$repairs" "$EVIDENCE_REPAIR_ATTEMPTED" \
+  "$EVIDENCE_REPAIR_SUCCEEDED" "${'${EVIDENCE_REPAIR_PENALTY-unset}'}"
 `
   const result = spawnSync('bash', ['-c', script], { encoding: 'utf8' })
   assert.equal(result.status, 0, result.stderr)
-  assert.equal(result.stdout.trim(), '2 1 true 5')
+  // The repair is recorded diagnostically; it carries no penalty at all.
+  assert.equal(result.stdout.trim(), '2 1 true true unset')
+})
+
+test('evidence repair may edit only its temporary helper copy', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'evidence-repair-isolation-'))
+  const manifest = join(dir, 'manifest.json')
+  const helper = join(dir, 'screenshot.mjs')
+  await writeFile(helper, 'original helper\n')
+  const script = `
+set -euo pipefail
+source ${JSON.stringify(repairPolicy)}
+capture() { printf '%s\\n' '{"complete":false}' > ${JSON.stringify(manifest)}; return 1; }
+repair() {
+  printf '%s\\n' 'repaired helper' > "$EVIDENCE_REPAIR_WORKSPACE/screenshot.mjs"
+  printf '%s\\n' "$EVIDENCE_REPAIR_WORKSPACE"
+}
+ensure_complete_evidence capture repair ${JSON.stringify(manifest)} ${JSON.stringify(helper)} || true
+`
+  const result = spawnSync('bash', ['-c', script], { encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr)
+
+  const workspace = result.stdout.trim().split('\n').pop()
+  assert.equal(await readFile(helper, 'utf8'), 'original helper\n')
+  assert.equal(await readFile(join(workspace, 'screenshot.mjs'), 'utf8'), 'repaired helper\n')
+  assert.notEqual(dirname(workspace), dirname(helper))
 })
 
 test('screenshot helper uses the spec contract and reports complete coverage', async () => {

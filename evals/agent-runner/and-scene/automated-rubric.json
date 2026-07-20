@@ -1,0 +1,318 @@
+{
+  "rubric_id": "and-scene-automated-product",
+  "version": "2.0.0",
+  "total_points": 100,
+  "automated_points": 70,
+  "human_points": 30,
+  "pass_threshold": 70,
+  "components": [
+    {
+      "id": "demo-technical-quality",
+      "title": "Demo presentation technical quality",
+      "points": 25,
+      "floor": 15,
+      "subcomponents": [
+        {
+          "id": "demo-canonical-content",
+          "title": "Canonical content, routing, and technical structure",
+          "points": 5,
+          "evaluator": "deterministic-browser",
+          "criteria": [
+            "demo-route-and-registration",
+            "demo-nine-step-content-and-order",
+            "demo-required-scene-content",
+            "demo-evolving-scene-structure",
+            "quality-captions-and-navigation"
+          ]
+        },
+        {
+          "id": "demo-navigation-and-modes",
+          "title": "Navigation, modes, boundaries, and controls",
+          "points": 5,
+          "evaluator": "deterministic-browser",
+          "criteria": [
+            "demo-present-mode-behavior",
+            "demo-browse-mode-behavior",
+            "demo-mode-position-preservation",
+            "demo-supported-navigation",
+            "demo-navigation-boundaries-and-control-keys"
+          ]
+        },
+        {
+          "id": "demo-runtime-reliability",
+          "title": "Runtime reliability and accessibility baseline",
+          "points": 4,
+          "evaluator": "deterministic-browser",
+          "criteria": [
+            "demo-step-and-transition-reliability",
+            "demo-mode-interaction-reliability",
+            "demo-control-semantics",
+            "demo-focus-and-keyboard-accessibility"
+          ]
+        },
+        {
+          "id": "demo-scene-kit-integration",
+          "title": "Uses scene-kit APIs without bypassing or duplicating them",
+          "points": 4,
+          "evaluator": "llm-source-review",
+          "job": "demo-integration",
+          "criteria": ["demo-scene-kit-api-use"]
+        },
+        {
+          "id": "demo-identity-and-grouping",
+          "title": "Uses stable identities and appropriate grouped-scene architecture",
+          "points": 3,
+          "evaluator": "llm-source-review",
+          "job": "demo-integration",
+          "criteria": ["demo-stable-identity-and-grouping"]
+        },
+        {
+          "id": "demo-code-boundaries",
+          "title": "Maintains clear demo/kit boundaries and understandable code",
+          "points": 3,
+          "evaluator": "llm-source-review",
+          "job": "demo-integration",
+          "criteria": [
+            "demo-clear-code-boundaries",
+            "quality-active-chrome-and-attribution-local"
+          ]
+        },
+        {
+          "id": "demo-scope-discipline",
+          "title": "Avoids unnecessary duplication and out-of-scope machinery",
+          "points": 1,
+          "evaluator": "llm-source-review",
+          "job": "demo-integration",
+          "criteria": ["demo-scope-discipline"]
+        }
+      ]
+    },
+    {
+      "id": "scene-kit-correctness",
+      "title": "Scene kit correctness",
+      "points": 25,
+      "floor": 15,
+      "subcomponents": [
+        {
+          "id": "scene-step-model",
+          "title": "Step model, stable identity, and typed boundary",
+          "points": 4,
+          "evaluator": "llm-source-review",
+          "job": "scene-kit",
+          "criteria": [
+            "scene-step-narration-and-identity",
+            "scene-order-derived-numbering",
+            "scene-typed-payload-boundary"
+          ]
+        },
+        {
+          "id": "scene-entity-transitions",
+          "title": "Entity transitions and persistent grouped scenes",
+          "points": 7,
+          "evaluator": "llm-source-review",
+          "job": "scene-kit",
+          "criteria": [
+            "entity-persisting-morph",
+            "entity-newcomer-after-settle",
+            "entity-departing-exit",
+            "grouped-scene-updates-in-place",
+            "grouped-continuing-entities-not-newcomers",
+            "grouped-intentional-composition"
+          ]
+        },
+        {
+          "id": "scene-modes-and-navigation",
+          "title": "Present/browse modes, navigation, controls, and boundaries",
+          "points": 6,
+          "evaluator": "llm-source-review",
+          "job": "scene-kit",
+          "criteria": [
+            "mode-present-title-focused",
+            "mode-browse-reading-focused",
+            "mode-toggle-preserves-position",
+            "navigation-keyboard",
+            "navigation-touch-swipe",
+            "navigation-direct-jump",
+            "navigation-active-state",
+            "navigation-controls-keep-keys",
+            "navigation-clamp-start",
+            "navigation-clamp-end"
+          ]
+        },
+        {
+          "id": "scene-fixed-canvas",
+          "title": "Fixed-canvas behavior",
+          "points": 2,
+          "evaluator": "llm-source-review",
+          "job": "scene-kit",
+          "criteria": ["canvas-uniform-scaling", "canvas-default-dimensions"]
+        },
+        {
+          "id": "scene-style-and-attribution",
+          "title": "Style ownership, hooks, framework neutrality, and attribution",
+          "points": 6,
+          "evaluator": "llm-source-review",
+          "job": "scene-kit",
+          "criteria": [
+            "style-kit-hooks",
+            "style-unstyled-kit-output",
+            "style-framework-optional",
+            "style-coordinate-heavy-diagrams",
+            "attribution-default-link",
+            "attribution-styling-hook",
+            "attribution-top-left-opt-in"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "presentation-skill-correctness",
+      "title": "Presentation skill correctness",
+      "points": 10,
+      "floor": null,
+      "subcomponents": [
+        {
+          "id": "skill-requirement-gathering",
+          "title": "Requirement gathering and proceeding with partial detail",
+          "points": 2,
+          "evaluator": "llm-source-review",
+          "job": "presentation-skill",
+          "criteria": [
+            "skill-missing-details-one-at-a-time",
+            "skill-partial-detail-proceeds",
+            "skill-complete-prompt-proceeds"
+          ]
+        },
+        {
+          "id": "skill-scaffolding",
+          "title": "Scaffold detection, location, dependencies, and style neutrality",
+          "points": 4,
+          "evaluator": "llm-source-review",
+          "job": "presentation-skill",
+          "criteria": [
+            "skill-empty-directory-scaffold",
+            "skill-already-scaffolded",
+            "skill-partial-scaffold",
+            "skill-scaffold-style-neutral",
+            "skill-template-path-resolution",
+            "skill-monorepo-target",
+            "skill-standalone-target",
+            "skill-nonempty-confirmation"
+          ]
+        },
+        {
+          "id": "skill-presentation-lifecycle",
+          "title": "Create, modify, route, and preserve presentations",
+          "points": 2,
+          "evaluator": "llm-source-review",
+          "job": "presentation-skill",
+          "criteria": [
+            "skill-new-presentation-routed",
+            "skill-presentation-owns-style",
+            "skill-existing-presentations-preserved",
+            "skill-modify-ambiguous-target",
+            "skill-scoped-modification"
+          ]
+        },
+        {
+          "id": "skill-self-verification",
+          "title": "Self-verification and fixing failures before completion",
+          "points": 2,
+          "evaluator": "llm-source-review",
+          "job": "presentation-skill",
+          "criteria": [
+            "skill-checks-run-before-done",
+            "skill-failures-fixed-before-success",
+            "quality-visual-composition-inspected",
+            "quality-visual-warnings-reviewed"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "verification-tool-correctness",
+      "title": "Verification tool correctness",
+      "points": 10,
+      "floor": null,
+      "subcomponents": [
+        {
+          "id": "verification-missing-sample",
+          "title": "Detects a missing reference sample",
+          "points": 2,
+          "evaluator": "llm-source-review",
+          "job": "verification-tooling",
+          "criteria": ["verification-missing-sample-fails"]
+        },
+        {
+          "id": "verification-addressing-and-errors",
+          "title": "Preview addressing and runtime/step error detection",
+          "points": 3,
+          "evaluator": "llm-source-review",
+          "job": "verification-tooling",
+          "criteria": [
+            "verification-ipv4-loopback",
+            "verification-console-page-error-fails",
+            "verification-step-error-fails"
+          ]
+        },
+        {
+          "id": "verification-capture",
+          "title": "Complete, settled screenshot capture",
+          "points": 2,
+          "evaluator": "llm-source-review",
+          "job": "verification-tooling",
+          "criteria": [
+            "quality-project-local-screenshot-helper",
+            "visual-helper-captures-steps",
+            "visual-helper-settled-screenshots"
+          ]
+        },
+        {
+          "id": "verification-warnings",
+          "title": "Overlap, active-state, and attribution warnings",
+          "points": 3,
+          "evaluator": "llm-source-review",
+          "job": "verification-tooling",
+          "criteria": [
+            "visual-helper-overlap-warning",
+            "visual-helper-allow-overlap",
+            "visual-helper-active-state-warning",
+            "visual-helper-attribution-warning"
+          ]
+        }
+      ]
+    }
+  ],
+  "gates": [
+    {
+      "id": "verification-build-whole-app",
+      "requirement": "The complete application builds successfully"
+    },
+    {
+      "id": "verification-sample-outline",
+      "requirement": "The canonical nine-step sample exists, is registered and reachable, and matches its required outline"
+    },
+    {
+      "id": "verification-every-produced-step-renders",
+      "requirement": "Every produced step renders without runtime or console errors"
+    },
+    {
+      "id": "verification-clear-outcome",
+      "requirement": "Verification produces an unambiguous machine-readable pass/fail result"
+    }
+  ],
+  "removed": [
+    {
+      "id": "skill-optional-ascii-mockup",
+      "reason": "Describes optional behavior, so it cannot award or deduct product points."
+    },
+    {
+      "id": "quality-builds-clean",
+      "reason": "The verification-build-whole-app hard gate covers this outcome more strongly."
+    },
+    {
+      "id": "quality-renders-without-errors",
+      "reason": "The verification-every-produced-step-renders hard gate covers this outcome more strongly."
+    }
+  ]
+}

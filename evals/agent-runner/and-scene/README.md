@@ -66,7 +66,7 @@ evals/agent-runner/and-scene/run.sh \
 
 Resume reuses the recorded Agent Runner run rather than starting a second one,
 and rejects a changed role profile, Agent Runner revision, workflow hash, CLI
-version, or any other score-affecting input.
+version, rubric hash, or any other score-affecting input.
 
 Evaluate an existing candidate as a reference baseline without invoking Agent
 Runner. Role profiles are neither required nor applicable:
@@ -186,16 +186,57 @@ survives a later harness failure — reported as `PASS — HARNESS FAILURE` or
 `FAIL — HARNESS FAILURE`. Cleanup failure after a durably written pending
 result is recorded diagnostically and still exits successfully.
 
-`result.json` is the authoritative machine-readable outcome. The product rubric,
-scoring, human review, and `report.html` land with the product evaluation,
-metrics, and human-review tasks.
+`result.json` is the authoritative machine-readable outcome. Human review and
+`report.html` land with the human-review task.
+
+## Scoring
+
+The product score is 100 points: 25 for demo presentation technical quality, 25
+for scene-kit correctness, 10 for presentation-skill correctness, 10 for
+verification-tool correctness, and 30 for human review. Runner health, workflow
+completion, evidence collection, judge execution, cost, timing, retries, and
+evidence repair award and deduct no product points; they are recorded
+diagnostically. Until a human review exists, a run reports its automated
+subtotal out of 70 and no official total or pass verdict.
+
+`automated-rubric.json` and `human-rubric.json` own criterion identifiers,
+evaluator assignment, points, gates, and thresholds. Neither the judge nor the
+human-review interface may change them, and every result records both rubrics'
+version and SHA-256 hash. Each row's points divide equally among its criteria,
+and intermediate values are never rounded.
+
+Deterministic browser checks exercise the built, running demo: routing, the
+canonical nine steps, evolving-scene structure, present/browse modes,
+navigation, end boundaries, transition reliability, control semantics, focus,
+and keyboard operability. Four sequential judge jobs — demo integration, scene
+kit, presentation skill, and verification tooling — review delivered source.
+Judges receive only their own rubric slice, get no screenshots, and do not judge
+visual taste, which belongs to human review.
+
+Four hard gates sit outside the point total: `verification-build-whole-app`,
+`verification-sample-outline`, `verification-every-produced-step-renders`, and
+`verification-clear-outcome`. A failed gate blocks an official pass without
+erasing the numerical score. An official pass needs at least 70 overall, 15 of
+25 for demo quality, 15 of 25 for scene-kit correctness, 15 of 30 for human
+review, no individual human rating of 1, all four gates, and every required
+phase complete.
+
+Evidence that was never observed — a judge job that never returned usable
+output, a browser evaluation that never ran — leaves its component incomplete
+and the verdict unavailable. It is never converted into product failures or
+rescaled away.
 
 ## Artifacts
 
-- `result.json` for evaluation status, product verdict, workflow provenance,
-  configured and observed role details, boundaries, and recovery history
+- `result.json` for evaluation status, product verdict, score breakdown, rubric
+  provenance, workflow provenance, configured and observed role details,
+  boundaries, and recovery history
 - `checkpoint.json` for phase and work-unit state, input fingerprints, and
   output hashes
+- `phases/browser-evaluation.json`, `phases/product-judging.json`, and
+  `phases/score.json` for the evidence each scored component rests on
+- `automated-rubric.json` and `human-rubric.json` in the suite for the scoring
+  policy every result cites by version and hash
 - `agent-runner-capabilities.json` in the suite for the role capabilities that
   profile validation checks against
 

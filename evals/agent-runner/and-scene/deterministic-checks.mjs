@@ -1,24 +1,23 @@
 #!/usr/bin/env node
+// Static source evidence about the delivered candidate.
+//
+// These scans no longer produce criterion verdicts of their own. The scored
+// criteria come from the live browser evaluation and the four product judges;
+// what this module produces is bounded, cited evidence those judges reason
+// over, plus the source half of the canonical-sample hard gate.
 import { opendir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { pathToFileURL } from 'node:url'
+
+import { DEMO_STEP_TITLES } from './lib/demo-contract.mjs'
 
 const MAX_TEXT_FILES = 500
 const MAX_TEXT_FILE_BYTES = 512 * 1024
 const MAX_TOTAL_TEXT_BYTES = 4 * 1024 * 1024
 const MAX_SCAN_ENTRIES = 2000
 
-const SAMPLE_TITLES = [
-  'You have a topic',
-  'The skill interviews you',
-  'Answers become steps',
-  'The deck grows',
-  'You set the depth',
-  'It assembles the scene',
-  'It checks its own work',
-  'Changed your mind? Loop it.',
-  "You're looking at one",
-]
+// The canonical outline is normative and shared with the browser evaluation.
+const SAMPLE_TITLES = DEMO_STEP_TITLES
 
 async function textFiles(root, directory, budget) {
   const base = join(root, directory)

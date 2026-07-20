@@ -1,0 +1,10 @@
+{
+  "rubric_id": "and-scene-human-review",
+  "version": "1.0.0",
+  "points": 30,
+  "floor": 15,
+  "question_count": 13,
+  "rating_scale": { "min": 1, "max": 5 },
+  "min_individual_rating": 2,
+  "note": "Question text, anchors, and the interactive review command are owned by the human-review task. This file owns only the policy the scorer applies: the point allocation, the component floor, the rating scale, and the disqualifying individual rating."
+}
