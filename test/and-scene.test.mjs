@@ -12,7 +12,21 @@ const shotsScript = join(root, 'evals/agent-runner/and-scene/scene-shots.mjs')
 const fixtureSha = 'c11595651dfb3941e39c703c483ed1a92d152a37'
 const referenceSha = '171c7def1e12aca2a5f605a5e5feafb20d4e4d19'
 
-async function setup() {
+const profileArgs = [
+  '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+  '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
+]
+
+function git(cwd, ...args) {
+  const result = spawnSync('git', ['-c', 'user.email=eval@example.invalid', '-c', 'user.name=eval', ...args], {
+    cwd, encoding: 'utf8',
+  })
+  assert.equal(result.status, 0, result.stderr)
+}
+
+// The scored path now requires a clean Agent Runner worktree containing
+// implement-change2, so the fixture runner directory is a real Git checkout.
+async function setup({ workflow = 'name: implement-change2\n', dirty = false } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'agent-evals-'))
   const runner = join(dir, 'agent-runner')
   const sandbox = join(runner, 'scripts/sandbox-run.sh')
@@ -24,6 +38,14 @@ async function setup() {
   await writeFile(join(home, '.claude/.credentials.json'), '{}\n')
   await writeFile(sandbox, '#!/usr/bin/env bash\nprintf \'%q \' "$@"\nprintf \'\\n\'\n')
   await chmod(sandbox, 0o755)
+  if (workflow !== null) {
+    await mkdir(join(runner, 'workflows/openspec'), { recursive: true })
+    await writeFile(join(runner, 'workflows/openspec/implement-change2.yaml'), workflow)
+  }
+  git(runner, 'init', '-q')
+  git(runner, 'add', '-A')
+  git(runner, 'commit', '-qm', 'runner')
+  if (dirty) await writeFile(join(runner, 'scratch.txt'), 'uncommitted\n')
   return { dir, runner, home }
 }
 
@@ -31,6 +53,13 @@ async function run(args, options = {}) {
   const env = { ...process.env, HOME: options.home, SANDBOX_SECRETS_FILE: join(options.dir, 'missing.env') }
   const result = spawnSync('bash', [runScript, ...args], { cwd: root, env, encoding: 'utf8' })
   return { ...result, output: result.stdout + result.stderr }
+}
+
+async function scored(context, extra = []) {
+  return run([
+    '--dry-run', '--run-agent', '--artifact-dir', join(context.dir, 'run'),
+    '--agent-runner-dir', context.runner, ...extra,
+  ], context)
 }
 
 test('proof mode wires the pinned fixture, browser proof, suite input, and provenance', async () => {
@@ -50,38 +79,111 @@ test('proof mode wires the pinned fixture, browser proof, suite input, and prove
   ]) assert.match(result.output, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
 })
 
-test('scored mode preserves workflow, evidence, judging, scoring, and artifacts', async () => {
+test('scored mode delegates the lifecycle to the suite controller', async () => {
   const context = await setup()
-  const result = await run([
-    '--dry-run', '--run-agent', '--artifact-dir', join(context.dir, 'run'),
-    '--agent-runner-dir', context.runner, '--agent', 'claude', '--model', 'sonnet', '--judge-model', 'gpt-5',
-  ], context)
+
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
+
   assert.equal(result.status, 0, result.output)
   for (const expected of [
-    fixtureSha, 'workflows/openspec/implement-change.yaml', 'RUN_ARGS=(run', '--until', 'run-validator',
-    'planner:', 'autonomous_permission_mode: yolo', 'change_name=create-and-scene',
-    'implementation.diff', 'diff-hash.txt', 'metadata.json', 'reward.json', 'manifest.json',
-    'tier1-result.json', 'tier2-judge-prompt.md', 'tier2-result.json',
-    '/eval-input/scene-shots.mjs', 'SHOTS_MANIFEST=/artifacts/screenshot-manifest.json',
-    'repair_screenshot_capture', 'evidence_repair_penalty', '--output-schema', '--image',
-    'AGENT_EVALS_SOURCE_COMMIT', 'AGENT_EVALS_SOURCE_DIRTY',
-    'evals/agent-runner/and-scene', '--input-dir', '--mount-claude-auth', '--mount-codex-auth',
+    '/eval-input/controller.mjs', '--run-dir', '/artifacts',
+    '--skip-validator', '--change-name', 'create-and-scene',
+    '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+    '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
   ]) assert.ok(result.output.includes(expected), `missing ${expected}\n${result.output}`)
 })
 
-test('custom workflow receives only caller supplied arguments', async () => {
+test('scored mode hard-codes implement-change2 and no longer accepts workflow overrides', async () => {
   const context = await setup()
-  const result = await run([
-    '--dry-run', '--run-agent', '--artifact-dir', join(context.dir, 'run'),
-    '--agent-runner-dir', context.runner, '--agent', 'codex', '--workflow', '/tmp/custom.yaml',
-    '--workflow-arg', 'feature=demo',
-  ], context)
+
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
+  const overridden = await scored(context, ['--workflow', '/tmp/custom.yaml', ...profileArgs])
+
+  assert.ok(result.output.includes('implement-change2'), result.output)
+  assert.ok(!result.output.includes('implement-change.yaml'), result.output)
+  assert.notEqual(overridden.status, 0)
+  assert.match(overridden.output, /Unknown option: --workflow/)
+})
+
+test('scored mode no longer carries the legacy reward and tier scoring lifecycle', async () => {
+  const text = await readFile(runScript, 'utf8')
+
+  for (const legacy of [
+    'reward.json', 'tier2-judge-prompt.md', 'hard_pass', 'soft_score',
+    'write_reward', 'run_tier2_judge', 'scenario_compliance',
+  ]) assert.ok(!text.includes(legacy), `run.sh still contains legacy lifecycle: ${legacy}`)
+})
+
+test('both role profiles are required before the sandbox is invoked', async () => {
+  const context = await setup()
+
+  const noLead = await scored(context, [
+    '--skip-validator',
+    '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
+  ])
+  const noImplementor = await scored(context, [
+    '--skip-validator', '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+  ])
+
+  assert.notEqual(noLead.status, 0)
+  assert.match(noLead.output, /lead-agent profile/)
+  assert.notEqual(noImplementor.status, 0)
+  assert.match(noImplementor.output, /task-implementor profile/)
+})
+
+test('a partially specified role profile is rejected', async () => {
+  const context = await setup()
+
+  const result = await scored(context, [
+    '--skip-validator', '--lead-cli', 'claude', '--lead-model', 'opus',
+    '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
+  ])
+
+  assert.notEqual(result.status, 0)
+  assert.match(result.output, /lead-agent profile/)
+})
+
+test('a reference baseline requires no role profiles', async () => {
+  const context = await setup()
+
+  const result = await scored(context, ['--skip-validator', '--reference-baseline', '--candidate-ref', 'origin/reference'])
+
   assert.equal(result.status, 0, result.output)
-  assert.ok(result.output.includes('feature=demo'))
-  assert.ok(result.output.includes('--mount-codex-auth'))
-  assert.ok(!result.output.includes('--mount-claude-auth'))
-  assert.ok(!result.output.includes('change_name=create-and-scene'))
-  assert.ok(!result.output.includes('run-validator'))
+  assert.ok(result.output.includes('--reference-baseline'), result.output)
+  assert.ok(result.output.includes('--candidate-ref'), result.output)
+})
+
+test('a dirty Agent Runner checkout is rejected on the host before the sandbox runs', async () => {
+  const context = await setup({ dirty: true })
+
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
+
+  assert.notEqual(result.status, 0)
+  assert.match(result.output, /uncommitted changes/i)
+  assert.ok(!result.output.includes('/eval-input/controller.mjs'), result.output)
+})
+
+test('an Agent Runner checkout without implement-change2 is rejected on the host', async () => {
+  const context = await setup({ workflow: null })
+
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
+
+  assert.notEqual(result.status, 0)
+  assert.match(result.output, /implement-change2\.yaml/)
+})
+
+test('the run receives a stable container identity that resume reuses', async () => {
+  const context = await setup()
+
+  const first = await scored(context, ['--skip-validator', ...profileArgs])
+  const resumed = await scored(context, ['--skip-validator', '--resume', ...profileArgs])
+
+  assert.equal(first.status, 0, first.output)
+  assert.equal(resumed.status, 0, resumed.output)
+  const identity = /AND_SCENE_RUN_ID/
+  assert.match(first.output, identity)
+  assert.match(resumed.output, identity)
+  assert.ok(resumed.output.includes('--resume'), resumed.output)
 })
 
 test('repository and refs remain shell quoted', async () => {
@@ -113,11 +215,13 @@ test('agent runner directory must contain an executable sandbox adapter', async 
 test('default artifact directories live under the agent-evals checkout', async () => {
   const context = await setup()
   const proof = await run(['--dry-run', '--proof-browser', '--agent-runner-dir', context.runner], context)
-  const scored = await run(['--dry-run', '--run-agent', '--agent', 'codex', '--agent-runner-dir', context.runner], context)
+  const run_ = await run([
+    '--dry-run', '--run-agent', '--skip-validator', '--agent-runner-dir', context.runner, ...profileArgs,
+  ], context)
   assert.equal(proof.status, 0, proof.output)
-  assert.equal(scored.status, 0, scored.output)
+  assert.equal(run_.status, 0, run_.output)
   assert.match(proof.output, new RegExp(`${root}/artifacts/evals/and-scene-proof/\\d{8}T\\d{6}Z`))
-  assert.match(scored.output, new RegExp(`${root}/artifacts/evals/and-scene/\\d{8}T\\d{6}Z`))
+  assert.match(run_.output, new RegExp(`${root}/artifacts/evals/and-scene/\\d{8}T\\d{6}Z`))
 })
 
 test('generated proof and scored container scripts are valid bash', async () => {
@@ -130,75 +234,13 @@ while [ "$#" -gt 0 ] && [ "$1" != -- ]; do shift; done
 bash -n -c "$1"
 `)
   await chmod(sandbox, 0o755)
+  // Re-commit so the scored path still sees a clean Agent Runner worktree.
+  git(context.runner, 'add', '-A')
+  git(context.runner, 'commit', '-qm', 'syntax-checking sandbox stub')
   const proof = await run(['--dry-run', '--proof-browser', '--agent-runner-dir', context.runner], context)
-  const scored = await run([
-    '--dry-run', '--run-agent', '--candidate-ref', 'origin/change/create-and-scene',
-    '--judge-command', 'true', '--agent-runner-dir', context.runner,
-  ], context)
+  const scoredRun = await scored(context, ['--skip-validator', ...profileArgs])
   assert.equal(proof.status, 0, proof.output)
-  assert.equal(scored.status, 0, scored.output)
-})
-
-test('static harness contract covers complete evidence and bounded sanitized repair', async () => {
-  const text = await readFile(runScript, 'utf8')
-  for (const expected of [
-    'pass: (\\$build_exit_code == 0 and \\$verify_exit_code == 0)', 'cat -- "\\$file"',
-    '--image "\\$screenshot"', "jq -e '.pass == true' /artifacts/tier2-result.json",
-    'hard_pass', 'soft_score', 'scenario_compliance', 'screenshot-manifest.json',
-    'ensure_complete_evidence', 'sanitized-screenshot-manifest.json',
-    'expectedPresentations', 'capturedPresentations', 'expectedScreenshots', 'capturedScreenshots', 'errorCount',
-    'generated_by: "evals/agent-runner/and-scene/run.sh"',
-    'hard_pass: (\\$wf and \\$correct and \\$evidence and \\$scenario_pass)',
-  ]) assert.ok(text.includes(expected), `missing ${expected}`)
-  assert.ok(!text.includes('cp /artifacts/logs/screenshots.log "$repair_dir/screenshots.log"'))
-  assert.ok(!text.includes('cp /artifacts/screenshot-manifest.json "$repair_dir/screenshot-manifest.json"'))
-})
-
-test('benchmark mode requires explicit implementation and judge models', async () => {
-  const context = await setup()
-  const missing = await run([
-    '--dry-run', '--run-agent', '--benchmark', '--agent-runner-dir', context.runner,
-  ], context)
-  assert.notEqual(missing.status, 0)
-  assert.match(missing.output, /--benchmark requires --model and --judge-model/)
-  const pinned = await run([
-    '--dry-run', '--run-agent', '--benchmark', '--model', 'claude-pinned',
-    '--judge-model', 'codex-pinned', '--agent-runner-dir', context.runner,
-  ], context)
-  assert.equal(pinned.status, 0, pinned.output)
-  assert.match(pinned.output, /benchmark_mode/)
-  assert.match(pinned.output, /implementation_model_selection/)
-  assert.match(pinned.output, /judge_model_selection/)
-})
-
-test('candidate ref mode skips implementation and supports pinned-judge calibration', async () => {
-  const context = await setup()
-  const missingJudge = await run([
-    '--dry-run', '--run-agent', '--benchmark', '--candidate-ref', 'origin/change/create-and-scene',
-    '--agent-runner-dir', context.runner,
-  ], context)
-  assert.notEqual(missingJudge.status, 0)
-  assert.match(missingJudge.output, /--benchmark requires --judge-model/)
-
-  const calibrated = await run([
-    '--dry-run', '--run-agent', '--benchmark', '--candidate-ref', 'origin/change/create-and-scene',
-    '--judge-model', 'codex-pinned', '--agent-runner-dir', context.runner,
-  ], context)
-  assert.equal(calibrated.status, 0, calibrated.output)
-  for (const expected of ['CANDIDATE_REF=origin/change/create-and-scene', 'candidate_ref', 'implementation_skipped']) {
-    assert.ok(calibrated.output.includes(expected), `missing ${expected}`)
-  }
-})
-
-test('judge execution status and candidate verdict are recorded separately', async () => {
-  const text = await readFile(runScript, 'utf8')
-  for (const expected of [
-    'judge_execution_exit_code', 'scorer_exit_code', 'judge_completed', 'candidate_pass',
-    'tier2-judge-raw.json', '/eval-input/score.mjs', '/eval-input/rubric.json',
-    '/eval-input/deterministic-checks.mjs',
-  ]) assert.ok(text.includes(expected), `missing ${expected}`)
-  assert.ok(!text.includes('JUDGE_EXECUTION_EXIT_CODE=3'))
-  assert.ok(!text.includes('if [ "\\$JUDGE_EXIT_CODE" -eq 0 ]; then\n      JUDGE_EXIT_CODE=1'))
+  assert.equal(scoredRun.status, 0, scoredRun.output)
 })
 
 test('repair policy retries incomplete evidence once and always charges the penalty', async () => {
@@ -242,11 +284,14 @@ test('screenshot helper uses the spec contract and reports complete coverage', a
   assert.ok(text.includes('127.0.0.1'))
 })
 
-test('help documents the exact fixture pin and agent runner checkout option', async () => {
+test('help documents the exact fixture pin, role profiles, and validator option', async () => {
   const result = spawnSync('bash', [runScript, '--help'], { cwd: root, encoding: 'utf8' })
   assert.equal(result.status, 0, result.stderr)
   assert.ok(result.stdout.includes('Usage: evals/agent-runner/and-scene/run.sh'))
   assert.ok(result.stdout.includes(fixtureSha))
   assert.ok(result.stdout.includes(referenceSha))
   assert.ok(result.stdout.includes('--agent-runner-dir PATH'))
+  assert.ok(result.stdout.includes('--skip-validator'))
+  assert.ok(result.stdout.includes('--lead-cli'))
+  assert.ok(result.stdout.includes('--implementor-cli'))
 })

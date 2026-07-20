@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "description": "Role capabilities the and-scene suite validates lead-agent and task-implementor profiles against. Update this pin deliberately when the recorded Agent Runner revision gains or drops an adapter, model, or effort.",
+  "clis": {
+    "claude": {
+      "models": ["opus", "sonnet", "haiku"],
+      "efforts": ["low", "medium", "high"],
+      "roles": ["planner", "implementor"]
+    },
+    "codex": {
+      "models": ["gpt-5", "gpt-5-codex"],
+      "efforts": ["low", "medium", "high"],
+      "roles": ["planner", "implementor"]
+    }
+  }
+}
