@@ -152,3 +152,56 @@ test('loading records distinct version identifiers and SHA-256 hashes for both r
   const { createHash } = await import('node:crypto')
   assert.equal(provenance.automated.sha256, createHash('sha256').update(expected).digest('hex'))
 })
+
+test('the human rubric requires one question per counted question and a covered dimension', async () => {
+  const { human } = await loadRubrics()
+
+  assert.deepEqual(
+    validateHumanRubric({ ...human.rubric, questions: human.rubric.questions.slice(0, 12) }),
+    [
+      'human rubric declares question_count 13 but defines 12 questions',
+      'human rubric dimension cohesion has no questions',
+    ],
+  )
+  assert.ok(
+    validateHumanRubric({
+      ...human.rubric,
+      questions: human.rubric.questions.map((question, index) => (
+        index === 0 ? { ...question, dimension: 'nowhere' } : question
+      )),
+    }).some((error) => error.includes('unknown dimension nowhere')),
+  )
+})
+
+test('the human rubric dimension points must sum to its total points', async () => {
+  const { human } = await loadRubrics()
+  const dimensions = human.rubric.dimensions.map((dimension, index) => (
+    index === 0 ? { ...dimension, points: 11 } : dimension
+  ))
+
+  assert.deepEqual(
+    validateHumanRubric({ ...human.rubric, dimensions }),
+    ['human rubric dimension points sum to 31, expected points 30'],
+  )
+})
+
+test('the human rubric requires one anchor for every rating on its scale', async () => {
+  const { human } = await loadRubrics()
+
+  assert.deepEqual(
+    validateHumanRubric({ ...human.rubric, anchors: human.rubric.anchors.slice(0, 4) }),
+    ['human rubric requires one anchor for each of the ratings 1 through 5'],
+  )
+})
+
+test('the human rubric requires unique, ordered question numbers', async () => {
+  const { human } = await loadRubrics()
+  const questions = human.rubric.questions.map((question, index) => (
+    index === 3 ? { ...question, number: 3 } : question
+  ))
+
+  assert.ok(
+    validateHumanRubric({ ...human.rubric, questions })
+      .some((error) => error.includes('numbered 1 through 13 in order')),
+  )
+})

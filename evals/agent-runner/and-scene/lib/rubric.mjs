@@ -215,6 +215,65 @@ export function validateHumanRubric(rubric) {
   if (!Number.isInteger(rubric.min_individual_rating)) {
     errors.push('human rubric requires an integer min_individual_rating')
   }
+
+  // The question set, its anchors, and the dimension weights are what the
+  // reviewer is actually asked and what their answers are worth, so they are
+  // validated here rather than trusted by the interview.
+  const dimensions = Array.isArray(rubric.dimensions) ? rubric.dimensions : []
+  const questions = Array.isArray(rubric.questions) ? rubric.questions : []
+  const dimensionPoints = dimensions.reduce((sum, { points }) => sum + (points ?? 0), 0)
+  if (dimensions.length === 0) errors.push('human rubric requires dimensions')
+  else if (dimensionPoints !== rubric.points) {
+    errors.push(`human rubric dimension points sum to ${dimensionPoints}, expected points ${rubric.points}`)
+  }
+
+  if (questions.length !== rubric.question_count) {
+    errors.push(`human rubric declares question_count ${rubric.question_count} but defines ${questions.length} questions`)
+  }
+  const numbers = questions.map(({ number }) => number)
+  if (numbers.some((number, index) => number !== index + 1)) {
+    errors.push(`human rubric questions must be numbered 1 through ${questions.length} in order`)
+  }
+  const ids = new Set()
+  const known = new Set(dimensions.map(({ id }) => id))
+  const covered = new Set()
+  for (const question of questions) {
+    if (typeof question.id !== 'string' || question.id.length === 0) {
+      errors.push('every human rubric question requires an id')
+      continue
+    }
+    if (ids.has(question.id)) errors.push(`duplicate human rubric question ${question.id}`)
+    ids.add(question.id)
+    if (typeof question.text !== 'string' || question.text.trim().length === 0) {
+      errors.push(`human rubric question ${question.id} requires text`)
+    }
+    if (!known.has(question.dimension)) {
+      errors.push(`human rubric question ${question.id} has unknown dimension ${question.dimension}`)
+    }
+    covered.add(question.dimension)
+  }
+  // An uncovered dimension would silently withhold its points from every
+  // possible review.
+  for (const { id } of dimensions) {
+    if (!covered.has(id)) errors.push(`human rubric dimension ${id} has no questions`)
+  }
+
+  if (scale && Number.isInteger(scale.min) && Number.isInteger(scale.max)) {
+    const ratings = Array.from({ length: scale.max - scale.min + 1 }, (_, index) => scale.min + index)
+    const anchored = (rubric.anchors ?? []).map(({ rating }) => rating)
+    if (anchored.length !== ratings.length || ratings.some((rating, index) => anchored[index] !== rating)) {
+      errors.push(`human rubric requires one anchor for each of the ratings ${scale.min} through ${scale.max}`)
+    }
+    for (const { rating, anchor } of rubric.anchors ?? []) {
+      if (typeof anchor !== 'string' || anchor.trim().length === 0) {
+        errors.push(`human rubric anchor ${rating} requires text`)
+      }
+    }
+  }
+
+  if (!Number.isInteger(rubric.rationale_required_at_or_below)) {
+    errors.push('human rubric requires an integer rationale_required_at_or_below')
+  }
   return errors
 }
 

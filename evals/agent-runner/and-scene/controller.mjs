@@ -5,10 +5,11 @@
 // state machine: preflight, role configuration, Agent Runner run identity and
 // resumption, durable checkpoints, and the ordered phase lifecycle.
 //
-// Phases owned by later tasks (product judging, ambiguity diagnostics, pricing,
-// human review, reporting) are registered here as explicit placeholders so the
-// ordering, checkpointing, and outcome contracts can be exercised now and the
-// handlers replaced without touching the lifecycle.
+// The command deliberately stops at `pending-human-review`: it writes the
+// automated result, its report, and the artifact manifest, attempts
+// candidate-server cleanup, and exits successfully. The literal human review
+// that turns that into an official score lives in `human-review.mjs`, because it
+// runs on human time and must never cost the completed automated work.
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -34,8 +35,10 @@ import {
 } from './lib/timing.mjs'
 import { collectSourceEvidence } from './deterministic-checks.mjs'
 import { runBrowserEvaluation } from './lib/browser-eval.mjs'
+import { ensureCandidateServer, stopCandidateServer } from './lib/candidate-server.mjs'
+import { assembleResult, writeResultArtifacts } from './lib/result.mjs'
 import { runProductJudging } from './lib/judge-jobs.mjs'
-import { applyOutcomeEvent, createOutcome, outcomeLabel } from './lib/outcomes.mjs'
+import { applyOutcomeEvent, createOutcome } from './lib/outcomes.mjs'
 import { loadRubrics, rubricProvenance } from './lib/rubric.mjs'
 import { scoreProduct } from './lib/scorer.mjs'
 import { AUTOMATED_PHASES, runPhases } from './lib/phases.mjs'
@@ -59,8 +62,6 @@ import {
 
 const SUITE_DIR = dirname(fileURLToPath(import.meta.url))
 const DEFAULT_CAPABILITIES = join(SUITE_DIR, 'agent-runner-capabilities.json')
-
-export const RESULT_SCHEMA_VERSION = 1
 
 const FLAGS = new Map([
   ['--skip-validator', 'skipValidator'],
@@ -147,6 +148,10 @@ export async function runEvaluation({
   // absent leaves its component unobserved rather than failing the candidate.
   browserDriver = null,
   judgeInvoke = null,
+  // The candidate-server adapter. Without one the suite still reaches a durable
+  // pending result; it simply has no server to hand the reviewer, and says so
+  // rather than pretending it started one.
+  candidateServer = null,
   buildResult = null,
   verificationResult = null,
   // The live models.dev catalog. Injected so pricing is exercisable offline and
@@ -309,6 +314,7 @@ export async function runEvaluation({
     pricing: null,
     cost: null,
     ambiguity: null,
+    candidateServer: null,
     // Measured durations only. See lib/timing.mjs: nothing here holds a
     // wall-clock stamp, so no stopped-process or human-review gap can reach a
     // reported total. Earlier sessions' intervals are carried forward from the
@@ -416,10 +422,30 @@ export async function runEvaluation({
       }
     },
 
-    // Placeholders owned by tasks 03-04. They keep the lifecycle honest about
-    // ordering and server dependency without claiming work they do not do.
+    // Placeholder owned by task 03's browser work; it keeps the lifecycle honest
+    // about ordering without claiming work it does not do.
     verification: async () => {},
-    'candidate-server': async (context) => { context.serverRunning = true },
+
+    'candidate-server': async (context) => {
+      if (!candidateServer) {
+        context.serverRunning = true
+        return
+      }
+      const outcome = await ensureCandidateServer({
+        recorded: checkpoint.candidate_server ?? null,
+        candidate: options.candidateRef ?? null,
+        isProcessAlive,
+        probe: candidateServer.probe,
+        start: candidateServer.start,
+      })
+      record.candidateServer = outcome.server
+      // Recorded durably as soon as it exists, so the separate human-review
+      // command can find the very server this run evaluated.
+      checkpoint = { ...checkpoint, candidate_server: outcome.server }
+      await saveCheckpoint(checkpointPath, checkpoint)
+      log(`candidate-server: ${outcome.action} at ${outcome.server.url}`)
+      context.serverRunning = true
+    },
 
     'browser-evaluation': async () => {
       if (!browserDriver) {
@@ -554,67 +580,88 @@ export async function runEvaluation({
     },
 
     'pending-result': async (context) => { await writeResult(context.outcome) },
-    cleanup: async (context) => { context.serverRunning = false },
+
+    cleanup: async (context) => {
+      context.serverRunning = false
+      if (!candidateServer) return
+      const outcome = await stopCandidateServer({
+        recorded: record.candidateServer,
+        isProcessAlive,
+        probe: candidateServer.probe,
+        stop: candidateServer.stop,
+      })
+      // Cleanup after a durably written pending result is a handoff detail: the
+      // lifecycle records the failure diagnostically and the command still exits
+      // successfully.
+      if (!outcome.completed) {
+        throw new Error(`candidate-server cleanup did not complete: ${outcome.error ?? outcome.reason}`)
+      }
+    },
+
     'cleanup-result': async (context) => { await writeResult(context.outcome) },
 
     ...handlerOverrides,
   }
 
+  // The pending result, its report, and the artifact manifest are written from
+  // one assembled value, so the three artifacts can never describe different
+  // states of the same run.
   async function writeResult(outcome) {
-    await writeJsonAtomic(join(runDir, 'result.json'), {
-      schema_version: RESULT_SCHEMA_VERSION,
-      run_id: runId,
-      mode,
-      evaluation_status: outcome.evaluation_status,
-      product_verdict: outcome.product_verdict,
-      official_score: outcome.official_score,
-      automated_subtotal: outcome.automated_subtotal,
-      label: outcomeLabel(outcome),
-      failed_phase: outcome.failed_phase,
-      failure: outcome.failure,
-      resumable: outcome.resumable,
-      cleanup: outcome.cleanup,
-      history: outcome.history,
-      rubrics: provenanceOfRubrics,
-      score: record.score,
-      browser_evaluation: record.browser,
-      source_evidence: record.sourceEvidence,
-      judging: record.judging,
-      workflow: {
-        workflow: boundary.workflow,
-        skip_validator: boundary.skip_validator,
-        arguments: boundary.workflow_arguments,
-        configured_stop_step: boundary.stop_step,
-        last_observed_step: record.boundary.last_observed_step,
-        unexpected_step: record.boundary.unexpected_step,
-        observed_steps: record.observed_steps,
-        run_id: record.run?.run_id ?? null,
-        session_dir: record.run?.session_dir ?? null,
-        provenance,
-        events: record.events,
-      },
-      implementation_metrics: record.metrics,
-      cost: record.cost,
-      pricing: record.pricing,
-      // Summarized at write time so the reported total covers every automated
-      // phase that had actually run when the result was written.
-      timing: summarizeMachineTiming({
-        ledger: record.timing,
-        implementationMs: record.metrics?.active_duration_ms ?? null,
+    const result = {
+      ...assembleResult({
+        runId,
+        mode,
+        outcome,
+        rubrics: provenanceOfRubrics,
+        score: record.score,
+        // Human review belongs to the separate review command. The automated
+        // command hands off without one and never invents an official verdict.
+        humanReview: null,
+        browser: record.browser,
+        sourceEvidence: record.sourceEvidence,
+        judging: record.judging,
+        workflow: {
+          workflow: boundary.workflow,
+          skip_validator: boundary.skip_validator,
+          arguments: boundary.workflow_arguments,
+          configured_stop_step: boundary.stop_step,
+          last_observed_step: record.boundary.last_observed_step,
+          unexpected_step: record.boundary.unexpected_step,
+          observed_steps: record.observed_steps,
+          run_id: record.run?.run_id ?? null,
+          session_dir: record.run?.session_dir ?? null,
+          provenance,
+          events: record.events,
+        },
+        // A reference baseline invoked no implementation workflow, so its usage,
+        // cost, and duration are absent rather than zero.
+        metrics: mode === 'reference-baseline' ? null : record.metrics,
+        cost: mode === 'reference-baseline' ? null : record.cost,
+        pricing: record.pricing,
+        // Summarized at write time so the reported total covers every automated
+        // phase that had actually run when the result was written.
+        timing: summarizeMachineTiming({
+          ledger: record.timing,
+          implementationMs: record.metrics?.active_duration_ms ?? null,
+        }),
+        ambiguity: record.ambiguity ? {
+          artifact: 'ambiguity-ledger.json',
+          coverage: record.ambiguity.coverage,
+          finding_count: record.ambiguity.findings.length,
+          classifications: record.ambiguity.findings.map(({ id, classification, consequence }) => ({
+            id, classification, consequence,
+          })),
+          fixture_improvement_proposals: record.ambiguity.fixture_improvement_proposals,
+          scoring_effect: 'none',
+        } : null,
+        roleConfiguration: reconcileRoleAttempts(validation.profiles, []),
+        timings: summarizeTimings(record.timings),
       }),
-      ambiguity: record.ambiguity ? {
-        artifact: 'ambiguity-ledger.json',
-        coverage: record.ambiguity.coverage,
-        finding_count: record.ambiguity.findings.length,
-        classifications: record.ambiguity.findings.map(({ id, classification, consequence }) => ({
-          id, classification, consequence,
-        })),
-        fixture_improvement_proposals: record.ambiguity.fixture_improvement_proposals,
-        scoring_effect: 'none',
-      } : null,
-      role_configuration: reconcileRoleAttempts(validation.profiles, []),
-      timings: summarizeTimings(record.timings),
-    })
+      // The endpoint the reviewer is handed. Null when no server was started, so
+      // the human-review command starts one rather than trusting a stale URL.
+      candidate_server: record.candidateServer,
+    }
+    await writeResultArtifacts({ runDir, result })
   }
 
   const completedPhases = new Set(

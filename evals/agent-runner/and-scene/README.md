@@ -126,6 +126,16 @@ focused modules under `lib/`:
 | `lib/runner-state.mjs` | Reading Agent Runner run state by identifier or newest timestamp |
 | `lib/outcomes.mjs` | Evaluation status and product verdict model |
 | `lib/phases.mjs` | The ordered lifecycle and its failure ownership |
+| `lib/human-review.mjs` | The 13 versioned questions, anchored responses, and the 30-point calculation |
+| `lib/candidate-server.mjs` | Candidate-server identity, provenance-safe reuse, and cleanup |
+| `lib/result.mjs` | Result assembly, the artifact manifest, and the durable artifact set |
+| `lib/baseline.mjs` | Reference-baseline comparison and its rubric-match refusal |
+| `lib/report.mjs` | The offline, escaped HTML report |
+
+`human-review.sh` is the second thin host entry point, for the literal human
+review; `human-review.mjs` owns its lifecycle. It runs on the host rather than
+in the sandbox: the reviewer needs the candidate URL in their own browser, and a
+review that spans hours must outlive the container that produced the run.
 
 Agent Runner owns the sandbox, workflow execution, run locks, sessions, its own
 internal resume point, and `run-metrics.json`. None of that is copied here.
@@ -136,6 +146,10 @@ internal resume point, and `run-metrics.json`. None of that is copied here.
 artifacts/evals/and-scene/<run-id>/
 ├── checkpoint.json
 ├── result.json
+├── report.html
+├── artifact-manifest.json
+├── human-review.json
+├── ambiguity-ledger.json
 ├── logs/
 ├── evidence/
 ├── phases/
@@ -167,12 +181,48 @@ The automated command runs these phases in order:
 9. Attempt candidate-server cleanup.
 10. Update the pending artifacts with the cleanup outcome and exit successfully.
 
-Phases 2 and 4-8 are registered as explicit placeholders pending the product
-evaluation, metrics, and reporting tasks; the ordering, checkpointing, and
-outcome contracts they run under are already enforced.
+Phase 2 is registered as an explicit placeholder pending the browser build and
+verification work; the ordering, checkpointing, and outcome contracts it runs
+under are already enforced.
 
 A phase that cannot produce its outputs stops its dependents rather than letting
 them run on stale or fabricated inputs. Result writing and cleanup still run.
+
+## Human review
+
+The automated command never asks a human-review question and never issues an
+official total or pass verdict. The literal review is a separate command:
+
+```sh
+evals/agent-runner/and-scene/human-review.sh --run-dir artifacts/evals/and-scene/<run>
+```
+
+It restores or restarts the exact candidate revision the automated rubric and
+judges scored, prints its URL, and waits for an explicit non-scoring readiness
+confirmation before question 1. It then asks the 13 versioned questions in
+order, one at a time, each rated 1-5 against shared anchors, with a rationale
+required for 3 or lower. Every accepted answer is saved immediately, so an
+interrupted review resumes at the first unanswered question with the candidate
+URL and readiness confirmation presented again. Nothing becomes official until
+the reviewer explicitly confirms the full summary; before that the run stays
+`pending-human-review`.
+
+Pass `--baseline-run-dir` to review a pending reference baseline first. Each run
+keeps its own candidate, rubric, response, score, and completion state, and the
+candidate's result records baseline totals, component, subcomponent, and gate
+deltas — only when both runs used identical rubric versions and hashes.
+
+The human-review score is 30 points: 10 for the average of the nine per-step
+ratings, 5 for readability and visual hierarchy, 4 for navigation and
+interaction usability, 4 for responsive visual quality, and 7 for overall
+cohesion and polish. Each rating `r` earns `(r - 1) / 4` of its points, summed
+without intermediate rounding. The component gate passes only at 15 or more with
+no individual rating of 1.
+
+A candidate server is only reused, or stopped, when both its process and its
+endpoint prove it is still that server for the evaluated candidate. A recycled
+process identifier or an occupied port is never treated as proof: the unverified
+process is left running and untouched, and a new server is started elsewhere.
 
 ## Outcomes
 
@@ -186,8 +236,15 @@ survives a later harness failure — reported as `PASS — HARNESS FAILURE` or
 `FAIL — HARNESS FAILURE`. Cleanup failure after a durably written pending
 result is recorded diagnostically and still exits successfully.
 
-`result.json` is the authoritative machine-readable outcome. Human review and
-`report.html` land with the human-review task.
+`result.json` is the authoritative machine-readable outcome and `report.html`
+renders the same current status, verdict, score availability, and failed or
+pending phase. Report generation fails rather than publishing an outcome that
+contradicts `result.json`.
+
+`report.html` is self-contained and offline: no external asset, no script, every
+untrusted value escaped, and artifact links relative to the run directory.
+`artifact-manifest.json` is the durable inventory of deliberate run artifacts,
+rebuilt on every write and always excluding `.runtime`.
 
 ## Scoring
 

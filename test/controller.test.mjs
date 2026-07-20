@@ -651,7 +651,7 @@ test('a complete automated run reports the 70-point subtotal and no official ver
 
   assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
   const record = await readJson(join(context.runDir, 'result.json'))
-  assert.equal(record.automated_subtotal, 70)
+  assert.equal(record.automated_subtotal.points, 70)
   assert.equal(record.score.automated_subtotal.complete, true)
   assert.equal(record.score.gates_passed, true)
   assert.equal(record.official_score, null)
