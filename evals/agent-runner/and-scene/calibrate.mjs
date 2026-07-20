@@ -20,8 +20,8 @@
 import { mkdir } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 
-import { runCalibration } from './lib/calibration.mjs'
-import { readJson, writeJsonAtomic } from './lib/persistence.mjs'
+import { calibrationIdentity, runCalibration } from './lib/calibration.mjs'
+import { hashJson, readJson, writeJsonAtomic } from './lib/persistence.mjs'
 import { loadRubrics } from './lib/rubric.mjs'
 
 const VALUES = new Map([
@@ -46,14 +46,35 @@ export function parseArgs(argv) {
   return options
 }
 
-// The gate. A record that is missing, unreadable, or not a pass blocks the run
-// and says which, so the operator knows whether to calibrate or to fix a defect
-// calibration already found.
+// The gate. A record that is missing, unreadable, stale, or not a pass blocks
+// the run and says which, so the operator knows whether to calibrate or to fix a
+// defect calibration already found.
+//
+// "Stale" is the important one: a record is a statement about the rubrics and
+// harness that produced it. Once either changes, the current harness has never
+// been calibrated, and an old pass must not be allowed to unblock an expensive
+// evaluation on its behalf.
 export async function checkCalibrationRecord(path) {
   const record = await readJson(path, null)
   if (record === null) {
     return { passed: false, reason: `no calibration record at ${path}` }
   }
+
+  const identity = await calibrationIdentity()
+  if (record.schema_version !== identity.schema_version) {
+    return {
+      passed: false,
+      reason: `the calibration record has schema version ${record.schema_version ?? 'none'}, `
+        + `not ${identity.schema_version}; recalibrate`,
+    }
+  }
+  if (hashJson(record.rubrics ?? null) !== hashJson(identity.rubrics)) {
+    return { passed: false, reason: 'the rubrics changed since the last calibration; recalibrate' }
+  }
+  if (record.harness_fingerprint !== identity.harness_fingerprint) {
+    return { passed: false, reason: 'the evaluation harness changed since the last calibration; recalibrate' }
+  }
+
   if (record.passed !== true) {
     const failures = (record.failures ?? []).map(({ case: id, problem }) => `${id}: ${problem}`)
     return {
@@ -94,9 +115,11 @@ export async function runCalibrationCommand({ argv, log = () => {} }) {
     const recordPath = resolve(options.recordPath)
     await mkdir(dirname(recordPath), { recursive: true })
     await writeJsonAtomic(recordPath, {
+      // The identity the gate re-verifies: this record speaks for these rubrics
+      // and this harness, and for nothing else.
+      ...await calibrationIdentity(rubrics),
       passed: ledger.passed,
       calibration_dir: outDir,
-      rubrics: ledger.rubrics,
       failures: ledger.failures,
       completed_at: new Date().toISOString(),
     })

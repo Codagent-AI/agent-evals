@@ -117,9 +117,10 @@ Calibration asserts that:
 
 - the reference earns the full automated 70, opens all four hard gates, and
   reaches an official pass;
-- each approved mutation degrades exactly the component or gate it targets,
-  degrades nothing else, and stays a product regression rather than becoming a
-  harness failure;
+- each approved mutation degrades exactly the component or gate it targets and
+  stays a product regression rather than becoming a harness failure — collateral
+  damage to any other component or gate fails the case just as surely as a
+  target that never moved;
 - the four product judge jobs all run and none fails; and
 - synthetic human answers exercise rating validation, the 30-point arithmetic,
   the human gates, resume at the first unanswered question, refusal of an edited
@@ -140,6 +141,14 @@ The durable pass/fail record defaults to
 consults. Override it with `--calibration-record PATH`. A missing or failed
 record stops a full evaluation with exit 2 before any container starts. A
 reference baseline invokes no Agent Runner and is exempt.
+
+A record speaks only for the rubrics and harness that produced it. It carries
+both rubrics' version and hash plus a fingerprint over the modules that decide
+what a case scores, gates, and reports — the scorer, rubric loader, judge jobs,
+human review, outcomes, result, report, and the calibration cases themselves.
+Edit any of them and the record no longer matches: the gate refuses it and asks
+for a recalibration rather than letting an old pass unblock an expensive run on
+the new harness's behalf.
 
 If calibration exposes a rubric defect rather than a harness defect, revise the
 spec and rubric through review and calibrate again.
@@ -351,12 +360,17 @@ cloned repositories, dependency and build output, Agent Runner session state and
 transcripts, raw model output, logs, screenshots, traces, raw pricing catalogs,
 and credentials all stay in the ignored run directory.
 
-From the agent-evals working directory the command then stages and commits only
-that exact result directory with `chore: record and-scene eval <run-id>` and
-runs an ordinary `git push` on the current branch's configured upstream. Every
-staging and commit command is limited to that one generated pathspec, so an
-unrelated dirty working tree is never swept in. There is no force flag anywhere
-in the publication path.
+If the destination already holds anything that is not a curated artifact —
+stale, accidental, or planted — publication stops before it copies or stages
+anything, because copying over the curated names would leave that file in place
+to be published beside them.
+
+From the agent-evals working directory the command then stages and commits those
+curated files with `chore: record and-scene eval <run-id>` and runs an ordinary
+`git push` on the current branch's configured upstream. Staging and committing
+name each file individually rather than the directory, so neither an unrelated
+dirty working tree nor a stray file sharing the results directory can ride
+along. There is no force flag anywhere in the publication path.
 
 Pending, implementation-workflow-failed, evaluation-harness-failed, and
 calibration runs are all refused by name and publish nothing.

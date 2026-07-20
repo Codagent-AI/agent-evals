@@ -21,7 +21,8 @@
 // `mode: 'calibration'`, which `lib/publication.mjs` refuses outright, so no
 // calibration artifact can ever become a published record.
 import { mkdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import {
   firstUnanswered,
@@ -33,13 +34,49 @@ import {
 } from './human-review.mjs'
 import { runProductJudging } from './judge-jobs.mjs'
 import { applyOutcomeEvent, createOutcome } from './outcomes.mjs'
-import { writeJsonAtomic } from './persistence.mjs'
+import { hashFile, hashJson, writeJsonAtomic } from './persistence.mjs'
 import { renderReport } from './report.mjs'
 import { assembleResult, writeResultArtifacts } from './result.mjs'
-import { rubricCriteria, rubricProvenance } from './rubric.mjs'
+import { loadRubrics, rubricCriteria, rubricProvenance } from './rubric.mjs'
 import { scoreProduct } from './scorer.mjs'
 
 export const CALIBRATION_SCHEMA_VERSION = 1
+
+const LIB_DIR = dirname(fileURLToPath(import.meta.url))
+
+// Everything outside the two rubrics that decides what a calibration case
+// scores, gates, or reports. Rubric bytes are already covered by rubric
+// provenance; this covers the code that acts on them, so a scorer or gate edit
+// invalidates a passing record instead of silently inheriting it.
+export const HARNESS_FINGERPRINT_SOURCES = [
+  'calibration.mjs',
+  'scorer.mjs',
+  'rubric.mjs',
+  'judge-jobs.mjs',
+  'human-review.mjs',
+  'outcomes.mjs',
+  'result.mjs',
+  'report.mjs',
+]
+
+export async function harnessFingerprint() {
+  const entries = []
+  for (const name of HARNESS_FINGERPRINT_SOURCES) {
+    entries.push([name, await hashFile(join(LIB_DIR, name))])
+  }
+  return hashJson(Object.fromEntries(entries))
+}
+
+// What a calibration record must still match before it may unblock a full
+// evaluation. A record is a statement about one harness and one pair of
+// rubrics; it says nothing about any other.
+export async function calibrationIdentity(rubrics = null) {
+  return {
+    schema_version: CALIBRATION_SCHEMA_VERSION,
+    rubrics: rubricProvenance(rubrics ?? await loadRubrics()),
+    harness_fingerprint: await harnessFingerprint(),
+  }
+}
 
 // The mode every calibration artifact records, and the one `publicationEligibility`
 // refuses by name.
@@ -382,6 +419,16 @@ export async function runCalibration({
       ? { problems: referenceProblems, unintended: [] }
       : compareToReference({ reference: reference.score, score, target: definition.target })
     const problems = [...comparison.problems]
+    // Collateral damage fails the case as surely as a target that never moved.
+    // A mutation that also degrades something it does not name means the harness
+    // is not attributing quality where it claims to, which is the whole thing
+    // calibration exists to prove.
+    for (const regression of comparison.unintended) {
+      problems.push(
+        `unintended regression in ${regression.kind} ${regression.id}: `
+        + `reference ${regression.reference}, observed ${regression.observed}`,
+      )
+    }
     if (score.official_pass !== definition.expected_official_pass) {
       problems.push(
         `expected official_pass ${definition.expected_official_pass} but observed ${score.official_pass}`,

@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import { spawnSync } from 'node:child_process'
 
+import { calibrationIdentity } from '../evals/agent-runner/and-scene/lib/calibration.mjs'
+
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const runScript = join(root, 'evals/agent-runner/and-scene/run.sh')
 const shotsScript = join(root, 'evals/agent-runner/and-scene/scene-shots.mjs')
@@ -46,10 +48,13 @@ async function setup({ workflow = 'name: implement-change2\n', dirty = false } =
   git(runner, 'add', '-A')
   git(runner, 'commit', '-qm', 'runner')
   if (dirty) await writeFile(join(runner, 'scratch.txt'), 'uncommitted\n')
-  // A full Agent Runner evaluation is gated on a passing calibration record, so
-  // the scored launcher tests supply one exactly as a calibrated host would.
+  // A full Agent Runner evaluation is gated on a passing calibration record for
+  // *this* harness and *these* rubrics, so the scored launcher tests supply one
+  // carrying the current identity, exactly as a calibrated host would.
   const record = join(dir, 'calibration-record.json')
-  await writeFile(record, JSON.stringify({ passed: true, failures: [] }))
+  await writeFile(record, JSON.stringify({
+    ...await calibrationIdentity(), passed: true, failures: [],
+  }))
   return { dir, runner, home, record }
 }
 
@@ -376,10 +381,22 @@ test('a full Agent Runner evaluation is blocked until calibration passes', async
   assert.match(missing.output, /calibration/i)
   assert.match(missing.output, /--calibrate/)
 
-  await writeFile(record, JSON.stringify({ passed: false, failures: [{ case: 'reference' }] }))
+  await writeFile(record, JSON.stringify({
+    ...await calibrationIdentity(),
+    passed: false,
+    failures: [{ case: 'reference', problem: 'the reference did not reach an official pass' }],
+  }))
   const failed = await scored({ ...context, record }, ['--skip-validator', ...profileArgs])
   assert.equal(failed.status, 2, failed.output)
-  assert.match(failed.output, /calibration/i)
+  assert.match(failed.output, /the reference did not reach an official pass/)
+
+  // A record from a different harness or rubric set is no better than none.
+  await writeFile(record, JSON.stringify({
+    ...await calibrationIdentity(), harness_fingerprint: 'stale', passed: true, failures: [],
+  }))
+  const stale = await scored({ ...context, record }, ['--skip-validator', ...profileArgs])
+  assert.equal(stale.status, 2, stale.output)
+  assert.match(stale.output, /recalibrate/)
 })
 
 test('a reference baseline is exempt from the calibration gate', async () => {

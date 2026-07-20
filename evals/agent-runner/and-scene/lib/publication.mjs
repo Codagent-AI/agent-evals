@@ -8,8 +8,9 @@
 //     cloned repositories, build output, Agent Runner sessions and transcripts,
 //     raw model output, logs, screenshots, traces, and raw pricing catalogs stay
 //     in the ignored run directory.
-//   * It stages and commits one generated pathspec, so an unrelated dirty
-//     working tree can never be swept into a result commit.
+//   * It stages and commits the curated files by name, so neither an unrelated
+//     dirty working tree nor a stray file sharing the results directory can be
+//     swept into a result commit.
 //   * It runs an ordinary `git push`. There is no force flag anywhere in this
 //     module, and the tests assert that.
 //
@@ -18,7 +19,7 @@
 // checkpoint, leaves the result untouched, and exits nonzero. Resume picks up at
 // the recorded stage: an existing result commit is reused rather than duplicated
 // and only the unfinished push is retried.
-import { copyFile, mkdir } from 'node:fs/promises'
+import { copyFile, mkdir, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { readJson, writeJsonAtomic } from './persistence.mjs'
@@ -70,10 +71,18 @@ export function resultsDirFor({ repoDir, runId }) {
   return join(repoDir, RESULTS_RELATIVE_DIR, runId)
 }
 
-// The pathspec every staging and commit command is limited to. Always POSIX
+// The pathspec every read-only status check is limited to. Always POSIX
 // separators: it is a Git pathspec, not a filesystem path.
 export function pathspecFor(runId) {
   return `${RESULTS_RELATIVE_DIR}/${runId}`
+}
+
+// Staging and committing name each curated file individually rather than the
+// directory that holds them. A directory pathspec would stage whatever else
+// happened to be sitting there, which is exactly the guarantee this module
+// exists to make.
+export function pathspecsFor(runId, files) {
+  return files.map((name) => `${pathspecFor(runId)}/${name}`)
 }
 
 // Only a durably finalized product verdict is publishable. Pending reviews,
@@ -124,6 +133,20 @@ function createPublicationCheckpoint(runId) {
 // that is neither curated nor present is simply not part of the snapshot.
 export async function copySnapshot({ runDir, runId, repoDir }) {
   const destination = resultsDirFor({ repoDir, runId })
+
+  // Anything already in the results directory that is not a curated artifact —
+  // stale, accidental, or planted — stops publication here. Copying over the
+  // curated names would leave it in place beside them, and it would then be
+  // published as part of this run's permanent record.
+  const existing = await readdir(destination).catch(() => [])
+  const uncurated = existing.filter((name) => !CURATED_ARTIFACTS.includes(name))
+  if (uncurated.length > 0) {
+    throw new PublicationError(
+      `cannot publish ${runId}: ${destination} contains uncurated entries: ${uncurated.join(', ')}`,
+      { stage: 'snapshot' },
+    )
+  }
+
   const files = []
   const absent = []
   for (const name of CURATED_ARTIFACTS) {
@@ -201,8 +224,6 @@ export async function publishRun({
     return checkpoint
   }
 
-  const pathspec = pathspecFor(runId)
-
   // Everything before the push is skipped once a commit is already recorded, so
   // resume after a failed push retries only the push.
   if (checkpoint.stage !== 'push' || !checkpoint.commit) {
@@ -225,13 +246,14 @@ export async function publishRun({
       log(`publication: reusing existing result commit ${existing} for ${runId}`)
       await save({ stage: 'push', commit: existing, error: null })
     } else {
-      const staged = git(['add', '--', pathspec], { cwd: repoDir })
+      const pathspecs = pathspecsFor(runId, snapshot.files)
+      const staged = git(['add', '--', ...pathspecs], { cwd: repoDir })
       if (!staged.ok) {
         const message = gitError('add', staged)
         await save({ stage: 'commit', error: message })
         throw new PublicationError(message, { stage: 'commit' })
       }
-      const committed = git(['commit', '-m', commitMessage(runId), '--', pathspec], { cwd: repoDir })
+      const committed = git(['commit', '-m', commitMessage(runId), '--', ...pathspecs], { cwd: repoDir })
       if (!committed.ok) {
         const message = gitError('commit', committed)
         await save({ stage: 'commit', error: message })
@@ -244,7 +266,7 @@ export async function publishRun({
         throw new PublicationError(message, { stage: 'commit' })
       }
       await save({ stage: 'push', commit: head.stdout.trim(), error: null })
-      log(`publication: committed ${pathspec} as ${checkpoint.commit}`)
+      log(`publication: committed ${snapshot.files.length} curated files as ${checkpoint.commit}`)
     }
   }
 

@@ -239,11 +239,14 @@ test('publication never force-pushes and always commits a limited pathspec', asy
       assert.ok(!args.includes(forbidden), `${forbidden} in ${args.join(' ')}`)
     }
   }
-  const pathspec = `${RESULTS_RELATIVE_DIR}/${runId}`
+  // Staging names each curated file, so nothing that merely shares the results
+  // directory can ride along.
+  const expected = CURATED_ARTIFACTS.map((name) => `${RESULTS_RELATIVE_DIR}/${runId}/${name}`)
   for (const command of ['add', 'commit']) {
     const call = calls.find(({ args }) => args[0] === command)
     assert.ok(call.args.includes('--'), `${command} must be path-limited`)
-    assert.equal(call.args.at(-1), pathspec)
+    const paths = call.args.slice(call.args.indexOf('--') + 1)
+    assert.deepEqual(paths.sort(), [...expected].sort(), command)
   }
 })
 
@@ -261,6 +264,28 @@ test('a missing required artifact stops publication before any commit', async ()
   assert.equal(git(repo, 'rev-parse', 'HEAD'), before)
   const checkpoint = await readJson(join(runDir, 'publication.json'), null)
   assert.equal(checkpoint.stage, 'snapshot')
+})
+
+test('an uncurated file already in the results directory stops publication', async () => {
+  const { repo, dir } = await disposableRepo()
+  const { runDir, runId, result } = await finalizedRun(dir)
+  const before = git(repo, 'rev-parse', 'HEAD')
+
+  // Stale, accidental, or planted — either way it is not part of the curated
+  // snapshot, and the directory pathspec would otherwise sweep it into a commit.
+  const { mkdir } = await import('node:fs/promises')
+  await mkdir(join(repo, RESULTS_RELATIVE_DIR, runId), { recursive: true })
+  await writeFile(join(repo, RESULTS_RELATIVE_DIR, runId, 'credentials.env'), 'TOKEN=secret\n')
+
+  const { git: spy, calls } = recordingGit()
+  await assert.rejects(
+    publishRun({ runDir, runId, result, repoDir: repo, git: spy }),
+    /credentials\.env/,
+  )
+
+  assert.deepEqual(calls, [])
+  assert.equal(git(repo, 'rev-parse', 'HEAD'), before)
+  assert.equal((await readJson(join(runDir, 'publication.json'), null)).stage, 'snapshot')
 })
 
 test('an existing result commit is reused rather than duplicated', async () => {

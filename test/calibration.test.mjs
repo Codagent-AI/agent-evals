@@ -88,6 +88,29 @@ test('a mutation that does not degrade its intended target fails calibration', a
   assert.ok(ledger.failures.some((failure) => failure.case === 'mislabelled-mutation'))
 })
 
+test('a mutation with collateral damage fails calibration even though its target degraded', async () => {
+  const cases = [
+    ...calibrationCases(rubrics.automated.rubric).filter(({ id }) => id === 'reference'),
+    {
+      id: 'leaky-mutation',
+      description: 'degrades the demo component but also takes a scene-kit criterion with it',
+      target: { kind: 'component', id: 'demo-technical-quality' },
+      fail_criteria: ['demo-supported-navigation', 'scene-step-narration-and-identity'],
+      fail_gates: [],
+      human: null,
+      expected_official_pass: true,
+    },
+  ]
+
+  const ledger = await runCalibration({ rubrics, outDir: await out(), cases })
+
+  const observed = ledger.cases.find(({ id }) => id === 'leaky-mutation')
+  assert.ok(observed.unintended_regressions.some(({ id }) => id === 'scene-kit-correctness'))
+  assert.equal(observed.ok, false, 'collateral damage must fail the case')
+  assert.equal(ledger.passed, false)
+  assert.ok(ledger.failures.some((failure) => failure.case === 'leaky-mutation'))
+})
+
 test('synthetic human answers exercise validation, scoring, gates, resume, and rendering', async () => {
   const ledger = await runCalibration({ rubrics, outDir: await out() })
 
