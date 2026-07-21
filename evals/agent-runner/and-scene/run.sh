@@ -429,6 +429,11 @@ mkdir -p /artifacts/logs /workspace/runs
 if [[ " \${NODE_OPTIONS:-} " != *" --dns-result-order="* ]]; then
   export NODE_OPTIONS="\${NODE_OPTIONS:-} --dns-result-order=ipv4first"
 fi
+# The pinned reference verifier extracts Vite's preview URL from stdout. Keep
+# that machine-consumed output free of terminal styling even when the sandbox
+# adapter allocates a TTY.
+export NO_COLOR=1
+export FORCE_COLOR=0
 
 configure_github_https_auth() {
   local token="\${GITHUB_TOKEN:-\${GH_TOKEN:-}}"

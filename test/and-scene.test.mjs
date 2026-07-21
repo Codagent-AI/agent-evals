@@ -93,6 +93,19 @@ test('proof mode wires the pinned fixture, browser proof, suite input, and prove
   ]) assert.match(result.output, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
 })
 
+test('proof mode disables ANSI colors for the pinned reference verifier', async () => {
+  const context = await setup()
+
+  const result = await run([
+    '--dry-run', '--proof-browser', '--artifact-dir', join(context.dir, 'proof'),
+    '--agent-runner-dir', context.runner,
+  ], context)
+
+  assert.equal(result.status, 0, result.output)
+  assert.match(result.output, /export NO_COLOR=1/)
+  assert.match(result.output, /export FORCE_COLOR=0/)
+})
+
 test('scored mode delegates the lifecycle to the suite controller', async () => {
   const context = await setup()
 
