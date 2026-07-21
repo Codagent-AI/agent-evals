@@ -38,6 +38,7 @@ import {
 } from './lib/timing.mjs'
 import { collectSourceEvidence } from './deterministic-checks.mjs'
 import { runBrowserEvaluation } from './lib/browser-eval.mjs'
+import { createAxiBrowserDriver } from './lib/axi-browser-driver.mjs'
 import { ensureCandidateServer, stopCandidateServer } from './lib/candidate-server.mjs'
 import { assembleResult, writeResultArtifacts } from './lib/result.mjs'
 import { createCodexJudgeInvoker } from './lib/judge-invoker.mjs'
@@ -159,6 +160,7 @@ export async function runEvaluation({
   // exercisable without a browser or a model call, and so a source that is
   // absent leaves its component unobserved rather than failing the candidate.
   browserDriver = null,
+  browserDriverFactory = null,
   judgeInvoke = null,
   // The candidate-server adapter. Without one the suite still reaches a durable
   // pending result; it simply has no server to hand the reviewer, and says so
@@ -551,7 +553,12 @@ export async function runEvaluation({
     },
 
     'browser-evaluation': async () => {
-      if (!browserDriver) {
+      const activeBrowserDriver = browserDriver ?? (
+        browserDriverFactory && record.candidateServer?.url
+          ? await browserDriverFactory({ baseUrl: record.candidateServer.url, runDir })
+          : null
+      )
+      if (!activeBrowserDriver) {
         // Without a driver the live demo was never observed. That is missing
         // evidence, not a demo that misbehaved, so nothing is recorded against
         // the candidate.
@@ -559,7 +566,7 @@ export async function runEvaluation({
         return
       }
       const evaluation = await runBrowserEvaluation({
-        driver: browserDriver,
+        driver: activeBrowserDriver,
         build: buildResult,
         verification: verificationResult,
       })
@@ -754,7 +761,10 @@ export async function runEvaluation({
           fixture_improvement_proposals: record.ambiguity.fixture_improvement_proposals,
           scoring_effect: 'none',
         } : null,
-        roleConfiguration: reconcileRoleAttempts(validation.profiles, []),
+        roleConfiguration: reconcileRoleAttempts(
+          validation.profiles,
+          record.metrics?.attempts ?? [],
+        ),
         timings: summarizeTimings(record.timings),
       }),
       candidate_identity: record.candidate?.candidate_identity ?? checkpoint.identity.candidate_identity,
@@ -858,6 +868,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       : null,
     candidateServer: productionRunDir
       ? createHostCandidateServer({ runDir: productionRunDir })
+      : null,
+    browserDriverFactory: productionRunDir
+      ? ({ baseUrl }) => createAxiBrowserDriver({ baseUrl })
       : null,
     judgeInvoke: productionRunDir
       ? createCodexJudgeInvoker({ runDir: productionRunDir, candidateWorktree })

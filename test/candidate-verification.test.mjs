@@ -47,8 +47,24 @@ test('a candidate command failure is an explicit failed product result, not a th
 
   assert.equal(result.build.ok, false)
   assert.match(result.build.log, /build failed/)
-  assert.equal(result.verification.machine_readable, true)
-  assert.equal(result.verification.passed, false)
+  assert.equal(result.verification.machine_readable, false)
+  assert.equal(result.verification.passed, null)
   assert.deepEqual(calls.map(({ args }) => args), [['ci'], ['run', 'build']])
   assert.equal(result.commands.verification.state, 'skipped')
+})
+
+test('a verifier exit status is retained as its machine-readable product result', async () => {
+  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-verification-'))
+  const { calls, exec } = executor([0, 0, 2])
+
+  const result = await runCandidateVerification({
+    worktree: join(runDir, '.runtime/candidate-worktree'),
+    exec,
+  })
+
+  assert.equal(result.build.ok, true)
+  assert.equal(result.verification.machine_readable, true)
+  assert.equal(result.verification.passed, false)
+  assert.deepEqual(calls.map(({ args }) => args), [['ci'], ['run', 'build'], ['run', 'verify']])
+  assert.equal(result.commands.verification.state, 'complete')
 })

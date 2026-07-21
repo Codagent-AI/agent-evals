@@ -112,6 +112,20 @@ test('a candidate with no build output cannot be served and says so', async () =
   )
 })
 
+test('a failed start terminates the detached candidate server', async () => {
+  const dir = await runDirectory()
+  const killed = []
+  const adapter = createHostCandidateServer({
+    runDir: dir,
+    spawnImpl: () => ({ pid: 8123, unref: () => {} }),
+    killImpl: (pid, signal) => killed.push([pid, signal]),
+    startTimeoutMs: 1,
+  })
+
+  await assert.rejects(adapter.start({ candidate: 'candidate-abc' }), /timed out/)
+  assert.deepEqual(killed, [[8123, 'SIGTERM']])
+})
+
 test('stopping the server signals only the recorded process', async () => {
   const dir = await runDirectory()
   const killed = []

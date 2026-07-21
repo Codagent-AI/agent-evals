@@ -98,14 +98,25 @@ export function createHostCandidateServer({
       ], { detached: true, stdio: 'ignore' })
       child.unref?.()
 
-      const url = await waitFor(
-        async () => (await readFile(urlFile, 'utf8')).trim() || null,
-        { timeoutMs: startTimeoutMs, description: 'the candidate server to report its URL' },
-      )
-      await waitFor(
-        async () => ((await probe(url)).ok ? url : null),
-        { timeoutMs: startTimeoutMs, description: 'the candidate server to answer an identity probe' },
-      )
+      let url
+      try {
+        url = await waitFor(
+          async () => (await readFile(urlFile, 'utf8')).trim() || null,
+          { timeoutMs: startTimeoutMs, description: 'the candidate server to report its URL' },
+        )
+        await waitFor(
+          async () => ((await probe(url)).ok ? url : null),
+          { timeoutMs: startTimeoutMs, description: 'the candidate server to answer an identity probe' },
+        )
+      } catch (error) {
+        try {
+          if (child.pid) killImpl(child.pid, 'SIGTERM')
+        } catch {
+          // A process that already exited needs no further cleanup.
+        }
+        await rm(urlFile, { force: true })
+        throw error
+      }
 
       return { pid: child.pid, url, candidate_identity: candidate ?? null }
     },

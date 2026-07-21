@@ -55,18 +55,30 @@ export class PublicationError extends Error {
   }
 }
 
+function assertRunId(runId) {
+  if (
+    typeof runId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(runId)
+    || runId === '.'
+    || runId === '..'
+  ) {
+    throw new Error(`invalid run id ${JSON.stringify(runId)}; expected one safe directory name`)
+  }
+  return runId
+}
+
 export function commitMessage(runId) {
-  return `chore: record and-scene eval ${runId}`
+  return `chore: record and-scene eval ${assertRunId(runId)}`
 }
 
 export function resultsDirFor({ repoDir, runId }) {
-  return join(repoDir, RESULTS_RELATIVE_DIR, runId)
+  return join(repoDir, RESULTS_RELATIVE_DIR, assertRunId(runId))
 }
 
 // The pathspec every read-only status check is limited to. Always POSIX
 // separators: it is a Git pathspec, not a filesystem path.
 export function pathspecFor(runId) {
-  return `${RESULTS_RELATIVE_DIR}/${runId}`
+  return `${RESULTS_RELATIVE_DIR}/${assertRunId(runId)}`
 }
 
 // Staging and committing name each curated file individually rather than the

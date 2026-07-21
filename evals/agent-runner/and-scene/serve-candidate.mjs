@@ -14,7 +14,7 @@
 // a reviewer rather than trusting a port number.
 import { createServer } from 'node:http'
 import { createReadStream } from 'node:fs'
-import { stat, writeFile } from 'node:fs/promises'
+import { realpath, stat, writeFile } from 'node:fs/promises'
 import { extname, join, normalize, resolve, sep } from 'node:path'
 
 export const CANDIDATE_IDENTITY_PATH = '.candidate-identity'
@@ -50,11 +50,13 @@ function resolveWithin(root, pathname) {
   return candidate === root || candidate.startsWith(root + sep) ? candidate : null
 }
 
-async function fileAt(path) {
+async function fileAt(root, path) {
   try {
-    const stats = await stat(path)
-    if (stats.isDirectory()) return fileAt(join(path, 'index.html'))
-    return stats.isFile() ? path : null
+    const [realRoot, realFile] = await Promise.all([realpath(root), realpath(path)])
+    if (realFile !== realRoot && !realFile.startsWith(realRoot + sep)) return null
+    const stats = await stat(realFile)
+    if (stats.isDirectory()) return fileAt(realRoot, join(realFile, 'index.html'))
+    return stats.isFile() ? realFile : null
   } catch {
     return null
   }
@@ -81,7 +83,7 @@ export function createCandidateServer({ root, identity }) {
     // A presentation is a single-page app: an unknown route falls back to the
     // shell so the reviewer can navigate it, but only ever to a file inside the
     // build.
-    const file = (await fileAt(within)) ?? (await fileAt(join(base, 'index.html')))
+    const file = (await fileAt(base, within)) ?? (await fileAt(base, join(base, 'index.html')))
     if (!file) {
       response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
       response.end('Not Found')

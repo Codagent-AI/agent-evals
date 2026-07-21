@@ -31,6 +31,7 @@ function createDemo(knobs = {}) {
     ariaCurrent = true,
     focusable = true,
     controlsKeepKeys = true,
+    focusedControlConsumesArrows = false,
     titleProminentInPresent = true,
     captionVisibleInBrowse = true,
     stallAt = null,
@@ -114,6 +115,7 @@ function createDemo(knobs = {}) {
       guard('focus')
       if (!focusable) return
       focused = name
+      if (focusedControlConsumesArrows) keysLive = false
     },
     async swipe(direction) {
       guard('swipe')
@@ -215,6 +217,12 @@ test('runtime failures fail the every-step-renders gate', async () => {
 
   assert.equal(verdictOf(result, 'verification-every-produced-step-renders'), 'fail')
   assert.ok(result.failures.length > 0)
+})
+
+test('focusability and global keyboard navigation are observed independently', async () => {
+  const result = await evaluate({ focusedControlConsumesArrows: true })
+
+  assert.equal(verdictOf(result, 'demo-focus-and-keyboard-accessibility'), 'pass')
 })
 
 test('the sample-outline gate follows route registration and the nine-step outline', async () => {

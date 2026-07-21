@@ -353,10 +353,14 @@ export async function runBrowserEvaluation({
       if (focused !== controls[0].name) {
         return [false, `focusing a control left focus on ${bounded(focused)}`, []]
       }
-      const before = (await page.state()).stepIndex
-      await page.press('ArrowRight')
-      const after = (await page.state()).stepIndex
-      return [after === before + 1, `keyboard navigation after focus moved ${before} → ${after}`, []]
+      // A focused button owns its own key handling. Observe global deck
+      // navigation in a fresh page state rather than requiring the app to
+      // hijack arrow keys from an interactive control.
+      const keyboardPage = await session()
+      const before = (await keyboardPage.state()).stepIndex
+      await keyboardPage.press('ArrowRight')
+      const after = (await keyboardPage.state()).stepIndex
+      return [after === before + 1, `focus succeeded and keyboard navigation moved ${before} → ${after}`, []]
     },
   }
 

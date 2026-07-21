@@ -110,6 +110,19 @@ test('only a finalized complete pass or product-fail run is publishable', () => 
   }
 })
 
+test('publication rejects run identifiers that are not one safe directory name', async () => {
+  const { repo, dir } = await disposableRepo()
+  const { runDir } = await finalizedRun(dir)
+
+  for (const runId of ['../escape', '..', '-git-option', '.hidden', 'two/levels']) {
+    await assert.rejects(
+      copySnapshot({ runDir, runId, repoDir: repo }),
+      /invalid run id/,
+      runId,
+    )
+  }
+})
+
 test('a finalized run publishes exactly the curated snapshot, commits it, and pushes upstream', async () => {
   const { repo, remote, dir } = await disposableRepo()
   const { runDir, runId, result } = await finalizedRun(dir)

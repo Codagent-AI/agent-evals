@@ -13,8 +13,77 @@ entry_points:
     checks:
       - test:
           command: npm test
+          working_directory: "."
       - syntax:
           command: bash -n evals/agent-runner/and-scene/run.sh && node --check evals/agent-runner/and-scene/scene-shots.mjs
+          working_directory: "."
+  - path: evals/*
+    checks:
+      - test
+      - syntax
     reviews:
-      - all-reviewers:
+      - all-reviewers-suite:
           builtin: all-reviewers
+  - path: test
+    checks:
+      - test
+      - syntax
+    reviews:
+      - all-reviewers-tests:
+          builtin: all-reviewers
+  - path: openspec/changes/*
+    checks:
+      - test
+      - syntax
+    reviews:
+      - all-reviewers-openspec:
+          builtin: all-reviewers
+  - path: openspec/specs/*
+    checks:
+      - test
+      - syntax
+    reviews:
+      - all-reviewers-openspec
+  - path: package.json
+    checks:
+      - test
+      - syntax
+    reviews:
+      - all-reviewers-repository-file:
+          builtin: all-reviewers
+  - path: todo.md
+    checks:
+      - test
+      - syntax
+    reviews:
+      - all-reviewers-repository-file
+  - path: .github
+    checks:
+      - test
+      - syntax
+    reviews:
+      - all-reviewers-repository-file
+  - path: .gitignore
+    checks:
+      - test
+      - syntax
+    reviews:
+      - all-reviewers-repository-file
+  - path: AGENTS.md
+    checks:
+      - test
+      - syntax
+    reviews:
+      - all-reviewers-repository-file
+  - path: LICENSE
+    checks:
+      - test
+      - syntax
+    reviews:
+      - all-reviewers-repository-file
+  - path: README.md
+    checks:
+      - test
+      - syntax
+    reviews:
+      - all-reviewers-repository-file

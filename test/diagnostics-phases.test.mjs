@@ -172,6 +172,11 @@ test('matching Runner metrics are ingested with their source hash preserved', as
   )
   const phase = await readJson(join(context.runDir, 'phases/metrics-pricing.json'))
   assert.equal(phase.metrics.attempts.length, 1)
+  assert.equal(record.role_configuration.roles.implementor.attempts.length, 1)
+  assert.equal(
+    record.role_configuration.roles.implementor.attempts[0].observed.model,
+    'sonnet',
+  )
 })
 
 test('metrics naming another run are rejected and never reconstructed', async () => {

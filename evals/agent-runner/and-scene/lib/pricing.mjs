@@ -245,6 +245,15 @@ export async function resolveAttemptCost({ attempt, catalog, invoke, authority =
   }
 
   const tokens = attempt.usage?.state === 'available' ? attemptBillingTokens(attempt) : null
+  const malformed = malformedCategory(tokens)
+  if (malformed) {
+    return {
+      ...base,
+      ...unavailable(`token category ${malformed} has an unusable count`),
+      source: null,
+      verification: null,
+    }
+  }
   if (billedCategories(tokens).length === 0) {
     return {
       ...base,

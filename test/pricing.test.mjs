@@ -197,6 +197,28 @@ test('a negative token count is not billable usage', async () => {
   assert.match(calculated.reason, /input/)
 })
 
+test('judge lookup cannot discard one malformed category from otherwise billable usage', async () => {
+  const catalog = await loadedCatalog()
+  let judgeCalls = 0
+
+  const resolution = await resolveAttemptCost({
+    attempt: attempt({
+      provider: 'anthropic',
+      model: 'claude-opus-4-8',
+      usage: { state: 'available', billing_tokens: { input: 1000, output: -1 } },
+    }),
+    catalog,
+    invoke: async () => {
+      judgeCalls += 1
+      return JSON.stringify({ found: false, reason: 'not needed' })
+    },
+  })
+
+  assert.equal(resolution.state, 'unavailable')
+  assert.match(resolution.reason, /output/)
+  assert.equal(judgeCalls, 0)
+})
+
 test('a negative catalog rate cannot price an attempt', async () => {
   const catalog = await fetchPricingCatalog({
     fetchImpl: catalogFetch(JSON.stringify({

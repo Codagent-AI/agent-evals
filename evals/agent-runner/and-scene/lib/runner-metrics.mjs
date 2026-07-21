@@ -113,6 +113,7 @@ function normalizeAttempt(raw, index) {
     cli: rawUsage?.cli ?? raw.cli ?? null,
     provider: rawUsage?.provider ?? raw.provider ?? null,
     model: rawUsage?.model ?? raw.model ?? null,
+    effort: rawUsage?.effort ?? raw.effort ?? null,
     usage_source: rawUsage?.source ?? raw.usage_source ?? null,
     usage_source_version: null,
     session: raw.session_id ?? raw.session ?? null,

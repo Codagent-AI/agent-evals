@@ -59,7 +59,7 @@ export async function runCandidateVerification({
     : skipped(build ? 'candidate build failed' : 'dependency installation failed')
   const installCommand = commandResult(install)
   const buildOk = install.ok && build?.ok === true
-  const verificationOk = buildOk && verification?.ok === true
+  const verificationRan = verification !== null
 
   return {
     commands: {
@@ -72,8 +72,10 @@ export async function runCandidateVerification({
       log: buildCommand.log || installCommand.log || buildCommand.reason,
     },
     verification: {
-      machine_readable: true,
-      passed: verificationOk,
+      // A process exit status is an unambiguous machine-readable result, but a
+      // verifier that never ran produced no result at all.
+      machine_readable: verificationRan,
+      passed: verificationRan ? verification.ok : null,
       artifact: 'phases/verification.json',
     },
     timings,

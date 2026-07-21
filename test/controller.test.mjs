@@ -732,6 +732,38 @@ test('the production verification adapter runs before browser evaluation and per
   assert.equal(record.score.gates.find(({ id }) => id === 'verification-clear-outcome').verdict, 'pass')
 })
 
+test('the production browser factory receives the verified candidate server URL', async () => {
+  const context = await environment()
+  await writeCandidateSource(context.runDir)
+  const urls = []
+  const endpoint = 'http://127.0.0.1:4319/'
+  let servedCandidate = null
+
+  const result = await evaluate(context, ['--skip-validator', ...profileArgs], {
+    isProcessAlive: () => true,
+    candidateServer: {
+      start: async ({ candidate }) => {
+        servedCandidate = candidate
+        return { pid: 4319, url: endpoint }
+      },
+      probe: async () => ({ ok: true, candidate_identity: servedCandidate }),
+      stop: async () => {},
+    },
+    browserDriverFactory: ({ baseUrl }) => {
+      urls.push(baseUrl)
+      return conformingDriver()
+    },
+    judgeInvoke: passingJudge(),
+    buildResult: { ok: true, log: 'build succeeded' },
+    verificationResult: { machine_readable: true, passed: true, artifact: 'verify-result.json' },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.deepEqual(urls, [endpoint])
+  const browser = await readJson(join(context.runDir, 'phases/browser-evaluation.json'))
+  assert.equal(browser.criteria.length > 0, true)
+})
+
 test('missing browser and judge evidence is reported incomplete rather than as product failures', async () => {
   const context = await environment()
 

@@ -123,6 +123,7 @@ export function compareRoleSelections(recorded, requested) {
 }
 
 const AGENT_ROLES = Object.fromEntries(Object.entries(ROLE_AGENTS).map(([role, agent]) => [agent, role]))
+const REPORTED_ROLES = { 'lead-agent': 'lead', 'task-implementor': 'implementor' }
 
 // Configured settings are never presented as observed ones. An attempt without
 // complete evidence is marked incomplete instead.
@@ -136,18 +137,18 @@ export function reconcileRoleAttempts(profiles, attempts = []) {
   let incomplete = false
 
   for (const attempt of attempts) {
-    const role = AGENT_ROLES[attempt.agent]
+    const role = AGENT_ROLES[attempt.agent] ?? REPORTED_ROLES[attempt.agent_role]
     if (!role) continue
     const observed = {
       role,
-      agent: attempt.agent,
+      agent: attempt.agent ?? attempt.agent_role,
       cli: attempt.cli ?? null,
       provider: attempt.provider ?? null,
       model: attempt.model ?? null,
       effort: attempt.effort ?? null,
       session: attempt.session ?? null,
       step: attempt.step ?? null,
-      attempt: attempt.attempt ?? null,
+      attempt: attempt.attempt ?? attempt.attempt_id ?? null,
     }
     const configured = roles[role].configured
     const complete = PROFILE_FIELDS.every((field) => observed[field] !== null)

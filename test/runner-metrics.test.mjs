@@ -33,6 +33,7 @@ function step(overrides = {}) {
       cli: 'codex',
       provider: 'openai',
       model: 'gpt-5-codex',
+      effort: 'high',
       source: 'codex:turn.completed',
       completeness: 'complete',
       tokens: { input: 1000, cached_input: 200, output: 300, reasoning: 50 },
@@ -92,6 +93,7 @@ test('valid schema-v1 metrics are ingested with every attempt preserved', () => 
   })
   assert.equal(ingested.attempts[0].cost.estimated_api_cost_usd, 0.0125)
   assert.equal(ingested.attempts[0].duration_ms, 1200)
+  assert.equal(ingested.attempts[0].effort, 'high')
 })
 
 test('the reported implementation active duration is preserved', () => {
