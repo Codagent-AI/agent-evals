@@ -13,6 +13,7 @@ import { hashJson, hashString, writeJsonAtomic } from './persistence.mjs'
 
 export const CANDIDATE_SOURCE_MANIFEST_SCHEMA_VERSION = 1
 export const EVAL_GIT_EXCLUDES = ['/.agent-runner/config.yaml']
+const MAX_CANDIDATE_DIFF_BYTES = 64 * 1024 * 1024
 
 function defaultExec(command, args, options = {}) {
   return spawnSync(command, args, { encoding: 'utf8', ...options })
@@ -181,7 +182,7 @@ export async function freezeCandidate({
     exec,
     'git',
     ['-C', worktree, 'diff', '--binary', '--full-index', '--no-ext-diff', fixtureCommit, producedCommit, '--'],
-    {},
+    { maxBuffer: MAX_CANDIDATE_DIFF_BYTES },
     'candidate diff capture',
     { trim: false },
   )

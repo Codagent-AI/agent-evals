@@ -190,6 +190,24 @@ test('freezing a clean implementation writes its normalized diff and tracked sou
   assert.ok(!manifest.tracked_files.some(({ path }) => path.includes('.agent-runner/config.yaml')))
 })
 
+test('freezing preserves implementation diffs larger than the subprocess default buffer', async () => {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
+  const runDir = join(repo.root, 'run')
+  const largeSource = `${'export const content = "large change"\n'.repeat(70_000)}// complete\n`
+  await mkdir(runDir)
+  await prepareCandidateWorktree({ repo: repo.source, worktree, ref: repo.fixture, resume: false, exec })
+  await writeFile(join(worktree, 'large-source.ts'), largeSource)
+  git(worktree, 'add', 'large-source.ts')
+  git(worktree, 'commit', '-qm', 'large implementation')
+
+  await freezeCandidate({ repo: repo.source, worktree, runDir, fixtureRevision: repo.fixture, exec })
+
+  const diff = await readFile(join(runDir, 'implementation.diff'), 'utf8')
+  assert.ok(diff.length > 1024 * 1024)
+  assert.match(diff, /\/\/ complete\n$/)
+})
+
 test('freezing rejects uncommitted candidate changes', async () => {
   const repo = await repository()
   const worktree = join(repo.root, 'candidate')
