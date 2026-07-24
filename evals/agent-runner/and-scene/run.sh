@@ -18,7 +18,10 @@ CHANGE_NAME="${CHANGE_NAME:-create-and-scene}"
 # The implementation workflow is hard-coded for this change. The suite records
 # whichever clean Agent Runner revision supplies it rather than pinning a commit.
 WORKFLOW_RELATIVE_PATH="workflows/openspec/implement-change2.yaml"
-CONTAINER_AGENT_RUNNER_DIR="${CONTAINER_AGENT_RUNNER_DIR:-/tmp/agent-runner-local}"
+# sandbox-run.sh mounts the validated host checkout here with its Git metadata.
+# Its separate /tmp/agent-runner-local copy is only the build source and cannot
+# satisfy the controller's clean-worktree provenance check.
+CONTAINER_AGENT_RUNNER_DIR="${CONTAINER_AGENT_RUNNER_DIR:-/agent-runner-source}"
 JUDGE_MODEL="${JUDGE_MODEL:-codex-default}"
 CANDIDATE_REF="${CANDIDATE_REF:-}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-}"

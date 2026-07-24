@@ -121,6 +121,22 @@ test('scored mode delegates the lifecycle to the suite controller', async () => 
   ]) assert.ok(result.output.includes(expected), `missing ${expected}\n${result.output}`)
 })
 
+test('scored mode validates provenance from the mounted Agent Runner checkout', async () => {
+  const context = await setup()
+
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
+
+  assert.equal(result.status, 0, result.output)
+  assert.ok(
+    result.output.includes('--agent-runner-dir /agent-runner-source'),
+    result.output,
+  )
+  assert.ok(
+    !result.output.includes('--agent-runner-dir /tmp/agent-runner-local'),
+    result.output,
+  )
+})
+
 test('scored mode hard-codes implement-change2 and no longer accepts workflow overrides', async () => {
   const context = await setup()
 
