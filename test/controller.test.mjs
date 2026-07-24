@@ -37,6 +37,7 @@ async function environment({
   dirty = '',
   commit = 'a'.repeat(40),
   candidateSource = true,
+  runnerResult = { status: 0, stdout: '' },
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'agent-evals-controller-'))
   const agentRunnerDir = join(root, 'agent-runner')
@@ -63,6 +64,7 @@ async function environment({
     if (command === 'agent-runner' && args[0] === '--version') {
       return { status: 0, stdout: 'agent-runner 2.4.0\n' }
     }
+    if (command === 'agent-runner') return runnerResult
     return { status: 0, stdout: '' }
   }
 
@@ -331,6 +333,31 @@ test('the Agent Runner run identity is durably recorded as soon as it is availab
   assert.equal(checkpoint.agent_runner.session_dir, '/sessions/run-7')
 })
 
+test('an abnormal Agent Runner exit preserves its discovered run identity and diagnostics', async () => {
+  const error = Object.assign(new Error('spawnSync agent-runner ENOBUFS'), { code: 'ENOBUFS' })
+  const context = await environment({
+    runnerResult: {
+      status: null,
+      signal: 'SIGTERM',
+      error,
+      stdout: 'partial runner output\n',
+      stderr: 'buffer limit reached\n',
+    },
+  })
+
+  const result = await evaluate(context, ['--skip-validator', ...profileArgs])
+
+  assert.equal(result.outcome.evaluation_status, 'implementation-workflow-failed')
+  assert.match(result.outcome.failure.reason, /ENOBUFS/)
+  assert.match(result.outcome.failure.reason, /agent-runner\.log/)
+  const checkpoint = await loadCheckpoint(join(context.runDir, 'checkpoint.json'))
+  assert.equal(checkpoint.agent_runner.run_id, 'run-7')
+  assert.match(
+    await readFile(join(context.runDir, 'logs/agent-runner.log'), 'utf8'),
+    /partial runner output[\s\S]*buffer limit reached/,
+  )
+})
+
 test('resume with an active run waits and does not launch a second workflow', async () => {
   const context = await environment()
   await evaluate(context, ['--skip-validator', ...profileArgs])
@@ -338,7 +365,7 @@ test('resume with an active run waits and does not launch a second workflow', as
 
   const waits = []
   await evaluate(context, ['--skip-validator', ...profileArgs, '--resume'], {
-    isProcessAlive: () => true,
+    isRunnerProcessAlive: () => true,
     readRunnerState: () => ({ run_id: 'run-7', session_dir: '/sessions/run-7', lock: { pid: 99, run_id: 'run-7' } }),
     waitForRun: (runId) => {
       waits.push(runId)
@@ -348,6 +375,41 @@ test('resume with an active run waits and does not launch a second workflow', as
 
   assert.deepEqual(waits, ['run-7'])
   assert.equal(runnerInvocations(context.invocations).length, before)
+})
+
+test('resume ignores a live unrelated PID and resumes the recorded Agent Runner run', async () => {
+  const context = await environment()
+  await evaluate(context, ['--skip-validator', ...profileArgs])
+  const before = runnerInvocations(context.invocations).length
+
+  const result = await evaluate(context, ['--skip-validator', ...profileArgs, '--resume'], {
+    isProcessAlive: () => true,
+    isRunnerProcessAlive: () => false,
+    readRunnerState: () => (
+      runnerInvocations(context.invocations).length === before
+        ? {
+            run_id: 'run-7',
+            session_dir: '/sessions/run-7',
+            last_step: 'implement-tasks',
+            step_completed: false,
+            lock: { pid: 1910, run_id: 'run-7' },
+          }
+        : {
+            run_id: 'run-7',
+            session_dir: '/sessions/run-7',
+            last_step: 'simplify',
+            step_completed: true,
+          }
+    ),
+    waitForRun: () => {
+      throw new Error('an unrelated PID must not make the controller wait')
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.deepEqual(runnerInvocations(context.invocations).slice(before), [
+    ['agent-runner', '--resume', 'run-7'],
+  ])
 })
 
 test('resume with a completed run continues without invoking Agent Runner again', async () => {

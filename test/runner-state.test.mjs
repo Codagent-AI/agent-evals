@@ -6,11 +6,13 @@ import { test } from 'node:test'
 
 import { lstat, readlink, symlink } from 'node:fs/promises'
 
-import {
+import * as runnerState from '../evals/agent-runner/and-scene/lib/runner-state.mjs'
+
+const {
   readRunnerState,
   resolveProjectsDir,
   waitForRunnerRun,
-} from '../evals/agent-runner/and-scene/lib/runner-state.mjs'
+} = runnerState
 
 // Agent Runner lays out run state as
 // <projects>/<encoded-project>/runs/<session-id>/state.json.
@@ -95,6 +97,23 @@ test('production waiting polls until Agent Runner releases its run lock', async 
   assert.equal(reads, 3)
   assert.equal(sleeps, 2)
   assert.equal(state.step_completed, true)
+})
+
+test('runner liveness rejects a reused PID owned by an unrelated process', () => {
+  assert.equal(typeof runnerState.isAgentRunnerProcessAlive, 'function')
+
+  const shared = {
+    kill: () => {},
+    readFileSync: () => Buffer.from('node\0-e\0new Worker()\0'),
+  }
+  assert.equal(runnerState.isAgentRunnerProcessAlive(1910, {
+    ...shared,
+    readlinkSync: () => '/usr/local/bin/node',
+  }), false)
+  assert.equal(runnerState.isAgentRunnerProcessAlive(1910, {
+    ...shared,
+    readlinkSync: () => '/workspace/bin/agent-runner',
+  }), true)
 })
 
 test('an empty projects directory reports null', async () => {

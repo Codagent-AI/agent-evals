@@ -57,6 +57,7 @@ import {
 } from './lib/profiles.mjs'
 import { compareProvenance, readWorkflowProvenance } from './lib/provenance.mjs'
 import {
+  isAgentRunnerProcessAlive,
   readRunnerState as readPersistedRunnerState,
   resolveProjectsDir,
   waitForRunnerRun,
@@ -148,10 +149,22 @@ function failure(errors) {
   return { exitCode: 2, errors, outcome: null }
 }
 
+function runnerFailure(timing) {
+  const details = []
+  if (timing.error_code) details.push(timing.error_code)
+  if (timing.error) details.push(timing.error)
+  if (timing.status !== null && timing.status !== undefined) details.push(`exit ${timing.status}`)
+  if (timing.signal) details.push(`signal ${timing.signal}`)
+  const diagnostic = details.length > 0 ? details.join(': ') : 'unknown subprocess failure'
+  const output = timing.output_path ? `; output: ${timing.output_path}` : ''
+  return `${timing.label} failed (${diagnostic})${output}`
+}
+
 export async function runEvaluation({
   argv,
   exec,
   isProcessAlive = (pid) => { try { process.kill(pid, 0); return true } catch { return false } },
+  isRunnerProcessAlive = isAgentRunnerProcessAlive,
   readRunnerState,
   observedSteps,
   waitForRun = null,
@@ -426,7 +439,7 @@ export async function runEvaluation({
         // starting a second implementation workflow.
         discovered: checkpoint.agent_runner?.run_id ? null : state,
         boundaryStep: boundary.stop_step,
-        isProcessAlive,
+        isProcessAlive: isRunnerProcessAlive,
       })
       while (decision.action !== 'continue') {
         const action = decision.action
@@ -454,18 +467,40 @@ export async function runEvaluation({
             'run', provenance.workflow_path,
             '--until', boundary.stop_step,
             ...boundary.workflow_arguments,
-          ], { label: 'agent-runner', exec, ...runnerSpawnOptions })
+          ], {
+            label: 'agent-runner',
+            exec,
+            outputPath: join(runDir, 'logs/agent-runner.log'),
+            ...runnerSpawnOptions,
+          })
           record.timings.push(timing)
-          if (!timing.ok) throw new Error(`agent-runner exited ${timing.status}`)
+          if (!timing.ok) {
+            const failedState = await readState(record.run?.run_id ?? null)
+            if (failedState?.run_id) await persistRunnerState(failedState)
+            throw new Error(runnerFailure(timing))
+          }
         } else if (action === 'resume') {
           const [command, ...args] = decision.command
-          const timing = runTimed(command, args, { label: 'agent-runner-resume', exec, ...runnerSpawnOptions })
+          const timing = runTimed(command, args, {
+            label: 'agent-runner-resume',
+            exec,
+            outputPath: join(runDir, 'logs/agent-runner.log'),
+            ...runnerSpawnOptions,
+          })
           record.timings.push(timing)
-          if (!timing.ok) throw new Error(`agent-runner resume exited ${timing.status}`)
+          if (!timing.ok) {
+            const failedState = await readState(record.run?.run_id ?? decision.run_id ?? null)
+            if (failedState?.run_id) await persistRunnerState(failedState)
+            throw new Error(runnerFailure(timing))
+          }
         } else if (action === 'wait') {
           waitedState = waitForRun
             ? await waitForRun(decision.run_id)
-            : await waitForRunnerRun({ readState, runId: decision.run_id, isProcessAlive })
+            : await waitForRunnerRun({
+                readState,
+                runId: decision.run_id,
+                isProcessAlive: isRunnerProcessAlive,
+              })
         }
 
         state = waitedState ?? await readState(record.run?.run_id ?? decision.run_id ?? null)
@@ -478,7 +513,7 @@ export async function runEvaluation({
           recorded: observedRun,
           state,
           boundaryStep: boundary.stop_step,
-          isProcessAlive,
+          isProcessAlive: isRunnerProcessAlive,
         })
         if (decision.action === 'resume' && action !== 'wait') {
           throw new Error(

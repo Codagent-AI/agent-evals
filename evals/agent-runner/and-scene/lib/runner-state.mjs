@@ -5,10 +5,34 @@
 // iteration order is not a recency guarantee, so a recorded run is always
 // selected by its exact identifier and discovery falls back to a validated
 // timestamp.
+import { readFileSync, readlinkSync } from 'node:fs'
 import { lstat, mkdir, readdir, readFile, readlink, stat, symlink } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 
 import { readJson } from './persistence.mjs'
+
+// Agent Runner's lock records only a PID. Disposable containers can reuse that
+// number for an unrelated process, so existence alone is not proof that the
+// process owns the persisted run. Verify the executable before waiting.
+export function isAgentRunnerProcessAlive(pid, {
+  kill = process.kill,
+  readlinkSync: readExecutable = readlinkSync,
+  readFileSync: readCommandLine = readFileSync,
+} = {}) {
+  if (!Number.isInteger(pid) || pid <= 0) return false
+  try {
+    kill(pid, 0)
+    const executable = basename(readExecutable(`/proc/${pid}/exe`))
+    if (executable === 'agent-runner') return true
+
+    const [command = ''] = readCommandLine(`/proc/${pid}/cmdline`)
+      .toString('utf8')
+      .split('\0')
+    return basename(command) === 'agent-runner'
+  } catch {
+    return false
+  }
+}
 
 // Agent Runner resolves its run store as
 // $HOME/.agent-runner/projects/<encoded-cwd>/runs/<session-id>, with no CLI

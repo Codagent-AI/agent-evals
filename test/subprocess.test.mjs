@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { mkdtemp, readFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { runTimed, summarizeTimings } from '../evals/agent-runner/and-scene/lib/subprocess.mjs'
@@ -48,6 +51,23 @@ test('an injected executor replaces the real subprocess while keeping timing', (
   assert.equal(result.stdout, 'stubbed')
   assert.equal(result.ok, true)
   assert.equal(typeof result.duration_ms, 'number')
+})
+
+test('a logged command streams output without the spawnSync buffer limit', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-subprocess-'))
+  const outputPath = join(dir, 'agent-runner.log')
+  const bytes = 2 * 1024 * 1024
+
+  const result = runTimed(
+    'node',
+    ['-e', `process.stdout.write("x".repeat(${bytes}))`],
+    { label: 'agent-runner', outputPath },
+  )
+
+  assert.equal(result.status, 0, result.error)
+  assert.equal(result.stdout, '')
+  assert.equal(result.output_path, outputPath)
+  assert.ok((await readFile(outputPath)).length >= bytes)
 })
 
 test('timings aggregate into a per-label machine duration breakdown', () => {
