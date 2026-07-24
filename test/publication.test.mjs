@@ -31,6 +31,8 @@ async function disposableRepo() {
   const repo = join(dir, 'repo')
   git(dir, 'init', '--bare', '-q', '-b', 'main', remote)
   git(dir, 'clone', '-q', remote, repo)
+  git(repo, 'config', 'user.email', 'eval@example.invalid')
+  git(repo, 'config', 'user.name', 'eval')
   await writeFile(join(repo, 'README.md'), 'disposable\n')
   git(repo, 'add', '-A')
   git(repo, 'commit', '-qm', 'initial')
