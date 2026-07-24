@@ -25,10 +25,14 @@ export function isAgentRunnerProcessAlive(pid, {
     const executable = basename(readExecutable(`/proc/${pid}/exe`))
     if (executable === 'agent-runner') return true
 
-    const [command = ''] = readCommandLine(`/proc/${pid}/cmdline`)
+    const argv = readCommandLine(`/proc/${pid}/cmdline`)
       .toString('utf8')
       .split('\0')
-    return basename(command) === 'agent-runner'
+      .filter(Boolean)
+    return argv.some((argument) => {
+      const name = basename(argument)
+      return name === 'agent-runner' || name.startsWith('agent-runner.')
+    })
   } catch {
     return false
   }

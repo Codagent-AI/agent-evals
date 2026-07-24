@@ -114,6 +114,13 @@ test('runner liveness rejects a reused PID owned by an unrelated process', () =>
     ...shared,
     readlinkSync: () => '/workspace/bin/agent-runner',
   }), true)
+  assert.equal(runnerState.isAgentRunnerProcessAlive(1910, {
+    kill: () => {},
+    readlinkSync: () => '/usr/local/bin/node',
+    readFileSync: () => Buffer.from(
+      '/usr/local/bin/node\0/workspace/node_modules/agent-runner/agent-runner.mjs\0--resume\0run-7\0',
+    ),
+  }), true)
 })
 
 test('an empty projects directory reports null', async () => {
