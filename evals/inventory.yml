@@ -1,0 +1,44 @@
+issues:
+  - id: candidate-resume-identity-not-verified
+    file: evals/agent-runner/and-scene/lib/candidate.mjs
+    line_range:
+      - 69
+      - 69
+    description: Resuming a candidate run verifies only that the supplied worktree is a Git worktree; it
+      does not verify that the worktree belongs to the requested repository or that HEAD matches the
+      checkpointed fixture commit. A resumed evaluation can therefore silently use a different
+      repository or revision and produce a score for the wrong candidate identity.
+    code_snippet: |2
+          `candidate ref lookup ${ref}`,
+        )
+        run(exec, 'git', ['-C', worktree, 'checkout', '--detach', commit], {}, `candidate checkout ${ref}`)
+      }
+
+      await installEvalExcludes(worktree)
+      const commit = run(exec, 'git', ['-C', worktree, 'rev-parse', 'HEAD'], {}, 'candidate commit lookup')
+    category: bug
+    difficulty: hard
+    priority: high
+    source: 2026-07-20 agent-evals
+  - id: judge-inherits-secret-environment
+    file: evals/agent-runner/and-scene/lib/judge-invoker.mjs
+    line_range:
+      - 59
+      - 59
+    description: The Codex judge evaluates an untrusted candidate checkout while inheriting the full
+      parent environment. The read-only filesystem sandbox does not prevent shell commands from
+      reading environment variables, so prompt-injected repository content can expose GitHub, cloud,
+      registry, or other credentials through judge output or authorized network access.
+    code_snippet: |
+      args.push('-')
+
+      const result = spawnImpl(command, args, {
+        cwd,
+        env,
+        encoding: 'utf8',
+        input: request.prompt,
+        maxBuffer: 16 * 1024 * 1024,
+    category: security
+    difficulty: hard
+    priority: high
+    source: 2026-07-20 agent-evals

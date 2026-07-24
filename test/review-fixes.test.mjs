@@ -49,13 +49,10 @@ test('screenshot capture hashes the Playwright buffer without rereading the PNG'
   assert.ok(!script.includes('readFile(screenshotPath)'))
 })
 
-test('judge prompt appends only the sanitized screenshot manifest', async () => {
-  const script = await readFile(join(root, 'evals/agent-runner/and-scene/run.sh'), 'utf8')
-
-  assert.ok(script.includes('/artifacts/screenshot-manifest-judge.json'))
-  assert.ok(script.includes('/eval-input/judge-manifest.mjs'))
-  assert.ok(!script.includes('append_file_block /artifacts/screenshot-manifest.json'))
-})
+// The judge prompt no longer lives in run.sh: the controller owns judging and
+// the sanitized-manifest boundary is asserted directly against
+// sanitizeJudgeManifest above. Prompt assembly is re-covered by the product
+// evaluation task that rebuilds it behind the controller.
 
 test('deterministic scanning bounds directory materialization before sorting', async () => {
   const script = await readFile(

@@ -1,0 +1,882 @@
+#!/usr/bin/env node
+// The and-scene evaluation controller.
+//
+// `run.sh` remains the thin host launcher; this module owns the evaluation
+// state machine: preflight, role configuration, Agent Runner run identity and
+// resumption, durable checkpoints, and the ordered phase lifecycle.
+//
+// The command deliberately stops at `pending-human-review`: it writes the
+// automated result, its report, and the artifact manifest, attempts
+// candidate-server cleanup, and exits successfully. The literal human review
+// that turns that into an official score lives in `human-review.mjs`, because it
+// runs on human time and must never cost the completed automated work.
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { basename, dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import {
+  collectAmbiguityArtifacts,
+  runAmbiguityDiagnostics,
+} from './lib/ambiguity.mjs'
+import {
+  createCheckpoint,
+  loadCheckpoint,
+  saveCheckpoint,
+  validateCheckpointIdentity,
+} from './lib/checkpoint.mjs'
+import { freezeCandidate, prepareCandidateWorktree } from './lib/candidate.mjs'
+import { runCandidateVerification } from './lib/candidate-verification.mjs'
+import { createHostCandidateServer } from './lib/candidate-server-host.mjs'
+import { aggregateImplementationCost, summarizeEvalOwnedUsage } from './lib/cost.mjs'
+import { fetchPricingCatalog, needsPricingLookup, resolveImplementationPricing } from './lib/pricing.mjs'
+import { readRunnerMetrics } from './lib/runner-metrics.mjs'
+import {
+  createTimingLedger,
+  mergeTimingLedgers,
+  recordMachineInterval,
+  summarizeMachineTiming,
+} from './lib/timing.mjs'
+import { collectSourceEvidence } from './deterministic-checks.mjs'
+import { runBrowserEvaluation } from './lib/browser-eval.mjs'
+import { createAxiBrowserDriver } from './lib/axi-browser-driver.mjs'
+import { ensureCandidateServer, stopCandidateServer } from './lib/candidate-server.mjs'
+import { assembleResult, writeResultArtifacts } from './lib/result.mjs'
+import { createCodexJudgeInvoker } from './lib/judge-invoker.mjs'
+import { runProductJudging } from './lib/judge-jobs.mjs'
+import { applyOutcomeEvent, createOutcome } from './lib/outcomes.mjs'
+import { loadRubrics, rubricProvenance } from './lib/rubric.mjs'
+import { scoreProduct } from './lib/scorer.mjs'
+import { AUTOMATED_PHASES, runPhases } from './lib/phases.mjs'
+import { hashJson, readJson, writeJsonAtomic } from './lib/persistence.mjs'
+import {
+  compareRoleSelections,
+  reconcileRoleAttempts,
+  renderEvalConfig,
+  renderEvalSettings,
+  validateRoleProfiles,
+} from './lib/profiles.mjs'
+import { compareProvenance, readWorkflowProvenance } from './lib/provenance.mjs'
+import {
+  readRunnerState as readPersistedRunnerState,
+  resolveProjectsDir,
+  waitForRunnerRun,
+} from './lib/runner-state.mjs'
+import { runTimed, summarizeTimings } from './lib/subprocess.mjs'
+import {
+  checkBoundary,
+  classifyRunnerRun,
+  parseWorkflowContract,
+  resolveBoundary,
+  verifyWorkflowContract,
+} from './lib/workflow.mjs'
+
+const SUITE_DIR = dirname(fileURLToPath(import.meta.url))
+const DEFAULT_CAPABILITIES = join(SUITE_DIR, 'agent-runner-capabilities.json')
+
+const FLAGS = new Map([
+  ['--skip-validator', 'skipValidator'],
+  ['--resume', 'resume'],
+  ['--reference-baseline', 'referenceBaseline'],
+])
+const VALUES = new Map([
+  ['--run-dir', 'runDir'],
+  ['--repo', 'repo'],
+  ['--agent-runner-dir', 'agentRunnerDir'],
+  ['--change-name', 'changeName'],
+  ['--fixture-ref', 'fixtureRef'],
+  ['--candidate-ref', 'candidateRef'],
+  ['--judge-model', 'judgeModel'],
+  ['--capabilities', 'capabilitiesPath'],
+  ['--lead-cli', 'leadCli'],
+  ['--lead-model', 'leadModel'],
+  ['--lead-effort', 'leadEffort'],
+  ['--implementor-cli', 'implementorCli'],
+  ['--implementor-model', 'implementorModel'],
+  ['--implementor-effort', 'implementorEffort'],
+])
+
+export function parseArgs(argv) {
+  const options = {
+    skipValidator: false,
+    resume: false,
+    referenceBaseline: false,
+    changeName: 'create-and-scene',
+    judgeModel: 'codex-default',
+    repo: 'https://github.com/Codagent-AI/and-scene.git',
+    fixtureRef: 'c11595651dfb3941e39c703c483ed1a92d152a37',
+    capabilitiesPath: DEFAULT_CAPABILITIES,
+  }
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index]
+    if (FLAGS.has(argument)) {
+      options[FLAGS.get(argument)] = true
+      continue
+    }
+    const key = VALUES.get(argument)
+    if (!key) throw new Error(`unknown controller option: ${argument}`)
+    const value = argv[index + 1]
+    if (value === undefined) throw new Error(`missing value for ${argument}`)
+    options[key] = value
+    index += 1
+  }
+  if (!options.runDir) throw new Error('--run-dir is required')
+  return options
+}
+
+function roleProfileFrom(options, role) {
+  const cli = options[`${role}Cli`]
+  const model = options[`${role}Model`]
+  const effort = options[`${role}Effort`]
+  return cli || model || effort ? { cli, model, effort } : null
+}
+
+async function prepareRunDirectory(runDir) {
+  for (const relative of [
+    'logs',
+    'evidence',
+    'phases',
+    // Persistent across disposable containers; credentials stay in the
+    // ephemeral container home and are never copied here.
+    '.runtime/candidate-worktree',
+    '.runtime/agent-runner-projects',
+  ]) {
+    await mkdir(join(runDir, relative), { recursive: true })
+  }
+}
+
+function failure(errors) {
+  return { exitCode: 2, errors, outcome: null }
+}
+
+export async function runEvaluation({
+  argv,
+  exec,
+  isProcessAlive = (pid) => { try { process.kill(pid, 0); return true } catch { return false } },
+  readRunnerState,
+  observedSteps,
+  waitForRun = null,
+  handlers: handlerOverrides = {},
+  // Product evidence sources. Each is injected so the whole scored lifecycle is
+  // exercisable without a browser or a model call, and so a source that is
+  // absent leaves its component unobserved rather than failing the candidate.
+  browserDriver = null,
+  browserDriverFactory = null,
+  judgeInvoke = null,
+  // The candidate-server adapter. Without one the suite still reaches a durable
+  // pending result; it simply has no server to hand the reviewer, and says so
+  // rather than pretending it started one.
+  candidateServer = null,
+  verifyCandidate = null,
+  buildResult = null,
+  verificationResult = null,
+  // The live models.dev catalog. Injected so pricing is exercisable offline and
+  // so a test never depends on today's published rates.
+  pricingFetch = null,
+  // Agent Runner resolves its run store from $HOME. The controller must read
+  // the same store the spawned runner writes to, so the home is explicit and
+  // is passed through to the child rather than being inherited implicitly.
+  // Linking a run store into a home is also a real side effect, so library
+  // callers name the home they mean instead of inheriting the ambient one.
+  home = null,
+  log = () => {},
+}) {
+  let options
+  try {
+    options = parseArgs(argv)
+  } catch (error) {
+    return failure([{ code: 'invalid-arguments', message: error.message }])
+  }
+
+  const runDir = resolve(options.runDir)
+  const runId = basename(runDir)
+  const mode = options.referenceBaseline ? 'reference-baseline' : 'agent-runner'
+
+  let capabilities
+  try {
+    capabilities = await readJson(options.capabilitiesPath)
+  } catch (error) {
+    return failure([{
+      code: 'invalid-capabilities',
+      message: `cannot read role capabilities from ${options.capabilitiesPath}: ${error.message}`,
+    }])
+  }
+
+  const validation = validateRoleProfiles({
+    lead: roleProfileFrom(options, 'lead'),
+    implementor: roleProfileFrom(options, 'implementor'),
+    capabilities,
+    mode,
+  })
+  if (!validation.ok) {
+    return failure(validation.errors.map((error) => ({ code: 'invalid-role-profile', ...error })))
+  }
+
+  const boundary = resolveBoundary({ skipValidator: options.skipValidator, changeName: options.changeName })
+
+  let rubrics
+  try {
+    rubrics = await loadRubrics()
+  } catch (error) {
+    return failure([{ code: 'invalid-rubric', message: error.message }])
+  }
+  const provenanceOfRubrics = rubricProvenance(rubrics)
+
+  // A reference baseline evaluates an existing candidate without invoking Agent
+  // Runner, so it needs no clean checkout or workflow contract.
+  let provenance = null
+  let workflowText = ''
+  if (mode === 'agent-runner') {
+    if (!options.agentRunnerDir) {
+      return failure([{ code: 'invalid-arguments', message: '--agent-runner-dir is required' }])
+    }
+    // Without a home the controller and Agent Runner would read and write
+    // different run stores, so a run identity could be silently lost.
+    if (!home) {
+      return failure([{
+        code: 'unresolvable-home',
+        message: 'cannot resolve a home directory for Agent Runner run state; set HOME',
+      }])
+    }
+    try {
+      provenance = await readWorkflowProvenance({ agentRunnerDir: resolve(options.agentRunnerDir), exec })
+    } catch (error) {
+      return failure([{ code: error.code ?? 'provenance-error', message: error.message }])
+    }
+    workflowText = await readFile(provenance.workflow_path, 'utf8')
+    const contract = verifyWorkflowContract(workflowText, boundary)
+    if (!contract.ok) {
+      return failure(contract.errors.map((message) => ({ code: 'workflow-contract', message })))
+    }
+  }
+
+  await prepareRunDirectory(runDir)
+  const checkpointPath = join(runDir, 'checkpoint.json')
+  let checkpoint
+  try {
+    checkpoint = await loadCheckpoint(checkpointPath)
+  } catch (error) {
+    return failure([{ code: 'checkpoint-schema', message: error.message }])
+  }
+
+  const candidateWorktree = join(runDir, '.runtime/candidate-worktree')
+  const freezeCurrentCandidate = () => freezeCandidate({
+    repo: options.repo,
+    worktree: candidateWorktree,
+    runDir,
+    fixtureRevision: options.fixtureRef,
+    exec,
+  })
+  const selectedCandidateRef = mode === 'reference-baseline'
+    ? (options.candidateRef ?? options.fixtureRef)
+    : options.fixtureRef
+  let candidateSource
+  try {
+    candidateSource = await prepareCandidateWorktree({
+      repo: options.repo,
+      worktree: candidateWorktree,
+      ref: selectedCandidateRef,
+      resume: options.resume,
+      expectedSource: checkpoint?.candidate_source ?? null,
+      exec,
+    })
+  } catch (error) {
+    return failure([{ code: 'candidate-worktree', message: error.message }])
+  }
+
+  // A baseline is immutable as soon as it is checked out. An implementation
+  // candidate becomes immutable only after Agent Runner reaches the configured
+  // boundary; on resume, a previously frozen identity is re-derived rather
+  // than trusted from the checkpoint alone.
+  let frozenCandidate = null
+  if (mode === 'reference-baseline' || checkpoint?.identity?.candidate_identity) {
+    try {
+      frozenCandidate = await freezeCurrentCandidate()
+    } catch (error) {
+      return failure([{ code: 'candidate-freeze', message: error.message }])
+    }
+  }
+
+  const identity = {
+    candidate_identity: frozenCandidate?.candidate_identity ?? null,
+    fixture_revision: frozenCandidate?.fixture_commit ?? candidateSource.fixture_commit,
+    agent_runner_provenance: hashJson({
+      commit: provenance?.commit ?? null,
+      workflow_sha256: provenance?.workflow_sha256 ?? null,
+      cli_version: provenance?.cli_version ?? null,
+    }),
+    workflow_arguments: hashJson(boundary.workflow_arguments),
+    agent_configuration: hashJson(validation.profiles),
+    evaluator_configuration: options.judgeModel,
+    // A rubric edit changes what the score means, so it invalidates a resumed
+    // run rather than being blended into half-scored results.
+    rubric_provenance: hashJson(provenanceOfRubrics),
+  }
+
+  if (checkpoint) {
+    const roleMismatches = compareRoleSelections(checkpoint.role_profiles, validation.profiles)
+    if (roleMismatches.length > 0) {
+      return failure(roleMismatches.map((mismatch) => ({ code: 'role-profile-mismatch', ...mismatch })))
+    }
+    if (provenance && checkpoint.agent_runner_provenance) {
+      const drift = compareProvenance(checkpoint.agent_runner_provenance, provenance)
+      if (drift.length > 0) {
+        return failure(drift.map((mismatch) => ({ code: 'resume-provenance', ...mismatch })))
+      }
+    }
+    const stale = validateCheckpointIdentity(checkpoint, identity)
+    if (stale.length > 0) {
+      return failure(stale.map((mismatch) => ({ code: 'stale-checkpoint', ...mismatch })))
+    }
+  } else {
+    checkpoint = {
+      ...createCheckpoint({ run_id: runId, identity }),
+      role_profiles: validation.profiles,
+      agent_runner_provenance: provenance,
+      candidate_source: {
+        repository: candidateSource.repository,
+        fixture_commit: candidateSource.fixture_commit,
+      },
+      boundary,
+      agent_runner: null,
+    }
+    await saveCheckpoint(checkpointPath, checkpoint)
+  }
+
+  // Agent Runner layers built-in defaults, the global config, then the project
+  // config it discovers at <cwd>/.agent-runner/config.yaml. Writing the
+  // evaluation profile there and running Agent Runner from the candidate
+  // worktree is what actually makes the selected roles take effect; the user's
+  // own configuration outside this run directory is never read or modified.
+  if (mode === 'agent-runner') {
+    await mkdir(join(candidateWorktree, '.agent-runner'), { recursive: true })
+    await writeFile(
+      join(candidateWorktree, '.agent-runner/config.yaml'),
+      renderEvalConfig(validation.profiles),
+    )
+    await mkdir(join(home, '.agent-runner'), { recursive: true })
+    await writeFile(join(home, '.agent-runner/settings.yaml'), renderEvalSettings())
+  }
+
+  const record = {
+    boundary: { ok: true, unexpected_step: null, last_observed_step: null },
+    observed_steps: [],
+    events: [],
+    run: checkpoint.agent_runner,
+    timings: [],
+    browser: null,
+    sourceEvidence: null,
+    judging: null,
+    score: null,
+    metrics: null,
+    pricing: null,
+    cost: null,
+    ambiguity: null,
+    candidateServer: null,
+    candidate: frozenCandidate,
+    // Measured durations only. See lib/timing.mjs: nothing here holds a
+    // wall-clock stamp, so no stopped-process or human-review gap can reach a
+    // reported total. Earlier sessions' intervals are carried forward from the
+    // checkpoint so a resumed run reports total active machine time rather than
+    // only the last session's share of it.
+    timing: mergeTimingLedgers(checkpoint.timing, createTimingLedger()),
+  }
+
+  // Pricing and ambiguity are eval-owned judge jobs and reuse the single
+  // recorded Codex authority rather than selecting one of their own.
+  const judgeAuthority = { cli: 'codex', model: options.judgeModel }
+
+  // Each execution session gets its own label so the reported total reads as a
+  // sum of recorded machine sessions rather than one uninterrupted stretch.
+  const executionSession = `${runId}#${new Set(
+    record.timing.intervals.map((interval) => interval.session),
+  ).size + 1}`
+  // Link the persistent run store into the container home so Agent Runner
+  // writes where the controller reads, then read from whichever store is
+  // actually in effect.
+  const projectsDir = await resolveProjectsDir({ runDir, home })
+  const readState = readRunnerState ?? ((runIdentifier) => readPersistedRunnerState(projectsDir, runIdentifier))
+  const readSteps = observedSteps ?? ((state) => state?.steps ?? [])
+  // Agent Runner must run in the candidate worktree so it discovers the
+  // eval-scoped project config, and under the same home the controller reads
+  // run state from so both agree on the run store.
+  const runnerSpawnOptions = {
+    cwd: candidateWorktree,
+    env: { ...process.env, HOME: home, AGENT_RUNNER_NO_TUI: '1' },
+  }
+
+  async function persistRunnerState(state) {
+    record.run = { run_id: state.run_id, session_dir: state.session_dir ?? null }
+    checkpoint = { ...checkpoint, agent_runner: record.run }
+    await saveCheckpoint(checkpointPath, checkpoint)
+  }
+
+  const handlers = {
+    'agent-runner': async () => {
+      if (mode === 'reference-baseline') {
+        record.events.push({ event: 'skipped', reason: 'reference-baseline' })
+        return
+      }
+
+      let state = await readState(checkpoint.agent_runner?.run_id ?? null)
+      let decision = classifyRunnerRun({
+        recorded: checkpoint.agent_runner,
+        state,
+        // With no checkpointed identity, an already-persisted run means a
+        // previous process was interrupted mid-flight; adopt it rather than
+        // starting a second implementation workflow.
+        discovered: checkpoint.agent_runner?.run_id ? null : state,
+        boundaryStep: boundary.stop_step,
+        isProcessAlive,
+      })
+      while (decision.action !== 'continue') {
+        const action = decision.action
+        record.events.push({
+          event: action,
+          status: decision.status,
+          reason: decision.reason,
+          adopted: decision.adopted ?? false,
+        })
+        log(`agent-runner: ${action}`)
+        if (action === 'error') throw new Error(decision.reason)
+
+        // Adopting a persisted run records its identity before any further
+        // work, so a second interruption cannot lose it again.
+        if (decision.adopted && decision.run_id) {
+          await persistRunnerState({
+            run_id: decision.run_id,
+            session_dir: state?.session_dir ?? null,
+          })
+        }
+
+        let waitedState = null
+        if (action === 'start') {
+          const timing = runTimed('agent-runner', [
+            'run', provenance.workflow_path,
+            '--until', boundary.stop_step,
+            ...boundary.workflow_arguments,
+          ], { label: 'agent-runner', exec, ...runnerSpawnOptions })
+          record.timings.push(timing)
+          if (!timing.ok) throw new Error(`agent-runner exited ${timing.status}`)
+        } else if (action === 'resume') {
+          const [command, ...args] = decision.command
+          const timing = runTimed(command, args, { label: 'agent-runner-resume', exec, ...runnerSpawnOptions })
+          record.timings.push(timing)
+          if (!timing.ok) throw new Error(`agent-runner resume exited ${timing.status}`)
+        } else if (action === 'wait') {
+          waitedState = waitForRun
+            ? await waitForRun(decision.run_id)
+            : await waitForRunnerRun({ readState, runId: decision.run_id, isProcessAlive })
+        }
+
+        state = waitedState ?? await readState(record.run?.run_id ?? decision.run_id ?? null)
+        if (!state?.run_id) {
+          throw new Error('Agent Runner exited without a discoverable persisted run state')
+        }
+
+        const observedRun = { run_id: state.run_id }
+        decision = classifyRunnerRun({
+          recorded: observedRun,
+          state,
+          boundaryStep: boundary.stop_step,
+          isProcessAlive,
+        })
+        if (decision.action === 'resume' && action !== 'wait') {
+          throw new Error(
+            `Agent Runner ${action} exited before completing boundary step ${boundary.stop_step}`,
+          )
+        }
+        if (decision.action !== 'error') {
+          await persistRunnerState(state)
+        }
+      }
+      if (state?.run_id && record.run?.run_id !== state.run_id) {
+        await persistRunnerState(state)
+      }
+      record.events.push({ event: 'continue', status: decision.status, reason: null, adopted: false })
+
+      record.observed_steps = await readSteps(state)
+      record.boundary = checkBoundary({
+        boundaryStep: boundary.stop_step,
+        workflowSteps: parseWorkflowContract(workflowText).steps,
+        observedSteps: record.observed_steps,
+      })
+      if (!record.boundary.ok) {
+        throw new Error(
+          `workflow boundary violated: ${record.boundary.unexpected_step} executed after ${boundary.stop_step}`,
+        )
+      }
+
+      // Reaching the boundary is where the delivered product becomes the
+      // immutable candidate. A dirty worktree is not a reproducible result and
+      // must stop before any product judge sees it.
+      record.candidate = await freezeCurrentCandidate()
+      checkpoint = {
+        ...checkpoint,
+        identity: {
+          ...checkpoint.identity,
+          candidate_identity: record.candidate.candidate_identity,
+          fixture_revision: record.candidate.fixture_commit,
+        },
+        candidate: record.candidate,
+      }
+      await saveCheckpoint(checkpointPath, checkpoint)
+    },
+
+    verification: async () => {
+      if (!verifyCandidate) return
+      const verified = await verifyCandidate({ worktree: candidateWorktree, runDir, exec })
+      buildResult = verified.build
+      verificationResult = verified.verification
+      record.timings.push(...(verified.timings ?? []))
+      await writeJsonAtomic(join(runDir, 'phases/verification.json'), verified)
+    },
+
+    'candidate-server': async (context) => {
+      if (!candidateServer) {
+        context.serverRunning = true
+        return
+      }
+      const outcome = await ensureCandidateServer({
+        recorded: checkpoint.candidate_server ?? null,
+        candidate: record.candidate?.candidate_identity ?? checkpoint.identity.candidate_identity,
+        isProcessAlive,
+        probe: candidateServer.probe,
+        start: candidateServer.start,
+      })
+      record.candidateServer = outcome.server
+      // Recorded durably as soon as it exists, so the separate human-review
+      // command can find the very server this run evaluated.
+      checkpoint = { ...checkpoint, candidate_server: outcome.server }
+      await saveCheckpoint(checkpointPath, checkpoint)
+      log(`candidate-server: ${outcome.action} at ${outcome.server.url}`)
+      context.serverRunning = true
+    },
+
+    'browser-evaluation': async () => {
+      const activeBrowserDriver = browserDriver ?? (
+        browserDriverFactory && record.candidateServer?.url
+          ? await browserDriverFactory({ baseUrl: record.candidateServer.url, runDir })
+          : null
+      )
+      if (!activeBrowserDriver) {
+        // Without a driver the live demo was never observed. That is missing
+        // evidence, not a demo that misbehaved, so nothing is recorded against
+        // the candidate.
+        record.events.push({ event: 'skipped', reason: 'no browser driver configured' })
+        return
+      }
+      const evaluation = await runBrowserEvaluation({
+        driver: activeBrowserDriver,
+        build: buildResult,
+        verification: verificationResult,
+      })
+      record.browser = evaluation
+      await writeJsonAtomic(join(runDir, 'phases/browser-evaluation.json'), evaluation)
+    },
+
+    'product-judging': async () => {
+      // The judges answer source-review criteria, so they must be shown the
+      // delivered source. Collecting it here also bounds it: the scan budget
+      // caps how much candidate-controlled text can reach a prompt.
+      record.sourceEvidence = await collectSourceEvidence(candidateWorktree)
+      await writeJsonAtomic(join(runDir, 'phases/source-evidence.json'), record.sourceEvidence)
+
+      if (record.sourceEvidence.files.length === 0) {
+        throw new Error('candidate source is empty; product judging cannot produce an evidence-backed result')
+      } else if (!judgeInvoke) {
+        record.events.push({ event: 'skipped', reason: 'no judge invoker configured' })
+      } else {
+        record.judging = await runProductJudging({
+          rubrics,
+          authority: { cli: 'codex', model: options.judgeModel },
+          evidence: [
+            ...record.sourceEvidence.evidence,
+            ...(record.browser?.criteria ?? []),
+            ...(record.browser?.gates ?? []),
+          ],
+          sources: record.sourceEvidence.files,
+          invoke: judgeInvoke,
+        })
+        await writeJsonAtomic(join(runDir, 'phases/product-judging.json'), record.judging)
+      }
+
+      record.score = scoreProduct({
+        rubrics,
+        deterministic: record.browser?.criteria ?? null,
+        judges: record.judging?.judges ?? {},
+        gates: record.browser?.gates ?? null,
+        humanReview: null,
+        // Retries, repair, and boundary events are diagnostic context for the
+        // reader; the scorer never turns any of them into points.
+        harness: {
+          judge_retries: record.judging?.retries ?? {},
+          failed_judge_jobs: record.judging?.failed_jobs ?? [],
+          browser_bounds_exceeded: record.browser?.bounds_exceeded ?? [],
+          source_scan_budget_exceeded: record.sourceEvidence?.budget_exceeded ?? [],
+        },
+        mode,
+      })
+      await writeJsonAtomic(join(runDir, 'phases/score.json'), record.score)
+      return [{
+        type: 'automated-scoring-complete',
+        automated_subtotal: record.score.automated_subtotal.points,
+      }]
+    },
+
+    // Both diagnostic phases are deliberately terminal in their own scope: they
+    // return no outcome events, so nothing they observe can move a point, open a
+    // gate, or change the product verdict.
+    'ambiguity-diagnostics': async () => {
+      const ledgerPath = join(runDir, 'ambiguity-ledger.json')
+      const artifacts = await collectAmbiguityArtifacts({ sessionDir: record.run?.session_dir ?? null })
+      // A ledger written by an earlier session is the record of what was already
+      // observed; this run adds to it rather than replacing it.
+      const previous = await readJson(ledgerPath, null)
+
+      const { ledger } = await runAmbiguityDiagnostics({
+        runId: record.run?.run_id ?? runId,
+        artifacts,
+        productEvidence: [
+          ...(record.sourceEvidence?.evidence ?? []),
+          ...(record.browser?.criteria ?? []),
+          ...(record.browser?.gates ?? []),
+        ],
+        authority: judgeAuthority,
+        invoke: judgeInvoke,
+        previous,
+      })
+
+      record.ambiguity = ledger
+      await writeJsonAtomic(ledgerPath, ledger)
+      await writeJsonAtomic(join(runDir, 'phases/ambiguity-diagnostics.json'), ledger)
+    },
+
+    'metrics-pricing': async () => {
+      record.metrics = await readRunnerMetrics({
+        sessionDir: record.run?.session_dir ?? null,
+        runId: record.run?.run_id ?? runId,
+        workflow: boundary.workflow,
+      })
+
+      const catalog = needsPricingLookup(record.metrics.attempts)
+        ? await fetchPricingCatalog(pricingFetch ? { fetchImpl: pricingFetch } : {})
+        : null
+      record.pricing = await resolveImplementationPricing({
+        attempts: record.metrics.attempts,
+        catalog,
+        invoke: judgeInvoke,
+        authority: judgeAuthority,
+      })
+      record.cost = {
+        ...aggregateImplementationCost({
+          attempts: record.metrics.attempts,
+          costs: record.pricing.costs,
+          // Rejected or partial Runner metrics mean the set of attempts is
+          // unknown, so no total computed from them can be presented as final.
+          attemptsComplete: record.metrics.complete,
+        }),
+        // Reported beside implementation cost and never inside it.
+        eval_owned: summarizeEvalOwnedUsage([]),
+      }
+
+      await writeJsonAtomic(join(runDir, 'phases/metrics-pricing.json'), {
+        metrics: record.metrics,
+        pricing: record.pricing,
+        cost: record.cost,
+      })
+    },
+
+    'pending-result': async (context) => { await writeResult(context.outcome) },
+
+    cleanup: async (context) => {
+      context.serverRunning = false
+      if (!candidateServer) return
+      const outcome = await stopCandidateServer({
+        recorded: record.candidateServer,
+        isProcessAlive,
+        probe: candidateServer.probe,
+        stop: candidateServer.stop,
+      })
+      // Cleanup after a durably written pending result is a handoff detail: the
+      // lifecycle records the failure diagnostically and the command still exits
+      // successfully.
+      if (!outcome.completed) {
+        throw new Error(`candidate-server cleanup did not complete: ${outcome.error ?? outcome.reason}`)
+      }
+    },
+
+    'cleanup-result': async (context) => { await writeResult(context.outcome) },
+
+    ...handlerOverrides,
+  }
+
+  // The pending result, its report, and the artifact manifest are written from
+  // one assembled value, so the three artifacts can never describe different
+  // states of the same run.
+  async function writeResult(outcome) {
+    const result = {
+      ...assembleResult({
+        runId,
+        mode,
+        outcome,
+        rubrics: provenanceOfRubrics,
+        score: record.score,
+        // Human review belongs to the separate review command. The automated
+        // command hands off without one and never invents an official verdict.
+        humanReview: null,
+        browser: record.browser,
+        sourceEvidence: record.sourceEvidence,
+        judging: record.judging,
+        workflow: {
+          workflow: boundary.workflow,
+          skip_validator: boundary.skip_validator,
+          arguments: boundary.workflow_arguments,
+          configured_stop_step: boundary.stop_step,
+          last_observed_step: record.boundary.last_observed_step,
+          unexpected_step: record.boundary.unexpected_step,
+          observed_steps: record.observed_steps,
+          run_id: record.run?.run_id ?? null,
+          session_dir: record.run?.session_dir ?? null,
+          provenance,
+          events: record.events,
+        },
+        // A reference baseline invoked no implementation workflow, so its usage,
+        // cost, and duration are absent rather than zero.
+        metrics: mode === 'reference-baseline' ? null : record.metrics,
+        cost: mode === 'reference-baseline' ? null : record.cost,
+        pricing: record.pricing,
+        // Summarized at write time so the reported total covers every automated
+        // phase that had actually run when the result was written.
+        timing: summarizeMachineTiming({
+          ledger: record.timing,
+          implementationMs: record.metrics?.active_duration_ms ?? null,
+        }),
+        ambiguity: record.ambiguity ? {
+          artifact: 'ambiguity-ledger.json',
+          coverage: record.ambiguity.coverage,
+          finding_count: record.ambiguity.findings.length,
+          classifications: record.ambiguity.findings.map(({ id, classification, consequence }) => ({
+            id, classification, consequence,
+          })),
+          fixture_improvement_proposals: record.ambiguity.fixture_improvement_proposals,
+          scoring_effect: 'none',
+        } : null,
+        roleConfiguration: reconcileRoleAttempts(
+          validation.profiles,
+          record.metrics?.attempts ?? [],
+        ),
+        timings: summarizeTimings(record.timings),
+      }),
+      candidate_identity: record.candidate?.candidate_identity ?? checkpoint.identity.candidate_identity,
+      candidate_source: record.candidate ?? checkpoint.candidate ?? null,
+      // The endpoint the reviewer is handed. Null when no server was started, so
+      // the human-review command starts one rather than trusting a stale URL.
+      candidate_server: record.candidateServer,
+    }
+    await writeResultArtifacts({ runDir, result })
+  }
+
+  const completedPhases = new Set(
+    Object.entries(checkpoint.phases ?? {})
+      .filter(([, phase]) => phase.state === 'complete')
+      .map(([name]) => name),
+  )
+
+  // A reused phase runs no handler, so its findings would be absent from the
+  // record the result is rendered from. Rehydrating from the durable phase
+  // artifacts is what makes a resumed `result.json` describe the whole
+  // evaluation rather than only the phases this session happened to execute.
+  for (const [phase, load] of [
+    ['verification', (value) => {
+      buildResult = value.build
+      verificationResult = value.verification
+      record.timings.push(...(value.timings ?? []))
+    }],
+    ['browser-evaluation', (value) => { record.browser = value }],
+    ['source-evidence', (value) => { record.sourceEvidence = value }],
+    ['product-judging', (value) => { record.judging = value }],
+    ['score', (value) => { record.score = value }],
+    ['ambiguity-diagnostics', (value) => { record.ambiguity = value }],
+    ['metrics-pricing', (value) => {
+      record.metrics = value.metrics
+      record.pricing = value.pricing
+      record.cost = value.cost
+    }],
+  ]) {
+    const persisted = await readJson(join(runDir, `phases/${phase}.json`), null)
+    if (persisted) load(persisted)
+  }
+
+  // Record phase completion durably as each phase finishes, so an interrupted
+  // run resumes at the first incomplete phase instead of repeating valid work.
+  const tracked = {}
+  for (const phase of AUTOMATED_PHASES) {
+    const handler = handlers[phase.name]
+    if (!handler) continue
+    tracked[phase.name] = async (context) => {
+      const start = process.hrtime.bigint()
+      const events = await handler(context)
+      // Only the phase's own active execution is measured. The implementation
+      // workflow's duration comes from Agent Runner's own metrics instead, so it
+      // is not double-counted here.
+      if (phase.owner === 'evaluation-harness') {
+        record.timing = recordMachineInterval(record.timing, {
+          phase: phase.name,
+          duration_ms: Number(process.hrtime.bigint() - start) / 1e6,
+          session: executionSession,
+        })
+      }
+      checkpoint = {
+        ...checkpoint,
+        timing: record.timing,
+        phases: {
+          ...checkpoint.phases,
+          [phase.name]: {
+            ...(checkpoint.phases?.[phase.name] ?? { units: {} }),
+            state: 'complete',
+            completed_at: new Date().toISOString(),
+          },
+        },
+      }
+      await saveCheckpoint(checkpointPath, checkpoint)
+      return events
+    }
+  }
+
+  const result = await runPhases({
+    phases: AUTOMATED_PHASES,
+    handlers: tracked,
+    outcome: createOutcome(),
+    isComplete: (name) => completedPhases.has(name),
+  })
+
+  return { ...result, errors: [], runDir, runId, boundary, provenance, profiles: validation.profiles }
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const argv = process.argv.slice(2)
+  const runDirIndex = argv.indexOf('--run-dir')
+  const productionRunDir = runDirIndex === -1 ? null : argv[runDirIndex + 1]
+  const candidateWorktree = productionRunDir
+    ? join(resolve(productionRunDir), '.runtime/candidate-worktree')
+    : null
+  const result = await runEvaluation({
+    argv,
+    home: process.env.HOME ?? null,
+    verifyCandidate: productionRunDir
+      ? ({ worktree, exec }) => runCandidateVerification({ worktree, exec })
+      : null,
+    candidateServer: productionRunDir
+      ? createHostCandidateServer({ runDir: productionRunDir })
+      : null,
+    browserDriverFactory: productionRunDir
+      ? ({ baseUrl }) => createAxiBrowserDriver({ baseUrl })
+      : null,
+    judgeInvoke: productionRunDir
+      ? createCodexJudgeInvoker({ runDir: productionRunDir, candidateWorktree })
+      : null,
+    log: (line) => console.error(line),
+  })
+  for (const error of result.errors ?? []) console.error(JSON.stringify(error))
+  process.exit(result.exitCode)
+}

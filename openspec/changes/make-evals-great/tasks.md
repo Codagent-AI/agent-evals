@@ -1,0 +1,5 @@
+- [x] [Build the durable workflow controller](tasks/01-durable-workflow-controller.md)
+- [x] [Replace product evaluation and scoring](tasks/02-product-evaluation-scoring.md)
+- [x] [Add metrics and ambiguity diagnostics](tasks/03-metrics-ambiguity-diagnostics.md)
+- [x] [Finalize human review and reporting](tasks/04-human-review-reporting.md)
+- [x] [Publish, calibrate, and cut over](tasks/05-publication-calibration-cutover.md)
