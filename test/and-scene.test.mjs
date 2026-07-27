@@ -11,7 +11,7 @@ import { calibrationIdentity } from '../evals/agent-runner/and-scene/lib/calibra
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const runScript = join(root, 'evals/agent-runner/and-scene/run.sh')
 const shotsScript = join(root, 'evals/agent-runner/and-scene/scene-shots.mjs')
-const fixtureSha = 'c11595651dfb3941e39c703c483ed1a92d152a37'
+const fixtureSha = '7a4d1328a3555f07d75356f07937e007e45922b2'
 const referenceSha = '171c7def1e12aca2a5f605a5e5feafb20d4e4d19'
 
 const profileArgs = [

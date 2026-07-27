@@ -65,6 +65,9 @@ async function environment({
     invocations.push({ command, args: [...args], options })
     if (command === 'git') {
       const joined = args.join(' ')
+      if (joined.includes('show') && joined.includes('.validator/config.yml')) {
+        return { status: 0, stdout: 'entry_points: []\n' }
+      }
       if (joined.includes('show-ref --verify --quiet')) return { status: 1, stdout: '' }
       if (joined.includes('--is-inside-work-tree')) return { status: 0, stdout: 'true\n' }
       if (joined.includes('remote get-url origin')) {

@@ -111,6 +111,9 @@ async function environment({ metrics = runMetrics(), sessionFiles = {} } = {}) {
     invocations.push([command, ...args])
     if (command === 'git') {
       const verb = args.join(' ')
+      if (verb.includes('show') && verb.includes('.validator/config.yml')) {
+        return { status: 0, stdout: 'entry_points: []\n' }
+      }
       if (verb.includes('show-ref --verify --quiet')) return { status: 1, stdout: '' }
       if (verb.includes('--is-inside-work-tree')) return { status: 0, stdout: 'true\n' }
       if (verb.includes('remote get-url origin')) {

@@ -22,13 +22,17 @@ function git(cwd, ...args) {
   return result.stdout.trim()
 }
 
-async function repository() {
+async function repository({ validatorConfig = true } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'and-scene-candidate-'))
   const source = join(root, 'source')
   await mkdir(source)
   git(source, 'init', '-q')
   await writeFile(join(source, 'README.md'), 'fixture\n')
-  git(source, 'add', 'README.md')
+  if (validatorConfig) {
+    await mkdir(join(source, '.validator'))
+    await writeFile(join(source, '.validator/config.yml'), 'entry_points: []\n')
+  }
+  git(source, 'add', '.')
   git(source, 'commit', '-qm', 'fixture')
   const fixture = git(source, 'rev-parse', 'HEAD')
   await writeFile(join(source, 'README.md'), 'reference\n')
@@ -37,6 +41,25 @@ async function repository() {
   const reference = git(source, 'rev-parse', 'HEAD')
   return { root, source, fixture, reference }
 }
+
+test('a scored candidate rejects a fixture without final Validator configuration before creating its branch', async () => {
+  const repo = await repository({ validatorConfig: false })
+  const worktree = join(repo.root, 'candidate')
+
+  await assert.rejects(
+    prepareCandidateWorktree({
+      repo: repo.source,
+      worktree,
+      ref: repo.fixture,
+      resume: false,
+      runId: 'run-without-validator',
+      kind: 'candidate',
+      exec,
+    }),
+    /fixture.*validator.*config/i,
+  )
+  assert.equal(git(worktree, 'branch', '--show-current'), git(repo.source, 'branch', '--show-current'))
+})
 
 test('fresh scored candidates clone and check out the fixture while baselines select their candidate', async () => {
   const repo = await repository()

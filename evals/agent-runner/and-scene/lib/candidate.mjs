@@ -77,6 +77,20 @@ function resolveRemoteDefaultBranch(exec, worktree) {
   return match[1]
 }
 
+function assertValidatorReadyFixture(exec, worktree, fixtureCommit) {
+  const path = '.validator/config.yml'
+  const config = exec(
+    'git',
+    ['-C', worktree, 'show', `${fixtureCommit}:${path}`],
+    { encoding: 'utf8' },
+  )
+  if (config.status !== 0 || config.error || !(config.stdout ?? '').trim()) {
+    throw new Error(
+      `candidate fixture ${fixtureCommit} is missing required final Validator configuration at ${path}`,
+    )
+  }
+}
+
 async function installEvalExcludes(worktree) {
   const path = join(worktree, '.git/info/exclude')
   await mkdir(dirname(path), { recursive: true })
@@ -148,7 +162,11 @@ export async function prepareCandidateWorktree({
   )
   if (resume) {
     assertSame('candidate fixture commit', fixtureCommit, expectedSource.fixture_commit)
-  } else {
+  }
+  if (kind === 'candidate') {
+    assertValidatorReadyFixture(exec, worktree, fixtureCommit)
+  }
+  if (!resume) {
     if (branch) {
       for (const candidateRef of [`refs/heads/${branch}`, `refs/remotes/origin/${branch}`]) {
         const collision = exec(
