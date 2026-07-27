@@ -63,6 +63,7 @@ async function environment() {
       return { status: 0, stdout: 'WRITE\n' }
     }
     if (command === 'agent-runner' && args[0] === '--version') return { status: 0, stdout: 'agent-runner 2.4.0\n' }
+    if (command === 'agent-runner' && args[0] === 'debug') return { status: 0, stdout: workflowYaml }
     return { status: 0, stdout: '' }
   }
 

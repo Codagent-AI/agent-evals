@@ -40,6 +40,7 @@ const profiles = [
 
 async function environment({
   workflow = workflowYaml,
+  resolvedWorkflow = workflow,
   dirty = '',
   commit = 'a'.repeat(40),
   ghAuthenticated = true,
@@ -91,6 +92,9 @@ async function environment({
     if (command === 'agent-runner' && args[0] === '--version') {
       return { status: 0, stdout: 'agent-runner 2.4.0\n' }
     }
+    if (command === 'agent-runner' && args[0] === 'debug') {
+      return { status: 0, stdout: resolvedWorkflow }
+    }
     if (command === 'agent-runner') return runnerResult
     return { status: 0, stdout: '' }
   }
@@ -99,7 +103,7 @@ async function environment({
 
 function runnerInvocations(context) {
   return context.invocations.filter(({ command, args }) => (
-    command === 'agent-runner' && args[0] !== '--version'
+    command === 'agent-runner' && (args[0] === 'run' || args[0] === '--resume')
   ))
 }
 
@@ -218,7 +222,7 @@ function browserDemo({ captions = DEMO_CONTRACT.step_captions } = {}) {
   }
 }
 
-test('--skip-validator runs the full exact workflow without --until', async () => {
+test('--skip-validator launches the verified workflow by logical name without --until', async () => {
   const context = await environment()
 
   const result = await evaluate(context, ['--skip-validator', ...profiles])
@@ -227,11 +231,23 @@ test('--skip-validator runs the full exact workflow without --until', async () =
   const [invocation] = runnerInvocations(context)
   assert.deepEqual(invocation.args, [
     'run',
-    join(context.agentRunnerDir, WORKFLOW_RELATIVE_PATH),
+    'openspec/implement-change',
     'change_name=create-and-scene',
     'skip_validator=true',
   ])
   assert.ok(!invocation.args.includes('--until'))
+})
+
+test('logical workflow resolution must match the verified pinned workflow before Runner starts', async () => {
+  const context = await environment({
+    resolvedWorkflow: `${workflowYaml}\n# unexpected newer workflow`,
+  })
+
+  const result = await evaluate(context, profiles)
+
+  assert.equal(result.exitCode, 2)
+  assert.deepEqual(runnerInvocations(context), [])
+  assert.match(JSON.stringify(result.errors), /workflow-resolution/)
 })
 
 test('task-level validation is included by default while the final Validator remains required', async () => {

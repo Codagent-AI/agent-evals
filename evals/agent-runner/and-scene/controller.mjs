@@ -71,7 +71,7 @@ import { applyRunStateEvent } from './lib/state-machine.mjs'
 import { loadRubrics, rubricProvenance } from './lib/rubric.mjs'
 import { scoreProduct } from './lib/scorer.mjs'
 import { AUTOMATED_PHASES, runPhases } from './lib/phases.mjs'
-import { hashFile, hashJson, readJson, writeJsonAtomic } from './lib/persistence.mjs'
+import { hashFile, hashJson, hashString, readJson, writeJsonAtomic } from './lib/persistence.mjs'
 import {
   compareRoleSelections,
   reconcileRoleAttempts,
@@ -90,6 +90,8 @@ import { runTimed, summarizeTimings } from './lib/subprocess.mjs'
 import {
   checkWorkflowHistory,
   classifyRunnerRun,
+  IMPLEMENTATION_WORKFLOW_INSPECTION_REF,
+  IMPLEMENTATION_WORKFLOW_LOGICAL_NAME,
   resolveBoundary,
   verifyWorkflowContract,
 } from './lib/workflow.mjs'
@@ -371,6 +373,26 @@ export async function runEvaluation({
     return failure([{ code: 'candidate-worktree', message: error.message }])
   }
   if (mode === 'agent-runner') {
+    const resolvedWorkflow = exec(
+      'agent-runner',
+      ['debug', '--show-workflow', IMPLEMENTATION_WORKFLOW_INSPECTION_REF],
+      {
+        cwd: candidateWorktree,
+        env: { ...process.env, HOME: home, AGENT_RUNNER_NO_TUI: '1' },
+      },
+    )
+    if (resolvedWorkflow.status !== 0 || resolvedWorkflow.error) {
+      return failure([{
+        code: 'workflow-resolution',
+        message: 'Cannot resolve the logical Agent Runner workflow selected for execution',
+      }])
+    }
+    if (hashString(resolvedWorkflow.stdout ?? '') !== provenance.workflow_sha256) {
+      return failure([{
+        code: 'workflow-resolution',
+        message: 'The logical Agent Runner workflow does not match the verified pinned workflow',
+      }])
+    }
     const permission = repositoryPermissionLevel(
       candidateSource.repository,
       candidateWorktree,
@@ -620,7 +642,7 @@ export async function runEvaluation({
         let waitedState = null
         if (action === 'start') {
           const timing = runTimed('agent-runner', [
-            'run', provenance.workflow_path,
+            'run', IMPLEMENTATION_WORKFLOW_LOGICAL_NAME,
             ...boundary.workflow_arguments,
           ], {
             label: 'agent-runner',
