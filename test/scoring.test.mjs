@@ -7,7 +7,14 @@ import { scoreProduct } from '../evals/agent-runner/and-scene/lib/scorer.mjs'
 const rubrics = await loadRubrics()
 const automated = rubrics.automated.rubric
 
-const JOBS = ['demo-integration', 'scene-kit', 'presentation-skill', 'verification-tooling']
+const JOBS = [
+  'demo-integration',
+  'scene-kit',
+  'presentation-skill',
+  'verification-tooling',
+  'testing-evidence',
+  'assumption-handling',
+]
 const GATE_IDS = automated.gates.map(({ id }) => id)
 
 function verdicts(ids, failures) {
@@ -49,12 +56,16 @@ test('an all-pass automated evaluation scores the full 70-point subtotal', () =>
   assert.deepEqual(
     result.components.map(({ id, points_awarded }) => [id, points_awarded]),
     [
-      ['demo-technical-quality', 25],
-      ['scene-kit-correctness', 25],
-      ['presentation-skill-correctness', 10],
-      ['verification-tool-correctness', 10],
+      ['demo-technical-quality', 24],
+      ['scene-kit-correctness', 24],
+      ['presentation-skill-correctness', 7],
+      ['verification-tool-correctness', 7],
+      ['testing-evidence-quality', 4],
+      ['assumption-handling-quality', 4],
     ],
   )
+  assert.ok(result.components.every(({ applicable, points_possible }) => applicable && points_possible > 0))
+  assert.equal(result.score_denominator, 100)
   assert.ok(result.components.every(({ complete }) => complete))
   assert.equal(result.gates_passed, true)
 })
@@ -88,7 +99,7 @@ test('a subcomponent divides its points equally among its criteria without round
   // 5.83, and not a float built by adding five separate 7/6 shares.
   assert.equal(transitions.points_awarded, 35 / 6)
   assert.equal(transitions.criteria.find(({ id }) => id === 'entity-departing-exit').points_awarded, 0)
-  assert.equal(component(result, 'scene-kit-correctness').points_awarded, 25 - 7 / 6)
+  assert.equal(component(result, 'scene-kit-correctness').points_awarded, 24 - 7 / 6)
   assert.equal(result.automated_subtotal.points, 70 - 7 / 6)
 })
 
@@ -96,7 +107,7 @@ test('every criterion result records its identifier, verdict, rationale, and cit
   const result = scoreProduct(inputs())
   const criteria = result.components.flatMap((entry) => entry.subcomponents.flatMap(({ criteria: rows }) => rows))
 
-  assert.equal(criteria.length, 78)
+  assert.equal(criteria.length, 84)
   assert.ok(criteria.every(({ id, verdict, rationale, evidence }) => (
     typeof id === 'string' && ['pass', 'fail'].includes(verdict)
       && rationale.length > 0 && Array.isArray(evidence)
@@ -188,7 +199,7 @@ test('missing, duplicate, unknown, and malformed criterion results fail validati
   assert.throws(
     () => scoreProduct(withJudges([
       ...verdicts(kitCriteria, []),
-      { id: 'demo-scope-discipline', verdict: 'pass', rationale: 'r', evidence: [] },
+      { id: 'demo-scope-discipline', verdict: 'pass', rationale: 'r', evidence: ['src/demo.tsx:1'] },
     ])),
     /unknown criterion results for scene-kit: demo-scope-discipline/,
   )
@@ -212,12 +223,12 @@ test('unobserved evaluator output leaves its component incomplete instead of fai
   assert.equal(component(result, 'scene-kit-correctness').complete, false)
   assert.equal(component(result, 'scene-kit-correctness').points_awarded, null)
   // Components with complete evidence keep their scores.
-  assert.equal(component(result, 'demo-technical-quality').points_awarded, 25)
-  assert.equal(result.automated_subtotal.points, 45)
+  assert.equal(component(result, 'demo-technical-quality').points_awarded, 24)
+  assert.equal(result.automated_subtotal.points, 46)
   assert.equal(result.automated_subtotal.possible, 70)
   assert.equal(result.automated_subtotal.complete, false)
   // The observed subtotal is never rescaled to hide the missing evidence.
-  assert.equal(result.automated_subtotal.observed_possible, 45)
+  assert.equal(result.automated_subtotal.observed_possible, 46)
   assert.equal(result.official_score, null)
   assert.equal(result.official_pass, null)
   assert.ok(result.incomplete.includes('scene-kit-correctness'))
@@ -234,7 +245,7 @@ test('a partially observed component keeps its deterministic score and marks jud
     demo.subcomponents.find(({ id }) => id === 'demo-canonical-content').points_awarded,
     5,
   )
-  assert.equal(demo.subcomponents.find(({ id }) => id === 'demo-scope-discipline').points_awarded, null)
+  assert.equal(demo.subcomponents.find(({ id }) => id === 'demo-code-boundaries').points_awarded, null)
 })
 
 test('unobserved gates make the verdict unavailable without failing the gates', () => {
@@ -291,14 +302,53 @@ test('a malformed human review is rejected rather than scored', () => {
   )
 })
 
-test('a reference baseline is scored with the same rubric, weights, gates, and thresholds', () => {
-  const candidate = scoreProduct({ ...inputs({ humanReview: fullHumanReview }), mode: 'agent-runner' })
+test('a reference baseline excludes workflow-quality components without rescaling or a candidate verdict', () => {
   const baseline = scoreProduct({ ...inputs({ humanReview: fullHumanReview }), mode: 'reference-baseline' })
 
-  assert.deepEqual(
-    { ...baseline, mode: null },
-    { ...candidate, mode: null },
-  )
+  assert.equal(baseline.automated_subtotal.points, 62)
+  assert.equal(baseline.automated_subtotal.possible, 62)
+  assert.equal(baseline.score_denominator, 92)
+  assert.equal(baseline.official_score, 92)
+  assert.equal(baseline.official_pass, null)
+  assert.deepEqual(baseline.pass_failures, [])
+  for (const id of ['testing-evidence-quality', 'assumption-handling-quality']) {
+    assert.deepEqual(component(baseline, id), {
+      id,
+      title: component(baseline, id).title,
+      applicable: false,
+      points_possible: 0,
+      points_awarded: null,
+      points_observed: 0,
+      points_observed_possible: 0,
+      floor: null,
+      complete: true,
+      subcomponents: [],
+    })
+  }
+})
+
+test('a pending reference reports 62 automated points but no final reference score', () => {
+  const baseline = scoreProduct({ ...inputs(), mode: 'reference-baseline' })
+
+  assert.equal(baseline.automated_subtotal.points, 62)
+  assert.equal(baseline.automated_subtotal.possible, 62)
+  assert.equal(baseline.official_score, null)
+  assert.equal(baseline.official_pass, null)
+  assert.deepEqual(baseline.incomplete, ['human-review'])
+})
+
+test('floorless workflow-quality components can score zero without creating a pass gate', () => {
+  const failures = [
+    ...criteriaForJob(automated, 'testing-evidence'),
+    ...criteriaForJob(automated, 'assumption-handling'),
+  ]
+  const result = scoreProduct(inputs({ failures, humanReview: fullHumanReview }))
+
+  assert.equal(component(result, 'testing-evidence-quality').points_awarded, 0)
+  assert.equal(component(result, 'assumption-handling-quality').points_awarded, 0)
+  assert.equal(result.official_score, 92)
+  assert.equal(result.official_pass, true)
+  assert.equal(result.pass_failures.some(({ rule }) => rule === 'component-floor'), false)
 })
 
 test('a gate whose evidence was never observed blocks the verdict without failing', () => {

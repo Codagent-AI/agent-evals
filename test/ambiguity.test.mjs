@@ -178,6 +178,25 @@ test('the ledger is diagnostic only and carries no points or gate', () => {
   assert.equal(ledger.affects_product_verdict, false)
 })
 
+test('ambiguity output cannot embed scored assumption verdicts or point effects', () => {
+  assert.throws(
+    () => parseAmbiguityOutput(JSON.stringify({
+      findings: [],
+      coverage: 'complete',
+      proposals: [],
+      scored_results: [{
+        id: 'assumption-consequential-ambiguities-surfaced',
+        verdict: 'fail',
+      }],
+    })),
+    /scored assumption|scoring/i,
+  )
+  assert.throws(
+    () => parseAmbiguityOutput(judgeOutput({ findings: [{ ...finding(), points: -4 }] })),
+    /points|scoring/i,
+  )
+})
+
 test('a fixture-improvement proposal is recorded as unapproved and pending review', () => {
   const parsed = parseAmbiguityOutput(judgeOutput({
     findings: [finding()],

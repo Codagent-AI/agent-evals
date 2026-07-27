@@ -20,17 +20,47 @@ async function automatedRubric() {
   return JSON.parse(await readFile(AUTOMATED_RUBRIC_PATH, 'utf8'))
 }
 
-test('the automated rubric allocates exactly 70 points across the four product components', async () => {
+test('the automated rubric allocates the approved 24/24/7/7/4/4 automated components', async () => {
   const rubric = await automatedRubric()
   assert.deepEqual(validateAutomatedRubric(rubric), [])
   assert.equal(rubric.automated_points, 70)
   assert.deepEqual(
     rubric.components.map(({ id, points, floor }) => ({ id, points, floor })),
     [
-      { id: 'demo-technical-quality', points: 25, floor: 15 },
-      { id: 'scene-kit-correctness', points: 25, floor: 15 },
-      { id: 'presentation-skill-correctness', points: 10, floor: null },
-      { id: 'verification-tool-correctness', points: 10, floor: null },
+      { id: 'demo-technical-quality', points: 24, floor: 15 },
+      { id: 'scene-kit-correctness', points: 24, floor: 15 },
+      { id: 'presentation-skill-correctness', points: 7, floor: null },
+      { id: 'verification-tool-correctness', points: 7, floor: null },
+      { id: 'testing-evidence-quality', points: 4, floor: null },
+      { id: 'assumption-handling-quality', points: 4, floor: null },
+    ],
+  )
+  assert.deepEqual(
+    rubric.components.flatMap(({ subcomponents }) => (
+      subcomponents.map(({ id, points }) => [id, points])
+    )),
+    [
+      ['demo-canonical-content', 5],
+      ['demo-navigation-and-modes', 5],
+      ['demo-runtime-reliability', 4],
+      ['demo-scene-kit-integration', 4],
+      ['demo-identity-and-grouping', 3],
+      ['demo-code-boundaries', 3],
+      ['scene-step-model', 4],
+      ['scene-entity-transitions', 7],
+      ['scene-modes-and-navigation', 6],
+      ['scene-fixed-canvas', 2],
+      ['scene-style-and-attribution', 5],
+      ['skill-requirement-gathering', 1],
+      ['skill-scaffolding', 3],
+      ['skill-presentation-lifecycle', 2],
+      ['skill-self-verification', 1],
+      ['verification-missing-sample', 1],
+      ['verification-addressing-and-errors', 2],
+      ['verification-capture', 2],
+      ['verification-warnings', 2],
+      ['testing-evidence-quality-criteria', 4],
+      ['assumption-handling-quality-criteria', 4],
     ],
   )
   for (const component of rubric.components) {
@@ -48,7 +78,7 @@ test('deterministic browser and LLM source review own disjoint demo subcomponent
     .reduce((sum, { points }) => sum + points, 0)
 
   assert.equal(byEvaluator('deterministic-browser'), 14)
-  assert.equal(byEvaluator('llm-source-review'), 11)
+  assert.equal(byEvaluator('llm-source-review'), 10)
   assert.ok(
     demo.subcomponents
       .filter(({ evaluator }) => evaluator === 'llm-source-review')
@@ -56,19 +86,20 @@ test('deterministic browser and LLM source review own disjoint demo subcomponent
   )
 })
 
-test('each product judge job maps to exactly one component', async () => {
+test('each of the six scored judge jobs maps to exactly one component', async () => {
   const rubric = await automatedRubric()
   const jobs = new Map()
   for (const component of rubric.components) {
     for (const subcomponent of component.subcomponents) {
-      if (subcomponent.evaluator !== 'llm-source-review') continue
+      if (!subcomponent.evaluator.startsWith('llm-')) continue
       const owners = jobs.get(subcomponent.job) ?? new Set()
       owners.add(component.id)
       jobs.set(subcomponent.job, owners)
     }
   }
   assert.deepEqual([...jobs.keys()].sort(), [
-    'demo-integration', 'presentation-skill', 'scene-kit', 'verification-tooling',
+    'assumption-handling', 'demo-integration', 'presentation-skill', 'scene-kit',
+    'testing-evidence', 'verification-tooling',
   ])
   assert.ok([...jobs.values()].every((owners) => owners.size === 1))
 })
@@ -81,19 +112,44 @@ test('every legacy criterion id receives exactly one approved disposition', asyn
   const scored = new Set(rubricCriteria(rubric).map(({ id }) => id))
   const gates = new Set(rubric.gates.map(({ id }) => id))
   const removed = new Set(rubric.removed.map(({ id }) => id))
+  const replaced = new Set(rubric.replaced.map(({ id }) => id))
   const legacyScored = LEGACY_CRITERION_IDS.filter((id) => scored.has(id))
 
-  assert.equal(legacyScored.length, 61)
+  assert.equal(legacyScored.length, 59)
   assert.equal(gates.size, 4)
   assert.equal(removed.size, 3)
+  assert.equal(replaced.size, 2)
   for (const id of LEGACY_CRITERION_IDS) {
-    const dispositions = [scored.has(id), gates.has(id), removed.has(id)].filter(Boolean)
+    const dispositions = [scored.has(id), gates.has(id), replaced.has(id), removed.has(id)].filter(Boolean)
     assert.equal(dispositions.length, 1, `${id} must have exactly one disposition`)
   }
+  assert.deepEqual([...replaced].sort(), [
+    'quality-visual-composition-inspected', 'quality-visual-warnings-reviewed',
+  ])
   assert.deepEqual([...removed].sort(), [
     'quality-builds-clean', 'quality-renders-without-errors', 'skill-optional-ascii-mockup',
   ])
   assert.ok(rubric.removed.every(({ reason }) => typeof reason === 'string' && reason.length > 0))
+})
+
+test('the four testing-evidence and four assumption-handling criteria are assigned exactly once', async () => {
+  const rubric = await automatedRubric()
+  const rows = rubricCriteria(rubric)
+  const byJob = (job) => rows.filter((row) => row.job === job).map(({ id }) => id)
+
+  assert.deepEqual(byJob('testing-evidence'), [
+    'testing-evidence-traceable-coverage',
+    'testing-evidence-usable-proof',
+    'testing-evidence-final-revision-applicability',
+    'testing-evidence-complete-honest-record',
+  ])
+  assert.deepEqual(byJob('assumption-handling'), [
+    'assumption-consequential-ambiguities-surfaced',
+    'assumption-repository-facts-distinguished',
+    'assumption-decisions-and-escalations-proportionate',
+    'assumption-final-handoff-preserves-decisions',
+  ])
+  assert.equal(new Set(rows.map(({ id }) => id)).size, rows.length)
 })
 
 test('the four hard gates are excluded from the scored verification component', async () => {

@@ -15,9 +15,9 @@
 //
 // Harness activity — retries, evidence repair, workflow failures — is carried
 // through diagnostically and never touches a point.
-import { rubricCriteria } from './rubric.mjs'
+import { componentApplicable, rubricCriteria } from './rubric.mjs'
 
-export const SCORE_SCHEMA_VERSION = 1
+export const SCORE_SCHEMA_VERSION = 2
 
 const VERDICTS = ['pass', 'fail']
 
@@ -60,9 +60,10 @@ function indexResults(source, results, expectedIds, { allowUnobserved = false } 
           `malformed criterion result from ${source}: ${result.id} has no rationale`,
         )
       }
-      if (!Array.isArray(result.evidence)) {
+      if (!Array.isArray(result.evidence) || result.evidence.length === 0
+        || result.evidence.some((item) => typeof item !== 'string' || item.trim().length === 0)) {
         throw new RubricValidationError(
-          `malformed criterion result from ${source}: ${result.id} has no cited evidence`,
+          `malformed criterion result from ${source}: ${result.id} has no cited verified evidence`,
         )
       }
     }
@@ -108,6 +109,9 @@ function validateHumanReview(humanReview, humanRubric) {
     )
   }
   return {
+    applicable: true,
+    points_awarded: humanReview.total,
+    points_possible: humanRubric.points,
     points: humanReview.total,
     possible: humanRubric.points,
     floor: humanRubric.floor,
@@ -175,7 +179,22 @@ function scoreSubcomponent(component, subcomponent, resultsBySource) {
   }
 }
 
-function scoreComponent(component, resultsBySource) {
+function scoreComponent(component, resultsBySource, applicable) {
+  if (!applicable) {
+    return {
+      id: component.id,
+      title: component.title,
+      applicable: false,
+      points_possible: 0,
+      points_awarded: null,
+      points_observed: 0,
+      points_observed_possible: 0,
+      floor: null,
+      complete: true,
+      subcomponents: [],
+      observed_shares: [],
+    }
+  }
   const scored = component.subcomponents.map(
     (subcomponent) => scoreSubcomponent(component, subcomponent, resultsBySource),
   )
@@ -186,6 +205,7 @@ function scoreComponent(component, resultsBySource) {
   return {
     id: component.id,
     title: component.title,
+    applicable: true,
     points_possible: component.points,
     // A component with unobserved evidence has no score at all; reporting a
     // partial number as if it were the component total would silently convert
@@ -237,7 +257,12 @@ export function scoreProduct({
   // Validate each evaluator's coverage against the criteria the rubric assigns
   // it, before any arithmetic depends on it.
   const resultsBySource = new Map()
-  const rows = rubricCriteria(automated)
+  const applicableComponents = new Set(
+    automated.components
+      .filter((component) => componentApplicable(component, mode))
+      .map(({ id }) => id),
+  )
+  const rows = rubricCriteria(automated).filter(({ component }) => applicableComponents.has(component))
   const deterministicIds = rows.filter(({ evaluator }) => evaluator === 'deterministic-browser').map(({ id }) => id)
   if (deterministic !== null && deterministic !== undefined) {
     resultsBySource.set('deterministic-browser', indexResults('deterministic-browser', deterministic, deterministicIds))
@@ -249,15 +274,20 @@ export function scoreProduct({
     resultsBySource.set(job, indexResults(job, results, rows.filter((row) => row.job === job).map(({ id }) => id)))
   }
 
-  const scoredComponents = automated.components.map((component) => scoreComponent(component, resultsBySource))
+  const scoredComponents = automated.components.map((component) => (
+    scoreComponent(component, resultsBySource, applicableComponents.has(component.id))
+  ))
   const components = scoredComponents.map(({ observed_shares: _shares, ...component }) => component)
   const gateScore = scoreGates(automated.gates, gates)
   const human = validateHumanReview(humanReview, humanRubric)
 
   const automatedComplete = components.every(({ complete }) => complete)
+  const automatedPossible = automated.components
+    .filter((component) => applicableComponents.has(component.id))
+    .reduce((sum, { points }) => sum + points, 0)
   const automatedSubtotal = {
     points: sumShares(scoredComponents.flatMap(({ observed_shares: shares }) => shares)),
-    possible: automated.automated_points,
+    possible: automatedPossible,
     // What the observed evidence could have awarded. Reporting this alongside
     // `possible` keeps a partial run readable without rescaling its score.
     observed_possible: components.reduce((sum, { points_observed_possible }) => sum + points_observed_possible, 0),
@@ -265,29 +295,30 @@ export function scoreProduct({
   }
 
   const incomplete = [
-    ...components.filter(({ complete }) => !complete).map(({ id }) => id),
+    ...components.filter(({ applicable, complete }) => applicable && !complete).map(({ id }) => id),
     ...(gateScore.passed === null ? ['hard-gates'] : []),
     ...(human ? [] : ['human-review']),
   ]
 
   const evaluable = incomplete.length === 0
-  const officialScore = evaluable ? automatedSubtotal.points + human.points : null
+  const officialScore = evaluable ? automatedSubtotal.points + human.points_awarded : null
+  const isCandidate = mode !== 'reference-baseline'
 
   const passFailures = []
-  if (evaluable) {
+  if (evaluable && isCandidate) {
     if (officialScore < automated.pass_threshold) {
       passFailures.push({ rule: 'total', id: null, value: officialScore, required: automated.pass_threshold })
     }
     for (const component of components) {
-      if (component.floor !== null && component.points_awarded < component.floor) {
+      if (component.applicable && component.floor !== null && component.points_awarded < component.floor) {
         passFailures.push({
           rule: 'component-floor', id: component.id,
           value: component.points_awarded, required: component.floor,
         })
       }
     }
-    if (human.points < human.floor) {
-      passFailures.push({ rule: 'human-floor', id: 'human-review', value: human.points, required: human.floor })
+    if (human.points_awarded < human.floor) {
+      passFailures.push({ rule: 'human-floor', id: 'human-review', value: human.points_awarded, required: human.floor })
     }
     if (human.lowest_rating < humanRubric.min_individual_rating) {
       passFailures.push({
@@ -318,6 +349,7 @@ export function scoreProduct({
       },
     },
     components,
+    score_denominator: automatedPossible + humanRubric.points,
     gates: gateScore.gates,
     gates_passed: gateScore.passed,
     automated_subtotal: automatedSubtotal,
@@ -325,7 +357,7 @@ export function scoreProduct({
     official_score: officialScore,
     // An unevaluable pass contract yields no verdict at all rather than a
     // failure, so an interrupted run is never reported as a bad product.
-    official_pass: evaluable ? passFailures.length === 0 : null,
+    official_pass: evaluable && isCandidate ? passFailures.length === 0 : null,
     pass_failures: passFailures,
     incomplete,
     harness,

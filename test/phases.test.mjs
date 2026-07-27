@@ -282,7 +282,7 @@ test('a browser phase without a running candidate server is a harness failure', 
   assert.equal(result.outcome.evaluation_status, 'evaluation-harness-failed')
 })
 
-test('completed phases are skipped on resume without rerunning their work', async () => {
+test('completed phases are skipped while product judging revalidates its individual units', async () => {
   const { order, map } = handlers(AUTOMATED_PHASES, { effects: serverUp })
 
   const result = await runPhases({
@@ -293,8 +293,8 @@ test('completed phases are skipped on resume without rerunning their work', asyn
   })
 
   assert.ok(!order.includes('verification'))
-  assert.ok(!order.includes('product-judging'))
-  assert.deepEqual(result.reused, ['verification', 'product-judging'])
+  assert.ok(order.includes('product-judging'))
+  assert.deepEqual(result.reused, ['verification'])
   assert.equal(result.failed, null)
 })
 
@@ -346,11 +346,12 @@ test('the Agent Runner phase always re-verifies rather than trusting a checkpoin
     'evidence-provenance',
     'source-freeze',
     'candidate-server',
+    'product-judging',
     'pending-result',
     'cleanup-result',
   ])
   assert.ok(!result.reused.includes('agent-runner'))
-  assert.ok(result.reused.includes('product-judging'))
+  assert.ok(!result.reused.includes('product-judging'))
 })
 
 test('cleanup failure after a durable pending result keeps a successful exit', async () => {

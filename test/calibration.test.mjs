@@ -19,20 +19,22 @@ async function out() {
   return mkdtemp(join(tmpdir(), 'agent-evals-calibration-'))
 }
 
-test('the known-good reference scores the full automated range and reaches an official pass', async () => {
+test('the known-good reference scores all 62 applicable automated points and opens every gate', async () => {
   const ledger = await runCalibration({ rubrics, outDir: await out() })
 
   assert.equal(ledger.passed, true, JSON.stringify(ledger.failures, null, 2))
   const reference = ledger.cases.find(({ id }) => id === 'reference')
   assert.equal(reference.ok, true)
-  assert.equal(reference.automated_subtotal, rubrics.automated.rubric.automated_points)
+  assert.equal(reference.automated_subtotal, 62)
+  assert.equal(reference.automated_possible, 62)
   assert.equal(reference.gates_passed, true)
-  assert.equal(reference.official_pass, true)
-  assert.equal(reference.official_score, rubrics.automated.rubric.total_points)
+  assert.equal(reference.official_pass, null)
+  assert.equal(reference.official_score, 92)
+  assert.equal(reference.score_denominator, 92)
   assert.equal(reference.evaluation_status, 'complete')
 })
 
-test('all four product judge jobs run and none fails', async () => {
+test('reference runs four applicable jobs while candidate calibration runs all six', async () => {
   const ledger = await runCalibration({ rubrics, outDir: await out() })
 
   const reference = ledger.cases.find(({ id }) => id === 'reference')
@@ -41,6 +43,15 @@ test('all four product judge jobs run and none fails', async () => {
     ['demo-integration', 'presentation-skill', 'scene-kit', 'verification-tooling'],
   )
   assert.deepEqual(reference.judging.failed_jobs, [])
+
+  const candidate = ledger.cases.find(({ id }) => id === 'testing-evidence-quality-regression')
+  assert.deepEqual(
+    Object.keys(candidate.judging.judges).sort(),
+    [
+      'assumption-handling', 'demo-integration', 'presentation-skill',
+      'scene-kit', 'testing-evidence', 'verification-tooling',
+    ],
+  )
 })
 
 test('every approved degradation degrades exactly its intended component or gate', async () => {
@@ -63,6 +74,31 @@ test('every approved degradation degrades exactly its intended component or gate
   const targeted = new Set(approved.map(({ target }) => target.id))
   for (const { id } of rubrics.automated.rubric.components) assert.ok(targeted.has(id), id)
   for (const { id } of rubrics.automated.rubric.gates) assert.ok(targeted.has(id), id)
+})
+
+test('calibration covers workflow evidence defects, missing judging, N/A arithmetic, and shared-92 comparison', async () => {
+  const ledger = await runCalibration({ rubrics, outDir: await out() })
+  const ids = new Set(ledger.cases.map(({ id }) => id))
+  for (const id of [
+    'evidence-ownership-regression',
+    'evidence-lineage-regression',
+    'evidence-contradiction-regression',
+    'visual-warning-disposition-regression',
+    'assumption-surfacing-regression',
+  ]) assert.ok(ids.has(id), id)
+
+  const checks = Object.fromEntries(ledger.harness_checks.map((check) => [check.id, check]))
+  for (const id of [
+    'missing-judge-output-is-harness-failure',
+    'reference-na-arithmetic',
+    'shared-92-comparison',
+    'runner-streaming-regression-retained',
+    'native-failure-detail-regression-retained',
+    'run-identity-regression-retained',
+    'process-identity-regression-retained',
+  ]) {
+    assert.equal(checks[id]?.ok, true, `${id}: ${checks[id]?.detail}`)
+  }
 })
 
 test('a mutation that does not degrade its intended target fails calibration', async () => {

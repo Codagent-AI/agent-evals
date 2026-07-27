@@ -50,6 +50,7 @@ const ARTIFACT_NAME = /(session[-_]?report|assumption|context[-_]?gap|ambiguit|a
 export const AMBIGUITY_RESULT_SCHEMA = {
   type: 'object',
   required: ['findings', 'coverage'],
+  additionalProperties: false,
   properties: {
     coverage: { enum: ['complete', 'incomplete'] },
     findings: {
@@ -57,6 +58,7 @@ export const AMBIGUITY_RESULT_SCHEMA = {
       items: {
         type: 'object',
         required: ['origin', 'source', 'concern', 'evidence', 'handling', 'consequence', 'classification', 'rationale'],
+        additionalProperties: false,
         properties: {
           origin: {
             type: 'object',
@@ -125,9 +127,19 @@ export function parseAmbiguityOutput(text) {
   if (!Array.isArray(payload?.findings)) {
     throw new Error('ambiguity output has no findings array')
   }
+  for (const key of ['score', 'scores', 'scored_results', 'verdicts', 'points']) {
+    if (Object.hasOwn(payload, key)) {
+      throw new Error(`ambiguity output cannot contain scored assumption or scoring field ${key}`)
+    }
+  }
 
   const findings = payload.findings.map((raw) => {
     if (!raw || typeof raw !== 'object') throw new Error('ambiguity finding is not an object')
+    for (const key of ['score', 'scored_result', 'verdict', 'points', 'points_awarded']) {
+      if (Object.hasOwn(raw, key)) {
+        throw new Error(`ambiguity finding cannot contain scoring field ${key}`)
+      }
+    }
     if (!AMBIGUITY_CLASSIFICATIONS.includes(raw.classification)) {
       throw new Error(`unsupported ambiguity classification: ${JSON.stringify(raw.classification)}`)
     }

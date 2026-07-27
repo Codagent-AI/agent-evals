@@ -23,7 +23,10 @@ export class ReportConsistencyError extends Error {
 
 // The outcome facts the report leads with. These are exactly the fields the
 // consistency check compares, because these are what a reader acts on.
-const OUTCOME_FIELDS = ['evaluation_status', 'product_verdict', 'official_score', 'label', 'failed_phase']
+const OUTCOME_FIELDS = [
+  'evaluation_status', 'product_verdict', 'official_score',
+  'score_denominator', 'label', 'failed_phase',
+]
 
 const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
 
@@ -100,7 +103,10 @@ function headlineClass(result) {
 function summaryBlock(result) {
   const lines = []
   if (Number.isFinite(result.official_score)) {
-    lines.push(`<p><strong>Official score:</strong> ${escapeHtml(points(result.official_score))} / 100</p>`)
+    lines.push(
+      `<p><strong>Official score:</strong> ${escapeHtml(points(result.official_score))} / `
+      + `${escapeHtml(String(result.score_denominator ?? 100))}</p>`,
+    )
   } else {
     lines.push('<p><strong>No official score:</strong> the product verdict is unavailable for this run.</p>')
   }
@@ -134,7 +140,7 @@ function componentSections(result) {
   const componentRows = components.map((component) => [
     component.id,
     component.title ?? '',
-    points(component.points_awarded),
+    component.applicable === false ? 'not applicable' : points(component.points_awarded),
     component.points_possible,
     component.floor ?? 'none',
     component.complete ? 'complete' : 'incomplete',
@@ -202,7 +208,12 @@ function baselineSection(result) {
   const totals = table(
     ['Measure', 'Baseline', 'Candidate', 'Delta'],
     [
-      ['Official score', points(baseline.totals?.baseline), points(baseline.totals?.candidate), delta(baseline.totals?.delta)],
+      [
+        `Shared score / ${baseline.denominator ?? 92}`,
+        points(baseline.totals?.baseline),
+        points(baseline.totals?.candidate),
+        delta(baseline.totals?.delta),
+      ],
       ['Human review', points(baseline.human_review?.baseline), points(baseline.human_review?.candidate), delta(baseline.human_review?.delta)],
       [
         'Implementation cost (USD)',

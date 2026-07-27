@@ -23,6 +23,7 @@ import {
   beginUnit,
   completeUnit,
   createCheckpoint,
+  failUnit,
   loadCheckpoint,
   saveCheckpoint,
   validateCheckpointIdentity,
@@ -950,10 +951,28 @@ export async function runEvaluation({
         })
       }
 
+      const judgeDirectory = join(runDir, 'phases/judges')
+      await mkdir(judgeDirectory, { recursive: true })
+      const evidenceViews = Object.fromEntries(
+        Object.entries(record.evidenceViews ?? {}).map(([id, view]) => [id, {
+          ...view,
+          root: join(runDir, view.root),
+          index: join(runDir, view.index),
+        }]),
+      )
+      const judgeDependencies = {
+        rubric: provenanceOfRubrics.automated,
+        final_sha: record.delivery?.final_sha ?? record.candidate?.produced_commit ?? null,
+        neutral_manifest: record.neutral?.manifest_sha256 ?? null,
+        evidence_views: record.evidenceViews ?? null,
+      }
+
       if (record.sourceEvidence.files.length === 0) {
         throw new Error('candidate source is empty; product judging cannot produce an evidence-backed result')
       } else if (!judgeInvoke) {
-        record.events.push({ event: 'skipped', reason: 'no judge invoker configured' })
+        const error = new Error('required scored judging has no judge invoker configured')
+        error.code = 'judge-output'
+        throw error
       } else {
         record.judging = await runProductJudging({
           rubrics,
@@ -969,6 +988,47 @@ export async function runEvaluation({
             source_root: join(runDir, record.neutral.source.root),
             requirements_root: join(runDir, record.neutral.requirements.root),
           } : null,
+          evidenceViews,
+          mode,
+          loadJob: async ({ id, inputHash }) => {
+            const reusable = await verifyUnit(checkpoint, {
+              phase: 'product-judging',
+              unit: id,
+              inputs: { input_hash: inputHash },
+              dependencies: judgeDependencies,
+            })
+            if (!reusable.reusable) return null
+            return readJson(join(judgeDirectory, `${id}.json`), null)
+          },
+          startJob: async ({ id, inputHash }) => {
+            checkpoint = beginUnit(checkpoint, {
+              phase: 'product-judging',
+              unit: id,
+              inputs: { input_hash: inputHash },
+              dependencies: judgeDependencies,
+            })
+            await saveCheckpoint(checkpointPath, checkpoint)
+          },
+          saveJob: async ({ id, inputHash, ...outcome }) => {
+            const artifact = join(judgeDirectory, `${id}.json`)
+            await writeJsonAtomic(artifact, { id, input_hash: inputHash, ...outcome })
+            checkpoint = await completeUnit(checkpoint, {
+              phase: 'product-judging',
+              unit: id,
+              inputs: { input_hash: inputHash },
+              dependencies: judgeDependencies,
+              outputs: [artifact],
+            })
+            await saveCheckpoint(checkpointPath, checkpoint)
+          },
+          failJob: async ({ id, attempts }) => {
+            checkpoint = failUnit(checkpoint, {
+              phase: 'product-judging',
+              unit: id,
+              error: attempts.at(-1)?.error ?? 'judge output exhausted',
+            })
+            await saveCheckpoint(checkpointPath, checkpoint)
+          },
           invoke: judgeInvoke,
         })
         await writeJsonAtomic(join(runDir, 'phases/product-judging.json'), record.judging)
@@ -991,6 +1051,13 @@ export async function runEvaluation({
         mode,
       })
       await writeJsonAtomic(join(runDir, 'phases/score.json'), record.score)
+      if ((record.judging?.failed_jobs ?? []).length > 0) {
+        const error = new Error(
+          `required judge output exhausted: ${record.judging.failed_jobs.join(', ')}`,
+        )
+        error.code = 'judge-output'
+        throw error
+      }
       return [{
         type: 'automated-scoring-complete',
         automated_subtotal: record.score.automated_subtotal.points,

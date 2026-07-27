@@ -8,6 +8,7 @@ import { writeFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 
 import { readJson } from './lib/persistence.mjs'
+import { productJudgeJobs } from './lib/judge-jobs.mjs'
 import { loadRubrics } from './lib/rubric.mjs'
 import { scoreProduct } from './lib/scorer.mjs'
 
@@ -30,18 +31,35 @@ async function main(args) {
   const judging = await optionalJson(args, '--judging')
   const humanReview = await optionalJson(args, '--human-review')
 
+  const rubrics = await loadRubrics()
+  const mode = valueAfter(args, '--mode', false) ?? 'agent-runner'
+  const requiredJobs = productJudgeJobs(rubrics, { mode }).map(({ id }) => id)
+  const failed = new Set(judging?.failed_jobs ?? [])
+  const missing = requiredJobs.filter((job) => (
+    failed.has(job) || !Array.isArray(judging?.judges?.[job])
+  ))
+  if (missing.length > 0) {
+    throw new Error(`required judge jobs failed: ${missing.join(', ')}`)
+  }
+  const durableHuman = humanReview?.score
+    ? {
+        total: humanReview.score.total,
+        ratings: (humanReview.responses ?? []).map(({ rating }) => rating),
+      }
+    : humanReview
+
   const result = scoreProduct({
-    rubrics: await loadRubrics(),
+    rubrics,
     deterministic: browser?.criteria ?? null,
     judges: judging?.judges ?? {},
     gates: browser?.gates ?? null,
-    humanReview,
+    humanReview: durableHuman,
     harness: {
       judge_retries: judging?.retries ?? {},
       failed_judge_jobs: judging?.failed_jobs ?? [],
       browser_bounds_exceeded: browser?.bounds_exceeded ?? [],
     },
-    mode: valueAfter(args, '--mode', false) ?? 'agent-runner',
+    mode,
   })
   await writeFile(valueAfter(args, '--output'), `${JSON.stringify(result, null, 2)}\n`)
 }

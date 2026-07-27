@@ -73,7 +73,10 @@ function verdict(id, pass, rationale, evidence = []) {
     id,
     verdict: pass ? 'pass' : 'fail',
     rationale: bounded(rationale),
-    evidence: evidence.map((item) => bounded(item)),
+    // Every observed machine verdict cites its durable probe even when the
+    // probe has no candidate-controlled detail worth repeating.
+    evidence: (evidence.length > 0 ? evidence : [`evaluator-probe:${id}`])
+      .map((item) => bounded(item)),
     observed: true,
   }
 }

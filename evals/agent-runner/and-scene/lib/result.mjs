@@ -24,7 +24,7 @@ import { summarizeEvidenceManifest } from './evidence.mjs'
 import { hashFile, writeJsonAtomic } from './persistence.mjs'
 import { renderReport } from './report.mjs'
 
-export const RESULT_SCHEMA_VERSION = 2
+export const RESULT_SCHEMA_VERSION = 3
 export const ARTIFACT_MANIFEST_SCHEMA_VERSION = 1
 
 // Runtime scratch: candidate worktrees, linked run stores, and anything else a
@@ -121,6 +121,7 @@ export function assembleResult({
     evaluation_status: outcome.evaluation_status,
     product_verdict: outcome.product_verdict,
     label: outcomeLabel(outcome),
+    score_denominator: score?.score_denominator ?? outcome.score_denominator ?? null,
     // Only a durable verdict carries an official score.
     official_score: outcome.verdict_durable ? (outcome.official_score ?? score?.official_score ?? null) : null,
     // The subtotal is a statement about the whole automated rubric, so a partial
@@ -132,6 +133,7 @@ export function assembleResult({
       ? []
       : components
         .filter(({ complete }) => complete)
+        .filter(({ applicable }) => applicable !== false)
         .map(({ id, title, points_awarded, points_possible }) => ({
           id, title, points_awarded, points_possible,
         })),

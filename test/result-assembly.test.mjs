@@ -117,6 +117,53 @@ test('a reference baseline marks Runner roles, cost, and timing not applicable r
   assert.notEqual(result.cost, 0)
 })
 
+test('a complete reference result records the 92-point denominator and N/A components', () => {
+  const referenceScore = score({
+    official: 92,
+    components: [
+      { ...component('demo-technical-quality', 24), applicable: true, points_possible: 24 },
+      { ...component('scene-kit-correctness', 24), applicable: true, points_possible: 24 },
+      { ...component('presentation-skill-correctness', 7), applicable: true, points_possible: 7 },
+      { ...component('verification-tool-correctness', 7), applicable: true, points_possible: 7 },
+      {
+        ...component('testing-evidence-quality', 0),
+        applicable: false,
+        points_awarded: null,
+        points_possible: 0,
+      },
+      {
+        ...component('assumption-handling-quality', 0),
+        applicable: false,
+        points_awarded: null,
+        points_possible: 0,
+      },
+    ],
+  })
+  referenceScore.score_denominator = 92
+  referenceScore.automated_subtotal = { points: 62, possible: 62, observed_possible: 62, complete: true }
+  referenceScore.official_pass = null
+  const outcome = applyOutcomeEvent(
+    applyOutcomeEvent(createOutcome({ kind: 'reference' }), {
+      type: 'automated-scoring-complete',
+      automated_subtotal: 62,
+    }),
+    { type: 'reference-finalized', official_score: 92 },
+  )
+
+  const result = assembleResult({
+    runId: 'reference-1',
+    mode: 'reference-baseline',
+    outcome,
+    rubrics: RUBRICS,
+    score: referenceScore,
+  })
+
+  assert.equal(result.score_denominator, 92)
+  assert.equal(result.official_score, 92)
+  assert.equal(result.product_verdict, 'not-applicable')
+  assert.equal(result.score.components.filter(({ applicable }) => applicable === false).length, 2)
+})
+
 test('completeness dimensions are reported independently of each other', () => {
   const result = assemble({
     cost: { implementation: { total_usd: 4.5, complete: true, usage_complete: false } },

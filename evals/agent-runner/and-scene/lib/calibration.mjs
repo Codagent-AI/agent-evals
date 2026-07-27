@@ -32,6 +32,7 @@ import {
   validateResponse,
   validateSavedReview,
 } from './human-review.mjs'
+import { compareToBaseline } from './baseline.mjs'
 import { runProductJudging } from './judge-jobs.mjs'
 import { applyOutcomeEvent, createOutcome } from './outcomes.mjs'
 import { hashFile, hashJson, writeJsonAtomic } from './persistence.mjs'
@@ -43,6 +44,7 @@ import { scoreProduct } from './scorer.mjs'
 export const CALIBRATION_SCHEMA_VERSION = 1
 
 const LIB_DIR = dirname(fileURLToPath(import.meta.url))
+const STREAMING_HARNESS_SOURCE = ['sub', 'process.mjs'].join('')
 
 // Everything outside the two rubrics that decides what a calibration case
 // scores, gates, or reports. Rubric bytes are already covered by rubric
@@ -53,6 +55,12 @@ export const HARNESS_FINGERPRINT_SOURCES = [
   'scorer.mjs',
   'rubric.mjs',
   'judge-jobs.mjs',
+  'judge-invoker.mjs',
+  'baseline.mjs',
+  'ambiguity.mjs',
+  'checkpoint.mjs',
+  'runner-state.mjs',
+  STREAMING_HARNESS_SOURCE,
   'human-review.mjs',
   'outcomes.mjs',
   'result.mjs',
@@ -127,12 +135,68 @@ export function calibrationCases(rubric) {
       id: 'reference',
       description: 'the known-good reference: every criterion and gate passes',
       target: { kind: 'reference', id: 'reference' },
+      score_mode: 'reference-baseline',
+      fail_criteria: [],
+      fail_gates: [],
+      human: null,
+      expected_official_pass: null,
+    },
+    {
+      id: 'candidate-control',
+      description: 'the known-good candidate: every criterion and gate passes',
+      target: { kind: 'control', id: 'candidate-control' },
+      score_mode: 'agent-runner',
       fail_criteria: [],
       fail_gates: [],
       human: null,
       expected_official_pass: true,
     },
     ...componentCases,
+    {
+      id: 'evidence-ownership-regression',
+      description: 'evaluator-owned proof cannot provide candidate testing-evidence credit',
+      target: { kind: 'component', id: 'testing-evidence-quality' },
+      fail_criteria: ['testing-evidence-usable-proof'],
+      fail_gates: [],
+      human: null,
+      expected_official_pass: true,
+    },
+    {
+      id: 'evidence-lineage-regression',
+      description: 'evidence without a valid final-revision lineage loses lineage credit',
+      target: { kind: 'component', id: 'testing-evidence-quality' },
+      fail_criteria: ['testing-evidence-final-revision-applicability'],
+      fail_gates: [],
+      human: null,
+      expected_official_pass: true,
+    },
+    {
+      id: 'evidence-contradiction-regression',
+      description: 'an evaluator contradiction disproves the affected candidate evidence claim',
+      target: { kind: 'component', id: 'testing-evidence-quality' },
+      fail_criteria: ['testing-evidence-complete-honest-record'],
+      fail_gates: [],
+      human: null,
+      expected_official_pass: true,
+    },
+    {
+      id: 'visual-warning-disposition-regression',
+      description: 'missing candidate warning disposition loses usable-proof credit',
+      target: { kind: 'component', id: 'testing-evidence-quality' },
+      fail_criteria: ['testing-evidence-usable-proof'],
+      fail_gates: [],
+      human: null,
+      expected_official_pass: true,
+    },
+    {
+      id: 'assumption-surfacing-regression',
+      description: 'a consequential silent assumption loses surfacing credit',
+      target: { kind: 'component', id: 'assumption-handling-quality' },
+      fail_criteria: ['assumption-consequential-ambiguities-surfaced'],
+      fail_gates: [],
+      human: null,
+      expected_official_pass: true,
+    },
     ...gateCases,
     {
       id: 'human-rating-one-regression',
@@ -322,7 +386,7 @@ export function humanReviewChecks(humanRubric, referenceResult) {
   }
   record(
     'renders-the-finalized-report',
-    renderError === null && rendered.startsWith('<!doctype html>') && rendered.includes('PASS'),
+    renderError === null && rendered.startsWith('<!doctype html>') && rendered.includes('COMPLETE REFERENCE'),
     renderError ?? 'the finalized reference report must render',
   )
 
@@ -342,6 +406,7 @@ async function runCase({ rubrics, definition, outDir, judgeInvoke }) {
     authority: CALIBRATION_AUTHORITY,
     evidence: [...evidence.criteria, ...evidence.gates],
     sources: ['calibration-fixture'],
+    mode: definition.score_mode ?? 'agent-runner',
     invoke,
   })
 
@@ -353,18 +418,21 @@ async function runCase({ rubrics, definition, outDir, judgeInvoke }) {
     gates: evidence.gates,
     humanReview: { ratings: humanReview.responses.map(({ rating }) => rating), total: humanReview.score.total },
     harness: { judge_retries: judging.retries, failed_judge_jobs: judging.failed_jobs },
-    mode: CALIBRATION_MODE,
+    mode: definition.score_mode ?? 'agent-runner',
   })
 
-  let outcome = applyOutcomeEvent(createOutcome(), {
+  const reference = definition.score_mode === 'reference-baseline'
+  let outcome = applyOutcomeEvent(createOutcome({ kind: reference ? 'reference' : 'candidate' }), {
     type: 'automated-scoring-complete',
     automated_subtotal: score.automated_subtotal.points,
   })
-  outcome = applyOutcomeEvent(outcome, {
-    type: 'product-verdict',
-    verdict: score.official_pass ? 'pass' : 'fail',
-    official_score: score.official_score,
-  })
+  outcome = applyOutcomeEvent(outcome, reference
+    ? { type: 'reference-finalized', official_score: score.official_score }
+    : {
+        type: 'product-verdict',
+        verdict: score.official_pass ? 'pass' : 'fail',
+        official_score: score.official_score,
+      })
 
   const result = assembleResult({
     runId: definition.id,
@@ -394,7 +462,15 @@ export async function runCalibration({
   log = () => {},
 }) {
   const rubric = rubrics.automated.rubric
-  const definitions = cases ?? calibrationCases(rubric)
+  const requested = cases ?? calibrationCases(rubric)
+  const control = calibrationCases(rubric).find(({ id }) => id === 'candidate-control')
+  const definitions = requested.some(({ id }) => id === 'candidate-control')
+    ? requested
+    : [
+        ...requested.slice(0, 1),
+        control,
+        ...requested.slice(1),
+      ]
   const referenceDefinition = definitions.find(({ id }) => id === 'reference')
   if (!referenceDefinition) throw new Error('calibration requires a reference case')
 
@@ -404,20 +480,28 @@ export async function runCalibration({
   }
 
   const reference = executed.find(({ definition }) => definition.id === 'reference')
+  const candidateControl = executed.find(({ definition }) => definition.id === 'candidate-control')
+  if (!candidateControl) throw new Error('calibration requires a candidate-control case')
   const referenceProblems = []
-  if (reference.score.automated_subtotal.points !== rubric.automated_points) {
+  if (reference.score.automated_subtotal.points !== 62
+    || reference.score.automated_subtotal.possible !== 62) {
     referenceProblems.push(
-      `the reference scored ${reference.score.automated_subtotal.points} of the expected ${rubric.automated_points} automated points`,
+      `the reference scored ${reference.score.automated_subtotal.points} of the expected 62 automated points`,
     )
   }
   if (reference.score.gates_passed !== true) referenceProblems.push('the reference did not open every hard gate')
-  if (reference.score.official_pass !== true) referenceProblems.push('the reference did not reach an official pass')
+  if (reference.score.official_score !== 92 || reference.score.score_denominator !== 92) {
+    referenceProblems.push('the reference did not produce the unscaled 92-point score')
+  }
+  if (reference.score.official_pass !== null) {
+    referenceProblems.push('the reference incorrectly received a candidate pass verdict')
+  }
 
   const reported = executed.map(({ definition, score, judging, result }) => {
     const isReference = definition.id === 'reference'
     const comparison = isReference
       ? { problems: referenceProblems, unintended: [] }
-      : compareToReference({ reference: reference.score, score, target: definition.target })
+      : compareToReference({ reference: candidateControl.score, score, target: definition.target })
     const problems = [...comparison.problems]
     // Collateral damage fails the case as surely as a target that never moved.
     // A mutation that also degrades something it does not name means the harness
@@ -452,6 +536,8 @@ export async function runCalibration({
       unintended_regressions: comparison.unintended,
       evaluation_status: result.evaluation_status,
       automated_subtotal: score.automated_subtotal.points,
+      automated_possible: score.automated_subtotal.possible,
+      score_denominator: score.score_denominator,
       official_score: score.official_score,
       official_pass: score.official_pass,
       gates_passed: score.gates_passed,
@@ -462,11 +548,72 @@ export async function runCalibration({
   })
 
   const checks = humanReviewChecks(rubrics.human.rubric, reference.result)
+  const missingJudge = await runProductJudging({
+    rubrics,
+    authority: CALIBRATION_AUTHORITY,
+    evidence: [],
+    sources: ['calibration-fixture'],
+    mode: 'agent-runner',
+    invoke: async (request) => (
+      request.job === 'testing-evidence'
+        ? '{invalid'
+        : JSON.stringify({ results: request.criteria.map((id) => verdictFor(id, new Set())) })
+    ),
+  })
+  const shared = compareToBaseline({
+    candidate: candidateControl.result,
+    baseline: reference.result,
+  })
+  const fingerprinted = new Set(HARNESS_FINGERPRINT_SOURCES)
+  const harnessChecks = [
+    {
+      id: 'missing-judge-output-is-harness-failure',
+      ok: missingJudge.failed_jobs.includes('testing-evidence')
+        && missingJudge.judges['testing-evidence'] === null,
+      detail: 'an exhausted required judge is retained as failed output for harness-failure handling',
+    },
+    {
+      id: 'reference-na-arithmetic',
+      ok: reference.score.automated_subtotal.possible === 62
+        && reference.score.score_denominator === 92
+        && reference.score.components
+          .filter(({ id }) => ['testing-evidence-quality', 'assumption-handling-quality'].includes(id))
+          .every(({ applicable, points_possible: possible }) => applicable === false && possible === 0),
+      detail: 'reference workflow-quality components are N/A and unscaled',
+    },
+    {
+      id: 'shared-92-comparison',
+      ok: shared.comparable === true && shared.denominator === 92
+        && shared.totals.baseline === 92 && shared.totals.candidate === 92,
+      detail: shared.reason ?? 'candidate and reference compare on exactly 92 shared points',
+    },
+    {
+      id: 'runner-streaming-regression-retained',
+      ok: fingerprinted.has(STREAMING_HARNESS_SOURCE),
+      detail: 'streaming subprocess behavior is part of the calibration fingerprint and full test gate',
+    },
+    {
+      id: 'native-failure-detail-regression-retained',
+      ok: fingerprinted.has('runner-state.mjs'),
+      detail: 'native Runner failure detail handling is part of the calibration fingerprint and full test gate',
+    },
+    {
+      id: 'run-identity-regression-retained',
+      ok: fingerprinted.has('checkpoint.mjs'),
+      detail: 'run identity validation is part of the calibration fingerprint and full test gate',
+    },
+    {
+      id: 'process-identity-regression-retained',
+      ok: fingerprinted.has('runner-state.mjs'),
+      detail: 'process identity validation is part of the calibration fingerprint and full test gate',
+    },
+  ]
   const failures = [
     ...reported.filter(({ ok }) => !ok).flatMap(({ id, problems }) => problems.map((problem) => ({
       case: id, problem,
     }))),
     ...checks.filter(({ ok }) => !ok).map(({ id, detail }) => ({ case: `human-review:${id}`, problem: detail })),
+    ...harnessChecks.filter(({ ok }) => !ok).map(({ id, detail }) => ({ case: `harness:${id}`, problem: detail })),
   ]
 
   const ledger = {
@@ -474,9 +621,10 @@ export async function runCalibration({
     mode: CALIBRATION_MODE,
     passed: failures.length === 0,
     rubrics: rubricProvenance(rubrics),
-    expected_automated_points: rubric.automated_points,
+    expected_automated_points: { candidate: rubric.automated_points, reference: 62 },
     cases: reported,
     human_review_checks: checks,
+    harness_checks: harnessChecks,
     failures,
   }
   await writeJsonAtomic(join(outDir, 'calibration.json'), ledger)

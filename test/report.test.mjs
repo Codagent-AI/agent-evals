@@ -12,6 +12,7 @@ function result(overrides = {}) {
     product_verdict: 'pass',
     label: 'PASS',
     official_score: 84,
+    score_denominator: 100,
     automated_subtotal: { points: 60, possible: 70, observed_possible: 70, complete: true },
     available_component_scores: [],
     failed_phase: null,
@@ -91,6 +92,33 @@ test('a failing verdict leads with FAIL and the official score', () => {
   const html = renderReport(result({ product_verdict: 'fail', label: 'FAIL', official_score: 51 }))
   assert.match(html, /<h1[^>]*>\s*FAIL\s*<\/h1>/)
   assert.match(html, /51/)
+})
+
+test('a complete reference renders its unscaled score out of 92 and N/A components', () => {
+  const reference = result({
+    mode: 'reference-baseline',
+    product_verdict: 'not-applicable',
+    label: 'COMPLETE REFERENCE',
+    official_score: 92,
+    score_denominator: 92,
+  })
+  reference.score.components.push({
+    id: 'testing-evidence-quality',
+    title: 'Testing-evidence quality',
+    applicable: false,
+    points_awarded: null,
+    points_possible: 0,
+    floor: null,
+    complete: true,
+    subcomponents: [],
+  })
+
+  const html = renderReport(reference)
+
+  assert.match(html, /92\s*\/\s*92/)
+  assert.match(html, /Testing-evidence quality/)
+  assert.match(html, /not applicable/i)
+  assert.doesNotMatch(html, /92\s*\/\s*100/)
 })
 
 test('a pending review leads with PENDING HUMAN REVIEW and the automated subtotal', () => {

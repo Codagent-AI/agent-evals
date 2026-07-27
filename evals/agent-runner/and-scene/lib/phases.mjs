@@ -22,7 +22,9 @@ export const AUTOMATED_PHASES = [
   // running now, so it is always restarted or health-checked on resume.
   { name: 'candidate-server', owner: 'evaluation-harness', alwaysVerify: true },
   { name: 'browser-evaluation', owner: 'evaluation-harness', requiresServer: true },
-  { name: 'product-judging', owner: 'evaluation-harness' },
+  // The phase itself is revisited so each independently hashed judge unit can
+  // be revalidated and reused or rerun on its own.
+  { name: 'product-judging', owner: 'evaluation-harness', alwaysVerify: true },
   { name: 'ambiguity-diagnostics', owner: 'evaluation-harness' },
   { name: 'metrics-pricing', owner: 'evaluation-harness' },
   // Always rewritten: the result artifact renders the run as it now stands, so

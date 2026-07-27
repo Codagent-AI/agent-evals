@@ -146,8 +146,27 @@ function catalogFetch(body = CATALOG_BODY) {
   return async () => ({ ok: true, status: 200, text: async () => body })
 }
 
+function scoredJudgeOutput(request) {
+  return JSON.stringify({
+    results: request.criteria.map((id) => ({
+      id,
+      verdict: 'pass',
+      rationale: 'the diagnostic fixture supplies verified implementation evidence',
+      evidence: ['diagnostic-fixture:verified'],
+    })),
+  })
+}
+
+function fixtureJudge(custom) {
+  return async (request) => {
+    if (Array.isArray(request.criteria)) return scoredJudgeOutput(request)
+    if (custom) return custom(request)
+    return JSON.stringify({ found: false })
+  }
+}
+
 async function evaluate(context, overrides = {}) {
-  const { resume = false, ...injected } = overrides
+  const { resume = false, judgeInvoke, ...injected } = overrides
   return runEvaluation({
     argv: [
       '--run-dir', context.runDir,
@@ -190,6 +209,7 @@ async function evaluate(context, overrides = {}) {
     }),
     verifyResumeDelivery: async () => ({ verified: true }),
     pricingFetch: catalogFetch(),
+    judgeInvoke: fixtureJudge(judgeInvoke),
     ...injected,
   })
 }

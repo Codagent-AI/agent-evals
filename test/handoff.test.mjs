@@ -96,7 +96,19 @@ function candidateServer({ stopFails = false } = {}) {
   }
 }
 
+function scoredJudgeOutput(request) {
+  return JSON.stringify({
+    results: request.criteria.map((id) => ({
+      id,
+      verdict: 'pass',
+      rationale: 'the handoff fixture supplies verified implementation evidence',
+      evidence: ['handoff-fixture:verified'],
+    })),
+  })
+}
+
 async function evaluate(context, extra = {}) {
+  const { judgeInvoke, ...injected } = extra
   return runEvaluation({
     argv: [
       '--run-dir', context.runDir,
@@ -137,7 +149,12 @@ async function evaluate(context, extra = {}) {
       acceptance_artifacts: [],
     }),
     isProcessAlive: () => false,
-    ...extra,
+    judgeInvoke: async (request) => (
+      Array.isArray(request.criteria)
+        ? scoredJudgeOutput(request)
+        : (judgeInvoke?.(request) ?? JSON.stringify({ found: false }))
+    ),
+    ...injected,
   })
 }
 

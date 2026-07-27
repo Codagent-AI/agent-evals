@@ -16,8 +16,39 @@ const SUITE_DIR = dirname(dirname(fileURLToPath(import.meta.url)))
 export const AUTOMATED_RUBRIC_PATH = join(SUITE_DIR, 'automated-rubric.json')
 export const HUMAN_RUBRIC_PATH = join(SUITE_DIR, 'human-rubric.json')
 
-export const EVALUATORS = ['deterministic-browser', 'llm-source-review']
-export const JUDGE_JOBS = ['demo-integration', 'scene-kit', 'presentation-skill', 'verification-tooling']
+export const EVALUATORS = ['deterministic-browser', 'llm-source-review', 'llm-evidence-review']
+export const JUDGE_JOBS = [
+  'demo-integration',
+  'scene-kit',
+  'presentation-skill',
+  'verification-tooling',
+  'testing-evidence',
+  'assumption-handling',
+]
+
+export const WORKFLOW_QUALITY_CRITERION_IDS = Object.freeze({
+  'testing-evidence': [
+    'testing-evidence-traceable-coverage',
+    'testing-evidence-usable-proof',
+    'testing-evidence-final-revision-applicability',
+    'testing-evidence-complete-honest-record',
+  ],
+  'assumption-handling': [
+    'assumption-consequential-ambiguities-surfaced',
+    'assumption-repository-facts-distinguished',
+    'assumption-decisions-and-escalations-proportionate',
+    'assumption-final-handoff-preserves-decisions',
+  ],
+})
+
+const COMPONENT_POLICY = [
+  ['demo-technical-quality', 24, 15],
+  ['scene-kit-correctness', 24, 15],
+  ['presentation-skill-correctness', 7, null],
+  ['verification-tool-correctness', 7, null],
+  ['testing-evidence-quality', 4, null],
+  ['assumption-handling-quality', 4, null],
+]
 
 // The 68 criterion identifiers the legacy rubric scored. The revised rubric
 // must classify every one of them exactly once, so this list is the fixed
@@ -127,6 +158,10 @@ export function deterministicCriteria(rubric) {
     .map(({ id }) => id)
 }
 
+export function componentApplicable(component, mode) {
+  return mode !== 'reference-baseline' || component.reference_applicable !== false
+}
+
 export function validateAutomatedRubric(rubric) {
   const errors = []
   if (typeof rubric?.rubric_id !== 'string' || typeof rubric?.version !== 'string') {
@@ -153,7 +188,7 @@ export function validateAutomatedRubric(rubric) {
       if (!EVALUATORS.includes(subcomponent.evaluator)) {
         errors.push(`subcomponent ${subcomponent.id} has unknown evaluator ${subcomponent.evaluator}`)
       }
-      if (subcomponent.evaluator === 'llm-source-review' && !JUDGE_JOBS.includes(subcomponent.job)) {
+      if (subcomponent.evaluator?.startsWith('llm-') && !JUDGE_JOBS.includes(subcomponent.job)) {
         errors.push(`subcomponent ${subcomponent.id} has unknown judge job ${subcomponent.job}`)
       }
       if (!Array.isArray(subcomponent.criteria) || subcomponent.criteria.length === 0) {
@@ -167,6 +202,14 @@ export function validateAutomatedRubric(rubric) {
   if (rubric.automated_points + rubric.human_points !== rubric.total_points) {
     errors.push('automated_points plus human_points must equal total_points')
   }
+  const componentPolicy = rubric.components.map(({ id, points, floor = null }) => [id, points, floor])
+  if (JSON.stringify(componentPolicy) !== JSON.stringify(COMPONENT_POLICY)) {
+    errors.push('components must use the approved 24/24/7/7/4/4 allocation and floors')
+  }
+  const referencePoints = rubric.components
+    .filter((component) => componentApplicable(component, 'reference-baseline'))
+    .reduce((sum, { points }) => sum + points, 0)
+  if (referencePoints !== 62) errors.push(`reference automated points sum to ${referencePoints}, expected 62`)
 
   const rows = rubricCriteria(rubric)
   const seen = new Set()
@@ -189,10 +232,28 @@ export function validateAutomatedRubric(rubric) {
 
   // Every legacy criterion must be scored, gated, or explicitly removed.
   const gates = new Set((rubric.gates ?? []).map(({ id }) => id))
+  const replacedIds = new Set((rubric.replaced ?? []).map(({ id }) => id))
   const removedIds = new Set((rubric.removed ?? []).map(({ id }) => id))
+  if (gates.size !== 4) errors.push(`rubric requires exactly 4 hard gates, found ${gates.size}`)
+  if (replacedIds.size !== 2) errors.push(`rubric requires exactly 2 replaced criteria, found ${replacedIds.size}`)
+  if (removedIds.size !== 3) errors.push(`rubric requires exactly 3 removed criteria, found ${removedIds.size}`)
   for (const id of LEGACY_CRITERION_IDS) {
-    const dispositions = [seen.has(id), gates.has(id), removedIds.has(id)].filter(Boolean).length
+    const dispositions = [seen.has(id), gates.has(id), replacedIds.has(id), removedIds.has(id)].filter(Boolean).length
     if (dispositions !== 1) errors.push(`legacy criterion ${id} has ${dispositions} dispositions, expected 1`)
+  }
+  const legacyScored = LEGACY_CRITERION_IDS.filter((id) => seen.has(id)).length
+  if (legacyScored !== 59) errors.push(`rubric directly scores ${legacyScored} legacy criteria, expected 59`)
+  for (const replaced of rubric.replaced ?? []) {
+    if (seen.has(replaced.id)) errors.push(`replaced criterion ${replaced.id} is also scored`)
+    if (typeof replaced.reason !== 'string' || replaced.reason.length === 0) {
+      errors.push(`replaced criterion ${replaced.id} requires a reason`)
+    }
+  }
+  for (const [job, expected] of Object.entries(WORKFLOW_QUALITY_CRITERION_IDS)) {
+    const actual = criteriaForJob(rubric, job)
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      errors.push(`${job} must own exactly its four approved workflow-quality criteria`)
+    }
   }
   return errors
 }

@@ -1,6 +1,6 @@
 {
   "rubric_id": "and-scene-automated-product",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "total_points": 100,
   "automated_points": 70,
   "human_points": 30,
@@ -9,7 +9,7 @@
     {
       "id": "demo-technical-quality",
       "title": "Demo presentation technical quality",
-      "points": 25,
+      "points": 24,
       "floor": 15,
       "subcomponents": [
         {
@@ -68,29 +68,22 @@
         },
         {
           "id": "demo-code-boundaries",
-          "title": "Maintains clear demo/kit boundaries and understandable code",
+          "title": "Maintains clear boundaries and scope discipline",
           "points": 3,
           "evaluator": "llm-source-review",
           "job": "demo-integration",
           "criteria": [
             "demo-clear-code-boundaries",
-            "quality-active-chrome-and-attribution-local"
+            "quality-active-chrome-and-attribution-local",
+            "demo-scope-discipline"
           ]
-        },
-        {
-          "id": "demo-scope-discipline",
-          "title": "Avoids unnecessary duplication and out-of-scope machinery",
-          "points": 1,
-          "evaluator": "llm-source-review",
-          "job": "demo-integration",
-          "criteria": ["demo-scope-discipline"]
         }
       ]
     },
     {
       "id": "scene-kit-correctness",
       "title": "Scene kit correctness",
-      "points": 25,
+      "points": 24,
       "floor": 15,
       "subcomponents": [
         {
@@ -150,7 +143,7 @@
         {
           "id": "scene-style-and-attribution",
           "title": "Style ownership, hooks, framework neutrality, and attribution",
-          "points": 6,
+          "points": 5,
           "evaluator": "llm-source-review",
           "job": "scene-kit",
           "criteria": [
@@ -168,13 +161,13 @@
     {
       "id": "presentation-skill-correctness",
       "title": "Presentation skill correctness",
-      "points": 10,
+      "points": 7,
       "floor": null,
       "subcomponents": [
         {
           "id": "skill-requirement-gathering",
           "title": "Requirement gathering and proceeding with partial detail",
-          "points": 2,
+          "points": 1,
           "evaluator": "llm-source-review",
           "job": "presentation-skill",
           "criteria": [
@@ -186,7 +179,7 @@
         {
           "id": "skill-scaffolding",
           "title": "Scaffold detection, location, dependencies, and style neutrality",
-          "points": 4,
+          "points": 3,
           "evaluator": "llm-source-review",
           "job": "presentation-skill",
           "criteria": [
@@ -217,14 +210,12 @@
         {
           "id": "skill-self-verification",
           "title": "Self-verification and fixing failures before completion",
-          "points": 2,
+          "points": 1,
           "evaluator": "llm-source-review",
           "job": "presentation-skill",
           "criteria": [
             "skill-checks-run-before-done",
-            "skill-failures-fixed-before-success",
-            "quality-visual-composition-inspected",
-            "quality-visual-warnings-reviewed"
+            "skill-failures-fixed-before-success"
           ]
         }
       ]
@@ -232,13 +223,13 @@
     {
       "id": "verification-tool-correctness",
       "title": "Verification tool correctness",
-      "points": 10,
+      "points": 7,
       "floor": null,
       "subcomponents": [
         {
           "id": "verification-missing-sample",
           "title": "Detects a missing reference sample",
-          "points": 2,
+          "points": 1,
           "evaluator": "llm-source-review",
           "job": "verification-tooling",
           "criteria": ["verification-missing-sample-fails"]
@@ -246,7 +237,7 @@
         {
           "id": "verification-addressing-and-errors",
           "title": "Preview addressing and runtime/step error detection",
-          "points": 3,
+          "points": 2,
           "evaluator": "llm-source-review",
           "job": "verification-tooling",
           "criteria": [
@@ -270,7 +261,7 @@
         {
           "id": "verification-warnings",
           "title": "Overlap, active-state, and attribution warnings",
-          "points": 3,
+          "points": 2,
           "evaluator": "llm-source-review",
           "job": "verification-tooling",
           "criteria": [
@@ -278,6 +269,50 @@
             "visual-helper-allow-overlap",
             "visual-helper-active-state-warning",
             "visual-helper-attribution-warning"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "testing-evidence-quality",
+      "title": "Testing-evidence quality",
+      "points": 4,
+      "floor": null,
+      "reference_applicable": false,
+      "subcomponents": [
+        {
+          "id": "testing-evidence-quality-criteria",
+          "title": "Verified candidate-produced testing evidence",
+          "points": 4,
+          "evaluator": "llm-evidence-review",
+          "job": "testing-evidence",
+          "criteria": [
+            "testing-evidence-traceable-coverage",
+            "testing-evidence-usable-proof",
+            "testing-evidence-final-revision-applicability",
+            "testing-evidence-complete-honest-record"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "assumption-handling-quality",
+      "title": "Assumption-handling quality",
+      "points": 4,
+      "floor": null,
+      "reference_applicable": false,
+      "subcomponents": [
+        {
+          "id": "assumption-handling-quality-criteria",
+          "title": "Observable assumption handling",
+          "points": 4,
+          "evaluator": "llm-evidence-review",
+          "job": "assumption-handling",
+          "criteria": [
+            "assumption-consequential-ambiguities-surfaced",
+            "assumption-repository-facts-distinguished",
+            "assumption-decisions-and-escalations-proportionate",
+            "assumption-final-handoff-preserves-decisions"
           ]
         }
       ]
@@ -299,6 +334,18 @@
     {
       "id": "verification-clear-outcome",
       "requirement": "Verification produces an unambiguous machine-readable pass/fail result"
+    }
+  ],
+  "replaced": [
+    {
+      "id": "quality-visual-composition-inspected",
+      "replacement": "testing-evidence-usable-proof",
+      "reason": "Observable visual inspection proof is evaluated once under testing-evidence quality."
+    },
+    {
+      "id": "quality-visual-warnings-reviewed",
+      "replacement": "testing-evidence-complete-honest-record",
+      "reason": "Visual warning disposition is evaluated once under testing-evidence quality."
     }
   ],
   "removed": [

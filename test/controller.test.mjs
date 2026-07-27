@@ -151,6 +151,22 @@ async function evaluate(context, extra = [], overrides = {}) {
     observedSteps: (state) => state.history,
     verifyDelivery: async () => delivery(context),
     verifyResumeDelivery: async () => ({ verified: true }),
+    judgeInvoke: async (request) => {
+      if (Array.isArray(request.criteria)) {
+        return JSON.stringify({
+          results: request.criteria.map((id) => ({
+            id,
+            verdict: 'pass',
+            rationale: 'controller fixture evidence supports this criterion',
+            evidence: ['controller-fixture:verified'],
+          })),
+        })
+      }
+      if (request.job === 'ambiguity-diagnostics') {
+        return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
+      }
+      return JSON.stringify({ results: [] })
+    },
     ...overrides,
   })
 }
@@ -434,7 +450,7 @@ test('unverifiable recorded identity fails without starting or resuming a duplic
   assert.equal(runnerInvocations(context).length, before)
 })
 
-test('completed work is rehashed and reused while identity-sensitive phases reverify', async () => {
+test('completed judge units are rehashed and reused while identity-sensitive phases reverify', async () => {
   const context = await environment()
   await evaluate(context, profiles)
 
@@ -448,10 +464,52 @@ test('completed work is rehashed and reused while identity-sensitive phases reve
     }),
   })
 
-  assert.ok(result.reused.includes('product-judging'))
+  const judging = await readJson(join(context.runDir, 'phases/product-judging.json'))
+  assert.deepEqual(judging.reused_jobs.sort(), [
+    'assumption-handling', 'demo-integration', 'presentation-skill',
+    'scene-kit', 'testing-evidence', 'verification-tooling',
+  ])
   assert.ok(result.completed.includes('agent-runner'))
   assert.ok(result.completed.includes('delivery-verification'))
   assert.ok(result.completed.includes('source-freeze'))
+})
+
+test('exhausted required judge output is a harness failure that preserves other judge checkpoints', async () => {
+  const context = await environment()
+  const result = await evaluate(context, profiles, {
+    judgeInvoke: async (request) => {
+      if (request.job === 'testing-evidence') return '{truncated'
+      if (!Array.isArray(request.criteria)) {
+        return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
+      }
+      return JSON.stringify({
+        results: request.criteria.map((id) => ({
+          id,
+          verdict: 'pass',
+          rationale: 'verified controller fixture',
+          evidence: ['controller-fixture:verified'],
+        })),
+      })
+    },
+  })
+
+  assert.equal(result.outcome.evaluation_status, 'evaluation-harness-failed')
+  assert.equal(result.outcome.product_verdict, 'unavailable')
+  assert.equal(result.outcome.failure.code, 'judge-output')
+  const judging = await readJson(join(context.runDir, 'phases/product-judging.json'))
+  assert.deepEqual(judging.failed_jobs, ['testing-evidence'])
+  const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
+  assert.equal(state.phases['product-judging'].units['testing-evidence'].state, 'failed')
+  assert.equal(state.phases['product-judging'].units['scene-kit'].state, 'complete')
+  const score = await readJson(join(context.runDir, 'phases/score.json'))
+  assert.equal(
+    score.components.find(({ id }) => id === 'testing-evidence-quality').points_awarded,
+    null,
+  )
+  assert.equal(
+    score.components.find(({ id }) => id === 'scene-kit-correctness').points_awarded,
+    24,
+  )
 })
 
 test('fresh collisions and legacy checkpoint-only runs are not silently resumed', async () => {

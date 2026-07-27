@@ -28,9 +28,10 @@ function judgeOutput(ids, overrides = {}) {
   })
 }
 
-test('the four product judge jobs align with the four scored components', () => {
+test('the six scored judge jobs align with the six automated components', () => {
   assert.deepEqual(PRODUCT_JUDGE_JOB_IDS, [
     'demo-integration', 'scene-kit', 'presentation-skill', 'verification-tooling',
+    'testing-evidence', 'assumption-handling',
   ])
   for (const job of productJudgeJobs(rubrics)) {
     assert.deepEqual(job.criteria, criteriaForJob(automated, job.id))
@@ -77,6 +78,58 @@ test('product judge requests are rooted in neutral inputs and disclose exact per
   assert.equal(request.input_permissions.neutral_source, true)
   assert.match(request.prompt, /NEUTRAL SOURCE/)
   assert.doesNotMatch(request.prompt, /CANDIDATE EVIDENCE/)
+})
+
+test('testing-evidence receives only verified candidate evidence plus evaluator contradictions', () => {
+  const request = buildJudgeRequest({
+    rubrics,
+    job: 'testing-evidence',
+    authority,
+    evidenceViews: {
+      'testing-evidence': {
+        root: '/run/evidence/judge-views/testing-evidence',
+        index: '/run/evidence/judge-views/testing-evidence/index.json',
+        permissions: {
+          candidate_evidence: true,
+          evaluator_evidence: 'contradictions-only',
+          revision_provenance: true,
+        },
+      },
+    },
+  })
+
+  assert.equal(request.cwd, '/run/evidence/judge-views/testing-evidence')
+  assert.equal(request.input_permissions.candidate_evidence, true)
+  assert.equal(request.input_permissions.evaluator_evidence, 'contradictions-only')
+  assert.equal(request.input_permissions.neutral_source, false)
+  assert.match(request.prompt, /candidate-produced evidence may support credit/i)
+  assert.match(request.prompt, /contradictions.*disprove/i)
+  assert.doesNotMatch(request.prompt, /NEUTRAL SOURCE FILES/)
+})
+
+test('assumption handling receives only its fixed criteria and assumption evidence view', () => {
+  const request = buildJudgeRequest({
+    rubrics,
+    job: 'assumption-handling',
+    authority,
+    evidenceViews: {
+      'assumption-handling': {
+        root: '/run/evidence/judge-views/assumption-handling',
+        index: '/run/evidence/judge-views/assumption-handling/index.json',
+        permissions: {
+          candidate_evidence: 'assumption-sources-only',
+          evaluator_evidence: false,
+          revision_provenance: true,
+        },
+      },
+    },
+  })
+
+  assert.equal(request.cwd, '/run/evidence/judge-views/assumption-handling')
+  assert.deepEqual(request.criteria, criteriaForJob(automated, 'assumption-handling'))
+  assert.equal(request.input_permissions.ambiguity_sources, true)
+  assert.match(request.prompt, /four fixed assumption-handling criteria/i)
+  assert.doesNotMatch(request.prompt, /classification.*points/i)
 })
 
 test('a judge request excludes screenshots and forbids visual-taste judgments', () => {
@@ -146,6 +199,10 @@ test('strict parsing rejects every shape of malformed judge output', () => {
     JSON.stringify({ results: ids.map((id) => ({ id, verdict: 'pass', rationale: 'r' })) }),
     /malformed criterion result/,
   )
+  rejects(
+    JSON.stringify({ results: ids.map((id) => ({ id, verdict: 'pass', rationale: 'r', evidence: [] })) }),
+    /verified evidence/,
+  )
 })
 
 test('a judge job retries locally once and succeeds on the second attempt', async () => {
@@ -180,18 +237,53 @@ test('an exhausted judge job leaves its component unobserved rather than failed'
   assert.ok(result.attempts.every(({ error }) => typeof error === 'string' && error.length > 0))
 })
 
-test('one failed job does not stop or invalidate the other three', async () => {
+test('one failed job does not discard the other five complete outputs', async () => {
   const outcome = await runProductJudging({
     rubrics, authority, evidence: [], sources: [],
     invoke: async ({ job, criteria }) => job === 'scene-kit' ? 'nope' : judgeOutput(criteria),
   })
 
   assert.equal(outcome.judges['scene-kit'], null)
-  for (const job of ['demo-integration', 'presentation-skill', 'verification-tooling']) {
+  for (const job of [
+    'demo-integration', 'presentation-skill', 'verification-tooling',
+    'testing-evidence', 'assumption-handling',
+  ]) {
     assert.equal(outcome.judges[job].length, criteriaForJob(automated, job).length, job)
   }
   assert.deepEqual(outcome.failed_jobs, ['scene-kit'])
   assert.equal(outcome.retries['scene-kit'], 1)
+})
+
+test('six jobs checkpoint independently and reuse a valid completed output', async () => {
+  const loaded = new Map()
+  const saved = []
+  const invoked = []
+  const sceneResults = JSON.parse(judgeOutput(criteriaForJob(automated, 'scene-kit'))).results
+  loaded.set('scene-kit', { results: sceneResults, attempts: [{ attempt: 1, ok: true, error: null }] })
+
+  const outcome = await runProductJudging({
+    rubrics,
+    authority,
+    evidence: [],
+    sources: [],
+    loadJob: async ({ id, inputHash }) => {
+      assert.match(inputHash, /^[0-9a-f]{64}$/)
+      return loaded.get(id) ?? null
+    },
+    saveJob: async (record) => saved.push(record),
+    invoke: async ({ job, criteria }) => {
+      invoked.push(job)
+      return judgeOutput(criteria)
+    },
+  })
+
+  assert.equal(invoked.includes('scene-kit'), false)
+  assert.equal(saved.some(({ id }) => id === 'scene-kit'), false)
+  assert.deepEqual(outcome.reused_jobs, ['scene-kit'])
+  assert.equal(saved.length, PRODUCT_JUDGE_JOB_IDS.length - 1)
+  assert.ok(saved.every(({ inputHash, outputHash }) => (
+    /^[0-9a-f]{64}$/.test(inputHash) && /^[0-9a-f]{64}$/.test(outputHash)
+  )))
 })
 
 test('product judging runs its jobs sequentially through one recorded authority', async () => {
