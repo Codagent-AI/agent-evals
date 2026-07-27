@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -147,6 +147,49 @@ test('missing structural roles produce a typed implementation-workflow failure',
       assert.equal(error.owner, 'implementation-workflow')
       assert.equal(error.code, 'missing-evidence-role')
       assert.ok(error.missing_roles.includes('screenshot-metadata'))
+      return true
+    },
+  )
+})
+
+test('an oversized required artifact remains a structural readiness failure', async () => {
+  const context = await fixture()
+  await writeRequiredArtifacts(context, {
+    'acceptance-test-results.md': Buffer.alloc((16 * 1024 * 1024) + 1, 0x61),
+  })
+
+  await assert.rejects(
+    buildCandidateEvidenceManifest({
+      worktree: context.worktree,
+      sessionDir: context.sessionDir,
+      runDir: context.runDir,
+      delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+    }),
+    (error) => {
+      assert.ok(error instanceof EvidenceReadinessError)
+      assert.ok(error.missing_roles.includes('acceptance-flow-record'))
+      return true
+    },
+  )
+})
+
+test('evidence discovery preserves non-ENOENT directory failures as harness errors', async () => {
+  const context = await fixture()
+  const output = join(context.sessionDir, 'output')
+  await rm(output, { recursive: true })
+  await writeFile(output, 'not a directory')
+
+  await assert.rejects(
+    buildCandidateEvidenceManifest({
+      worktree: context.worktree,
+      sessionDir: context.sessionDir,
+      runDir: context.runDir,
+      delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+    }),
+    (error) => {
+      assert.ok(!(error instanceof EvidenceReadinessError))
+      assert.match(error.message, /failed to read evidence directory/)
+      assert.equal(error.cause?.code, 'ENOTDIR')
       return true
     },
   )

@@ -144,7 +144,13 @@ async function walkFiles(root) {
   let visited = 0
   async function walk(directory, depth) {
     if (depth > 14 || output.length >= MAX_ARTIFACTS || visited >= MAX_DISCOVERY_ENTRIES) return
-    const entries = await readdir(directory, { withFileTypes: true }).catch(() => [])
+    let entries
+    try {
+      entries = await readdir(directory, { withFileTypes: true })
+    } catch (error) {
+      if (error.code === 'ENOENT') return
+      throw new Error(`failed to read evidence directory ${directory}`, { cause: error })
+    }
     for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
       visited += 1
       if (visited > MAX_DISCOVERY_ENTRIES) return
@@ -169,16 +175,35 @@ async function canonicalRoots({ worktree, sessionDir }) {
     ['runner-session', sessionDir],
   ]) {
     if (!path) continue
-    const canonical = await realpath(path).catch(() => resolve(path))
+    let canonical
+    try {
+      canonical = await realpath(path)
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        throw new Error(`failed to resolve evidence root ${path}`, { cause: error })
+      }
+      canonical = resolve(path)
+    }
     roots.push({ namespace, path: canonical })
   }
   return roots
 }
 
 async function safeOrigin(path, roots) {
-  const info = await lstat(path).catch(() => null)
+  let info
+  try {
+    info = await lstat(path)
+  } catch (error) {
+    if (error.code === 'ENOENT') return null
+    throw new Error(`failed to inspect evidence artifact ${path}`, { cause: error })
+  }
   if (!info?.isFile() || info.isSymbolicLink()) return null
-  const canonical = await realpath(path)
+  let canonical
+  try {
+    canonical = await realpath(path)
+  } catch (error) {
+    throw new Error(`failed to resolve evidence artifact ${path}`, { cause: error })
+  }
   const root = roots.find((candidate) => within(candidate.path, canonical))
   if (!root) return null
   return {
@@ -532,6 +557,17 @@ export async function buildCandidateEvidenceManifest({
       }),
       claims: evidenceClaims(text, parsed),
     })
+  }
+
+  const materializedRoles = new Set(artifacts.map(({ role }) => role))
+  const omittedRequiredRoles = EVIDENCE_ROLE_REGISTRY
+    .filter(({ required, role }) => required && !materializedRoles.has(role))
+    .map(({ role }) => role)
+  if (omittedRequiredRoles.length > 0) {
+    throw new EvidenceReadinessError(
+      `required candidate evidence roles exceed materialization bounds: ${omittedRequiredRoles.join(', ')}`,
+      omittedRequiredRoles,
+    )
   }
 
   if (screenshotMetadata) {

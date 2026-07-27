@@ -233,7 +233,7 @@ focused modules under `lib/`:
 | `lib/profiles.mjs` | Role profile validation, eval-scoped config, effective-profile reconciliation |
 | `lib/workflow.mjs` | Full-workflow contract, prohibited-side-effect checks, Runner run classification |
 | `lib/evidence.mjs` | Role-based candidate intake, byte integrity, lineage, evaluator evidence, contradictions, and bounded judge views |
-| `lib/neutral-source.mjs` | Final-commit neutral source and approved requirement bundles with identity-redaction provenance |
+| `lib/neutral-source.mjs` | Byte-exact final-commit source under neutralized paths plus approved identity-free requirement bundles |
 | `lib/runner-state.mjs` | Reading Agent Runner run state by identifier or newest timestamp |
 | `lib/outcomes.mjs` | Evaluation status and product verdict model |
 | `lib/phases.mjs` | The ordered lifecycle and its failure ownership |
@@ -285,11 +285,14 @@ present. Missing required roles stop scored judging as an implementation
 workflow failure. Present but stale, malformed, weakly traceable, or
 wrong-revision content remains judgeable and is recorded as an evidence defect.
 
-Product-source judges run from `neutral/judge/`, which contains only the
-identity-neutral final-commit snapshot and identity-free approved requirements.
-The provenance manifest is stored outside that judge root. Testing-evidence and
-assumption-handling jobs use separate bounded views under
-`evidence/judge-views/`.
+Product-source judges run from `neutral/judge/`, which contains only a
+byte-exact final-commit source snapshot under neutralized paths and
+identity-free approved requirements. The source snapshot excludes only exact
+harness-owned paths (`.agent-runner/` and the original OpenSpec change
+directory), so product modules with generic names such as `evidence` or
+`acceptance` remain reviewable. The provenance manifest is stored outside that
+judge root. Testing-evidence and assumption-handling jobs use separate bounded
+views under `evidence/judge-views/`.
 
 ## Run directory layout
 

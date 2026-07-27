@@ -1,21 +1,16 @@
 // Identity-neutral, immutable judge inputs.
 //
 // Product judges never receive the live candidate checkout. This module reads
-// blobs from the verified final commit, filters evaluation/workflow material,
-// performs exact recorded-token substitutions in a separate snapshot, and
-// records every byte transformation without modifying the delivered source.
+// blobs from the verified final commit, filters known evaluation/workflow
+// material, neutralizes identity-bearing path metadata, and records every
+// transformation without modifying delivered source bytes.
 import { spawnSync } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
-import { dirname, extname, join, relative, resolve, sep } from 'node:path'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 
 import { hashJson, hashString, writeJsonAtomic } from './persistence.mjs'
 
 export const NEUTRAL_INPUT_SCHEMA_VERSION = 1
-
-const TEXT_EXTENSIONS = new Set([
-  '.cjs', '.css', '.html', '.js', '.json', '.jsx', '.md', '.mjs',
-  '.scss', '.sh', '.svg', '.ts', '.tsx', '.txt', '.yaml', '.yml',
-])
 
 const PLACEHOLDERS = {
   run: '<RUN_ID>',
@@ -128,9 +123,8 @@ function excludedSource(path, changeName) {
     || normalized.startsWith('.git/')
     || normalized === '.agent-runner'
     || normalized.startsWith('.agent-runner/')
+    || normalized === `openspec/changes/${changeName}`
     || normalized.startsWith(`openspec/changes/${changeName}/`)
-    || /(?:^|\/)(?:acceptance|delivery|evidence|evals?|benchmark|run-state)(?:[-_.\/]|$)/i.test(normalized)
-    || /(?:^|\/)(?:artifact-manifest|candidate-source-manifest|result|report)\.(?:json|html)$/i.test(normalized)
 }
 
 function requirementSource(path, changeName) {
@@ -179,33 +173,6 @@ function redactPath(path, identities) {
     }
   }
   return { path: output, transformations }
-}
-
-function redact(bytes, neutralPath, identities) {
-  if (!TEXT_EXTENSIONS.has(extname(neutralPath).toLowerCase())) {
-    return { bytes, transformations: [] }
-  }
-  let text = bytes.toString('utf8')
-  const transformations = []
-
-  for (const replacement of identityReplacements(identities)) {
-    const pattern = exactTokenPattern(replacement.token)
-    let count = 0
-    text = text.replace(pattern, () => {
-      count += 1
-      return replacement.placeholder
-    })
-    if (count > 0) {
-      transformations.push({
-        type: 'exact-identity-token-replacement',
-        identity_type: replacement.type,
-        placeholder: replacement.placeholder,
-        occurrences: count,
-        token_sha256: hashString(replacement.token),
-      })
-    }
-  }
-  return { bytes: Buffer.from(text), transformations }
 }
 
 async function writeSnapshotFile(root, path, bytes) {
@@ -262,15 +229,14 @@ export async function materializeNeutralInputs({
       throw new Error(`identity redaction creates a neutral source path collision: ${neutralPath.path}`)
     }
     includedPaths.add(neutralPath.path)
-    const transformed = redact(original, neutralPath.path, identities)
-    await writeSnapshotFile(sourceRoot, neutralPath.path, transformed.bytes)
+    await writeSnapshotFile(sourceRoot, neutralPath.path, original)
     manifestEntries.push({
       namespace: 'neutral-source',
       path: `source/${neutralPath.path}`,
       origin: { revision: finalSha, path: entry.path, object: entry.object },
       original_sha256: hashString(original),
-      sha256: hashString(transformed.bytes),
-      transformations: [...neutralPath.transformations, ...transformed.transformations],
+      sha256: hashString(original),
+      transformations: neutralPath.transformations,
     })
   }
 
@@ -310,10 +276,8 @@ export async function materializeNeutralInputs({
     entries: manifestEntries,
     exclusions: {
       git_metadata: true,
-      delivery_and_acceptance: true,
       original_change_directory: true,
-      evaluation_configuration: true,
-      benchmark_bookkeeping: true,
+      exact_harness_paths: ['.agent-runner', `openspec/changes/${changeName}`],
     },
   }
   manifest.manifest_sha256 = hashJson(manifest)
