@@ -16,6 +16,11 @@ import {
   validateCheckpointIdentity,
   verifyUnit,
 } from '../evals/agent-runner/and-scene/lib/checkpoint.mjs'
+import {
+  RUN_STATE_SCHEMA_VERSION,
+  applyRunStateEvent,
+  createRunState,
+} from '../evals/agent-runner/and-scene/lib/state-machine.mjs'
 
 const identity = {
   candidate_identity: 'candidate-a',
@@ -64,6 +69,8 @@ test('the score-affecting identity fields are the approved set', () => {
     'agent_configuration',
     'evaluator_configuration',
     'rubric_provenance',
+    'candidate_repository',
+    'candidate_branch',
   ])
 })
 
@@ -90,6 +97,33 @@ test('a completed unit records input fingerprint, output paths, and hashes', asy
   assert.equal(unit.outputs[0].path, path)
   assert.match(unit.outputs[0].sha256, /^[0-9a-f]{64}$/)
   assert.equal(typeof unit.completed_at, 'string')
+})
+
+test('work units record and revalidate dependency hashes independently from inputs', async () => {
+  const { path } = await evidence()
+  let checkpoint = createCheckpoint({ run_id: 'run-1', identity })
+  checkpoint = beginUnit(checkpoint, {
+    phase: 'browser-evaluation',
+    unit: 'captions',
+    inputs: { mode: 'browse' },
+    dependencies: { final_sha: 'abc', server: 'candidate-1' },
+  })
+  checkpoint = await completeUnit(checkpoint, {
+    phase: 'browser-evaluation',
+    unit: 'captions',
+    inputs: { mode: 'browse' },
+    dependencies: { final_sha: 'abc', server: 'candidate-1' },
+    outputs: [path],
+  })
+
+  const unit = checkpoint.phases['browser-evaluation'].units.captions
+  assert.match(unit.dependency_fingerprint, /^[0-9a-f]{64}$/)
+  assert.equal((await verifyUnit(checkpoint, {
+    phase: 'browser-evaluation',
+    unit: 'captions',
+    inputs: { mode: 'browse' },
+    dependencies: { final_sha: 'different', server: 'candidate-1' },
+  })).reusable, false)
 })
 
 test('a proven unit is reused on resume', async () => {
@@ -252,4 +286,129 @@ test('checkpoint updates never mutate the previous checkpoint', () => {
   beginUnit(before, { phase: 'browser-evaluation', unit: 'check-1', inputs: {} })
 
   assert.deepEqual(before.phases, {})
+})
+
+test('run-state v2 is the sole manifest for immutable inputs, delivery identity, and typed events', () => {
+  const state = createRunState({
+    runId: 'run-1',
+    kind: 'candidate',
+    immutableInputs: identity,
+    delivery: {
+      repository: 'github.com/Codagent-AI/and-scene',
+      fixture_commit: 'fixture-a',
+      branch: 'eval/and-scene/run-1',
+    },
+  })
+
+  assert.equal(state.schema_version, RUN_STATE_SCHEMA_VERSION)
+  assert.equal(state.state_kind, 'and-scene-run-state')
+  assert.deepEqual(state.immutable_inputs, identity)
+  assert.equal(state.delivery.applicable, true)
+  assert.equal(state.delivery.branch, 'eval/and-scene/run-1')
+  assert.equal(state.events[0].type, 'run-created')
+})
+
+test('the reducer records evolving delivery identity and rejects conflicting identity', () => {
+  const initial = createRunState({
+    runId: 'run-1',
+    kind: 'candidate',
+    immutableInputs: identity,
+    delivery: { branch: 'eval/and-scene/run-1' },
+  })
+  const recorded = applyRunStateEvent(initial, {
+    type: 'delivery-identity-recorded',
+    runner: { run_id: 'runner-7', session_dir: '/sessions/runner-7' },
+    pull_request: {
+      number: 53,
+      url: 'https://github.com/Codagent-AI/and-scene/pull/53',
+      base: 'main',
+      head_branch: 'eval/and-scene/run-1',
+      head_sha: 'abc123',
+      state: 'OPEN',
+      draft: true,
+    },
+    final_sha: 'abc123',
+  })
+
+  assert.equal(recorded.delivery.runner.run_id, 'runner-7')
+  assert.equal(recorded.delivery.pull_request.number, 53)
+  assert.equal(recorded.delivery.final_sha, 'abc123')
+  assert.throws(
+    () => applyRunStateEvent(recorded, {
+      type: 'delivery-identity-recorded',
+      final_sha: 'different',
+    }),
+    /conflicting delivery identity/i,
+  )
+})
+
+test('revalidating acceptance identity preserves artifact arrays as arrays', () => {
+  const artifacts = [
+    { role: 'acceptance-handoff', path: 'acceptance-handoff.md', sha256: 'abc123' },
+  ]
+  const initial = applyRunStateEvent(createRunState({
+    runId: 'run-1',
+    kind: 'candidate',
+    immutableInputs: identity,
+  }), {
+    type: 'delivery-identity-recorded',
+    acceptance: { artifacts },
+  })
+
+  const revalidated = applyRunStateEvent(initial, {
+    type: 'delivery-identity-recorded',
+    acceptance: { artifacts: structuredClone(artifacts) },
+  })
+
+  assert.ok(Array.isArray(revalidated.delivery.acceptance.artifacts))
+  assert.deepEqual(revalidated.delivery.acceptance.artifacts, artifacts)
+})
+
+test('phase transitions retain input, dependency, and output hashes in run-state', () => {
+  const initial = createRunState({
+    runId: 'run-1',
+    kind: 'candidate',
+    immutableInputs: identity,
+  })
+  const started = applyRunStateEvent(initial, {
+    type: 'phase-started',
+    phase: 'delivery-verification',
+    input_fingerprint: 'inputs-hash',
+    dependency_fingerprint: 'dependencies-hash',
+  })
+  const completed = applyRunStateEvent(started, {
+    type: 'phase-completed',
+    phase: 'delivery-verification',
+    outputs: [{ path: 'delivery.json', sha256: 'output-hash' }],
+  })
+
+  assert.equal(completed.phases['delivery-verification'].input_fingerprint, 'inputs-hash')
+  assert.equal(completed.phases['delivery-verification'].dependency_fingerprint, 'dependencies-hash')
+  assert.deepEqual(completed.phases['delivery-verification'].outputs, [
+    { path: 'delivery.json', sha256: 'output-hash' },
+  ])
+})
+
+test('reference run-state explicitly marks delivery-only identity not applicable', () => {
+  const state = createRunState({
+    runId: 'reference-1',
+    kind: 'reference',
+    immutableInputs: identity,
+  })
+
+  assert.equal(state.delivery.applicable, false)
+  assert.equal(state.delivery.branch, null)
+  assert.equal(state.delivery.pull_request, null)
+})
+
+test('old boundary-era checkpoint files cannot be loaded as run-state', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-checkpoint-'))
+  const path = join(dir, 'run-state.json')
+  await writeFile(path, JSON.stringify({
+    schema_version: 1,
+    run_id: 'legacy',
+    boundary: { stop_step: 'simplify' },
+  }))
+
+  await assert.rejects(() => loadCheckpoint(path), /legacy|boundary-era|not resumable/i)
 })

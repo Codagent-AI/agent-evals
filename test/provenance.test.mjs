@@ -11,7 +11,7 @@ import {
   readWorkflowProvenance,
 } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
 
-const workflowYaml = 'name: implement-change2\nsteps:\n  - id: simplify\n'
+const workflowYaml = 'name: implement-change\nsteps:\n  - id: verify-acceptance-handoff\n'
 
 // A scripted `git`/`agent-runner` stub keeps provenance reading testable without
 // building a real Agent Runner checkout for every case.
@@ -42,8 +42,8 @@ async function checkout({ workflow = workflowYaml } = {}) {
   return dir
 }
 
-test('the pinned workflow path is the implement-change2 contract', () => {
-  assert.equal(WORKFLOW_RELATIVE_PATH, 'workflows/openspec/implement-change2.yaml')
+test('the pinned workflow path is the versioned implement-change contract', () => {
+  assert.equal(WORKFLOW_RELATIVE_PATH, 'workflows/openspec/implement-change-v2.0.yaml')
 })
 
 test('a clean checkout records commit, workflow hash, and CLI version', async () => {
@@ -78,11 +78,11 @@ test('an unstaged change stops the evaluation before Agent Runner', async () => 
   await assert.rejects(
     () => readWorkflowProvenance({
       agentRunnerDir: dir,
-      exec: execStub({ 'git status --porcelain': { status: 0, stdout: ' M workflows/openspec/implement-change2.yaml\n' } }),
+      exec: execStub({ 'git status --porcelain': { status: 0, stdout: ' M workflows/openspec/implement-change-v2.0.yaml\n' } }),
     }),
     (error) => {
       assert.equal(error.code, 'dirty-agent-runner-checkout')
-      assert.match(error.message, /implement-change2\.yaml/)
+      assert.match(error.message, /implement-change-v2\.0\.yaml/)
       return true
     },
   )

@@ -2,7 +2,7 @@
 //
 // Each role independently selects a CLI adapter, model, and effort. The two
 // roles map onto the `planner` and `implementor` agents of a single
-// end-to-end `implement-change2` run; they are never scored separately.
+// end-to-end `implement-change-v2.0` run; they are never scored separately.
 
 export const ROLE_AGENTS = { lead: 'planner', implementor: 'implementor' }
 

@@ -13,7 +13,7 @@ import {
 } from '../evals/agent-runner/and-scene/lib/runner-metrics.mjs'
 
 const RUN_ID = 'run-7f3a'
-const WORKFLOW = 'implement-change2'
+const WORKFLOW = 'implement-change'
 
 function step(overrides = {}) {
   return {
@@ -145,7 +145,7 @@ test('metrics naming another run are rejected as implementation metrics input', 
 })
 
 test('metrics naming another workflow are rejected', () => {
-  const text = JSON.stringify(metrics({ workflow: 'implement-change' }))
+  const text = JSON.stringify(metrics({ workflow: 'legacy-implement-change' }))
 
   const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
 

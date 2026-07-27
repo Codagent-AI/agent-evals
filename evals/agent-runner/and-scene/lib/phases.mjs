@@ -7,11 +7,14 @@
 import { applyOutcomeEvent } from './outcomes.mjs'
 
 export const AUTOMATED_PHASES = [
+  { name: 'preflight', owner: 'evaluation-harness', alwaysVerify: true },
   // Resume must consult Agent Runner's own persisted state and run lock before
   // acting, so this phase is never skipped on the strength of an eval-side
   // checkpoint. Re-verification is cheap and resolves to "continue" when the
-  // recorded run already reached its boundary.
+  // recorded run already completed the full workflow.
   { name: 'agent-runner', owner: 'implementation-workflow', alwaysVerify: true },
+  { name: 'delivery-verification', owner: 'implementation-workflow', alwaysVerify: true },
+  { name: 'source-freeze', owner: 'evaluation-harness', alwaysVerify: true },
   { name: 'verification', owner: 'evaluation-harness' },
   // The candidate server is a process-local resource. A durable phase
   // checkpoint from an earlier process proves nothing about whether it is
@@ -53,9 +56,18 @@ export async function runPhases({ phases, handlers, outcome, context = {}, isCom
   const reused = []
   let current = outcome
   let failed = null
+  let productTerminal = false
 
   for (const phase of phases) {
     if (failed && !phase.final) {
+      skipped.push(phase.name)
+      continue
+    }
+    if (
+      productTerminal
+      && !phase.final
+      && phase.name !== 'metrics-pricing'
+    ) {
       skipped.push(phase.name)
       continue
     }
@@ -89,6 +101,7 @@ export async function runPhases({ phases, handlers, outcome, context = {}, isCom
       // lifecycle stays the single place the outcome is advanced.
       for (const event of (await handler(state)) ?? []) {
         current = applyOutcomeEvent(current, event)
+        if (event.type === 'conclusive-product-failure') productTerminal = true
       }
       completed.push(phase.name)
       if (current.failed_phase === phase.name) {
@@ -111,6 +124,16 @@ export async function runPhases({ phases, handlers, outcome, context = {}, isCom
         type: failureEventType(phase),
         phase: phase.name,
         reason: error.message,
+        code: error.code ?? null,
+        step: error.step ?? null,
+        attempt: error.attempt ?? null,
+        session: error.session ?? null,
+        run_id: error.run_id ?? null,
+        unexpected_action: error.unexpected_action ?? null,
+        missing_delivery_output: error.missing_delivery_output ?? null,
+        candidate_branch: error.candidate_branch ?? null,
+        pull_request: error.pull_request ?? null,
+        final_sha: error.final_sha ?? null,
         resumable: true,
       })
     }

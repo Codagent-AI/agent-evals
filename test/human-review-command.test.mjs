@@ -75,7 +75,7 @@ async function pendingRun({
     ? { ...rubricProvenance(rubrics), human: humanRubricProvenance }
     : rubricProvenance(rubrics)
 
-  await saveCheckpoint(join(runDir, 'checkpoint.json'), {
+  await saveCheckpoint(join(runDir, 'run-state.json'), {
     ...createCheckpoint({
       run_id: name,
       identity: { candidate_identity: candidate, rubric_provenance: hashJson(provenance) },

@@ -28,20 +28,20 @@ async function projects(runs) {
 
 test('a recorded run is selected by its session-directory identifier and current Agent Runner schema', async () => {
   const dir = await projects({
-    'run-a': { workflowName: 'implement-change2', currentStep: { stepId: 'simplify', completed: true } },
-    'run-b': { workflowName: 'implement-change2', currentStep: { stepId: 'implement-tasks' } },
+    'run-a': { workflowName: 'implement-change', currentStep: { stepId: 'simplify', completed: true } },
+    'run-b': { workflowName: 'implement-change', currentStep: { stepId: 'implement-tasks' } },
   })
 
   const state = await readRunnerState(dir, 'run-a')
 
   assert.equal(state.run_id, 'run-a')
-  assert.equal(state.workflow_name, 'implement-change2')
+  assert.equal(state.workflow_name, 'implement-change')
   assert.equal(state.last_step, 'simplify')
   assert.equal(state.step_completed, true)
 })
 
 test('the session directory is reported alongside the state', async () => {
-  const dir = await projects({ 'run-a': { workflowName: 'implement-change2', currentStep: 'plan' } })
+  const dir = await projects({ 'run-a': { workflowName: 'implement-change', currentStep: 'plan' } })
 
   const state = await readRunnerState(dir, 'run-a')
 
@@ -56,8 +56,8 @@ test('a recorded run that is absent reports null rather than an unrelated run', 
 
 test('discovery without a recorded identifier selects the newest session by filesystem timestamp', async () => {
   const dir = await projects({
-    'run-old': { workflowName: 'implement-change2', currentStep: 'plan' },
-    'run-new': { workflowName: 'implement-change2', currentStep: 'simplify' },
+    'run-old': { workflowName: 'implement-change', currentStep: 'plan' },
+    'run-new': { workflowName: 'implement-change', currentStep: 'simplify' },
   })
   await utimes(join(dir, 'encoded-project/runs/run-old/state.json'), new Date('2026-07-01'), new Date('2026-07-01'))
   await utimes(join(dir, 'encoded-project/runs/run-new/state.json'), new Date('2026-07-05'), new Date('2026-07-05'))
@@ -69,7 +69,7 @@ test('discovery without a recorded identifier selects the newest session by file
 
 test('the separate Agent Runner lock file is normalized onto discovered state', async () => {
   const dir = await projects({
-    'run-active': { workflowName: 'implement-change2', currentStep: { stepId: 'implement-tasks' } },
+    'run-active': { workflowName: 'implement-change', currentStep: { stepId: 'implement-tasks' } },
   })
   await writeFile(join(dir, 'encoded-project/runs/run-active/lock'), '4321\n')
 
@@ -134,7 +134,7 @@ test('a missing projects directory reports null rather than throwing', async () 
 })
 
 test('malformed run state is skipped rather than failing discovery', async () => {
-  const dir = await projects({ 'run-good': { workflowName: 'implement-change2', currentStep: 'plan' } })
+  const dir = await projects({ 'run-good': { workflowName: 'implement-change', currentStep: 'plan' } })
   const broken = join(dir, 'encoded-project', 'runs', 'run-broken')
   await mkdir(broken, { recursive: true })
   await writeFile(join(broken, 'state.json'), '{not json')
@@ -199,4 +199,30 @@ test('an unknown home falls back to the run directory store', async () => {
   const { runDir, persistent } = await homes()
 
   assert.equal(await resolveProjectsDir({ runDir, home: null }), persistent)
+})
+
+test('Runner state includes complete ordered step outcomes from the durable audit log', async () => {
+  const dir = await projects({
+    'run-a': {
+      workflowName: 'implement-change',
+      currentStep: { stepId: 'verify-acceptance-handoff', completed: true },
+      completed: true,
+    },
+  })
+  const sessionDir = join(dir, 'encoded-project/runs/run-a')
+  await writeFile(join(sessionDir, 'audit.log'), [
+    '2026-07-26T00:00:00Z [run-validator] step_end {"outcome":"success"}',
+    '2026-07-26T00:00:01Z [open-draft-pr] step_end {"outcome":"success"}',
+    '2026-07-26T00:00:02Z [verify-acceptance-handoff] step_end {"outcome":"success"}',
+    '',
+  ].join('\n'))
+
+  const state = await readRunnerState(dir, 'run-a')
+
+  assert.equal(state.workflow_completed, true)
+  assert.deepEqual(state.history.map(({ step, outcome }) => ({ step, outcome })), [
+    { step: 'run-validator', outcome: 'success' },
+    { step: 'open-draft-pr', outcome: 'success' },
+    { step: 'verify-acceptance-handoff', outcome: 'success' },
+  ])
 })

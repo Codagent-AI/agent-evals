@@ -1,24 +1,43 @@
-// Agent Runner `implement-change2` integration.
+// Agent Runner complete `implement-change-v2.0` integration.
 //
-// The suite owns the stop boundary and the decision to start, wait for, or
-// resume a run. Agent Runner owns workflow execution, run locks, sessions, and
-// its own internal resume point.
+// Agent Runner owns workflow execution and its internal resume point. The eval
+// owns the immutable workflow contract and never supplies an early stop.
 
-export const IMPLEMENTATION_WORKFLOW = 'implement-change2'
+export const IMPLEMENTATION_WORKFLOW = 'implement-change'
+export const IMPLEMENTATION_WORKFLOW_PATH = 'workflows/openspec/implement-change-v2.0.yaml'
 
-// The eval option maps to exactly one workflow argument and one final step.
-export const VALIDATOR_BOUNDARIES = {
-  true: { skip_validator: 'true', stop_step: 'simplify' },
-  false: { skip_validator: 'false', stop_step: 'verify-validator' },
+export const REQUIRED_FINAL_WORKFLOW_STEPS = [
+  'run-validator',
+  'open-draft-pr',
+  'verify-draft-pr',
+  'prepare-acceptance',
+  'verify-acceptance-handoff',
+]
+
+const PROHIBITED_STEP_PATTERNS = [
+  /(?:^|-)merge(?:-|$)/i,
+  /ready-for-review/i,
+  /(?:^|-)close(?:-pr)?(?:-|$)/i,
+  /(?:^|-)archive(?:-|$)/i,
+  /(?:^|-)release(?:-|$)/i,
+  /(?:delete|remove).*(?:branch)/i,
+  /branch.*(?:delete|remove)/i,
+]
+
+export function isProhibitedWorkflowStep(step) {
+  return PROHIBITED_STEP_PATTERNS.some((pattern) => pattern.test(step))
 }
 
 export function resolveBoundary({ skipValidator = false, changeName }) {
-  const boundary = VALIDATOR_BOUNDARIES[String(Boolean(skipValidator))]
+  const skip = String(Boolean(skipValidator))
   return {
     workflow: IMPLEMENTATION_WORKFLOW,
-    skip_validator: boundary.skip_validator,
-    stop_step: boundary.stop_step,
-    workflow_arguments: [`change_name=${changeName}`, `skip_validator=${boundary.skip_validator}`],
+    workflow_path: IMPLEMENTATION_WORKFLOW_PATH,
+    skip_validator: skip,
+    task_level_compliance: skip === 'true' ? 'skipped' : 'required',
+    final_validator: 'required',
+    stop_step: null,
+    workflow_arguments: [`change_name=${changeName}`, `skip_validator=${skip}`],
   }
 }
 
@@ -49,16 +68,25 @@ export function parseWorkflowContract(text) {
   return { parameters, steps }
 }
 
-export function verifyWorkflowContract(text, boundary) {
+export function verifyWorkflowContract(text) {
   const contract = parseWorkflowContract(text)
   const errors = []
   if (!contract.parameters.includes('skip_validator')) {
     errors.push(`workflow ${IMPLEMENTATION_WORKFLOW} lacks the skip_validator parameter`)
   }
-  if (!contract.steps.includes(boundary.stop_step)) {
-    errors.push(`workflow ${IMPLEMENTATION_WORKFLOW} lacks the selected stop step ${boundary.stop_step}`)
+  if (!contract.parameters.includes('change_name')) {
+    errors.push(`workflow ${IMPLEMENTATION_WORKFLOW} lacks the change_name parameter`)
   }
-  return { ok: errors.length === 0, errors }
+  for (const step of REQUIRED_FINAL_WORKFLOW_STEPS) {
+    if (!contract.steps.includes(step)) {
+      errors.push(`workflow ${IMPLEMENTATION_WORKFLOW} lacks required final-workflow step ${step}`)
+    }
+  }
+  const prohibitedSteps = contract.steps.filter(isProhibitedWorkflowStep)
+  for (const step of prohibitedSteps) {
+    errors.push(`workflow ${IMPLEMENTATION_WORKFLOW} declares prohibited publication step ${step}`)
+  }
+  return { ok: errors.length === 0, errors, prohibited_steps: prohibitedSteps }
 }
 
 // The outer eval process restarting must never launch a second implementation
@@ -67,7 +95,6 @@ export function classifyRunnerRun({
   recorded,
   state,
   discovered,
-  boundaryStep,
   isProcessAlive,
   workflowName = IMPLEMENTATION_WORKFLOW,
 }) {
@@ -80,7 +107,6 @@ export function classifyRunnerRun({
       ...classifyRunnerRun({
         recorded: { run_id: discovered.run_id },
         state: discovered,
-        boundaryStep,
         isProcessAlive,
         workflowName,
       }),
@@ -122,10 +148,7 @@ export function classifyRunnerRun({
     return { status: 'active', action: 'wait', reason: null, run_id: recorded.run_id }
   }
 
-  // `--until` intentionally leaves the overall workflow incomplete because
-  // later steps remain. Reaching the eval boundary is represented by the
-  // current top-level step itself being complete, not by a synthetic status.
-  if (state.last_step === boundaryStep && state.step_completed === true) {
+  if (state.workflow_completed === true || state.completed === true) {
     return { status: 'completed', action: 'continue', reason: null, run_id: recorded.run_id }
   }
 
@@ -138,18 +161,38 @@ export function classifyRunnerRun({
   }
 }
 
-// The harness must never enter an acceptance, PR, CI, archive, or publishing
-// step, so anything after the configured boundary is a boundary failure.
-export function checkBoundary({ boundaryStep, workflowSteps, observedSteps }) {
-  const limit = workflowSteps.indexOf(boundaryStep)
-  let lastObserved = null
-
-  for (const step of observedSteps) {
-    const index = workflowSteps.indexOf(step)
-    if (index === -1 || index > limit) {
-      return { ok: false, unexpected_step: step, last_observed_step: lastObserved }
-    }
-    lastObserved = step
+function normalizeHistoryEntry(entry) {
+  if (typeof entry === 'string') return { step: entry, outcome: 'success' }
+  return {
+    step: entry?.step ?? entry?.id ?? null,
+    outcome: entry?.outcome ?? null,
+    ...entry,
   }
-  return { ok: true, unexpected_step: null, last_observed_step: lastObserved }
+}
+
+export function checkWorkflowHistory(history = []) {
+  const normalized = history.map(normalizeHistoryEntry).filter(({ step }) => step)
+  const completed = new Set(
+    normalized.filter(({ outcome }) => outcome === 'success').map(({ step }) => step),
+  )
+  const missingSteps = REQUIRED_FINAL_WORKFLOW_STEPS.filter((step) => !completed.has(step))
+  const prohibitedEffects = normalized.filter(({ step }) => isProhibitedWorkflowStep(step))
+  return {
+    ok: missingSteps.length === 0 && prohibitedEffects.length === 0,
+    missing_steps: missingSteps,
+    prohibited_effects: prohibitedEffects,
+    observed_steps: normalized.map(({ step }) => step),
+  }
+}
+
+// Compatibility for result consumers while the reported concept changes from
+// an early boundary to complete workflow history.
+export function checkBoundary({ observedSteps }) {
+  const checked = checkWorkflowHistory(observedSteps)
+  return {
+    ok: checked.ok,
+    unexpected_step: checked.prohibited_effects[0]?.step ?? null,
+    last_observed_step: checked.observed_steps.at(-1) ?? null,
+    ...checked,
+  }
 }

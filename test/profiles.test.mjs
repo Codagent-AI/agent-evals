@@ -20,7 +20,7 @@ const capabilities = {
 const lead = { cli: 'claude', model: 'opus', effort: 'high' }
 const implementor = { cli: 'claude', model: 'sonnet', effort: 'medium' }
 
-test('roles map to the implement-change2 planner and implementor agents', () => {
+test('roles map to the implement-change planner and implementor agents', () => {
   assert.deepEqual(ROLE_AGENTS, { lead: 'planner', implementor: 'implementor' })
 })
 

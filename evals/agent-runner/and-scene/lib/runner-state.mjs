@@ -101,11 +101,13 @@ async function* sessions(projectsDir) {
       const state = await readJson(statePath, null).catch(() => null)
       if (!state) continue
       const lock = await readLock(sessionDir, session)
+      const history = await readWorkflowHistory(sessionDir)
       const info = await stat(statePath).catch(() => null)
       yield normalizeState(state, {
         runId: basename(sessionDir),
         sessionDir,
         lock,
+        history,
         modifiedAtMs: info?.mtimeMs ?? null,
       })
     }
@@ -129,7 +131,7 @@ function currentStep(state) {
   }
 }
 
-function normalizeState(state, { runId, sessionDir, lock, modifiedAtMs }) {
+function normalizeState(state, { runId, sessionDir, lock, history, modifiedAtMs }) {
   const step = currentStep(state)
   return {
     ...state,
@@ -141,8 +143,43 @@ function normalizeState(state, { runId, sessionDir, lock, modifiedAtMs }) {
     workflow_completed: state.completed === true,
     lock,
     modified_at_ms: modifiedAtMs,
-    steps: step.id ? [step.id] : [],
+    history,
+    steps: history.length > 0 ? history.map(({ step: id }) => id) : (step.id ? [step.id] : []),
   }
+}
+
+function auditStep(prefix) {
+  const match = prefix.match(/^\[([^,\]]+)/)
+  if (!match) return null
+  return match[1].replace(/:\d+$/, '')
+}
+
+export async function readWorkflowHistory(sessionDir) {
+  const text = await readFile(join(sessionDir, 'audit.log'), 'utf8').catch(() => '')
+  const history = []
+  for (const line of text.split('\n')) {
+    const match = line.match(
+      /^(\S+)\s+(\[[^\]]+\])\s+(step_start|step_end)(?:\s+(\{.*\}))?$/,
+    )
+    if (!match) continue
+    const step = auditStep(match[2])
+    if (!step) continue
+    let data = {}
+    try {
+      data = match[4] ? JSON.parse(match[4]) : {}
+    } catch {
+      continue
+    }
+    history.push({
+      at: match[1],
+      step,
+      event: match[3],
+      outcome: match[3] === 'step_end' ? (data.outcome ?? null) : null,
+      attempt: data.identity?.attempt ?? null,
+      error: data.error ?? data.stderr ?? null,
+    })
+  }
+  return history
 }
 
 export async function readRunnerState(projectsDir, runId) {

@@ -106,7 +106,7 @@ async function openRun({ runDir, rubrics }) {
     }
   }
 
-  const checkpoint = await loadCheckpoint(join(runDir, 'checkpoint.json'))
+  const checkpoint = await loadCheckpoint(join(runDir, 'run-state.json'))
   const candidate = checkpoint?.identity?.candidate_identity ?? result.candidate_identity ?? null
 
   // A rubric edited between the automated run and the review would change what
@@ -226,7 +226,7 @@ async function reviewRun({
   log,
 }) {
   const reviewPath = join(run.runDir, 'human-review.json')
-  const checkpointPath = join(run.runDir, 'checkpoint.json')
+  const checkpointPath = join(run.runDir, 'run-state.json')
   let state = run.state
   let score = null
   let humanReview = null
@@ -236,7 +236,9 @@ async function reviewRun({
 
   // Start from the outcome the automated run durably recorded, so this command
   // extends that history rather than inventing a fresh one.
-  let baseOutcome = applyOutcomeEvent(createOutcome(), {
+  let baseOutcome = applyOutcomeEvent(createOutcome({
+    kind: run.mode === 'reference-baseline' ? 'reference' : 'candidate',
+  }), {
     type: 'automated-scoring-complete',
     automated_subtotal: run.result.automated_subtotal?.points ?? null,
   })
@@ -287,11 +289,16 @@ async function reviewRun({
         // Unconfirmed: the run stays exactly as the automated command left it.
         return
       }
-      const event = {
-        type: 'product-verdict',
-        verdict: score.official_pass ? 'pass' : 'fail',
-        official_score: score.official_score,
-      }
+      const event = run.mode === 'reference-baseline'
+        ? {
+            type: 'reference-finalized',
+            official_score: score.official_score,
+          }
+        : {
+            type: 'product-verdict',
+            verdict: score.official_pass ? 'pass' : 'fail',
+            official_score: score.official_score,
+          }
       const outcome = applyOutcomeEvent(context.outcome, event)
       assembled = buildResult({
         run,

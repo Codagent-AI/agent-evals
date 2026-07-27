@@ -11,6 +11,7 @@
 // that turns that into an official score lives in `human-review.mjs`, because it
 // runs on human time and must never cost the completed automated work.
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { spawnSync } from 'node:child_process'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -24,7 +25,12 @@ import {
   saveCheckpoint,
   validateCheckpointIdentity,
 } from './lib/checkpoint.mjs'
-import { freezeCandidate, prepareCandidateWorktree } from './lib/candidate.mjs'
+import {
+  freezeCandidate,
+  prepareCandidateWorktree,
+  verifyCandidateDelivery,
+  verifyRecordedDeliveryIdentity,
+} from './lib/candidate.mjs'
 import { runCandidateVerification } from './lib/candidate-verification.mjs'
 import { createHostCandidateServer } from './lib/candidate-server-host.mjs'
 import { aggregateImplementationCost, summarizeEvalOwnedUsage } from './lib/cost.mjs'
@@ -44,10 +50,11 @@ import { assembleResult, writeResultArtifacts } from './lib/result.mjs'
 import { createCodexJudgeInvoker } from './lib/judge-invoker.mjs'
 import { runProductJudging } from './lib/judge-jobs.mjs'
 import { applyOutcomeEvent, createOutcome } from './lib/outcomes.mjs'
+import { applyRunStateEvent } from './lib/state-machine.mjs'
 import { loadRubrics, rubricProvenance } from './lib/rubric.mjs'
 import { scoreProduct } from './lib/scorer.mjs'
 import { AUTOMATED_PHASES, runPhases } from './lib/phases.mjs'
-import { hashJson, readJson, writeJsonAtomic } from './lib/persistence.mjs'
+import { hashFile, hashJson, readJson, writeJsonAtomic } from './lib/persistence.mjs'
 import {
   compareRoleSelections,
   reconcileRoleAttempts,
@@ -64,9 +71,8 @@ import {
 } from './lib/runner-state.mjs'
 import { runTimed, summarizeTimings } from './lib/subprocess.mjs'
 import {
-  checkBoundary,
+  checkWorkflowHistory,
   classifyRunnerRun,
-  parseWorkflowContract,
   resolveBoundary,
   verifyWorkflowContract,
 } from './lib/workflow.mjs'
@@ -180,6 +186,8 @@ export async function runEvaluation({
   // rather than pretending it started one.
   candidateServer = null,
   verifyCandidate = null,
+  verifyDelivery = null,
+  verifyResumeDelivery = null,
   buildResult = null,
   verificationResult = null,
   // The live models.dev catalog. Injected so pricing is exercisable offline and
@@ -193,6 +201,7 @@ export async function runEvaluation({
   home = null,
   log = () => {},
 }) {
+  exec ??= (command, args, options = {}) => spawnSync(command, args, { encoding: 'utf8', ...options })
   let options
   try {
     options = parseArgs(argv)
@@ -203,6 +212,7 @@ export async function runEvaluation({
   const runDir = resolve(options.runDir)
   const runId = basename(runDir)
   const mode = options.referenceBaseline ? 'reference-baseline' : 'agent-runner'
+  const runKind = options.referenceBaseline ? 'reference' : 'candidate'
 
   let capabilities
   try {
@@ -256,19 +266,38 @@ export async function runEvaluation({
       return failure([{ code: error.code ?? 'provenance-error', message: error.message }])
     }
     workflowText = await readFile(provenance.workflow_path, 'utf8')
-    const contract = verifyWorkflowContract(workflowText, boundary)
+    const contract = verifyWorkflowContract(workflowText)
     if (!contract.ok) {
       return failure(contract.errors.map((message) => ({ code: 'workflow-contract', message })))
+    }
+    const credentials = exec('gh', ['auth', 'status'], { cwd: resolve(options.agentRunnerDir) })
+    if (credentials.status !== 0 || credentials.error) {
+      return failure([{
+        code: 'publishing-credentials',
+        message: 'GitHub credentials capable of pushing the candidate branch and managing its draft pull request are required',
+      }])
     }
   }
 
   await prepareRunDirectory(runDir)
-  const checkpointPath = join(runDir, 'checkpoint.json')
+  const checkpointPath = join(runDir, 'run-state.json')
   let checkpoint
   try {
     checkpoint = await loadCheckpoint(checkpointPath)
   } catch (error) {
     return failure([{ code: 'checkpoint-schema', message: error.message }])
+  }
+  if (checkpoint && !options.resume) {
+    return failure([{
+      code: 'run-directory-collision',
+      message: `run-state.json already exists for ${runId}; use --resume to continue it`,
+    }])
+  }
+  if (!checkpoint && options.resume) {
+    return failure([{
+      code: 'resume-state-missing',
+      message: `cannot resume ${runId}: run-state.json does not exist`,
+    }])
   }
 
   const candidateWorktree = join(runDir, '.runtime/candidate-worktree')
@@ -290,6 +319,8 @@ export async function runEvaluation({
       ref: selectedCandidateRef,
       resume: options.resume,
       expectedSource: checkpoint?.candidate_source ?? null,
+      runId,
+      kind: runKind,
       exec,
     })
   } catch (error) {
@@ -298,7 +329,7 @@ export async function runEvaluation({
 
   // A baseline is immutable as soon as it is checked out. An implementation
   // candidate becomes immutable only after Agent Runner reaches the configured
-  // boundary; on resume, a previously frozen identity is re-derived rather
+  // delivery; on resume, a previously frozen identity is re-derived rather
   // than trusted from the checkpoint alone.
   let frozenCandidate = null
   if (mode === 'reference-baseline' || checkpoint?.identity?.candidate_identity) {
@@ -323,6 +354,8 @@ export async function runEvaluation({
     // A rubric edit changes what the score means, so it invalidates a resumed
     // run rather than being blended into half-scored results.
     rubric_provenance: hashJson(provenanceOfRubrics),
+    candidate_repository: candidateSource.repository,
+    candidate_branch: candidateSource.branch,
   }
 
   if (checkpoint) {
@@ -340,16 +373,43 @@ export async function runEvaluation({
     if (stale.length > 0) {
       return failure(stale.map((mismatch) => ({ code: 'stale-checkpoint', ...mismatch })))
     }
+    if (mode === 'agent-runner') {
+      try {
+        const revalidate = verifyResumeDelivery ?? verifyRecordedDeliveryIdentity
+        await revalidate({
+          worktree: candidateWorktree,
+          recorded: checkpoint.delivery,
+          exec,
+        })
+      } catch (error) {
+        return failure([{
+          code: 'resume-provenance',
+          field: 'delivery',
+          message: error.message,
+        }])
+      }
+    }
   } else {
     checkpoint = {
-      ...createCheckpoint({ run_id: runId, identity }),
+      ...createCheckpoint({
+        run_id: runId,
+        identity,
+        kind: runKind,
+        delivery: {
+          repository: candidateSource.repository,
+          origin: candidateSource.repository,
+          fixture_commit: candidateSource.fixture_commit,
+          branch: candidateSource.branch,
+        },
+      }),
       role_profiles: validation.profiles,
       agent_runner_provenance: provenance,
       candidate_source: {
         repository: candidateSource.repository,
         fixture_commit: candidateSource.fixture_commit,
+        branch: candidateSource.branch,
       },
-      boundary,
+      workflow: boundary,
       agent_runner: null,
     }
     await saveCheckpoint(checkpointPath, checkpoint)
@@ -371,7 +431,12 @@ export async function runEvaluation({
   }
 
   const record = {
-    boundary: { ok: true, unexpected_step: null, last_observed_step: null },
+    workflowHistory: {
+      ok: mode === 'reference-baseline',
+      missing_steps: [],
+      prohibited_effects: [],
+      observed_steps: [],
+    },
     observed_steps: [],
     events: [],
     run: checkpoint.agent_runner,
@@ -386,6 +451,7 @@ export async function runEvaluation({
     ambiguity: null,
     candidateServer: null,
     candidate: frozenCandidate,
+    delivery: checkpoint.delivery?.final_sha ? checkpoint.delivery : null,
     // Measured durations only. See lib/timing.mjs: nothing here holds a
     // wall-clock stamp, so no stopped-process or human-review gap can reach a
     // reported total. Earlier sessions' intervals are carried forward from the
@@ -408,7 +474,7 @@ export async function runEvaluation({
   // actually in effect.
   const projectsDir = await resolveProjectsDir({ runDir, home })
   const readState = readRunnerState ?? ((runIdentifier) => readPersistedRunnerState(projectsDir, runIdentifier))
-  const readSteps = observedSteps ?? ((state) => state?.steps ?? [])
+  const readSteps = observedSteps ?? ((state) => state?.history ?? state?.steps ?? [])
   // Agent Runner must run in the candidate worktree so it discovers the
   // eval-scoped project config, and under the same home the controller reads
   // run state from so both agree on the run store.
@@ -419,11 +485,32 @@ export async function runEvaluation({
 
   async function persistRunnerState(state) {
     record.run = { run_id: state.run_id, session_dir: state.session_dir ?? null }
-    checkpoint = { ...checkpoint, agent_runner: record.run }
+    checkpoint = applyRunStateEvent(
+      { ...checkpoint, agent_runner: record.run },
+      {
+        type: 'delivery-identity-recorded',
+        owner: 'implementation-workflow',
+        runner: record.run,
+      },
+    )
     await saveCheckpoint(checkpointPath, checkpoint)
   }
 
   const handlers = {
+    preflight: async () => {
+      // All preflight work has completed before phase scheduling so failures
+      // cannot create or resume an Agent Runner process. This phase records the
+      // successful contract in the authoritative state.
+      await writeJsonAtomic(join(runDir, 'phases/preflight.json'), {
+        fixture: candidateSource,
+        workflow: boundary,
+        agent_runner_provenance: provenance,
+        role_profiles: validation.profiles,
+        evaluator_configuration: options.judgeModel,
+        rubric_provenance: provenanceOfRubrics,
+      })
+    },
+
     'agent-runner': async () => {
       if (mode === 'reference-baseline') {
         record.events.push({ event: 'skipped', reason: 'reference-baseline' })
@@ -431,6 +518,7 @@ export async function runEvaluation({
       }
 
       let state = await readState(checkpoint.agent_runner?.run_id ?? null)
+      let runnerStateSnapshot = state
       let decision = classifyRunnerRun({
         recorded: checkpoint.agent_runner,
         state,
@@ -438,7 +526,6 @@ export async function runEvaluation({
         // previous process was interrupted mid-flight; adopt it rather than
         // starting a second implementation workflow.
         discovered: checkpoint.agent_runner?.run_id ? null : state,
-        boundaryStep: boundary.stop_step,
         isProcessAlive: isRunnerProcessAlive,
       })
       while (decision.action !== 'continue') {
@@ -465,7 +552,6 @@ export async function runEvaluation({
         if (action === 'start') {
           const timing = runTimed('agent-runner', [
             'run', provenance.workflow_path,
-            '--until', boundary.stop_step,
             ...boundary.workflow_arguments,
           ], {
             label: 'agent-runner',
@@ -504,6 +590,7 @@ export async function runEvaluation({
         }
 
         state = waitedState ?? await readState(record.run?.run_id ?? decision.run_id ?? null)
+        runnerStateSnapshot = state
         if (!state?.run_id) {
           throw new Error('Agent Runner exited without a discoverable persisted run state')
         }
@@ -512,12 +599,11 @@ export async function runEvaluation({
         decision = classifyRunnerRun({
           recorded: observedRun,
           state,
-          boundaryStep: boundary.stop_step,
           isProcessAlive: isRunnerProcessAlive,
         })
         if (decision.action === 'resume' && action !== 'wait') {
           throw new Error(
-            `Agent Runner ${action} exited before completing boundary step ${boundary.stop_step}`,
+            `Agent Runner ${action} exited before completing the full ${boundary.workflow} workflow`,
           )
         }
         if (decision.action !== 'error') {
@@ -529,26 +615,65 @@ export async function runEvaluation({
       }
       record.events.push({ event: 'continue', status: decision.status, reason: null, adopted: false })
 
-      record.observed_steps = await readSteps(state)
-      record.boundary = checkBoundary({
-        boundaryStep: boundary.stop_step,
-        workflowSteps: parseWorkflowContract(workflowText).steps,
-        observedSteps: record.observed_steps,
+      record.observed_steps = await readSteps(runnerStateSnapshot)
+      record.workflowHistory = checkWorkflowHistory(record.observed_steps)
+      await writeJsonAtomic(join(runDir, 'phases/workflow-execution.json'), {
+        run: record.run,
+        workflow: boundary,
+        provenance,
+        events: record.events,
+        history: record.observed_steps,
+        history_verification: record.workflowHistory,
       })
-      if (!record.boundary.ok) {
-        throw new Error(
-          `workflow boundary violated: ${record.boundary.unexpected_step} executed after ${boundary.stop_step}`,
-        )
-      }
+    },
 
-      // Reaching the boundary is where the delivered product becomes the
-      // immutable candidate. A dirty worktree is not a reproducible result and
-      // must stop before any product judge sees it.
+    'delivery-verification': async () => {
+      if (mode === 'reference-baseline') return
+      try {
+        const verifier = verifyDelivery ?? verifyCandidateDelivery
+        record.delivery = await verifier({
+          worktree: candidateWorktree,
+          fixtureCommit: candidateSource.fixture_commit,
+          branch: candidateSource.branch,
+          changeName: options.changeName,
+          sessionDir: record.run?.session_dir,
+          workflowHistory: record.observed_steps,
+          exec,
+        })
+      } catch (error) {
+        error.run_id ??= record.run?.run_id ?? null
+        error.candidate_branch ??= candidateSource.branch
+        error.pull_request ??= checkpoint.delivery?.pull_request ?? null
+        throw error
+      }
+      checkpoint = applyRunStateEvent(checkpoint, {
+        type: 'delivery-identity-recorded',
+        owner: 'implementation-workflow',
+        branch: candidateSource.branch,
+        pull_request: record.delivery.pull_request,
+        final_sha: record.delivery.final_sha,
+        final_validator: record.delivery.final_validator,
+        acceptance: {
+          artifacts: record.delivery.acceptance_artifacts,
+          workflow_history: record.delivery.workflow_history,
+        },
+      })
+      await writeJsonAtomic(join(runDir, 'phases/delivery-verification.json'), record.delivery)
+      await saveCheckpoint(checkpointPath, checkpoint)
+    },
+
+    'source-freeze': async () => {
+      if (mode === 'reference-baseline' && record.candidate) return
       record.candidate = await freezeCurrentCandidate()
       checkpoint = {
         ...checkpoint,
         identity: {
           ...checkpoint.identity,
+          candidate_identity: record.candidate.candidate_identity,
+          fixture_revision: record.candidate.fixture_commit,
+        },
+        immutable_inputs: {
+          ...checkpoint.immutable_inputs,
           candidate_identity: record.candidate.candidate_identity,
           fixture_revision: record.candidate.fixture_commit,
         },
@@ -564,6 +689,14 @@ export async function runEvaluation({
       verificationResult = verified.verification
       record.timings.push(...(verified.timings ?? []))
       await writeJsonAtomic(join(runDir, 'phases/verification.json'), verified)
+      if (verified.build?.ok === false) {
+        return [{
+          type: 'conclusive-product-failure',
+          phase: 'verification',
+          reason: verified.build.log || 'candidate install or build failed reproducibly',
+          gate: 'build-succeeds',
+        }]
+      }
     },
 
     'candidate-server': async (context) => {
@@ -641,7 +774,7 @@ export async function runEvaluation({
         judges: record.judging?.judges ?? {},
         gates: record.browser?.gates ?? null,
         humanReview: null,
-        // Retries, repair, and boundary events are diagnostic context for the
+        // Retries, repair, and workflow lifecycle events are diagnostic context for the
         // reader; the scorer never turns any of them into points.
         harness: {
           judge_retries: record.judging?.retries ?? {},
@@ -764,12 +897,19 @@ export async function runEvaluation({
         judging: record.judging,
         workflow: {
           workflow: boundary.workflow,
+          workflow_path: boundary.workflow_path,
           skip_validator: boundary.skip_validator,
+          task_level_compliance: boundary.task_level_compliance,
+          final_validator: boundary.final_validator,
           arguments: boundary.workflow_arguments,
-          configured_stop_step: boundary.stop_step,
-          last_observed_step: record.boundary.last_observed_step,
-          unexpected_step: record.boundary.unexpected_step,
+          full_workflow: true,
+          configured_stop_step: null,
+          last_observed_step: record.workflowHistory.observed_steps.at(-1) ?? null,
+          unexpected_step: record.workflowHistory.prohibited_effects[0]?.step ?? null,
           observed_steps: record.observed_steps,
+          history_complete: record.workflowHistory.ok,
+          missing_steps: record.workflowHistory.missing_steps,
+          prohibited_effects: record.workflowHistory.prohibited_effects,
           run_id: record.run?.run_id ?? null,
           session_dir: record.run?.session_dir ?? null,
           provenance,
@@ -804,6 +944,7 @@ export async function runEvaluation({
       }),
       candidate_identity: record.candidate?.candidate_identity ?? checkpoint.identity.candidate_identity,
       candidate_source: record.candidate ?? checkpoint.candidate ?? null,
+      delivery: checkpoint.delivery,
       // The endpoint the reviewer is handed. Null when no server was started, so
       // the human-review command starts one rather than trusting a stale URL.
       candidate_server: record.candidateServer,
@@ -811,11 +952,18 @@ export async function runEvaluation({
     await writeResultArtifacts({ runDir, result })
   }
 
-  const completedPhases = new Set(
-    Object.entries(checkpoint.phases ?? {})
-      .filter(([, phase]) => phase.state === 'complete')
-      .map(([name]) => name),
-  )
+  const completedPhases = new Set()
+  for (const [name, phase] of Object.entries(checkpoint.phases ?? {})) {
+    if (phase.state !== 'complete' || !Array.isArray(phase.outputs) || phase.outputs.length === 0) continue
+    let matches = true
+    for (const output of phase.outputs) {
+      if (await hashFile(join(runDir, output.path)) !== output.sha256) {
+        matches = false
+        break
+      }
+    }
+    if (matches) completedPhases.add(name)
+  }
 
   // A reused phase runs no handler, so its findings would be absent from the
   // record the result is rendered from. Rehydrating from the durable phase
@@ -845,12 +993,63 @@ export async function runEvaluation({
   // Record phase completion durably as each phase finishes, so an interrupted
   // run resumes at the first incomplete phase instead of repeating valid work.
   const tracked = {}
+  const phaseArtifactPaths = {
+    preflight: ['phases/preflight.json'],
+    'agent-runner': ['phases/workflow-execution.json'],
+    'delivery-verification': ['phases/delivery-verification.json'],
+    'source-freeze': ['implementation.diff', 'candidate-source-manifest.json'],
+    verification: ['phases/verification.json'],
+    'browser-evaluation': ['phases/browser-evaluation.json'],
+    'product-judging': [
+      'phases/source-evidence.json',
+      'phases/product-judging.json',
+      'phases/score.json',
+    ],
+    'ambiguity-diagnostics': ['phases/ambiguity-diagnostics.json', 'ambiguity-ledger.json'],
+    'metrics-pricing': ['phases/metrics-pricing.json'],
+    'pending-result': ['result.json', 'report.html', 'artifact-manifest.json'],
+    'cleanup-result': ['result.json', 'report.html', 'artifact-manifest.json'],
+  }
+  async function recordedPhaseOutputs(name) {
+    const outputs = []
+    for (const relative of phaseArtifactPaths[name] ?? []) {
+      const path = join(runDir, relative)
+      const sha256 = await hashFile(path)
+      if (sha256) outputs.push({ path: relative, sha256 })
+    }
+    return outputs
+  }
   for (const phase of AUTOMATED_PHASES) {
     const handler = handlers[phase.name]
     if (!handler) continue
     tracked[phase.name] = async (context) => {
+      checkpoint = applyRunStateEvent(checkpoint, {
+        type: 'phase-started',
+        owner: phase.owner,
+        phase: phase.name,
+        input_fingerprint: hashJson(identity),
+        dependency_fingerprint: hashJson(
+          Object.fromEntries(
+            Object.entries(checkpoint.phases ?? {})
+              .filter(([, value]) => value.state === 'complete')
+              .map(([name, value]) => [name, value.completed_at]),
+          ),
+        ),
+      })
+      await saveCheckpoint(checkpointPath, checkpoint)
       const start = process.hrtime.bigint()
-      const events = await handler(context)
+      let events
+      try {
+        events = await handler(context)
+      } catch (error) {
+        if (phase.owner === 'implementation-workflow') {
+          error.candidate_branch ??= candidateSource.branch
+          error.pull_request ??= checkpoint.delivery?.pull_request ?? null
+          error.final_sha ??= checkpoint.delivery?.final_sha ?? null
+          error.run_id ??= record.run?.run_id ?? checkpoint.agent_runner?.run_id ?? null
+        }
+        throw error
+      }
       // Only the phase's own active execution is measured. The implementation
       // workflow's duration comes from Agent Runner's own metrics instead, so it
       // is not double-counted here.
@@ -861,18 +1060,15 @@ export async function runEvaluation({
           session: executionSession,
         })
       }
-      checkpoint = {
+      checkpoint = applyRunStateEvent({
         ...checkpoint,
         timing: record.timing,
-        phases: {
-          ...checkpoint.phases,
-          [phase.name]: {
-            ...(checkpoint.phases?.[phase.name] ?? { units: {} }),
-            state: 'complete',
-            completed_at: new Date().toISOString(),
-          },
-        },
-      }
+      }, {
+        type: 'phase-completed',
+        owner: phase.owner,
+        phase: phase.name,
+        outputs: await recordedPhaseOutputs(phase.name),
+      })
       await saveCheckpoint(checkpointPath, checkpoint)
       return events
     }
@@ -881,9 +1077,24 @@ export async function runEvaluation({
   const result = await runPhases({
     phases: AUTOMATED_PHASES,
     handlers: tracked,
-    outcome: createOutcome(),
+    outcome: checkpoint.outcome ?? createOutcome({ kind: runKind }),
     isComplete: (name) => completedPhases.has(name),
   })
+
+  checkpoint = applyRunStateEvent(checkpoint, {
+    type: 'outcome-updated',
+    owner: 'evaluation-harness',
+    outcome: result.outcome,
+  })
+  if (result.failed) {
+    checkpoint = applyRunStateEvent(checkpoint, {
+      type: 'phase-failed',
+      owner: result.outcome.failure?.owner ?? 'evaluation-harness',
+      phase: result.failed,
+      error: result.outcome.failure,
+    })
+  }
+  await saveCheckpoint(checkpointPath, checkpoint)
 
   return { ...result, errors: [], runDir, runId, boundary, provenance, profiles: validation.profiles }
 }

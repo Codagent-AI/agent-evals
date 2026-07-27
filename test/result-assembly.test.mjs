@@ -169,7 +169,7 @@ async function runDirectory() {
   await mkdir(join(dir, 'phases'), { recursive: true })
   await mkdir(join(dir, '.runtime/candidate-worktree'), { recursive: true })
   await writeFile(join(dir, 'phases/score.json'), '{}\n')
-  await writeFile(join(dir, 'checkpoint.json'), '{}\n')
+  await writeFile(join(dir, 'run-state.json'), '{}\n')
   await writeFile(join(dir, '.runtime/candidate-worktree/App.tsx'), 'secret\n')
   return dir
 }
@@ -181,7 +181,7 @@ test('the artifact manifest inventories deliberate artifacts and excludes .runti
 
   const paths = manifest.artifacts.map(({ path }) => path)
   assert.ok(paths.includes('phases/score.json'), paths.join(','))
-  assert.ok(paths.includes('checkpoint.json'))
+  assert.ok(paths.includes('run-state.json'))
   assert.ok(!paths.some((path) => path.startsWith('.runtime')), paths.join(','))
   assert.deepEqual(manifest.excluded, ['.runtime'])
   for (const artifact of manifest.artifacts) {

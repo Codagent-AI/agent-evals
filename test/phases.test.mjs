@@ -26,7 +26,10 @@ const serverUp = { 'candidate-server': (context) => { context.serverRunning = tr
 
 test('the automated lifecycle runs in the approved order', () => {
   assert.deepEqual(AUTOMATED_PHASES.map((phase) => phase.name), [
+    'preflight',
     'agent-runner',
+    'delivery-verification',
+    'source-freeze',
     'verification',
     'candidate-server',
     'browser-evaluation',
@@ -55,7 +58,8 @@ test('Agent Runner failures are owned by the implementation workflow', () => {
   const runner = AUTOMATED_PHASES.find((phase) => phase.name === 'agent-runner')
 
   assert.equal(runner.owner, 'implementation-workflow')
-  assert.ok(AUTOMATED_PHASES.filter((phase) => phase.name !== 'agent-runner')
+  assert.equal(AUTOMATED_PHASES.find((phase) => phase.name === 'delivery-verification').owner, 'implementation-workflow')
+  assert.ok(AUTOMATED_PHASES.filter((phase) => !['agent-runner', 'delivery-verification'].includes(phase.name))
     .every((phase) => phase.owner === 'evaluation-harness'))
 })
 
@@ -102,6 +106,30 @@ test('dependent phases do not run after an earlier phase cannot complete', async
   assert.ok(!order.includes('browser-evaluation'))
   assert.ok(!order.includes('product-judging'))
   assert.equal(result.outcome.evaluation_status, 'evaluation-harness-failed')
+})
+
+test('a conclusive product failure skips browser, judging, and human-dependent work but reports successfully', async () => {
+  const { order, map } = handlers(AUTOMATED_PHASES, { effects: serverUp })
+  map.verification = async () => {
+    order.push('verification')
+    return [{
+      type: 'conclusive-product-failure',
+      phase: 'verification',
+      reason: 'candidate build failed reproducibly',
+      gate: 'build-succeeds',
+    }]
+  }
+
+  const result = await runPhases({ phases: AUTOMATED_PHASES, handlers: map, outcome: createOutcome() })
+
+  assert.equal(result.exitCode, 0)
+  assert.equal(result.outcome.evaluation_status, 'complete')
+  assert.equal(result.outcome.product_verdict, 'fail')
+  assert.ok(!order.includes('browser-evaluation'))
+  assert.ok(!order.includes('product-judging'))
+  assert.ok(order.includes('metrics-pricing'))
+  assert.ok(order.includes('pending-result'))
+  assert.ok(order.includes('cleanup'))
 })
 
 test('outcome reporting and cleanup still run after an earlier phase fails', async () => {
@@ -198,7 +226,15 @@ test('the Agent Runner phase always re-verifies rather than trusting a checkpoin
   // never short-circuited by an eval-side checkpoint. The candidate server is
   // likewise always re-verified, and the result artifacts are always rewritten
   // so they describe this session rather than an earlier one.
-  assert.deepEqual(order, ['agent-runner', 'candidate-server', 'pending-result', 'cleanup-result'])
+  assert.deepEqual(order, [
+    'preflight',
+    'agent-runner',
+    'delivery-verification',
+    'source-freeze',
+    'candidate-server',
+    'pending-result',
+    'cleanup-result',
+  ])
   assert.ok(!result.reused.includes('agent-runner'))
   assert.ok(result.reused.includes('product-judging'))
 })

@@ -4,8 +4,14 @@
 // matching score-affecting inputs plus output artifacts whose hashes still
 // validate. Anything less restarts the enclosing phase.
 import { hashFile, hashJson, readJson, writeJsonAtomic } from './persistence.mjs'
+import {
+  RUN_STATE_SCHEMA_VERSION,
+  createRunState,
+  validateRunState,
+} from './state-machine.mjs'
+import { planReusableUnits } from './orchestrator.mjs'
 
-export const CHECKPOINT_SCHEMA_VERSION = 1
+export const CHECKPOINT_SCHEMA_VERSION = RUN_STATE_SCHEMA_VERSION
 
 // The score-affecting provenance a checkpoint is only valid against.
 export const IDENTITY_FIELDS = [
@@ -16,6 +22,8 @@ export const IDENTITY_FIELDS = [
   'agent_configuration',
   'evaluator_configuration',
   'rubric_provenance',
+  'candidate_repository',
+  'candidate_branch',
 ]
 
 function now() {
@@ -29,26 +37,31 @@ function withUnit(checkpoint, phase, unit, value) {
   return { ...checkpoint, phases }
 }
 
-export function createCheckpoint({ run_id, identity }) {
-  return {
-    schema_version: CHECKPOINT_SCHEMA_VERSION,
-    run_id,
-    identity: Object.fromEntries(IDENTITY_FIELDS.map((field) => [field, identity?.[field] ?? null])),
-    phases: {},
-  }
+export function createCheckpoint({ run_id, identity, kind = 'candidate', delivery = {} }) {
+  const immutableInputs = Object.fromEntries(
+    IDENTITY_FIELDS.map((field) => [field, identity?.[field] ?? null]),
+  )
+  return createRunState({ runId: run_id, kind, immutableInputs, delivery })
 }
 
-export function beginUnit(checkpoint, { phase, unit, inputs }) {
+export function beginUnit(checkpoint, { phase, unit, inputs, dependencies }) {
   return withUnit(checkpoint, phase, unit, {
     state: 'in-progress',
     input_fingerprint: hashJson(inputs ?? {}),
+    dependency_fingerprint: hashJson(dependencies ?? {}),
     outputs: [],
     started_at: now(),
     completed_at: null,
   })
 }
 
-export async function completeUnit(checkpoint, { phase, unit, inputs, outputs = [] }) {
+export async function completeUnit(checkpoint, {
+  phase,
+  unit,
+  inputs,
+  dependencies,
+  outputs = [],
+}) {
   const existing = checkpoint.phases[phase]?.units?.[unit]
   const recorded = []
   for (const path of outputs) {
@@ -57,6 +70,7 @@ export async function completeUnit(checkpoint, { phase, unit, inputs, outputs = 
   return withUnit(checkpoint, phase, unit, {
     state: 'complete',
     input_fingerprint: hashJson(inputs ?? {}),
+    dependency_fingerprint: hashJson(dependencies ?? {}),
     outputs: recorded,
     started_at: existing?.started_at ?? now(),
     completed_at: now(),
@@ -75,12 +89,15 @@ export function failUnit(checkpoint, { phase, unit, error }) {
 
 // A completed unit is reusable regardless of its product verdict: a recorded
 // product failure is a finished result, not work to redo.
-export async function verifyUnit(checkpoint, { phase, unit, inputs }) {
+export async function verifyUnit(checkpoint, { phase, unit, inputs, dependencies }) {
   const recorded = checkpoint.phases?.[phase]?.units?.[unit]
   if (!recorded) return { reusable: false, reason: 'no checkpoint for this unit' }
   if (recorded.state !== 'complete') return { reusable: false, reason: `unit is not complete (${recorded.state})` }
   if (recorded.input_fingerprint !== hashJson(inputs ?? {})) {
     return { reusable: false, reason: 'score-affecting input provenance changed' }
+  }
+  if (recorded.dependency_fingerprint !== hashJson(dependencies ?? {})) {
+    return { reusable: false, reason: 'work-unit dependency provenance changed' }
   }
   for (const output of recorded.outputs) {
     if (await hashFile(output.path) !== output.sha256) {
@@ -90,25 +107,32 @@ export async function verifyUnit(checkpoint, { phase, unit, inputs }) {
   return { reusable: true, reason: null }
 }
 
-export async function planPhaseResume(checkpoint, { phase, units, inputsFor, provable = true }) {
-  // Without durable per-unit proof the whole phase restarts from its beginning.
-  if (!provable) return { restart: true, reuse: [], run: [...units] }
-
-  const reuse = []
-  const run = []
-  for (const unit of units) {
-    const { reusable } = await verifyUnit(checkpoint, { phase, unit, inputs: inputsFor(unit) })
-    ;(reusable ? reuse : run).push(unit)
-  }
-  return { restart: false, reuse, run }
+export async function planPhaseResume(checkpoint, {
+  phase,
+  units,
+  inputsFor,
+  dependenciesFor = () => ({}),
+  provable = true,
+}) {
+  return planReusableUnits({
+    units,
+    provable,
+    verify: (unit) => verifyUnit(checkpoint, {
+      phase,
+      unit,
+      inputs: inputsFor(unit),
+      dependencies: dependenciesFor(unit),
+    }),
+  })
 }
 
 export function validateCheckpointIdentity(checkpoint, identity) {
-  return IDENTITY_FIELDS.flatMap((field) => (
-    checkpoint.identity[field] === identity?.[field]
+  return IDENTITY_FIELDS.flatMap((field) => {
+    const current = identity?.[field] ?? null
+    return checkpoint.identity[field] === current
       ? []
-      : [{ field, recorded: checkpoint.identity[field], current: identity?.[field] ?? null }]
-  ))
+      : [{ field, recorded: checkpoint.identity[field], current }]
+  })
 }
 
 export async function saveCheckpoint(path, checkpoint) {
@@ -118,10 +142,9 @@ export async function saveCheckpoint(path, checkpoint) {
 export async function loadCheckpoint(path) {
   const checkpoint = await readJson(path, null)
   if (checkpoint === null) return null
-  if (checkpoint.schema_version !== CHECKPOINT_SCHEMA_VERSION) {
-    throw new Error(
-      `unsupported checkpoint schema version ${checkpoint.schema_version}; expected ${CHECKPOINT_SCHEMA_VERSION}`,
-    )
-  }
-  return checkpoint
+  return validateRunState(checkpoint)
 }
+
+export const createRunManifest = createRunState
+export const loadRunState = loadCheckpoint
+export const saveRunState = saveCheckpoint

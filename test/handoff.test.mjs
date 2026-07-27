@@ -9,11 +9,11 @@ import { loadCheckpoint } from '../evals/agent-runner/and-scene/lib/checkpoint.m
 import { readJson } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
 import { WORKFLOW_RELATIVE_PATH } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
 
-const workflowYaml = `name: implement-change2
-parameters:
-  change_name:
+const workflowYaml = `name: implement-change
+params:
+  - name: change_name
     required: true
-  skip_validator:
+  - name: skip_validator
     default: false
 steps:
   - id: plan
@@ -21,8 +21,10 @@ steps:
   - id: review-assumptions
   - id: simplify
   - id: run-validator
-  - id: verify-validator
-  - id: acceptance-test
+  - id: open-draft-pr
+  - id: verify-draft-pr
+  - id: prepare-acceptance
+  - id: verify-acceptance-handoff
 `
 
 const profileArgs = [
@@ -41,14 +43,19 @@ async function environment() {
   const exec = (command, args) => {
     if (command === 'git') {
       const verb = args.join(' ')
+      if (verb.includes('show-ref --verify --quiet')) return { status: 1, stdout: '' }
       if (verb.includes('--is-inside-work-tree')) return { status: 0, stdout: 'true\n' }
       if (verb.includes('remote get-url origin')) {
         return { status: 0, stdout: 'https://github.com/Codagent-AI/and-scene.git\n' }
       }
       if (verb.includes('merge-base --is-ancestor')) return { status: 0, stdout: '' }
+      if (verb.includes('branch --show-current')) {
+        return { status: 0, stdout: 'eval/and-scene/run-1\n' }
+      }
       if (verb.includes('status --porcelain')) return { status: 0, stdout: '' }
       if (verb.includes('rev-parse')) return { status: 0, stdout: `${'a'.repeat(40)}\n` }
     }
+    if (command === 'gh' && args[0] === 'auth') return { status: 0, stdout: '' }
     if (command === 'agent-runner' && args[0] === '--version') return { status: 0, stdout: 'agent-runner 2.4.0\n' }
     return { status: 0, stdout: '' }
   }
@@ -99,9 +106,33 @@ async function evaluate(context, extra = {}) {
     exec: context.exec,
     home: context.home,
     readRunnerState: () => ({
-      run_id: 'run-7', session_dir: '/sessions/run-7', last_step: 'simplify', step_completed: true,
+      run_id: 'run-7',
+      session_dir: '/sessions/run-7',
+      workflow_name: 'implement-change',
+      workflow_completed: true,
     }),
-    observedSteps: () => ['plan', 'implement-tasks', 'review-assumptions', 'simplify'],
+    observedSteps: () => [
+      { step: 'run-validator', outcome: 'success' },
+      { step: 'open-draft-pr', outcome: 'success' },
+      { step: 'verify-draft-pr', outcome: 'success' },
+      { step: 'prepare-acceptance', outcome: 'success' },
+      { step: 'verify-acceptance-handoff', outcome: 'success' },
+    ],
+    verifyDelivery: async () => ({
+      final_sha: 'a'.repeat(40),
+      pull_request: {
+        number: 53,
+        url: 'https://example.test/pull/53',
+        state: 'OPEN',
+        draft: true,
+        base: 'main',
+        head_branch: 'eval/and-scene/run-1',
+        head_sha: 'a'.repeat(40),
+      },
+      final_validator: { step: 'run-validator', outcome: 'success' },
+      workflow_history: [],
+      acceptance_artifacts: [],
+    }),
     isProcessAlive: () => false,
     ...extra,
   })
@@ -136,7 +167,7 @@ test('the candidate server is recorded durably and stopped before the command ex
 
   await evaluate(context, infra)
 
-  const checkpoint = await loadCheckpoint(join(context.runDir, 'checkpoint.json'))
+  const checkpoint = await loadCheckpoint(join(context.runDir, 'run-state.json'))
   assert.deepEqual(checkpoint.candidate_server, {
     pid: 9001,
     url: 'http://127.0.0.1:4173/',

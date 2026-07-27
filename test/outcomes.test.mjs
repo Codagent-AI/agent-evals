@@ -26,7 +26,45 @@ test('the approved status and verdict vocabularies are exact', () => {
     'implementation-workflow-failed',
     'evaluation-harness-failed',
   ])
-  assert.deepEqual(PRODUCT_VERDICTS, ['pass', 'fail', 'unavailable'])
+  assert.deepEqual(PRODUCT_VERDICTS, ['pass', 'fail', 'unavailable', 'not-applicable'])
+})
+
+test('a reference outcome marks product verdict and delivery applicability not applicable', () => {
+  const outcome = createOutcome({ kind: 'reference' })
+
+  assert.equal(outcome.product_verdict, 'not-applicable')
+  assert.equal(outcome.applicability.delivery, false)
+  assert.equal(outcome.score_denominator, 92)
+})
+
+test('a finalized reference stays not-applicable while recording its local score', () => {
+  const outcome = applyOutcomeEvent(createOutcome({ kind: 'reference' }), {
+    type: 'reference-finalized',
+    official_score: 88,
+  })
+
+  assert.equal(outcome.evaluation_status, 'complete')
+  assert.equal(outcome.product_verdict, 'not-applicable')
+  assert.equal(outcome.official_score, 88)
+  assert.equal(outcome.verdict_durable, true)
+})
+
+test('workflow failures retain delivery identity and the typed side-effect reason', () => {
+  const outcome = applyOutcomeEvent(createOutcome({ kind: 'candidate' }), {
+    type: 'workflow-failure',
+    phase: 'delivery-verification',
+    reason: 'workflow-side-effect-violation',
+    code: 'workflow-side-effect-violation',
+    unexpected_action: 'merge-pr',
+    candidate_branch: 'eval/and-scene/run-123',
+    pull_request: { number: 53, url: 'https://example.test/pull/53' },
+    resumable: false,
+  })
+
+  assert.equal(outcome.failure.code, 'workflow-side-effect-violation')
+  assert.equal(outcome.failure.unexpected_action, 'merge-pr')
+  assert.equal(outcome.delivery.candidate_branch, 'eval/and-scene/run-123')
+  assert.equal(outcome.delivery.pull_request.number, 53)
 })
 
 test('a new outcome is pending human review with no product verdict', () => {
@@ -66,6 +104,21 @@ test('a complete fail records the official score and a fail verdict', () => {
   assert.equal(outcome.evaluation_status, 'complete')
   assert.equal(outcome.product_verdict, 'fail')
   assert.equal(outcome.official_score, 41)
+})
+
+test('a deterministic build failure is a conclusive unscored product fail', () => {
+  const outcome = applyOutcomeEvent(createOutcome(), {
+    type: 'conclusive-product-failure',
+    phase: 'verification',
+    reason: 'candidate build failed reproducibly',
+    gate: 'build-succeeds',
+  })
+
+  assert.equal(outcome.evaluation_status, 'complete')
+  assert.equal(outcome.product_verdict, 'fail')
+  assert.equal(outcome.official_score, null)
+  assert.equal(outcome.verdict_durable, true)
+  assert.equal(outcome.product_failure.gate, 'build-succeeds')
 })
 
 test('a workflow failure leaves the product verdict unavailable', () => {

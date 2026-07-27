@@ -17,7 +17,7 @@ REFERENCE_REF="${REFERENCE_REF:-171c7def1e12aca2a5f605a5e5feafb20d4e4d19}"
 CHANGE_NAME="${CHANGE_NAME:-create-and-scene}"
 # The implementation workflow is hard-coded for this change. The suite records
 # whichever clean Agent Runner revision supplies it rather than pinning a commit.
-WORKFLOW_RELATIVE_PATH="workflows/openspec/implement-change2.yaml"
+WORKFLOW_RELATIVE_PATH="workflows/openspec/implement-change-v2.0.yaml"
 # sandbox-run.sh mounts the validated host checkout here with its Git metadata.
 # Its separate /tmp/agent-runner-local copy is only the build source and cannot
 # satisfy the controller's clean-worktree provenance check.
@@ -53,13 +53,13 @@ Usage: evals/agent-runner/and-scene/run.sh (--proof-browser | --run-agent | --ca
 
 Runs the and-scene evaluation through Agent Runner's sandbox adapter.
 
-Credential posture: no host credentials are inherited by default except the
-agent auth mounts required by the selected role profiles. Pass only short-lived,
-repo-scoped credentials with --env, for example --env GITHUB_TOKEN for a private
-fixture clone, or use the sandbox runner's default .sandbox-secrets.env file.
-Any env secret passed through is readable by processes inside the container.
-Credentials remain in the ephemeral container home and are never written into
-the persistent run directory.
+Credential posture: a candidate run requires GitHub credentials that can push
+the unique eval/and-scene/<run-id> branch and create or update its draft pull
+request. No host credentials are inherited by default except the agent auth
+mounts required by selected profiles. Pass only short-lived, repo-scoped
+credentials with --env (for example --env GITHUB_TOKEN), or use the sandbox
+runner's default .sandbox-secrets.env file. Credentials remain in the ephemeral
+container home and are never written into the persistent run directory.
 
 Modes:
   --proof-browser        Run the narrow container/browser proof.
@@ -74,7 +74,7 @@ Options:
   --dry-run              Print the sandbox command instead of running it.
   --agent-runner-dir PATH
                           Agent Runner checkout. Must be a clean Git worktree
-                          containing workflows/openspec/implement-change2.yaml.
+                          containing workflows/openspec/implement-change-v2.0.yaml.
                           Default: sibling ../agent-runner.
   --artifact-dir PATH    Host run directory. Default:
                           proof: artifacts/evals/and-scene-proof/<timestamp>
@@ -88,12 +88,13 @@ Options:
   --reference-baseline   Evaluate an existing candidate without invoking Agent
                           Runner. Role profiles are not required or applicable.
   --change-name NAME     OpenSpec change name. Default: create-and-scene
-  --skip-validator       Pass skip_validator=true and stop the workflow after
-                          simplify. Without this flag the eval passes
-                          skip_validator=false and stops after verify-validator.
-  --resume               Reopen the run directory and continue the recorded
-                          evaluation instead of starting a new one.
-  --lead-cli CLI         Lead-agent CLI adapter (implement-change2 planner).
+  --skip-validator       Pass skip_validator=true to skip task-level compliance
+                          only. The final Validator, draft PR, acceptance
+                          preparation, and handoff verification still run.
+  --resume               Reopen run-state.json, revalidate the recorded fixture,
+                          Runner, branch, draft PR, final SHA, and evidence, then
+                          wait for/resume the exact Runner run as needed.
+  --lead-cli CLI         Lead-agent CLI adapter (implement-change planner).
   --lead-model MODEL     Lead-agent model.
   --lead-effort EFFORT   Lead-agent effort.
   --implementor-cli CLI  Task-implementor CLI adapter.
@@ -547,7 +548,8 @@ fi
 
 # The implementation workflow is fixed for this change; the controller records
 # the clean Agent Runner revision that supplies it.
-IMPLEMENTATION_WORKFLOW=implement-change2
+IMPLEMENTATION_WORKFLOW=implement-change
+IMPLEMENTATION_WORKFLOW_PATH=$WORKFLOW_RELATIVE_PATH
 REPO=$REPO_Q
 FIXTURE_REF=$FIXTURE_REF_Q
 REFERENCE_REF=$REFERENCE_REF_Q
@@ -555,7 +557,7 @@ CANDIDATE_REF=$CANDIDATE_REF_Q
 CHANGE_NAME=$CHANGE_NAME_Q
 JUDGE_MODEL=$JUDGE_MODEL_Q
 AGENT_RUNNER_DIR=$CONTAINER_AGENT_RUNNER_DIR_Q
-export REPO FIXTURE_REF REFERENCE_REF CANDIDATE_REF CHANGE_NAME JUDGE_MODEL IMPLEMENTATION_WORKFLOW
+export REPO FIXTURE_REF REFERENCE_REF CANDIDATE_REF CHANGE_NAME JUDGE_MODEL IMPLEMENTATION_WORKFLOW IMPLEMENTATION_WORKFLOW_PATH
 
 token="\${GITHUB_TOKEN:-\${GH_TOKEN:-}}"
 if [ -n "\$token" ]; then

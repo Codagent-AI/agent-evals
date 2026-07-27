@@ -13,16 +13,21 @@ import { hashString, readJson, writeJsonAtomic } from '../evals/agent-runner/and
 import { MODELS_DEV_URL } from '../evals/agent-runner/and-scene/lib/pricing.mjs'
 import { WORKFLOW_RELATIVE_PATH } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
 
-const workflowYaml = `name: implement-change2
-parameters:
-  change_name:
+const workflowYaml = `name: implement-change
+params:
+  - name: change_name
     required: true
-  skip_validator:
+  - name: skip_validator
     default: false
 steps:
   - id: plan
   - id: implement-tasks
   - id: simplify
+  - id: run-validator
+  - id: open-draft-pr
+  - id: verify-draft-pr
+  - id: prepare-acceptance
+  - id: verify-acceptance-handoff
 `
 
 const profileArgs = [
@@ -68,7 +73,7 @@ function runMetrics(overrides = {}) {
   return {
     schema_version: 1,
     run_id: 'run-7',
-    workflow: 'implement-change2',
+    workflow: 'implement-change',
     history_complete: true,
     sessions: [{ duration_ms: 120_000, status: 'closed' }],
     steps: [attempt()],
@@ -106,14 +111,19 @@ async function environment({ metrics = runMetrics(), sessionFiles = {} } = {}) {
     invocations.push([command, ...args])
     if (command === 'git') {
       const verb = args.join(' ')
+      if (verb.includes('show-ref --verify --quiet')) return { status: 1, stdout: '' }
       if (verb.includes('--is-inside-work-tree')) return { status: 0, stdout: 'true\n' }
       if (verb.includes('remote get-url origin')) {
         return { status: 0, stdout: 'https://github.com/Codagent-AI/and-scene.git\n' }
       }
       if (verb.includes('merge-base --is-ancestor')) return { status: 0, stdout: '' }
+      if (verb.includes('branch --show-current')) {
+        return { status: 0, stdout: 'eval/and-scene/run-1\n' }
+      }
       if (verb.includes('status --porcelain')) return { status: 0, stdout: '' }
       if (verb.includes('rev-parse')) return { status: 0, stdout: `${'a'.repeat(40)}\n` }
     }
+    if (command === 'gh' && args[0] === 'auth') return { status: 0, stdout: '' }
     if (command === 'agent-runner' && args[0] === '--version') {
       return { status: 0, stdout: 'agent-runner 2.4.0\n' }
     }
@@ -134,12 +144,14 @@ function catalogFetch(body = CATALOG_BODY) {
 }
 
 async function evaluate(context, overrides = {}) {
+  const { resume = false, ...injected } = overrides
   return runEvaluation({
     argv: [
       '--run-dir', context.runDir,
       '--agent-runner-dir', context.agentRunnerDir,
       '--change-name', 'create-and-scene',
       '--skip-validator',
+      ...(resume ? ['--resume'] : []),
       ...profileArgs,
     ],
     exec: context.exec,
@@ -148,12 +160,34 @@ async function evaluate(context, overrides = {}) {
     readRunnerState: () => ({
       run_id: 'run-7',
       session_dir: context.sessionDir,
-      last_step: 'simplify',
-      step_completed: true,
+      workflow_name: 'implement-change',
+      workflow_completed: true,
     }),
-    observedSteps: () => ['plan', 'implement-tasks', 'simplify'],
+    observedSteps: () => [
+      { step: 'run-validator', outcome: 'success' },
+      { step: 'open-draft-pr', outcome: 'success' },
+      { step: 'verify-draft-pr', outcome: 'success' },
+      { step: 'prepare-acceptance', outcome: 'success' },
+      { step: 'verify-acceptance-handoff', outcome: 'success' },
+    ],
+    verifyDelivery: async () => ({
+      final_sha: 'a'.repeat(40),
+      pull_request: {
+        number: 53,
+        url: 'https://example.test/pull/53',
+        state: 'OPEN',
+        draft: true,
+        base: 'main',
+        head_branch: 'eval/and-scene/run-1',
+        head_sha: 'a'.repeat(40),
+      },
+      final_validator: { step: 'run-validator', outcome: 'success' },
+      workflow_history: [],
+      acceptance_artifacts: [],
+    }),
+    verifyResumeDelivery: async () => ({ verified: true }),
     pricingFetch: catalogFetch(),
-    ...overrides,
+    ...injected,
   })
 }
 
@@ -274,11 +308,11 @@ test('a resumed run adds its active time to the earlier sessions', async () => {
   await evaluate(context)
   const first = await readJson(join(context.runDir, 'result.json'))
   // Re-run the diagnostic phases in a second session, as resume does.
-  const checkpointPath = join(context.runDir, 'checkpoint.json')
+  const checkpointPath = join(context.runDir, 'run-state.json')
   const checkpoint = await readJson(checkpointPath)
   delete checkpoint.phases['metrics-pricing']
   await writeJsonAtomic(checkpointPath, checkpoint)
-  const resumed = await evaluate(context)
+  const resumed = await evaluate(context, { resume: true })
 
   assert.equal(resumed.exitCode, 0, JSON.stringify(resumed.errors))
   const second = await readJson(join(context.runDir, 'result.json'))
@@ -321,7 +355,7 @@ test('a resume that reuses every phase keeps the recorded diagnostics in the res
   const first = await readJson(join(context.runDir, 'result.json'))
   // Every phase is checkpointed complete, so the resume recomputes nothing. The
   // rewritten result must still carry what the earlier session established.
-  const resumed = await evaluate(context)
+  const resumed = await evaluate(context, { resume: true })
 
   assert.equal(resumed.exitCode, 0, JSON.stringify(resumed.errors))
   const second = await readJson(join(context.runDir, 'result.json'))
@@ -488,11 +522,11 @@ test('a resumed run preserves prior ledger findings instead of duplicating them'
 
   await evaluate(context, { judgeInvoke: judge })
   // Force the diagnostics phase to run again by clearing its checkpoint entry.
-  const checkpointPath = join(context.runDir, 'checkpoint.json')
+  const checkpointPath = join(context.runDir, 'run-state.json')
   const checkpoint = await readJson(checkpointPath)
   delete checkpoint.phases['ambiguity-diagnostics']
   await writeJsonAtomic(checkpointPath, checkpoint)
-  const resumed = await evaluate(context, { judgeInvoke: judge })
+  const resumed = await evaluate(context, { resume: true, judgeInvoke: judge })
 
   assert.equal(resumed.exitCode, 0, JSON.stringify(resumed.errors))
   const ledger = await readJson(join(context.runDir, 'ambiguity-ledger.json'))

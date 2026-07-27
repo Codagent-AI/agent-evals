@@ -27,8 +27,8 @@ function git(cwd, ...args) {
 }
 
 // The scored path now requires a clean Agent Runner worktree containing
-// implement-change2, so the fixture runner directory is a real Git checkout.
-async function setup({ workflow = 'name: implement-change2\n', dirty = false } = {}) {
+// implement-change-v2.0, so the fixture runner directory is a real Git checkout.
+async function setup({ workflow = 'name: implement-change\n', dirty = false } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'agent-evals-'))
   const runner = join(dir, 'agent-runner')
   const sandbox = join(runner, 'scripts/sandbox-run.sh')
@@ -42,7 +42,7 @@ async function setup({ workflow = 'name: implement-change2\n', dirty = false } =
   await chmod(sandbox, 0o755)
   if (workflow !== null) {
     await mkdir(join(runner, 'workflows/openspec'), { recursive: true })
-    await writeFile(join(runner, 'workflows/openspec/implement-change2.yaml'), workflow)
+    await writeFile(join(runner, 'workflows/openspec/implement-change-v2.0.yaml'), workflow)
   }
   git(runner, 'init', '-q')
   git(runner, 'add', '-A')
@@ -137,13 +137,13 @@ test('scored mode validates provenance from the mounted Agent Runner checkout', 
   )
 })
 
-test('scored mode hard-codes implement-change2 and no longer accepts workflow overrides', async () => {
+test('scored mode hard-codes implement-change-v2.0 and no longer accepts workflow overrides', async () => {
   const context = await setup()
 
   const result = await scored(context, ['--skip-validator', ...profileArgs])
   const overridden = await scored(context, ['--workflow', '/tmp/custom.yaml', ...profileArgs])
 
-  assert.ok(result.output.includes('implement-change2'), result.output)
+  assert.ok(result.output.includes('implement-change-v2.0'), result.output)
   assert.ok(!result.output.includes('implement-change.yaml'), result.output)
   assert.notEqual(overridden.status, 0)
   assert.match(overridden.output, /Unknown option: --workflow/)
@@ -232,13 +232,13 @@ test('a dirty Agent Runner checkout is rejected on the host before the sandbox r
   assert.ok(!result.output.includes('/eval-input/controller.mjs'), result.output)
 })
 
-test('an Agent Runner checkout without implement-change2 is rejected on the host', async () => {
+test('an Agent Runner checkout without implement-change-v2.0 is rejected on the host', async () => {
   const context = await setup({ workflow: null })
 
   const result = await scored(context, ['--skip-validator', ...profileArgs])
 
   assert.notEqual(result.status, 0)
-  assert.match(result.output, /implement-change2\.yaml/)
+  assert.match(result.output, /implement-change-v2\.0\.yaml/)
 })
 
 test('the run receives a stable container identity that resume reuses', async () => {

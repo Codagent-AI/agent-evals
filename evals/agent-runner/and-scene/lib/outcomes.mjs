@@ -11,22 +11,38 @@ export const EVALUATION_STATUSES = [
   'evaluation-harness-failed',
 ]
 
-export const PRODUCT_VERDICTS = ['pass', 'fail', 'unavailable']
+export const PRODUCT_VERDICTS = ['pass', 'fail', 'unavailable', 'not-applicable']
 
-export const OUTCOME_SCHEMA_VERSION = 1
+export const OUTCOME_SCHEMA_VERSION = 2
 
-export function createOutcome() {
+export function createOutcome({ kind = 'candidate' } = {}) {
+  const reference = kind === 'reference'
   return {
     schema_version: OUTCOME_SCHEMA_VERSION,
     evaluation_status: 'pending-human-review',
-    product_verdict: 'unavailable',
+    product_verdict: reference ? 'not-applicable' : 'unavailable',
+    run_kind: kind,
+    applicability: {
+      delivery: !reference,
+      product_verdict: !reference,
+      testing_evidence: !reference,
+      assumption_handling: !reference,
+    },
+    score_denominator: reference ? 92 : 100,
     official_score: null,
     automated_subtotal: null,
+    product_failure: null,
     verdict_durable: false,
     failed_phase: null,
     failure: null,
     resumable: null,
     cleanup: null,
+    delivery: {
+      candidate_branch: null,
+      pull_request: null,
+      final_sha: null,
+      retained_for_manual_cleanup: !reference,
+    },
     history: [],
   }
 }
@@ -64,17 +80,28 @@ function failureEvent(previous, event, owner, status) {
       evaluation_status: status,
       // A durable verdict is computed from complete required scoring inputs and
       // is never erased by a later failure.
-      product_verdict: previous.verdict_durable ? previous.product_verdict : 'unavailable',
+      product_verdict: previous.product_verdict === 'not-applicable'
+        ? 'not-applicable'
+        : (previous.verdict_durable ? previous.product_verdict : 'unavailable'),
       failed_phase: event.phase ?? null,
       resumable: event.resumable ?? null,
       failure: {
         owner,
+        code: event.code ?? null,
         phase: event.phase ?? null,
         reason: event.reason ?? null,
         step: event.step ?? null,
         attempt: event.attempt ?? null,
         session: event.session ?? null,
         run_id: event.run_id ?? null,
+        unexpected_action: event.unexpected_action ?? null,
+        missing_delivery_output: event.missing_delivery_output ?? null,
+      },
+      delivery: {
+        ...previous.delivery,
+        candidate_branch: event.candidate_branch ?? previous.delivery?.candidate_branch ?? null,
+        pull_request: event.pull_request ?? previous.delivery?.pull_request ?? null,
+        final_sha: event.final_sha ?? previous.delivery?.final_sha ?? null,
       },
     },
     event.type,
@@ -113,6 +140,46 @@ export function applyOutcomeEvent(outcome, event) {
         event.type,
       )
     }
+
+    case 'reference-finalized':
+      if (outcome.run_kind !== 'reference') {
+        throw new Error('reference-finalized is valid only for a reference outcome')
+      }
+      return record(
+        outcome,
+        {
+          ...outcome,
+          evaluation_status: 'complete',
+          product_verdict: 'not-applicable',
+          official_score: event.official_score ?? null,
+          verdict_durable: true,
+          failed_phase: null,
+          failure: null,
+          resumable: null,
+        },
+        event.type,
+      )
+
+    case 'conclusive-product-failure':
+      return record(
+        outcome,
+        {
+          ...outcome,
+          evaluation_status: 'complete',
+          product_verdict: 'fail',
+          official_score: null,
+          verdict_durable: true,
+          product_failure: {
+            phase: event.phase ?? null,
+            reason: event.reason ?? null,
+            gate: event.gate ?? null,
+          },
+          failed_phase: null,
+          failure: null,
+          resumable: null,
+        },
+        event.type,
+      )
 
     case 'workflow-failure':
       return failureEvent(outcome, event, 'implementation-workflow', 'implementation-workflow-failed')
@@ -167,5 +234,8 @@ export function outcomeLabel(outcome) {
   }
   if (label) return label
   if (outcome.evaluation_status === 'pending-human-review') return 'PENDING HUMAN REVIEW'
+  if (outcome.evaluation_status === 'complete' && outcome.product_verdict === 'not-applicable') {
+    return 'COMPLETE REFERENCE'
+  }
   return 'EVALUATION FAILED'
 }

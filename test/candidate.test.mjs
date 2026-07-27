@@ -8,6 +8,8 @@ import { test } from 'node:test'
 import {
   freezeCandidate,
   prepareCandidateWorktree,
+  verifyCandidateDelivery,
+  verifyRecordedDeliveryIdentity,
 } from '../evals/agent-runner/and-scene/lib/candidate.mjs'
 
 function exec(command, args, options = {}) {
@@ -237,4 +239,170 @@ test('freezing preserves tracked filenames containing newlines', async () => {
 
   const manifest = JSON.parse(await readFile(join(runDir, 'candidate-source-manifest.json'), 'utf8'))
   assert.ok(manifest.tracked_files.some(({ path }) => path === unusualPath))
+})
+
+test('a fresh candidate creates its unique delivery branch exactly at the fixture commit', async () => {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
+
+  const prepared = await prepareCandidateWorktree({
+    repo: repo.source,
+    worktree,
+    ref: repo.fixture,
+    resume: false,
+    runId: 'run-123',
+    kind: 'candidate',
+    exec,
+  })
+
+  assert.equal(prepared.branch, 'eval/and-scene/run-123')
+  assert.equal(git(worktree, 'branch', '--show-current'), 'eval/and-scene/run-123')
+  assert.equal(git(worktree, 'rev-parse', 'HEAD'), repo.fixture)
+})
+
+test('a fresh candidate refuses a pre-existing local or remote branch collision', async () => {
+  const repo = await repository()
+  git(repo.source, 'branch', 'eval/and-scene/run-123', repo.fixture)
+
+  await assert.rejects(
+    prepareCandidateWorktree({
+      repo: repo.source,
+      worktree: join(repo.root, 'candidate'),
+      ref: repo.fixture,
+      resume: false,
+      runId: 'run-123',
+      kind: 'candidate',
+      exec,
+    }),
+    /branch.*already exists|collision/i,
+  )
+})
+
+test('delivery verification proves branch, remote head, draft PR identity, and final handoff without CI', async () => {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
+  const sessionDir = join(repo.root, 'session')
+  await prepareCandidateWorktree({
+    repo: repo.source,
+    worktree,
+    ref: repo.fixture,
+    resume: false,
+    runId: 'run-123',
+    kind: 'candidate',
+    exec,
+  })
+  await mkdir(join(worktree, 'openspec/changes/create-and-scene'), { recursive: true })
+  await mkdir(join(sessionDir, 'output'), { recursive: true })
+  for (const file of [
+    'acceptance-assumptions.md',
+    'acceptance-flow-evidence.md',
+    'acceptance-handoff.md',
+  ]) {
+    await writeFile(join(sessionDir, 'output', file), `${file}\n`)
+  }
+  await writeFile(join(sessionDir, 'output', 'acceptance-flow.png'), 'image bytes\n')
+
+  const head = git(worktree, 'rev-parse', 'HEAD')
+  const calls = []
+  const delivery = await verifyCandidateDelivery({
+    worktree,
+    fixtureCommit: repo.fixture,
+    branch: 'eval/and-scene/run-123',
+    changeName: 'create-and-scene',
+    sessionDir,
+    workflowHistory: [
+      { step: 'run-validator', outcome: 'success' },
+      { step: 'open-draft-pr', outcome: 'success' },
+      { step: 'verify-draft-pr', outcome: 'success' },
+      { step: 'prepare-acceptance', outcome: 'success' },
+      { step: 'verify-acceptance-handoff', outcome: 'success' },
+    ],
+    exec: (command, args, options) => {
+      calls.push([command, ...args])
+      if (command === 'git' && args.includes('ls-remote')) {
+        return { status: 0, stdout: `${head}\trefs/heads/eval/and-scene/run-123\n` }
+      }
+      return exec(command, args, options)
+    },
+    inspectPullRequest: async () => ({
+      number: 53,
+      url: 'https://github.com/Codagent-AI/and-scene/pull/53',
+      state: 'OPEN',
+      draft: true,
+      base: 'main',
+      head_branch: 'eval/and-scene/run-123',
+      head_sha: head,
+    }),
+  })
+
+  assert.equal(delivery.final_sha, head)
+  assert.equal(delivery.pull_request.base, 'main')
+  assert.equal(delivery.acceptance_artifacts.length, 4)
+  assert.ok(delivery.acceptance_artifacts.some(({ role }) => role === 'acceptance-screenshot'))
+  assert.ok(!calls.some(([command, ...args]) => (
+    command === 'gh' && /check|status|ci/i.test(args.join(' '))
+  )), JSON.stringify(calls))
+})
+
+test('an observed prohibited delivery effect has typed workflow-side-effect ownership', async () => {
+  let error
+  try {
+    await verifyCandidateDelivery({
+      worktree: '/unused',
+      fixtureCommit: 'fixture',
+      branch: 'eval/and-scene/run-123',
+      changeName: 'create-and-scene',
+      sessionDir: '/unused',
+      workflowHistory: [{ step: 'merge-pr', outcome: 'success' }],
+      exec,
+      inspectPullRequest: async () => null,
+    })
+    assert.fail('expected delivery verification to reject the prohibited effect')
+  } catch (caught) {
+    error = caught
+  }
+
+  assert.equal(error.code, 'workflow-side-effect-violation')
+  assert.equal(error.owner, 'implementation-workflow')
+})
+
+test('resume revalidates the recorded branch, PR, and final SHA before Runner action', async () => {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
+  await prepareCandidateWorktree({
+    repo: repo.source,
+    worktree,
+    ref: repo.fixture,
+    resume: false,
+    runId: 'run-123',
+    kind: 'candidate',
+    exec,
+  })
+  const head = git(worktree, 'rev-parse', 'HEAD')
+  const recorded = {
+    branch: 'eval/and-scene/run-123',
+    final_sha: head,
+    pull_request: {
+      number: 53,
+      url: 'https://example.test/pull/53',
+      state: 'OPEN',
+      draft: true,
+      base: 'main',
+      head_branch: 'eval/and-scene/run-123',
+      head_sha: head,
+    },
+  }
+
+  await assert.rejects(
+    verifyRecordedDeliveryIdentity({
+      worktree,
+      recorded,
+      exec,
+      inspectPullRequest: async () => ({
+        ...recorded.pull_request,
+        head_sha: 'different',
+      }),
+    }),
+    /pull request.*head_sha|head_sha.*recorded/i,
+  )
 })

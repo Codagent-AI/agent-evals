@@ -72,7 +72,7 @@ async function finalizedRun(root, {
   await writeFile(join(runDir, 'logs/agent-runner.log'), 'raw log\n')
   await writeFile(join(runDir, 'evidence/screenshot.png'), 'binary')
   await writeFile(join(runDir, '.runtime/candidate-worktree/App.tsx'), 'source')
-  await writeFile(join(runDir, 'checkpoint.json'), '{}')
+  await writeFile(join(runDir, 'run-state.json'), '{}')
   return { runDir, runId, result }
 }
 
@@ -173,7 +173,7 @@ test('the permanent snapshot excludes runtime state, logs, evidence, and phase r
   const { readdir } = await import('node:fs/promises')
   const entries = await readdir(join(repo, RESULTS_RELATIVE_DIR, runId))
   assert.deepEqual(entries.sort(), [...CURATED_ARTIFACTS].sort())
-  for (const excluded of ['.runtime', 'logs', 'evidence', 'phases', 'checkpoint.json']) {
+  for (const excluded of ['.runtime', 'logs', 'evidence', 'phases', 'run-state.json']) {
     assert.ok(!entries.includes(excluded), excluded)
   }
 })

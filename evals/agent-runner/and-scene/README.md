@@ -15,6 +15,8 @@ You need:
 - Docker with a running daemon
 - network access to clone the fixture and install packages
 - valid host authentication for the implementation agent and judge
+- repository-scoped GitHub credentials that can push the candidate branch and
+  manage its draft pull request
 
 Agent Runner owns the sandbox image, local-source build, authentication
 forwarding, and devcontainer. This suite calls its `scripts/sandbox-run.sh`
@@ -26,8 +28,8 @@ selected adapters plus Codex.
 
 The implementation agents use unrestricted permissions inside the container.
 The container is the isolation boundary. Run trusted fixtures and pass only the
-credentials the evaluation needs. For a private fixture, use a short-lived,
-repository-scoped token with `--env GITHUB_TOKEN` or an env file.
+credentials the evaluation needs. Use a short-lived, repository-scoped token
+with `--env GITHUB_TOKEN` or an env file for candidate delivery.
 
 ## Run the suite
 
@@ -60,10 +62,12 @@ evals/agent-runner/and-scene/run.sh \
   --implementor-cli claude --implementor-model sonnet --implementor-effort medium
 ```
 
-`--skip-validator` passes `skip_validator=true` and stops Agent Runner after
-`simplify`. Without it the eval passes `skip_validator=false` and stops after
-`verify-validator`. Either way the run stops before any acceptance, PR, CI,
-archive, or publishing step.
+`--skip-validator` passes `skip_validator=true` only to task-level compliance.
+Without it, task-level compliance also runs. Both paths complete the final
+Validator, draft-PR, acceptance-preparation, and handoff-verification steps.
+The first complete benchmark candidate explicitly uses `--skip-validator`.
+The harness never queries CI and never permits merge, ready-for-review, close,
+archive, release, or candidate-branch deletion behavior.
 
 Continue an interrupted evaluation against the same run directory:
 
@@ -75,9 +79,11 @@ evals/agent-runner/and-scene/run.sh \
   --implementor-cli claude --implementor-model sonnet --implementor-effort medium
 ```
 
-Resume reuses the recorded Agent Runner run rather than starting a second one,
-and rejects a changed role profile, Agent Runner revision, workflow hash, CLI
-version, rubric hash, or any other score-affecting input.
+Resume reuses the recorded Agent Runner run rather than starting a second one.
+It verifies live process ownership before waiting, resumes only the exact
+inactive unfinished run, and rejects a changed fixture, role profile, Runner
+revision, workflow hash, branch, draft PR, final SHA, rubric hash, evidence
+identity, or other score-affecting input.
 
 Evaluate an existing candidate as a reference baseline without invoking Agent
 Runner. Role profiles are neither required nor applicable:
@@ -199,10 +205,13 @@ The external fixture is pinned to commit
 `171c7def1e12aca2a5f605a5e5feafb20d4e4d19` is the comparable reference baseline.
 It is not a similarity target.
 
-The suite runs Agent Runner's `workflows/openspec/implement-change2.yaml`
-workflow, which is hard-coded for this change. The Agent Runner checkout must be
-a clean Git worktree; the suite records whichever commit, workflow hash, and CLI
-version it used rather than pinning a predetermined revision.
+The suite runs Agent Runner's exact
+`workflows/openspec/implement-change-v2.0.yaml` workflow through completion.
+There is no early `--until` boundary. `--skip-validator` sets only the
+workflow's task-level `skip_validator` parameter; the final Validator, draft
+pull request, acceptance preparation, and handoff verification always remain
+required. The Agent Runner checkout must be a clean Git worktree; the suite
+records whichever commit, workflow hash, and CLI version it used.
 
 ## Architecture
 
@@ -216,11 +225,13 @@ focused modules under `lib/`:
 | Module | Responsibility |
 |---|---|
 | `lib/persistence.mjs` | Atomic JSON writes and SHA-256 hashing |
-| `lib/checkpoint.mjs` | Schema-versioned checkpoints, fingerprints, resume plans |
+| `lib/state-machine.mjs` | Versioned run-state schema and typed lifecycle reducer |
+| `lib/orchestrator.mjs` | Dependency-aware, hash-verified fine-grained resume plans |
+| `lib/checkpoint.mjs` | Run-state persistence and work-unit artifact verification |
 | `lib/subprocess.mjs` | Subprocess execution with active machine timing |
 | `lib/provenance.mjs` | Clean-checkout, workflow-hash, and CLI-version provenance |
 | `lib/profiles.mjs` | Role profile validation, eval-scoped config, effective-profile reconciliation |
-| `lib/workflow.mjs` | Stop boundary, workflow contract, Agent Runner run classification |
+| `lib/workflow.mjs` | Full-workflow contract, prohibited-side-effect checks, Runner run classification |
 | `lib/runner-state.mjs` | Reading Agent Runner run state by identifier or newest timestamp |
 | `lib/outcomes.mjs` | Evaluation status and product verdict model |
 | `lib/phases.mjs` | The ordered lifecycle and its failure ownership |
@@ -249,7 +260,7 @@ internal resume point, and `run-metrics.json`. None of that is copied here.
 
 ```text
 artifacts/evals/and-scene/<run-id>/
-├── checkpoint.json
+├── run-state.json
 ├── result.json
 ├── report.html
 ├── artifact-manifest.json
@@ -270,31 +281,36 @@ artifacts/evals/and-scene/<run-id>/
 `.runtime/` persists across disposable containers. Agent Runner layers built-in
 defaults, the global config, then the project config it discovers at
 `<cwd>/.agent-runner/config.yaml`, so the eval-scoped profile is written into
-the candidate worktree and Agent Runner is invoked from there. Fresh runs clone
-and check out the pinned fixture there; resumes require that exact worktree.
-The eval config is excluded through `.git/info/exclude`, and reaching the Runner
-boundary requires a clean candidate before the produced commit, normalized
-`implementation.diff`, and tracked-source manifest are frozen. Credentials stay
-in the ephemeral container home and are never written into the run directory.
+the candidate worktree and Agent Runner is invoked from there. A fresh candidate
+creates `eval/and-scene/<run-id>` exactly at the pinned fixture before Runner
+starts; any local or remote branch collision is refused. Resumes require that
+exact repository, worktree, branch, Runner run, workflow revision, draft PR,
+final SHA, and evidence identity. Credentials stay in the ephemeral container
+home and are never written into the run directory.
+
+Candidate runs require GitHub credentials capable of pushing the recorded
+branch and creating or updating its draft pull request. The branch and draft PR
+are retained after success and failure for diagnosis and manual cleanup. The
+harness never merges, marks ready, closes, archives, releases, or deletes these
+resources automatically.
 
 ## Lifecycle
 
 The automated command runs these phases in order:
 
-1. Run, wait for, or resume the recorded Agent Runner run through its boundary.
-2. Install dependencies, build, and run non-browser verification.
-3. Start the evaluated candidate server.
-4. Run deterministic browser checks and capture evidence.
-5. Run the four product judge jobs.
-6. Run ambiguity diagnostics.
-7. Ingest metrics and resolve pricing.
-8. Write the `pending-human-review` result and HTML report.
-9. Attempt candidate-server cleanup.
-10. Update the pending artifacts with the cleanup outcome and exit successfully.
-
-Phase 2 is registered as an explicit placeholder pending the browser build and
-verification work; the ordering, checkpointing, and outcome contracts it runs
-under are already enforced.
+1. Preflight the fixture, unique candidate branch, Runner checkout and workflow,
+   publishing credentials, profiles, evaluator inputs, and run directory.
+2. Start, wait for, resume, or continue the one recorded complete Runner run.
+3. Verify the clean delivered branch, remote head, open draft PR/base/head,
+   final Validator, unarchived change, and acceptance handoff.
+4. Freeze the verified final source revision.
+5. Install dependencies, build, and run non-browser verification.
+6. Start the evaluated candidate server.
+7. Run deterministic browser checks and capture evaluator evidence.
+8. Run product judging, then the separate ambiguity diagnostic.
+9. Ingest metrics and resolve pricing.
+10. Write the `pending-human-review` result and HTML report.
+11. Attempt candidate-server cleanup, update the pending artifacts, and exit.
 
 A phase that cannot produce its outputs stops its dependents rather than letting
 them run on stale or fabricated inputs. Result writing and cleanup still run.
@@ -460,9 +476,11 @@ failure list only proves clean rendering when the failure list was readable.
 
 - `result.json` for evaluation status, product verdict, score breakdown, rubric
   provenance, workflow provenance, configured and observed role details,
-  boundaries, and recovery history
-- `checkpoint.json` for phase and work-unit state, input fingerprints, and
-  output hashes
+  delivery identity, and recovery history
+- `run-state.json` as the sole atomic state authority for immutable input
+  hashes, evolving branch/Runner/PR/final-SHA identity, typed events and failure
+  ownership, phase and work-unit dependency hashes, output hashes, outcome, and
+  resume eligibility
 - `phases/browser-evaluation.json`, `phases/product-judging.json`, and
   `phases/score.json` for the evidence each scored component rests on
 - `automated-rubric.json` and `human-rubric.json` in the suite for the scoring
@@ -481,7 +499,7 @@ an implementation agent or producing a score.
 ## Configuration
 
 Run `evals/agent-runner/and-scene/run.sh --help` for every option. The
-implementation workflow and its stop steps are hard-coded; there is no
+implementation workflow and its full delivery contract are hard-coded; there is no
 `--workflow`, `--until`, or `--workflow-arg` override. Update
 `agent-runner-capabilities.json` deliberately when the recorded Agent Runner
 revision gains or drops an adapter, model, or effort.
@@ -494,14 +512,16 @@ preview, and verification logs identify earlier failures.
 
 For evaluation failures, start with `result.json`. It records
 `evaluation_status`, the owning phase, the observed error, whether the phase can
-be resumed, and the full transition history. `checkpoint.json` records which
-phases and work units completed.
+be resumed, and the full transition history. `run-state.json` records which
+phases and work units completed and the hashes that must still match before
+they can be reused.
 
 Preflight failures exit 2 before any workflow starts and name the exact cause: a
 dirty Agent Runner checkout, a missing or non-conforming
-`implement-change2.yaml`, an invalid role profile with its role and field, a
+`implement-change-v2.0.yaml`, missing publishing credentials, an invalid role
+profile with its role and field, a
 role-profile mismatch on resume, a resume-provenance change, or a stale
-checkpoint identity.
+run-state identity.
 
 For a blocked full evaluation, run `--calibrate` and read `calibration.json`.
 Its `failures` name the case and the exact expectation that broke, and each
@@ -514,9 +534,10 @@ commit if one exists, and the git error. Re-run the review command against the
 same run directory to retry only the unfinished work.
 
 For implementation failures, `result.json` records the Agent Runner run
-identifier, session directory, configured and observed stop boundaries, and
-every observed step. A step observed beyond the configured boundary is reported
-as a workflow-boundary failure with the unexpected step named.
+identifier, session directory, candidate branch, retained draft PR, final SHA,
+and every observed step outcome. A declared or observed merge, ready, close,
+archive, release, or branch deletion is reported as
+`workflow-side-effect-violation`; no CI checks or status endpoints are queried.
 
 ## Maintenance
 

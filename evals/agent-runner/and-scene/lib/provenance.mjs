@@ -8,7 +8,7 @@ import { join } from 'node:path'
 
 import { hashFile } from './persistence.mjs'
 
-export const WORKFLOW_RELATIVE_PATH = 'workflows/openspec/implement-change2.yaml'
+export const WORKFLOW_RELATIVE_PATH = 'workflows/openspec/implement-change-v2.0.yaml'
 
 export const PROVENANCE_FIELDS = ['commit', 'workflow_sha256', 'cli_version']
 

@@ -4,12 +4,13 @@
 // Agent Runner starts. The scored diff therefore contains only product changes,
 // while cleanliness still covers every other tracked and untracked candidate
 // file.
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { hashJson, hashString, writeJsonAtomic } from './persistence.mjs'
+import { hashFile, hashJson, hashString, writeJsonAtomic } from './persistence.mjs'
+import { checkWorkflowHistory } from './workflow.mjs'
 
 export const CANDIDATE_SOURCE_MANIFEST_SCHEMA_VERSION = 1
 export const EVAL_GIT_EXCLUDES = ['/.agent-runner/config.yaml']
@@ -77,17 +78,22 @@ export async function prepareCandidateWorktree({
   ref,
   resume,
   expectedSource = null,
+  runId = null,
+  kind = runId ? 'candidate' : 'reference',
   exec = defaultExec,
 }) {
   if (!repo) throw new Error('candidate repository is required')
   if (!ref) throw new Error('candidate ref is required')
   const repository = normalizeRepository(repo)
+  const branch = kind === 'candidate' ? `eval/and-scene/${runId}` : null
+  if (kind === 'candidate' && !runId) throw new Error('candidate run identifier is required')
 
   if (resume) {
     if (!expectedSource?.repository || !expectedSource?.fixture_commit) {
       throw new Error('resume requires recorded candidate repository and fixture provenance')
     }
     assertSame('candidate repository', repository, expectedSource.repository)
+    if (branch) assertSame('candidate branch', branch, expectedSource.branch)
     const inside = exec('git', ['-C', worktree, 'rev-parse', '--is-inside-work-tree'], { encoding: 'utf8' })
     if (inside.status !== 0 || (inside.stdout ?? '').trim() !== 'true') {
       throw new Error(`resume requires the existing candidate worktree at ${worktree}`)
@@ -115,12 +121,42 @@ export async function prepareCandidateWorktree({
   if (resume) {
     assertSame('candidate fixture commit', fixtureCommit, expectedSource.fixture_commit)
   } else {
-    run(exec, 'git', ['-C', worktree, 'checkout', '--detach', fixtureCommit], {}, `candidate checkout ${ref}`)
+    if (branch) {
+      for (const candidateRef of [`refs/heads/${branch}`, `refs/remotes/origin/${branch}`]) {
+        const collision = exec(
+          'git',
+          ['-C', worktree, 'show-ref', '--verify', '--quiet', candidateRef],
+          { encoding: 'utf8' },
+        )
+        if (collision.status === 0) {
+          throw new Error(`candidate branch collision: ${branch} already exists`)
+        }
+      }
+      run(
+        exec,
+        'git',
+        ['-C', worktree, 'checkout', '-b', branch, fixtureCommit],
+        {},
+        `candidate branch creation ${branch}`,
+      )
+    } else {
+      run(exec, 'git', ['-C', worktree, 'checkout', '--detach', fixtureCommit], {}, `candidate checkout ${ref}`)
+    }
   }
 
   await installEvalExcludes(worktree)
   const headCommit = run(exec, 'git', ['-C', worktree, 'rev-parse', 'HEAD'], {}, 'candidate commit lookup')
   if (resume) {
+    if (branch) {
+      const currentBranch = run(
+        exec,
+        'git',
+        ['-C', worktree, 'branch', '--show-current'],
+        {},
+        'candidate branch lookup',
+      )
+      assertSame('candidate branch', currentBranch, branch)
+    }
     const ancestry = exec(
       'git',
       ['-C', worktree, 'merge-base', '--is-ancestor', fixtureCommit, headCommit],
@@ -136,6 +172,7 @@ export async function prepareCandidateWorktree({
     head_commit: headCommit,
     repository,
     worktree,
+    branch,
   }
 }
 
@@ -223,5 +260,266 @@ export async function freezeCandidate({
     produced_commit: producedCommit,
     implementation_diff_sha256: diffSha256,
     source_manifest: 'candidate-source-manifest.json',
+  }
+}
+
+function deliveryError(code, message, details = {}) {
+  const error = new Error(message)
+  error.code = code
+  error.owner = 'implementation-workflow'
+  error.resumable = code !== 'workflow-side-effect-violation'
+  Object.assign(error, details)
+  return error
+}
+
+function normalizePullRequest(raw) {
+  if (!raw) return null
+  return {
+    number: raw.number ?? null,
+    url: raw.url ?? null,
+    state: raw.state ?? null,
+    draft: raw.draft ?? raw.isDraft ?? null,
+    base: raw.base ?? raw.baseRefName ?? null,
+    head_branch: raw.head_branch ?? raw.headRefName ?? null,
+    head_sha: raw.head_sha ?? raw.headRefOid ?? null,
+  }
+}
+
+export async function inspectDraftPullRequest({ worktree, branch, exec = defaultExec }) {
+  const json = run(
+    exec,
+    'gh',
+    [
+      'pr', 'list',
+      '--head', branch,
+      '--state', 'all',
+      '--json', 'number,url,state,isDraft,baseRefName,headRefName,headRefOid',
+      '--limit', '2',
+    ],
+    { cwd: worktree },
+    'draft pull-request metadata lookup',
+  )
+  let pulls
+  try {
+    pulls = JSON.parse(json)
+  } catch {
+    throw deliveryError('pull-request-metadata-invalid', 'draft pull-request metadata is not valid JSON')
+  }
+  if (!Array.isArray(pulls) || pulls.length !== 1) {
+    throw deliveryError(
+      'pull-request-identity-mismatch',
+      `expected exactly one pull request for ${branch}, found ${Array.isArray(pulls) ? pulls.length : 0}`,
+    )
+  }
+  return normalizePullRequest(pulls[0])
+}
+
+export async function verifyRecordedDeliveryIdentity({
+  worktree,
+  recorded,
+  exec = defaultExec,
+  inspectPullRequest = (options) => inspectDraftPullRequest({ ...options, exec }),
+}) {
+  if (!recorded?.branch) {
+    throw new Error('resume provenance is missing the recorded candidate branch')
+  }
+  const branch = run(
+    exec,
+    'git',
+    ['-C', worktree, 'branch', '--show-current'],
+    {},
+    'resume candidate branch lookup',
+  )
+  if (branch !== recorded.branch) {
+    throw new Error(`candidate branch ${branch} does not match recorded candidate branch ${recorded.branch}`)
+  }
+  if (recorded.final_sha) {
+    const head = run(exec, 'git', ['-C', worktree, 'rev-parse', 'HEAD'], {}, 'resume candidate HEAD lookup')
+    if (head !== recorded.final_sha) {
+      throw new Error(`candidate final SHA ${head} does not match recorded final SHA ${recorded.final_sha}`)
+    }
+  }
+  if (recorded.pull_request) {
+    const current = normalizePullRequest(await inspectPullRequest({ worktree, branch }))
+    for (const field of ['number', 'url', 'state', 'draft', 'base', 'head_branch', 'head_sha']) {
+      if (current?.[field] !== recorded.pull_request[field]) {
+        throw new Error(
+          `pull request ${field} ${current?.[field] ?? null} does not match recorded `
+          + `pull request ${field} ${recorded.pull_request[field] ?? null}`,
+        )
+      }
+    }
+  }
+  return { verified: true, branch, final_sha: recorded.final_sha ?? null }
+}
+
+const REQUIRED_ACCEPTANCE_ARTIFACTS = [
+  'acceptance-assumptions.md',
+  'acceptance-flow-evidence.md',
+  'acceptance-handoff.md',
+]
+
+async function acceptanceScreenshots(root) {
+  const found = []
+  async function visit(dir) {
+    for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+      const path = join(dir, entry.name)
+      if (entry.isDirectory()) await visit(path)
+      else if (/\.(?:png|jpe?g|webp)$/i.test(entry.name)) found.push(path)
+    }
+  }
+  await visit(root)
+  return found.sort()
+}
+
+export async function verifyCandidateDelivery({
+  worktree,
+  fixtureCommit,
+  branch,
+  changeName,
+  sessionDir,
+  workflowHistory,
+  exec = defaultExec,
+  inspectPullRequest = (options) => inspectDraftPullRequest({ ...options, exec }),
+}) {
+  const history = checkWorkflowHistory(workflowHistory)
+  if (history.prohibited_effects.length > 0) {
+    const unexpected = history.prohibited_effects[0]
+    throw deliveryError(
+      'workflow-side-effect-violation',
+      `workflow-side-effect-violation: observed prohibited action ${unexpected.step}`,
+      { unexpected_action: unexpected.step, workflow_history: workflowHistory },
+    )
+  }
+  if (history.missing_steps.length > 0) {
+    throw deliveryError(
+      'incomplete-workflow-history',
+      `completed workflow history is missing: ${history.missing_steps.join(', ')}`,
+      { missing_delivery_output: history.missing_steps },
+    )
+  }
+
+  const status = run(
+    exec,
+    'git',
+    ['-C', worktree, 'status', '--porcelain=v1', '--untracked-files=all'],
+    {},
+    'candidate delivery cleanliness check',
+  )
+  if (status) {
+    throw deliveryError('dirty-candidate', `candidate delivery has uncommitted changes:\n${status}`)
+  }
+  const currentBranch = run(
+    exec,
+    'git',
+    ['-C', worktree, 'branch', '--show-current'],
+    {},
+    'candidate delivery branch lookup',
+  )
+  if (currentBranch !== branch) {
+    throw deliveryError(
+      'candidate-branch-mismatch',
+      `candidate branch ${currentBranch} does not match recorded candidate branch ${branch}`,
+    )
+  }
+  const finalSha = run(exec, 'git', ['-C', worktree, 'rev-parse', 'HEAD'], {}, 'candidate final HEAD lookup')
+  const ancestry = exec(
+    'git',
+    ['-C', worktree, 'merge-base', '--is-ancestor', fixtureCommit, finalSha],
+    { encoding: 'utf8' },
+  )
+  if (ancestry.status !== 0 || ancestry.error) {
+    throw deliveryError(
+      'fixture-ancestry-mismatch',
+      `candidate final HEAD ${finalSha} does not descend from fixture ${fixtureCommit}`,
+    )
+  }
+
+  const remote = run(
+    exec,
+    'git',
+    ['-C', worktree, 'ls-remote', '--heads', 'origin', `refs/heads/${branch}`],
+    {},
+    'remote candidate branch lookup',
+  )
+  const remoteSha = remote.split(/\s+/)[0] || null
+  if (remoteSha !== finalSha) {
+    throw deliveryError(
+      'remote-branch-mismatch',
+      `remote candidate branch ${branch} is ${remoteSha ?? 'missing'}, expected ${finalSha}`,
+    )
+  }
+
+  const changePath = join(worktree, 'openspec', 'changes', changeName)
+  if (!(await stat(changePath).catch(() => null))?.isDirectory()) {
+    throw deliveryError(
+      'workflow-side-effect-violation',
+      `workflow-side-effect-violation: OpenSpec change ${changeName} was archived or removed`,
+      { unexpected_action: 'archive-change' },
+    )
+  }
+
+  const pullRequest = normalizePullRequest(await inspectPullRequest({ worktree, branch }))
+  if (!pullRequest
+    || pullRequest.state !== 'OPEN'
+    || pullRequest.draft !== true
+    || !pullRequest.base
+    || pullRequest.head_branch !== branch
+    || pullRequest.head_sha !== finalSha) {
+    const prohibited = pullRequest && (pullRequest.state !== 'OPEN' || pullRequest.draft !== true)
+    throw deliveryError(
+      prohibited ? 'workflow-side-effect-violation' : 'pull-request-identity-mismatch',
+      prohibited
+        ? 'workflow-side-effect-violation: candidate pull request is closed, merged, or ready for review'
+        : 'draft pull request does not match the recorded candidate branch and final HEAD',
+      { pull_request: pullRequest },
+    )
+  }
+
+  const acceptanceArtifacts = []
+  for (const name of REQUIRED_ACCEPTANCE_ARTIFACTS) {
+    const path = join(sessionDir, 'output', name)
+    const info = await stat(path).catch(() => null)
+    if (!info?.isFile() || info.size === 0) {
+      throw deliveryError(
+        'missing-delivery-output',
+        `required acceptance artifact is missing or empty: ${name}`,
+        { missing_delivery_output: name },
+      )
+    }
+    acceptanceArtifacts.push({
+      role: name.replace(/\.[^.]+$/, ''),
+      path,
+      sha256: await hashFile(path),
+    })
+  }
+  const screenshots = await acceptanceScreenshots(join(sessionDir, 'output'))
+  if (screenshots.length === 0) {
+    throw deliveryError(
+      'missing-delivery-output',
+      'required acceptance screenshots are missing',
+      { missing_delivery_output: 'acceptance-screenshots' },
+    )
+  }
+  for (const path of screenshots) {
+    acceptanceArtifacts.push({
+      role: 'acceptance-screenshot',
+      path,
+      sha256: await hashFile(path),
+    })
+  }
+
+  return {
+    verified: true,
+    branch,
+    fixture_commit: fixtureCommit,
+    final_sha: finalSha,
+    remote_sha: remoteSha,
+    pull_request: pullRequest,
+    final_validator: workflowHistory
+      .filter((entry) => (entry.step ?? entry.id) === 'run-validator')
+      .at(-1) ?? null,
+    workflow_history: workflowHistory,
+    acceptance_artifacts: acceptanceArtifacts,
   }
 }
