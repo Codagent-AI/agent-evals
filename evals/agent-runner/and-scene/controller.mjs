@@ -861,6 +861,10 @@ export async function runEvaluation({
         build: buildResult,
         verification: verificationResult,
         revision,
+        evidenceArtifacts: {
+          probe: (id) => `evidence/evaluator/browser-probes/${id}.json`,
+          verification: 'phases/verification.json',
+        },
         loadProbe: async ({ id, inputs, dependencies }) => {
           const reusable = await verifyUnit(checkpoint, {
             phase: 'browser-evaluation',

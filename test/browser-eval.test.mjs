@@ -159,12 +159,17 @@ function createDemo(knobs = {}) {
 
 const passingBuild = { ok: true, log: 'build succeeded' }
 const passingVerification = { machine_readable: true, passed: true, artifact: 'verify-result.json' }
+const fixtureEvidenceArtifacts = {
+  probe: (id) => `evidence/evaluator/browser-probes/${id}.json`,
+  verification: 'phases/verification.json',
+}
 
 async function evaluate(knobs = {}, extra = {}) {
   return runBrowserEvaluation({
     driver: createDemo(knobs),
     build: passingBuild,
     verification: passingVerification,
+    evidenceArtifacts: fixtureEvidenceArtifacts,
     ...extra,
   })
 }
@@ -251,6 +256,7 @@ test('matching pass and fail probe records can be reused without operating the b
     driver: createDemo({ titles: [...TITLES].reverse() }),
     build: passingBuild,
     verification: passingVerification,
+    evidenceArtifacts: fixtureEvidenceArtifacts,
     revision: 'reference-revision',
     loadProbe: async ({ id }) => stored.get(id) ?? null,
     saveProbe: async ({ id, result }) => { stored.set(id, result) },
@@ -260,6 +266,7 @@ test('matching pass and fail probe records can be reused without operating the b
     driver: createDemo({ actions }),
     build: passingBuild,
     verification: passingVerification,
+    evidenceArtifacts: fixtureEvidenceArtifacts,
     revision: 'reference-revision',
     loadProbe: async ({ id }) => stored.get(id) ?? null,
     saveProbe: async () => { throw new Error('reused probes must not be rewritten') },
@@ -285,8 +292,24 @@ test('browser adapter failures remain harness failures instead of product criter
       driver,
       build: passingBuild,
       verification: passingVerification,
+      evidenceArtifacts: fixtureEvidenceArtifacts,
     }),
     (error) => error.owner === 'evaluation-harness' && error.code === 'browser-driver-failed',
+  )
+})
+
+test('deterministic verdicts refuse to fabricate citations when no durable artifacts are identified', async () => {
+  await assert.rejects(
+    runBrowserEvaluation({
+      driver: createDemo(),
+      build: passingBuild,
+      verification: passingVerification,
+    }),
+    (error) => (
+      error.owner === 'evaluation-harness'
+      && error.code === 'browser-evidence-missing'
+      && /durable.*evidence/i.test(error.message)
+    ),
   )
 })
 

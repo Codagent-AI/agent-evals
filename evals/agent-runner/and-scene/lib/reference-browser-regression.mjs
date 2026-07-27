@@ -23,10 +23,15 @@ const CANONICAL_CRITERIA = [
 export async function runReferenceBrowserRegression({
   baseUrl,
   revision,
+  artifact,
   driverFactory = ({ baseUrl: url }) => createAxiBrowserDriver({ baseUrl: url }),
   evaluate = ({ driver, revision: evaluatedRevision }) => runBrowserEvaluation({
     driver,
     revision: evaluatedRevision,
+    evidenceArtifacts: {
+      probe: () => artifact,
+      verification: artifact,
+    },
     build: { ok: true, log: 'reference build completed before browser regression' },
     verification: {
       machine_readable: true,
@@ -84,6 +89,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   runReferenceBrowserRegression({
     baseUrl: valueAfter(args, '--url'),
     revision: valueAfter(args, '--revision'),
+    artifact: output,
   }).then(async (result) => {
     await writeJsonAtomic(output, result)
     console.log(`pinned reference browser regression passed at ${result.revision}`)

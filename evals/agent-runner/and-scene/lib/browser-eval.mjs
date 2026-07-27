@@ -68,15 +68,33 @@ export function bounded(value, maxChars = MAX_EVIDENCE_CHARS) {
   return escaped.length > maxChars ? `${escaped.slice(0, maxChars - 1)}…` : escaped
 }
 
-function verdict(id, pass, rationale, evidence = []) {
+function missingEvidence(message) {
+  return Object.assign(new Error(message), {
+    owner: 'evaluation-harness',
+    code: 'browser-evidence-missing',
+  })
+}
+
+function durableCitation(value, label) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw missingEvidence(`${label} has no durable evidence artifact`)
+  }
+  return value
+}
+
+function verdict(id, pass, rationale, evidence) {
+  if (
+    !Array.isArray(evidence)
+    || evidence.length === 0
+    || evidence.some((item) => typeof item !== 'string' || item.trim().length === 0)
+  ) {
+    throw missingEvidence(`deterministic verdict ${id} has no durable evidence citation`)
+  }
   return {
     id,
     verdict: pass ? 'pass' : 'fail',
     rationale: bounded(rationale),
-    // Every observed machine verdict cites its durable probe even when the
-    // probe has no candidate-controlled detail worth repeating.
-    evidence: (evidence.length > 0 ? evidence : [`evaluator-probe:${id}`])
-      .map((item) => bounded(item)),
+    evidence: [...new Set(evidence)].map((item) => bounded(item)),
     observed: true,
   }
 }
@@ -106,7 +124,19 @@ export async function runBrowserEvaluation({
   revision = null,
   loadProbe = null,
   saveProbe = null,
+  evidenceArtifacts = null,
 }) {
+  if (typeof evidenceArtifacts?.probe !== 'function') {
+    throw missingEvidence('deterministic browser evaluation has no durable probe evidence locator')
+  }
+  const probeCitation = (id) => durableCitation(
+    evidenceArtifacts.probe(id),
+    `deterministic probe ${id}`,
+  )
+  const verificationCitation = durableCitation(
+    evidenceArtifacts.verification,
+    'candidate verification',
+  )
   const boundsExceeded = []
   const failures = new Set()
   let failureReportingAvailable = true
@@ -456,13 +486,18 @@ export async function runBrowserEvaluation({
     let criterion
     try {
       const [pass, rationale, evidence] = await probes[id]()
-      criterion = verdict(id, pass, rationale, evidence)
+      criterion = verdict(id, pass, rationale, [...evidence, probeCitation(id)])
     } catch (error) {
       if (error?.owner === 'evaluation-harness') throw error
       // A driver or page error is a real observation about the demo, so it
       // fails its own criterion instead of aborting the whole evaluation and
       // discarding every other criterion's evidence.
-      criterion = verdict(id, false, `browser evaluation failed: ${error.message}`, [])
+      criterion = verdict(
+        id,
+        false,
+        `browser evaluation failed: ${error.message}`,
+        [probeCitation(id)],
+      )
     }
     const probeFailures = []
     let probeFailureReportingAvailable = true
@@ -533,13 +568,16 @@ export async function runBrowserEvaluation({
         build.ok === true
           ? 'the complete application built successfully'
           : `the build did not succeed: ${bounded(build.log ?? 'no build log')}`,
-        build.log ? [build.log] : [],
+        [verificationCitation, ...(build.log ? [build.log] : [])],
       ),
     verdict(
       'verification-sample-outline',
       passed('demo-route-and-registration') && passed('demo-nine-step-content-and-order'),
       'the canonical nine-step sample must be registered, reachable, and match its outline',
-      [contract.route],
+      [
+        probeCitation('demo-route-and-registration'),
+        probeCitation('demo-nine-step-content-and-order'),
+      ],
     ),
     failureReportingAvailable
       ? verdict(
@@ -548,7 +586,10 @@ export async function runBrowserEvaluation({
         failures.size === 0
           ? 'every produced step rendered without runtime or console errors'
           : `${failures.size} runtime or console failure(s) occurred while stepping the demo`,
-        [...failures].slice(0, 10),
+        [
+          ...DETERMINISTIC_BROWSER_CRITERIA.map((id) => probeCitation(id)),
+          ...[...failures].slice(0, 10),
+        ],
       )
       : unobserved(
         'verification-every-produced-step-renders',
@@ -563,7 +604,7 @@ export async function runBrowserEvaluation({
         clearOutcome
           ? `verification produced a machine-readable ${verification.passed ? 'pass' : 'fail'} result`
           : 'verification did not produce an unambiguous machine-readable result',
-        verification.artifact ? [verification.artifact] : [],
+        [verificationCitation, ...(verification.artifact ? [verification.artifact] : [])],
       ),
   ]
 
