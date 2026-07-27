@@ -149,8 +149,10 @@ costing a build and a browser for every case.
 
 Calibration asserts that:
 
-- the reference earns the full automated 70, opens all four hard gates, and
-  reaches an official pass;
+- the reference earns all 62 applicable automated points and opens all four
+  hard gates without receiving a candidate pass/fail verdict, while the
+  candidate-control case earns the full automated 70 and reaches an official
+  pass;
 - each approved mutation degrades exactly the component or gate it targets and
   stays a product regression rather than becoming a harness failure — collateral
   damage to any other component or gate fails the case just as surely as a
