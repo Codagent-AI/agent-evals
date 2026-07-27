@@ -1,0 +1,5 @@
+- [ ] [Build the delivery state machine](tasks/01-delivery-state-machine.md)
+- [ ] [Verify evidence and neutral inputs](tasks/02-evidence-provenance.md)
+- [ ] [Correct browser and product verification](tasks/03-browser-verification.md)
+- [ ] [Replace scoring and judge orchestration](tasks/04-scoring-judges.md)
+- [ ] [Project results and cut over](tasks/05-reporting-cutover.md)
