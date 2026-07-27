@@ -231,7 +231,7 @@ test('--skip-validator launches the verified workflow by logical name without --
   const [invocation] = runnerInvocations(context)
   assert.deepEqual(invocation.args, [
     'run',
-    'openspec/implement-change',
+    'openspec:implement-change',
     'change_name=create-and-scene',
     'skip_validator=true',
   ])

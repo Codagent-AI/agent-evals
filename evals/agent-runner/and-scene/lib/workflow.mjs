@@ -4,7 +4,7 @@
 // owns the immutable workflow contract and never supplies an early stop.
 
 export const IMPLEMENTATION_WORKFLOW = 'implement-change'
-export const IMPLEMENTATION_WORKFLOW_LOGICAL_NAME = 'openspec/implement-change'
+export const IMPLEMENTATION_WORKFLOW_LOGICAL_NAME = 'openspec:implement-change'
 export const IMPLEMENTATION_WORKFLOW_INSPECTION_REF = 'openspec:implement-change'
 export const IMPLEMENTATION_WORKFLOW_PATH = 'workflows/openspec/implement-change-v2.0.yaml'
 
