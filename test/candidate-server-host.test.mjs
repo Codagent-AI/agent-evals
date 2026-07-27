@@ -108,7 +108,26 @@ test('a candidate with no build output cannot be served and says so', async () =
 
   await assert.rejects(
     adapter.start({ candidate: 'candidate-abc' }),
-    /no built candidate to serve/,
+    (error) => (
+      error.owner === 'product'
+      && error.code === 'candidate-product-serve-failed'
+      && /no built candidate to serve/.test(error.message)
+    ),
+  )
+})
+
+test('a build directory without an application shell is a reproducible product serve failure', async () => {
+  const dir = await runDirectory({ build: false })
+  await mkdir(join(dir, '.runtime/candidate-worktree/dist'), { recursive: true })
+  const adapter = createHostCandidateServer({ runDir: dir, spawnImpl: fakeSpawn().spawn })
+
+  await assert.rejects(
+    adapter.start({ candidate: 'candidate-abc' }),
+    (error) => (
+      error.owner === 'product'
+      && error.code === 'candidate-product-serve-failed'
+      && /application shell/.test(error.message)
+    ),
   )
 })
 

@@ -38,7 +38,7 @@ test('candidate verification installs, builds, and runs the repository verifier 
 
 test('a candidate command failure is an explicit failed product result, not a thrown harness error', async () => {
   const runDir = await mkdtemp(join(tmpdir(), 'and-scene-verification-'))
-  const { calls, exec } = executor([0, 2])
+  const { calls, exec } = executor([0, 2, 2])
 
   const result = await runCandidateVerification({
     worktree: join(runDir, '.runtime/candidate-worktree'),
@@ -49,8 +49,13 @@ test('a candidate command failure is an explicit failed product result, not a th
   assert.match(result.build.log, /build failed/)
   assert.equal(result.verification.machine_readable, false)
   assert.equal(result.verification.passed, null)
-  assert.deepEqual(calls.map(({ args }) => args), [['ci'], ['run', 'build']])
+  assert.deepEqual(calls.map(({ args }) => args), [
+    ['ci'],
+    ['run', 'build'],
+    ['run', 'build'],
+  ])
   assert.equal(result.commands.verification.state, 'skipped')
+  assert.equal(result.product_failure.reproducible, true)
 })
 
 test('a verifier exit status is retained as its machine-readable product result', async () => {
@@ -67,4 +72,56 @@ test('a verifier exit status is retained as its machine-readable product result'
   assert.equal(result.verification.passed, false)
   assert.deepEqual(calls.map(({ args }) => args), [['ci'], ['run', 'build'], ['run', 'verify']])
   assert.equal(result.commands.verification.state, 'complete')
+})
+
+test('install and build failures identify the reproducible product-owned stage', async () => {
+  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-verification-'))
+
+  const installFailure = await runCandidateVerification({
+    worktree: join(runDir, '.runtime/install-failure'),
+    exec: executor([2, 2]).exec,
+  })
+  assert.equal(installFailure.product_failure.stage, 'install')
+  assert.equal(installFailure.product_failure.gate, 'verification-build-whole-app')
+
+  const buildFailure = await runCandidateVerification({
+    worktree: join(runDir, '.runtime/build-failure'),
+    exec: executor([0, 2, 2]).exec,
+  })
+  assert.equal(buildFailure.product_failure.stage, 'build')
+  assert.equal(buildFailure.product_failure.gate, 'verification-build-whole-app')
+})
+
+test('a one-off candidate command failure is retried and does not become a conclusive product failure', async () => {
+  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-verification-'))
+  const { calls, exec } = executor([0, 2, 0, 0])
+
+  const result = await runCandidateVerification({
+    worktree: join(runDir, '.runtime/candidate-worktree'),
+    exec,
+  })
+
+  assert.equal(result.product_failure, null)
+  assert.equal(result.build.ok, true)
+  assert.equal(result.verification.passed, true)
+  assert.deepEqual(calls.map(({ args }) => args), [
+    ['ci'],
+    ['run', 'build'],
+    ['run', 'build'],
+    ['run', 'verify'],
+  ])
+  assert.deepEqual(result.commands.build.attempts.map(({ status }) => status), [2, 0])
+})
+
+test('an inability to launch npm is an evaluation-harness failure', async () => {
+  await assert.rejects(
+    runCandidateVerification({
+      worktree: '/candidate',
+      exec: () => ({ status: -1, error: new Error('spawn npm ENOENT'), stdout: '', stderr: '' }),
+    }),
+    (error) => (
+      error.owner === 'evaluation-harness'
+      && error.code === 'candidate-command-launch-failed'
+    ),
+  )
 })

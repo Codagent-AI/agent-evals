@@ -26,10 +26,25 @@ function commandResult(timing) {
   }
 }
 
+function attemptedCommand(attempts) {
+  const result = commandResult(attempts.at(-1))
+  return {
+    ...result,
+    attempts: attempts.map((attempt) => commandResult(attempt)),
+  }
+}
+
 function invoke(label, args, { worktree, exec }) {
   const timing = runTimed('npm', args, { label, cwd: worktree, exec })
   if (timing.error && timing.status === -1) {
-    throw new Error(`cannot launch npm for candidate ${label}: ${timing.error}`)
+    throw Object.assign(
+      new Error(`cannot launch npm for candidate ${label}: ${timing.error}`),
+      {
+        owner: 'evaluation-harness',
+        code: 'candidate-command-launch-failed',
+        resumable: true,
+      },
+    )
   }
   return timing
 }
@@ -39,27 +54,42 @@ export async function runCandidateVerification({
   exec = spawnSync,
 } = {}) {
   const timings = []
-  const install = invoke('install', ['ci'], { worktree, exec })
-  timings.push(install)
+  const installAttempts = [invoke('install', ['ci'], { worktree, exec })]
+  timings.push(...installAttempts)
+  if (!installAttempts[0].ok) {
+    installAttempts.push(invoke('install-confirmation', ['ci'], { worktree, exec }))
+    timings.push(installAttempts[1])
+  }
+  const install = installAttempts.at(-1)
 
   let build = null
+  const buildAttempts = []
   let verification = null
   if (install.ok) {
     build = invoke('build', ['run', 'build'], { worktree, exec })
+    buildAttempts.push(build)
     timings.push(build)
+    if (!build.ok) {
+      build = invoke('build-confirmation', ['run', 'build'], { worktree, exec })
+      buildAttempts.push(build)
+      timings.push(build)
+    }
     if (build.ok) {
       verification = invoke('verification', ['run', 'verify'], { worktree, exec })
       timings.push(verification)
     }
   }
 
-  const buildCommand = build ? commandResult(build) : skipped('dependency installation failed')
+  const buildCommand = build ? attemptedCommand(buildAttempts) : skipped('dependency installation failed')
   const verificationCommand = verification
-    ? commandResult(verification)
+    ? attemptedCommand([verification])
     : skipped(build ? 'candidate build failed' : 'dependency installation failed')
-  const installCommand = commandResult(install)
+  const installCommand = attemptedCommand(installAttempts)
   const buildOk = install.ok && build?.ok === true
   const verificationRan = verification !== null
+  const failedStage = installAttempts.every((attempt) => !attempt.ok)
+    ? 'install'
+    : (buildAttempts.length > 0 && buildAttempts.every((attempt) => !attempt.ok) ? 'build' : null)
 
   return {
     commands: {
@@ -78,6 +108,17 @@ export async function runCandidateVerification({
       passed: verificationRan ? verification.ok : null,
       artifact: 'phases/verification.json',
     },
+    product_failure: failedStage
+      ? {
+          owner: 'product',
+          stage: failedStage,
+          gate: 'verification-build-whole-app',
+          reproducible: true,
+          reason: failedStage === 'install'
+            ? (installCommand.log || 'candidate dependency installation failed')
+            : (buildCommand.log || 'candidate build failed'),
+        }
+      : null,
     timings,
   }
 }

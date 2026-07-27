@@ -20,10 +20,13 @@ import {
   runAmbiguityDiagnostics,
 } from './lib/ambiguity.mjs'
 import {
+  beginUnit,
+  completeUnit,
   createCheckpoint,
   loadCheckpoint,
   saveCheckpoint,
   validateCheckpointIdentity,
+  verifyUnit,
 } from './lib/checkpoint.mjs'
 import {
   freezeCandidate,
@@ -791,12 +794,12 @@ export async function runEvaluation({
       verificationResult = verified.verification
       record.timings.push(...(verified.timings ?? []))
       await writeJsonAtomic(join(runDir, 'phases/verification.json'), verified)
-      if (verified.build?.ok === false) {
+      if (verified.product_failure) {
         return [{
           type: 'conclusive-product-failure',
           phase: 'verification',
-          reason: verified.build.log || 'candidate install or build failed reproducibly',
-          gate: 'build-succeeds',
+          reason: verified.product_failure.reason,
+          gate: verified.product_failure.gate,
         }]
       }
     },
@@ -806,13 +809,24 @@ export async function runEvaluation({
         context.serverRunning = true
         return
       }
-      const outcome = await ensureCandidateServer({
-        recorded: checkpoint.candidate_server ?? null,
-        candidate: record.candidate?.candidate_identity ?? checkpoint.identity.candidate_identity,
-        isProcessAlive,
-        probe: candidateServer.probe,
-        start: candidateServer.start,
-      })
+      let outcome
+      try {
+        outcome = await ensureCandidateServer({
+          recorded: checkpoint.candidate_server ?? null,
+          candidate: record.candidate?.candidate_identity ?? checkpoint.identity.candidate_identity,
+          isProcessAlive,
+          probe: candidateServer.probe,
+          start: candidateServer.start,
+        })
+      } catch (error) {
+        if (error?.owner !== 'product') throw error
+        return [{
+          type: 'conclusive-product-failure',
+          phase: 'candidate-server',
+          reason: error.message,
+          gate: error.gate ?? 'verification-every-produced-step-renders',
+        }]
+      }
       record.candidateServer = outcome.server
       // Recorded durably as soon as it exists, so the separate human-review
       // command can find the very server this run evaluated.
@@ -835,10 +849,47 @@ export async function runEvaluation({
         record.events.push({ event: 'skipped', reason: 'no browser driver configured' })
         return
       }
+      const revision = record.delivery?.final_sha
+        ?? record.candidate?.produced_commit
+        ?? checkpoint.delivery?.final_sha
+        ?? checkpoint.identity.candidate_identity
+      const probeDirectory = join(runDir, 'evidence/evaluator/browser-probes')
+      await mkdir(probeDirectory, { recursive: true })
       const evaluation = await runBrowserEvaluation({
         driver: activeBrowserDriver,
         build: buildResult,
         verification: verificationResult,
+        revision,
+        loadProbe: async ({ id, inputs, dependencies }) => {
+          const reusable = await verifyUnit(checkpoint, {
+            phase: 'browser-evaluation',
+            unit: id,
+            inputs,
+            dependencies,
+          })
+          if (!reusable.reusable) return null
+          const artifact = join(probeDirectory, `${id}.json`)
+          return readJson(artifact, null)
+        },
+        saveProbe: async ({ id, inputs, dependencies, result }) => {
+          const artifact = join(probeDirectory, `${id}.json`)
+          checkpoint = beginUnit(checkpoint, {
+            phase: 'browser-evaluation',
+            unit: id,
+            inputs,
+            dependencies,
+          })
+          await saveCheckpoint(checkpointPath, checkpoint)
+          await writeJsonAtomic(artifact, result)
+          checkpoint = await completeUnit(checkpoint, {
+            phase: 'browser-evaluation',
+            unit: id,
+            inputs,
+            dependencies,
+            outputs: [artifact],
+          })
+          await saveCheckpoint(checkpointPath, checkpoint)
+        },
       })
       record.browser = evaluation
       await writeJsonAtomic(join(runDir, 'phases/browser-evaluation.json'), evaluation)

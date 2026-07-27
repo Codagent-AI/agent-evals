@@ -26,6 +26,17 @@ export const CANDIDATE_BUILD_DIR = '.runtime/candidate-worktree/dist'
 const START_TIMEOUT_MS = 20_000
 const POLL_INTERVAL_MS = 50
 
+export class CandidateProductServeError extends Error {
+  constructor(message) {
+    super(message)
+    this.name = 'CandidateProductServeError'
+    this.owner = 'product'
+    this.code = 'candidate-product-serve-failed'
+    this.gate = 'verification-every-produced-step-renders'
+    this.resumable = false
+  }
+}
+
 function sleep(ms) {
   return new Promise((done) => { setTimeout(done, ms) })
 }
@@ -78,8 +89,15 @@ export function createHostCandidateServer({
       try {
         await access(root)
       } catch {
-        throw new Error(
+        throw new CandidateProductServeError(
           `no built candidate to serve at ${root}; the candidate must be built before human review`,
+        )
+      }
+      try {
+        await access(join(root, 'index.html'))
+      } catch {
+        throw new CandidateProductServeError(
+          `the built candidate at ${root} has no serveable application shell (index.html)`,
         )
       }
 

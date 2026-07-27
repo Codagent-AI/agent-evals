@@ -49,6 +49,24 @@ test('screenshot capture hashes the Playwright buffer without rereading the PNG'
   assert.ok(!script.includes('readFile(screenshotPath)'))
 })
 
+test('every evaluator screenshot records revision-safe mode, position, settle, ownership, and hashes', async () => {
+  const script = await readFile(join(root, 'evals/agent-runner/and-scene/scene-shots.mjs'), 'utf8')
+
+  for (const field of [
+    'EVALUATED_REVISION',
+    "ownership: 'evaluator-produced'",
+    "mode: 'present'",
+    'position: i',
+    'settled',
+    'input_sha256',
+    'output_sha256',
+  ]) assert.ok(script.includes(field), `missing ${field}`)
+  assert.ok(
+    script.includes("if (browsing) await page.keyboard.press('p')"),
+    'capture must explicitly establish present mode',
+  )
+})
+
 // The judge prompt no longer lives in run.sh: the controller owns judging and
 // the sanitized-manifest boundary is asserted directly against
 // sanitizeJudgeManifest above. Prompt assembly is re-covered by the product

@@ -30,6 +30,7 @@ const MANIFEST = process.env.SHOTS_MANIFEST || '/artifacts/screenshot-manifest.j
 const VITE_BIN = join(ROOT, 'node_modules', '.bin', 'vite')
 const MAX_STEPS = 50
 const SHOT_SETTLE_MS = parseSettleMs(process.env.SHOT_SETTLE_MS)
+const EVALUATED_REVISION = process.env.EVALUATED_REVISION || null
 
 function getFreePort() {
   return new Promise((resolve, reject) => {
@@ -112,6 +113,14 @@ async function shootPresentation(page, port, slug) {
   await mkdir(dir, { recursive: true })
   await page.goto(`http://127.0.0.1:${port}${route}`, { waitUntil: 'load', timeout: 30_000 })
 
+  const browsing = await page.locator(
+    '[data-presentation-caption], [data-presentation-toc]',
+  ).evaluateAll((elements) => elements.some((element) => (
+    element.getClientRects().length > 0
+    && getComputedStyle(element).display !== 'none'
+    && getComputedStyle(element).visibility !== 'hidden'
+  )))
+  if (browsing) await page.keyboard.press('p')
   const progress = page.locator('[data-step-count]')
   let stepCount = 1
   let expectedScreenshots = 1
@@ -137,16 +146,33 @@ async function shootPresentation(page, port, slug) {
   }
 
   for (let i = 0; i < stepCount; i++) {
+    const control = page.locator('[data-presentation-progress-dot]').nth(i)
+    if (await control.count()) await control.click()
     await page.waitForTimeout(SHOT_SETTLE_MS)
     stepTexts.push(await page.locator('body').innerText())
     const name = `step-${String(i).padStart(2, '0')}.png`
     const screenshotPath = join(dir, name)
     const bytes = await page.screenshot({ path: screenshotPath })
+    const inputs = {
+      revision: EVALUATED_REVISION,
+      slug: slug || 'index',
+      mode: 'present',
+      position: i,
+      settle_ms: SHOT_SETTLE_MS,
+    }
     frames.push({
       index: i,
       path: join(slug || 'index', name),
       bytes: bytes.length,
       sha256: createHash('sha256').update(bytes).digest('hex'),
+      ownership: 'evaluator-produced',
+      evaluator: 'scene-shots',
+      revision: EVALUATED_REVISION,
+      mode: 'present',
+      position: i,
+      settled: { complete: true, duration_ms: SHOT_SETTLE_MS },
+      input_sha256: createHash('sha256').update(JSON.stringify(inputs)).digest('hex'),
+      output_sha256: createHash('sha256').update(bytes).digest('hex'),
     })
     capturedScreenshots += 1
     if (i < stepCount - 1) {
@@ -213,6 +239,9 @@ async function main() {
     stopPreview(child)
   }
   const manifest = {
+    ownership: 'evaluator-produced',
+    evaluator: 'scene-shots',
+    revision: EVALUATED_REVISION,
     expectedPresentations: presentations.length,
     capturedPresentations: coverage.filter(({ capturedScreenshots }) => capturedScreenshots > 0).length,
     expectedScreenshots: coverage.reduce((sum, item) => sum + item.expectedScreenshots, 0),

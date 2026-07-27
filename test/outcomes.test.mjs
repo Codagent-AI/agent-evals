@@ -111,14 +111,14 @@ test('a deterministic build failure is a conclusive unscored product fail', () =
     type: 'conclusive-product-failure',
     phase: 'verification',
     reason: 'candidate build failed reproducibly',
-    gate: 'build-succeeds',
+    gate: 'verification-build-whole-app',
   })
 
   assert.equal(outcome.evaluation_status, 'complete')
   assert.equal(outcome.product_verdict, 'fail')
   assert.equal(outcome.official_score, null)
   assert.equal(outcome.verdict_durable, true)
-  assert.equal(outcome.product_failure.gate, 'build-succeeds')
+  assert.equal(outcome.product_failure.gate, 'verification-build-whole-app')
 })
 
 test('a workflow failure leaves the product verdict unavailable', () => {

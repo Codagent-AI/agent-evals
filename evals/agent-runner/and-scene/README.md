@@ -43,6 +43,34 @@ reference app through `chrome-devtools-axi`:
 evals/agent-runner/and-scene/run.sh --proof-browser
 ```
 
+The browser-evaluator cutover regression uses the implemented reference at the
+exact pinned revision and the product repository's own install, build, and
+preview commands. In one terminal:
+
+```bash
+git clone https://github.com/Codagent-AI/and-scene.git /tmp/and-scene-reference
+git -C /tmp/and-scene-reference checkout --detach 171c7def1e12aca2a5f605a5e5feafb20d4e4d19
+npm --prefix /tmp/and-scene-reference ci
+npm --prefix /tmp/and-scene-reference run build
+npm --prefix /tmp/and-scene-reference exec vite -- \
+  preview --host 127.0.0.1 --port 4173 --strictPort
+```
+
+Then run the suite-owned AXI regression from this repository:
+
+```bash
+node evals/agent-runner/and-scene/lib/reference-browser-regression.mjs \
+  --url http://127.0.0.1:4173/ \
+  --revision 171c7def1e12aca2a5f605a5e5feafb20d4e4d19 \
+  --output /tmp/and-scene-reference-browser.json
+```
+
+It fails unless every route, outline, caption, canonical-content, and
+evolving-scene criterion passes from explicitly established browse mode. The
+normal deterministic run also establishes present or browse mode and starting
+position independently for every navigation, reliability, and accessibility
+probe. Opening records the product's initial mode before any state change.
+
 Then calibrate. A full `--run-agent` evaluation is blocked until calibration
 passes, because a run that costs real model time should not be the thing that
 discovers the harness scores the wrong component:
@@ -492,8 +520,14 @@ and intermediate values are never rounded.
 Deterministic browser checks exercise the built, running demo: routing, the
 canonical nine steps, evolving-scene structure, present/browse modes,
 navigation, end boundaries, transition reliability, control semantics, focus,
-and keyboard operability. Four sequential judge jobs — demo integration, scene
-kit, presentation skill, and verification tooling — review delivered source.
+and keyboard operability. Each probe is stored in
+`evidence/evaluator/browser-probes/` as an evaluator-owned, revision-bound
+work unit with input/output hashes, required mode and position, initial and
+settled state, runtime failures, and its pass or fail result. Matching negative
+findings are reusable after interruption just like matching passes. Evaluator
+screenshots carry the same ownership, revision, mode, position, settle, and
+hash metadata. Focused component judge jobs review delivered source and
+candidate-produced evidence.
 Judges receive only their own rubric slice, get no screenshots, and do not judge
 visual taste, which belongs to human review.
 
@@ -528,6 +562,8 @@ failure list only proves clean rendering when the failure list was readable.
   resume eligibility
 - `phases/browser-evaluation.json`, `phases/product-judging.json`, and
   `phases/score.json` for the evidence each scored component rests on
+- `evidence/evaluator/browser-probes/*.json` for independently reusable,
+  hash-verified browser pass and fail work units
 - `automated-rubric.json` and `human-rubric.json` in the suite for the scoring
   policy every result cites by version and hash
 - `agent-runner-capabilities.json` in the suite for the role capabilities that

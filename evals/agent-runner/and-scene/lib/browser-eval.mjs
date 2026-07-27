@@ -11,6 +11,7 @@
 // directly, so the whole demo contract is exercisable against an in-memory
 // stand-in and the browser adapter stays a thin, replaceable edge.
 import { DEMO_CONTRACT } from './demo-contract.mjs'
+import { hashJson } from './persistence.mjs'
 
 // The candidate controls every string and number that crosses this boundary, so
 // both are bounded before they reach a rationale, an artifact, or a report.
@@ -33,6 +34,23 @@ export const DETERMINISTIC_BROWSER_CRITERIA = [
   'demo-control-semantics',
   'demo-focus-and-keyboard-accessibility',
 ]
+
+const PROBE_REQUIREMENTS = {
+  'demo-route-and-registration': { mode: 'browse', position: 0 },
+  'demo-nine-step-content-and-order': { mode: 'browse', position: 0 },
+  'demo-required-scene-content': { mode: 'browse', position: 0 },
+  'demo-evolving-scene-structure': { mode: 'browse', position: 0 },
+  'quality-captions-and-navigation': { mode: 'browse', position: 0 },
+  'demo-present-mode-behavior': { mode: 'present', position: 0 },
+  'demo-browse-mode-behavior': { mode: 'browse', position: 0 },
+  'demo-mode-position-preservation': { mode: 'present', position: 4 },
+  'demo-supported-navigation': { mode: 'present', position: 0 },
+  'demo-navigation-boundaries-and-control-keys': { mode: 'present', position: 0 },
+  'demo-step-and-transition-reliability': { mode: 'present', position: 0 },
+  'demo-mode-interaction-reliability': { mode: 'present', position: 0 },
+  'demo-control-semantics': { mode: 'browse', position: 0 },
+  'demo-focus-and-keyboard-accessibility': { mode: 'browse', position: 0 },
+}
 
 const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
 
@@ -82,15 +100,60 @@ export async function runBrowserEvaluation({
   contract = DEMO_CONTRACT,
   build = null,
   verification = null,
+  revision = null,
+  loadProbe = null,
+  saveProbe = null,
 }) {
   const boundsExceeded = []
   const failures = new Set()
   let failureReportingAvailable = true
+  const probeRecords = []
+  let currentProbeSessions = []
 
   // One session per probe, so a probe that leaves the demo mid-navigation
-  // cannot make the next probe's result depend on execution order.
-  async function session() {
+  // cannot make the next probe's result depend on execution order. Opening is
+  // observational: only after recording the initial state do we establish the
+  // mode and position declared by the probe.
+  async function session({ mode, position }) {
     await driver.open(contract.route)
+    const opened = await driver.state()
+    const initialState = {
+      mode: opened.mode,
+      position: opened.stepIndex,
+    }
+    if (typeof driver.setMode === 'function') {
+      await driver.setMode(mode)
+    } else if (opened.mode !== mode) {
+      await driver.toggleMode()
+    }
+    if (typeof driver.setPosition === 'function') {
+      await driver.setPosition(position)
+    } else {
+      let state = await driver.state()
+      while (state.stepIndex > position) {
+        await driver.press('ArrowLeft')
+        state = await driver.state()
+      }
+      while (state.stepIndex < position) {
+        await driver.press('ArrowRight')
+        state = await driver.state()
+      }
+    }
+    const settled = typeof driver.settle === 'function'
+      ? await driver.settle()
+      : { settled: true, strategy: 'driver-state-read' }
+    const established = await driver.state()
+    if (established.mode !== mode || established.stepIndex !== position) {
+      throw new Error(
+        `probe state could not be established: required ${mode} at ${position}, `
+        + `observed ${bounded(established.mode)} at ${bounded(established.stepIndex)}`,
+      )
+    }
+    currentProbeSessions.push({
+      initial_state: initialState,
+      established_state: { mode: established.mode, position: established.stepIndex },
+      settled_state: settled,
+    })
     return driver
   }
 
@@ -126,7 +189,7 @@ export async function runBrowserEvaluation({
       if (!Array.isArray(routes) || !routes.includes(contract.route)) {
         return [false, `the demo route ${contract.route} is not registered`, (routes ?? []).slice(0, 10)]
       }
-      const page = await session()
+      const page = await session(PROBE_REQUIREMENTS['demo-route-and-registration'])
       const state = await page.state()
       return [
         Number.isInteger(state.stepIndex),
@@ -136,7 +199,7 @@ export async function runBrowserEvaluation({
     },
 
     'demo-nine-step-content-and-order': async () => {
-      const page = await session()
+      const page = await session(PROBE_REQUIREMENTS['demo-nine-step-content-and-order'])
       const first = await page.state()
       if (first.stepCount !== contract.step_count) {
         return [false, `the demo reports ${bounded(first.stepCount)} steps, expected ${contract.step_count}`, []]
@@ -154,7 +217,7 @@ export async function runBrowserEvaluation({
     },
 
     'demo-required-scene-content': async () => {
-      await session()
+      await session(PROBE_REQUIREMENTS['demo-required-scene-content'])
       const states = await walk()
       const mismatch = states.findIndex(
         (state, position) => state.caption?.trim() !== contract.step_captions[position]
@@ -175,7 +238,7 @@ export async function runBrowserEvaluation({
     },
 
     'demo-evolving-scene-structure': async () => {
-      await session()
+      await session(PROBE_REQUIREMENTS['demo-evolving-scene-structure'])
       const states = await walk()
       const sceneIds = new Set(states.map(({ sceneId }) => sceneId))
       if (sceneIds.size !== 1) {
@@ -191,7 +254,7 @@ export async function runBrowserEvaluation({
     },
 
     'quality-captions-and-navigation': async () => {
-      await session()
+      await session(PROBE_REQUIREMENTS['quality-captions-and-navigation'])
       const states = await walk()
       const missingCaption = states.findIndex((state) => !state.caption?.trim())
       if (missingCaption !== -1) return [false, `step ${missingCaption + 1} exposes no caption`, []]
@@ -203,7 +266,7 @@ export async function runBrowserEvaluation({
     },
 
     'demo-present-mode-behavior': async () => {
-      const page = await session()
+      const page = await session(PROBE_REQUIREMENTS['demo-present-mode-behavior'])
       const state = await page.state()
       return [
         state.mode === 'present' && state.titleProminent === true,
@@ -213,8 +276,7 @@ export async function runBrowserEvaluation({
     },
 
     'demo-browse-mode-behavior': async () => {
-      const page = await session()
-      await page.toggleMode()
+      const page = await session(PROBE_REQUIREMENTS['demo-browse-mode-behavior'])
       const state = await page.state()
       return [
         state.mode === 'browse' && state.captionVisible === true,
@@ -224,8 +286,7 @@ export async function runBrowserEvaluation({
     },
 
     'demo-mode-position-preservation': async () => {
-      const page = await session()
-      for (let position = 0; position < 4; position += 1) await page.press('ArrowRight')
+      const page = await session(PROBE_REQUIREMENTS['demo-mode-position-preservation'])
       const before = (await page.state()).stepIndex
       await page.toggleMode()
       const during = (await page.state()).stepIndex
@@ -239,7 +300,7 @@ export async function runBrowserEvaluation({
     },
 
     'demo-supported-navigation': async () => {
-      const page = await session()
+      const page = await session(PROBE_REQUIREMENTS['demo-supported-navigation'])
       await page.press('ArrowRight')
       const forward = (await page.state()).stepIndex
       await page.press('ArrowLeft')
@@ -261,7 +322,7 @@ export async function runBrowserEvaluation({
     },
 
     'demo-navigation-boundaries-and-control-keys': async () => {
-      const page = await session()
+      const page = await session(PROBE_REQUIREMENTS['demo-navigation-boundaries-and-control-keys'])
       await page.press('ArrowLeft')
       const atStart = (await page.state()).stepIndex
       const first = await page.state()
@@ -271,7 +332,7 @@ export async function runBrowserEvaluation({
       await page.press('ArrowRight')
       const pastEnd = (await page.state()).stepIndex
 
-      const restarted = await session()
+      const restarted = await session(PROBE_REQUIREMENTS['demo-navigation-boundaries-and-control-keys'])
       const controls = (await restarted.state()).controls ?? []
       if (controls[0]) await restarted.activate(controls[0].name)
       const beforeKey = (await restarted.state()).stepIndex
@@ -287,7 +348,7 @@ export async function runBrowserEvaluation({
     },
 
     'demo-step-and-transition-reliability': async () => {
-      const page = await session()
+      const page = await session(PROBE_REQUIREMENTS['demo-step-and-transition-reliability'])
       const first = await page.state()
       const count = await stepCountOf(first)
       for (let position = 1; position < count; position += 1) {
@@ -310,7 +371,7 @@ export async function runBrowserEvaluation({
     },
 
     'demo-mode-interaction-reliability': async () => {
-      const page = await session()
+      const page = await session(PROBE_REQUIREMENTS['demo-mode-interaction-reliability'])
       for (let round = 0; round < 4; round += 1) {
         await page.toggleMode()
         const state = await page.state()
@@ -324,7 +385,7 @@ export async function runBrowserEvaluation({
     },
 
     'demo-control-semantics': async () => {
-      await session()
+      await session(PROBE_REQUIREMENTS['demo-control-semantics'])
       const states = await walk()
       for (const [position, state] of states.entries()) {
         const controls = state.controls ?? []
@@ -343,7 +404,7 @@ export async function runBrowserEvaluation({
     },
 
     'demo-focus-and-keyboard-accessibility': async () => {
-      const page = await session()
+      const page = await session(PROBE_REQUIREMENTS['demo-focus-and-keyboard-accessibility'])
       const controls = (await page.state()).controls ?? []
       if (controls.length === 0) return [false, 'there are no controls to focus', []]
       const unfocusable = controls.find(({ focusable }) => focusable !== true)
@@ -356,7 +417,7 @@ export async function runBrowserEvaluation({
       // A focused button owns its own key handling. Observe global deck
       // navigation in a fresh page state rather than requiring the app to
       // hijack arrow keys from an interactive control.
-      const keyboardPage = await session()
+      const keyboardPage = await session(PROBE_REQUIREMENTS['demo-focus-and-keyboard-accessibility'])
       const before = (await keyboardPage.state()).stepIndex
       await keyboardPage.press('ArrowRight')
       const after = (await keyboardPage.state()).stepIndex
@@ -366,24 +427,93 @@ export async function runBrowserEvaluation({
 
   const criteria = []
   for (const id of DETERMINISTIC_BROWSER_CRITERIA) {
+    const requirement = PROBE_REQUIREMENTS[id]
+    const inputs = {
+      schema_version: 1,
+      criterion: id,
+      revision,
+      route: contract.route,
+      contract_sha256: hashJson(contract),
+      required_mode: requirement.mode,
+      start_position: requirement.position,
+    }
+    const dependencies = { revision, route: contract.route }
+    const inputSha256 = hashJson(inputs)
+    const reused = await loadProbe?.({ id, inputs, dependencies })
+    if (reused) {
+      const record = { ...reused, reused: true }
+      probeRecords.push(record)
+      criteria.push(record.result)
+      for (const failure of record.failures ?? []) failures.add(bounded(failure))
+      if (record.failure_reporting_available === false) failureReportingAvailable = false
+      continue
+    }
+
+    currentProbeSessions = []
+    let criterion
     try {
       const [pass, rationale, evidence] = await probes[id]()
-      criteria.push(verdict(id, pass, rationale, evidence))
+      criterion = verdict(id, pass, rationale, evidence)
     } catch (error) {
+      if (error?.owner === 'evaluation-harness') throw error
       // A driver or page error is a real observation about the demo, so it
       // fails its own criterion instead of aborting the whole evaluation and
       // discarding every other criterion's evidence.
-      criteria.push(verdict(id, false, `browser evaluation failed: ${error.message}`, []))
+      criterion = verdict(id, false, `browser evaluation failed: ${error.message}`, [])
     }
+    const probeFailures = []
+    let probeFailureReportingAvailable = true
     try {
-      for (const failure of await driver.failures()) failures.add(bounded(failure))
-    } catch {
+      for (const failure of await driver.failures()) {
+        const safe = bounded(failure)
+        failures.add(safe)
+        probeFailures.push(safe)
+      }
+    } catch (error) {
+      if (error?.owner === 'evaluation-harness') throw error
       // An empty failure set only proves clean rendering when the failure list
       // could actually be read. Losing the page or the console log means the
       // evidence is missing, so the renders gate goes unobserved rather than
       // passing on the strength of what was never collected.
       failureReportingAvailable = false
+      probeFailureReportingAvailable = false
     }
+    criteria.push(criterion)
+    const firstSession = currentProbeSessions[0] ?? {
+      initial_state: { mode: null, position: null },
+      established_state: { mode: requirement.mode, position: requirement.position },
+      settled_state: { settled: false, strategy: 'probe-failed-before-settle' },
+    }
+    const outputs = {
+      initial_state: firstSession.initial_state,
+      established_state: firstSession.established_state,
+      settled_state: firstSession.settled_state,
+      sessions: currentProbeSessions,
+      result: criterion,
+      failures: probeFailures,
+      failure_reporting_available: probeFailureReportingAvailable,
+    }
+    const record = {
+      id,
+      ownership: 'evaluator-produced',
+      evaluator: 'deterministic-browser',
+      revision,
+      required_mode: requirement.mode,
+      start_position: requirement.position,
+      initial_state: firstSession.initial_state,
+      established_state: firstSession.established_state,
+      settled_state: firstSession.settled_state,
+      sessions: currentProbeSessions,
+      input_sha256: inputSha256,
+      result: criterion,
+      failures: probeFailures,
+      failure_reporting_available: probeFailureReportingAvailable,
+      outputs,
+      output_sha256: hashJson(outputs),
+      reused: false,
+    }
+    probeRecords.push(record)
+    await saveProbe?.({ id, inputs, dependencies, result: record })
   }
 
   const passed = (id) => criteria.find((entry) => entry.id === id)?.verdict === 'pass'
@@ -437,6 +567,11 @@ export async function runBrowserEvaluation({
   return {
     criteria,
     gates,
+    ownership: 'evaluator-produced',
+    evaluator: 'deterministic-browser',
+    revision,
+    initial_state: probeRecords[0]?.initial_state ?? null,
+    probes: probeRecords,
     failures: [...failures],
     failure_reporting_available: failureReportingAvailable,
     bounds_exceeded: [...new Set(boundsExceeded)],

@@ -8,6 +8,7 @@ import { runEvaluation } from '../evals/agent-runner/and-scene/controller.mjs'
 import { loadCheckpoint } from '../evals/agent-runner/and-scene/lib/checkpoint.mjs'
 import { readJson } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
 import { WORKFLOW_RELATIVE_PATH } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
+import { DEMO_CONTRACT } from '../evals/agent-runner/and-scene/lib/demo-contract.mjs'
 
 const workflowYaml = `name: implement-change
 params:
@@ -152,6 +153,49 @@ async function evaluate(context, extra = [], overrides = {}) {
     verifyResumeDelivery: async () => ({ verified: true }),
     ...overrides,
   })
+}
+
+function browserDemo({ captions = DEMO_CONTRACT.step_captions } = {}) {
+  let index = 0
+  let mode = 'present'
+  return {
+    async routes() { return [DEMO_CONTRACT.route] },
+    async open() { index = 0; mode = 'present' },
+    async setMode(required) { mode = required },
+    async setPosition(required) { index = required },
+    async settle() { return { settled: true, strategy: 'mock-idle' } },
+    async state() {
+      return {
+        stepIndex: index,
+        stepCount: DEMO_CONTRACT.step_count,
+        mode,
+        title: DEMO_CONTRACT.step_titles[index],
+        caption: mode === 'browse' ? captions[index] : '',
+        sceneId: 'reference-scene',
+        entityIds: ['persistent', `step-${index}`],
+        titleProminent: mode === 'present',
+        captionVisible: mode === 'browse',
+        controls: DEMO_CONTRACT.step_titles.map((_, position) => ({
+          name: `Step ${position + 1}`,
+          role: 'button',
+          ariaCurrent: position === index,
+          focusable: true,
+        })),
+        focused: null,
+      }
+    },
+    async press(key) {
+      if (key === 'ArrowRight') index = Math.min(DEMO_CONTRACT.step_count - 1, index + 1)
+      if (key === 'ArrowLeft') index = Math.max(0, index - 1)
+    },
+    async swipe(direction) {
+      await this.press(direction === 'left' ? 'ArrowRight' : 'ArrowLeft')
+    },
+    async activate(name) { index = Number(name.replace('Step ', '')) - 1 },
+    async focus() {},
+    async toggleMode() { mode = mode === 'present' ? 'browse' : 'present' },
+    async failures() { return [] },
+  }
 }
 
 test('--skip-validator runs the full exact workflow without --until', async () => {
@@ -439,4 +483,81 @@ test('reference run-state marks delivery and product verdict not applicable', as
   assert.equal(state.delivery.applicable, false)
   const written = await readJson(join(context.runDir, 'result.json'))
   assert.equal(written.product_verdict, 'not-applicable')
+})
+
+test('browser probes are durable hashed evaluator-owned work units even when a probe fails', async () => {
+  const context = await environment()
+  let servedIdentity = null
+  const candidateServer = {
+    probe: async () => ({ ok: true, candidate_identity: servedIdentity }),
+    start: async ({ candidate }) => {
+      servedIdentity = candidate
+      return { pid: 9876, url: 'http://127.0.0.1:4319/' }
+    },
+    stop: async () => {},
+  }
+  const captions = [...DEMO_CONTRACT.step_captions]
+  captions[3] = 'wrong caption'
+
+  const result = await evaluate(context, profiles, {
+    isProcessAlive: () => true,
+    verifyCandidate: async () => ({
+      build: { ok: true, log: 'built' },
+      verification: { machine_readable: true, passed: true },
+      timings: [],
+    }),
+    candidateServer,
+    browserDriver: browserDemo({ captions }),
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
+  const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
+  const units = state.phases['browser-evaluation'].units
+  assert.equal(Object.keys(units).length, 14)
+  assert.ok(Object.values(units).every(({ state: unitState }) => unitState === 'complete'))
+  for (const [id, unit] of Object.entries(units)) {
+    assert.equal(unit.outputs.length, 1, id)
+    const artifact = await readJson(unit.outputs[0].path)
+    assert.equal(artifact.ownership, 'evaluator-produced')
+    assert.equal(artifact.revision, context.commit)
+    assert.match(artifact.input_sha256, /^[a-f0-9]{64}$/)
+    assert.match(artifact.output_sha256, /^[a-f0-9]{64}$/)
+  }
+  const failed = await readJson(units['demo-required-scene-content'].outputs[0].path)
+  assert.equal(failed.result.verdict, 'fail')
+})
+
+test('the controller converts product-owned serve failure into a conclusive unscored fail', async () => {
+  const context = await environment()
+  let browserOpened = false
+
+  const result = await evaluate(context, profiles, {
+    isProcessAlive: () => true,
+    verifyCandidate: async () => ({
+      build: { ok: true, log: 'built' },
+      verification: { machine_readable: true, passed: true },
+      timings: [],
+    }),
+    candidateServer: {
+      probe: async () => ({ ok: false, error: 'not running' }),
+      start: async () => {
+        throw Object.assign(new Error('candidate has no serveable application shell'), {
+          owner: 'product',
+          code: 'candidate-product-serve-failed',
+          gate: 'verification-every-produced-step-renders',
+        })
+      },
+      stop: async () => {},
+    },
+    browserDriver: {
+      async open() { browserOpened = true },
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
+  assert.equal(result.outcome.evaluation_status, 'complete')
+  assert.equal(result.outcome.product_verdict, 'fail')
+  assert.equal(result.outcome.official_score, null)
+  assert.equal(result.outcome.product_failure.gate, 'verification-every-produced-step-renders')
+  assert.equal(browserOpened, false)
 })

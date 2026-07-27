@@ -8,6 +8,7 @@ import {
   runBrowserEvaluation,
 } from '../evals/agent-runner/and-scene/lib/browser-eval.mjs'
 import { deterministicCriteria, loadRubrics } from '../evals/agent-runner/and-scene/lib/rubric.mjs'
+import { hashJson } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
 
 const TITLES = DEMO_CONTRACT.step_titles
 
@@ -34,6 +35,9 @@ function createDemo(knobs = {}) {
     focusedControlConsumesArrows = false,
     titleProminentInPresent = true,
     captionVisibleInBrowse = true,
+    initialMode = 'present',
+    captionHiddenInPresent = false,
+    actions = [],
     stallAt = null,
     failures = [],
     controlCount = stepCount,
@@ -41,7 +45,7 @@ function createDemo(knobs = {}) {
   } = knobs
 
   let index = 0
-  let mode = 'present'
+  let mode = initialMode
   let focused = null
   let keysLive = true
   const observed = []
@@ -69,11 +73,12 @@ function createDemo(knobs = {}) {
       guard('open')
       if (target !== route) throw new Error(`no such route: ${target}`)
       index = 0
-      mode = 'present'
+      mode = initialMode
       focused = null
       keysLive = true
       observed.length = 0
       observed.push(...failures)
+      actions.push({ action: 'open', mode, position: index })
     },
     async state() {
       guard('state')
@@ -82,7 +87,9 @@ function createDemo(knobs = {}) {
         stepCount,
         mode,
         title: titles[index % titles.length],
-        caption: captions[index % captions.length] ?? '',
+        caption: captionHiddenInPresent && mode === 'present'
+          ? ''
+          : captions[index % captions.length] ?? '',
         sceneId: perStepSceneId ? `scene-${index}` : 'how-to-make-a-presentation-scene',
         entityIds: replaceEntities
           ? [`only-${index}`]
@@ -126,6 +133,22 @@ function createDemo(knobs = {}) {
       guard('toggleMode')
       mode = mode === 'present' ? 'browse' : 'present'
       if (!preservePositionAcrossModes) index = 0
+      actions.push({ action: 'toggle-mode', mode, position: index })
+    },
+    async setMode(required) {
+      guard('setMode')
+      if (mode !== required) await this.toggleMode()
+      actions.push({ action: 'set-mode', mode, position: index })
+    },
+    async setPosition(required) {
+      guard('setPosition')
+      index = clamp(required)
+      actions.push({ action: 'set-position', mode, position: index })
+    },
+    async settle() {
+      guard('settle')
+      actions.push({ action: 'settle', mode, position: index })
+      return { settled: true, strategy: 'mock-idle' }
     },
     async failures() {
       guard('failures')
@@ -166,6 +189,105 @@ test('a conforming built demo passes every deterministic criterion and hard gate
   assert.deepEqual([...new Set(result.criteria.map(({ verdict }) => verdict))], ['pass'])
   assert.deepEqual([...new Set(result.gates.map(({ verdict }) => verdict))], ['pass'])
   assert.equal(result.gates.length, 4)
+})
+
+test('opening records and preserves the presentation initial mode', async () => {
+  for (const initialMode of ['present', 'browse']) {
+    const result = await evaluate({ initialMode })
+
+    assert.equal(result.initial_state.mode, initialMode)
+    assert.equal(result.initial_state.position, 0)
+    assert.ok(result.probes.every(({ initial_state }) => initial_state.mode === initialMode))
+  }
+})
+
+test('caption and canonical-content probes enter browse mode before traversal', async () => {
+  const actions = []
+  const result = await evaluate({
+    initialMode: 'present',
+    captionHiddenInPresent: true,
+    actions,
+  })
+
+  for (const id of [
+    'demo-nine-step-content-and-order',
+    'demo-required-scene-content',
+    'demo-evolving-scene-structure',
+    'quality-captions-and-navigation',
+  ]) {
+    assert.equal(verdictOf(result, id), 'pass', id)
+    const probe = result.probes.find((entry) => entry.id === id)
+    assert.equal(probe.required_mode, 'browse')
+    assert.equal(probe.start_position, 0)
+    assert.equal(probe.settled_state.settled, true)
+    assert.equal(probe.ownership, 'evaluator-produced')
+    assert.match(probe.input_sha256, /^[a-f0-9]{64}$/)
+    assert.match(probe.output_sha256, /^[a-f0-9]{64}$/)
+    assert.equal(probe.output_sha256, hashJson(probe.outputs))
+  }
+  assert.ok(actions.some((entry) => entry.action === 'set-mode' && entry.mode === 'browse'))
+})
+
+test('mode-specific and navigation probes establish their declared state from either initial mode', async () => {
+  const actions = []
+  const result = await evaluate({ initialMode: 'browse', actions })
+
+  assert.equal(verdictOf(result, 'demo-present-mode-behavior'), 'pass')
+  assert.equal(verdictOf(result, 'demo-browse-mode-behavior'), 'pass')
+  assert.equal(
+    result.probes.find(({ id }) => id === 'demo-present-mode-behavior').required_mode,
+    'present',
+  )
+  assert.equal(
+    result.probes.find(({ id }) => id === 'demo-supported-navigation').start_position,
+    0,
+  )
+  assert.ok(actions.some((entry) => entry.action === 'set-mode' && entry.mode === 'present'))
+})
+
+test('matching pass and fail probe records can be reused without operating the browser again', async () => {
+  const stored = new Map()
+  const first = await runBrowserEvaluation({
+    driver: createDemo({ titles: [...TITLES].reverse() }),
+    build: passingBuild,
+    verification: passingVerification,
+    revision: 'reference-revision',
+    loadProbe: async ({ id }) => stored.get(id) ?? null,
+    saveProbe: async ({ id, result }) => { stored.set(id, result) },
+  })
+  const actions = []
+  const second = await runBrowserEvaluation({
+    driver: createDemo({ actions }),
+    build: passingBuild,
+    verification: passingVerification,
+    revision: 'reference-revision',
+    loadProbe: async ({ id }) => stored.get(id) ?? null,
+    saveProbe: async () => { throw new Error('reused probes must not be rewritten') },
+  })
+
+  assert.equal(verdictOf(first, 'demo-nine-step-content-and-order'), 'fail')
+  assert.equal(verdictOf(second, 'demo-nine-step-content-and-order'), 'fail')
+  assert.ok(second.probes.every(({ reused }) => reused === true))
+  assert.deepEqual(actions, [])
+})
+
+test('browser adapter failures remain harness failures instead of product criterion failures', async () => {
+  const driver = createDemo()
+  driver.routes = async () => {
+    throw Object.assign(new Error('Chrome process is unavailable'), {
+      owner: 'evaluation-harness',
+      code: 'browser-driver-failed',
+    })
+  }
+
+  await assert.rejects(
+    runBrowserEvaluation({
+      driver,
+      build: passingBuild,
+      verification: passingVerification,
+    }),
+    (error) => error.owner === 'evaluation-harness' && error.code === 'browser-driver-failed',
+  )
 })
 
 test('every emitted result carries a verdict, rationale, and cited evidence', async () => {

@@ -7,6 +7,16 @@ import { spawnSync } from 'node:child_process'
 
 const MAX_OUTPUT_BYTES = 1024 * 1024
 
+export class BrowserDriverError extends Error {
+  constructor(message) {
+    super(message)
+    this.name = 'BrowserDriverError'
+    this.owner = 'evaluation-harness'
+    this.code = 'browser-driver-failed'
+    this.resumable = true
+  }
+}
+
 function defaultCommand(args, input = '') {
   return spawnSync('chrome-devtools-axi', args, {
     encoding: 'utf8',
@@ -28,18 +38,18 @@ export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {
   async function invoke(args, input = '') {
     const result = await command(args, input)
     if (result?.error || result?.status !== 0) {
-      throw new Error(`browser adapter failed: ${failureMessage(result)}`)
+      throw new BrowserDriverError(`browser adapter failed: ${failureMessage(result)}`)
     }
     return result.stdout ?? ''
   }
 
   async function run(script) {
     const output = (await invoke(['run'], script)).trim()
-    if (!output) throw new Error('browser adapter returned no structured output')
+    if (!output) throw new BrowserDriverError('browser adapter returned no structured output')
     try {
       return JSON.parse(output.split('\n').at(-1))
     } catch (error) {
-      throw new Error(`browser adapter returned invalid JSON: ${error.message}`)
+      throw new BrowserDriverError(`browser adapter returned invalid JSON: ${error.message}`)
     }
   }
 
@@ -70,11 +80,60 @@ const browsing = await page.eval(() => [...document.querySelectorAll('[data-pres
   .some((element) => element.getClientRects().length > 0
     && getComputedStyle(element).display !== 'none'
     && getComputedStyle(element).visibility !== 'hidden'));
-if (browsing) {
+const progress = await page.eval(() => document.querySelector('[data-step-count]')?.getAttribute('data-step-index'));
+console.log(JSON.stringify({
+  ...opened,
+  initialMode: browsing ? 'browse' : 'present',
+  initialPosition: Number(progress),
+}));
+`)
+    },
+
+    async setMode(requiredMode) {
+      if (!['present', 'browse'].includes(requiredMode)) {
+        throw new BrowserDriverError(`unsupported presentation mode: ${requiredMode}`)
+      }
+      return run(`
+const requiredMode = ${JSON.stringify(requiredMode)};
+const mode = await page.eval(() => {
+  const visible = (element) => Boolean(element && element.getClientRects().length > 0
+    && getComputedStyle(element).display !== 'none'
+    && getComputedStyle(element).visibility !== 'hidden');
+  const browsing = [...document.querySelectorAll('[data-presentation-caption], [data-presentation-toc]')]
+    .some(visible);
+  return browsing ? 'browse' : 'present';
+});
+if (mode !== requiredMode) {
   await page.press('p');
   await page.wait(50);
 }
-console.log(JSON.stringify(opened));
+console.log(JSON.stringify(true));
+`)
+    },
+
+    async setPosition(requiredPosition) {
+      if (!Number.isInteger(requiredPosition) || requiredPosition < 0) {
+        throw new BrowserDriverError(`invalid presentation position: ${requiredPosition}`)
+      }
+      return run(`
+const requiredPosition = ${requiredPosition};
+const positioned = await page.eval(() => {
+  const controls = [...document.querySelectorAll('[data-presentation-progress-dot]')];
+  const target = controls[requiredPosition];
+  if (!target) return false;
+  target.click();
+  return true;
+});
+if (!positioned) throw new Error('required navigation position was not found');
+await page.wait(50);
+console.log(JSON.stringify(true));
+`)
+    },
+
+    async settle() {
+      return run(`
+await page.wait(100);
+console.log(JSON.stringify({ settled: true, strategy: 'bounded-wait-and-state-read' }));
 `)
     },
 

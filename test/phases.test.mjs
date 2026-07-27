@@ -139,7 +139,7 @@ test('a conclusive product failure skips browser, judging, and human-dependent w
       type: 'conclusive-product-failure',
       phase: 'verification',
       reason: 'candidate build failed reproducibly',
-      gate: 'build-succeeds',
+      gate: 'verification-build-whole-app',
     }]
   }
 
@@ -155,12 +155,42 @@ test('a conclusive product failure skips browser, judging, and human-dependent w
   assert.ok(order.includes('cleanup'))
 })
 
+test('a product-owned serve failure is conclusive while server management defects remain harness failures', async () => {
+  const product = handlers(AUTOMATED_PHASES)
+  product.map['candidate-server'] = async () => [{
+    type: 'conclusive-product-failure',
+    phase: 'candidate-server',
+    reason: 'the frozen candidate has no serveable application shell',
+    gate: 'verification-every-produced-step-renders',
+  }]
+
+  const productResult = await runPhases({
+    phases: AUTOMATED_PHASES,
+    handlers: product.map,
+    outcome: createOutcome(),
+  })
+  assert.equal(productResult.outcome.evaluation_status, 'complete')
+  assert.equal(productResult.outcome.product_verdict, 'fail')
+  assert.ok(!product.order.includes('browser-evaluation'))
+
+  const harness = handlers(AUTOMATED_PHASES, {
+    fails: { 'candidate-server': 'cannot allocate a viable server process' },
+  })
+  const harnessResult = await runPhases({
+    phases: AUTOMATED_PHASES,
+    handlers: harness.map,
+    outcome: createOutcome(),
+  })
+  assert.equal(harnessResult.outcome.evaluation_status, 'evaluation-harness-failed')
+  assert.equal(harnessResult.outcome.product_verdict, 'unavailable')
+})
+
 test('a resumed conclusive product failure remains terminal when verification is reused', async () => {
   const outcome = applyOutcomeEvent(createOutcome(), {
     type: 'conclusive-product-failure',
     phase: 'verification',
     reason: 'candidate build failed reproducibly',
-    gate: 'build-succeeds',
+    gate: 'verification-build-whole-app',
   })
   const { order, map } = handlers(AUTOMATED_PHASES, { effects: serverUp })
 
