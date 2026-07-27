@@ -52,7 +52,7 @@ function invoke(label, args, { worktree, exec }) {
 const INFRASTRUCTURE_FAILURE_PATTERNS = [
   /\b(?:EAI_AGAIN|ENETUNREACH|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOSPC)\b/i,
   /(?:registry|network).*(?:unavailable|timed out|failed|error)/i,
-  /\b(?:502|503|504)\b/,
+  /\bHTTP(?:\/\d(?:\.\d)?)?\s+(?:502|503|504)\b/i,
 ]
 
 function isInfrastructureFailure(attempt) {

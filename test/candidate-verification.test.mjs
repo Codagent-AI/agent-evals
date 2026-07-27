@@ -142,3 +142,34 @@ test('repeated infrastructure-shaped npm failures remain harness failures', asyn
     ),
   )
 })
+
+test('bare HTTP status numbers remain candidate failures', async () => {
+  const result = await runCandidateVerification({
+    worktree: '/candidate',
+    exec: () => ({
+      status: 1,
+      stdout: '',
+      stderr: 'assertion failed: expected status 502 but received 500',
+    }),
+  })
+
+  assert.equal(result.product_failure.stage, 'install')
+  assert.equal(result.product_failure.reproducible, true)
+})
+
+test('explicit HTTP gateway errors remain infrastructure failures', async () => {
+  await assert.rejects(
+    runCandidateVerification({
+      worktree: '/candidate',
+      exec: () => ({
+        status: 1,
+        stdout: '',
+        stderr: 'npm request failed: HTTP/1.1 503 Service Unavailable',
+      }),
+    }),
+    (error) => (
+      error.owner === 'evaluation-harness'
+      && error.code === 'candidate-command-infrastructure-failed'
+    ),
+  )
+})

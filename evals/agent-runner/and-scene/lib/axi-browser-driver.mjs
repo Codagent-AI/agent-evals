@@ -159,11 +159,15 @@ console.log(JSON.stringify(true));
     async settle() {
       return run(`
 const readSettledState = () => page.eval(() => {
-  const animations = document.getAnimations()
-    .filter((animation) => animation.playState === 'running').length;
   const nodes = [...document.querySelectorAll(
     '[data-step-count], [data-presentation-stage], [data-layout-id], [data-scene-entity], [data-node]',
   )];
+  const animations = [...new Set(nodes.flatMap(
+    (node) => node.getAnimations({ subtree: true }),
+  ))].filter((animation) => (
+    animation.playState === 'running'
+      && animation.effect?.getComputedTiming().iterations !== Infinity
+  )).length;
   const signature = JSON.stringify(nodes.map((element) => {
     const rect = element.getBoundingClientRect();
     const style = getComputedStyle(element);
