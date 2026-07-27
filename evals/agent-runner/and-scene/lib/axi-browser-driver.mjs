@@ -117,15 +117,41 @@ console.log(JSON.stringify(true));
       }
       return run(`
 const requiredPosition = ${requiredPosition};
-const positioned = await page.eval(() => {
+const readPosition = () => page.eval(() => Number(
+  document.querySelector('[data-step-count]')?.getAttribute('data-step-index'),
+));
+const positionedByControl = await page.eval(() => {
   const controls = [...document.querySelectorAll('[data-presentation-progress-dot]')];
   const target = controls[requiredPosition];
   if (!target) return false;
   target.click();
   return true;
 });
-if (!positioned) throw new Error('required navigation position was not found');
-await page.wait(50);
+if (positionedByControl) await page.wait(100);
+let observedPosition = await readPosition();
+if (observedPosition !== requiredPosition) {
+  const stepCount = await page.eval(() => Number(
+    document.querySelector('[data-step-count]')?.getAttribute('data-step-count'),
+  ));
+  if (!Number.isInteger(stepCount) || stepCount < 1) {
+    throw new Error('presentation step count was not found');
+  }
+  for (let index = 0; index < stepCount; index += 1) {
+    await page.press('ArrowLeft');
+    await page.wait(100);
+  }
+  for (let index = 0; index < requiredPosition; index += 1) {
+    await page.press('ArrowRight');
+    await page.wait(100);
+  }
+  observedPosition = await readPosition();
+}
+if (observedPosition !== requiredPosition) {
+  throw new Error(
+    'required navigation position was not established: expected '
+      + requiredPosition + ', observed ' + observedPosition,
+  );
+}
 console.log(JSON.stringify(true));
 `)
     },

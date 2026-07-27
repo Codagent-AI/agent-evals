@@ -50,7 +50,11 @@ import { collectSourceEvidence } from './deterministic-checks.mjs'
 import { runBrowserEvaluation } from './lib/browser-eval.mjs'
 import { createAxiBrowserDriver } from './lib/axi-browser-driver.mjs'
 import { ensureCandidateServer, stopCandidateServer } from './lib/candidate-server.mjs'
-import { assembleResult, writeResultArtifacts } from './lib/result.mjs'
+import {
+  assembleResult,
+  readEvidenceProjectionInputs,
+  writeResultArtifacts,
+} from './lib/result.mjs'
 import { createCodexJudgeInvoker } from './lib/judge-invoker.mjs'
 import { runProductJudging } from './lib/judge-jobs.mjs'
 import {
@@ -1159,8 +1163,8 @@ export async function runEvaluation({
   // one assembled value, so the three artifacts can never describe different
   // states of the same run.
   async function writeResult(outcome) {
-    const result = {
-      ...assembleResult({
+    const projectedState = { ...checkpoint, outcome }
+    const result = assembleResult({
         runId,
         mode,
         outcome,
@@ -1225,14 +1229,16 @@ export async function runEvaluation({
           record.metrics?.attempts ?? [],
         ),
         timings: summarizeTimings(record.timings),
-      }),
-      candidate_identity: record.candidate?.candidate_identity ?? checkpoint.identity.candidate_identity,
-      candidate_source: record.candidate ?? checkpoint.candidate ?? null,
-      delivery: checkpoint.delivery,
-      // The endpoint the reviewer is handed. Null when no server was started, so
-      // the human-review command starts one rather than trusting a stale URL.
-      candidate_server: record.candidateServer,
-    }
+        runState: projectedState,
+        candidate: record.candidate ?? checkpoint.candidate ?? {
+          candidate_identity: checkpoint.identity.candidate_identity,
+        },
+        delivery: checkpoint.delivery,
+        // The endpoint the reviewer is handed. Null when no server was started,
+        // so the human-review command starts one rather than trusting a stale
+        // URL.
+        candidateServer: record.candidateServer,
+      })
     await writeResultArtifacts({ runDir, result })
   }
 
@@ -1261,7 +1267,6 @@ export async function runEvaluation({
     }],
     ['browser-evaluation', (value) => { record.browser = value }],
     ['source-evidence', (value) => { record.sourceEvidence = value }],
-    ['candidate-evidence', (value) => { record.candidateEvidence = value }],
     ['neutral-inputs', (value) => { record.neutral = value }],
     ['product-judging', (value) => { record.judging = value }],
     ['score', (value) => { record.score = value }],
@@ -1275,6 +1280,11 @@ export async function runEvaluation({
     const persisted = await readJson(join(runDir, `phases/${phase}.json`), null)
     if (persisted) load(persisted)
   }
+  const durableEvidence = await readEvidenceProjectionInputs(runDir)
+  record.candidateEvidence ??= durableEvidence.candidate
+  record.evaluatorEvidence ??= durableEvidence.evaluator
+  record.contradictions ??= durableEvidence.contradictions
+  record.evidenceLineage ??= durableEvidence.lineage
 
   // Record phase completion durably as each phase finishes, so an interrupted
   // run resumes at the first incomplete phase instead of repeating valid work.

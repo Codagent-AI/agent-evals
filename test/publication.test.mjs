@@ -55,7 +55,15 @@ async function finalizedRun(root, {
   await mkdir(join(runDir, '.runtime/candidate-worktree'), { recursive: true })
   await mkdir(join(runDir, 'evidence'), { recursive: true })
 
-  const result = { run_id: runId, mode, evaluation_status: evaluationStatus, product_verdict: verdict }
+  const finalized = evaluationStatus === 'complete' && ['pass', 'fail'].includes(verdict)
+  const result = {
+    run_id: runId,
+    mode,
+    evaluation_status: evaluationStatus,
+    product_verdict: verdict,
+    ...(finalized ? { official_score: 84 } : {}),
+    human_review: { complete: finalized },
+  }
   const contents = {
     'result.json': JSON.stringify(result),
     'report.html': '<!doctype html><title>report</title>',
@@ -94,17 +102,26 @@ function recordingGit({ fail = () => null, head = 'commit-sha', log = '' } = {})
   }
 }
 
-test('only a finalized complete pass or product-fail run is publishable', () => {
+test('only a finalized scored Agent Runner candidate with completed human review is publishable', () => {
   for (const verdict of ['pass', 'fail']) {
-    const eligibility = publicationEligibility({ evaluation_status: 'complete', product_verdict: verdict })
+    const eligibility = publicationEligibility({
+      mode: 'agent-runner',
+      evaluation_status: 'complete',
+      product_verdict: verdict,
+      official_score: verdict === 'pass' ? 84 : 61,
+      human_review: { complete: true },
+    })
     assert.equal(eligibility.publishable, true, verdict)
   }
   for (const result of [
-    { evaluation_status: 'pending-human-review', product_verdict: 'unavailable' },
-    { evaluation_status: 'implementation-workflow-failed', product_verdict: 'unavailable' },
-    { evaluation_status: 'evaluation-harness-failed', product_verdict: 'unavailable' },
-    { evaluation_status: 'complete', product_verdict: 'unavailable' },
-    { evaluation_status: 'complete', product_verdict: 'pass', mode: 'calibration' },
+    { mode: 'agent-runner', evaluation_status: 'pending-human-review', product_verdict: 'unavailable' },
+    { mode: 'agent-runner', evaluation_status: 'implementation-workflow-failed', product_verdict: 'unavailable' },
+    { mode: 'agent-runner', evaluation_status: 'evaluation-harness-failed', product_verdict: 'unavailable' },
+    { mode: 'agent-runner', evaluation_status: 'complete', product_verdict: 'unavailable' },
+    { mode: 'calibration', evaluation_status: 'complete', product_verdict: 'pass', official_score: 100, human_review: { complete: true } },
+    { mode: 'reference-baseline', evaluation_status: 'complete', product_verdict: 'not-applicable', official_score: 92, human_review: { complete: true } },
+    { mode: 'agent-runner', evaluation_status: 'complete', product_verdict: 'fail', human_review: null },
+    { mode: 'agent-runner', evaluation_status: 'complete', product_verdict: 'pass', official_score: 84, human_review: { complete: false } },
   ]) {
     const eligibility = publicationEligibility(result)
     assert.equal(eligibility.publishable, false, JSON.stringify(result))

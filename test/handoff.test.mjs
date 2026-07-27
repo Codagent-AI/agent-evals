@@ -168,9 +168,9 @@ test('the automated command hands off at pending-human-review with all three art
   const written = await readJson(join(context.runDir, 'result.json'))
   assert.equal(written.evaluation_status, 'pending-human-review')
   assert.equal(written.product_verdict, 'unavailable')
-  assert.equal(written.official_score, null)
+  assert.equal('official_score' in written, false)
   assert.equal(written.label, 'PENDING HUMAN REVIEW')
-  assert.equal(written.human_review, null)
+  assert.equal('human_review' in written, false)
 
   const report = await readFile(join(context.runDir, 'report.html'), 'utf8')
   assert.match(report, /PENDING HUMAN REVIEW/)
@@ -210,7 +210,7 @@ test('a cleanup failure at handoff is diagnostic and still exits successfully', 
   assert.equal(written.evaluation_status, 'pending-human-review')
   assert.equal(written.cleanup.completed, false)
   assert.match(written.cleanup.error, /permission denied/)
-  assert.equal(written.official_score, null)
+  assert.equal('official_score' in written, false)
   assert.match(await readFile(join(context.runDir, 'report.html'), 'utf8'), /permission denied/)
 })
 
@@ -226,7 +226,7 @@ test('the handoff never asks a human-review question or invents a verdict', asyn
   assert.equal(result.exitCode, 0)
   assert.deepEqual(asked, [])
   const written = await readJson(join(context.runDir, 'result.json'))
-  assert.equal(written.official_score, null)
+  assert.equal('official_score' in written, false)
   assert.equal(written.product_verdict, 'unavailable')
 })
 

@@ -186,6 +186,87 @@ test('a confirmed review finalizes the official score without rerunning automate
   const manifest = await readJson(join(run.runDir, 'artifact-manifest.json'))
   assert.ok(manifest.artifacts.some(({ path }) => path === 'report.html'))
   assert.ok(manifest.artifacts.some(({ path }) => path === 'human-review.json'))
+  const runState = await readJson(join(run.runDir, 'run-state.json'))
+  assert.equal(runState.outcome.evaluation_status, 'complete')
+  assert.equal(runState.outcome.product_verdict, result.product_verdict)
+})
+
+test('final human review preserves delivery identity, evidence summaries, and resume history', async () => {
+  const directory = await root()
+  const run = await pendingRun({ root: directory })
+  const pending = await readJson(join(run.runDir, 'result.json'))
+  const sha = 'f'.repeat(40)
+  await writeJsonAtomic(join(run.runDir, 'result.json'), {
+    ...pending,
+    candidate_source: { candidate_identity: run.candidate, produced_commit: sha },
+    delivery: {
+      repository: 'https://example.test/and-scene.git',
+      branch: 'eval/and-scene/run-1',
+      base_branch: 'main',
+      pull_request: { url: 'https://example.test/pull/7', draft: true, base: 'main', head_sha: sha },
+      final_sha: sha,
+      final_validator: { status: 'passed' },
+      candidate_reported_ci: { status: 'pending', revision: sha },
+    },
+    evidence: {
+      candidate: {
+        ownership: 'candidate-produced',
+        readiness: 'ready',
+        final_sha: sha,
+        artifacts: [{
+          id: 'candidate-flow',
+          kind: 'acceptance-flow-record',
+          ownership: 'candidate-produced',
+          sha256: 'a'.repeat(64),
+          revision: sha,
+          verification_state: 'verified',
+          coverage: ['demo-flow'],
+          limitations: [],
+        }],
+      },
+      evaluator: {
+        ownership: 'evaluator-produced',
+        final_sha: sha,
+        artifacts: [{
+          id: 'route-probe',
+          kind: 'deterministic-probe',
+          ownership: 'evaluator-produced',
+          sha256: 'b'.repeat(64),
+          revision: sha,
+          verification_state: 'verified',
+          coverage: ['demo-route'],
+          limitations: [],
+        }],
+      },
+      lineage: { accepted: true, final_sha: sha },
+      contradictions: [{ id: 'contradiction-1' }],
+    },
+    artifacts: [{ path: 'ambiguity-ledger.json', bytes: 10 }],
+  })
+  const checkpoint = await readJson(join(run.runDir, 'run-state.json'))
+  checkpoint.events.push({ type: 'runner-resumed', at: '2026-07-26T12:00:00.000Z' })
+  await writeJsonAtomic(join(run.runDir, 'run-state.json'), checkpoint)
+
+  const outcome = await runHumanReview({
+    argv: ['--run-dir', run.runDir],
+    io: scriptedIo(answers()).io,
+    ...servers(),
+  })
+
+  assert.equal(outcome.exitCode, 0, JSON.stringify(outcome.errors))
+  const finalized = await readJson(join(run.runDir, 'result.json'))
+  assert.equal(finalized.delivery.final_sha, sha)
+  assert.equal(finalized.delivery.pull_request.head_sha, sha)
+  assert.equal(finalized.evidence.candidate.artifacts[0].id, 'candidate-flow')
+  assert.equal(finalized.evidence.evaluator.artifacts[0].id, 'route-probe')
+  assert.equal(finalized.evidence.contradictions[0].id, 'contradiction-1')
+  assert.ok(finalized.run_state.events.some(({ type }) => type === 'runner-resumed'))
+  assert.ok(finalized.artifacts.some(({ path }) => path === 'human-review.json'))
+  assert.equal(
+    finalized.artifacts.some(({ path }) => path === 'ambiguity-ledger.json'),
+    false,
+    'a stale artifact reference is not preserved when the file is absent',
+  )
 })
 
 test('an unavailable candidate server collects no ratings and fails as a harness failure', async () => {
@@ -202,7 +283,7 @@ test('an unavailable candidate server collects no ratings and fails as a harness
   const result = await readJson(join(run.runDir, 'result.json'))
   assert.equal(result.evaluation_status, 'evaluation-harness-failed')
   assert.equal(result.product_verdict, 'unavailable')
-  assert.equal(result.official_score, null)
+  assert.equal('official_score' in result, false)
   assert.equal(result.failed_phase, 'candidate-server')
 })
 
@@ -216,7 +297,7 @@ test('an unconfirmed review leaves the run pending with no official score', asyn
   assert.equal(outcome.exitCode, 0)
   const result = await readJson(join(run.runDir, 'result.json'))
   assert.equal(result.evaluation_status, 'pending-human-review')
-  assert.equal(result.official_score, null)
+  assert.equal('official_score' in result, false)
   const review = await readJson(join(run.runDir, 'human-review.json'))
   assert.equal(review.complete, false)
   assert.equal(review.responses.length, 13, 'valid answers are preserved')
@@ -480,7 +561,7 @@ test('a corrupted saved review is refused before any question is asked', async (
   assert.deepEqual(second.asked, [])
   const untouched = await readJson(join(run.runDir, 'result.json'))
   assert.equal(untouched.evaluation_status, 'pending-human-review')
-  assert.equal(untouched.official_score, null)
+  assert.equal('official_score' in untouched, false)
 })
 
 test('a paired review serves each run from its own run directory', async () => {

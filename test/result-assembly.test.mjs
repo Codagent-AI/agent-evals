@@ -8,10 +8,11 @@ import {
   RESULT_SCHEMA_VERSION,
   assembleResult,
   buildArtifactManifest,
+  readEvidenceProjectionInputs,
   writeResultArtifacts,
 } from '../evals/agent-runner/and-scene/lib/result.mjs'
 import { createOutcome, applyOutcomeEvent } from '../evals/agent-runner/and-scene/lib/outcomes.mjs'
-import { readJson } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
+import { readJson, writeJsonAtomic } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
 
 const RUBRICS = {
   automated: { rubric_id: 'and-scene-product', version: '2.0.0', sha256: 'a'.repeat(64) },
@@ -60,6 +61,7 @@ test('a complete result carries the official score, breakdown, and source detail
   const result = assemble()
 
   assert.equal(result.schema_version, RESULT_SCHEMA_VERSION)
+  assert.equal(result.run_kind, 'candidate')
   assert.equal(result.official_score, 84)
   assert.equal(result.product_verdict, 'pass')
   assert.equal(result.label, 'PASS')
@@ -76,7 +78,7 @@ test('a pending review carries the automated subtotal out of 70 and no official 
 
   assert.equal(result.evaluation_status, 'pending-human-review')
   assert.equal(result.product_verdict, 'unavailable')
-  assert.equal(result.official_score, null)
+  assert.equal('official_score' in result, false)
   assert.equal(result.automated_subtotal.points, 60)
   assert.equal(result.automated_subtotal.possible, 70)
 })
@@ -92,7 +94,7 @@ test('completed components of an incomplete evaluation are preserved without a t
     }),
   })
 
-  assert.equal(result.official_score, null)
+  assert.equal('official_score' in result, false)
   assert.equal(result.automated_subtotal, null, 'an incomplete automated phase reports no subtotal')
   assert.deepEqual(
     result.available_component_scores.map(({ id, points_awarded }) => [id, points_awarded]),
@@ -159,6 +161,7 @@ test('a complete reference result records the 92-point denominator and N/A compo
   })
 
   assert.equal(result.score_denominator, 92)
+  assert.equal(result.run_kind, 'reference')
   assert.equal(result.official_score, 92)
   assert.equal(result.product_verdict, 'not-applicable')
   assert.equal(result.score.components.filter(({ applicable }) => applicable === false).length, 2)
@@ -169,12 +172,16 @@ test('completeness dimensions are reported independently of each other', () => {
     cost: { implementation: { total_usd: 4.5, complete: true, usage_complete: false } },
     pricing: { verified: false },
     metrics: { complete: true, history_complete: false, attempts: [] },
+    judging: { judges: { demo: [] }, failed_jobs: [] },
+    delivery: { candidate_reported_ci: { status: 'pending', revision: 'f'.repeat(40) } },
   })
 
   assert.equal(result.completeness.implementation_cost, 'complete')
   assert.equal(result.completeness.implementation_usage, 'unavailable')
   assert.equal(result.completeness.pricing, 'unverified')
   assert.equal(result.completeness.metric_history, 'incomplete')
+  assert.equal(result.completeness.judge_coverage, 'complete')
+  assert.equal(result.completeness.candidate_reported_ci, 'complete')
   assert.equal(result.completeness.score, 'complete')
 })
 
@@ -196,7 +203,9 @@ test('missing product evidence marks score completeness without failing the prod
 test('candidate and evaluator evidence summaries remain ownership-separated', () => {
   const candidate = {
     ownership: 'candidate-produced',
+    readiness: 'ready',
     manifest_sha256: 'c'.repeat(64),
+    ci_claims: [{ artifact_id: 'candidate-flow', status: 'pending', revision: 'f'.repeat(40) }],
     artifacts: [{
       id: 'candidate-flow',
       kind: 'acceptance-flow-record',
@@ -235,9 +244,104 @@ test('candidate and evaluator evidence summaries remain ownership-separated', ()
   assert.equal(result.evidence.candidate.ownership, 'candidate-produced')
   assert.equal(result.evidence.evaluator.ownership, 'evaluator-produced')
   assert.equal(result.evidence.contradictions[0].scoring_effect, 'disproof-only')
+  assert.equal(result.candidate_reported_ci[0].status, 'pending')
+  assert.equal(result.completeness.candidate_reported_ci, 'complete')
   assert.equal(result.completeness.candidate_evidence, 'complete')
   assert.equal(result.completeness.evaluator_evidence, 'complete')
   assert.equal(result.completeness.final_revision_alignment, 'complete')
+})
+
+test('candidate and evaluator evidence defects remain independently incomplete', () => {
+  const result = assemble({
+    judging: { judges: {}, failed_jobs: ['testing-evidence'] },
+    evidence: {
+      candidate: {
+        ownership: 'candidate-produced',
+        readiness: 'incomplete',
+        artifacts: [{ id: 'candidate-flow', ownership: 'candidate-produced' }],
+      },
+      evaluator: {
+        ownership: 'evaluator-produced',
+        artifacts: [],
+      },
+      lineage: { accepted: false, final_sha: 'f'.repeat(40) },
+      contradictions: { items: [] },
+      workflow_provenance: 'incomplete',
+    },
+  })
+
+  assert.equal(result.completeness.candidate_evidence, 'incomplete')
+  assert.equal(result.completeness.evaluator_evidence, 'incomplete')
+  assert.equal(result.completeness.final_revision_alignment, 'defective')
+  assert.equal(result.completeness.judge_coverage, 'incomplete')
+  assert.equal(result.completeness.candidate_reported_ci, 'unavailable')
+  assert.equal(result.completeness.workflow_provenance, 'incomplete')
+})
+
+test('a conclusive product failure omits score and human-review fields while preserving its failed gate', () => {
+  const outcome = applyOutcomeEvent(createOutcome(), {
+    type: 'conclusive-product-failure',
+    phase: 'verification',
+    reason: 'the delivered product could not build',
+    gate: 'verification-build-whole-app',
+  })
+  const result = assemble({
+    outcome,
+    score: score({
+      complete: false,
+      official: null,
+      components: [component('demo-technical-quality', 12)],
+    }),
+    humanReview: null,
+  })
+
+  assert.equal(result.evaluation_status, 'complete')
+  assert.equal(result.product_verdict, 'fail')
+  assert.equal('official_score' in result, false)
+  assert.equal('human_review' in result, false)
+  assert.equal(result.product_failure.gate, 'verification-build-whole-app')
+})
+
+test('result projection carries authoritative run-state, delivery, and retained artifact identity', () => {
+  const runState = {
+    schema_version: 2,
+    state_kind: 'and-scene-run-state',
+    run_id: 'run-1',
+    run_kind: 'candidate',
+    updated_at: '2026-07-26T12:00:00.000Z',
+    resume: { eligible: true, reason: null },
+    events: [{ type: 'runner-resumed', at: '2026-07-26T11:59:00.000Z' }],
+  }
+  const delivery = {
+    repository: 'https://example.test/and-scene.git',
+    branch: 'eval/and-scene/run-1',
+    base_branch: 'main',
+    pull_request: {
+      url: 'https://example.test/pull/7',
+      draft: true,
+      base: 'main',
+      head_sha: 'f'.repeat(40),
+    },
+    final_sha: 'f'.repeat(40),
+    final_validator: { status: 'passed' },
+    candidate_reported_ci: { status: 'pending', revision: 'f'.repeat(40) },
+  }
+
+  const result = assemble({
+    runState,
+    delivery,
+    candidate: { candidate_identity: 'candidate-abc', produced_commit: 'f'.repeat(40) },
+    candidateServer: { pid: 42, url: 'http://127.0.0.1:4173/' },
+    artifacts: [{ path: 'ambiguity-ledger.json', bytes: 10 }],
+  })
+
+  assert.equal(result.run_state.schema_version, 2)
+  assert.equal(result.run_state.events[0].type, 'runner-resumed')
+  assert.equal(result.delivery.pull_request.head_sha, result.delivery.final_sha)
+  assert.equal(result.delivery.candidate_reported_ci.status, 'pending')
+  assert.equal(result.candidate_source.candidate_identity, 'candidate-abc')
+  assert.equal(result.candidate_server.pid, 42)
+  assert.equal(result.artifacts[0].path, 'ambiguity-ledger.json')
 })
 
 test('a finalized human review is carried with its responses and rationales', () => {
@@ -284,6 +388,34 @@ test('the artifact manifest inventories deliberate artifacts and excludes .runti
   }
 })
 
+test('evidence projection inputs are restored from durable manifests on resume', async () => {
+  const dir = await runDirectory()
+  await mkdir(join(dir, 'evidence/candidate'), { recursive: true })
+  await mkdir(join(dir, 'evidence/evaluator'), { recursive: true })
+  await writeJsonAtomic(join(dir, 'evidence/candidate/manifest.json'), {
+    ownership: 'candidate-produced',
+    readiness: 'ready',
+    artifacts: [{ id: 'candidate-flow' }],
+  })
+  await writeJsonAtomic(join(dir, 'evidence/evaluator/manifest.json'), {
+    ownership: 'evaluator-produced',
+    artifacts: [{ id: 'route-probe' }],
+  })
+  await writeJsonAtomic(join(dir, 'evidence/evaluator/contradictions.json'), {
+    items: [{ id: 'contradiction-1' }],
+  })
+  await writeJsonAtomic(join(dir, 'phases/evidence-provenance.json'), {
+    lineage: { accepted: true, final_sha: 'f'.repeat(40) },
+  })
+
+  const evidence = await readEvidenceProjectionInputs(dir)
+
+  assert.equal(evidence.candidate.artifacts[0].id, 'candidate-flow')
+  assert.equal(evidence.evaluator.artifacts[0].id, 'route-probe')
+  assert.equal(evidence.contradictions.items[0].id, 'contradiction-1')
+  assert.equal(evidence.lineage.accepted, true)
+})
+
 test('writing the result artifacts produces result.json, report.html, and the manifest', async () => {
   const dir = await runDirectory()
 
@@ -291,12 +423,19 @@ test('writing the result artifacts produces result.json, report.html, and the ma
 
   const result = await readJson(join(dir, 'result.json'))
   assert.equal(result.official_score, 84)
+  assert.ok(result.artifacts.some(({ path }) => path === 'phases/score.json'))
+  assert.ok(result.artifacts.some(({ path }) => path === 'run-state.json'))
+  assert.ok(!result.artifacts.some(({ path }) => path === 'result.json'))
   const report = await readFile(join(dir, 'report.html'), 'utf8')
   assert.match(report, /PASS/)
   const manifest = await readJson(join(dir, 'artifact-manifest.json'))
   const paths = manifest.artifacts.map(({ path }) => path)
   assert.ok(paths.includes('result.json'))
   assert.ok(paths.includes('report.html'))
+  assert.equal(manifest.projection.evaluation_status, 'complete')
+  assert.equal(manifest.projection.product_verdict, 'pass')
+  assert.equal(manifest.projection.official_score, 84)
+  assert.equal(manifest.projection.score_denominator, 100)
   assert.deepEqual(written.errors, [])
 })
 
@@ -343,5 +482,6 @@ test('a failure with no scored components is incomplete rather than vacuously co
   assert.equal(result.completeness.score, 'incomplete')
   assert.equal(result.completeness.evidence, 'incomplete')
   assert.equal(result.automated_subtotal, null)
+  assert.equal('official_score' in result, false)
   assert.deepEqual(result.available_component_scores, [])
 })

@@ -379,6 +379,26 @@ test('finalization cleanup failure during human review is a harness failure', as
   assert.equal(result.exitCode, 1)
 })
 
+test('publication failure is delivery-owned and does not alter a completed product result', async () => {
+  const completed = applyOutcomeEvent(createOutcome(), {
+    type: 'product-verdict',
+    verdict: 'pass',
+    official_score: 84,
+  })
+  const { map } = handlers(HUMAN_REVIEW_PHASES, {
+    effects: serverUp,
+    fails: { publication: 'ordinary push failed' },
+  })
+
+  const result = await runPhases({ phases: HUMAN_REVIEW_PHASES, handlers: map, outcome: completed })
+
+  assert.equal(result.failed, 'publication')
+  assert.equal(result.exitCode, 1)
+  assert.equal(result.outcome.evaluation_status, 'complete')
+  assert.equal(result.outcome.product_verdict, 'pass')
+  assert.equal(result.outcome.official_score, 84)
+})
+
 test('a missing handler is a programming error, not a silent skip', async () => {
   await assert.rejects(
     () => runPhases({ phases: AUTOMATED_PHASES, handlers: {}, outcome: createOutcome() }),

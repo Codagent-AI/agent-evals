@@ -20,7 +20,10 @@ export function createOutcome({ kind = 'candidate' } = {}) {
   return {
     schema_version: OUTCOME_SCHEMA_VERSION,
     evaluation_status: 'pending-human-review',
-    product_verdict: reference ? 'not-applicable' : 'unavailable',
+    // A reference has no candidate verdict, but the not-applicable disposition
+    // is final only once its complete score is durable. While review is pending
+    // (or if scoring fails), the verdict field remains unavailable.
+    product_verdict: 'unavailable',
     run_kind: kind,
     applicability: {
       delivery: !reference,
@@ -228,14 +231,16 @@ export function applyOutcomeEvent(outcome, event) {
 export function outcomeLabel(outcome) {
   const verdictAvailable = outcome.product_verdict === 'pass' || outcome.product_verdict === 'fail'
   const label = verdictAvailable ? outcome.product_verdict.toUpperCase() : null
+  const completeReference = outcome.product_verdict === 'not-applicable' && outcome.verdict_durable
 
   if (outcome.evaluation_status === 'evaluation-harness-failed' && label) {
     return `${label} — HARNESS FAILURE`
   }
+  if (outcome.evaluation_status === 'evaluation-harness-failed' && completeReference) {
+    return 'REFERENCE — COMPLETE — HARNESS FAILURE'
+  }
   if (label) return label
   if (outcome.evaluation_status === 'pending-human-review') return 'PENDING HUMAN REVIEW'
-  if (outcome.evaluation_status === 'complete' && outcome.product_verdict === 'not-applicable') {
-    return 'COMPLETE REFERENCE'
-  }
+  if (outcome.evaluation_status === 'complete' && completeReference) return 'REFERENCE — COMPLETE'
   return 'EVALUATION FAILED'
 }

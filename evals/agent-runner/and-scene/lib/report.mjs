@@ -97,6 +97,7 @@ summary { cursor: pointer; font-weight: 600; }
 function headlineClass(result) {
   if (result.product_verdict === 'pass') return 'pass'
   if (result.product_verdict === 'fail') return 'fail'
+  if (result.product_verdict === 'not-applicable') return 'reference'
   return result.evaluation_status === 'pending-human-review' ? 'pending' : 'failed'
 }
 
@@ -106,6 +107,16 @@ function summaryBlock(result) {
     lines.push(
       `<p><strong>Official score:</strong> ${escapeHtml(points(result.official_score))} / `
       + `${escapeHtml(String(result.score_denominator ?? 100))}</p>`,
+    )
+  } else if (result.product_failure) {
+    lines.push(
+      '<p><strong>No official score:</strong> the official score and human review are unavailable '
+      + 'because the delivered product could not build or serve.</p>',
+    )
+    lines.push(
+      `<div class="banner"><strong>Conclusive product failure`
+      + `${result.product_failure.gate ? ` (${escapeHtml(result.product_failure.gate)})` : ''}:</strong> `
+      + `${escapeHtml(result.product_failure.reason ?? 'the delivered product could not build or serve')}</div>`,
     )
   } else {
     lines.push('<p><strong>No official score:</strong> the product verdict is unavailable for this run.</p>')
@@ -119,10 +130,17 @@ function summaryBlock(result) {
   }
   lines.push(`<p><strong>Run:</strong> ${escapeHtml(result.run_id)} (${escapeHtml(result.mode)})</p>`)
   lines.push(`<p><strong>Evaluation status:</strong> ${escapeHtml(result.evaluation_status)}</p>`)
+  lines.push(
+    `<p><strong>Score denominator:</strong> `
+    + `${escapeHtml(result.score_denominator ?? 'not available')}</p>`,
+  )
 
   if (result.failure) {
+    const owner = result.failure.owner === 'implementation-workflow'
+      ? 'Implementation workflow'
+      : 'Evaluation harness'
     lines.push(
-      `<div class="banner"><strong>Harness failure in ${escapeHtml(result.failure.phase ?? 'an unnamed phase')}:</strong> `
+      `<div class="banner"><strong>${owner} failure in ${escapeHtml(result.failure.phase ?? 'an unnamed phase')}:</strong> `
       + `${escapeHtml(result.failure.reason ?? 'no reason recorded')}</div>`,
     )
   }
@@ -133,6 +151,60 @@ function summaryBlock(result) {
     )
   }
   return lines.join('\n')
+}
+
+function deliverySection(result) {
+  return section(
+    'Candidate delivery identity',
+    table(['Field', 'Value'], keyValueRows(result.delivery)),
+  )
+}
+
+function evidenceRows(summary) {
+  return (summary?.artifacts ?? []).map((artifact) => [
+    artifact.id,
+    artifact.kind,
+    artifact.ownership,
+    artifact.sha256,
+    artifact.revision,
+    artifact.verification_state,
+    (artifact.coverage ?? []).join(' | '),
+    (artifact.limitations ?? []).join(' | '),
+  ])
+}
+
+function evidenceSection(title, summary) {
+  const overview = table(['Field', 'Value'], keyValueRows(summary
+    ? {
+        ownership: summary.ownership,
+        readiness: summary.readiness,
+        final_sha: summary.final_sha,
+        manifest_sha256: summary.manifest_sha256,
+        candidate_reported_ci: summary.ci_claims,
+      }
+    : null))
+  const artifacts = table(
+    ['Identifier', 'Kind', 'Ownership', 'SHA-256', 'Revision', 'Verification', 'Coverage', 'Limitations'],
+    evidenceRows(summary),
+  )
+  return section(title, overview + artifacts)
+}
+
+function evidenceAuditSection(result) {
+  return section(
+    'Evidence lineage and contradictions',
+    table(['Lineage field', 'Value'], keyValueRows(result.evidence?.lineage))
+    + table(
+      ['Identifier', 'Claim', 'Consequence', 'Candidate evidence', 'Evaluator evidence'],
+      (result.evidence?.contradictions ?? []).map((item) => [
+        item.id,
+        item.claim ?? '',
+        item.consequence ?? '',
+        item.candidate?.id ?? '',
+        item.evaluator?.id ?? '',
+      ]),
+    ),
+  )
 }
 
 function componentSections(result) {
@@ -263,14 +335,25 @@ function artifactSection(result) {
   const artifacts = result.artifacts ?? []
   if (artifacts.length === 0) return section('Artifacts', '<p class="empty">Nothing recorded.</p>')
   const rows = artifacts
-    .map(({ path, bytes }) => (
-      `<tr><td><a href="${escapeHtml(path)}">${escapeHtml(path)}</a></td><td>${escapeHtml(bytes)}</td></tr>`
-    ))
+    .map(({ path, bytes }) => {
+      const renderedPath = safeArtifactPath(path)
+        ? `<a href="${escapeHtml(path)}">${escapeHtml(path)}</a>`
+        : escapeHtml(path)
+      return `<tr><td>${renderedPath}</td><td>${escapeHtml(bytes)}</td></tr>`
+    })
     .join('\n')
   return section(
     'Artifacts',
     `<table><thead><tr><th>Path</th><th>Bytes</th></tr></thead><tbody>\n${rows}\n</tbody></table>`,
   )
+}
+
+function safeArtifactPath(path) {
+  if (typeof path !== 'string' || path.length === 0) return false
+  if (path.startsWith('/') || path.startsWith('\\') || path.includes('\\')) return false
+  if (/^[a-z][a-z0-9+.-]*:/i.test(path)) return false
+  const segments = path.split('/')
+  return segments.every((segment) => segment.length > 0 && segment !== '.' && segment !== '..')
 }
 
 function assertMatchesCurrent(result, current) {
@@ -309,10 +392,15 @@ export function renderReport(result, { current = null } = {}) {
     ),
     criteriaSection(result),
     humanSection(result),
+    deliverySection(result),
+    evidenceSection('Candidate-produced evidence', result.evidence?.candidate),
+    evidenceSection('Evaluator-produced evidence', result.evidence?.evaluator),
+    evidenceAuditSection(result),
     section(
       'Workflow and harness outcomes',
       table(['Field', 'Value'], keyValueRows(result.workflow))
-      + table(['Harness', 'Value'], keyValueRows(result.score?.harness)),
+      + table(['Harness', 'Value'], keyValueRows(result.score?.harness))
+      + table(['Judge detail', 'Value'], keyValueRows(result.judging)),
     ),
     section('Agent roles and models', table(['Role', 'Selection'], keyValueRows(result.role_configuration))),
     section(
@@ -324,6 +412,16 @@ export function renderReport(result, { current = null } = {}) {
     section('Machine timing', table(['Field', 'Value'], keyValueRows(result.timing))),
     section('Completeness', table(['Dimension', 'State'], keyValueRows(result.completeness))),
     section('Ambiguity diagnostics', table(['Field', 'Value'], keyValueRows(result.ambiguity))),
+    section(
+      'Checkpoint and resume history',
+      table(['State field', 'Value'], keyValueRows(result.run_state?.resume))
+      + table(
+        ['Event', 'Owner', 'Phase', 'Recorded at'],
+        (result.run_state?.events ?? []).map((event) => [
+          event.type, event.owner ?? '', event.phase ?? '', event.at ?? '',
+        ]),
+      ),
+    ),
     baselineSection(result),
     section(
       // Plain language: a reader should not need the word "provenance" to know

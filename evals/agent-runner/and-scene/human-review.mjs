@@ -29,14 +29,21 @@ import {
   runInterview,
   validateSavedReview,
 } from './lib/human-review.mjs'
-import { applyOutcomeEvent, createOutcome, outcomeLabel } from './lib/outcomes.mjs'
+import { applyOutcomeEvent, createOutcome } from './lib/outcomes.mjs'
 import { HUMAN_REVIEW_PHASES, runPhases } from './lib/phases.mjs'
 import { hashJson, readJson, writeJsonAtomic } from './lib/persistence.mjs'
 import { publishRun } from './lib/publication.mjs'
 import { renderReport } from './lib/report.mjs'
-import { assembleResult, writeManifest, writeReport, writeResult } from './lib/result.mjs'
+import {
+  assembleResult,
+  writeManifest,
+  writeReport,
+  writeResult,
+  writeResultArtifacts,
+} from './lib/result.mjs'
 import { loadRubrics, rubricProvenance } from './lib/rubric.mjs'
 import { scoreProduct } from './lib/scorer.mjs'
+import { applyRunStateEvent } from './lib/state-machine.mjs'
 
 const SUITE_DIR = dirname(fileURLToPath(import.meta.url))
 // The agent-evals working directory publication commits and pushes from.
@@ -186,7 +193,7 @@ function rescore({ rubrics, run, humanReview }) {
   })
 }
 
-function buildResult({ run, outcome, rubrics, score, humanReview, baseline }) {
+function buildResult({ run, outcome, rubrics, score, humanReview, baseline, candidateServer = null }) {
   const previous = run.result
   return assembleResult({
     runId: run.runId,
@@ -206,7 +213,15 @@ function buildResult({ run, outcome, rubrics, score, humanReview, baseline }) {
     ambiguity: previous.ambiguity ?? null,
     roleConfiguration: previous.role_configuration === 'not-applicable' ? null : previous.role_configuration,
     timings: previous.timings ?? [],
+    evidence: previous.evidence ?? null,
     baseline,
+    artifacts: previous.artifacts ?? [],
+    runState: run.checkpoint,
+    candidate: previous.candidate_source ?? {
+      candidate_identity: run.candidate,
+    },
+    delivery: previous.delivery ?? run.checkpoint?.delivery ?? null,
+    candidateServer: candidateServer ?? previous.candidate_server ?? null,
   })
 }
 
@@ -231,17 +246,21 @@ async function reviewRun({
   let score = null
   let humanReview = null
   let server = run.checkpoint?.candidate_server ?? null
+  let checkpoint = run.checkpoint
   let assembled = null
   const candidateServer = typeof adapterFor === 'function' ? adapterFor(run) : adapterFor
 
   // Start from the outcome the automated run durably recorded, so this command
   // extends that history rather than inventing a fresh one.
-  let baseOutcome = applyOutcomeEvent(createOutcome({
-    kind: run.mode === 'reference-baseline' ? 'reference' : 'candidate',
-  }), {
-    type: 'automated-scoring-complete',
-    automated_subtotal: run.result.automated_subtotal?.points ?? null,
-  })
+  let baseOutcome = checkpoint?.outcome
+  if (!baseOutcome) {
+    baseOutcome = applyOutcomeEvent(createOutcome({
+      kind: run.mode === 'reference-baseline' ? 'reference' : 'candidate',
+    }), {
+      type: 'automated-scoring-complete',
+      automated_subtotal: run.result.automated_subtotal?.points ?? null,
+    })
+  }
 
   const handlers = {
     'candidate-server': async (context) => {
@@ -255,7 +274,9 @@ async function reviewRun({
       server = outcome.server
       if (outcome.action === 'started') {
         log(`candidate-server: started for ${run.runId} (${outcome.reason})`)
-        await saveCheckpoint(checkpointPath, { ...run.checkpoint, candidate_server: server })
+        checkpoint = { ...checkpoint, candidate_server: server }
+        run.checkpoint = checkpoint
+        await saveCheckpoint(checkpointPath, checkpoint)
       }
       context.serverRunning = true
     },
@@ -300,6 +321,13 @@ async function reviewRun({
             official_score: score.official_score,
           }
       const outcome = applyOutcomeEvent(context.outcome, event)
+      checkpoint = applyRunStateEvent(checkpoint, {
+        type: 'outcome-updated',
+        owner: 'evaluation-harness',
+        outcome,
+      })
+      run.checkpoint = checkpoint
+      await saveCheckpoint(checkpointPath, checkpoint)
       assembled = buildResult({
         run,
         outcome,
@@ -310,6 +338,7 @@ async function reviewRun({
           candidate: { ...run.result, official_score: score.official_score, score, rubrics: rubricProvenance(rubrics) },
           baseline: baselineResult,
         }) : null,
+        candidateServer: server,
       })
       await writeResult({ runDir: run.runDir, result: assembled })
       // The lifecycle owns the outcome; the phase only reports the fact it
@@ -340,23 +369,31 @@ async function reviewRun({
     // not finish, for instance — reaches result.json and report.html too.
     'final-artifacts': async (context) => {
       if (!assembled) {
-        await writeManifest({ runDir: run.runDir, runId: run.runId })
+        await writeManifest({ runDir: run.runDir, runId: run.runId, result: run.result })
         return
       }
-      const refreshed = {
-        ...assembled,
-        evaluation_status: context.outcome.evaluation_status,
-        product_verdict: context.outcome.product_verdict,
-        label: outcomeLabel(context.outcome),
-        failed_phase: context.outcome.failed_phase,
-        failure: context.outcome.failure,
-        cleanup: context.outcome.cleanup,
-        history: context.outcome.history,
-      }
-      await writeResult({ runDir: run.runDir, result: refreshed })
-      await writeReport({ runDir: run.runDir, result: refreshed, renderReportImpl })
-      await writeManifest({ runDir: run.runDir, runId: run.runId })
-      assembled = refreshed
+      checkpoint = applyRunStateEvent(checkpoint, {
+        type: 'outcome-updated',
+        owner: 'evaluation-harness',
+        outcome: context.outcome,
+      })
+      run.checkpoint = checkpoint
+      await saveCheckpoint(checkpointPath, checkpoint)
+      const refreshed = buildResult({
+        run,
+        outcome: context.outcome,
+        rubrics,
+        score,
+        humanReview,
+        baseline: assembled.baseline,
+        candidateServer: server,
+      })
+      const written = await writeResultArtifacts({
+        runDir: run.runDir,
+        result: refreshed,
+        renderReportImpl,
+      })
+      assembled = written.result
     },
 
     // Publication is delivery, not evaluation. It runs last, after the official
@@ -374,6 +411,13 @@ async function reviewRun({
   // A phase that failed before the result was ever written still has to leave a
   // durable account of the run behind.
   if (!assembled) {
+    checkpoint = applyRunStateEvent(checkpoint, {
+      type: 'outcome-updated',
+      owner: 'evaluation-harness',
+      outcome: lifecycle.outcome,
+    })
+    run.checkpoint = checkpoint
+    await saveCheckpoint(checkpointPath, checkpoint)
     const fallback = buildResult({
       run,
       outcome: lifecycle.outcome,
@@ -381,6 +425,7 @@ async function reviewRun({
       score: score ?? run.result.score,
       humanReview: state.complete ? state : (state.responses.length > 0 ? state : null),
       baseline: null,
+      candidateServer: server,
     })
     await writeResult({ runDir: run.runDir, result: fallback })
     try {
@@ -388,7 +433,7 @@ async function reviewRun({
     } catch {
       // The result is already durable; a second report failure adds nothing.
     }
-    await writeManifest({ runDir: run.runDir, runId: run.runId })
+    await writeManifest({ runDir: run.runDir, runId: run.runId, result: fallback })
   }
 
   return {

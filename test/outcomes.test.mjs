@@ -29,11 +29,12 @@ test('the approved status and verdict vocabularies are exact', () => {
   assert.deepEqual(PRODUCT_VERDICTS, ['pass', 'fail', 'unavailable', 'not-applicable'])
 })
 
-test('a reference outcome marks product verdict and delivery applicability not applicable', () => {
+test('a pending reference keeps the product verdict unavailable while delivery is not applicable', () => {
   const outcome = createOutcome({ kind: 'reference' })
 
-  assert.equal(outcome.product_verdict, 'not-applicable')
+  assert.equal(outcome.product_verdict, 'unavailable')
   assert.equal(outcome.applicability.delivery, false)
+  assert.equal(outcome.applicability.product_verdict, false)
   assert.equal(outcome.score_denominator, 92)
 })
 
@@ -310,4 +311,21 @@ test('a harness failure beside a valid verdict is labelled with both', () => {
   })
 
   assert.equal(outcomeLabel(outcome), 'PASS — HARNESS FAILURE')
+})
+
+test('reference headlines use the approved literal and preserve it beside a later harness failure', () => {
+  const complete = applyOutcomeEvent(createOutcome({ kind: 'reference' }), {
+    type: 'reference-finalized',
+    official_score: 92,
+  })
+  const failed = applyOutcomeEvent(complete, {
+    type: 'harness-failure',
+    phase: 'report',
+    reason: 'disk full',
+  })
+
+  assert.equal(outcomeLabel(complete), 'REFERENCE — COMPLETE')
+  assert.equal(outcomeLabel(failed), 'REFERENCE — COMPLETE — HARNESS FAILURE')
+  assert.equal(failed.product_verdict, 'not-applicable')
+  assert.equal(failed.official_score, 92)
 })

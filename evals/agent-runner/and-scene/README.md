@@ -437,8 +437,9 @@ process is left running and untouched, and a new server is started elsewhere.
 ## Publication
 
 A normal automated run ends at `pending-human-review` and is never published.
-Once the review finalizes a `complete` result with a `pass` or `fail` product
-verdict, the review command copies exactly these six files into
+Once the review finalizes a scored Agent Runner candidate with a `complete`
+result, a `pass` or `fail` product verdict, and completed human review, the
+review command copies exactly these six files into
 `evals/agent-runner/and-scene/results/<run-id>/`:
 
 ```text
@@ -468,8 +469,9 @@ name each file individually rather than the directory, so neither an unrelated
 dirty working tree nor a stray file sharing the results directory can ride
 along. There is no force flag anywhere in the publication path.
 
-Pending, implementation-workflow-failed, evaluation-harness-failed, and
-calibration runs are all refused by name and publish nothing.
+Pending, implementation-workflow-failed, evaluation-harness-failed, reference,
+calibration, conclusive unscored product-fail, and incomplete-human-review runs
+are refused and publish nothing.
 
 Publication is delivery, not evaluation, and it is independently retryable. The
 completed product result is already durable when it begins, so a commit or push
@@ -483,13 +485,16 @@ unfinished push.
 
 `evaluation_status` is exactly one of `complete`, `pending-human-review`,
 `implementation-workflow-failed`, or `evaluation-harness-failed`.
-`product_verdict` is exactly one of `pass`, `fail`, or `unavailable`.
+`product_verdict` is exactly one of `pass`, `fail`, `unavailable`, or
+`not-applicable`. A pending reference remains `unavailable`; only a completed
+reference score uses `not-applicable` and the `REFERENCE — COMPLETE` headline.
 
 Execution status and product quality are independent. A failed workflow or
 harness never becomes a product failure, and a durably recorded product verdict
 survives a later harness failure — reported as `PASS — HARNESS FAILURE` or
-`FAIL — HARNESS FAILURE`. Cleanup failure after a durably written pending
-result is recorded diagnostically and still exits successfully.
+`FAIL — HARNESS FAILURE`. A completed reference likewise retains its score as
+`REFERENCE — COMPLETE — HARNESS FAILURE`. Cleanup failure after a durably
+written pending result is recorded diagnostically and still exits successfully.
 
 `result.json` is the authoritative machine-readable outcome and `report.html`
 renders the same current status, verdict, score availability, and failed or
@@ -497,15 +502,21 @@ pending phase. Report generation fails rather than publishing an outcome that
 contradicts `result.json`.
 
 `report.html` is self-contained and offline: no external asset, no script, every
-untrusted value escaped, and artifact links relative to the run directory.
+untrusted value escaped, and only retained, confined run-directory artifacts
+rendered as relative links. Pending, partial, and conclusive unscored outcomes
+omit `official_score` rather than representing its absence as zero or `null`.
 `artifact-manifest.json` is the durable inventory of deliberate run artifacts,
-rebuilt on every write and always excluding `.runtime`.
+rebuilt on every write, carrying the same outcome projection, and always
+excluding `.runtime`.
 
 ## Scoring
 
-The product score is 100 points: 25 for demo presentation technical quality, 25
-for scene-kit correctness, 10 for presentation-skill correctness, 10 for
-verification-tool correctness, and 30 for human review. Runner health, workflow
+The candidate score is 100 points: 24 for demo presentation technical quality,
+24 for scene-kit correctness, 7 for presentation-skill correctness, 7 for
+verification-tool correctness, 4 for testing-evidence quality, 4 for
+assumption-handling quality, and 30 for human review. A reference applies only
+the four shared automated components and human review, for an unscaled
+denominator of 92. Runner health, workflow
 completion, evidence collection, judge execution, cost, timing, retries, and
 evidence repair award and deduct no product points; they are recorded
 diagnostically. Until a human review exists, a run reports its automated
@@ -535,7 +546,7 @@ Four hard gates sit outside the point total: `verification-build-whole-app`,
 `verification-sample-outline`, `verification-every-produced-step-renders`, and
 `verification-clear-outcome`. A failed gate blocks an official pass without
 erasing the numerical score. An official pass needs at least 70 overall, 15 of
-25 for demo quality, 15 of 25 for scene-kit correctness, 15 of 30 for human
+24 for demo quality, 15 of 24 for scene-kit correctness, 15 of 30 for human
 review, no individual human rating of 1, all four gates, and every required
 phase complete.
 

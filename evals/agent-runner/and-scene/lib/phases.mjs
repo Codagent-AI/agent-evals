@@ -45,7 +45,10 @@ export const HUMAN_REVIEW_PHASES = [
   // Finalization cleanup is required work: failing it is a harness failure.
   { name: 'cleanup', owner: 'evaluation-harness', final: true, cleanup: 'required' },
   { name: 'final-artifacts', owner: 'evaluation-harness', final: true },
-  { name: 'publication', owner: 'evaluation-harness' },
+  // Publication is delivery after evaluation. A failed commit or ordinary push
+  // fails the command and remains retryable, but cannot rewrite the already
+  // completed product result as a harness failure.
+  { name: 'publication', owner: 'evaluation-harness', deliveryOnly: true },
 ]
 
 function failureEventType(phase, error) {
@@ -128,6 +131,7 @@ export async function runPhases({ phases, handlers, outcome, context = {}, isCom
         continue
       }
       failed = phase.name
+      if (phase.deliveryOnly) continue
       current = applyOutcomeEvent(current, {
         type: failureEventType(phase, error),
         phase: phase.name,

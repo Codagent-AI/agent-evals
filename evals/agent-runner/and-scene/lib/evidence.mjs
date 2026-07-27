@@ -1041,6 +1041,7 @@ export function summarizeEvidenceManifest(manifest) {
     readiness: manifest.readiness ?? 'complete',
     final_sha: manifest.delivery?.final_sha ?? manifest.final_sha ?? null,
     manifest_sha256: manifest.manifest_sha256 ?? null,
+    ci_claims: manifest.ci_claims ?? [],
     artifacts: (manifest.artifacts ?? []).map((artifact) => ({
       id: artifact.id,
       kind: artifact.kind,

@@ -530,7 +530,7 @@ test('fresh collisions and legacy checkpoint-only runs are not silently resumed'
   assert.match(JSON.stringify(resumed.errors), /run-state.*does not exist/i)
 })
 
-test('reference run-state marks delivery and product verdict not applicable', async () => {
+test('pending reference run-state marks delivery not applicable and verdict unavailable', async () => {
   const context = await environment()
 
   const result = await evaluate(context, ['--reference-baseline'])
@@ -540,7 +540,8 @@ test('reference run-state marks delivery and product verdict not applicable', as
   const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
   assert.equal(state.delivery.applicable, false)
   const written = await readJson(join(context.runDir, 'result.json'))
-  assert.equal(written.product_verdict, 'not-applicable')
+  assert.equal(written.product_verdict, 'unavailable')
+  assert.equal(written.evaluation_status, 'pending-human-review')
 })
 
 test('browser probes are durable hashed evaluator-owned work units even when a probe fails', async () => {

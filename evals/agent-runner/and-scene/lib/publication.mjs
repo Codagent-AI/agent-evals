@@ -94,14 +94,20 @@ export function pathspecsFor(runId, files) {
 // says which rule excluded it.
 export function publicationEligibility(result) {
   if (!result) return { publishable: false, reason: 'no result to publish' }
-  if (result.mode === 'calibration') {
-    return { publishable: false, reason: 'calibration runs are diagnostic and are never published' }
+  if (result.mode !== 'agent-runner') {
+    return { publishable: false, reason: `run mode is ${result.mode ?? 'unknown'}, not agent-runner` }
   }
   if (result.evaluation_status !== 'complete') {
     return { publishable: false, reason: `evaluation_status is ${result.evaluation_status}, not complete` }
   }
   if (result.product_verdict !== 'pass' && result.product_verdict !== 'fail') {
     return { publishable: false, reason: `product verdict is ${result.product_verdict}, not pass or fail` }
+  }
+  if (!Number.isFinite(result.official_score)) {
+    return { publishable: false, reason: 'the candidate has no complete official score' }
+  }
+  if (result.human_review?.complete !== true) {
+    return { publishable: false, reason: 'human review is not complete' }
   }
   return { publishable: true, reason: null }
 }

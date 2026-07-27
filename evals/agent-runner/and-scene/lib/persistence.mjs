@@ -46,11 +46,15 @@ export async function hashFile(path) {
 export async function writeJsonAtomic(target, value, options = {}) {
   // Serialize first: a serialization failure must not touch the existing file.
   const serialized = `${JSON.stringify(value, null, 2)}\n`
+  return writeTextAtomic(target, serialized, options)
+}
+
+export async function writeTextAtomic(target, value, options = {}) {
   const staged = stagingPath(target)
   options.onStage?.(staged)
   const handle = await open(staged, 'w')
   try {
-    await handle.writeFile(serialized)
+    await handle.writeFile(value)
     await handle.sync()
   } finally {
     await handle.close()

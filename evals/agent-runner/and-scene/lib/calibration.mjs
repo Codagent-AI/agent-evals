@@ -386,7 +386,7 @@ export function humanReviewChecks(humanRubric, referenceResult) {
   }
   record(
     'renders-the-finalized-report',
-    renderError === null && rendered.startsWith('<!doctype html>') && rendered.includes('COMPLETE REFERENCE'),
+    renderError === null && rendered.startsWith('<!doctype html>') && rendered.includes('REFERENCE — COMPLETE'),
     renderError ?? 'the finalized reference report must render',
   )
 

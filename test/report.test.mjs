@@ -86,6 +86,7 @@ test('a passing verdict leads with PASS and the official score', () => {
   const html = renderReport(result())
   assert.match(html, /<h1[^>]*>\s*PASS\s*<\/h1>/)
   assert.match(html, /84/)
+  assert.match(html, /Score denominator:<\/strong>\s*100/)
 })
 
 test('a failing verdict leads with FAIL and the official score', () => {
@@ -98,7 +99,7 @@ test('a complete reference renders its unscaled score out of 92 and N/A componen
   const reference = result({
     mode: 'reference-baseline',
     product_verdict: 'not-applicable',
-    label: 'COMPLETE REFERENCE',
+    label: 'REFERENCE — COMPLETE',
     official_score: 92,
     score_denominator: 92,
   })
@@ -115,6 +116,7 @@ test('a complete reference renders its unscaled score out of 92 and N/A componen
 
   const html = renderReport(reference)
 
+  assert.match(html, /<h1[^>]*>\s*REFERENCE — COMPLETE\s*<\/h1>/)
   assert.match(html, /92\s*\/\s*92/)
   assert.match(html, /Testing-evidence quality/)
   assert.match(html, /not applicable/i)
@@ -122,30 +124,63 @@ test('a complete reference renders its unscaled score out of 92 and N/A componen
 })
 
 test('a pending review leads with PENDING HUMAN REVIEW and the automated subtotal', () => {
-  const html = renderReport(result({
+  const pending = result({
     evaluation_status: 'pending-human-review',
     product_verdict: 'unavailable',
     label: 'PENDING HUMAN REVIEW',
-    official_score: null,
-  }))
+  })
+  delete pending.official_score
+  const html = renderReport(pending)
   assert.match(html, /<h1[^>]*>\s*PENDING HUMAN REVIEW\s*<\/h1>/)
   assert.match(html, /60\s*\/\s*70/)
   assert.doesNotMatch(html, /Official score:\s*\d/)
 })
 
 test('a harness failure without a verdict leads with EVALUATION FAILED and names the phase', () => {
-  const html = renderReport(result({
+  const failed = result({
     evaluation_status: 'evaluation-harness-failed',
     product_verdict: 'unavailable',
     label: 'EVALUATION FAILED',
-    official_score: null,
     failed_phase: 'browser-evaluation',
     failure: { owner: 'evaluation-harness', phase: 'browser-evaluation', reason: 'driver crashed' },
-  }))
+  })
+  delete failed.official_score
+  const html = renderReport(failed)
   assert.match(html, /<h1[^>]*>\s*EVALUATION FAILED\s*<\/h1>/)
   assert.match(html, /browser-evaluation/)
   assert.match(html, /driver crashed/)
   assert.match(html, /product verdict is unavailable/i)
+})
+
+test('a conclusive unscored product failure explains build or serve failure without inventing a score or review', () => {
+  const failed = result({
+    evaluation_status: 'complete',
+    product_verdict: 'fail',
+    label: 'FAIL',
+    human_review: undefined,
+    automated_subtotal: null,
+    product_failure: {
+      phase: 'verification',
+      reason: 'the delivered product could not build',
+      gate: 'verification-build-whole-app',
+    },
+    available_component_scores: [{
+      id: 'demo-technical-quality',
+      title: 'Demo',
+      points_awarded: 12,
+      points_possible: 24,
+    }],
+  })
+  delete failed.official_score
+
+  const html = renderReport(failed)
+
+  assert.match(html, /<h1[^>]*>\s*FAIL\s*<\/h1>/)
+  assert.match(html, /could not build/i)
+  assert.match(html, /official score and human review are unavailable/i)
+  assert.match(html, /verification-build-whole-app/)
+  assert.doesNotMatch(html, /Official score:\s*\d/)
+  assert.doesNotMatch(html, /product verdict is unavailable/i)
 })
 
 test('a harness failure after a durable verdict displays both facts', () => {
@@ -194,6 +229,92 @@ test('artifact links are relative to the run directory', () => {
   assert.doesNotMatch(html, /href="\//)
 })
 
+test('artifact paths outside the retained run directory render as inert text rather than links', () => {
+  const html = renderReport(result({
+    artifacts: [
+      { path: '../outside.txt', bytes: 1 },
+      { path: '/absolute.txt', bytes: 2 },
+      { path: 'https://evil.example/payload', bytes: 3 },
+      { path: 'phases/score.json', bytes: 10 },
+    ],
+  }))
+
+  assert.match(html, /href="phases\/score\.json"/)
+  assert.doesNotMatch(html, /href="\.\.\/outside\.txt"/)
+  assert.doesNotMatch(html, /href="\/absolute\.txt"/)
+  assert.doesNotMatch(html, /href="https:\/\//)
+  assert.match(html, /\.\.\/outside\.txt/)
+})
+
+test('delivery identity and evidence ownership render in separate auditable sections', () => {
+  const sha = 'f'.repeat(40)
+  const html = renderReport(result({
+    delivery: {
+      repository: 'https://example.test/and-scene.git',
+      branch: 'eval/and-scene/run-1',
+      base_branch: 'main',
+      pull_request: {
+        url: 'https://example.test/pull/7',
+        draft: true,
+        base: 'main',
+        head_sha: sha,
+      },
+      final_sha: sha,
+      final_validator: { status: 'passed' },
+      candidate_reported_ci: { status: 'pending', revision: sha },
+      acceptance: { manifest_sha256: 'a'.repeat(64) },
+    },
+    evidence: {
+      candidate: {
+        ownership: 'candidate-produced',
+        final_sha: sha,
+        manifest_sha256: 'b'.repeat(64),
+        artifacts: [{
+          id: 'candidate-flow',
+          kind: 'acceptance-flow-record',
+          ownership: 'candidate-produced',
+          sha256: 'c'.repeat(64),
+          revision: sha,
+          verification_state: 'verified',
+          coverage: ['demo-flow'],
+          limitations: ['narrow viewport not claimed'],
+        }],
+      },
+      evaluator: {
+        ownership: 'evaluator-produced',
+        final_sha: sha,
+        manifest_sha256: 'd'.repeat(64),
+        artifacts: [{
+          id: 'route-probe',
+          kind: 'deterministic-probe',
+          ownership: 'evaluator-produced',
+          sha256: 'e'.repeat(64),
+          revision: sha,
+          verification_state: 'verified',
+          coverage: ['demo-route'],
+          limitations: [],
+        }],
+      },
+      lineage: { accepted: true, final_sha: sha },
+      contradictions: [{
+        id: 'contradiction-1',
+        claim: 'all routes passed',
+        consequence: 'the evaluator observed a missing route',
+      }],
+    },
+  }))
+
+  assert.match(html, /<summary>Candidate delivery identity<\/summary>/)
+  assert.match(html, /eval\/and-scene\/run-1/)
+  assert.match(html, /pending/)
+  assert.match(html, /<summary>Candidate-produced evidence<\/summary>/)
+  assert.match(html, /<summary>Evaluator-produced evidence<\/summary>/)
+  assert.match(html, /candidate-flow/)
+  assert.match(html, /route-probe/)
+  assert.match(html, /contradiction-1/)
+  assert.match(html, /narrow viewport not claimed/)
+})
+
 test('details for every reported dimension are expandable', () => {
   const html = renderReport(result())
   for (const heading of [
@@ -201,6 +322,10 @@ test('details for every reported dimension are expandable', () => {
     'Hard gates',
     'Automated criteria',
     'Human review',
+    'Candidate delivery identity',
+    'Candidate-produced evidence',
+    'Evaluator-produced evidence',
+    'Evidence lineage and contradictions',
     'Workflow and harness outcomes',
     'Agent roles and models',
     'Implementation usage and cost',
@@ -263,16 +388,17 @@ test('an incomparable baseline is refused rather than rendered as a delta', () =
 })
 
 test('available component scores are shown without an unofficial total', () => {
-  const html = renderReport(result({
+  const failed = result({
     evaluation_status: 'evaluation-harness-failed',
     product_verdict: 'unavailable',
     label: 'EVALUATION FAILED',
-    official_score: null,
     automated_subtotal: null,
     available_component_scores: [
       { id: 'demo-technical-quality', title: 'Demo', points_awarded: 20, points_possible: 25 },
     ],
-  }))
+  })
+  delete failed.official_score
+  const html = renderReport(failed)
 
   assert.match(html, /<summary>Available component scores<\/summary>/)
   assert.match(html, /20/)

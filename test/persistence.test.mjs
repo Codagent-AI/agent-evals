@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 
 import {
@@ -10,6 +10,7 @@ import {
   hashString,
   readJson,
   writeJsonAtomic,
+  writeTextAtomic,
 } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
 
 async function workdir() {
@@ -37,8 +38,25 @@ test('writeJsonAtomic stages the temporary file in the target directory', async 
   })
 
   assert.equal(staged.length, 1)
-  assert.equal(join(dir, 'nested'), staged[0].slice(0, join(dir, 'nested').length))
+  assert.equal(dirname(staged[0]), dirname(target))
   assert.notEqual(staged[0], target)
+})
+
+test('writeTextAtomic replaces an HTML projection from a same-directory staging file', async () => {
+  const dir = await workdir()
+  const target = join(dir, 'report.html')
+  const staged = []
+  await writeFile(target, 'old report')
+
+  await writeTextAtomic(target, '<!doctype html><title>new report</title>', {
+    onStage: (path) => staged.push(path),
+  })
+
+  assert.equal(await readFile(target, 'utf8'), '<!doctype html><title>new report</title>')
+  assert.equal(staged.length, 1)
+  assert.equal(dirname(staged[0]), dirname(target))
+  assert.notEqual(staged[0], target)
+  assert.deepEqual(await readdir(dir), ['report.html'])
 })
 
 test('writeJsonAtomic preserves the previous file when serialization fails', async () => {

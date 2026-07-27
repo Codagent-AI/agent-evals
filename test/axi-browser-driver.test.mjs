@@ -85,6 +85,8 @@ test('the AXI driver establishes mode and position explicitly and waits for sett
   assert.match(calls[0].input, /page\.press\('p'\)/)
   assert.match(calls[1].input, /data-presentation-progress-dot/)
   assert.match(calls[1].input, /requiredPosition/)
+  assert.match(calls[1].input, /page\.press\('ArrowRight'\)/)
+  assert.match(calls[1].input, /observedPosition/)
   assert.match(calls[2].input, /page\.wait\(100\)/)
   assert.doesNotMatch(calls[2].input, /requestAnimationFrame/)
 })
