@@ -71,6 +71,7 @@ test('the score-affecting identity fields are the approved set', () => {
     'rubric_provenance',
     'candidate_repository',
     'candidate_branch',
+    'candidate_base_branch',
   ])
 })
 

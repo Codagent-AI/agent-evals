@@ -356,6 +356,7 @@ export async function runEvaluation({
     rubric_provenance: hashJson(provenanceOfRubrics),
     candidate_repository: candidateSource.repository,
     candidate_branch: candidateSource.branch,
+    candidate_base_branch: candidateSource.base_branch,
   }
 
   if (checkpoint) {
@@ -400,6 +401,7 @@ export async function runEvaluation({
           origin: candidateSource.repository,
           fixture_commit: candidateSource.fixture_commit,
           branch: candidateSource.branch,
+          base_branch: candidateSource.base_branch,
         },
       }),
       role_profiles: validation.profiles,
@@ -408,6 +410,7 @@ export async function runEvaluation({
         repository: candidateSource.repository,
         fixture_commit: candidateSource.fixture_commit,
         branch: candidateSource.branch,
+        base_branch: candidateSource.base_branch,
       },
       workflow: boundary,
       agent_runner: null,
@@ -635,6 +638,7 @@ export async function runEvaluation({
           worktree: candidateWorktree,
           fixtureCommit: candidateSource.fixture_commit,
           branch: candidateSource.branch,
+          expectedBase: candidateSource.base_branch,
           changeName: options.changeName,
           sessionDir: record.run?.session_dir,
           workflowHistory: record.observed_steps,

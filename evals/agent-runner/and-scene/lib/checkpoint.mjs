@@ -24,6 +24,7 @@ export const IDENTITY_FIELDS = [
   'rubric_provenance',
   'candidate_repository',
   'candidate_branch',
+  'candidate_base_branch',
 ]
 
 function now() {

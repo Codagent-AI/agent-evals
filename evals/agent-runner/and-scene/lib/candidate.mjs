@@ -58,6 +58,21 @@ function assertSame(label, current, recorded) {
   }
 }
 
+function resolveRemoteDefaultBranch(exec, worktree) {
+  const output = run(
+    exec,
+    'git',
+    ['-C', worktree, 'ls-remote', '--symref', 'origin', 'HEAD'],
+    {},
+    'candidate default base branch lookup',
+  )
+  const match = output.match(/^ref:\s+refs\/heads\/([^\s]+)\s+HEAD$/m)
+  if (!match) {
+    throw new Error('candidate repository default base branch could not be resolved from origin/HEAD')
+  }
+  return match[1]
+}
+
 async function installEvalExcludes(worktree) {
   const path = join(worktree, '.git/info/exclude')
   await mkdir(dirname(path), { recursive: true })
@@ -110,6 +125,15 @@ export async function prepareCandidateWorktree({
     'candidate origin lookup',
   ))
   assertSame('candidate origin repository', origin, repository)
+  const baseBranch = kind === 'candidate'
+    ? resolveRemoteDefaultBranch(exec, worktree)
+    : null
+  if (resume && kind === 'candidate') {
+    if (!expectedSource?.base_branch) {
+      throw new Error('resume provenance is missing the recorded candidate default base branch')
+    }
+    assertSame('candidate default base branch', baseBranch, expectedSource.base_branch)
+  }
 
   const fixtureCommit = run(
     exec,
@@ -173,6 +197,7 @@ export async function prepareCandidateWorktree({
     repository,
     worktree,
     branch,
+    base_branch: baseBranch,
   }
 }
 
@@ -323,6 +348,15 @@ export async function verifyRecordedDeliveryIdentity({
   if (!recorded?.branch) {
     throw new Error('resume provenance is missing the recorded candidate branch')
   }
+  if (!recorded?.base_branch) {
+    throw new Error('resume provenance is missing the recorded candidate default base branch')
+  }
+  if (recorded.pull_request && recorded.pull_request.base !== recorded.base_branch) {
+    throw new Error(
+      `recorded pull request base ${recorded.pull_request.base ?? null} does not match `
+      + `recorded candidate default base branch ${recorded.base_branch}`,
+    )
+  }
   const branch = run(
     exec,
     'git',
@@ -376,12 +410,20 @@ export async function verifyCandidateDelivery({
   worktree,
   fixtureCommit,
   branch,
+  expectedBase,
   changeName,
   sessionDir,
   workflowHistory,
   exec = defaultExec,
   inspectPullRequest = (options) => inspectDraftPullRequest({ ...options, exec }),
 }) {
+  if (!expectedBase) {
+    throw deliveryError(
+      'missing-delivery-identity',
+      'candidate delivery has no recorded expected base branch',
+      { missing_delivery_output: 'candidate-base-branch' },
+    )
+  }
   const history = checkWorkflowHistory(workflowHistory)
   if (history.prohibited_effects.length > 0) {
     const unexpected = history.prohibited_effects[0]
@@ -475,6 +517,13 @@ export async function verifyCandidateDelivery({
       { pull_request: pullRequest },
     )
   }
+  if (pullRequest.base !== expectedBase) {
+    throw deliveryError(
+      'pull-request-base-mismatch',
+      `draft pull request base ${pullRequest.base} does not match expected repository base ${expectedBase}`,
+      { pull_request: pullRequest },
+    )
+  }
 
   const acceptanceArtifacts = []
   for (const name of REQUIRED_ACCEPTANCE_ARTIFACTS) {
@@ -512,6 +561,7 @@ export async function verifyCandidateDelivery({
   return {
     verified: true,
     branch,
+    base_branch: expectedBase,
     fixture_commit: fixtureCommit,
     final_sha: finalSha,
     remote_sha: remoteSha,

@@ -48,6 +48,9 @@ async function environment() {
       if (verb.includes('remote get-url origin')) {
         return { status: 0, stdout: 'https://github.com/Codagent-AI/and-scene.git\n' }
       }
+      if (verb.includes('ls-remote --symref origin HEAD')) {
+        return { status: 0, stdout: 'ref: refs/heads/main\tHEAD\n' }
+      }
       if (verb.includes('merge-base --is-ancestor')) return { status: 0, stdout: '' }
       if (verb.includes('branch --show-current')) {
         return { status: 0, stdout: 'eval/and-scene/run-1\n' }

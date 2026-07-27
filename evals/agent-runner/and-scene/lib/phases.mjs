@@ -56,7 +56,11 @@ export async function runPhases({ phases, handlers, outcome, context = {}, isCom
   const reused = []
   let current = outcome
   let failed = null
-  let productTerminal = false
+  // A resumed run may reuse the verification phase that originally established
+  // a conclusive build/serve failure. The persisted product-failure evidence is
+  // itself the terminal signal; it must not depend on the reused handler
+  // emitting the event a second time.
+  let productTerminal = outcome.product_failure != null
 
   for (const phase of phases) {
     if (failed && !phase.final) {
@@ -134,7 +138,7 @@ export async function runPhases({ phases, handlers, outcome, context = {}, isCom
         candidate_branch: error.candidate_branch ?? null,
         pull_request: error.pull_request ?? null,
         final_sha: error.final_sha ?? null,
-        resumable: true,
+        resumable: error.resumable ?? true,
       })
     }
   }

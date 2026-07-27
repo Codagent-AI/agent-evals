@@ -70,6 +70,9 @@ async function environment({
       if (joined.includes('branch --show-current')) {
         return { status: 0, stdout: 'eval/and-scene/run-1\n' }
       }
+      if (joined.includes('ls-remote --symref origin HEAD')) {
+        return { status: 0, stdout: 'ref: refs/heads/main\tHEAD\n' }
+      }
       if (joined.includes('status --porcelain')) return { status: 0, stdout: dirty }
       if (joined.includes('merge-base --is-ancestor')) return { status: 0, stdout: '' }
       if (joined.includes('diff --binary')) return { status: 0, stdout: '' }
@@ -215,6 +218,7 @@ test('the candidate branch identity exists in run-state before Runner starts', a
 
   const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
   assert.equal(state.delivery.branch, 'eval/and-scene/run-1')
+  assert.equal(state.delivery.base_branch, 'main')
   assert.equal(state.delivery.fixture_commit, context.commit)
   assert.equal(state.delivery.retained_for_manual_cleanup, true)
 })

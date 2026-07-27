@@ -6,7 +6,10 @@ import {
   HUMAN_REVIEW_PHASES,
   runPhases,
 } from '../evals/agent-runner/and-scene/lib/phases.mjs'
-import { createOutcome } from '../evals/agent-runner/and-scene/lib/outcomes.mjs'
+import {
+  applyOutcomeEvent,
+  createOutcome,
+} from '../evals/agent-runner/and-scene/lib/outcomes.mjs'
 
 // Handlers that simply record the order they ran in, with optional failures.
 function handlers(phases, { fails = {}, effects = {} } = {}) {
@@ -132,6 +135,48 @@ test('a conclusive product failure skips browser, judging, and human-dependent w
   assert.ok(order.includes('cleanup'))
 })
 
+test('a resumed conclusive product failure remains terminal when verification is reused', async () => {
+  const outcome = applyOutcomeEvent(createOutcome(), {
+    type: 'conclusive-product-failure',
+    phase: 'verification',
+    reason: 'candidate build failed reproducibly',
+    gate: 'build-succeeds',
+  })
+  const { order, map } = handlers(AUTOMATED_PHASES, { effects: serverUp })
+
+  const result = await runPhases({
+    phases: AUTOMATED_PHASES,
+    handlers: map,
+    outcome,
+    isComplete: (name) => name === 'verification',
+  })
+
+  assert.equal(result.outcome.product_verdict, 'fail')
+  assert.ok(!order.includes('candidate-server'))
+  assert.ok(!order.includes('browser-evaluation'))
+  assert.ok(!order.includes('product-judging'))
+  assert.ok(order.includes('metrics-pricing'))
+  assert.ok(order.includes('pending-result'))
+})
+
+test('a partially migrated outcome without product_failure remains non-terminal', async () => {
+  const outcome = createOutcome()
+  delete outcome.product_failure
+  const { order, map } = handlers(AUTOMATED_PHASES, { effects: serverUp })
+
+  const result = await runPhases({
+    phases: AUTOMATED_PHASES,
+    handlers: map,
+    outcome,
+  })
+
+  assert.equal(result.exitCode, 0)
+  assert.ok(order.includes('verification'))
+  assert.ok(order.includes('candidate-server'))
+  assert.ok(order.includes('browser-evaluation'))
+  assert.ok(order.includes('product-judging'))
+})
+
 test('outcome reporting and cleanup still run after an earlier phase fails', async () => {
   const { order, map } = handlers(AUTOMATED_PHASES, {
     effects: serverUp,
@@ -156,6 +201,24 @@ test('an Agent Runner failure is classified as an implementation-workflow failur
 
   assert.equal(result.outcome.evaluation_status, 'implementation-workflow-failed')
   assert.equal(result.outcome.product_verdict, 'unavailable')
+})
+
+test('a non-resumable delivery violation remains non-resumable in the outcome', async () => {
+  const { map } = handlers(AUTOMATED_PHASES, { effects: serverUp })
+  map['delivery-verification'] = async () => {
+    const error = new Error('workflow-side-effect-violation: pull request was merged')
+    error.resumable = false
+    throw error
+  }
+
+  const result = await runPhases({
+    phases: AUTOMATED_PHASES,
+    handlers: map,
+    outcome: createOutcome(),
+  })
+
+  assert.equal(result.outcome.evaluation_status, 'implementation-workflow-failed')
+  assert.equal(result.outcome.resumable, false)
 })
 
 test('a browser phase without a running candidate server is a harness failure', async () => {

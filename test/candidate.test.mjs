@@ -256,6 +256,7 @@ test('a fresh candidate creates its unique delivery branch exactly at the fixtur
   })
 
   assert.equal(prepared.branch, 'eval/and-scene/run-123')
+  assert.equal(prepared.base_branch, git(repo.source, 'branch', '--show-current'))
   assert.equal(git(worktree, 'branch', '--show-current'), 'eval/and-scene/run-123')
   assert.equal(git(worktree, 'rev-parse', 'HEAD'), repo.fixture)
 })
@@ -275,6 +276,41 @@ test('a fresh candidate refuses a pre-existing local or remote branch collision'
       exec,
     }),
     /branch.*already exists|collision/i,
+  )
+})
+
+test('resume rejects a repository default base branch that changed after delivery began', async () => {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
+  const prepared = await prepareCandidateWorktree({
+    repo: repo.source,
+    worktree,
+    ref: repo.fixture,
+    resume: false,
+    runId: 'run-123',
+    kind: 'candidate',
+    exec,
+  })
+  git(repo.source, 'branch', 'different-base', repo.reference)
+  git(repo.source, 'symbolic-ref', 'HEAD', 'refs/heads/different-base')
+
+  await assert.rejects(
+    prepareCandidateWorktree({
+      repo: repo.source,
+      worktree,
+      ref: repo.fixture,
+      resume: true,
+      expectedSource: {
+        repository: prepared.repository,
+        fixture_commit: prepared.fixture_commit,
+        branch: prepared.branch,
+        base_branch: prepared.base_branch,
+      },
+      runId: 'run-123',
+      kind: 'candidate',
+      exec,
+    }),
+    /default base branch.*does not match recorded/i,
   )
 })
 
@@ -308,6 +344,7 @@ test('delivery verification proves branch, remote head, draft PR identity, and f
     worktree,
     fixtureCommit: repo.fixture,
     branch: 'eval/and-scene/run-123',
+    expectedBase: 'main',
     changeName: 'create-and-scene',
     sessionDir,
     workflowHistory: [
@@ -342,6 +379,29 @@ test('delivery verification proves branch, remote head, draft PR identity, and f
   assert.ok(!calls.some(([command, ...args]) => (
     command === 'gh' && /check|status|ci/i.test(args.join(' '))
   )), JSON.stringify(calls))
+
+  await assert.rejects(
+    verifyCandidateDelivery({
+      worktree,
+      fixtureCommit: repo.fixture,
+      branch: 'eval/and-scene/run-123',
+      expectedBase: 'main',
+      changeName: 'create-and-scene',
+      sessionDir,
+      workflowHistory: delivery.workflow_history,
+      exec: (command, args, options) => {
+        if (command === 'git' && args.includes('ls-remote')) {
+          return { status: 0, stdout: `${head}\trefs/heads/eval/and-scene/run-123\n` }
+        }
+        return exec(command, args, options)
+      },
+      inspectPullRequest: async () => ({
+        ...delivery.pull_request,
+        base: 'evaluation-fixture',
+      }),
+    }),
+    /base.*evaluation-fixture.*expected.*main|expected.*base.*main/i,
+  )
 })
 
 test('an observed prohibited delivery effect has typed workflow-side-effect ownership', async () => {
@@ -351,6 +411,7 @@ test('an observed prohibited delivery effect has typed workflow-side-effect owne
       worktree: '/unused',
       fixtureCommit: 'fixture',
       branch: 'eval/and-scene/run-123',
+      expectedBase: 'main',
       changeName: 'create-and-scene',
       sessionDir: '/unused',
       workflowHistory: [{ step: 'merge-pr', outcome: 'success' }],
@@ -381,6 +442,7 @@ test('resume revalidates the recorded branch, PR, and final SHA before Runner ac
   const head = git(worktree, 'rev-parse', 'HEAD')
   const recorded = {
     branch: 'eval/and-scene/run-123',
+    base_branch: 'main',
     final_sha: head,
     pull_request: {
       number: 53,

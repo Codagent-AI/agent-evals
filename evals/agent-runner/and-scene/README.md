@@ -301,8 +301,9 @@ The automated command runs these phases in order:
 1. Preflight the fixture, unique candidate branch, Runner checkout and workflow,
    publishing credentials, profiles, evaluator inputs, and run directory.
 2. Start, wait for, resume, or continue the one recorded complete Runner run.
-3. Verify the clean delivered branch, remote head, open draft PR/base/head,
-   final Validator, unarchived change, and acceptance handoff.
+3. Verify the clean delivered branch, remote head, and open draft PR whose base
+   exactly matches the recorded `origin/HEAD`, plus its head, final Validator,
+   unarchived change, and acceptance handoff.
 4. Freeze the verified final source revision.
 5. Install dependencies, build, and run non-browser verification.
 6. Start the evaluated candidate server.
