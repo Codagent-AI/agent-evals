@@ -4,12 +4,16 @@
 // Agent Runner starts. The scored diff therefore contains only product changes,
 // while cleanliness still covers every other tracked and untracked candidate
 // file.
-import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 import { hashFile, hashJson, hashString, writeJsonAtomic } from './persistence.mjs'
+import {
+  EvidenceReadinessError,
+  inspectCandidateEvidenceReadiness,
+} from './evidence.mjs'
 import { checkWorkflowHistory } from './workflow.mjs'
 
 export const CANDIDATE_SOURCE_MANIFEST_SCHEMA_VERSION = 1
@@ -387,25 +391,6 @@ export async function verifyRecordedDeliveryIdentity({
   return { verified: true, branch, final_sha: recorded.final_sha ?? null }
 }
 
-const REQUIRED_ACCEPTANCE_ARTIFACTS = [
-  'acceptance-assumptions.md',
-  'acceptance-flow-evidence.md',
-  'acceptance-handoff.md',
-]
-
-async function acceptanceScreenshots(root) {
-  const found = []
-  async function visit(dir) {
-    for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
-      const path = join(dir, entry.name)
-      if (entry.isDirectory()) await visit(path)
-      else if (/\.(?:png|jpe?g|webp)$/i.test(entry.name)) found.push(path)
-    }
-  }
-  await visit(root)
-  return found.sort()
-}
-
 export async function verifyCandidateDelivery({
   worktree,
   fixtureCommit,
@@ -525,37 +510,19 @@ export async function verifyCandidateDelivery({
     )
   }
 
-  const acceptanceArtifacts = []
-  for (const name of REQUIRED_ACCEPTANCE_ARTIFACTS) {
-    const path = join(sessionDir, 'output', name)
-    const info = await stat(path).catch(() => null)
-    if (!info?.isFile() || info.size === 0) {
+  let acceptance
+  try {
+    acceptance = await inspectCandidateEvidenceReadiness({ worktree, sessionDir })
+  } catch (error) {
+    if (error instanceof EvidenceReadinessError || error.code === 'missing-evidence-role') {
       throw deliveryError(
         'missing-delivery-output',
-        `required acceptance artifact is missing or empty: ${name}`,
-        { missing_delivery_output: name },
+        error.message,
+        { missing_delivery_output: error.missing_roles ?? error.missing_delivery_output },
       )
     }
-    acceptanceArtifacts.push({
-      role: name.replace(/\.[^.]+$/, ''),
-      path,
-      sha256: await hashFile(path),
-    })
-  }
-  const screenshots = await acceptanceScreenshots(join(sessionDir, 'output'))
-  if (screenshots.length === 0) {
-    throw deliveryError(
-      'missing-delivery-output',
-      'required acceptance screenshots are missing',
-      { missing_delivery_output: 'acceptance-screenshots' },
-    )
-  }
-  for (const path of screenshots) {
-    acceptanceArtifacts.push({
-      role: 'acceptance-screenshot',
-      path,
-      sha256: await hashFile(path),
-    })
+    error.owner ??= 'evaluation-harness'
+    throw error
   }
 
   return {
@@ -570,6 +537,7 @@ export async function verifyCandidateDelivery({
       .filter((entry) => (entry.step ?? entry.id) === 'run-validator')
       .at(-1) ?? null,
     workflow_history: workflowHistory,
-    acceptance_artifacts: acceptanceArtifacts,
+    acceptance_artifacts: acceptance.artifacts,
+    acceptance_findings: acceptance.findings,
   }
 }

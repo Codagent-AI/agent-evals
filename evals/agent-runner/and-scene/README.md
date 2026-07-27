@@ -232,6 +232,8 @@ focused modules under `lib/`:
 | `lib/provenance.mjs` | Clean-checkout, workflow-hash, and CLI-version provenance |
 | `lib/profiles.mjs` | Role profile validation, eval-scoped config, effective-profile reconciliation |
 | `lib/workflow.mjs` | Full-workflow contract, prohibited-side-effect checks, Runner run classification |
+| `lib/evidence.mjs` | Role-based candidate intake, byte integrity, lineage, evaluator evidence, contradictions, and bounded judge views |
+| `lib/neutral-source.mjs` | Final-commit neutral source and approved requirement bundles with identity-redaction provenance |
 | `lib/runner-state.mjs` | Reading Agent Runner run state by identifier or newest timestamp |
 | `lib/outcomes.mjs` | Evaluation status and product verdict model |
 | `lib/phases.mjs` | The ordered lifecycle and its failure ownership |
@@ -256,6 +258,39 @@ review that spans hours must outlive the container that produced the run.
 Agent Runner owns the sandbox, workflow execution, run locks, sessions, its own
 internal resume point, and `run-metrics.json`. None of that is copied here.
 
+## Evidence ownership and aliases
+
+Candidate acceptance material is untrusted input. After the local and draft-PR
+heads are verified, the suite anchors discovery on the final handoff, copies
+the original bytes under `evidence/candidate/`, and records hashes, origins,
+claimed revisions, coverage, limitations, and lineage. Independent checks and
+captures are written under `evidence/evaluator/`; they may disprove candidate
+claims but never count as candidate testing proof. The harness preserves
+candidate-reported CI text and its claimed revision verbatim and does not query
+CI.
+
+The required semantic roles and accepted filenames are:
+
+| Role | Accepted aliases |
+|---|---|
+| Acceptance flow record | `acceptance-flow-evidence.md`, `acceptance-test-results.md`, `acceptance-flow.md`, `acceptance-evidence.md`, `flow-evidence.md` |
+| Screenshots | `.png`, `.jpg`, `.jpeg`, or `.webp` files referenced by the handoff or found in the recorded acceptance output |
+| Screenshot metadata | `capture-metadata.json`, `screenshot-metadata.json`, `screenshot-manifest.json`, `capture-manifest.json` |
+| Findings and retest history | `findings-history.md`, `retest-history.md`, `acceptance-findings.md`, `findings.md`, `acceptance-retest.md` |
+| Final handoff | `acceptance-handoff.md`, `final-acceptance-handoff.md`, `acceptance-final-handoff.md`, `final-handoff.md` |
+| Assumptions ledger | `acceptance-assumptions.md`, `assumptions-ledger.md`, `acceptance-assumption-ledger.md`, `assumptions.md` |
+
+Referenced session reports and assumption/context-gap audits are retained when
+present. Missing required roles stop scored judging as an implementation
+workflow failure. Present but stale, malformed, weakly traceable, or
+wrong-revision content remains judgeable and is recorded as an evidence defect.
+
+Product-source judges run from `neutral/judge/`, which contains only the
+identity-neutral final-commit snapshot and identity-free approved requirements.
+The provenance manifest is stored outside that judge root. Testing-evidence and
+assumption-handling jobs use separate bounded views under
+`evidence/judge-views/`.
+
 ## Run directory layout
 
 ```text
@@ -271,6 +306,12 @@ artifacts/evals/and-scene/<run-id>/
 ├── publication.json
 ├── logs/
 ├── evidence/
+│   ├── candidate/
+│   ├── evaluator/
+│   └── judge-views/
+├── neutral/
+│   ├── judge/
+│   └── provenance/
 ├── phases/
 └── .runtime/
     ├── candidate-worktree/

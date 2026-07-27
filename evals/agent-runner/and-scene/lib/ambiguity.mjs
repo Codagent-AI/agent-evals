@@ -45,7 +45,7 @@ const MAX_WALK_DEPTH = 12
 const MAX_QUOTED_CHARS = 4000
 const MAX_EVIDENCE_ROWS = 60
 
-const ARTIFACT_NAME = /(session[-_]?report|assumption|context[-_]?gap|ambiguit)/i
+const ARTIFACT_NAME = /(session[-_]?report|assumption|context[-_]?gap|ambiguit|acceptance[-_]?handoff|final[-_]?handoff|findings?(?:[-_]?history)?|retest[-_]?history|acceptance[-_]?flow)/i
 
 export const AMBIGUITY_RESULT_SCHEMA = {
   type: 'object',

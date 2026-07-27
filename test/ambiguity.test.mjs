@@ -286,6 +286,24 @@ test('artifact collection reads assumption and session-report files under the se
   ])
 })
 
+test('artifact collection includes acceptance findings and final handoff sources', async () => {
+  const dir = await artifactDir({
+    'output/acceptance-handoff.md': 'No unresolved context gaps',
+    'output/findings-history.md': 'Finding A was retested',
+    'output/acceptance-flow-evidence.md': 'Flow passed',
+    'output/acceptance-assumptions.md': 'No assumptions',
+  })
+
+  const artifacts = await collectAmbiguityArtifacts({ sessionDir: dir })
+
+  assert.deepEqual(artifacts.files.map(({ path }) => path).sort(), [
+    'output/acceptance-assumptions.md',
+    'output/acceptance-flow-evidence.md',
+    'output/acceptance-handoff.md',
+    'output/findings-history.md',
+  ])
+})
+
 test('a deeply nested session tree is bounded rather than walked to exhaustion', async () => {
   const deep = Array.from({ length: 60 }, (_, index) => `d${index}`).join('/')
   const dir = await artifactDir({

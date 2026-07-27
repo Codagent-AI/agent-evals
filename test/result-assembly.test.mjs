@@ -146,6 +146,53 @@ test('missing product evidence marks score completeness without failing the prod
   assert.deepEqual(result.incomplete_components, ['scene-kit-correctness'])
 })
 
+test('candidate and evaluator evidence summaries remain ownership-separated', () => {
+  const candidate = {
+    ownership: 'candidate-produced',
+    manifest_sha256: 'c'.repeat(64),
+    artifacts: [{
+      id: 'candidate-flow',
+      kind: 'acceptance-flow-record',
+      ownership: 'candidate-produced',
+      sha256: 'a'.repeat(64),
+      claimed_revision: 'f'.repeat(40),
+      verification_state: 'verified',
+      coverage: ['demo-flow'],
+      limitations: [],
+    }],
+  }
+  const evaluator = {
+    ownership: 'evaluator-produced',
+    final_sha: 'f'.repeat(40),
+    manifest_sha256: 'e'.repeat(64),
+    artifacts: [{
+      id: 'route-probe',
+      kind: 'deterministic-probe',
+      ownership: 'evaluator-produced',
+      sha256: 'b'.repeat(64),
+      revision: 'f'.repeat(40),
+      verification_state: 'verified',
+      coverage: ['demo-route'],
+      limitations: [],
+    }],
+  }
+  const result = assemble({
+    evidence: {
+      candidate,
+      evaluator,
+      contradictions: { items: [{ id: 'contradiction-1', scoring_effect: 'disproof-only' }] },
+      lineage: { accepted: true, final_sha: 'f'.repeat(40) },
+    },
+  })
+
+  assert.equal(result.evidence.candidate.ownership, 'candidate-produced')
+  assert.equal(result.evidence.evaluator.ownership, 'evaluator-produced')
+  assert.equal(result.evidence.contradictions[0].scoring_effect, 'disproof-only')
+  assert.equal(result.completeness.candidate_evidence, 'complete')
+  assert.equal(result.completeness.evaluator_evidence, 'complete')
+  assert.equal(result.completeness.final_revision_alignment, 'complete')
+})
+
 test('a finalized human review is carried with its responses and rationales', () => {
   const humanReview = {
     complete: true,

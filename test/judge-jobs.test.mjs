@@ -57,6 +57,28 @@ test('a judge request carries only its own rubric slice and records the judge au
   for (const id of request.criteria) assert.ok(request.prompt.includes(id), id)
 })
 
+test('product judge requests are rooted in neutral inputs and disclose exact permissions', () => {
+  const request = buildJudgeRequest({
+    rubrics,
+    job: 'demo-integration',
+    authority,
+    evidence: [{ id: 'route', verdict: 'pass', note: 'reachable' }],
+    sources: ['src/demo.tsx'],
+    neutral: {
+      root: '/run/neutral',
+      source_root: '/run/neutral/source',
+      requirements_root: '/run/neutral/requirements',
+    },
+  })
+
+  assert.equal(request.cwd, '/run/neutral')
+  assert.equal(request.input_permissions.candidate_evidence, false)
+  assert.equal(request.input_permissions.evaluator_evidence, false)
+  assert.equal(request.input_permissions.neutral_source, true)
+  assert.match(request.prompt, /NEUTRAL SOURCE/)
+  assert.doesNotMatch(request.prompt, /CANDIDATE EVIDENCE/)
+})
+
 test('a judge request excludes screenshots and forbids visual-taste judgments', () => {
   for (const job of productJudgeJobs(rubrics)) {
     const request = buildJudgeRequest({ rubrics, job: job.id, authority, evidence: [], sources: [] })

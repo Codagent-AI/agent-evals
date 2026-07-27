@@ -49,6 +49,15 @@ import { ensureCandidateServer, stopCandidateServer } from './lib/candidate-serv
 import { assembleResult, writeResultArtifacts } from './lib/result.mjs'
 import { createCodexJudgeInvoker } from './lib/judge-invoker.mjs'
 import { runProductJudging } from './lib/judge-jobs.mjs'
+import {
+  buildCandidateEvidenceManifest,
+  buildEvaluatorEvidenceManifest,
+  detectEvidenceContradictions,
+  materializeEvidenceJudgeViews,
+  recordEvidenceContradictions,
+  validateCandidateEvidenceLineage,
+} from './lib/evidence.mjs'
+import { materializeNeutralInputs } from './lib/neutral-source.mjs'
 import { applyOutcomeEvent, createOutcome } from './lib/outcomes.mjs'
 import { applyRunStateEvent } from './lib/state-machine.mjs'
 import { loadRubrics, rubricProvenance } from './lib/rubric.mjs'
@@ -188,6 +197,8 @@ export async function runEvaluation({
   verifyCandidate = null,
   verifyDelivery = null,
   verifyResumeDelivery = null,
+  materializeEvidence = null,
+  materializeNeutral = null,
   buildResult = null,
   verificationResult = null,
   // The live models.dev catalog. Injected so pricing is exercisable offline and
@@ -452,6 +463,12 @@ export async function runEvaluation({
     pricing: null,
     cost: null,
     ambiguity: null,
+    candidateEvidence: null,
+    evaluatorEvidence: null,
+    contradictions: null,
+    evidenceLineage: null,
+    evidenceViews: null,
+    neutral: null,
     candidateServer: null,
     candidate: frozenCandidate,
     delivery: checkpoint.delivery?.final_sha ? checkpoint.delivery : null,
@@ -666,9 +683,90 @@ export async function runEvaluation({
       await saveCheckpoint(checkpointPath, checkpoint)
     },
 
+    'evidence-provenance': async () => {
+      if (mode === 'reference-baseline') {
+        await writeJsonAtomic(join(runDir, 'phases/evidence-provenance.json'), {
+          applicable: false,
+          reason: 'reference-baseline',
+        })
+        return
+      }
+      const evidenceBuilder = materializeEvidence
+        ?? (verifyDelivery ? null : buildCandidateEvidenceManifest)
+      if (!evidenceBuilder) {
+        await writeJsonAtomic(join(runDir, 'phases/evidence-provenance.json'), {
+          applicable: true,
+          state: 'not-configured',
+        })
+        return
+      }
+      try {
+        record.candidateEvidence = await evidenceBuilder({
+          worktree: candidateWorktree,
+          sessionDir: record.run?.session_dir ?? null,
+          runDir,
+          delivery: record.delivery,
+        })
+        record.evidenceLineage = await validateCandidateEvidenceLineage({
+          finalSha: record.delivery.final_sha,
+          worktree: candidateWorktree,
+          manifest: record.candidateEvidence,
+          exec,
+        })
+      } catch (error) {
+        error.owner ??= 'evaluation-harness'
+        if (error.owner === 'implementation-workflow') {
+          error.run_id ??= record.run?.run_id ?? null
+          error.candidate_branch ??= candidateSource.branch
+          error.pull_request ??= record.delivery?.pull_request ?? null
+          error.final_sha ??= record.delivery?.final_sha ?? null
+        }
+        throw error
+      }
+      checkpoint = applyRunStateEvent(checkpoint, {
+        type: 'delivery-identity-recorded',
+        owner: 'evaluation-harness',
+        acceptance: {
+          artifacts: record.delivery.acceptance_artifacts,
+          workflow_history: record.delivery.workflow_history,
+          manifest_sha256: record.candidateEvidence.manifest_sha256,
+          lineage: record.evidenceLineage,
+        },
+      })
+      await writeJsonAtomic(join(runDir, 'phases/evidence-provenance.json'), {
+        applicable: true,
+        manifest_sha256: record.candidateEvidence.manifest_sha256,
+        lineage: record.evidenceLineage,
+      })
+      await saveCheckpoint(checkpointPath, checkpoint)
+    },
+
     'source-freeze': async () => {
-      if (mode === 'reference-baseline' && record.candidate) return
-      record.candidate = await freezeCurrentCandidate()
+      if (!(mode === 'reference-baseline' && record.candidate)) {
+        record.candidate = await freezeCurrentCandidate()
+      }
+      const neutralBuilder = materializeNeutral
+        ?? (verifyDelivery ? null : materializeNeutralInputs)
+      if (neutralBuilder) {
+        const finalSha = record.delivery?.final_sha ?? record.candidate.produced_commit
+        record.neutral = await neutralBuilder({
+          worktree: candidateWorktree,
+          runDir,
+          finalSha,
+          changeName: options.changeName,
+          identities: {
+            run: [runId, record.run?.run_id].filter(Boolean),
+            branch: [candidateSource.branch].filter(Boolean),
+            pull_request: [
+              record.delivery?.pull_request?.url,
+              record.delivery?.pull_request?.number,
+            ].filter((value) => value !== null && value !== undefined),
+            baseline: mode === 'reference-baseline' ? [record.candidate.candidate_identity] : [],
+            candidate: [record.candidate.candidate_identity],
+            change: [options.changeName],
+          },
+        })
+      }
       checkpoint = {
         ...checkpoint,
         identity: {
@@ -750,8 +848,56 @@ export async function runEvaluation({
       // The judges answer source-review criteria, so they must be shown the
       // delivered source. Collecting it here also bounds it: the scan budget
       // caps how much candidate-controlled text can reach a prompt.
-      record.sourceEvidence = await collectSourceEvidence(candidateWorktree)
+      const sourceRoot = record.neutral
+        ? join(runDir, record.neutral.source.root)
+        : candidateWorktree
+      record.sourceEvidence = await collectSourceEvidence(sourceRoot)
       await writeJsonAtomic(join(runDir, 'phases/source-evidence.json'), record.sourceEvidence)
+      record.evaluatorEvidence = await buildEvaluatorEvidenceManifest({
+        runDir,
+        finalSha: record.delivery?.final_sha ?? record.candidate?.produced_commit ?? null,
+        artifacts: [{
+          id: 'deterministic-source-facts',
+          kind: 'deterministic-checks',
+          content: `${JSON.stringify(record.sourceEvidence, null, 2)}\n`,
+          media_type: 'application/json',
+          coverage: record.sourceEvidence.evidence.map(({ id }) => id),
+          claims: record.sourceEvidence.evidence.map(({ id, verdict, note }) => ({
+            id, verdict, note,
+          })),
+        }, ...(record.browser ? [{
+          id: 'deterministic-browser-facts',
+          kind: 'deterministic-browser-checks',
+          content: `${JSON.stringify(record.browser, null, 2)}\n`,
+          media_type: 'application/json',
+          coverage: [
+            ...(record.browser.criteria ?? []).map(({ id }) => id),
+            ...(record.browser.gates ?? []).map(({ id }) => id),
+          ],
+          claims: [
+            ...(record.browser.criteria ?? []),
+            ...(record.browser.gates ?? []),
+          ].map(({ id, verdict, note }) => ({ id, verdict, note })),
+        }] : [])],
+      })
+      record.contradictions = await recordEvidenceContradictions({
+        runDir,
+        candidate: record.candidateEvidence,
+        evaluator: record.evaluatorEvidence,
+        contradictions: detectEvidenceContradictions({
+          candidate: record.candidateEvidence,
+          evaluator: record.evaluatorEvidence,
+        }),
+      })
+      if (record.candidateEvidence) {
+        record.evidenceViews = await materializeEvidenceJudgeViews({
+          runDir,
+          candidate: record.candidateEvidence,
+          evaluator: record.evaluatorEvidence,
+          contradictions: record.contradictions,
+          lineage: record.evidenceLineage,
+        })
+      }
 
       if (record.sourceEvidence.files.length === 0) {
         throw new Error('candidate source is empty; product judging cannot produce an evidence-backed result')
@@ -767,6 +913,11 @@ export async function runEvaluation({
             ...(record.browser?.gates ?? []),
           ],
           sources: record.sourceEvidence.files,
+          neutral: record.neutral ? {
+            root: join(runDir, record.neutral.judge?.root ?? 'neutral/judge'),
+            source_root: join(runDir, record.neutral.source.root),
+            requirements_root: join(runDir, record.neutral.requirements.root),
+          } : null,
           invoke: judgeInvoke,
         })
         await writeJsonAtomic(join(runDir, 'phases/product-judging.json'), record.judging)
@@ -940,6 +1091,13 @@ export async function runEvaluation({
           fixture_improvement_proposals: record.ambiguity.fixture_improvement_proposals,
           scoring_effect: 'none',
         } : null,
+        evidence: {
+          candidate: record.candidateEvidence,
+          evaluator: record.evaluatorEvidence,
+          contradictions: record.contradictions,
+          lineage: record.evidenceLineage,
+          workflow_provenance: mode === 'reference-baseline' ? 'not-applicable' : 'complete',
+        },
         roleConfiguration: reconcileRoleAttempts(
           validation.profiles,
           record.metrics?.attempts ?? [],
@@ -981,6 +1139,8 @@ export async function runEvaluation({
     }],
     ['browser-evaluation', (value) => { record.browser = value }],
     ['source-evidence', (value) => { record.sourceEvidence = value }],
+    ['candidate-evidence', (value) => { record.candidateEvidence = value }],
+    ['neutral-inputs', (value) => { record.neutral = value }],
     ['product-judging', (value) => { record.judging = value }],
     ['score', (value) => { record.score = value }],
     ['ambiguity-diagnostics', (value) => { record.ambiguity = value }],
@@ -1001,13 +1161,23 @@ export async function runEvaluation({
     preflight: ['phases/preflight.json'],
     'agent-runner': ['phases/workflow-execution.json'],
     'delivery-verification': ['phases/delivery-verification.json'],
-    'source-freeze': ['implementation.diff', 'candidate-source-manifest.json'],
+    'evidence-provenance': [
+      'phases/evidence-provenance.json',
+      'evidence/candidate/manifest.json',
+    ],
+    'source-freeze': [
+      'implementation.diff',
+      'candidate-source-manifest.json',
+      'neutral/provenance/manifest.json',
+    ],
     verification: ['phases/verification.json'],
     'browser-evaluation': ['phases/browser-evaluation.json'],
     'product-judging': [
       'phases/source-evidence.json',
       'phases/product-judging.json',
       'phases/score.json',
+      'evidence/evaluator/manifest.json',
+      'evidence/evaluator/contradictions.json',
     ],
     'ambiguity-diagnostics': ['phases/ambiguity-diagnostics.json', 'ambiguity-ledger.json'],
     'metrics-pricing': ['phases/metrics-pricing.json'],
@@ -1123,7 +1293,16 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       ? ({ baseUrl }) => createAxiBrowserDriver({ baseUrl })
       : null,
     judgeInvoke: productionRunDir
-      ? createCodexJudgeInvoker({ runDir: productionRunDir, candidateWorktree })
+      ? createCodexJudgeInvoker({
+          runDir: productionRunDir,
+          candidateWorktree,
+          defaultCwd: join(resolve(productionRunDir), '.runtime/judge-workspace'),
+          allowedRoots: [
+            join(resolve(productionRunDir), '.runtime/judge-workspace'),
+            join(resolve(productionRunDir), 'neutral/judge'),
+            join(resolve(productionRunDir), 'evidence/judge-views'),
+          ],
+        })
       : null,
     log: (line) => console.error(line),
   })

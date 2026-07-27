@@ -333,9 +333,14 @@ test('delivery verification proves branch, remote head, draft PR identity, and f
     'acceptance-assumptions.md',
     'acceptance-flow-evidence.md',
     'acceptance-handoff.md',
+    'findings-history.md',
   ]) {
     await writeFile(join(sessionDir, 'output', file), `${file}\n`)
   }
+  await writeFile(
+    join(sessionDir, 'output', 'screenshot-metadata.json'),
+    JSON.stringify({ captures: [{ path: 'acceptance-flow.png' }] }),
+  )
   await writeFile(join(sessionDir, 'output', 'acceptance-flow.png'), 'image bytes\n')
 
   const head = git(worktree, 'rev-parse', 'HEAD')
@@ -374,7 +379,7 @@ test('delivery verification proves branch, remote head, draft PR identity, and f
 
   assert.equal(delivery.final_sha, head)
   assert.equal(delivery.pull_request.base, 'main')
-  assert.equal(delivery.acceptance_artifacts.length, 4)
+  assert.ok(delivery.acceptance_artifacts.length >= 6)
   assert.ok(delivery.acceptance_artifacts.some(({ role }) => role === 'acceptance-screenshot'))
   assert.ok(!calls.some(([command, ...args]) => (
     command === 'gh' && /check|status|ci/i.test(args.join(' '))

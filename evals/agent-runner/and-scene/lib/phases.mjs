@@ -14,6 +14,7 @@ export const AUTOMATED_PHASES = [
   // recorded run already completed the full workflow.
   { name: 'agent-runner', owner: 'implementation-workflow', alwaysVerify: true },
   { name: 'delivery-verification', owner: 'implementation-workflow', alwaysVerify: true },
+  { name: 'evidence-provenance', owner: 'evaluation-harness', alwaysVerify: true },
   { name: 'source-freeze', owner: 'evaluation-harness', alwaysVerify: true },
   { name: 'verification', owner: 'evaluation-harness' },
   // The candidate server is a process-local resource. A durable phase
@@ -45,8 +46,9 @@ export const HUMAN_REVIEW_PHASES = [
   { name: 'publication', owner: 'evaluation-harness' },
 ]
 
-function failureEventType(phase) {
-  return phase.owner === 'implementation-workflow' ? 'workflow-failure' : 'harness-failure'
+function failureEventType(phase, error) {
+  const owner = error?.owner ?? phase.owner
+  return owner === 'implementation-workflow' ? 'workflow-failure' : 'harness-failure'
 }
 
 export async function runPhases({ phases, handlers, outcome, context = {}, isComplete = () => false }) {
@@ -125,7 +127,7 @@ export async function runPhases({ phases, handlers, outcome, context = {}, isCom
       }
       failed = phase.name
       current = applyOutcomeEvent(current, {
-        type: failureEventType(phase),
+        type: failureEventType(phase, error),
         phase: phase.name,
         reason: error.message,
         code: error.code ?? null,

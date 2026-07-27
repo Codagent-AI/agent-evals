@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { writeFileSync } from 'node:fs'
-import { mkdtemp, readFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -83,5 +83,41 @@ test('Codex judge invoker reports a failed CLI without accepting stale output', 
       prompt: 'judge this',
     }),
     /Codex judge demo-integration exited 7: model unavailable/,
+  )
+})
+
+test('Codex judge invoker accepts only explicitly allowed read-only judge roots', async () => {
+  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const neutralRoot = join(runDir, 'neutral')
+  await mkdir(neutralRoot)
+  const calls = []
+  const invoke = createCodexJudgeInvoker({
+    runDir,
+    candidateWorktree: join(runDir, 'candidate'),
+    allowedRoots: [neutralRoot],
+    spawnImpl: (command, args, options) => {
+      calls.push(options.cwd)
+      const outputPath = args[args.indexOf('--output-last-message') + 1]
+      writeFileSync(outputPath, '{"results":[]}')
+      return { status: 0, stdout: '', stderr: '' }
+    },
+  })
+
+  await invoke({
+    job: 'scene-kit',
+    cwd: neutralRoot,
+    schema: { type: 'object' },
+    prompt: 'judge neutral source',
+  })
+  assert.deepEqual(calls, [neutralRoot])
+
+  await assert.rejects(
+    invoke({
+      job: 'scene-kit',
+      cwd: join(runDir, '..', 'unbounded'),
+      schema: { type: 'object' },
+      prompt: 'escape',
+    }),
+    /approved read-only root/,
   )
 })

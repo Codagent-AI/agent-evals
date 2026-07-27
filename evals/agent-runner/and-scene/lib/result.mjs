@@ -20,6 +20,7 @@ import { readdir, stat, writeFile } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 
 import { outcomeLabel } from './outcomes.mjs'
+import { summarizeEvidenceManifest } from './evidence.mjs'
 import { hashFile, writeJsonAtomic } from './persistence.mjs'
 import { renderReport } from './report.mjs'
 
@@ -66,6 +67,18 @@ function completenessOf({ mode, score, humanReview, cost, pricing, metrics, timi
       ? NOT_APPLICABLE
       : (metrics ? (metrics.history_complete === false ? 'incomplete' : 'complete') : 'unavailable'),
     workflow_provenance: evidence?.workflow_provenance ?? (mode === 'reference-baseline' ? NOT_APPLICABLE : 'complete'),
+    candidate_evidence: mode === 'reference-baseline'
+      ? NOT_APPLICABLE
+      : (evidence?.candidate?.readiness === 'ready' || evidence?.candidate?.ownership === 'candidate-produced'
+          ? 'complete'
+          : 'incomplete'),
+    evaluator_evidence: evidence?.evaluator?.ownership === 'evaluator-produced'
+      ? 'complete'
+      : 'incomplete',
+    final_revision_alignment: mode === 'reference-baseline'
+      ? NOT_APPLICABLE
+      : (evidence?.lineage?.accepted === true ? 'complete'
+          : (evidence?.lineage ? 'defective' : 'incomplete')),
   }
 }
 
@@ -94,6 +107,12 @@ export function assembleResult({
   const baselineRun = mode === 'reference-baseline'
   const components = score?.components ?? []
   const automatedComplete = components.length > 0 && components.every(({ complete }) => complete)
+  const evidenceSummary = evidence ? {
+    candidate: summarizeEvidenceManifest(evidence.candidate),
+    evaluator: summarizeEvidenceManifest(evidence.evaluator),
+    lineage: evidence.lineage ?? null,
+    contradictions: evidence.contradictions?.items ?? [],
+  } : null
 
   return {
     schema_version: RESULT_SCHEMA_VERSION,
@@ -130,6 +149,7 @@ export function assembleResult({
     judging,
     workflow,
     ambiguity,
+    evidence: evidenceSummary,
     // A reference baseline ran no Agent Runner, so an absent value here is
     // "not applicable", never zero and never empty. A caller that has a richer
     // not-applicable record of its own — per-role configuration, say — keeps it.

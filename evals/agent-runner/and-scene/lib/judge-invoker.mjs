@@ -6,7 +6,7 @@
 // project instructions or user configuration influencing the evaluator.
 import { spawnSync } from 'node:child_process'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 const JUDGE_ENV_ALLOWLIST = [
   'HOME',
@@ -40,6 +40,8 @@ function detail(result) {
 export function createCodexJudgeInvoker({
   runDir,
   candidateWorktree,
+  defaultCwd = candidateWorktree,
+  allowedRoots = null,
   // The sandbox installs `codex` as a yolo wrapper for implementation agents.
   // Judges must bypass that wrapper and invoke the real, sandboxed CLI.
   command = '/usr/bin/codex',
@@ -47,10 +49,20 @@ export function createCodexJudgeInvoker({
   env = process.env,
 } = {}) {
   const runtimeDir = join(resolve(runDir), '.runtime', 'judge')
-  const cwd = resolve(candidateWorktree)
+  const fallbackCwd = resolve(defaultCwd)
+  const approvedRoots = (allowedRoots ?? [fallbackCwd]).map((root) => resolve(root))
   let sequence = 0
 
   return async function invoke(request) {
+    const cwd = resolve(request.cwd ?? fallbackCwd)
+    const approved = approvedRoots.some((root) => {
+      const offset = relative(root, cwd)
+      return offset === '' || (!offset.startsWith(`..${sep}`) && offset !== '..' && !isAbsolute(offset))
+    })
+    if (!approved) {
+      throw new Error(`Codex judge ${request.job ?? 'job'} cwd is not an approved read-only root: ${cwd}`)
+    }
+    await mkdir(cwd, { recursive: true })
     sequence += 1
     const stem = `${String(sequence).padStart(2, '0')}-${safeJobName(request.job)}`
     const schemaPath = join(runtimeDir, `${stem}.schema.json`)

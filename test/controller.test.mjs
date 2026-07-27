@@ -256,6 +256,43 @@ test('delivery verification finishes before source freeze and product judging', 
   assert.deepEqual(order, ['delivery', 'source-freeze', 'product-judging'])
 })
 
+test('candidate evidence is frozen after delivery and neutral inputs exist before judging', async () => {
+  const context = await environment()
+  const order = []
+
+  const result = await evaluate(context, profiles, {
+    materializeEvidence: async ({ delivery: verified }) => {
+      order.push(`evidence:${verified.final_sha}`)
+      return {
+        ownership: 'candidate-produced',
+        manifest_sha256: 'c'.repeat(64),
+        artifacts: [],
+        findings: [],
+      }
+    },
+    materializeNeutral: async ({ finalSha }) => {
+      order.push(`neutral:${finalSha}`)
+      return {
+        source: { root: 'neutral/source' },
+        requirements: { root: 'neutral/requirements' },
+        manifest: { manifest_sha256: 'd'.repeat(64) },
+      }
+    },
+    handlers: {
+      'product-judging': async () => { order.push('judging') },
+    },
+  })
+
+  assert.equal(result.exitCode, 0)
+  assert.deepEqual(order, [
+    `evidence:${context.commit}`,
+    `neutral:${context.commit}`,
+    'judging',
+  ])
+  const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
+  assert.equal(state.delivery.acceptance.manifest_sha256, 'c'.repeat(64))
+})
+
 test('a typed side-effect violation is an implementation-workflow failure and retains resources', async () => {
   const context = await environment()
   const error = Object.assign(

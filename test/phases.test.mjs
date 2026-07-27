@@ -32,6 +32,7 @@ test('the automated lifecycle runs in the approved order', () => {
     'preflight',
     'agent-runner',
     'delivery-verification',
+    'evidence-provenance',
     'source-freeze',
     'verification',
     'candidate-server',
@@ -64,6 +65,25 @@ test('Agent Runner failures are owned by the implementation workflow', () => {
   assert.equal(AUTOMATED_PHASES.find((phase) => phase.name === 'delivery-verification').owner, 'implementation-workflow')
   assert.ok(AUTOMATED_PHASES.filter((phase) => !['agent-runner', 'delivery-verification'].includes(phase.name))
     .every((phase) => phase.owner === 'evaluation-harness'))
+})
+
+test('typed missing evidence in evaluator intake remains an implementation-workflow failure', async () => {
+  const { map } = handlers(AUTOMATED_PHASES, { effects: serverUp })
+  map['evidence-provenance'] = async () => {
+    throw Object.assign(new Error('required candidate evidence is missing'), {
+      owner: 'implementation-workflow',
+      code: 'missing-evidence-role',
+    })
+  }
+
+  const result = await runPhases({
+    phases: AUTOMATED_PHASES,
+    handlers: map,
+    outcome: createOutcome(),
+  })
+
+  assert.equal(result.outcome.evaluation_status, 'implementation-workflow-failed')
+  assert.equal(result.outcome.failure.code, 'missing-evidence-role')
 })
 
 test('every browser-dependent phase requires the candidate server', () => {
@@ -286,13 +306,14 @@ test('the Agent Runner phase always re-verifies rather than trusting a checkpoin
   })
 
   // Resume must consult Agent Runner's own state before acting, so its phase is
-  // never short-circuited by an eval-side checkpoint. The candidate server is
-  // likewise always re-verified, and the result artifacts are always rewritten
-  // so they describe this session rather than an earlier one.
+  // never short-circuited by an eval-side checkpoint. Delivery evidence is
+  // re-ingested against that identity, the candidate server is likewise always
+  // re-verified, and result artifacts are rewritten for this session.
   assert.deepEqual(order, [
     'preflight',
     'agent-runner',
     'delivery-verification',
+    'evidence-provenance',
     'source-freeze',
     'candidate-server',
     'pending-result',
