@@ -49,14 +49,22 @@ function invoke(label, args, { worktree, exec }) {
   return timing
 }
 
-const INFRASTRUCTURE_FAILURE = /\b(?:EAI_AGAIN|ENETUNREACH|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOSPC)\b|(?:registry|network).*(?:unavailable|timed out|failed|error)|\b(?:502|503|504)\b/i
+const INFRASTRUCTURE_FAILURE_PATTERNS = [
+  /\b(?:EAI_AGAIN|ENETUNREACH|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOSPC)\b/i,
+  /(?:registry|network).*(?:unavailable|timed out|failed|error)/i,
+  /\b(?:502|503|504)\b/,
+]
+
+function isInfrastructureFailure(attempt) {
+  const output = outputOf(attempt)
+  return !attempt.ok && INFRASTRUCTURE_FAILURE_PATTERNS.some((pattern) => pattern.test(output))
+}
 
 function throwInfrastructureFailure(attempts, stage) {
-  if (attempts.length === 0 || !attempts.every((attempt) => (
-    !attempt.ok && INFRASTRUCTURE_FAILURE.test(outputOf(attempt))
-  ))) return
+  if (attempts.length === 0 || !attempts.every(isInfrastructureFailure)) return
+  const lastOutput = outputOf(attempts.at(-1))
   throw Object.assign(
-    new Error(`candidate ${stage} could not be evaluated because infrastructure failed repeatedly: ${outputOf(attempts.at(-1))}`),
+    new Error(`candidate ${stage} could not be evaluated because infrastructure failed repeatedly: ${lastOutput}`),
     {
       owner: 'evaluation-harness',
       code: 'candidate-command-infrastructure-failed',

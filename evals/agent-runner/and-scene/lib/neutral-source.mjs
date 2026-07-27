@@ -276,19 +276,20 @@ export async function materializeNeutralInputs({
     const path = `requirement-${String(requirementIndex).padStart(3, '0')}.md`
     // Requirement descriptions and scenarios are copied without behavioral
     // rewriting. Only an outer OpenSpec delta heading is omitted when present.
-    const content = redactContent(Buffer.from(normativeRequirements(original)), identities)
-    await writeSnapshotFile(requirementsRoot, path, content.bytes)
+    const normative = Buffer.from(normativeRequirements(original))
+    const neutralContent = redactContent(normative, identities)
+    await writeSnapshotFile(requirementsRoot, path, neutralContent.bytes)
     manifestEntries.push({
       namespace: 'neutral-requirements',
       path: `requirements/${path}`,
       origin: { revision: finalSha, path: entry.path, object: entry.object },
       original_sha256: hashString(original),
-      sha256: hashString(content.bytes),
+      sha256: hashString(neutralContent.bytes),
       transformations: [
-        ...(original.equals(Buffer.from(normativeRequirements(original)))
+        ...(original.equals(normative)
           ? []
           : [{ type: 'remove-openspec-delta-container-heading', behavioral_edit: false }]),
-        ...content.transformations,
+        ...neutralContent.transformations,
       ],
     })
   }

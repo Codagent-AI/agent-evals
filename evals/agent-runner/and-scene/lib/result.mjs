@@ -52,6 +52,17 @@ function evidenceArtifactsComplete(summary, ownership) {
     ))
 }
 
+function judgeCoverage(judging) {
+  if (!judging) return 'unavailable'
+  if ((judging.failed_jobs ?? []).length > 0) return 'incomplete'
+
+  const observed = Object.keys(judging.judges ?? {}).sort()
+  const expected = [...(judging.expected_jobs ?? [])].sort()
+  const complete = observed.length === expected.length
+    && observed.every((id, index) => id === expected[index])
+  return complete ? 'complete' : 'incomplete'
+}
+
 function completenessOf({
   mode,
   score,
@@ -105,17 +116,7 @@ function completenessOf({
       ? NOT_APPLICABLE
       : (evidence?.lineage?.accepted === true ? 'complete'
           : (evidence?.lineage ? 'defective' : 'incomplete')),
-    judge_coverage: judging
-      ? (() => {
-          const observed = Object.keys(judging.judges ?? {}).sort()
-          const expected = [...(judging.expected_jobs ?? [])].sort()
-          return (judging.failed_jobs ?? []).length === 0
-            && observed.length === expected.length
-            && observed.every((id, index) => id === expected[index])
-            ? 'complete'
-            : 'incomplete'
-        })()
-      : 'unavailable',
+    judge_coverage: judgeCoverage(judging),
     candidate_reported_ci: mode === 'reference-baseline'
       ? NOT_APPLICABLE
       : (delivery?.candidate_reported_ci || (evidence?.candidate?.ci_claims ?? []).length > 0

@@ -96,6 +96,12 @@ import {
 
 const SUITE_DIR = dirname(fileURLToPath(import.meta.url))
 const DEFAULT_CAPABILITIES = join(SUITE_DIR, 'agent-runner-capabilities.json')
+const BROWSER_EVALUATOR_FILES = [
+  'lib/browser-eval.mjs',
+  'lib/axi-browser-driver.mjs',
+  'lib/demo-contract.mjs',
+]
+const GITHUB_WRITE_PERMISSIONS = new Set(['WRITE', 'MAINTAIN', 'ADMIN'])
 
 const FLAGS = new Map([
   ['--skip-validator', 'skipValidator'],
@@ -183,6 +189,24 @@ function runnerFailure(timing) {
   return `${timing.label} failed (${diagnostic})${output}`
 }
 
+async function fingerprintFiles(paths) {
+  const hashes = await Promise.all(paths.map(async (path) => [
+    path,
+    await hashFile(join(SUITE_DIR, path)),
+  ]))
+  return hashJson(Object.fromEntries(hashes))
+}
+
+function repositoryPermissionLevel(repository, worktree, exec) {
+  const permission = exec(
+    'gh',
+    ['repo', 'view', repository, '--json', 'viewerPermission', '--jq', '.viewerPermission'],
+    { cwd: worktree },
+  )
+  if (permission.status !== 0 || permission.error) return ''
+  return String(permission.stdout ?? '').trim().toUpperCase()
+}
+
 export async function runEvaluation({
   argv,
   exec,
@@ -262,13 +286,7 @@ export async function runEvaluation({
     return failure([{ code: 'invalid-rubric', message: error.message }])
   }
   const provenanceOfRubrics = rubricProvenance(rubrics)
-  const browserEvaluatorFingerprint = hashJson(Object.fromEntries(await Promise.all(
-    [
-      'lib/browser-eval.mjs',
-      'lib/axi-browser-driver.mjs',
-      'lib/demo-contract.mjs',
-    ].map(async (path) => [path, await hashFile(join(SUITE_DIR, path))]),
-  )))
+  const browserEvaluatorFingerprint = await fingerprintFiles(BROWSER_EVALUATOR_FILES)
 
   // A reference baseline evaluates an existing candidate without invoking Agent
   // Runner, so it needs no clean checkout or workflow contract.
@@ -353,15 +371,12 @@ export async function runEvaluation({
     return failure([{ code: 'candidate-worktree', message: error.message }])
   }
   if (mode === 'agent-runner') {
-    const permission = exec(
-      'gh',
-      ['repo', 'view', candidateSource.repository, '--json', 'viewerPermission', '--jq', '.viewerPermission'],
-      { cwd: candidateWorktree },
+    const permission = repositoryPermissionLevel(
+      candidateSource.repository,
+      candidateWorktree,
+      exec,
     )
-    const level = permission.status === 0 && !permission.error
-      ? String(permission.stdout ?? '').trim().toUpperCase()
-      : ''
-    if (!['WRITE', 'MAINTAIN', 'ADMIN'].includes(level)) {
+    if (!GITHUB_WRITE_PERMISSIONS.has(permission)) {
       return failure([{
         code: 'publishing-credentials',
         message: 'GitHub credentials must have write permission for the candidate repository',

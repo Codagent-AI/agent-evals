@@ -170,20 +170,23 @@ function normalizeHistoryEntry(entry) {
   }
 }
 
+function historyStepPath(entry) {
+  return Array.isArray(entry.step_path) && entry.step_path.length > 0
+    ? entry.step_path
+    : [entry.step]
+}
+
 export function checkWorkflowHistory(history = []) {
   const normalized = history.map(normalizeHistoryEntry).filter(({ step }) => step)
   const completed = new Set(
     normalized.filter(({ outcome }) => outcome === 'success').map(({ step }) => step),
   )
   const missingSteps = REQUIRED_FINAL_WORKFLOW_STEPS.filter((step) => !completed.has(step))
-  const prohibitedEffects = normalized.flatMap((entry) => {
-    const path = Array.isArray(entry.step_path) && entry.step_path.length > 0
-      ? entry.step_path
-      : [entry.step]
-    return path
+  const prohibitedEffects = normalized.flatMap((entry) => (
+    historyStepPath(entry)
       .filter(isProhibitedWorkflowStep)
       .map((step) => ({ ...entry, step }))
-  })
+  ))
   return {
     ok: missingSteps.length === 0 && prohibitedEffects.length === 0,
     missing_steps: missingSteps,

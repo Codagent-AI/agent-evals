@@ -148,7 +148,7 @@ function normalizeState(state, { runId, sessionDir, lock, history, modifiedAtMs 
   }
 }
 
-function auditStep(prefix) {
+function parseAuditStepIdentity(prefix) {
   if (!prefix.startsWith('[') || !prefix.endsWith(']')) return null
   const stepPath = prefix.slice(1, -1)
     .split(',')
@@ -165,7 +165,7 @@ export async function readWorkflowHistory(sessionDir) {
       /^(\S+)\s+(\[[^\]]+\])\s+(step_start|step_end)(?:\s+(\{.*\}))?$/,
     )
     if (!match) continue
-    const identity = auditStep(match[2])
+    const identity = parseAuditStepIdentity(match[2])
     if (!identity) continue
     let data = {}
     try {
