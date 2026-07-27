@@ -112,6 +112,7 @@ const FLAGS = new Map([
 ])
 const VALUES = new Map([
   ['--run-dir', 'runDir'],
+  ['--run-id', 'runId'],
   ['--repo', 'repo'],
   ['--agent-runner-dir', 'agentRunnerDir'],
   ['--change-name', 'changeName'],
@@ -152,6 +153,10 @@ export function parseArgs(argv) {
     index += 1
   }
   if (!options.runDir) throw new Error('--run-dir is required')
+  options.runId ??= basename(resolve(options.runDir))
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(options.runId)) {
+    throw new Error('--run-id must be a single safe path component')
+  }
   return options
 }
 
@@ -255,7 +260,7 @@ export async function runEvaluation({
   }
 
   const runDir = resolve(options.runDir)
-  const runId = basename(runDir)
+  const runId = options.runId
   const mode = options.referenceBaseline ? 'reference-baseline' : 'agent-runner'
   const runKind = options.referenceBaseline ? 'reference' : 'candidate'
 

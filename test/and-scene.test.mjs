@@ -113,7 +113,7 @@ test('scored mode delegates the lifecycle to the suite controller', async () => 
 
   assert.equal(result.status, 0, result.output)
   for (const expected of [
-    '/eval-input/controller.mjs', '--run-dir', '/artifacts',
+    '/eval-input/controller.mjs', '--run-dir', '/artifacts', '--run-id run',
     'AGENT_RUNNER_NO_TUI=1', '--repo',
     '--skip-validator', '--change-name', 'create-and-scene',
     '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
@@ -249,7 +249,7 @@ test('the run receives a stable container identity that resume reuses', async ()
 
   assert.equal(first.status, 0, first.output)
   assert.equal(resumed.status, 0, resumed.output)
-  const identity = /AND_SCENE_RUN_ID/
+  const identity = /--run-id run/
   assert.match(first.output, identity)
   assert.match(resumed.output, identity)
   assert.ok(resumed.output.includes('--resume'), resumed.output)

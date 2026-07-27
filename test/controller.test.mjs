@@ -313,6 +313,20 @@ test('the candidate branch identity exists in run-state before Runner starts', a
   assert.equal(state.delivery.retained_for_manual_cleanup, true)
 })
 
+test('an explicit host run identity survives the fixed container artifact mount', async () => {
+  const context = await environment({
+    runnerResult: { status: 1, stderr: 'runner stopped' },
+  })
+
+  await evaluate(context, ['--run-id', 'candidate-cutover-42', ...profiles], {
+    readRunnerState: () => null,
+  })
+
+  const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
+  assert.equal(state.run_id, 'candidate-cutover-42')
+  assert.equal(state.delivery.branch, 'eval/and-scene/candidate-cutover-42')
+})
+
 test('Runner identity, delivery identity, and acceptance hashes evolve in one run-state manifest', async () => {
   const context = await environment()
 
