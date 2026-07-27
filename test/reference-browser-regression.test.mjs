@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { mkdtemp, readFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
 
 import {
@@ -40,6 +43,28 @@ test('the pinned reference regression requires real mode operation and every can
     driver: { baseUrl: 'http://127.0.0.1:4173/' },
     revision: REFERENCE_REVISION,
   }])
+})
+
+test('a programmatic reference regression persists the artifact it cites', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'reference-browser-regression-'))
+  const artifact = join(dir, 'reference-browser.json')
+  const result = await runReferenceBrowserRegression({
+    baseUrl: 'http://127.0.0.1:4173/',
+    revision: REFERENCE_REVISION,
+    artifact,
+    driverFactory: () => ({}),
+    evaluate: async () => ({
+      criteria: canonicalIds.map((id) => ({ id, verdict: 'pass' })),
+      probes: canonicalIds.map((id) => ({
+        id,
+        required_mode: 'browse',
+        established_state: { mode: 'browse', position: 0 },
+        settled_state: { settled: true },
+      })),
+    }),
+  })
+
+  assert.deepEqual(JSON.parse(await readFile(artifact, 'utf8')), result)
 })
 
 test('the real-browser regression refuses a different revision or presenter-state caption evidence', async () => {

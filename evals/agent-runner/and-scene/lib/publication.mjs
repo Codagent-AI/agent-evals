@@ -24,6 +24,7 @@ import { join } from 'node:path'
 
 import { readJson, writeJsonAtomic } from './persistence.mjs'
 import { runTimed } from './subprocess.mjs'
+import { writeResultArtifacts } from './result.mjs'
 
 export const PUBLICATION_SCHEMA_VERSION = 1
 
@@ -191,6 +192,11 @@ export async function copySnapshot({ runDir, runId, repoDir }) {
   for (const name of files) {
     await copyFile(join(runDir, name), join(destination, name))
   }
+  // Re-project the three derived artifacts inside the curated namespace. This
+  // keeps the published report's artifact links resolvable without copying raw
+  // evidence, logs, or runtime state into the permanent result.
+  const result = await readJson(join(destination, 'result.json'))
+  await writeResultArtifacts({ runDir: destination, result })
   return { dir: destination, files, absent }
 }
 

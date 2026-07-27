@@ -65,6 +65,15 @@ export const HARNESS_FINGERPRINT_SOURCES = [
   'outcomes.mjs',
   'result.mjs',
   'report.mjs',
+  'browser-eval.mjs',
+  'axi-browser-driver.mjs',
+  'demo-contract.mjs',
+  'evidence.mjs',
+  'neutral-source.mjs',
+  'candidate-verification.mjs',
+  'candidate-server.mjs',
+  'candidate-server-host.mjs',
+  'workflow.mjs',
 ]
 
 export async function harnessFingerprint() {

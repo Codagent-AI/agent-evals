@@ -87,8 +87,10 @@ test('the AXI driver establishes mode and position explicitly and waits for sett
   assert.match(calls[1].input, /requiredPosition/)
   assert.match(calls[1].input, /page\.press\('ArrowRight'\)/)
   assert.match(calls[1].input, /observedPosition/)
-  assert.match(calls[2].input, /page\.wait\(100\)/)
-  assert.doesNotMatch(calls[2].input, /requestAnimationFrame/)
+  assert.match(calls[2].input, /stableReads/)
+  assert.match(calls[2].input, /document\.getAnimations/)
+  assert.match(calls[2].input, /timed out waiting for a settled browser state/)
+  assert.doesNotMatch(calls[2].input, /^await page\.wait\(100\);/m)
 })
 
 test('the AXI driver turns CLI failures into harness errors', async () => {

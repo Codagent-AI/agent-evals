@@ -6,6 +6,7 @@ import { test } from 'node:test'
 
 import {
   CALIBRATION_MODE,
+  HARNESS_FINGERPRINT_SOURCES,
   calibrationCases,
   runCalibration,
 } from '../evals/agent-runner/and-scene/lib/calibration.mjs'
@@ -18,6 +19,18 @@ const rubrics = await loadRubrics()
 async function out() {
   return mkdtemp(join(tmpdir(), 'agent-evals-calibration-'))
 }
+
+test('the harness fingerprint covers browser and evidence behavior used by scoring', () => {
+  for (const source of [
+    'browser-eval.mjs',
+    'axi-browser-driver.mjs',
+    'evidence.mjs',
+    'neutral-source.mjs',
+    'candidate-verification.mjs',
+  ]) {
+    assert.ok(HARNESS_FINGERPRINT_SOURCES.includes(source), source)
+  }
+})
 
 test('the known-good reference scores all 62 applicable automated points and opens every gate', async () => {
   const ledger = await runCalibration({ rubrics, outDir: await out() })

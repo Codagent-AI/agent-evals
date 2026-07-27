@@ -155,11 +155,33 @@ test('a finalized run publishes exactly the curated snapshot, commits it, and pu
     published.split('\n').sort(),
     CURATED_ARTIFACTS.map((name) => `${RESULTS_RELATIVE_DIR}/${runId}/${name}`).sort(),
   )
-  assert.equal(await readFile(join(resultsDir, 'report.html'), 'utf8'), '<!doctype html><title>report</title>')
+  assert.match(await readFile(join(resultsDir, 'report.html'), 'utf8'), /<!doctype html>/i)
 
   assert.equal(git(repo, 'log', '-1', '--format=%s'), `chore: record and-scene eval ${runId}`)
   // The ordinary push reached the configured upstream.
   assert.equal(git(remote, 'log', '-1', '--format=%s'), `chore: record and-scene eval ${runId}`)
+})
+
+test('published report artifact links resolve inside the curated snapshot', async () => {
+  const { repo, dir } = await disposableRepo()
+  const { runDir, runId, result } = await finalizedRun(dir)
+  await writeFile(join(runDir, 'evidence/raw-probe.json'), '{}')
+  result.artifacts = [
+    { path: 'evidence/raw-probe.json', bytes: 2 },
+    { path: 'human-review.json', bytes: 17 },
+  ]
+  await writeFile(join(runDir, 'result.json'), JSON.stringify(result))
+
+  await publishRun({ runDir, runId, result, repoDir: repo })
+
+  const resultsDir = join(repo, RESULTS_RELATIVE_DIR, runId)
+  const publishedResult = await readJson(join(resultsDir, 'result.json'))
+  assert.ok(publishedResult.artifacts.every(({ path }) => CURATED_ARTIFACTS.includes(path)))
+  const report = await readFile(join(resultsDir, 'report.html'), 'utf8')
+  assert.doesNotMatch(report, /href="evidence\/raw-probe\.json"/)
+  for (const href of [...report.matchAll(/href="([^"]+)"/g)].map((match) => match[1])) {
+    assert.ok(CURATED_ARTIFACTS.includes(href), href)
+  }
 })
 
 test('publication never stages unrelated working-tree changes', async () => {

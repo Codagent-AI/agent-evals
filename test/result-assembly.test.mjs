@@ -57,6 +57,28 @@ function assemble(overrides = {}) {
   })
 }
 
+function completeJudging() {
+  return {
+    expected_jobs: [
+      'demo-integration',
+      'scene-kit',
+      'presentation-skill',
+      'verification-tooling',
+      'testing-evidence',
+      'assumption-handling',
+    ],
+    judges: Object.fromEntries([
+      'demo-integration',
+      'scene-kit',
+      'presentation-skill',
+      'verification-tooling',
+      'testing-evidence',
+      'assumption-handling',
+    ].map((id) => [id, [{ id: `${id}-criterion`, verdict: 'pass' }]])),
+    failed_jobs: [],
+  }
+}
+
 test('a complete result carries the official score, breakdown, and source details', () => {
   const result = assemble()
 
@@ -172,7 +194,7 @@ test('completeness dimensions are reported independently of each other', () => {
     cost: { implementation: { total_usd: 4.5, complete: true, usage_complete: false } },
     pricing: { verified: false },
     metrics: { complete: true, history_complete: false, attempts: [] },
-    judging: { judges: { demo: [] }, failed_jobs: [] },
+    judging: completeJudging(),
     delivery: { candidate_reported_ci: { status: 'pending', revision: 'f'.repeat(40) } },
   })
 
@@ -183,6 +205,15 @@ test('completeness dimensions are reported independently of each other', () => {
   assert.equal(result.completeness.judge_coverage, 'complete')
   assert.equal(result.completeness.candidate_reported_ci, 'complete')
   assert.equal(result.completeness.score, 'complete')
+})
+
+test('judge coverage is incomplete when a required judge is absent without a recorded failure', () => {
+  const judging = completeJudging()
+  delete judging.judges['assumption-handling']
+
+  const result = assemble({ judging })
+
+  assert.equal(result.completeness.judge_coverage, 'incomplete')
 })
 
 test('missing product evidence marks score completeness without failing the product', () => {

@@ -158,8 +158,50 @@ console.log(JSON.stringify(true));
 
     async settle() {
       return run(`
-await page.wait(100);
-console.log(JSON.stringify({ settled: true, strategy: 'bounded-wait-and-state-read' }));
+const readSettledState = () => page.eval(() => {
+  const animations = document.getAnimations()
+    .filter((animation) => animation.playState === 'running').length;
+  const nodes = [...document.querySelectorAll(
+    '[data-step-count], [data-presentation-stage], [data-layout-id], [data-scene-entity], [data-node]',
+  )];
+  const signature = JSON.stringify(nodes.map((element) => {
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    return [
+      element.getAttribute('data-step-index'),
+      element.getAttribute('data-layout-id'),
+      element.getAttribute('data-scene-entity'),
+      element.getAttribute('data-node'),
+      Math.round(rect.x * 10) / 10,
+      Math.round(rect.y * 10) / 10,
+      Math.round(rect.width * 10) / 10,
+      Math.round(rect.height * 10) / 10,
+      style.opacity,
+      style.transform,
+      element.textContent?.trim(),
+    ];
+  }));
+  return { animations, signature };
+});
+let previous = null;
+let stableReads = 0;
+for (let attempt = 0; attempt < 50; attempt += 1) {
+  const state = await readSettledState();
+  stableReads = state.animations === 0 && state.signature === previous
+    ? stableReads + 1
+    : 0;
+  if (stableReads >= 2) {
+    console.log(JSON.stringify({
+      settled: true,
+      strategy: 'animation-idle-and-three-stable-state-reads',
+      observations: attempt + 1,
+    }));
+    break;
+  }
+  previous = state.signature;
+  await page.wait(100);
+  if (attempt === 49) throw new Error('timed out waiting for a settled browser state');
+}
 `)
     },
 

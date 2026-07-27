@@ -106,7 +106,15 @@ function completenessOf({
       : (evidence?.lineage?.accepted === true ? 'complete'
           : (evidence?.lineage ? 'defective' : 'incomplete')),
     judge_coverage: judging
-      ? ((judging.failed_jobs ?? []).length === 0 ? 'complete' : 'incomplete')
+      ? (() => {
+          const observed = Object.keys(judging.judges ?? {}).sort()
+          const expected = [...(judging.expected_jobs ?? [])].sort()
+          return (judging.failed_jobs ?? []).length === 0
+            && observed.length === expected.length
+            && observed.every((id, index) => id === expected[index])
+            ? 'complete'
+            : 'incomplete'
+        })()
       : 'unavailable',
     candidate_reported_ci: mode === 'reference-baseline'
       ? NOT_APPLICABLE
@@ -185,7 +193,6 @@ export function assembleResult({
   const officialScore = outcome.verdict_durable
     ? (outcome.official_score ?? score?.official_score ?? null)
     : null
-
   return {
     schema_version: RESULT_SCHEMA_VERSION,
     run_id: runId,

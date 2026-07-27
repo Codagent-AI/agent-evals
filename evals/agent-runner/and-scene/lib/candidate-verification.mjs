@@ -49,6 +49,22 @@ function invoke(label, args, { worktree, exec }) {
   return timing
 }
 
+const INFRASTRUCTURE_FAILURE = /\b(?:EAI_AGAIN|ENETUNREACH|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOSPC)\b|(?:registry|network).*(?:unavailable|timed out|failed|error)|\b(?:502|503|504)\b/i
+
+function throwInfrastructureFailure(attempts, stage) {
+  if (attempts.length === 0 || !attempts.every((attempt) => (
+    !attempt.ok && INFRASTRUCTURE_FAILURE.test(outputOf(attempt))
+  ))) return
+  throw Object.assign(
+    new Error(`candidate ${stage} could not be evaluated because infrastructure failed repeatedly: ${outputOf(attempts.at(-1))}`),
+    {
+      owner: 'evaluation-harness',
+      code: 'candidate-command-infrastructure-failed',
+      resumable: true,
+    },
+  )
+}
+
 export async function runCandidateVerification({
   worktree,
   exec = spawnSync,
@@ -60,6 +76,7 @@ export async function runCandidateVerification({
     installAttempts.push(invoke('install-confirmation', ['ci'], { worktree, exec }))
     timings.push(installAttempts[1])
   }
+  throwInfrastructureFailure(installAttempts, 'install')
   const install = installAttempts.at(-1)
 
   let build = null
@@ -74,6 +91,7 @@ export async function runCandidateVerification({
       buildAttempts.push(build)
       timings.push(build)
     }
+    throwInfrastructureFailure(buildAttempts, 'build')
     if (build.ok) {
       verification = invoke('verification', ['run', 'verify'], { worktree, exec })
       timings.push(verification)

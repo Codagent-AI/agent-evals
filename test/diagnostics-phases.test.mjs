@@ -127,6 +127,9 @@ async function environment({ metrics = runMetrics(), sessionFiles = {} } = {}) {
       if (verb.includes('rev-parse')) return { status: 0, stdout: `${'a'.repeat(40)}\n` }
     }
     if (command === 'gh' && args[0] === 'auth') return { status: 0, stdout: '' }
+    if (command === 'gh' && args[0] === 'repo' && args[1] === 'view') {
+      return { status: 0, stdout: 'WRITE\n' }
+    }
     if (command === 'agent-runner' && args[0] === '--version') {
       return { status: 0, stdout: 'agent-runner 2.4.0\n' }
     }

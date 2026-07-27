@@ -43,6 +43,7 @@ async function environment({
   dirty = '',
   commit = 'a'.repeat(40),
   ghAuthenticated = true,
+  ghPermission = 'WRITE',
   runnerResult = { status: 0, stdout: '' },
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'agent-evals-controller-'))
@@ -83,6 +84,9 @@ async function environment({
     }
     if (command === 'gh' && args[0] === 'auth') {
       return ghAuthenticated ? { status: 0, stdout: '' } : { status: 1, stderr: 'not logged in' }
+    }
+    if (command === 'gh' && args[0] === 'repo' && args[1] === 'view') {
+      return { status: 0, stdout: `${ghPermission}\n` }
     }
     if (command === 'agent-runner' && args[0] === '--version') {
       return { status: 0, stdout: 'agent-runner 2.4.0\n' }
@@ -259,6 +263,16 @@ test('workflow preflight rejects missing required and declared prohibited steps 
 
 test('publishing credentials are required before Runner starts', async () => {
   const context = await environment({ ghAuthenticated: false })
+
+  const result = await evaluate(context, profiles)
+
+  assert.equal(result.exitCode, 2)
+  assert.deepEqual(runnerInvocations(context), [])
+  assert.match(JSON.stringify(result.errors), /publishing-credentials/)
+})
+
+test('authenticated read-only GitHub credentials are rejected before Runner starts', async () => {
+  const context = await environment({ ghPermission: 'READ' })
 
   const result = await evaluate(context, profiles)
 

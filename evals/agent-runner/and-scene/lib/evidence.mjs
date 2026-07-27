@@ -37,6 +37,7 @@ export const EVIDENCE_ROLE_REGISTRY = [
     required: true,
     multiple: false,
     aliases: [
+      'acceptance-test.md',
       'capture-metadata.json',
       'screenshot-metadata.json',
       'screenshot-manifest.json',
@@ -502,7 +503,10 @@ export async function buildCandidateEvidenceManifest({
 
     let parsed = null
     let metadataError = null
-    if (source.role === 'screenshot-metadata') {
+    if (
+      source.role === 'screenshot-metadata'
+      && extname(source.origin.relative_path).toLowerCase() === '.json'
+    ) {
       try {
         parsed = JSON.parse(source.bytes.toString('utf8'))
         screenshotMetadata = parsed
@@ -781,9 +785,10 @@ export async function validateCandidateEvidenceLineage({
     const changed = diff.status === 0 && !diff.error
       ? String(diff.stdout ?? '').split('\0').filter(Boolean)
       : null
+    // Only exact harness-owned namespaces are non-product. Ordinary product
+    // modules named evidence, delivery, or acceptance remain product changes.
     const productChanges = changed?.filter((path) => (
-      !/(?:^|\/)(?:acceptance|delivery|evidence)(?:[-_.\/]|$)/i.test(path)
-      && !path.startsWith('.agent-runner/')
+      !path.startsWith('.agent-runner/')
       && !path.startsWith('openspec/changes/')
     )) ?? null
     evidence = evidence.map((item) => {

@@ -125,3 +125,20 @@ test('an inability to launch npm is an evaluation-harness failure', async () => 
     ),
   )
 })
+
+test('repeated infrastructure-shaped npm failures remain harness failures', async () => {
+  await assert.rejects(
+    runCandidateVerification({
+      worktree: '/candidate',
+      exec: () => ({
+        status: 1,
+        stdout: '',
+        stderr: 'npm error code EAI_AGAIN\nnpm error request to https://registry.npmjs.org failed',
+      }),
+    }),
+    (error) => (
+      error.owner === 'evaluation-harness'
+      && error.code === 'candidate-command-infrastructure-failed'
+    ),
+  )
+})

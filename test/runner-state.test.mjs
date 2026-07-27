@@ -213,6 +213,7 @@ test('Runner state includes complete ordered step outcomes from the durable audi
   await writeFile(join(sessionDir, 'audit.log'), [
     '2026-07-26T00:00:00Z [run-validator] step_end {"outcome":"success"}',
     '2026-07-26T00:00:01Z [open-draft-pr] step_end {"outcome":"success"}',
+    '2026-07-26T00:00:01Z [prepare-acceptance:0,release-product] step_end {"outcome":"success"}',
     '2026-07-26T00:00:02Z [verify-acceptance-handoff] step_end {"outcome":"success"}',
     '',
   ].join('\n'))
@@ -223,6 +224,8 @@ test('Runner state includes complete ordered step outcomes from the durable audi
   assert.deepEqual(state.history.map(({ step, outcome }) => ({ step, outcome })), [
     { step: 'run-validator', outcome: 'success' },
     { step: 'open-draft-pr', outcome: 'success' },
+    { step: 'prepare-acceptance', outcome: 'success' },
     { step: 'verify-acceptance-handoff', outcome: 'success' },
   ])
+  assert.deepEqual(state.history[2].step_path, ['prepare-acceptance', 'release-product'])
 })

@@ -66,7 +66,7 @@ export async function runReferenceBrowserRegression({
     }
   }
 
-  return {
+  const result = {
     passed: true,
     ownership: 'evaluator-produced',
     evaluator: 'deterministic-browser-reference-regression',
@@ -75,6 +75,8 @@ export async function runReferenceBrowserRegression({
     canonical_criteria: CANONICAL_CRITERIA,
     evaluation,
   }
+  if (artifact) await writeJsonAtomic(artifact, result)
+  return result
 }
 
 function valueAfter(args, flag) {
@@ -91,7 +93,6 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     revision: valueAfter(args, '--revision'),
     artifact: output,
   }).then(async (result) => {
-    await writeJsonAtomic(output, result)
     console.log(`pinned reference browser regression passed at ${result.revision}`)
   }).catch((error) => {
     console.error(error.message)

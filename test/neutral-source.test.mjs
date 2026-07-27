@@ -57,7 +57,7 @@ async function filesBelow(root) {
   return output.sort()
 }
 
-test('neutral source preserves committed source bytes while neutralizing path metadata', async () => {
+test('neutral source removes exact identity signals from paths and textual source', async () => {
   const repo = await repository()
   const runDir = join(repo.root, '.run-output')
   const neutral = await materializeNeutralInputs({
@@ -81,16 +81,19 @@ test('neutral source preserves committed source bytes while neutralizing path me
   const text = await readFile(join(runDir, neutral.source.root, 'src/index.ts'), 'utf8')
   assert.equal(
     text,
-    'export const branch = "eval/and-scene/run-77"\n'
-      + 'export const pr = "https://github.com/acme/example/pull/53"\n'
+    'export const branch = "__BRANCH_ID__"\n'
+      + 'export const pr = "__PULL_REQUEST_ID__"\n'
       + 'export const ordinary = "candidate experience"\n',
   )
   assert.ok(neutral.manifest.entries.every(({ sha256 }) => /^[a-f0-9]{64}$/.test(sha256)))
   assert.ok(neutral.manifest.entries
     .filter(({ namespace }) => namespace === 'neutral-source')
-    .every(({ original_sha256, sha256 }) => original_sha256 === sha256))
+    .some(({ original_sha256, sha256 }) => original_sha256 !== sha256))
   assert.ok(neutral.manifest.entries.some(({ transformations }) => (
     transformations.some(({ type }) => type === 'exact-identity-path-token-replacement')
+  )))
+  assert.ok(neutral.manifest.entries.some(({ transformations }) => (
+    transformations.some(({ type }) => type === 'exact-identity-content-token-replacement')
   )))
   assert.ok(!neutral.manifest_path.startsWith(neutral.judge.root))
 })

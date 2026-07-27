@@ -262,6 +262,13 @@ export async function runEvaluation({
     return failure([{ code: 'invalid-rubric', message: error.message }])
   }
   const provenanceOfRubrics = rubricProvenance(rubrics)
+  const browserEvaluatorFingerprint = hashJson(Object.fromEntries(await Promise.all(
+    [
+      'lib/browser-eval.mjs',
+      'lib/axi-browser-driver.mjs',
+      'lib/demo-contract.mjs',
+    ].map(async (path) => [path, await hashFile(join(SUITE_DIR, path))]),
+  )))
 
   // A reference baseline evaluates an existing candidate without invoking Agent
   // Runner, so it needs no clean checkout or workflow contract.
@@ -345,6 +352,22 @@ export async function runEvaluation({
   } catch (error) {
     return failure([{ code: 'candidate-worktree', message: error.message }])
   }
+  if (mode === 'agent-runner') {
+    const permission = exec(
+      'gh',
+      ['repo', 'view', candidateSource.repository, '--json', 'viewerPermission', '--jq', '.viewerPermission'],
+      { cwd: candidateWorktree },
+    )
+    const level = permission.status === 0 && !permission.error
+      ? String(permission.stdout ?? '').trim().toUpperCase()
+      : ''
+    if (!['WRITE', 'MAINTAIN', 'ADMIN'].includes(level)) {
+      return failure([{
+        code: 'publishing-credentials',
+        message: 'GitHub credentials must have write permission for the candidate repository',
+      }])
+    }
+  }
 
   // A baseline is immutable as soon as it is checked out. An implementation
   // candidate becomes immutable only after Agent Runner reaches the configured
@@ -369,7 +392,10 @@ export async function runEvaluation({
     }),
     workflow_arguments: hashJson(boundary.workflow_arguments),
     agent_configuration: hashJson(validation.profiles),
-    evaluator_configuration: options.judgeModel,
+    evaluator_configuration: hashJson({
+      judge_model: options.judgeModel,
+      browser_evaluator: browserEvaluatorFingerprint,
+    }),
     // A rubric edit changes what the score means, so it invalidates a resumed
     // run rather than being blended into half-scored results.
     rubric_provenance: hashJson(provenanceOfRubrics),
@@ -865,6 +891,7 @@ export async function runEvaluation({
         build: buildResult,
         verification: verificationResult,
         revision,
+        evaluatorFingerprint: browserEvaluatorFingerprint,
         evidenceArtifacts: {
           probe: (id) => `evidence/evaluator/browser-probes/${id}.json`,
           verification: 'phases/verification.json',

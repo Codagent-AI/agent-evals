@@ -291,6 +291,7 @@ export async function runProductJudging({
   failJob = null,
   invoke,
 }) {
+  const jobs = productJudgeJobs(rubrics, { mode })
   const judges = {}
   const retries = {}
   const failedJobs = []
@@ -301,7 +302,7 @@ export async function runProductJudging({
 
   // Sequential by design: the jobs share one judge authority and one rate
   // budget, and a component-local failure must be attributable to its job.
-  for (const { id } of productJudgeJobs(rubrics, { mode })) {
+  for (const { id } of jobs) {
     const request = buildJudgeRequest({
       rubrics, job: id, authority, evidence, sources, neutral, evidenceViews,
     })
@@ -357,6 +358,7 @@ export async function runProductJudging({
   }
 
   return {
+    expected_jobs: jobs.map(({ id }) => id),
     judges,
     retries,
     attempts,

@@ -149,9 +149,12 @@ function normalizeState(state, { runId, sessionDir, lock, history, modifiedAtMs 
 }
 
 function auditStep(prefix) {
-  const match = prefix.match(/^\[([^,\]]+)/)
-  if (!match) return null
-  return match[1].replace(/:\d+$/, '')
+  if (!prefix.startsWith('[') || !prefix.endsWith(']')) return null
+  const stepPath = prefix.slice(1, -1)
+    .split(',')
+    .map((part) => part.trim().replace(/:\d+$/, ''))
+    .filter(Boolean)
+  return stepPath.length > 0 ? { step: stepPath[0], step_path: stepPath } : null
 }
 
 export async function readWorkflowHistory(sessionDir) {
@@ -162,8 +165,8 @@ export async function readWorkflowHistory(sessionDir) {
       /^(\S+)\s+(\[[^\]]+\])\s+(step_start|step_end)(?:\s+(\{.*\}))?$/,
     )
     if (!match) continue
-    const step = auditStep(match[2])
-    if (!step) continue
+    const identity = auditStep(match[2])
+    if (!identity) continue
     let data = {}
     try {
       data = match[4] ? JSON.parse(match[4]) : {}
@@ -172,7 +175,7 @@ export async function readWorkflowHistory(sessionDir) {
     }
     history.push({
       at: match[1],
-      step,
+      ...identity,
       event: match[3],
       outcome: match[3] === 'step_end' ? (data.outcome ?? null) : null,
       attempt: data.identity?.attempt ?? null,

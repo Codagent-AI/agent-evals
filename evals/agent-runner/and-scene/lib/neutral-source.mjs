@@ -3,14 +3,14 @@
 // Product judges never receive the live candidate checkout. This module reads
 // blobs from the verified final commit, filters known evaluation/workflow
 // material, neutralizes identity-bearing path metadata, and records every
-// transformation without modifying delivered source bytes.
+// transformation without modifying the delivered candidate.
 import { spawnSync } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 
 import { hashJson, hashString, writeJsonAtomic } from './persistence.mjs'
 
-export const NEUTRAL_INPUT_SCHEMA_VERSION = 1
+export const NEUTRAL_INPUT_SCHEMA_VERSION = 2
 
 const PLACEHOLDERS = {
   run: '<RUN_ID>',
@@ -175,6 +175,33 @@ function redactPath(path, identities) {
   return { path: output, transformations }
 }
 
+function redactContent(bytes, identities) {
+  const text = bytes.toString('utf8')
+  // Binary or otherwise non-UTF-8 source is never rewritten.
+  if (!Buffer.from(text, 'utf8').equals(bytes)) return { bytes, transformations: [] }
+  let output = text
+  const transformations = []
+  for (const replacement of identityReplacements(identities, { pathSafe: true })
+    .filter(({ token }) => token.length >= 6)) {
+    let count = 0
+    output = output.replace(exactTokenPattern(replacement.token), () => {
+      count += 1
+      return replacement.placeholder
+    })
+    if (count > 0) {
+      transformations.push({
+        type: 'exact-identity-content-token-replacement',
+        identity_type: replacement.type,
+        placeholder: replacement.placeholder,
+        occurrences: count,
+        token_sha256: hashString(replacement.token),
+        behavioral_edit: false,
+      })
+    }
+  }
+  return { bytes: Buffer.from(output), transformations }
+}
+
 async function writeSnapshotFile(root, path, bytes) {
   const target = join(root, path)
   await mkdir(dirname(target), { recursive: true })
@@ -229,14 +256,15 @@ export async function materializeNeutralInputs({
       throw new Error(`identity redaction creates a neutral source path collision: ${neutralPath.path}`)
     }
     includedPaths.add(neutralPath.path)
-    await writeSnapshotFile(sourceRoot, neutralPath.path, original)
+    const neutralContent = redactContent(original, identities)
+    await writeSnapshotFile(sourceRoot, neutralPath.path, neutralContent.bytes)
     manifestEntries.push({
       namespace: 'neutral-source',
       path: `source/${neutralPath.path}`,
       origin: { revision: finalSha, path: entry.path, object: entry.object },
       original_sha256: hashString(original),
-      sha256: hashString(original),
-      transformations: neutralPath.transformations,
+      sha256: hashString(neutralContent.bytes),
+      transformations: [...neutralPath.transformations, ...neutralContent.transformations],
     })
   }
 
@@ -248,17 +276,20 @@ export async function materializeNeutralInputs({
     const path = `requirement-${String(requirementIndex).padStart(3, '0')}.md`
     // Requirement descriptions and scenarios are copied without behavioral
     // rewriting. Only an outer OpenSpec delta heading is omitted when present.
-    const content = Buffer.from(normativeRequirements(original))
-    await writeSnapshotFile(requirementsRoot, path, content)
+    const content = redactContent(Buffer.from(normativeRequirements(original)), identities)
+    await writeSnapshotFile(requirementsRoot, path, content.bytes)
     manifestEntries.push({
       namespace: 'neutral-requirements',
       path: `requirements/${path}`,
       origin: { revision: finalSha, path: entry.path, object: entry.object },
       original_sha256: hashString(original),
-      sha256: hashString(content),
-      transformations: original.equals(content)
-        ? []
-        : [{ type: 'remove-openspec-delta-container-heading', behavioral_edit: false }],
+      sha256: hashString(content.bytes),
+      transformations: [
+        ...(original.equals(Buffer.from(normativeRequirements(original)))
+          ? []
+          : [{ type: 'remove-openspec-delta-container-heading', behavioral_edit: false }]),
+        ...content.transformations,
+      ],
     })
   }
 

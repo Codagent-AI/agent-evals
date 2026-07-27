@@ -278,6 +278,25 @@ test('matching pass and fail probe records can be reused without operating the b
   assert.deepEqual(actions, [])
 })
 
+test('probe checkpoint inputs include the evaluator implementation fingerprint', async () => {
+  const observed = []
+  await runBrowserEvaluation({
+    driver: createDemo(),
+    build: passingBuild,
+    verification: passingVerification,
+    evidenceArtifacts: fixtureEvidenceArtifacts,
+    revision: 'reference-revision',
+    evaluatorFingerprint: 'browser-evaluator-sha256',
+    loadProbe: async ({ inputs }) => {
+      observed.push(inputs.evaluator_fingerprint)
+      return null
+    },
+  })
+
+  assert.ok(observed.length > 0)
+  assert.ok(observed.every((value) => value === 'browser-evaluator-sha256'))
+})
+
 test('browser adapter failures remain harness failures instead of product criterion failures', async () => {
   const driver = createDemo()
   driver.routes = async () => {

@@ -176,7 +176,14 @@ export function checkWorkflowHistory(history = []) {
     normalized.filter(({ outcome }) => outcome === 'success').map(({ step }) => step),
   )
   const missingSteps = REQUIRED_FINAL_WORKFLOW_STEPS.filter((step) => !completed.has(step))
-  const prohibitedEffects = normalized.filter(({ step }) => isProhibitedWorkflowStep(step))
+  const prohibitedEffects = normalized.flatMap((entry) => {
+    const path = Array.isArray(entry.step_path) && entry.step_path.length > 0
+      ? entry.step_path
+      : [entry.step]
+    return path
+      .filter(isProhibitedWorkflowStep)
+      .map((step) => ({ ...entry, step }))
+  })
   return {
     ok: missingSteps.length === 0 && prohibitedEffects.length === 0,
     missing_steps: missingSteps,

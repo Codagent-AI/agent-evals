@@ -122,6 +122,7 @@ export async function runBrowserEvaluation({
   build = null,
   verification = null,
   revision = null,
+  evaluatorFingerprint = 'browser-evaluator-unversioned',
   loadProbe = null,
   saveProbe = null,
   evidenceArtifacts = null,
@@ -467,6 +468,7 @@ export async function runBrowserEvaluation({
       revision,
       route: contract.route,
       contract_sha256: hashJson(contract),
+      evaluator_fingerprint: evaluatorFingerprint,
       required_mode: requirement.mode,
       start_position: requirement.position,
     }

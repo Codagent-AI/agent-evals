@@ -112,6 +112,33 @@ test('candidate evidence is discovered from handoff aliases and copied byte-for-
   )
 })
 
+test('the current acceptance workflow markdown is accepted as screenshot metadata evidence', async () => {
+  const context = await fixture()
+  await writeRequiredArtifacts(context, {
+    'capture-metadata.json': '',
+    'acceptance-test.md': [
+      '# Acceptance test',
+      `Head SHA: ${FINAL_SHA}`,
+      'Coverage: demo-flow',
+      '- Screenshot: [final state](captures/final.png)',
+      '- Expected: the final state is visible',
+      '- Observed: the final state is visible',
+    ].join('\n'),
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  const metadata = manifest.artifacts.find(({ role }) => role === 'screenshot-metadata')
+  assert.equal(metadata.origin.relative_path, 'output/acceptance-test.md')
+  assert.equal(metadata.verification_state, 'verified')
+  assert.ok(!manifest.findings.some(({ code }) => code === 'malformed-metadata'))
+})
+
 test('candidate references cannot traverse outside the worktree or recorded session', async () => {
   const context = await fixture()
   await writeFile(join(context.root, 'secret.md'), 'must not be copied')
@@ -381,6 +408,35 @@ test('manifest lineage independently rejects evidence-only alignment after produ
 
   assert.equal(lineage.accepted, false)
   assert.ok(lineage.findings.some(({ code }) => code === 'new-final-full-flow-required'))
+})
+
+test('lineage treats product source under evidence-named directories as product changes', async () => {
+  const lineage = await validateCandidateEvidenceLineage({
+    finalSha: FINAL_SHA,
+    worktree: '/candidate',
+    manifest: {
+      artifacts: [{
+        id: 'baseline',
+        lineage_claims: [{ kind: 'full-flow', revision: BASELINE_SHA, trustworthy: true }],
+      }, {
+        id: 'alignment',
+        lineage_claims: [{
+          kind: 'external-alignment',
+          revision: FINAL_SHA,
+          tracked_product_changed: false,
+        }],
+      }],
+    },
+    exec: (command, args) => args.includes('diff')
+      ? { status: 0, stdout: 'src/evidence/parser.ts\u0000src/delivery/queue.ts\u0000' }
+      : { status: 0, stdout: '' },
+  })
+
+  assert.equal(lineage.accepted, false)
+  assert.deepEqual(
+    lineage.evidence.find(({ id }) => id === 'alignment').observed_product_changes,
+    ['src/evidence/parser.ts', 'src/delivery/queue.ts'],
+  )
 })
 
 test('evaluator evidence and contradictions retain separate ownership', async () => {

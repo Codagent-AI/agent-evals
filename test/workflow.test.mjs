@@ -120,6 +120,13 @@ test('completed workflow history requires every final delivery step and rejects 
   const violated = checkWorkflowHistory([...requiredHistory, { step: 'merge-pr', outcome: 'success' }])
   assert.equal(violated.ok, false)
   assert.equal(violated.prohibited_effects[0].step, 'merge-pr')
+
+  const nested = checkWorkflowHistory([
+    ...requiredHistory,
+    { step: 'prepare-acceptance', step_path: ['prepare-acceptance', 'release-product'], outcome: 'success' },
+  ])
+  assert.equal(nested.ok, false)
+  assert.equal(nested.prohibited_effects[0].step, 'release-product')
 })
 
 test('no persisted run starts a fresh complete workflow', () => {
