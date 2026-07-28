@@ -254,6 +254,15 @@ function adjudicationSection(result) {
       ['Revised shared technical score', points(review.revised_shared_technical_score)],
       ['Prior official score', points(review.prior_official_score)],
       ['Revised official score', points(review.revised_official_score)],
+      ...(review.reviewed_rubric
+        ? [
+            [
+              'Reviewed rubric',
+              `${review.reviewed_rubric.rubric_id} ${review.reviewed_rubric.version}`,
+            ],
+            ['Reviewed rubric SHA-256', review.reviewed_rubric.sha256],
+          ]
+        : []),
       ['Rationale', review.rationale],
     ])
     + table(

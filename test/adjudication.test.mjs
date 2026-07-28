@@ -130,6 +130,11 @@ test('a reviewed adjudication can supersede a provisional adjudication without l
     approved_by: 'user',
     approved_at: '2026-07-28T22:00:00.000Z',
     rationale: 'A fresh rubric 3.2 review produced the final technical score.',
+    reviewed_rubric: {
+      rubric_id: 'and-scene-automated-product',
+      version: '3.2.0',
+      sha256: 'c'.repeat(64),
+    },
     component_scores: {
       'demo-technical-quality': 23,
       'scene-kit-correctness': 637 / 30,
@@ -145,6 +150,7 @@ test('a reviewed adjudication can supersede a provisional adjudication without l
   assert.equal(revised.technical_adjudication.revised_shared_technical_score, 53.691666666667)
   assert.equal(revised.technical_adjudication_history.length, 1)
   assert.deepEqual(revised.technical_adjudication_history[0], provisional.technical_adjudication)
+  assert.deepEqual(revised.technical_adjudication.reviewed_rubric, finalReview.reviewed_rubric)
   assert.equal(revised.automated_subtotal.points, 61.691666666667)
   assert.equal(revised.official_score, 82.191666666667)
   const demo = revised.score.components.find(({ id }) => id === 'demo-technical-quality')
@@ -177,4 +183,14 @@ test('technical adjudication rejects incomplete or out-of-range component scores
     }),
     /outside 0-24/,
   )
+
+  for (const reviewed_rubric of [null, false, 0, '']) {
+    assert.throws(
+      () => module.applyTechnicalAdjudication(candidateResult(), {
+        ...approvedReview(),
+        reviewed_rubric,
+      }),
+      /reviewed_rubric must be an object/,
+    )
+  }
 })

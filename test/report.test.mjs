@@ -133,6 +133,11 @@ test('a superseding adjudication renders the current review and its superseded a
       approved_by: 'user',
       approved_at: '2026-07-28T22:00:00.000Z',
       rationale: 'Final rubric 3.2 review.',
+      reviewed_rubric: {
+        rubric_id: 'and-scene-automated-product',
+        version: '3.2.0',
+        sha256: 'c'.repeat(64),
+      },
       prior_shared_technical_score: 58,
       revised_shared_technical_score: 53.691666666667,
       findings: ['final finding'],
@@ -145,6 +150,8 @@ test('a superseding adjudication renders the current review and its superseded a
   assert.match(html, /Superseded technical adjudications/)
   assert.match(html, /Provisional review/)
   assert.match(html, /Final rubric 3\.2 review/)
+  assert.match(html, /and-scene-automated-product 3\.2\.0/)
+  assert.match(html, new RegExp('c{64}'))
 })
 
 test('technical adjudication audit text is escaped rather than rendered as markup', () => {

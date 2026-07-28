@@ -49,6 +49,24 @@ function validateReview(result, review) {
     || review.findings.some((finding) => typeof finding !== 'string' || finding.trim().length === 0)) {
     throw new Error('technical adjudication requires at least one finding')
   }
+  const hasReviewedRubric = Object.hasOwn(review ?? {}, 'reviewed_rubric')
+  if (hasReviewedRubric) {
+    if (
+      review.reviewed_rubric === null
+      || typeof review.reviewed_rubric !== 'object'
+      || Array.isArray(review.reviewed_rubric)
+    ) {
+      throw new Error('technical adjudication reviewed_rubric must be an object')
+    }
+    for (const field of ['rubric_id', 'version', 'sha256']) {
+      if (
+        typeof review.reviewed_rubric[field] !== 'string'
+        || review.reviewed_rubric[field].trim().length === 0
+      ) {
+        throw new Error(`technical adjudication reviewed_rubric requires ${field}`)
+      }
+    }
+  }
 
   const supplied = Object.keys(review.component_scores ?? {}).sort()
   const expected = [...SHARED_COMPONENT_IDS].sort()
@@ -141,6 +159,14 @@ export function applyTechnicalAdjudication(result, review) {
     approved_at: review.approved_at,
     rationale: review.rationale.trim(),
     findings: review.findings.map((finding) => finding.trim()),
+    ...(Object.hasOwn(review, 'reviewed_rubric')
+      ? {
+          reviewed_rubric: Object.fromEntries(
+            ['rubric_id', 'version', 'sha256']
+              .map((field) => [field, review.reviewed_rubric[field].trim()]),
+          ),
+        }
+      : {}),
     component_scores: componentScores,
     prior_shared_technical_score: priorShared,
     revised_shared_technical_score: revisedShared,
@@ -201,6 +227,9 @@ export function validateTechnicalAdjudicationSupersession(published, next) {
     approved_at: record.approved_at,
     rationale: record.rationale,
     findings: record.findings,
+    ...(Object.hasOwn(record, 'reviewed_rubric')
+      ? { reviewed_rubric: record.reviewed_rubric }
+      : {}),
     component_scores: record.component_scores,
   }
   try {
