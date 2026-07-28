@@ -7,9 +7,9 @@
   "product_verdict": "pass",
   "label": "PASS",
   "score_denominator": 100,
-  "official_score": 88.4,
+  "official_score": 86.5,
   "automated_subtotal": {
-    "points": 67.9,
+    "points": 66,
     "possible": 70,
     "observed_possible": 70,
     "complete": true
@@ -100,8 +100,8 @@
         "title": "Demo presentation technical quality",
         "applicable": true,
         "points_possible": 24,
-        "points_awarded": 23,
-        "points_observed": 23,
+        "points_awarded": 24,
+        "points_observed": 24,
         "points_observed_possible": 24,
         "floor": 15,
         "complete": true,
@@ -421,15 +421,17 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 23,
+        "adjudication_adjustment": 1
       },
       {
         "id": "scene-kit-correctness",
         "title": "Scene kit correctness",
         "applicable": true,
         "points_possible": 24,
-        "points_awarded": 23.4,
-        "points_observed": 23.4,
+        "points_awarded": 22.5,
+        "points_observed": 22.5,
         "points_observed_possible": 24,
         "floor": 15,
         "complete": true,
@@ -856,15 +858,17 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 23.4,
+        "adjudication_adjustment": -0.9
       },
       {
         "id": "presentation-skill-correctness",
         "title": "Presentation skill correctness",
         "applicable": true,
         "points_possible": 7,
-        "points_awarded": 7,
-        "points_observed": 7,
+        "points_awarded": 6,
+        "points_observed": 6,
         "points_observed_possible": 7,
         "floor": null,
         "complete": true,
@@ -1141,15 +1145,17 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 7,
+        "adjudication_adjustment": -1
       },
       {
         "id": "verification-tool-correctness",
         "title": "Verification tool correctness",
         "applicable": true,
         "points_possible": 7,
-        "points_awarded": 6.5,
-        "points_observed": 6.5,
+        "points_awarded": 5.5,
+        "points_observed": 5.5,
         "points_observed_possible": 7,
         "floor": null,
         "complete": true,
@@ -1327,7 +1333,9 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 6.5,
+        "adjudication_adjustment": -1
       },
       {
         "id": "testing-evidence-quality",
@@ -1554,7 +1562,7 @@
     ],
     "gates_passed": true,
     "automated_subtotal": {
-      "points": 67.9,
+      "points": 66,
       "possible": 70,
       "observed_possible": 70,
       "complete": true
@@ -1584,7 +1592,7 @@
       "lowest_rating": 3,
       "complete": true
     },
-    "official_score": 88.4,
+    "official_score": 86.5,
     "official_pass": true,
     "pass_failures": [],
     "incomplete": [],
@@ -9078,8 +9086,8 @@
     "denominator": 92,
     "totals": {
       "baseline": 92,
-      "candidate": 80.4,
-      "delta": -11.6
+      "candidate": 78.5,
+      "delta": -13.5
     },
     "components": [
       {
@@ -9087,32 +9095,32 @@
         "title": "Demo presentation technical quality",
         "points_possible": 24,
         "baseline": 24,
-        "candidate": 23,
-        "delta": -1
+        "candidate": 24,
+        "delta": 0
       },
       {
         "id": "scene-kit-correctness",
         "title": "Scene kit correctness",
         "points_possible": 24,
         "baseline": 24,
-        "candidate": 23.4,
-        "delta": -0.6
+        "candidate": 22.5,
+        "delta": -1.5
       },
       {
         "id": "presentation-skill-correctness",
         "title": "Presentation skill correctness",
         "points_possible": 7,
         "baseline": 7,
-        "candidate": 7,
-        "delta": 0
+        "candidate": 6,
+        "delta": -1
       },
       {
         "id": "verification-tool-correctness",
         "title": "Verification tool correctness",
         "points_possible": 7,
         "baseline": 7,
-        "candidate": 6.5,
-        "delta": -0.5
+        "candidate": 5.5,
+        "delta": -1.5
       }
     ],
     "subcomponents": [
@@ -14546,5 +14554,32 @@
   "report": {
     "written": true,
     "error": null
+  },
+  "technical_adjudication": {
+    "schema_version": 1,
+    "approved_by": "Paul (user-confirmed independent review)",
+    "approved_at": "2026-07-28T23:09:50.000Z",
+    "rationale": "Independent source and runtime review corrected the active-state scanner false negatives and applied stricter engineering-quality standards than the original token- and existence-oriented source judgments.",
+    "findings": [
+      "The active navigation and active-style warning deductions were false negatives: the implementation uses aria-current plus data-presentation-active and compares active/inactive computed styles.",
+      "Newcomer delay is not wired to the same transition contract as persistent layout motion, so after-settlement sequencing is not guaranteed.",
+      "Touch navigation checks horizontal distance but does not reject gestures that are predominantly vertical or multi-touch.",
+      "Partial-scaffold and monorepo behavior is described but not directly exercised through executable or verified workflow cases.",
+      "Fixed preview ports can attach verification to an unrelated stale server after the intended preview child exits.",
+      "Visual-warning behavior is comparatively brittle and lacks focused executable regression coverage."
+    ],
+    "component_scores": {
+      "demo-technical-quality": 24,
+      "scene-kit-correctness": 22.5,
+      "presentation-skill-correctness": 6,
+      "verification-tool-correctness": 5.5
+    },
+    "prior_shared_technical_score": 59.9,
+    "revised_shared_technical_score": 58,
+    "prior_automated_subtotal": 67.9,
+    "revised_automated_subtotal": 66,
+    "prior_official_score": 88.4,
+    "revised_official_score": 86.5,
+    "prior_result_fingerprint": "317c10b745cd091ffee650f4ac66b4dc0e62eb60f795fd36d1218a7461e4a0a8"
   }
 }

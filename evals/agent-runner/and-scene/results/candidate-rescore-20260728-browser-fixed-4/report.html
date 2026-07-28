@@ -18,19 +18,19 @@ summary { cursor: pointer; font-weight: 600; }
 </head>
 <body>
 <h1 class="pass">PASS</h1>
-<p><strong>Official score:</strong> 88.40 / 100</p>
-<p><strong>Automated subtotal:</strong> 67.90 / 70</p>
+<p><strong>Official score:</strong> 86.50 / 100</p>
+<p><strong>Automated subtotal:</strong> 66 / 70</p>
 <p><strong>Run:</strong> candidate-rescore-20260728-browser-fixed-4 (agent-runner)</p>
 <p><strong>Evaluation status:</strong> complete</p>
 <p><strong>Score denominator:</strong> 100</p>
 <details><summary>Component and subcomponent scores</summary>
-<table><thead><tr><th>Component</th><th>Title</th><th>Awarded</th><th>Possible</th><th>Floor</th><th>State</th></tr></thead><tbody>
-<tr><td>demo-technical-quality</td><td>Demo presentation technical quality</td><td>23</td><td>24</td><td>15</td><td>complete</td></tr>
-<tr><td>scene-kit-correctness</td><td>Scene kit correctness</td><td>23.40</td><td>24</td><td>15</td><td>complete</td></tr>
-<tr><td>presentation-skill-correctness</td><td>Presentation skill correctness</td><td>7</td><td>7</td><td>none</td><td>complete</td></tr>
-<tr><td>verification-tool-correctness</td><td>Verification tool correctness</td><td>6.50</td><td>7</td><td>none</td><td>complete</td></tr>
-<tr><td>testing-evidence-quality</td><td>Testing-evidence quality</td><td>4</td><td>4</td><td>none</td><td>complete</td></tr>
-<tr><td>assumption-handling-quality</td><td>Assumption-handling quality</td><td>4</td><td>4</td><td>none</td><td>complete</td></tr>
+<table><thead><tr><th>Component</th><th>Title</th><th>Raw awarded</th><th>Adjudicated</th><th>Adjustment</th><th>Possible</th><th>Floor</th><th>State</th></tr></thead><tbody>
+<tr><td>demo-technical-quality</td><td>Demo presentation technical quality</td><td>23</td><td>24</td><td>+1</td><td>24</td><td>15</td><td>complete</td></tr>
+<tr><td>scene-kit-correctness</td><td>Scene kit correctness</td><td>23.40</td><td>22.50</td><td>-0.90</td><td>24</td><td>15</td><td>complete</td></tr>
+<tr><td>presentation-skill-correctness</td><td>Presentation skill correctness</td><td>7</td><td>6</td><td>-1</td><td>7</td><td>none</td><td>complete</td></tr>
+<tr><td>verification-tool-correctness</td><td>Verification tool correctness</td><td>6.50</td><td>5.50</td><td>-1</td><td>7</td><td>none</td><td>complete</td></tr>
+<tr><td>testing-evidence-quality</td><td>Testing-evidence quality</td><td>4</td><td>4</td><td>none</td><td>4</td><td>none</td><td>complete</td></tr>
+<tr><td>assumption-handling-quality</td><td>Assumption-handling quality</td><td>4</td><td>4</td><td>none</td><td>4</td><td>none</td><td>complete</td></tr>
 </tbody></table><table><thead><tr><th>Component</th><th>Subcomponent</th><th>Title</th><th>Awarded</th><th>Possible</th><th>State</th></tr></thead><tbody>
 <tr><td>demo-technical-quality</td><td>demo-canonical-content</td><td>Canonical content, routing, and technical structure</td><td>5</td><td>5</td><td>complete</td></tr>
 <tr><td>demo-technical-quality</td><td>demo-navigation-and-modes</td><td>Navigation, modes, boundaries, and controls</td><td>5</td><td>5</td><td>complete</td></tr>
@@ -53,6 +53,24 @@ summary { cursor: pointer; font-weight: 600; }
 <tr><td>verification-tool-correctness</td><td>verification-warnings</td><td>Overlap, active-state, and attribution warnings</td><td>1.50</td><td>2</td><td>complete</td></tr>
 <tr><td>testing-evidence-quality</td><td>testing-evidence-quality-criteria</td><td>Verified candidate-produced testing evidence</td><td>4</td><td>4</td><td>complete</td></tr>
 <tr><td>assumption-handling-quality</td><td>assumption-handling-quality-criteria</td><td>Observable assumption handling</td><td>4</td><td>4</td><td>complete</td></tr>
+</tbody></table>
+</details>
+<details><summary>Technical score adjudication</summary>
+<table><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>
+<tr><td>Approved by</td><td>Paul (user-confirmed independent review)</td></tr>
+<tr><td>Approved at</td><td>2026-07-28T23:09:50.000Z</td></tr>
+<tr><td>Raw shared technical score</td><td>59.90</td></tr>
+<tr><td>Revised shared technical score</td><td>58</td></tr>
+<tr><td>Raw official score</td><td>88.40</td></tr>
+<tr><td>Revised official score</td><td>86.50</td></tr>
+<tr><td>Rationale</td><td>Independent source and runtime review corrected the active-state scanner false negatives and applied stricter engineering-quality standards than the original token- and existence-oriented source judgments.</td></tr>
+</tbody></table><table><thead><tr><th>Finding</th></tr></thead><tbody>
+<tr><td>The active navigation and active-style warning deductions were false negatives: the implementation uses aria-current plus data-presentation-active and compares active/inactive computed styles.</td></tr>
+<tr><td>Newcomer delay is not wired to the same transition contract as persistent layout motion, so after-settlement sequencing is not guaranteed.</td></tr>
+<tr><td>Touch navigation checks horizontal distance but does not reject gestures that are predominantly vertical or multi-touch.</td></tr>
+<tr><td>Partial-scaffold and monorepo behavior is described but not directly exercised through executable or verified workflow cases.</td></tr>
+<tr><td>Fixed preview ports can attach verification to an unrelated stale server after the intended preview child exits.</td></tr>
+<tr><td>Visual-warning behavior is comparatively brittle and lacks focused executable regression coverage.</td></tr>
 </tbody></table>
 </details>
 <details><summary>Hard gates</summary>
@@ -427,14 +445,14 @@ summary { cursor: pointer; font-weight: 600; }
 </details>
 <details><summary>Reference baseline comparison</summary>
 <p><strong>Baseline run:</strong> reference-cutover-20260728-browser-fixed-2</p><p>Baseline values marked not applicable are absent, not zero: agent_roles, implementation_cost, implementation_timing.</p><table><thead><tr><th>Measure</th><th>Baseline</th><th>Candidate</th><th>Delta</th></tr></thead><tbody>
-<tr><td>Shared score / 92</td><td>92</td><td>80.40</td><td>-11.60</td></tr>
+<tr><td>Shared score / 92</td><td>92</td><td>78.50</td><td>-13.50</td></tr>
 <tr><td>Human review</td><td>30</td><td>20.50</td><td>-9.50</td></tr>
 <tr><td>Implementation cost (USD)</td><td>not applicable</td><td>not available</td><td>not applicable</td></tr>
 </tbody></table><table><thead><tr><th>Component</th><th>Title</th><th>Baseline</th><th>Candidate</th><th>Delta</th></tr></thead><tbody>
-<tr><td>demo-technical-quality</td><td>Demo presentation technical quality</td><td>24</td><td>23</td><td>-1</td></tr>
-<tr><td>scene-kit-correctness</td><td>Scene kit correctness</td><td>24</td><td>23.40</td><td>-0.60</td></tr>
-<tr><td>presentation-skill-correctness</td><td>Presentation skill correctness</td><td>7</td><td>7</td><td>0</td></tr>
-<tr><td>verification-tool-correctness</td><td>Verification tool correctness</td><td>7</td><td>6.50</td><td>-0.50</td></tr>
+<tr><td>demo-technical-quality</td><td>Demo presentation technical quality</td><td>24</td><td>24</td><td>0</td></tr>
+<tr><td>scene-kit-correctness</td><td>Scene kit correctness</td><td>24</td><td>22.50</td><td>-1.50</td></tr>
+<tr><td>presentation-skill-correctness</td><td>Presentation skill correctness</td><td>7</td><td>6</td><td>-1</td></tr>
+<tr><td>verification-tool-correctness</td><td>Verification tool correctness</td><td>7</td><td>5.50</td><td>-1.50</td></tr>
 </tbody></table><table><thead><tr><th>Subcomponent</th><th>Title</th><th>Baseline</th><th>Candidate</th><th>Delta</th></tr></thead><tbody>
 <tr><td>demo-canonical-content</td><td>Canonical content, routing, and technical structure</td><td>5</td><td>5</td><td>0</td></tr>
 <tr><td>demo-navigation-and-modes</td><td>Navigation, modes, boundaries, and controls</td><td>5</td><td>5</td><td>0</td></tr>
