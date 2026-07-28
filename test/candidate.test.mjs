@@ -88,6 +88,36 @@ test('a scored candidate rejects a Validator base with no shared fixture history
   )
 })
 
+test('a scored candidate rejects a draft PR base with no shared fixture history', async () => {
+  const repo = await repository()
+  const defaultBranch = git(repo.source, 'branch', '--show-current')
+  git(repo.source, 'checkout', '--orphan', 'unrelated-fixture')
+  git(repo.source, 'rm', '-qrf', '.')
+  await writeFile(join(repo.source, 'README.md'), 'unrelated fixture\n')
+  await mkdir(join(repo.source, '.validator'))
+  await writeFile(
+    join(repo.source, '.validator/config.yml'),
+    'base_branch: origin/unrelated-fixture\nentry_points: []\n',
+  )
+  git(repo.source, 'add', '.')
+  git(repo.source, 'commit', '-qm', 'unrelated fixture')
+  const unrelatedFixture = git(repo.source, 'rev-parse', 'HEAD')
+  git(repo.source, 'checkout', '-q', defaultBranch)
+
+  await assert.rejects(
+    prepareCandidateWorktree({
+      repo: repo.source,
+      worktree: join(repo.root, 'candidate'),
+      ref: unrelatedFixture,
+      resume: false,
+      runId: 'run-with-unrelated-pr-base',
+      kind: 'candidate',
+      exec,
+    }),
+    /draft PR base.*share history|share history.*draft PR base/i,
+  )
+})
+
 test('fresh scored candidates clone and check out the fixture while baselines select their candidate', async () => {
   const repo = await repository()
   const scored = join(repo.root, 'scored')

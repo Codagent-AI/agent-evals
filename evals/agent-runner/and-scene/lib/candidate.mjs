@@ -77,6 +77,19 @@ function resolveRemoteDefaultBranch(exec, worktree) {
   return match[1]
 }
 
+function assertSharedHistory(exec, worktree, base, fixtureCommit, label) {
+  const ancestry = exec(
+    'git',
+    ['-C', worktree, 'merge-base', base, fixtureCommit],
+    { encoding: 'utf8' },
+  )
+  if (ancestry.status !== 0 || ancestry.error) {
+    throw new Error(
+      `${label} ${base} must share history with candidate fixture ${fixtureCommit}`,
+    )
+  }
+}
+
 function assertValidatorReadyFixture(exec, worktree, fixtureCommit, defaultBaseBranch) {
   const path = '.validator/config.yml'
   const config = exec(
@@ -95,16 +108,9 @@ function assertValidatorReadyFixture(exec, worktree, fixtureCommit, defaultBaseB
   const validatorBase = configuredBase
     ? configuredBase.slice(1).find(Boolean)
     : `origin/${defaultBaseBranch}`
-  const ancestry = exec(
-    'git',
-    ['-C', worktree, 'merge-base', validatorBase, fixtureCommit],
-    { encoding: 'utf8' },
-  )
-  if (ancestry.status !== 0 || ancestry.error) {
-    throw new Error(
-      `Validator base ${validatorBase} must share history with candidate fixture ${fixtureCommit}`,
-    )
-  }
+  assertSharedHistory(exec, worktree, validatorBase, fixtureCommit, 'Validator base')
+  const draftPrBase = `origin/${defaultBaseBranch}`
+  assertSharedHistory(exec, worktree, draftPrBase, fixtureCommit, 'draft PR base')
 }
 
 async function installEvalExcludes(worktree) {
