@@ -83,18 +83,17 @@ function durableCitation(value, label) {
 }
 
 function verdict(id, pass, rationale, evidence) {
-  if (
-    !Array.isArray(evidence)
-    || evidence.length === 0
-    || evidence.some((item) => typeof item !== 'string' || item.trim().length === 0)
-  ) {
+  const citations = Array.isArray(evidence)
+    ? evidence.filter((item) => typeof item === 'string' && item.trim().length > 0)
+    : []
+  if (citations.length === 0) {
     throw missingEvidence(`deterministic verdict ${id} has no durable evidence citation`)
   }
   return {
     id,
     verdict: pass ? 'pass' : 'fail',
     rationale: bounded(rationale),
-    evidence: [...new Set(evidence)].map((item) => bounded(item)),
+    evidence: [...new Set(citations)].map((item) => bounded(item)),
     observed: true,
   }
 }

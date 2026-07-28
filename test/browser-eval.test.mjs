@@ -317,6 +317,23 @@ test('browser adapter failures remain harness failures instead of product criter
   )
 })
 
+test('candidate-controlled non-string observations cannot invalidate durable browser evidence', async () => {
+  const driver = createDemo()
+  driver.routes = async () => [null]
+
+  const result = await runBrowserEvaluation({
+    driver,
+    build: passingBuild,
+    verification: passingVerification,
+    evidenceArtifacts: fixtureEvidenceArtifacts,
+  })
+
+  const route = result.criteria.find(({ id }) => id === 'demo-route-and-registration')
+  assert.equal(route.verdict, 'fail')
+  assert.match(route.rationale, /not registered/)
+  assert.deepEqual(route.evidence, ['evidence/evaluator/browser-probes/demo-route-and-registration.json'])
+})
+
 test('deterministic verdicts refuse to fabricate citations when no durable artifacts are identified', async () => {
   await assert.rejects(
     runBrowserEvaluation({
