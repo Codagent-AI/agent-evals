@@ -213,8 +213,10 @@ for (let attempt = 0; attempt < 50; attempt += 1) {
       return run(`
 const captured = await page.eval(() => {
   const progress = document.querySelector('[data-step-count]');
-  const presentation = document.querySelector('[data-presentation]');
-  const title = document.querySelector('[data-presentation-title]');
+  const presentation = document.querySelector('[data-presentation], [data-presentation-root]');
+  const title = document.querySelector(
+    '[data-presentation-title], [data-presentation-header-title], [data-presentation-footer-title]',
+  );
   const caption = document.querySelector('[data-presentation-caption]');
   const toc = document.querySelector('[data-presentation-toc]');
   const visible = (element) => Boolean(element && element.getClientRects().length > 0
@@ -227,10 +229,37 @@ const captured = await page.eval(() => {
     ariaCurrent: control.getAttribute('aria-current') === 'step',
     focusable: !control.disabled && control.tabIndex >= 0,
   }));
-  const entityIds = [...document.querySelectorAll('[data-presentation-stage] [data-layout-id], [data-presentation-stage] [data-scene-entity], [data-presentation-stage] [data-node]')]
-    .map((element) => element.getAttribute('data-layout-id')
-      || element.getAttribute('data-scene-entity')
-      || [element.getAttribute('data-node'), element.className, element.textContent?.trim().slice(0, 80)].join(':'))
+  const entityOccurrences = new Map();
+  const entityIds = [...document.querySelectorAll(
+    '[data-presentation-stage] [data-layout-id], '
+      + '[data-presentation-stage] [data-scene-entity], '
+      + '[data-presentation-stage] [data-node], '
+      + '[data-presentation-stage] [data-presentation-box], '
+      + '[data-presentation-stage] [data-presentation-label], '
+      + '[data-presentation-stage] [data-presentation-arrow], '
+      + '[data-presentation-stage] [data-presentation-frame], '
+      + '[data-presentation-stage] [data-presentation-emphasis], '
+      + '[data-presentation-stage] [data-presentation-symbol-chip]',
+  )]
+    .map((element) => {
+      const explicit = element.getAttribute('data-layout-id')
+        || element.getAttribute('data-scene-entity')
+        || element.getAttribute('data-node');
+      if (explicit) return explicit;
+      const hook = element.getAttributeNames()
+        .find((name) => name.startsWith('data-presentation-'));
+      const className = typeof element.className === 'string'
+        ? element.className
+        : element.getAttribute('class');
+      const base = [
+        hook || element.tagName.toLowerCase(),
+        hook ? element.getAttribute(hook) : '',
+        className || '',
+      ].join(':');
+      const occurrence = entityOccurrences.get(base) || 0;
+      entityOccurrences.set(base, occurrence + 1);
+      return base + ':' + occurrence;
+    })
     .filter(Boolean);
   const focused = document.activeElement?.getAttribute?.('aria-label')
     || document.activeElement?.textContent?.trim()
@@ -267,6 +296,7 @@ const activated = await page.eval(() => {
   return true;
 });
 if (!activated) throw new Error('navigation control was not found');
+await page.wait(100);
 console.log(JSON.stringify(true));
 `)
     },
@@ -289,14 +319,15 @@ console.log(JSON.stringify(true));
       const left = direction === 'left'
       await run(`
 const dispatched = await page.eval(() => {
-  const target = document.querySelector('[data-presentation]') || document.body;
+  const target = document.querySelector('[data-presentation], [data-presentation-root]') || document.body;
   const startX = ${left ? 200 : 20};
   const endX = ${left ? 20 : 200};
   const touch = (x) => new Touch({ identifier: 1, target, clientX: x, clientY: 100 });
-  window.dispatchEvent(new TouchEvent('touchstart', { touches: [touch(startX)], bubbles: true }));
-  window.dispatchEvent(new TouchEvent('touchend', { changedTouches: [touch(endX)], bubbles: true }));
+  target.dispatchEvent(new TouchEvent('touchstart', { touches: [touch(startX)], bubbles: true }));
+  target.dispatchEvent(new TouchEvent('touchend', { changedTouches: [touch(endX)], bubbles: true }));
   return true;
 });
+await page.wait(100);
 console.log(JSON.stringify(dispatched));
 `)
     },

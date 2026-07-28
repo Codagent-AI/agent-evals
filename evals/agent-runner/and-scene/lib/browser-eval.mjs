@@ -342,10 +342,11 @@ export async function runBrowserEvaluation({
       const swiped = (await page.state()).stepIndex
       await page.swipe('right')
       const swipedBack = (await page.state()).stepIndex
-      const controls = (await page.state()).controls ?? []
+      const browsePage = await session({ mode: 'browse', position: 0 })
+      const controls = (await browsePage.state()).controls ?? []
       const target = controls[4]
-      if (target) await page.activate(target.name)
-      const jumped = (await page.state()).stepIndex
+      if (target) await browsePage.activate(target.name)
+      const jumped = (await browsePage.state()).stepIndex
       const ok = forward === 1 && back === 0 && swiped === 1 && swipedBack === 0 && jumped === 4
       return [
         ok,

@@ -56,8 +56,10 @@ git clone https://github.com/Codagent-AI/and-scene.git /tmp/and-scene-reference
 git -C /tmp/and-scene-reference checkout --detach 171c7def1e12aca2a5f605a5e5feafb20d4e4d19
 npm --prefix /tmp/and-scene-reference ci
 npm --prefix /tmp/and-scene-reference run build
-npm --prefix /tmp/and-scene-reference exec vite -- \
-  preview --host 127.0.0.1 --port 4173 --strictPort
+(
+  cd /tmp/and-scene-reference
+  npm exec vite -- preview --host 127.0.0.1 --port 4173 --strictPort
+)
 ```
 
 Then run the suite-owned AXI regression from this repository:

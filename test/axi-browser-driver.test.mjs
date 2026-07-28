@@ -95,6 +95,36 @@ test('the AXI driver establishes mode and position explicitly and waits for sett
   assert.doesNotMatch(calls[2].input, /^await page\.wait\(100\);/m)
 })
 
+test('the AXI driver observes compatible stable presentation hooks without requiring one DOM vocabulary', async () => {
+  const { createAxiBrowserDriver } = await import(
+    '../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs'
+  )
+  const calls = []
+  const driver = createAxiBrowserDriver({
+    baseUrl: 'http://127.0.0.1:4319/',
+    command: async (args, input) => {
+      calls.push({ args, input })
+      return { status: 0, stdout: `${JSON.stringify(true)}\n`, stderr: '' }
+    },
+  })
+
+  await driver.state()
+  await driver.swipe('left')
+  await driver.activate('Step 1')
+
+  assert.match(calls[0].input, /data-presentation-header-title/)
+  assert.match(calls[0].input, /data-presentation-footer-title/)
+  assert.match(calls[0].input, /data-presentation-box/)
+  assert.match(calls[0].input, /data-presentation-label/)
+  assert.match(calls[0].input, /data-presentation-root/)
+  assert.match(calls[0].input, /const entityOccurrences = new Map/)
+  assert.match(calls[0].input, /entityOccurrences\.set/)
+  assert.match(calls[1].input, /data-presentation-root/)
+  assert.match(calls[1].input, /target\.dispatchEvent/)
+  assert.match(calls[1].input, /page\.wait\(100\)/)
+  assert.match(calls[2].input, /page\.wait\(100\)/)
+})
+
 test('the AXI driver turns CLI failures into harness errors', async () => {
   const { createAxiBrowserDriver } = await import(
     '../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs'

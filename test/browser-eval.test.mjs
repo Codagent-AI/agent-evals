@@ -41,6 +41,7 @@ function createDemo(knobs = {}) {
     stallAt = null,
     failures = [],
     controlCount = stepCount,
+    controlsOnlyInBrowse = false,
     throwOn = null,
   } = knobs
 
@@ -96,12 +97,14 @@ function createDemo(knobs = {}) {
           : ['stage', `beat-${index}`, `beat-${index + 1}`],
         titleProminent: mode === 'present' ? titleProminentInPresent : false,
         captionVisible: mode === 'browse' ? captionVisibleInBrowse : false,
-        controls: Array.from({ length: controlCount }, (_, position) => ({
-          name: `Step ${position + 1}`,
-          role: 'button',
-          ariaCurrent: ariaCurrent && position === index,
-          focusable,
-        })),
+        controls: controlsOnlyInBrowse && mode !== 'browse'
+          ? []
+          : Array.from({ length: controlCount }, (_, position) => ({
+              name: `Step ${position + 1}`,
+              role: 'button',
+              ariaCurrent: ariaCurrent && position === index,
+              focusable,
+            })),
         focused,
       }
     },
@@ -248,6 +251,17 @@ test('mode-specific and navigation probes establish their declared state from ei
     0,
   )
   assert.ok(actions.some((entry) => entry.action === 'set-mode' && entry.mode === 'present'))
+})
+
+test('direct-jump navigation enters browse mode when present mode intentionally hides its controls', async () => {
+  const result = await evaluate({ controlsOnlyInBrowse: true })
+
+  assert.equal(verdictOf(result, 'demo-supported-navigation'), 'pass')
+  const probe = result.probes.find(({ id }) => id === 'demo-supported-navigation')
+  assert.deepEqual(
+    probe.sessions.map(({ established_state: state }) => state.mode),
+    ['present', 'browse'],
+  )
 })
 
 test('matching pass and fail probe records can be reused without operating the browser again', async () => {
