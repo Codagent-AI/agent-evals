@@ -841,17 +841,27 @@ export async function runEvaluation({
     'delivery-verification': async () => {
       if (mode === 'reference-baseline') return
       try {
-        const verifier = verifyDelivery ?? verifyCandidateDelivery
-        record.delivery = await verifier({
-          worktree: candidateWorktree,
-          fixtureCommit: candidateSource.fixture_commit,
-          branch: candidateSource.branch,
-          expectedBase: candidateSource.base_branch,
-          changeName: options.changeName,
-          sessionDir: record.run?.session_dir,
-          workflowHistory: record.observed_steps,
-          exec,
-        })
+        if (rescore) {
+          const revalidate = verifyResumeDelivery ?? verifyRecordedDeliveryIdentity
+          await revalidate({
+            worktree: candidateWorktree,
+            recorded: importedRun.delivery,
+            exec,
+          })
+          record.delivery = importedRun.delivery
+        } else {
+          const verifier = verifyDelivery ?? verifyCandidateDelivery
+          record.delivery = await verifier({
+            worktree: candidateWorktree,
+            fixtureCommit: candidateSource.fixture_commit,
+            branch: candidateSource.branch,
+            expectedBase: candidateSource.base_branch,
+            changeName: options.changeName,
+            sessionDir: record.run?.session_dir,
+            workflowHistory: record.observed_steps,
+            exec,
+          })
+        }
       } catch (error) {
         error.run_id ??= record.run?.run_id ?? null
         error.candidate_branch ??= candidateSource.branch

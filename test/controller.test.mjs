@@ -604,8 +604,16 @@ test('an evaluator-only rescore imports a completed candidate and never starts A
   const context = await environment()
   const importedDelivery = delivery(context)
   const before = runnerInvocations(context).length
+  let identityReverified = false
 
   const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    verifyDelivery: async () => {
+      throw new Error('rescore must not rediscover historical artifact paths')
+    },
+    verifyResumeDelivery: async ({ recorded }) => {
+      identityReverified = recorded.final_sha === context.commit
+      return { verified: true }
+    },
     loadRescoreSource: async () => ({
       source_dir: '/rescore-source',
       source_run_id: 'completed-candidate-run',
@@ -644,6 +652,7 @@ test('an evaluator-only rescore imports a completed candidate and never starts A
   })
 
   assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.equal(identityReverified, true)
   assert.equal(runnerInvocations(context).length, before)
   const written = await readJson(join(context.runDir, 'result.json'))
   assert.equal(written.mode, 'agent-runner')
