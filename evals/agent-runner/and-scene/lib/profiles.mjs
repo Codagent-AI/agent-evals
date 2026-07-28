@@ -1,10 +1,17 @@
-// Independent lead-agent and task-implementor role profiles.
+// Independent lead-agent, task-implementor, and acceptance-reviewer profiles.
 //
 // Each role independently selects a CLI adapter, model, and effort. The two
-// roles map onto the `planner` and `implementor` agents of a single
-// end-to-end `implement-change-v2.0` run; they are never scored separately.
+// implementation roles and the independent acceptance role map onto the
+// `planner`, `implementor`, and `reviewer` agents of a single end-to-end
+// `implement-change-v2.0` run; they are never scored separately.
 
-export const ROLE_AGENTS = { lead: 'planner', implementor: 'implementor' }
+export const ROLE_AGENTS = {
+  lead: 'planner',
+  implementor: 'implementor',
+  reviewer: 'reviewer',
+}
+
+const ROLES = Object.keys(ROLE_AGENTS)
 
 export const PROFILE_FIELDS = ['cli', 'model', 'effort']
 
@@ -56,7 +63,13 @@ function validateOne(role, profile, capabilities) {
   }
 }
 
-export function validateRoleProfiles({ lead, implementor, capabilities, mode = 'agent-runner' }) {
+export function validateRoleProfiles({
+  lead,
+  implementor,
+  reviewer,
+  capabilities,
+  mode = 'agent-runner',
+}) {
   // A reference baseline evaluates an existing candidate without invoking
   // Agent Runner, so neither role applies.
   if (mode === 'reference-baseline') {
@@ -64,21 +77,23 @@ export function validateRoleProfiles({ lead, implementor, capabilities, mode = '
       ok: true,
       applicable: false,
       errors: [],
-      profiles: { lead: NOT_APPLICABLE, implementor: NOT_APPLICABLE },
+      profiles: Object.fromEntries(ROLES.map((role) => [role, NOT_APPLICABLE])),
     }
   }
 
-  const results = {
-    lead: validateOne('lead', lead, capabilities),
-    implementor: validateOne('implementor', implementor, capabilities),
-  }
-  const errors = [...results.lead.errors, ...results.implementor.errors]
+  const supplied = { lead, implementor, reviewer }
+  const results = Object.fromEntries(
+    ROLES.map((role) => [role, validateOne(role, supplied[role], capabilities)]),
+  )
+  const errors = ROLES.flatMap((role) => results[role].errors)
 
   return {
     ok: errors.length === 0,
     applicable: true,
     errors,
-    profiles: { lead: results.lead.profile ?? null, implementor: results.implementor.profile ?? null },
+    profiles: Object.fromEntries(
+      ROLES.map((role) => [role, results[role].profile ?? null]),
+    ),
   }
 }
 
@@ -86,7 +101,7 @@ export function validateRoleProfiles({ lead, implementor, capabilities, mode = '
 // environment; it neither reads nor writes the user's global or project config.
 export function renderEvalConfig(profiles) {
   const lines = ['active_profile: eval', 'profiles:', '  eval:', '    agents:']
-  for (const role of ['lead', 'implementor']) {
+  for (const role of ROLES) {
     const profile = profiles[role]
     if (!profile || profile === NOT_APPLICABLE) continue
     lines.push(`      ${profile.agent}:`)
@@ -107,7 +122,7 @@ export function renderEvalSettings() {
 }
 
 export function compareRoleSelections(recorded, requested) {
-  return ['lead', 'implementor'].flatMap((role) => {
+  return ROLES.flatMap((role) => {
     const before = recorded?.[role]
     const after = requested?.[role]
     if (before === after) return []
@@ -123,16 +138,19 @@ export function compareRoleSelections(recorded, requested) {
 }
 
 const AGENT_ROLES = Object.fromEntries(Object.entries(ROLE_AGENTS).map(([role, agent]) => [agent, role]))
-const REPORTED_ROLES = { 'lead-agent': 'lead', 'task-implementor': 'implementor' }
+const REPORTED_ROLES = {
+  'lead-agent': 'lead',
+  'task-implementor': 'implementor',
+  'acceptance-reviewer': 'reviewer',
+}
 
 // Configured settings are never presented as observed ones. An attempt without
 // complete evidence is marked incomplete instead.
 export function reconcileRoleAttempts(profiles, attempts = []) {
-  const applicable = profiles.lead !== NOT_APPLICABLE && profiles.implementor !== NOT_APPLICABLE
-  const roles = {
-    lead: { configured: profiles.lead, attempts: [] },
-    implementor: { configured: profiles.implementor, attempts: [] },
-  }
+  const applicable = ROLES.every((role) => profiles[role] !== NOT_APPLICABLE)
+  const roles = Object.fromEntries(
+    ROLES.map((role) => [role, { configured: profiles[role], attempts: [] }]),
+  )
   const mismatches = []
   let incomplete = false
 

@@ -18,6 +18,7 @@ export const IDENTITY_FIELDS = [
   'candidate_identity',
   'fixture_revision',
   'agent_runner_provenance',
+  'agent_skills_provenance',
   'workflow_arguments',
   'agent_configuration',
   'evaluator_configuration',

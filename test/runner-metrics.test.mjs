@@ -228,6 +228,21 @@ test('resumed attempts are retained alongside the earlier ones', () => {
   assert.deepEqual(ingested.sessions, ['session-1', 'session-2'])
 })
 
+test('Runner-owned reviewer calls are attributed to the acceptance-reviewer profile', () => {
+  const text = JSON.stringify(metrics({
+    steps: [step({
+      record_id: 'prepare-acceptance/reviewer-call#1',
+      id: 'reviewer-call',
+      kind: 'agent-call',
+      target_name: 'reviewer',
+    })],
+  }))
+
+  const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
+
+  assert.equal(ingested.attempts[0].agent_role, 'acceptance-reviewer')
+})
+
 test('incomplete Runner history is preserved rather than presented as complete', () => {
   const text = JSON.stringify(metrics({ history_complete: false }))
 

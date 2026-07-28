@@ -30,13 +30,17 @@ steps:
 const profileArgs = [
   '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
   '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
+  '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
 ]
 
 async function environment() {
   const root = await mkdtemp(join(tmpdir(), 'agent-evals-handoff-'))
   const agentRunnerDir = join(root, 'agent-runner')
+  const agentSkillsDir = join(root, 'agent-skills')
   await mkdir(join(agentRunnerDir, 'workflows/openspec'), { recursive: true })
   await writeFile(join(agentRunnerDir, WORKFLOW_RELATIVE_PATH), workflowYaml)
+  await mkdir(join(agentSkillsDir, '.claude-plugin'), { recursive: true })
+  await writeFile(join(agentSkillsDir, '.claude-plugin/marketplace.json'), '{"name":"codagent"}\n')
   const home = join(root, 'container-home')
   await mkdir(home, { recursive: true })
 
@@ -74,7 +78,7 @@ async function environment() {
   const source = join(runDir, '.runtime/candidate-worktree/src/index.ts')
   await mkdir(join(source, '..'), { recursive: true })
   await writeFile(source, 'export const fixture = true\n')
-  return { root, agentRunnerDir, exec, home, runDir }
+  return { root, agentRunnerDir, agentSkillsDir, exec, home, runDir }
 }
 
 function candidateServer({ stopFails = false } = {}) {
@@ -120,6 +124,7 @@ async function evaluate(context, extra = {}) {
     argv: [
       '--run-dir', context.runDir,
       '--agent-runner-dir', context.agentRunnerDir,
+      '--agent-skills-dir', context.agentSkillsDir,
       '--change-name', 'create-and-scene',
       '--candidate-ref', 'candidate-abc',
       '--skip-validator',

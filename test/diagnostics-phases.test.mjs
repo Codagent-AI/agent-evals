@@ -33,6 +33,7 @@ steps:
 const profileArgs = [
   '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
   '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
+  '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
 ]
 
 const CATALOG_BODY = JSON.stringify({
@@ -93,8 +94,11 @@ function runMetrics(overrides = {}) {
 async function environment({ metrics = runMetrics(), sessionFiles = {} } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'agent-evals-diagnostics-'))
   const agentRunnerDir = join(root, 'agent-runner')
+  const agentSkillsDir = join(root, 'agent-skills')
   await mkdir(join(agentRunnerDir, 'workflows/openspec'), { recursive: true })
   await writeFile(join(agentRunnerDir, WORKFLOW_RELATIVE_PATH), workflowYaml)
+  await mkdir(join(agentSkillsDir, '.claude-plugin'), { recursive: true })
+  await writeFile(join(agentSkillsDir, '.claude-plugin/marketplace.json'), '{"name":"codagent"}\n')
 
   const sessionDir = join(root, 'sessions/run-7')
   await mkdir(sessionDir, { recursive: true })
@@ -148,7 +152,7 @@ async function environment({ metrics = runMetrics(), sessionFiles = {} } = {}) {
   const source = join(runDir, '.runtime/candidate-worktree/src/index.ts')
   await mkdir(join(source, '..'), { recursive: true })
   await writeFile(source, 'export const fixture = true\n')
-  return { root, agentRunnerDir, exec, invocations, home, sessionDir, runDir }
+  return { root, agentRunnerDir, agentSkillsDir, exec, invocations, home, sessionDir, runDir }
 }
 
 function catalogFetch(body = CATALOG_BODY) {
@@ -180,6 +184,7 @@ async function evaluate(context, overrides = {}) {
     argv: [
       '--run-dir', context.runDir,
       '--agent-runner-dir', context.agentRunnerDir,
+      '--agent-skills-dir', context.agentSkillsDir,
       '--change-name', 'create-and-scene',
       '--skip-validator',
       ...(resume ? ['--resume'] : []),

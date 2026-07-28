@@ -79,7 +79,12 @@ import {
   renderEvalSettings,
   validateRoleProfiles,
 } from './lib/profiles.mjs'
-import { compareProvenance, readWorkflowProvenance } from './lib/provenance.mjs'
+import {
+  compareAgentSkillsProvenance,
+  compareProvenance,
+  readAgentSkillsProvenance,
+  readWorkflowProvenance,
+} from './lib/provenance.mjs'
 import {
   isAgentRunnerProcessAlive,
   readRunnerState as readPersistedRunnerState,
@@ -115,6 +120,7 @@ const VALUES = new Map([
   ['--run-id', 'runId'],
   ['--repo', 'repo'],
   ['--agent-runner-dir', 'agentRunnerDir'],
+  ['--agent-skills-dir', 'agentSkillsDir'],
   ['--change-name', 'changeName'],
   ['--fixture-ref', 'fixtureRef'],
   ['--candidate-ref', 'candidateRef'],
@@ -126,6 +132,9 @@ const VALUES = new Map([
   ['--implementor-cli', 'implementorCli'],
   ['--implementor-model', 'implementorModel'],
   ['--implementor-effort', 'implementorEffort'],
+  ['--reviewer-cli', 'reviewerCli'],
+  ['--reviewer-model', 'reviewerModel'],
+  ['--reviewer-effort', 'reviewerEffort'],
 ])
 
 export function parseArgs(argv) {
@@ -277,6 +286,7 @@ export async function runEvaluation({
   const validation = validateRoleProfiles({
     lead: roleProfileFrom(options, 'lead'),
     implementor: roleProfileFrom(options, 'implementor'),
+    reviewer: roleProfileFrom(options, 'reviewer'),
     capabilities,
     mode,
   })
@@ -298,10 +308,14 @@ export async function runEvaluation({
   // A reference baseline evaluates an existing candidate without invoking Agent
   // Runner, so it needs no clean checkout or workflow contract.
   let provenance = null
+  let agentSkillsProvenance = null
   let workflowText = ''
   if (mode === 'agent-runner') {
     if (!options.agentRunnerDir) {
       return failure([{ code: 'invalid-arguments', message: '--agent-runner-dir is required' }])
+    }
+    if (!options.agentSkillsDir) {
+      return failure([{ code: 'invalid-arguments', message: '--agent-skills-dir is required' }])
     }
     // Without a home the controller and Agent Runner would read and write
     // different run stores, so a run identity could be silently lost.
@@ -313,8 +327,18 @@ export async function runEvaluation({
     }
     try {
       provenance = await readWorkflowProvenance({ agentRunnerDir: resolve(options.agentRunnerDir), exec })
+      agentSkillsProvenance = await readAgentSkillsProvenance({
+        agentSkillsDir: resolve(options.agentSkillsDir),
+        exec,
+      })
     } catch (error) {
       return failure([{ code: error.code ?? 'provenance-error', message: error.message }])
+    }
+    if (!agentSkillsProvenance.complete) {
+      return failure([{
+        code: 'agent-skills-provenance',
+        message: 'Agent Skills provenance is incomplete',
+      }])
     }
     workflowText = await readFile(provenance.workflow_path, 'utf8')
     const contract = verifyWorkflowContract(workflowText)
@@ -432,6 +456,10 @@ export async function runEvaluation({
       workflow_sha256: provenance?.workflow_sha256 ?? null,
       cli_version: provenance?.cli_version ?? null,
     }),
+    agent_skills_provenance: hashJson({
+      commit: agentSkillsProvenance?.commit ?? null,
+      manifest_sha256: agentSkillsProvenance?.manifest_sha256 ?? null,
+    }),
     workflow_arguments: hashJson(boundary.workflow_arguments),
     agent_configuration: hashJson(validation.profiles),
     evaluator_configuration: hashJson({
@@ -455,6 +483,18 @@ export async function runEvaluation({
       const drift = compareProvenance(checkpoint.agent_runner_provenance, provenance)
       if (drift.length > 0) {
         return failure(drift.map((mismatch) => ({ code: 'resume-provenance', ...mismatch })))
+      }
+    }
+    if (agentSkillsProvenance && checkpoint.agent_skills_provenance) {
+      const drift = compareAgentSkillsProvenance(
+        checkpoint.agent_skills_provenance,
+        agentSkillsProvenance,
+      )
+      if (drift.length > 0) {
+        return failure(drift.map((mismatch) => ({
+          code: 'resume-agent-skills-provenance',
+          ...mismatch,
+        })))
       }
     }
     const stale = validateCheckpointIdentity(checkpoint, identity)
@@ -493,6 +533,7 @@ export async function runEvaluation({
       }),
       role_profiles: validation.profiles,
       agent_runner_provenance: provenance,
+      agent_skills_provenance: agentSkillsProvenance,
       candidate_source: {
         repository: candidateSource.repository,
         fixture_commit: candidateSource.fixture_commit,
@@ -601,6 +642,7 @@ export async function runEvaluation({
         fixture: candidateSource,
         workflow: boundary,
         agent_runner_provenance: provenance,
+        agent_skills_provenance: agentSkillsProvenance,
         role_profiles: validation.profiles,
         evaluator_configuration: options.judgeModel,
         rubric_provenance: provenanceOfRubrics,
@@ -1263,6 +1305,7 @@ export async function runEvaluation({
           run_id: record.run?.run_id ?? null,
           session_dir: record.run?.session_dir ?? null,
           provenance,
+          agent_skills_provenance: agentSkillsProvenance,
           events: record.events,
         },
         // A reference baseline invoked no implementation workflow, so its usage,

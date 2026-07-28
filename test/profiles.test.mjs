@@ -12,20 +12,25 @@ import {
 
 const capabilities = {
   clis: {
-    claude: { models: ['opus', 'sonnet'], efforts: ['low', 'medium', 'high'], roles: ['planner', 'implementor'] },
+    claude: {
+      models: ['opus', 'sonnet'],
+      efforts: ['low', 'medium', 'high'],
+      roles: ['planner', 'implementor', 'reviewer'],
+    },
     codex: { models: ['gpt-5'], efforts: ['medium', 'high'], roles: ['implementor'] },
   },
 }
 
 const lead = { cli: 'claude', model: 'opus', effort: 'high' }
 const implementor = { cli: 'claude', model: 'sonnet', effort: 'medium' }
+const reviewer = { cli: 'claude', model: 'opus', effort: 'high' }
 
-test('roles map to the implement-change planner and implementor agents', () => {
-  assert.deepEqual(ROLE_AGENTS, { lead: 'planner', implementor: 'implementor' })
+test('roles map to the implement-change planner, implementor, and reviewer agents', () => {
+  assert.deepEqual(ROLE_AGENTS, { lead: 'planner', implementor: 'implementor', reviewer: 'reviewer' })
 })
 
 test('independently selected profiles are accepted and normalized', () => {
-  const result = validateRoleProfiles({ lead, implementor, capabilities })
+  const result = validateRoleProfiles({ lead, implementor, reviewer, capabilities })
 
   assert.equal(result.ok, true)
   assert.deepEqual(result.errors, [])
@@ -33,28 +38,40 @@ test('independently selected profiles are accepted and normalized', () => {
   assert.deepEqual(result.profiles.implementor, {
     cli: 'claude', model: 'sonnet', effort: 'medium', agent: 'implementor',
   })
+  assert.deepEqual(result.profiles.reviewer, {
+    cli: 'claude', model: 'opus', effort: 'high', agent: 'reviewer',
+  })
 })
 
-test('two identical profiles remain two independently declared selections', () => {
-  const result = validateRoleProfiles({ lead, implementor: { ...lead }, capabilities })
+test('identical profiles remain independently declared selections', () => {
+  const result = validateRoleProfiles({ lead, implementor: { ...lead }, reviewer: { ...lead }, capabilities })
 
   assert.equal(result.ok, true)
   assert.notEqual(result.profiles.lead.agent, result.profiles.implementor.agent)
+  assert.notEqual(result.profiles.lead.agent, result.profiles.reviewer.agent)
   assert.equal(result.profiles.lead.model, result.profiles.implementor.model)
+  assert.equal(result.profiles.lead.model, result.profiles.reviewer.model)
 })
 
 test('a missing lead profile is rejected before Agent Runner starts', () => {
-  const result = validateRoleProfiles({ implementor, capabilities })
+  const result = validateRoleProfiles({ implementor, reviewer, capabilities })
 
   assert.equal(result.ok, false)
   assert.deepEqual(result.errors.map((error) => [error.role, error.field]), [['lead', 'profile']])
 })
 
 test('a missing implementor profile is rejected before Agent Runner starts', () => {
-  const result = validateRoleProfiles({ lead, capabilities })
+  const result = validateRoleProfiles({ lead, reviewer, capabilities })
 
   assert.equal(result.ok, false)
   assert.deepEqual(result.errors.map((error) => [error.role, error.field]), [['implementor', 'profile']])
+})
+
+test('a missing reviewer profile is rejected before Agent Runner starts', () => {
+  const result = validateRoleProfiles({ lead, implementor, capabilities })
+
+  assert.equal(result.ok, false)
+  assert.deepEqual(result.errors.map((error) => [error.role, error.field]), [['reviewer', 'profile']])
 })
 
 test('a reference baseline needs no role profiles and reports them not applicable', () => {
@@ -64,10 +81,13 @@ test('a reference baseline needs no role profiles and reports them not applicabl
   assert.equal(result.applicable, false)
   assert.equal(result.profiles.lead, 'not-applicable')
   assert.equal(result.profiles.implementor, 'not-applicable')
+  assert.equal(result.profiles.reviewer, 'not-applicable')
 })
 
 test('an unsupported lead CLI names the failing role and field', () => {
-  const result = validateRoleProfiles({ lead: { ...lead, cli: 'gemini' }, implementor, capabilities })
+  const result = validateRoleProfiles({
+    lead: { ...lead, cli: 'gemini' }, implementor, reviewer, capabilities,
+  })
 
   assert.equal(result.ok, false)
   assert.deepEqual(result.errors, [
@@ -76,7 +96,9 @@ test('an unsupported lead CLI names the failing role and field', () => {
 })
 
 test('a CLI that cannot run the planner role autonomously is rejected for the lead', () => {
-  const result = validateRoleProfiles({ lead: { ...lead, cli: 'codex', model: 'gpt-5' }, implementor, capabilities })
+  const result = validateRoleProfiles({
+    lead: { ...lead, cli: 'codex', model: 'gpt-5' }, implementor, reviewer, capabilities,
+  })
 
   assert.equal(result.ok, false)
   assert.deepEqual(result.errors.map((error) => [error.role, error.field]), [['lead', 'role']])
@@ -84,7 +106,9 @@ test('a CLI that cannot run the planner role autonomously is rejected for the le
 })
 
 test('an unavailable implementor model names the failing role and field', () => {
-  const result = validateRoleProfiles({ lead, implementor: { ...implementor, model: 'opus-9' }, capabilities })
+  const result = validateRoleProfiles({
+    lead, implementor: { ...implementor, model: 'opus-9' }, reviewer, capabilities,
+  })
 
   assert.equal(result.ok, false)
   assert.deepEqual(result.errors, [
@@ -93,7 +117,9 @@ test('an unavailable implementor model names the failing role and field', () => 
 })
 
 test('an invalid implementor effort names the failing role and field', () => {
-  const result = validateRoleProfiles({ lead, implementor: { ...implementor, effort: 'turbo' }, capabilities })
+  const result = validateRoleProfiles({
+    lead, implementor: { ...implementor, effort: 'turbo' }, reviewer, capabilities,
+  })
 
   assert.equal(result.ok, false)
   assert.deepEqual(result.errors.map((error) => [error.role, error.field, error.value]), [
@@ -101,21 +127,23 @@ test('an invalid implementor effort names the failing role and field', () => {
   ])
 })
 
-test('renderEvalConfig materializes both roles autonomously in an eval-scoped profile', () => {
-  const { profiles } = validateRoleProfiles({ lead, implementor, capabilities })
+test('renderEvalConfig materializes all workflow roles autonomously in an eval-scoped profile', () => {
+  const { profiles } = validateRoleProfiles({ lead, implementor, reviewer, capabilities })
 
   const config = renderEvalConfig(profiles)
 
   assert.match(config, /^active_profile: eval$/m)
   assert.match(config, /^ {6}planner:$/m)
   assert.match(config, /^ {6}implementor:$/m)
-  assert.equal(config.match(/default_mode: autonomous/g).length, 2)
+  assert.match(config, /^ {6}reviewer:$/m)
+  assert.equal(config.match(/default_mode: autonomous/g).length, 3)
   assert.match(config, /planner:\n {8}default_mode: autonomous\n {8}cli: claude\n {8}model: opus\n {8}effort: high/)
   assert.match(config, /implementor:\n {8}default_mode: autonomous\n {8}cli: claude\n {8}model: sonnet\n {8}effort: medium/)
+  assert.match(config, /reviewer:\n {8}default_mode: autonomous\n {8}cli: claude\n {8}model: opus\n {8}effort: high/)
 })
 
 test('renderEvalConfig never inherits host or project Agent Runner settings', () => {
-  const { profiles } = validateRoleProfiles({ lead, implementor, capabilities })
+  const { profiles } = validateRoleProfiles({ lead, implementor, reviewer, capabilities })
 
   const config = renderEvalConfig(profiles)
 
@@ -129,17 +157,17 @@ test('the disposable Agent Runner home grants autonomous agents container-level 
 })
 
 test('resume with matching selections reports no mismatch', () => {
-  const { profiles } = validateRoleProfiles({ lead, implementor, capabilities })
+  const { profiles } = validateRoleProfiles({ lead, implementor, reviewer, capabilities })
 
   assert.deepEqual(compareRoleSelections(profiles, validateRoleProfiles({
-    lead: { ...lead }, implementor: { ...implementor }, capabilities,
+    lead: { ...lead }, implementor: { ...implementor }, reviewer: { ...reviewer }, capabilities,
   }).profiles), [])
 })
 
 test('resume that changes one profile identifies the role and field', () => {
-  const recorded = validateRoleProfiles({ lead, implementor, capabilities }).profiles
+  const recorded = validateRoleProfiles({ lead, implementor, reviewer, capabilities }).profiles
   const requested = validateRoleProfiles({
-    lead: { ...lead, model: 'sonnet' }, implementor, capabilities,
+    lead: { ...lead, model: 'sonnet' }, implementor, reviewer, capabilities,
   }).profiles
 
   assert.deepEqual(compareRoleSelections(recorded, requested), [
@@ -148,7 +176,7 @@ test('resume that changes one profile identifies the role and field', () => {
 })
 
 test('an observed attempt matching its configuration is linked to the role', () => {
-  const { profiles } = validateRoleProfiles({ lead, implementor, capabilities })
+  const { profiles } = validateRoleProfiles({ lead, implementor, reviewer, capabilities })
 
   const report = reconcileRoleAttempts(profiles, [
     { agent: 'planner', cli: 'claude', provider: 'anthropic', model: 'opus', effort: 'high', session: 'lead-agent', step: 'plan', attempt: 1 },
@@ -162,7 +190,7 @@ test('an observed attempt matching its configuration is linked to the role', () 
 })
 
 test('an effective setting differing from configuration preserves both values', () => {
-  const { profiles } = validateRoleProfiles({ lead, implementor, capabilities })
+  const { profiles } = validateRoleProfiles({ lead, implementor, reviewer, capabilities })
 
   const report = reconcileRoleAttempts(profiles, [
     { agent: 'implementor', cli: 'claude', provider: 'anthropic', model: 'opus', effort: 'medium', session: 'task-1', step: 'implement', attempt: 1 },
@@ -177,7 +205,7 @@ test('an effective setting differing from configuration preserves both values', 
 })
 
 test('missing effective evidence is incomplete and is never inferred from configuration', () => {
-  const { profiles } = validateRoleProfiles({ lead, implementor, capabilities })
+  const { profiles } = validateRoleProfiles({ lead, implementor, reviewer, capabilities })
 
   const report = reconcileRoleAttempts(profiles, [
     { agent: 'implementor', session: 'task-1', step: 'implement', attempt: 1 },
@@ -192,24 +220,27 @@ test('missing effective evidence is incomplete and is never inferred from config
 })
 
 test('every retried and resumed attempt is retained under its role', () => {
-  const { profiles } = validateRoleProfiles({ lead, implementor, capabilities })
+  const { profiles } = validateRoleProfiles({ lead, implementor, reviewer, capabilities })
 
   const report = reconcileRoleAttempts(profiles, [
     { agent: 'implementor', cli: 'claude', provider: 'anthropic', model: 'sonnet', effort: 'medium', session: 's', step: 'implement', attempt: 1 },
     { agent: 'implementor', cli: 'claude', provider: 'anthropic', model: 'sonnet', effort: 'medium', session: 's', step: 'implement', attempt: 2 },
     { agent: 'planner', cli: 'claude', provider: 'anthropic', model: 'opus', effort: 'high', session: 'lead-agent', step: 'simplify', attempt: 1 },
+    { agent: 'reviewer', cli: 'claude', provider: 'anthropic', model: 'opus', effort: 'high', session: 'acceptance-tester', step: 'prepare-acceptance', attempt: 1 },
   ])
 
   assert.deepEqual(report.roles.implementor.attempts.map((a) => a.observed.attempt), [1, 2])
   assert.equal(report.roles.lead.attempts.length, 1)
+  assert.equal(report.roles.reviewer.attempts.length, 1)
 })
 
-test('a reference baseline reports both roles not applicable', () => {
+test('a reference baseline reports every workflow role not applicable', () => {
   const { profiles } = validateRoleProfiles({ capabilities, mode: 'reference-baseline' })
 
   const report = reconcileRoleAttempts(profiles, [])
 
   assert.equal(report.applicable, false)
   assert.equal(report.roles.lead.configured, 'not-applicable')
+  assert.equal(report.roles.reviewer.configured, 'not-applicable')
   assert.equal(report.incomplete, false)
 })

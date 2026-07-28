@@ -6,8 +6,11 @@ import { test } from 'node:test'
 
 import { hashString } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
 import {
+  AGENT_SKILLS_MANIFEST_PATH,
   WORKFLOW_RELATIVE_PATH,
+  compareAgentSkillsProvenance,
   compareProvenance,
+  readAgentSkillsProvenance,
   readWorkflowProvenance,
 } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
 
@@ -44,6 +47,53 @@ async function checkout({ workflow = workflowYaml } = {}) {
 
 test('the pinned workflow path is the versioned implement-change contract', () => {
   assert.equal(WORKFLOW_RELATIVE_PATH, 'workflows/openspec/implement-change-v2.0.yaml')
+})
+
+test('a clean Agent Skills checkout records its commit and plugin manifest hash', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-skills-provenance-'))
+  const manifest = '{"name":"codagent"}\n'
+  await mkdir(join(dir, '.claude-plugin'), { recursive: true })
+  await writeFile(join(dir, AGENT_SKILLS_MANIFEST_PATH), manifest)
+
+  const provenance = await readAgentSkillsProvenance({
+    agentSkillsDir: dir,
+    exec: execStub(),
+  })
+
+  assert.equal(provenance.commit, 'a'.repeat(40))
+  assert.equal(provenance.clean, true)
+  assert.equal(provenance.manifest_sha256, hashString(manifest))
+  assert.equal(provenance.complete, true)
+  assert.equal(provenance.reproducible, true)
+})
+
+test('Agent Skills provenance rejects a dirty or incomplete checkout', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-skills-provenance-'))
+  await mkdir(join(dir, '.claude-plugin'), { recursive: true })
+  await writeFile(join(dir, AGENT_SKILLS_MANIFEST_PATH), '{}\n')
+
+  await assert.rejects(
+    () => readAgentSkillsProvenance({
+      agentSkillsDir: dir,
+      exec: execStub({ 'git status --porcelain': { status: 0, stdout: '?? scratch.txt\n' } }),
+    }),
+    (error) => error.code === 'dirty-agent-skills-checkout',
+  )
+
+  const missing = await mkdtemp(join(tmpdir(), 'agent-evals-skills-provenance-'))
+  await assert.rejects(
+    () => readAgentSkillsProvenance({ agentSkillsDir: missing, exec: execStub() }),
+    (error) => error.code === 'missing-agent-skills-manifest',
+  )
+})
+
+test('Agent Skills resume comparison reports commit or manifest drift', () => {
+  const recorded = { commit: 'a', manifest_sha256: 'b' }
+
+  assert.deepEqual(compareAgentSkillsProvenance(recorded, { commit: 'z', manifest_sha256: 'c' }), [
+    { field: 'commit', recorded: 'a', current: 'z' },
+    { field: 'manifest_sha256', recorded: 'b', current: 'c' },
+  ])
 })
 
 test('a clean checkout records commit, workflow hash, and CLI version', async () => {

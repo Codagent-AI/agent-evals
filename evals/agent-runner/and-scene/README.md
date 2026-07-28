@@ -12,6 +12,7 @@ Run commands from the `agent-evals` repository root. The entry point is
 You need:
 
 - an Agent Runner checkout, normally cloned next to this repository
+- a clean Agent Skills checkout, normally cloned next to this repository
 - Docker with a running daemon
 - network access to clone the fixture and install packages
 - valid host authentication for the implementation agent and judge
@@ -22,9 +23,12 @@ Agent Runner owns the sandbox image, local-source build, authentication
 forwarding, and devcontainer. This suite calls its `scripts/sandbox-run.sh`
 adapter and mounts only this suite at `/eval-input`.
 
-Each role profile selects its own CLI adapter, and eval-owned judging always
-runs through Codex. The adapter mounts the host authentication matching the
-selected adapters plus Codex.
+Each lead, implementor, and acceptance-reviewer profile selects its own CLI
+adapter, and eval-owned judging always runs through Codex. The adapter mounts
+the host authentication matching the selected adapters plus Codex. Before
+starting Agent Runner, the suite verifies the workflow's named Codagent skills
+against the pinned Agent Skills checkout and installs that local plugin for
+each selected CLI.
 
 The implementation agents use unrestricted permissions inside the container.
 The container is the isolation boundary. Run trusted fixtures and pass only the
@@ -79,7 +83,7 @@ discovers the harness scores the wrong component:
 evals/agent-runner/and-scene/run.sh --calibrate
 ```
 
-Run the evaluation. Both role profiles are required and each independently
+Run the evaluation. All three role profiles are required and each independently
 selects a CLI adapter, model, and effort:
 
 ```bash
@@ -87,7 +91,8 @@ evals/agent-runner/and-scene/run.sh \
   --run-agent \
   --skip-validator \
   --lead-cli claude --lead-model opus --lead-effort high \
-  --implementor-cli claude --implementor-model sonnet --implementor-effort medium
+  --implementor-cli claude --implementor-model sonnet --implementor-effort medium \
+  --reviewer-cli claude --reviewer-model opus --reviewer-effort high
 ```
 
 `--skip-validator` passes `skip_validator=true` only to task-level compliance.
@@ -104,14 +109,15 @@ evals/agent-runner/and-scene/run.sh \
   --run-agent --resume --artifact-dir artifacts/evals/and-scene/<run-id> \
   --skip-validator \
   --lead-cli claude --lead-model opus --lead-effort high \
-  --implementor-cli claude --implementor-model sonnet --implementor-effort medium
+  --implementor-cli claude --implementor-model sonnet --implementor-effort medium \
+  --reviewer-cli claude --reviewer-model opus --reviewer-effort high
 ```
 
 Resume reuses the recorded Agent Runner run rather than starting a second one.
 It verifies live process ownership before waiting, resumes only the exact
 inactive unfinished run, and rejects a changed fixture, role profile, Runner
-revision, workflow hash, branch, draft PR, final SHA, rubric hash, evidence
-identity, or other score-affecting input.
+revision, workflow hash, Agent Skills revision or manifest, branch, draft PR,
+final SHA, rubric hash, evidence identity, or other score-affecting input.
 
 Evaluate an existing candidate as a reference baseline without invoking Agent
 Runner. Role profiles are neither required nor applicable:
@@ -127,6 +133,7 @@ without Docker or model calls:
 
 ```bash
 evals/agent-runner/and-scene/run.sh --run-agent --agent-runner-dir /path/to/agent-runner ...
+evals/agent-runner/and-scene/run.sh --run-agent --agent-skills-dir /path/to/agent-skills ...
 evals/agent-runner/and-scene/run.sh --run-agent --dry-run ...
 ```
 
@@ -206,7 +213,8 @@ evals/agent-runner/and-scene/run.sh \
   --run-agent --skip-validator \
   --artifact-dir artifacts/evals/and-scene/candidate-1 \
   --lead-cli claude --lead-model opus --lead-effort high \
-  --implementor-cli claude --implementor-model sonnet --implementor-effort medium
+  --implementor-cli claude --implementor-model sonnet --implementor-effort medium \
+  --reviewer-cli claude --reviewer-model opus --reviewer-effort high
 ```
 
 Both stop at `pending-human-review`. The paired review that turns them into
@@ -241,7 +249,9 @@ There is no early `--until` boundary. `--skip-validator` sets only the
 workflow's task-level `skip_validator` parameter; the final Validator, draft
 pull request, acceptance preparation, and handoff verification always remain
 required. The Agent Runner checkout must be a clean Git worktree; the suite
-records whichever commit, workflow hash, and CLI version it used.
+records whichever commit, workflow hash, and CLI version it used. The Agent
+Skills checkout must also be clean; the suite records its commit and plugin
+manifest hash.
 
 ## Architecture
 
@@ -259,7 +269,7 @@ focused modules under `lib/`:
 | `lib/orchestrator.mjs` | Dependency-aware, hash-verified fine-grained resume plans |
 | `lib/checkpoint.mjs` | Run-state persistence and work-unit artifact verification |
 | `lib/subprocess.mjs` | Subprocess execution with active machine timing |
-| `lib/provenance.mjs` | Clean-checkout, workflow-hash, and CLI-version provenance |
+| `lib/provenance.mjs` | Agent Runner and Agent Skills clean-checkout, revision, workflow, manifest, and CLI-version provenance |
 | `lib/profiles.mjs` | Role profile validation, eval-scoped config, effective-profile reconciliation |
 | `lib/workflow.mjs` | Full-workflow contract, prohibited-side-effect checks, Runner run classification |
 | `lib/evidence.mjs` | Role-based candidate intake, byte integrity, lineage, evaluator evidence, contradictions, and bounded judge views |
@@ -373,7 +383,8 @@ resources automatically.
 The automated command runs these phases in order:
 
 1. Preflight the fixture, unique candidate branch, Runner checkout and workflow,
-   publishing credentials, profiles, evaluator inputs, and run directory.
+   Agent Skills checkout and required skills, publishing credentials, profiles,
+   evaluator inputs, and run directory.
 2. Start, wait for, resume, or continue the one recorded complete Runner run.
 3. Verify the clean delivered branch, remote head, and open draft PR whose base
    exactly matches the recorded `origin/HEAD`, plus its head, final Validator,
@@ -567,8 +578,8 @@ failure list only proves clean rendering when the failure list was readable.
 ## Artifacts
 
 - `result.json` for evaluation status, product verdict, score breakdown, rubric
-  provenance, workflow provenance, configured and observed role details,
-  delivery identity, and recovery history
+  provenance, workflow and Agent Skills provenance, configured and observed
+  role details, delivery identity, and recovery history
 - `run-state.json` as the sole atomic state authority for immutable input
   hashes, evolving branch/Runner/PR/final-SHA identity, typed events and failure
   ownership, phase and work-unit dependency hashes, output hashes, outcome, and
@@ -611,9 +622,9 @@ phases and work units completed and the hashes that must still match before
 they can be reused.
 
 Preflight failures exit 2 before any workflow starts and name the exact cause: a
-dirty Agent Runner checkout, a missing or non-conforming
-`implement-change-v2.0.yaml`, missing publishing credentials, an invalid role
-profile with its role and field, a
+dirty Agent Runner or Agent Skills checkout, a missing or non-conforming
+`implement-change-v2.0.yaml`, a missing workflow-named Codagent skill, missing
+publishing credentials, an invalid role profile with its role and field, a
 role-profile mismatch on resume, a resume-provenance change, or a stale
 run-state identity.
 

@@ -22,11 +22,13 @@ WORKFLOW_RELATIVE_PATH="workflows/openspec/implement-change-v2.0.yaml"
 # Its separate /tmp/agent-runner-local copy is only the build source and cannot
 # satisfy the controller's clean-worktree provenance check.
 CONTAINER_AGENT_RUNNER_DIR="${CONTAINER_AGENT_RUNNER_DIR:-/agent-runner-source}"
+CONTAINER_AGENT_SKILLS_DIR="${CONTAINER_AGENT_SKILLS_DIR:-/agent-skills-source}"
 JUDGE_MODEL="${JUDGE_MODEL:-codex-default}"
 CANDIDATE_REF="${CANDIDATE_REF:-}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-}"
 LEAD_CLI="" LEAD_MODEL="" LEAD_EFFORT=""
 IMPLEMENTOR_CLI="" IMPLEMENTOR_MODEL="" IMPLEMENTOR_EFFORT=""
+REVIEWER_CLI="" REVIEWER_MODEL="" REVIEWER_EFFORT=""
 SKIP_VALIDATOR=0
 RESUME=0
 REFERENCE_BASELINE=0
@@ -40,6 +42,7 @@ EVALS_ROOT="$(cd -- "$SUITE_DIR/../../.." && pwd)"
 # blocked until it says calibration passed.
 CALIBRATION_RECORD="${CALIBRATION_RECORD:-$EVALS_ROOT/artifacts/evals/and-scene-calibration/latest.json}"
 AGENT_RUNNER_DIR="${AGENT_RUNNER_DIR:-$EVALS_ROOT/../agent-runner}"
+AGENT_SKILLS_DIR="${AGENT_SKILLS_DIR:-$EVALS_ROOT/../agent-skills}"
 SANDBOX_RUNNER="${SANDBOX_RUNNER:-}"
 ENV_ARGS=()
 ENV_FILE_ARGS=()
@@ -76,6 +79,10 @@ Options:
                           Agent Runner checkout. Must be a clean Git worktree
                           containing workflows/openspec/implement-change-v2.0.yaml.
                           Default: sibling ../agent-runner.
+  --agent-skills-dir PATH
+                          Agent Skills checkout. Must be a clean Git worktree
+                          containing every Codagent skill named by the workflow.
+                          Default: sibling ../agent-skills.
   --artifact-dir PATH    Host run directory. Default:
                           proof: artifacts/evals/and-scene-proof/<timestamp>
                           run:   artifacts/evals/and-scene/<timestamp>
@@ -102,6 +109,10 @@ Options:
                           Task-implementor model.
   --implementor-effort EFFORT
                           Task-implementor effort.
+  --reviewer-cli CLI     Acceptance-reviewer CLI adapter.
+  --reviewer-model MODEL Acceptance-reviewer model.
+  --reviewer-effort EFFORT
+                          Acceptance-reviewer effort.
   --judge-model MODEL    Eval-owned judge model. Default: the Codex CLI default.
   --calibration-record PATH
                           Durable calibration pass/fail record. Written by
@@ -158,6 +169,10 @@ while (($#)); do
       AGENT_RUNNER_DIR="${2:?missing value for --agent-runner-dir}"
       shift 2
       ;;
+    --agent-skills-dir)
+      AGENT_SKILLS_DIR="${2:?missing value for --agent-skills-dir}"
+      shift 2
+      ;;
     --repo)
       REPO="${2:?missing value for --repo}"
       shift 2
@@ -212,6 +227,18 @@ while (($#)); do
       ;;
     --implementor-effort)
       IMPLEMENTOR_EFFORT="${2:?missing value for --implementor-effort}"
+      shift 2
+      ;;
+    --reviewer-cli)
+      REVIEWER_CLI="${2:?missing value for --reviewer-cli}"
+      shift 2
+      ;;
+    --reviewer-model)
+      REVIEWER_MODEL="${2:?missing value for --reviewer-model}"
+      shift 2
+      ;;
+    --reviewer-effort)
+      REVIEWER_EFFORT="${2:?missing value for --reviewer-effort}"
       shift 2
       ;;
     --judge-model)
@@ -340,12 +367,26 @@ if [[ "$RUN_AGENT" == 1 ]]; then
       echo "Agent Runner checkout does not contain $WORKFLOW_RELATIVE_PATH: $AGENT_RUNNER_DIR" >&2
       exit 2
     fi
+    if ! git -C "$AGENT_SKILLS_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      echo "Agent Skills checkout is not a Git worktree: $AGENT_SKILLS_DIR" >&2
+      exit 2
+    fi
+    if ! git -C "$AGENT_SKILLS_DIR" status --porcelain >/dev/null 2>&1; then
+      echo "Cannot determine Agent Skills checkout status: $AGENT_SKILLS_DIR" >&2
+      exit 2
+    fi
+    if [[ -n "$(git -C "$AGENT_SKILLS_DIR" status --porcelain)" ]]; then
+      echo "Agent Skills checkout has uncommitted changes: $AGENT_SKILLS_DIR" >&2
+      exit 2
+    fi
+    AGENT_SKILLS_DIR="$(cd -- "$AGENT_SKILLS_DIR" && pwd)"
 
     require_role_profile "lead-agent" "$LEAD_CLI" "$LEAD_MODEL" "$LEAD_EFFORT"
     require_role_profile "task-implementor" "$IMPLEMENTOR_CLI" "$IMPLEMENTOR_MODEL" "$IMPLEMENTOR_EFFORT"
+    require_role_profile "acceptance-reviewer" "$REVIEWER_CLI" "$REVIEWER_MODEL" "$REVIEWER_EFFORT"
 
     # Forward only the auth the selected role profiles and the judge need.
-    for cli in "$LEAD_CLI" "$IMPLEMENTOR_CLI"; do
+    for cli in "$LEAD_CLI" "$IMPLEMENTOR_CLI" "$REVIEWER_CLI"; do
       case "$cli" in
         claude)
           if [[ "$MOUNT_CLAUDE_AUTH" != 1 ]]; then
@@ -402,11 +443,16 @@ CANDIDATE_REF_Q="$(shell_quote "$CANDIDATE_REF")"
 CHANGE_NAME_Q="$(shell_quote "$CHANGE_NAME")"
 JUDGE_MODEL_Q="$(shell_quote "$JUDGE_MODEL")"
 CONTAINER_AGENT_RUNNER_DIR_Q="$(shell_quote "$CONTAINER_AGENT_RUNNER_DIR")"
+CONTAINER_AGENT_SKILLS_DIR_Q="$(shell_quote "$CONTAINER_AGENT_SKILLS_DIR")"
+SELECTED_ADAPTERS_Q="$(shell_quote "$LEAD_CLI") $(shell_quote "$IMPLEMENTOR_CLI") $(shell_quote "$REVIEWER_CLI")"
 
 # Assemble the controller argument list on the host so the container script
 # stays a fixed, quoted invocation rather than string-built shell.
 CONTROLLER_ARGS=(--run-dir /artifacts --run-id "$AND_SCENE_RUN_ID")
 CONTROLLER_ARGS+=(--agent-runner-dir "$CONTAINER_AGENT_RUNNER_DIR" --repo "$REPO")
+if [[ "$REFERENCE_BASELINE" != 1 ]]; then
+  CONTROLLER_ARGS+=(--agent-skills-dir "$CONTAINER_AGENT_SKILLS_DIR")
+fi
 CONTROLLER_ARGS+=(--change-name "$CHANGE_NAME" --fixture-ref "$FIXTURE_REF" --judge-model "$JUDGE_MODEL")
 if [[ -n "$CANDIDATE_REF" ]]; then
   CONTROLLER_ARGS+=(--candidate-ref "$CANDIDATE_REF")
@@ -423,6 +469,8 @@ else
   CONTROLLER_ARGS+=(--lead-cli "$LEAD_CLI" --lead-model "$LEAD_MODEL" --lead-effort "$LEAD_EFFORT")
   CONTROLLER_ARGS+=(--implementor-cli "$IMPLEMENTOR_CLI" --implementor-model "$IMPLEMENTOR_MODEL")
   CONTROLLER_ARGS+=(--implementor-effort "$IMPLEMENTOR_EFFORT")
+  CONTROLLER_ARGS+=(--reviewer-cli "$REVIEWER_CLI" --reviewer-model "$REVIEWER_MODEL")
+  CONTROLLER_ARGS+=(--reviewer-effort "$REVIEWER_EFFORT")
 fi
 CONTROLLER_ARGS_Q=""
 for controller_arg in "${CONTROLLER_ARGS[@]}"; do
@@ -575,11 +623,25 @@ if [ -n "\$token" ]; then
   export GIT_TERMINAL_PROMPT=0
 fi
 
+if [[ "$REFERENCE_BASELINE" != 1 ]]; then
+  /eval-input/bootstrap-agent-skills.sh \
+    $CONTAINER_AGENT_SKILLS_DIR_Q \
+    "\$AGENT_RUNNER_DIR/\$IMPLEMENTATION_WORKFLOW_PATH" \
+    $SELECTED_ADAPTERS_Q \
+    2>&1 | tee /artifacts/logs/agent-skills-bootstrap.log
+fi
+
 exec node /eval-input/controller.mjs $CONTROLLER_ARGS_Q
 AGENT
 )
 
 sandbox_args=(--artifact-dir "$ARTIFACT_DIR" --input-dir "$SUITE_DIR")
+if [[ "$REFERENCE_BASELINE" != 1 ]]; then
+  sandbox_args+=(
+    --docker-run-arg --mount
+    --docker-run-arg "type=bind,source=$AGENT_SKILLS_DIR,target=$CONTAINER_AGENT_SKILLS_DIR,readonly"
+  )
+fi
 if [[ "$DRY_RUN" == 1 ]]; then
   sandbox_args=(--dry-run "${sandbox_args[@]}")
 fi

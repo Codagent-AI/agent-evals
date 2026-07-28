@@ -68,6 +68,7 @@ function usageStateOf(usage, invokedCli) {
 
 function agentRole(raw) {
   if (!raw.agent_invoked) return null
+  if (raw.kind === 'agent-call' && raw.target_name === 'reviewer') return 'acceptance-reviewer'
   return IMPLEMENTOR_STEPS.has(raw.id) ? 'task-implementor' : 'lead-agent'
 }
 

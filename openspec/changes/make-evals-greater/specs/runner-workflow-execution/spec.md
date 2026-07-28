@@ -8,7 +8,7 @@ The evaluation harness SHALL expose a `--skip-validator` option and SHALL hard-c
 | With `--skip-validator` | `skip_validator=true` | Skipped | Required | Full workflow completion |
 | Without `--skip-validator` | `skip_validator=false` | Required | Required | Full workflow completion |
 
-The option SHALL default to false. Before starting the workflow, the harness SHALL verify that the `skip_validator` parameter and the required final Validator, draft-PR, acceptance-preparation, and handoff-verification steps exist. The first complete evaluation required by this change SHALL explicitly use `--skip-validator`.
+The option SHALL default to false. Before starting the workflow, the harness SHALL verify that the `skip_validator` parameter and the required final Validator, draft-PR, acceptance-preparation, and handoff-verification steps exist. It SHALL also verify a clean pinned Agent Skills checkout containing every `codagent:*` skill named by the workflow and install that exact checkout for every selected workflow CLI before invoking an agent. The first complete evaluation required by this change SHALL explicitly use `--skip-validator`.
 
 #### Scenario: Task-level compliance is skipped
 - **WHEN** the eval is invoked with `--skip-validator`
@@ -24,6 +24,11 @@ The option SHALL default to false. Before starting the workflow, the harness SHA
 - **WHEN** `implement-change-v2.0.yaml` is unavailable or lacks the `skip_validator` parameter or any required final-workflow step
 - **THEN** the harness fails before starting Agent Runner
 - **AND** it identifies the missing workflow contract
+
+#### Scenario: Required workflow skill is unavailable
+- **WHEN** the pinned Agent Skills checkout is dirty, cannot be identified, or lacks a `codagent:*` skill named by the workflow
+- **THEN** the harness fails before starting Agent Runner
+- **AND** it identifies the unavailable skill or provenance
 
 ### Requirement: Publishing-side-effect boundary
 Before starting Agent Runner, the evaluation harness SHALL create a unique candidate branch named `eval/and-scene/<run-id>` from the pinned fixture commit in the configured fixture repository. The complete workflow SHALL push only that candidate branch and SHALL create or update only its draft pull request. The pull request SHALL have a non-empty base branch identity and SHALL remain a draft.
@@ -58,7 +63,7 @@ The harness SHALL reject a workflow contract that declares a merge, ready-for-re
 - **AND** it records the unexpected action without treating the workflow as successfully complete
 
 ### Requirement: Ordered evaluation lifecycle
-For an Agent Runner candidate, the main evaluation command SHALL execute phases in this order: preflight the pinned fixture, unique candidate branch, Agent Runner checkout, workflow contract, credentials, profiles, evaluator, and run directory; run or resume the complete Agent Runner workflow; verify candidate delivery and acceptance-handoff completeness; install dependencies, build, and run non-browser verification; start the evaluated final candidate server; run deterministic browser checks and capture evaluator evidence; run the six focused product judge jobs; run the separate non-scoring ambiguity diagnostic; ingest metrics and resolve pricing; write the pending-human-review result and HTML report; attempt candidate-server cleanup; update the pending artifacts with the cleanup outcome; and exit successfully.
+For an Agent Runner candidate, the main evaluation command SHALL execute phases in this order: preflight the pinned fixture, unique candidate branch, Agent Runner checkout, Agent Skills checkout, workflow contract, credentials, lead, implementor, and reviewer profiles, evaluator, and run directory; install the pinned workflow skills for the selected CLIs; run or resume the complete Agent Runner workflow; verify candidate delivery and acceptance-handoff completeness; install dependencies, build, and run non-browser verification; start the evaluated final candidate server; run deterministic browser checks and capture evaluator evidence; run the six focused product judge jobs; run the separate non-scoring ambiguity diagnostic; ingest metrics and resolve pricing; write the pending-human-review result and HTML report; attempt candidate-server cleanup; update the pending artifacts with the cleanup outcome; and exit successfully.
 
 The separate human-review command SHALL later restore or start the same evaluated final candidate server; collect or resume human review; calculate the official candidate result; generate the final HTML report; attempt candidate-server cleanup; update the final artifacts; and publish a curated permanent result for a completed scored candidate pass or product-fail run. The candidate server SHALL be running before every browser-dependent phase and SHALL NOT be required to remain running between the automated and human-review commands. If verified product behavior makes the final candidate unable to build or serve, dependent browser and human-review phases SHALL NOT run, and the conclusive product-failure outcome rules SHALL apply instead.
 
@@ -87,7 +92,7 @@ The separate human-review command SHALL later restore or start the same evaluate
 - **AND** the evaluation applies the conclusive product-failure outcome without classifying the product defect as a harness failure
 
 ### Requirement: Agent Runner run identity and resumption
-The evaluation harness SHALL durably record the Agent Runner run identifier, session directory, candidate branch, and candidate repository as soon as they become available. It SHALL add the draft-PR identity and final pull-request head SHA as the complete workflow produces them. When an eval resumes, it SHALL verify the recorded fixture commit, Agent Runner commit, profiles, workflow arguments, candidate branch, candidate repository, draft PR, and known final head before taking action.
+The evaluation harness SHALL durably record the Agent Runner run identifier, session directory, candidate branch, and candidate repository as soon as they become available. It SHALL add the draft-PR identity and final pull-request head SHA as the complete workflow produces them. When an eval resumes, it SHALL verify the recorded fixture commit, Agent Runner commit, Agent Skills commit and plugin-manifest hash, lead, implementor, and reviewer profiles, workflow arguments, candidate branch, candidate repository, draft PR, and known final head before taking action.
 
 If the recorded Agent Runner run is active, the harness SHALL verify that the active process owns that run and wait for the same run rather than launching or resuming another. If the run completed the full workflow and its delivery identity still matches, the harness SHALL continue to the next eval phase. If the run is inactive and unfinished, the harness SHALL invoke `agent-runner --resume <run-id>` and allow Agent Runner to choose its internal resume point. If the run, process, branch, pull request, or revision identity cannot be verified, the harness SHALL stop with an explicit workflow or resume-provenance error. It SHALL never start a duplicate implementation run, candidate branch, or draft pull request merely because the outer eval process restarted.
 
@@ -113,7 +118,7 @@ If the recorded Agent Runner run is active, the harness SHALL verify that the ac
 ### Requirement: Durable eval checkpointing
 The harness SHALL maintain durable checkpoint state for every evaluation phase and for every finer work unit whose completion can be verified independently. Each checkpoint SHALL record its state, score-affecting input provenance, output artifact paths and hashes, and start and completion events.
 
-Checkpoint provenance SHALL include the fixture repository and commit, Agent Runner commit and workflow hash, workflow arguments, lead and implementor profiles, candidate branch, draft-PR identity, known final SHA, evaluator configuration, rubric provenance, and hashes of required acceptance evidence. On resume, the harness SHALL reuse the finest checkpoint it can deterministically prove complete. It SHALL resume after individual browser checks, screenshots, judge jobs, or human responses when each completed unit has durable matching evidence. When it cannot prove finer completion, it SHALL restart the enclosing phase from its beginning. A completed negative product finding SHALL remain a completed result and SHALL NOT be rerun merely because its verdict was fail.
+Checkpoint provenance SHALL include the fixture repository and commit, Agent Runner commit and workflow hash, Agent Skills commit and plugin-manifest hash, workflow arguments, lead, implementor, and reviewer profiles, candidate branch, draft-PR identity, known final SHA, evaluator configuration, rubric provenance, and hashes of required acceptance evidence. On resume, the harness SHALL reuse the finest checkpoint it can deterministically prove complete. It SHALL resume after individual browser checks, screenshots, judge jobs, or human responses when each completed unit has durable matching evidence. When it cannot prove finer completion, it SHALL restart the enclosing phase from its beginning. A completed negative product finding SHALL remain a completed result and SHALL NOT be rerun merely because its verdict was fail.
 
 The harness SHALL reject a checkpoint when any recorded identity or score-affecting input no longer matches the resumed run.
 
@@ -135,11 +140,11 @@ The harness SHALL reject a checkpoint when any recorded identity or score-affect
 - **AND** it reports which provenance changed
 
 ### Requirement: Workflow execution provenance
-The evaluation result SHALL record the Agent Runner commit and clean-worktree result, CLI version, workflow path and SHA-256 hash, workflow arguments, task-level Validator choice, run identifier, session directory, candidate repository and branch, draft-PR URL and base, final local and PR head SHA, every observed workflow step and outcome, final Validator result, candidate-reported CI status when present, acceptance attempt history, and hashes of required acceptance artifacts. It SHALL also record start, wait, resume, completion, and retry events without treating those events as product points.
+The evaluation result SHALL record the Agent Runner commit and clean-worktree result, CLI version, workflow path and SHA-256 hash, Agent Skills commit, clean-worktree result, and plugin-manifest hash, the configured lead, implementor, and reviewer profiles, workflow arguments, task-level Validator choice, run identifier, session directory, candidate repository and branch, draft-PR URL and base, final local and PR head SHA, every observed workflow step and outcome, final Validator result, candidate-reported CI status when present, acceptance attempt history, and hashes of required acceptance artifacts. It SHALL also record start, wait, resume, completion, and retry events without treating those events as product points.
 
 #### Scenario: Fresh Agent Runner run is recorded
 - **WHEN** the harness starts a new Agent Runner run
-- **THEN** it records the run identity, workflow provenance, arguments, candidate branch, and subsequent observed step outcomes
+- **THEN** it records the run identity, workflow and Agent Skills provenance, all three workflow profiles, arguments, candidate branch, and subsequent observed step outcomes
 - **AND** it adds PR, final-SHA, Validator, candidate-reported CI, and acceptance provenance as those values become available
 
 #### Scenario: Agent Runner run is resumed
@@ -148,7 +153,7 @@ The evaluation result SHALL record the Agent Runner commit and clean-worktree re
 - **AND** it preserves the original run, branch, PR, and start provenance
 
 #### Scenario: Workflow provenance is incomplete
-- **WHEN** the harness cannot determine the Agent Runner revision, workflow hash, arguments, candidate identity, executed-step history, final Validator result, or acceptance-artifact identity
+- **WHEN** the harness cannot determine the Agent Runner revision, workflow hash, Agent Skills revision and manifest hash, configured workflow profiles, arguments, candidate identity, executed-step history, final Validator result, or acceptance-artifact identity
 - **THEN** it marks workflow provenance incomplete
 - **AND** it does not present the run as reproducible or ready for scored judging
 

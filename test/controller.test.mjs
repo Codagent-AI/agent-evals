@@ -36,6 +36,7 @@ const history = [
 const profiles = [
   '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
   '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
+  '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
 ]
 
 async function environment({
@@ -49,8 +50,11 @@ async function environment({
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'agent-evals-controller-'))
   const agentRunnerDir = join(root, 'agent-runner')
+  const agentSkillsDir = join(root, 'agent-skills')
   await mkdir(join(agentRunnerDir, 'workflows/openspec'), { recursive: true })
   if (workflow !== null) await writeFile(join(agentRunnerDir, WORKFLOW_RELATIVE_PATH), workflow)
+  await mkdir(join(agentSkillsDir, '.claude-plugin'), { recursive: true })
+  await writeFile(join(agentSkillsDir, '.claude-plugin/marketplace.json'), '{"name":"codagent"}\n')
   const runDir = join(root, 'run-1')
   await mkdir(join(runDir, '.runtime/candidate-worktree/src'), { recursive: true })
   await writeFile(
@@ -101,7 +105,7 @@ async function environment({
     if (command === 'agent-runner') return runnerResult
     return { status: 0, stdout: '' }
   }
-  return { root, runDir, home, agentRunnerDir, exec, invocations, commit }
+  return { root, runDir, home, agentRunnerDir, agentSkillsDir, exec, invocations, commit }
 }
 
 function runnerInvocations(context) {
@@ -151,6 +155,7 @@ async function evaluate(context, extra = [], overrides = {}) {
     argv: [
       '--run-dir', context.runDir,
       '--agent-runner-dir', context.agentRunnerDir,
+      '--agent-skills-dir', context.agentSkillsDir,
       '--change-name', 'create-and-scene',
       ...extra,
     ],
@@ -314,6 +319,10 @@ test('the candidate branch identity exists in run-state before Runner starts', a
   assert.equal(state.delivery.base_branch, 'main')
   assert.equal(state.delivery.fixture_commit, context.commit)
   assert.equal(state.delivery.retained_for_manual_cleanup, true)
+  assert.equal(state.agent_skills_provenance.commit, context.commit)
+  assert.match(state.agent_skills_provenance.manifest_sha256, /^[a-f0-9]{64}$/)
+  assert.match(state.identity.agent_skills_provenance, /^[a-f0-9]{64}$/)
+  assert.equal(state.role_profiles.reviewer.agent, 'reviewer')
 })
 
 test('an explicit host run identity survives the fixed container artifact mount', async () => {

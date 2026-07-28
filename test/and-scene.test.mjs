@@ -17,6 +17,7 @@ const referenceSha = '171c7def1e12aca2a5f605a5e5feafb20d4e4d19'
 const profileArgs = [
   '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
   '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
+  '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
 ]
 
 function git(cwd, ...args) {
@@ -31,6 +32,7 @@ function git(cwd, ...args) {
 async function setup({ workflow = 'name: implement-change\n', dirty = false } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'agent-evals-'))
   const runner = join(dir, 'agent-runner')
+  const agentSkills = join(dir, 'agent-skills')
   const sandbox = join(runner, 'scripts/sandbox-run.sh')
   const home = join(dir, 'home')
   await mkdir(dirname(sandbox), { recursive: true })
@@ -48,6 +50,11 @@ async function setup({ workflow = 'name: implement-change\n', dirty = false } = 
   git(runner, 'add', '-A')
   git(runner, 'commit', '-qm', 'runner')
   if (dirty) await writeFile(join(runner, 'scratch.txt'), 'uncommitted\n')
+  await mkdir(join(agentSkills, 'skills', 'prepare-acceptance'), { recursive: true })
+  await writeFile(join(agentSkills, 'skills', 'prepare-acceptance', 'SKILL.md'), '# prepare acceptance\n')
+  git(agentSkills, 'init', '-q')
+  git(agentSkills, 'add', '-A')
+  git(agentSkills, 'commit', '-qm', 'skills')
   // A full Agent Runner evaluation is gated on a passing calibration record for
   // *this* harness and *these* rubrics, so the scored launcher tests supply one
   // carrying the current identity, exactly as a calibrated host would.
@@ -55,7 +62,7 @@ async function setup({ workflow = 'name: implement-change\n', dirty = false } = 
   await writeFile(record, JSON.stringify({
     ...await calibrationIdentity(), passed: true, failures: [],
   }))
-  return { dir, runner, home, record }
+  return { dir, runner, agentSkills, home, record }
 }
 
 async function run(args, options = {}) {
@@ -72,7 +79,7 @@ async function run(args, options = {}) {
 async function scored(context, extra = []) {
   return run([
     '--dry-run', '--run-agent', '--artifact-dir', join(context.dir, 'run'),
-    '--agent-runner-dir', context.runner, ...extra,
+    '--agent-runner-dir', context.runner, '--agent-skills-dir', context.agentSkills, ...extra,
   ], context)
 }
 
@@ -118,7 +125,20 @@ test('scored mode delegates the lifecycle to the suite controller', async () => 
     '--skip-validator', '--change-name', 'create-and-scene',
     '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
     '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
+    '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+    'bootstrap-agent-skills.sh', '/agent-skills-source',
   ]) assert.ok(result.output.includes(expected), `missing ${expected}\n${result.output}`)
+})
+
+test('scored mode mounts one clean pinned Agent Skills checkout for every selected role', async () => {
+  const context = await setup()
+
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
+
+  assert.equal(result.status, 0, result.output)
+  assert.ok(result.output.includes('agent-skills\\,target=/agent-skills-source\\,readonly'), result.output)
+  assert.match(result.output, /bootstrap-agent-skills\.sh/)
+  assert.match(result.output, /claude claude claude/)
 })
 
 test('scored mode validates provenance from the mounted Agent Runner checkout', async () => {
@@ -158,7 +178,7 @@ test('scored mode no longer carries the legacy reward and tier scoring lifecycle
   ]) assert.ok(!text.includes(legacy), `run.sh still contains legacy lifecycle: ${legacy}`)
 })
 
-test('both role profiles are required before the sandbox is invoked', async () => {
+test('all role profiles are required before the sandbox is invoked', async () => {
   const context = await setup()
 
   const noLead = await scored(context, [
@@ -167,12 +187,20 @@ test('both role profiles are required before the sandbox is invoked', async () =
   ])
   const noImplementor = await scored(context, [
     '--skip-validator', '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+    '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+  ])
+  const noReviewer = await scored(context, [
+    '--skip-validator',
+    '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+    '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
   ])
 
   assert.notEqual(noLead.status, 0)
   assert.match(noLead.output, /lead-agent profile/)
   assert.notEqual(noImplementor.status, 0)
   assert.match(noImplementor.output, /task-implementor profile/)
+  assert.notEqual(noReviewer.status, 0)
+  assert.match(noReviewer.output, /acceptance-reviewer profile/)
 })
 
 test('a partially specified role profile is rejected', async () => {
@@ -181,10 +209,21 @@ test('a partially specified role profile is rejected', async () => {
   const result = await scored(context, [
     '--skip-validator', '--lead-cli', 'claude', '--lead-model', 'opus',
     '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
+    '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
   ])
 
   assert.notEqual(result.status, 0)
   assert.match(result.output, /lead-agent profile/)
+})
+
+test('a dirty Agent Skills checkout is rejected before the sandbox runs', async () => {
+  const context = await setup()
+  await writeFile(join(context.agentSkills, 'scratch.txt'), 'uncommitted\n')
+
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
+
+  assert.notEqual(result.status, 0)
+  assert.match(result.output, /Agent Skills checkout has uncommitted changes/i)
 })
 
 test('a reference baseline requires no role profiles', async () => {
