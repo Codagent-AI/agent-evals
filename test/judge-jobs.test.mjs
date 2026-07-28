@@ -89,6 +89,7 @@ test('testing-evidence receives only verified candidate evidence plus evaluator 
       'testing-evidence': {
         root: '/run/evidence/judge-views/testing-evidence',
         index: '/run/evidence/judge-views/testing-evidence/index.json',
+        packet: 'verified testing packet',
         permissions: {
           candidate_evidence: true,
           evaluator_evidence: 'contradictions-only',
@@ -104,6 +105,8 @@ test('testing-evidence receives only verified candidate evidence plus evaluator 
   assert.equal(request.input_permissions.neutral_source, false)
   assert.match(request.prompt, /candidate-produced evidence may support credit/i)
   assert.match(request.prompt, /contradictions.*disprove/i)
+  assert.match(request.prompt, /BEGIN VERIFIED EVIDENCE VIEW[\s\S]*verified testing packet/)
+  assert.doesNotMatch(request.prompt, /Read its verified index/)
   assert.doesNotMatch(request.prompt, /NEUTRAL SOURCE FILES/)
 })
 
@@ -116,6 +119,7 @@ test('assumption handling receives only its fixed criteria and assumption eviden
       'assumption-handling': {
         root: '/run/evidence/judge-views/assumption-handling',
         index: '/run/evidence/judge-views/assumption-handling/index.json',
+        packet: 'verified assumption packet',
         permissions: {
           candidate_evidence: 'assumption-sources-only',
           evaluator_evidence: false,
@@ -129,6 +133,7 @@ test('assumption handling receives only its fixed criteria and assumption eviden
   assert.deepEqual(request.criteria, criteriaForJob(automated, 'assumption-handling'))
   assert.equal(request.input_permissions.ambiguity_sources, true)
   assert.match(request.prompt, /four fixed assumption-handling criteria/i)
+  assert.match(request.prompt, /verified assumption packet/)
   assert.doesNotMatch(request.prompt, /classification.*points/i)
 })
 

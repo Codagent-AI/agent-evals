@@ -712,6 +712,9 @@ test('testing and assumption judges receive bounded, distinct evidence views', a
     evaluator_evidence: 'contradictions-only',
     revision_provenance: true,
   })
+  assert.match(views['testing-evidence'].packet, /BEGIN VERIFIED INDEX/)
+  assert.match(views['testing-evidence'].packet, /Full flow: passed/)
+  assert.ok(views['testing-evidence'].packet.length <= 220_000)
   assert.deepEqual(views['assumption-handling'].roles, [
     'assumptions-ledger', 'final-handoff', 'findings-history', 'session-audit',
   ])
@@ -729,4 +732,6 @@ test('testing and assumption judges receive bounded, distinct evidence views', a
   assert.ok(assumptionIndex.candidate.artifacts.every(({ role }) => (
     views['assumption-handling'].roles.includes(role)
   )))
+  assert.match(views['assumption-handling'].packet, /assumption/i)
+  assert.ok(views['assumption-handling'].packet.length <= 220_000)
 })

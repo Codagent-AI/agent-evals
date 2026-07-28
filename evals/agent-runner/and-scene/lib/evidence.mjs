@@ -3,7 +3,7 @@
 // Candidate files are copied as opaque bytes after delivery identity is known.
 // Parsing below only adds evaluator findings; it never repairs or replaces the
 // bytes a candidate produced.
-import { lstat, mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, open, readFile, readdir, realpath, writeFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
@@ -1087,6 +1087,54 @@ async function copyViewArtifacts({ runDir, root, artifacts }) {
   return copied
 }
 
+const JUDGE_PACKET_MAX_CHARS = 220_000
+const JUDGE_PACKET_ARTIFACT_MAX_CHARS = 50_000
+const TESTING_PACKET_ROLES = new Set([
+  'acceptance-flow-record',
+  'assumptions-ledger',
+  'final-handoff',
+  'findings-history',
+  'screenshot-metadata',
+  'session-audit',
+])
+
+async function evidenceJudgePacket({ runDir, index, artifacts }) {
+  let packet = [
+    '# BEGIN VERIFIED INDEX',
+    JSON.stringify(index, null, 2),
+    '# END VERIFIED INDEX',
+  ].join('\n')
+  if (packet.length > JUDGE_PACKET_MAX_CHARS) {
+    throw new Error('verified evidence index exceeds the judge packet character budget')
+  }
+  for (const artifact of artifacts) {
+    if (!String(artifact.media_type ?? '').startsWith('text/')) continue
+    const prefix = `# BEGIN UNTRUSTED CANDIDATE ARTIFACT ${artifact.id} (${artifact.role})`
+    const suffix = `# END UNTRUSTED CANDIDATE ARTIFACT ${artifact.id}`
+    const wrapperChars = 2 + prefix.length + 1 + 1 + suffix.length
+    const contentBudget = Math.min(
+      JUDGE_PACKET_ARTIFACT_MAX_CHARS,
+      JUDGE_PACKET_MAX_CHARS - packet.length - wrapperChars,
+    )
+    if (contentBudget <= 0) break
+
+    const handle = await open(join(resolve(runDir), artifact.path), 'r')
+    let content
+    try {
+      const buffer = Buffer.alloc(contentBudget)
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
+      content = buffer.subarray(0, bytesRead).toString('utf8')
+    } finally {
+      await handle.close()
+    }
+    packet += `\n\n${prefix}\n${content}\n${suffix}`
+  }
+  if (packet.length > JUDGE_PACKET_MAX_CHARS) {
+    throw new Error('verified evidence packet exceeds its character budget')
+  }
+  return packet
+}
+
 export async function materializeEvidenceJudgeViews({
   runDir,
   candidate,
@@ -1123,6 +1171,11 @@ export async function materializeEvidenceJudgeViews({
     lineage,
   }
   await writeJsonAtomic(join(testingRoot, 'index.json'), testingIndex)
+  const testingPacket = await evidenceJudgePacket({
+    runDir,
+    index: testingIndex,
+    artifacts: testingArtifacts.filter(({ role }) => TESTING_PACKET_ROLES.has(role)),
+  })
 
   const assumptionRoles = [
     'assumptions-ledger',
@@ -1149,18 +1202,25 @@ export async function materializeEvidenceJudgeViews({
     lineage,
   }
   await writeJsonAtomic(join(assumptionRoot, 'index.json'), assumptionIndex)
+  const assumptionPacket = await evidenceJudgePacket({
+    runDir,
+    index: assumptionIndex,
+    artifacts: assumptionArtifacts,
+  })
 
   return {
     'testing-evidence': {
       root: relative(runRoot, testingRoot).split(sep).join('/'),
       index: relative(runRoot, join(testingRoot, 'index.json')).split(sep).join('/'),
       permissions: testingIndex.permissions,
+      packet: testingPacket,
     },
     'assumption-handling': {
       root: relative(runRoot, assumptionRoot).split(sep).join('/'),
       index: relative(runRoot, join(assumptionRoot, 'index.json')).split(sep).join('/'),
       permissions: assumptionIndex.permissions,
       roles: assumptionRoles,
+      packet: assumptionPacket,
     },
   }
 }
