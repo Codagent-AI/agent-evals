@@ -7,9 +7,9 @@
   "product_verdict": "pass",
   "label": "PASS",
   "score_denominator": 100,
-  "official_score": 86.5,
+  "official_score": 82.191666666667,
   "automated_subtotal": {
-    "points": 66,
+    "points": 61.691666666667,
     "possible": 70,
     "observed_possible": 70,
     "complete": true
@@ -100,8 +100,8 @@
         "title": "Demo presentation technical quality",
         "applicable": true,
         "points_possible": 24,
-        "points_awarded": 24,
-        "points_observed": 24,
+        "points_awarded": 23,
+        "points_observed": 23,
         "points_observed_possible": 24,
         "floor": 15,
         "complete": true,
@@ -423,15 +423,17 @@
           }
         ],
         "raw_points_awarded": 23,
-        "adjudication_adjustment": 1
+        "adjudication_adjustment": 0,
+        "prior_points_awarded": 24,
+        "prior_adjudication_adjustment": -1
       },
       {
         "id": "scene-kit-correctness",
         "title": "Scene kit correctness",
         "applicable": true,
         "points_possible": 24,
-        "points_awarded": 22.5,
-        "points_observed": 22.5,
+        "points_awarded": 21.233333333333334,
+        "points_observed": 21.233333333333334,
         "points_observed_possible": 24,
         "floor": 15,
         "complete": true,
@@ -860,15 +862,17 @@
           }
         ],
         "raw_points_awarded": 23.4,
-        "adjudication_adjustment": -0.9
+        "adjudication_adjustment": -2.166666666667,
+        "prior_points_awarded": 22.5,
+        "prior_adjudication_adjustment": -1.266666666667
       },
       {
         "id": "presentation-skill-correctness",
         "title": "Presentation skill correctness",
         "applicable": true,
         "points_possible": 7,
-        "points_awarded": 6,
-        "points_observed": 6,
+        "points_awarded": 5.125,
+        "points_observed": 5.125,
         "points_observed_possible": 7,
         "floor": null,
         "complete": true,
@@ -1147,15 +1151,17 @@
           }
         ],
         "raw_points_awarded": 7,
-        "adjudication_adjustment": -1
+        "adjudication_adjustment": -1.875,
+        "prior_points_awarded": 6,
+        "prior_adjudication_adjustment": -0.875
       },
       {
         "id": "verification-tool-correctness",
         "title": "Verification tool correctness",
         "applicable": true,
         "points_possible": 7,
-        "points_awarded": 5.5,
-        "points_observed": 5.5,
+        "points_awarded": 4.333333333333333,
+        "points_observed": 4.333333333333333,
         "points_observed_possible": 7,
         "floor": null,
         "complete": true,
@@ -1335,7 +1341,9 @@
           }
         ],
         "raw_points_awarded": 6.5,
-        "adjudication_adjustment": -1
+        "adjudication_adjustment": -2.166666666667,
+        "prior_points_awarded": 5.5,
+        "prior_adjudication_adjustment": -1.166666666667
       },
       {
         "id": "testing-evidence-quality",
@@ -1562,7 +1570,7 @@
     ],
     "gates_passed": true,
     "automated_subtotal": {
-      "points": 66,
+      "points": 61.691666666667,
       "possible": 70,
       "observed_possible": 70,
       "complete": true
@@ -1592,7 +1600,7 @@
       "lowest_rating": 3,
       "complete": true
     },
-    "official_score": 86.5,
+    "official_score": 82.191666666667,
     "official_pass": true,
     "pass_failures": [],
     "incomplete": [],
@@ -9086,8 +9094,8 @@
     "denominator": 92,
     "totals": {
       "baseline": 92,
-      "candidate": 78.5,
-      "delta": -13.5
+      "candidate": 74.191666666667,
+      "delta": -17.808333333333
     },
     "components": [
       {
@@ -9095,32 +9103,32 @@
         "title": "Demo presentation technical quality",
         "points_possible": 24,
         "baseline": 24,
-        "candidate": 24,
-        "delta": 0
+        "candidate": 23,
+        "delta": -1
       },
       {
         "id": "scene-kit-correctness",
         "title": "Scene kit correctness",
         "points_possible": 24,
         "baseline": 24,
-        "candidate": 22.5,
-        "delta": -1.5
+        "candidate": 21.233333333333334,
+        "delta": -2.766666666667
       },
       {
         "id": "presentation-skill-correctness",
         "title": "Presentation skill correctness",
         "points_possible": 7,
         "baseline": 7,
-        "candidate": 6,
-        "delta": -1
+        "candidate": 5.125,
+        "delta": -1.875
       },
       {
         "id": "verification-tool-correctness",
         "title": "Verification tool correctness",
         "points_possible": 7,
         "baseline": 7,
-        "candidate": 5.5,
-        "delta": -1.5
+        "candidate": 4.333333333333333,
+        "delta": -2.666666666667
       }
     ],
     "subcomponents": [
@@ -14557,29 +14565,67 @@
   },
   "technical_adjudication": {
     "schema_version": 1,
-    "approved_by": "Paul (user-confirmed independent review)",
-    "approved_at": "2026-07-28T23:09:50.000Z",
-    "rationale": "Independent source and runtime review corrected the active-state scanner false negatives and applied stricter engineering-quality standards than the original token- and existence-oriented source judgments.",
+    "approved_by": "Paul (user-confirmed independent rubric 3.2 review)",
+    "approved_at": "2026-07-28T23:53:25.540Z",
+    "rationale": "A fresh independent source-and-evidence review applied rubric 3.2 after its ambiguity fixes and found no consequential rubric issues. This replaces the provisional technical adjudication with the exact criterion-weighted result.",
     "findings": [
-      "The active navigation and active-style warning deductions were false negatives: the implementation uses aria-current plus data-presentation-active and compares active/inactive computed styles.",
-      "Newcomer delay is not wired to the same transition contract as persistent layout motion, so after-settlement sequencing is not guaranteed.",
-      "Touch navigation checks horizontal distance but does not reject gestures that are predominantly vertical or multi-touch.",
-      "Partial-scaffold and monorepo behavior is described but not directly exercised through executable or verified workflow cases.",
-      "Fixed preview ports can attach verification to an unrelated stale server after the intended preview child exits.",
-      "Visual-warning behavior is comparatively brittle and lacks focused executable regression coverage."
+      "All 14 deterministic browser criteria passed at the evaluated candidate SHA.",
+      "The required demo title input is ignored and is deducted once under demo code boundaries.",
+      "Newcomer delay is not connected to persistent-motion completion or an actually consumed shared transition contract.",
+      "Touch navigation does not reject predominantly vertical or multi-touch gestures.",
+      "Minimum-scale clamping can prevent the fixed canvas from fitting sufficiently small viewports.",
+      "Five scaffold branches lack eligible executable or revision-bound transcript proof.",
+      "IPv4 loopback passes, but preview-process ownership fails independently because a stale responder can be accepted.",
+      "Screenshot settlement uses a disconnected fixed delay.",
+      "Three visual-warning behaviors lack eligible retained raw executable output.",
+      "The rubric 3.2 correction audit found no consequential ambiguity, loophole, inconsistency, or arbitrary double counting."
     ],
-    "component_scores": {
-      "demo-technical-quality": 24,
-      "scene-kit-correctness": 22.5,
-      "presentation-skill-correctness": 6,
-      "verification-tool-correctness": 5.5
+    "reviewed_rubric": {
+      "rubric_id": "and-scene-automated-product",
+      "version": "3.2.0",
+      "sha256": "e39ad48c48a94002c77201102ef790336cd8e5614f12b2c5202cdaef3b1d33d1"
     },
-    "prior_shared_technical_score": 59.9,
-    "revised_shared_technical_score": 58,
-    "prior_automated_subtotal": 67.9,
-    "revised_automated_subtotal": 66,
-    "prior_official_score": 88.4,
-    "revised_official_score": 86.5,
-    "prior_result_fingerprint": "317c10b745cd091ffee650f4ac66b4dc0e62eb60f795fd36d1218a7461e4a0a8"
-  }
+    "component_scores": {
+      "demo-technical-quality": 23,
+      "scene-kit-correctness": 21.233333333333334,
+      "presentation-skill-correctness": 5.125,
+      "verification-tool-correctness": 4.333333333333333
+    },
+    "prior_shared_technical_score": 58,
+    "revised_shared_technical_score": 53.691666666667,
+    "prior_automated_subtotal": 66,
+    "revised_automated_subtotal": 61.691666666667,
+    "prior_official_score": 86.5,
+    "revised_official_score": 82.191666666667,
+    "prior_result_fingerprint": "b1fbf5a94d722347acc9e829a884d4aa4fe60f2eaaa19531a02301265769b4fb"
+  },
+  "technical_adjudication_history": [
+    {
+      "schema_version": 1,
+      "approved_by": "Paul (user-confirmed independent review)",
+      "approved_at": "2026-07-28T23:09:50.000Z",
+      "rationale": "Independent source and runtime review corrected the active-state scanner false negatives and applied stricter engineering-quality standards than the original token- and existence-oriented source judgments.",
+      "findings": [
+        "The active navigation and active-style warning deductions were false negatives: the implementation uses aria-current plus data-presentation-active and compares active/inactive computed styles.",
+        "Newcomer delay is not wired to the same transition contract as persistent layout motion, so after-settlement sequencing is not guaranteed.",
+        "Touch navigation checks horizontal distance but does not reject gestures that are predominantly vertical or multi-touch.",
+        "Partial-scaffold and monorepo behavior is described but not directly exercised through executable or verified workflow cases.",
+        "Fixed preview ports can attach verification to an unrelated stale server after the intended preview child exits.",
+        "Visual-warning behavior is comparatively brittle and lacks focused executable regression coverage."
+      ],
+      "component_scores": {
+        "demo-technical-quality": 24,
+        "scene-kit-correctness": 22.5,
+        "presentation-skill-correctness": 6,
+        "verification-tool-correctness": 5.5
+      },
+      "prior_shared_technical_score": 59.9,
+      "revised_shared_technical_score": 58,
+      "prior_automated_subtotal": 67.9,
+      "revised_automated_subtotal": 66,
+      "prior_official_score": 88.4,
+      "revised_official_score": 86.5,
+      "prior_result_fingerprint": "317c10b745cd091ffee650f4ac66b4dc0e62eb60f795fd36d1218a7461e4a0a8"
+    }
+  ]
 }
