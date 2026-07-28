@@ -86,6 +86,28 @@ test('deterministic browser and LLM source review own disjoint demo subcomponent
   )
 })
 
+test('source-reviewed robustness-sensitive rows carry explicit review guidance', async () => {
+  const rubric = await automatedRubric()
+  const required = new Set([
+    'demo-code-boundaries',
+    'scene-entity-transitions',
+    'scene-modes-and-navigation',
+    'skill-scaffolding',
+    'verification-addressing-and-errors',
+    'verification-capture',
+    'verification-warnings',
+  ])
+  const rows = rubric.components.flatMap(({ subcomponents }) => subcomponents)
+    .filter(({ id }) => required.has(id))
+
+  assert.equal(rows.length, required.size)
+  for (const row of rows) {
+    assert.ok(Array.isArray(row.review_guidance), row.id)
+    assert.ok(row.review_guidance.length > 0, row.id)
+    assert.ok(row.review_guidance.every((item) => typeof item === 'string' && item.length > 0), row.id)
+  }
+})
+
 test('each of the six scored judge jobs maps to exactly one component', async () => {
   const rubric = await automatedRubric()
   const jobs = new Map()

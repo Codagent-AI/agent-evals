@@ -84,6 +84,23 @@ test('deterministic evaluator accepts the project-local helper in the scaffold t
   ]) assert.equal(results.find((item) => item.id === id)?.verdict, 'pass', id)
 })
 
+test('active-state evidence accepts a namespaced stable hook without duplicating aria-current in the helper', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'and-scene-namespaced-active-'))
+  await writeCandidate(dir, {
+    'src/presentation-kit/Toc.tsx': 'aria-current data-presentation-active',
+    'scripts/screenshot.mjs': [
+      'playwright screenshot data-allow-overlap overlap warning',
+      'getComputedStyle active inactive data-presentation-active warning',
+      'made by and-scene missing attribution fontSize textDecoration warning',
+    ].join('\n'),
+  })
+
+  const results = await runDeterministicChecks(dir)
+
+  assert.equal(results.find(({ id }) => id === 'navigation-active-state')?.verdict, 'pass')
+  assert.equal(results.find(({ id }) => id === 'visual-helper-active-state-warning')?.verdict, 'pass')
+})
+
 test('deterministic evaluator catches known sample, loopback, attribution, active-state, and screenshot-helper mutations', async () => {
   const mutations = [
     ['verification-sample-outline', { 'src/presentations/how-to-make-a-presentation/steps.tsx': 'You have a topic\nThe skill interviews you' }],

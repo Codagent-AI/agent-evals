@@ -12,6 +12,7 @@ import {
   publicationEligibility,
   publishRun,
 } from '../evals/agent-runner/and-scene/lib/publication.mjs'
+import { applyTechnicalAdjudication } from '../evals/agent-runner/and-scene/lib/adjudication.mjs'
 import { readJson } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
 
 function git(cwd, ...args) {
@@ -480,6 +481,92 @@ test('late baseline attachment cannot change an already-published score', async 
   )
   assert.equal(git(repo, 'rev-parse', 'HEAD'), firstCommit)
   assert.equal(git(repo, 'rev-list', '--count', 'HEAD'), '2')
+})
+
+test('a completed publication can be superseded only by a validated technical adjudication', async () => {
+  const { repo, remote, dir } = await disposableRepo()
+  const { runDir, runId, result } = await finalizedRun(dir)
+  const scored = {
+    ...result,
+    official_score: 88.4,
+    automated_subtotal: { points: 67.9, possible: 70, observed_possible: 70, complete: true },
+    score: {
+      components: [
+        { id: 'demo-technical-quality', points_awarded: 23, points_possible: 24, floor: 15 },
+        { id: 'scene-kit-correctness', points_awarded: 23.4, points_possible: 24, floor: 15 },
+        { id: 'presentation-skill-correctness', points_awarded: 7, points_possible: 7, floor: null },
+        { id: 'verification-tool-correctness', points_awarded: 6.5, points_possible: 7, floor: null },
+        { id: 'testing-evidence-quality', points_awarded: 4, points_possible: 4, floor: null },
+        { id: 'assumption-handling-quality', points_awarded: 4, points_possible: 4, floor: null },
+      ],
+      automated_subtotal: { points: 67.9, possible: 70, observed_possible: 70, complete: true },
+      human_review: { points_awarded: 20.5, points: 20.5 },
+      official_score: 88.4,
+      official_pass: true,
+      pass_failures: [],
+    },
+  }
+  await writeFile(join(runDir, 'result.json'), JSON.stringify(scored))
+  await publishRun({ runDir, runId, result: scored, repoDir: repo })
+  const firstCommit = git(repo, 'rev-parse', 'HEAD')
+
+  const adjudicated = applyTechnicalAdjudication(scored, {
+    approved_by: 'user',
+    approved_at: '2026-07-28T20:00:00.000Z',
+    rationale: 'Independent robustness review.',
+    component_scores: {
+      'demo-technical-quality': 24,
+      'scene-kit-correctness': 22.5,
+      'presentation-skill-correctness': 6,
+      'verification-tool-correctness': 5.5,
+    },
+    findings: ['reviewed source and runtime evidence'],
+  })
+  await writeFile(join(runDir, 'result.json'), JSON.stringify(adjudicated))
+
+  const outcome = await publishRun({ runDir, runId, result: adjudicated, repoDir: repo })
+
+  assert.equal(outcome.published, true)
+  assert.notEqual(outcome.commit, firstCommit)
+  assert.equal(git(remote, 'rev-parse', 'HEAD'), outcome.commit)
+  const published = await readJson(join(repo, RESULTS_RELATIVE_DIR, runId, 'result.json'))
+  assert.equal(published.technical_adjudication.revised_shared_technical_score, 58)
+  assert.equal(published.official_score, 86.5)
+})
+
+test('an invalid adjudication leaves the published snapshot unchanged and records the failure', async () => {
+  const { repo, dir } = await disposableRepo()
+  const { runDir, runId, result } = await finalizedRun(dir)
+
+  await publishRun({ runDir, runId, result, repoDir: repo })
+  const publishedCommit = git(repo, 'rev-parse', 'HEAD')
+  const publishedResult = await readJson(join(repo, RESULTS_RELATIVE_DIR, runId, 'result.json'))
+  const invalid = {
+    ...result,
+    official_score: result.official_score + 1,
+    technical_adjudication: {
+      schema_version: 1,
+      approved_by: 'user',
+      approved_at: '2026-07-28T20:00:00.000Z',
+      rationale: 'Malformed replacement.',
+      findings: ['missing reproducible raw-score fingerprint'],
+      component_scores: {},
+    },
+  }
+
+  await assert.rejects(
+    publishRun({ runDir, runId, result: invalid, repoDir: repo }),
+    /invalid adjudication/,
+  )
+
+  assert.equal(git(repo, 'rev-parse', 'HEAD'), publishedCommit)
+  assert.deepEqual(
+    await readJson(join(repo, RESULTS_RELATIVE_DIR, runId, 'result.json')),
+    publishedResult,
+  )
+  const checkpoint = await readJson(join(runDir, 'publication.json'))
+  assert.equal(checkpoint.stage, 'published')
+  assert.match(checkpoint.error, /invalid adjudication/)
 })
 
 // A real git adapter with one injected failure, so the commit is genuinely

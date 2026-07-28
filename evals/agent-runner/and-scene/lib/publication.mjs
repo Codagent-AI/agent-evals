@@ -25,6 +25,7 @@ import { join } from 'node:path'
 import { hashJson, readJson, writeJsonAtomic } from './persistence.mjs'
 import { runTimed } from './subprocess.mjs'
 import { writeResultArtifacts } from './result.mjs'
+import { validateTechnicalAdjudicationSupersession } from './adjudication.mjs'
 
 export const PUBLICATION_SCHEMA_VERSION = 1
 
@@ -257,14 +258,22 @@ export async function publishRun({
     )
     const publishedBaseline = publishedResult?.baseline ?? null
     const nextBaseline = result.baseline ?? null
-    if (hashJson(publishedBaseline) === hashJson(nextBaseline)) {
-      return { published: true, skipped: false, reason: null, commit: checkpoint.commit }
-    }
+    const baselineChanged = hashJson(publishedBaseline) !== hashJson(nextBaseline)
     const coreChanged = hashJson(comparableResultCore(publishedResult))
       !== hashJson(comparableResultCore(result))
-    if (coreChanged || publishedBaseline?.comparable === true || nextBaseline?.comparable !== true) {
+    if (!baselineChanged && !coreChanged) {
+      return { published: true, skipped: false, reason: null, commit: checkpoint.commit }
+    }
+    const approvedBaselineAttachment = !coreChanged
+      && publishedBaseline?.comparable !== true
+      && nextBaseline?.comparable === true
+    const adjudication = validateTechnicalAdjudicationSupersession(publishedResult, result)
+    if (!approvedBaselineAttachment && !adjudication.valid) {
+      const message = `cannot supersede completed publication ${runId} with a non-baseline result change`
+        + ` or invalid adjudication: ${adjudication.reason}`
+      await writeJsonAtomic(checkpointPath, { ...checkpoint, error: message })
       throw new PublicationError(
-        `cannot supersede completed publication ${runId} with a non-baseline result change`,
+        message,
         { stage: 'snapshot' },
       )
     }

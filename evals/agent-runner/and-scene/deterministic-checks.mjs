@@ -129,10 +129,12 @@ export async function runDeterministicChecks(root, { screenshotManifest, scanBud
   }
 
   const attribution = source.includes('made by and-scene') && source.includes('github.com/Codagent-AI/and-scene')
-  const activeState = source.includes('aria-current') && (source.includes('data-active') || source.includes('is-active'))
+  const stableActiveHook = (text) => /data-(?:[a-z0-9-]*-)?active\b|is-active\b/i.test(text)
+  const activeState = source.includes('aria-current') && stableActiveHook(source)
   const localHelper = Boolean(screenshotFile) && screenshot.includes('playwright')
   const overlap = hasTokens(screenshot, ['overlap', 'warning']) && (screenshot.includes('data-allow-overlap') || screenshot.includes('allow-overlap'))
-  const activeWarning = hasTokens(screenshot, ['getComputedStyle', 'active', 'inactive', 'warning']) && screenshot.includes('aria-current')
+  const activeWarning = hasTokens(screenshot, ['getComputedStyle', 'active', 'inactive', 'warning'])
+    && (screenshot.includes('aria-current') || stableActiveHook(screenshot))
   const attributionTarget = screenshot.includes('made by and-scene') || screenshot.includes('data-presentation-attribution')
   const attributionMissing = /missing[^\n]{0,40}attribution/i.test(screenshot)
     || /!\s*(?:isVisible\()?attribution/.test(screenshot)

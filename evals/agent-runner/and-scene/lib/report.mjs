@@ -212,7 +212,13 @@ function componentSections(result) {
   const componentRows = components.map((component) => [
     component.id,
     component.title ?? '',
+    component.applicable === false
+      ? 'not applicable'
+      : points(component.raw_points_awarded ?? component.points_awarded),
     component.applicable === false ? 'not applicable' : points(component.points_awarded),
+    Number.isFinite(component.adjudication_adjustment)
+      ? delta(component.adjudication_adjustment)
+      : 'none',
     component.points_possible,
     component.floor ?? 'none',
     component.complete ? 'complete' : 'incomplete',
@@ -227,8 +233,32 @@ function componentSections(result) {
   ]))
   return section(
     'Component and subcomponent scores',
-    table(['Component', 'Title', 'Awarded', 'Possible', 'Floor', 'State'], componentRows)
+    table(
+      ['Component', 'Title', 'Raw awarded', 'Adjudicated', 'Adjustment', 'Possible', 'Floor', 'State'],
+      componentRows,
+    )
     + table(['Component', 'Subcomponent', 'Title', 'Awarded', 'Possible', 'State'], subcomponentRows),
+  )
+}
+
+function adjudicationSection(result) {
+  const review = result.technical_adjudication
+  if (!review) return ''
+  return section(
+    'Technical score adjudication',
+    table(['Field', 'Value'], [
+      ['Approved by', review.approved_by],
+      ['Approved at', review.approved_at],
+      ['Raw shared technical score', points(review.prior_shared_technical_score)],
+      ['Revised shared technical score', points(review.revised_shared_technical_score)],
+      ['Raw official score', points(review.prior_official_score)],
+      ['Revised official score', points(review.revised_official_score)],
+      ['Rationale', review.rationale],
+    ])
+    + table(
+      ['Finding'],
+      (review.findings ?? []).map((finding) => [finding]),
+    ),
   )
 }
 
@@ -374,6 +404,7 @@ export function renderReport(result, { current = null } = {}) {
     summaryBlock(result),
     availableSection(result),
     componentSections(result),
+    adjudicationSection(result),
     section(
       'Hard gates',
       table(

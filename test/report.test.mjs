@@ -89,6 +89,55 @@ test('a passing verdict leads with PASS and the official score', () => {
   assert.match(html, /Score denominator:<\/strong>\s*100/)
 })
 
+test('a technical adjudication is explicit and distinguishes raw from revised scores', () => {
+  const adjudicated = result({
+    official_score: 86.5,
+    technical_adjudication: {
+      approved_by: 'user',
+      approved_at: '2026-07-28T20:00:00.000Z',
+      rationale: 'Independent robustness review.',
+      prior_shared_technical_score: 59.9,
+      revised_shared_technical_score: 58,
+      findings: ['fixed-port preview can attach to a stale server'],
+    },
+  })
+  adjudicated.score.components[0] = {
+    ...adjudicated.score.components[0],
+    raw_points_awarded: 23,
+    points_awarded: 24,
+    adjudication_adjustment: 1,
+  }
+
+  const html = renderReport(adjudicated)
+
+  assert.match(html, /Technical score adjudication/)
+  assert.match(html, /59\.90/)
+  assert.match(html, /58/)
+  assert.match(html, /Independent robustness review/)
+  assert.match(html, /Raw awarded/)
+  assert.match(html, /Adjudicated/)
+})
+
+test('technical adjudication audit text is escaped rather than rendered as markup', () => {
+  const adjudicated = result({
+    technical_adjudication: {
+      approved_by: '<img src=x onerror=alert(1)>',
+      approved_at: '2026-07-28T20:00:00.000Z',
+      rationale: '<script>alert("rationale")</script>',
+      prior_shared_technical_score: 59.9,
+      revised_shared_technical_score: 58,
+      findings: ['<svg onload=alert("finding")>'],
+    },
+  })
+
+  const html = renderReport(adjudicated)
+
+  assert.doesNotMatch(html, /<script>|<img src=|<svg onload=/)
+  assert.match(html, /&lt;script&gt;/)
+  assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/)
+  assert.match(html, /&lt;svg onload=alert\(&quot;finding&quot;\)&gt;/)
+})
+
 test('a failing verdict leads with FAIL and the official score', () => {
   const html = renderReport(result({ product_verdict: 'fail', label: 'FAIL', official_score: 51 }))
   assert.match(html, /<h1[^>]*>\s*FAIL\s*<\/h1>/)

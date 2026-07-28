@@ -31,6 +31,8 @@ The reference baseline SHALL be evaluated only on the components shared with the
 
 The reference SHALL therefore have a score denominator of 92 without rescaling. Before its human review is complete, it SHALL report an applicable automated subtotal out of 62. After human review, it SHALL report its score out of 92 without an official candidate pass/fail verdict. Candidate reports SHALL retain the candidate's official score out of 100 and SHALL separately compare the candidate and reference on the shared 92 points.
 
+When the user explicitly approves a post-run technical adjudication, the harness SHALL preserve the raw automated criterion and component scores, record the approver, time, rationale, consequential findings, and replacement scores for exactly the four shared technical components, and recalculate the automated subtotal using those four replacement scores plus the unchanged raw scores of every other applicable automated component. It SHALL recalculate the official candidate score from that subtotal and the applicable human-review score, and SHALL recalculate the shared-92 comparison using only the four shared replacement scores and applicable human-review scores. An adjudication SHALL NOT masquerade as a new automated judge result or silently replace the raw score.
+
 #### Scenario: Complete candidate score
 - **WHEN** all six automated candidate components and human review have completed successfully
 - **THEN** the evaluator reports every component score and their sum out of 100
@@ -65,6 +67,12 @@ The reference SHALL therefore have a score denominator of 92 without rescaling. 
 - **THEN** the candidate report retains its official score out of 100
 - **AND** it separately reports candidate-versus-reference component and total differences on the shared 92 points
 
+#### Scenario: User approves technical adjudication
+- **WHEN** the user explicitly approves revised scores for all four shared technical components after independently reviewing a completed candidate
+- **THEN** the harness preserves the raw automated score and records the approved adjudication separately
+- **AND** it recalculates the automated subtotal from the approved shared replacements and unchanged non-shared scores
+- **AND** it recalculates the official score and shared-92 comparison from their applicable components
+
 ### Requirement: Demo presentation technical quality
 The evaluation SHALL score the delivered demo presentation out of 24 using the following rubric. Deterministic browser evaluation SHALL inspect the built, running demo. LLM source review SHALL inspect the delivered source and supporting evidence. The LLM SHALL assess technical implementation and SHALL NOT assess visual taste, perceived motion quality, or responsive aesthetics, which belong to human review.
 
@@ -82,6 +90,8 @@ The deterministic evaluator SHALL preserve the presentation's initial mode when 
 The canonical-content checks SHALL verify the registered demo route, the nine required steps in their specified order, their normative titles, captions, and scene content, and their implementation as one evolving scene. The navigation checks SHALL exercise present and browse modes, mode changes, supported navigation inputs, direct controls, and end boundaries. The reliability and accessibility checks SHALL exercise step transitions and mode interactions, monitor browser failures, and inspect control semantics, current-state exposure, focus behavior, and keyboard operability.
 
 The deterministic browser evaluator SHALL have real-browser regression coverage against the pinned reference presentation. The reference regression SHALL require caption and canonical-content criteria to pass and SHALL NOT rely only on mocked mode state.
+
+Deterministic source facts supplied to an LLM source judge SHALL be treated as leads rather than authoritative verdicts. The judge SHALL inspect cited source and resolve contradictions. Equivalent semantic current-state attributes and stable presentation-owned active hooks SHALL satisfy the active-state contract without requiring one hard-coded hook spelling. Source review of code boundaries SHALL also identify public API inputs or shared constants that are declared but not used by the delivered behavior.
 
 #### Scenario: Deterministic demo behavior is scored
 - **WHEN** the built demo is available to the evaluator
@@ -121,8 +131,15 @@ The deterministic browser evaluator SHALL have real-browser regression coverage 
 - **THEN** the evaluator scores the demo criterion from the correctness of its integration
 - **AND** it independently scores the corresponding scene-kit criterion from the defective reusable implementation
 
+#### Scenario: Source contradicts a deterministic token scan
+- **WHEN** deterministic source evidence reports that a technical hook is missing but the delivered source implements the required semantics through an equivalent stable hook
+- **THEN** the LLM judge resolves the contradiction from source behavior
+- **AND** it does not inherit the token scan's verdict
+
 ### Requirement: Scene kit correctness
 The evaluation SHALL score the reusable scene kit out of 24 using LLM review of delivered source and structured browser evidence. The judge SHALL assess implementation of the technical contracts rather than the aesthetic quality of the demo that uses them.
+
+For transition sequencing, the judge SHALL require persisting motion and newcomer delay to share one settlement contract or executable proof that newcomers wait until continuing entities settle; the presence of timing constants or named primitives alone SHALL NOT earn credit. Touch navigation SHALL distinguish predominantly horizontal single-touch swipes from vertical scrolling and multi-touch gestures.
 
 | Subcomponent | Points | Criteria |
 |---|---:|---|
@@ -142,6 +159,14 @@ The evaluation SHALL score the reusable scene kit out of 24 using LLM review of 
 - **THEN** it scores whether the required technical mechanism and behavior are present
 - **AND** it leaves perceived transition smoothness and visual composition quality to human review
 
+#### Scenario: Newcomer timing is disconnected from persistent motion
+- **WHEN** the kit delays newcomers using a duration that is not applied to persistent layout motion and supplies no executable settlement proof
+- **THEN** `entity-newcomer-after-settle` fails
+
+#### Scenario: Vertical gesture has horizontal drift
+- **WHEN** a touch gesture moves primarily vertically while also exceeding the horizontal distance threshold
+- **THEN** the kit does not navigate
+
 ### Requirement: Presentation skill correctness
 The evaluation SHALL score the delivered presentation skill out of seven points using LLM review of the skill, its templates, delivered source, and workflow evidence.
 
@@ -153,6 +178,8 @@ The evaluation SHALL score the delivered presentation skill out of seven points 
 | Automated self-verification and fixing failures before completion | 1 | `skill-checks-run-before-done`, `skill-failures-fixed-before-success` |
 
 Visual-composition inspection and visual-warning review SHALL NOT receive presentation-skill points. The candidate's observable proof that those activities occurred and were handled SHALL be evaluated by the testing-evidence component.
+
+For scaffold scenarios that can be exercised deterministically, prose instructions alone SHALL NOT establish correctness. The judge SHALL require focused executable tests or verified workflow evidence covering empty, already-scaffolded, partial-scaffold, monorepo, standalone, and ambiguous nonempty targets, including template resolution and dependency handling from the resolved target.
 
 #### Scenario: Skill contracts are scored
 - **WHEN** the LLM judge evaluates the presentation skill
@@ -169,8 +196,14 @@ Visual-composition inspection and visual-warning review SHALL NOT receive presen
 - **THEN** that record is evaluated under testing-evidence quality
 - **AND** it does not award presentation-skill points
 
+#### Scenario: Scaffold edge cases exist only as instructions
+- **WHEN** the skill describes partial-scaffold and monorepo behavior without executable tests or verified workflow evidence for those cases
+- **THEN** the affected scaffold criteria fail
+
 ### Requirement: Verification tool correctness
 The evaluation SHALL score the delivered verification tooling out of seven points using LLM review of its source, executable behavior, and produced artifacts. The four hard-gate criteria SHALL remain outside this point allocation.
+
+The verifier SHALL prove that browser checks connect to the preview process it started and SHALL fail if that process exits; an unrelated stale process on a fixed port SHALL NOT satisfy readiness. Screenshot settlement SHALL be tied to observable animation stability or to the same configured transition contract used by the scene. Warning criteria SHALL require executable regression or verified browser evidence that each warning fires and that intentional-overlap suppression does not hide unrelated collisions; token presence alone SHALL NOT earn credit.
 
 | Subcomponent | Points | Criteria |
 |---|---:|---|
@@ -187,6 +220,14 @@ The evaluation SHALL score the delivered verification tooling out of seven point
 #### Scenario: Hard-gate behavior is excluded from verification points
 - **WHEN** the scorer calculates the verification-tool component
 - **THEN** it does not award points for `verification-build-whole-app`, `verification-sample-outline`, `verification-every-produced-step-renders`, or `verification-clear-outcome`
+
+#### Scenario: Stale preview occupies the configured port
+- **WHEN** the verifier's own preview process exits because its port is occupied while another server responds on that port
+- **THEN** verification fails rather than inspecting the unrelated server
+
+#### Scenario: Warning implementation is not exercised
+- **WHEN** warning-related tokens or helper functions exist but no executable regression or verified browser evidence demonstrates the warning behavior
+- **THEN** the affected warning criteria fail
 
 ### Requirement: Existing criterion disposition
 The revised rubric SHALL classify each of the 68 legacy rubric criteria exactly once. It SHALL retain 59 as directly scored product criteria, use four exclusively as hard gates, remove three from scoring, and replace two presentation-skill evidence criteria with the broader testing-evidence criteria.
