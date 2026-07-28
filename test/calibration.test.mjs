@@ -98,6 +98,7 @@ test('calibration covers workflow evidence defects, missing judging, N/A arithme
     'evidence-contradiction-regression',
     'visual-warning-disposition-regression',
     'assumption-surfacing-regression',
+    'preview-process-ownership-regression',
   ]) assert.ok(ids.has(id), id)
 
   const checks = Object.fromEntries(ledger.harness_checks.map((check) => [check.id, check]))

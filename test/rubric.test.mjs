@@ -108,6 +108,28 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
+test('rubric 3.2 gives preview ownership its own criterion and removes scoring ambiguities', async () => {
+  const rubric = await automatedRubric()
+  assert.equal(rubric.version, '3.2.0')
+
+  const rows = new Map(
+    rubric.components
+      .flatMap(({ subcomponents }) => subcomponents)
+      .map((subcomponent) => [subcomponent.id, subcomponent]),
+  )
+  const addressing = rows.get('verification-addressing-and-errors')
+  assert.ok(addressing.criteria.includes('verification-preview-process-ownership'))
+
+  const guidance = (id) => rows.get(id).review_guidance.join('\n')
+  assert.match(guidance('verification-addressing-and-errors'), /score preview ownership only/i)
+  assert.match(guidance('verification-addressing-and-errors'), /IPv4 loopback/i)
+  assert.match(guidance('scene-entity-transitions'), /shared timing (?:value|constant).*insufficient/i)
+  assert.match(guidance('skill-scaffolding'), /interactive confirmation/i)
+  assert.match(guidance('verification-warnings'), /earlier revision/i)
+  assert.match(guidance('verification-warnings'), /raw executable/i)
+  assert.match(guidance('demo-code-boundaries'), /exactly once/i)
+})
+
 test('each of the six scored judge jobs maps to exactly one component', async () => {
   const rubric = await automatedRubric()
   const jobs = new Map()

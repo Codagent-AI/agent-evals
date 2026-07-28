@@ -107,7 +107,7 @@ test('every criterion result records its identifier, verdict, rationale, and cit
   const result = scoreProduct(inputs())
   const criteria = result.components.flatMap((entry) => entry.subcomponents.flatMap(({ criteria: rows }) => rows))
 
-  assert.equal(criteria.length, 84)
+  assert.equal(criteria.length, 85)
   assert.ok(criteria.every(({ id, verdict, rationale, evidence }) => (
     typeof id === 'string' && ['pass', 'fail'].includes(verdict)
       && rationale.length > 0 && Array.isArray(evidence)

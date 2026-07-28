@@ -206,6 +206,15 @@ export function calibrationCases(rubric) {
       human: null,
       expected_official_pass: true,
     },
+    {
+      id: 'preview-process-ownership-regression',
+      description: 'a verifier that can attach to a stale preview loses process-ownership credit',
+      target: { kind: 'component', id: 'verification-tool-correctness' },
+      fail_criteria: ['verification-preview-process-ownership'],
+      fail_gates: [],
+      human: null,
+      expected_official_pass: true,
+    },
     ...gateCases,
     {
       id: 'human-rating-one-regression',
