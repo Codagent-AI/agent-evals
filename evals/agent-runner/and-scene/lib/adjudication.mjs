@@ -26,7 +26,6 @@ function resultFingerprint(result) {
   const {
     artifacts: _artifacts,
     report: _report,
-    technical_adjudication: _technicalAdjudication,
     ...stable
   } = result ?? {}
   return hashJson(stable)
@@ -40,9 +39,6 @@ function adjudicationComparableCore(result) {
 function validateReview(result, review) {
   if (result?.mode !== 'agent-runner' || result?.evaluation_status !== 'complete') {
     throw new Error('technical adjudication requires a completed Agent Runner candidate result')
-  }
-  if (result.technical_adjudication) {
-    throw new Error('technical adjudication has already been applied')
   }
   for (const field of ['approved_by', 'approved_at', 'rationale']) {
     if (typeof review?.[field] !== 'string' || review[field].trim().length === 0) {
@@ -114,11 +110,18 @@ export function applyTechnicalAdjudication(result, review) {
   const revisedShared = round(Object.values(componentScores).reduce((sum, points) => sum + points, 0))
   const components = result.score.components.map((component) => {
     if (!Object.hasOwn(componentScores, component.id)) return component
-    const raw = component.points_awarded
+    const prior = component.points_awarded
+    const raw = component.raw_points_awarded ?? prior
     const revised = componentScores[component.id]
     return {
       ...component,
       raw_points_awarded: raw,
+      ...(result.technical_adjudication
+        ? {
+            prior_points_awarded: prior,
+            prior_adjudication_adjustment: round(revised - prior),
+          }
+        : {}),
       points_awarded: revised,
       points_observed: revised,
       adjudication_adjustment: round(revised - raw),
@@ -159,12 +162,21 @@ export function applyTechnicalAdjudication(result, review) {
     automated_subtotal: automatedSubtotal,
     official_score: official,
   }
+  const technicalAdjudicationHistory = result.technical_adjudication
+    ? [
+        ...(result.technical_adjudication_history ?? []),
+        result.technical_adjudication,
+      ]
+    : result.technical_adjudication_history
   return {
     ...result,
     official_score: official,
     automated_subtotal: automatedSubtotal,
     score,
     baseline: updateBaseline(result.baseline, componentScores, revisedShared, human),
+    ...(technicalAdjudicationHistory
+      ? { technical_adjudication_history: technicalAdjudicationHistory }
+      : {}),
     technical_adjudication: technicalAdjudication,
   }
 }

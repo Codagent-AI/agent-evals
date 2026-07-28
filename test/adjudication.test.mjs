@@ -121,6 +121,44 @@ test('an approved technical adjudication revises the shared score to 58 with an 
   assert.equal(revised.score.components.find(({ id }) => id === 'demo-technical-quality').points_awarded, 24)
 })
 
+test('a reviewed adjudication can supersede a provisional adjudication without losing either audit record', async () => {
+  const module = await adjudicationModule()
+  assert.ok(module, 'technical adjudication support must exist')
+
+  const provisional = module.applyTechnicalAdjudication(candidateResult(), approvedReview())
+  const finalReview = {
+    approved_by: 'user',
+    approved_at: '2026-07-28T22:00:00.000Z',
+    rationale: 'A fresh rubric 3.2 review produced the final technical score.',
+    component_scores: {
+      'demo-technical-quality': 23,
+      'scene-kit-correctness': 637 / 30,
+      'presentation-skill-correctness': 41 / 8,
+      'verification-tool-correctness': 13 / 3,
+    },
+    findings: ['fresh independent review found no consequential rubric issues'],
+  }
+
+  const revised = module.applyTechnicalAdjudication(provisional, finalReview)
+
+  assert.equal(revised.technical_adjudication.prior_shared_technical_score, 58)
+  assert.equal(revised.technical_adjudication.revised_shared_technical_score, 53.691666666667)
+  assert.equal(revised.technical_adjudication_history.length, 1)
+  assert.deepEqual(revised.technical_adjudication_history[0], provisional.technical_adjudication)
+  assert.equal(revised.automated_subtotal.points, 61.691666666667)
+  assert.equal(revised.official_score, 82.191666666667)
+  const demo = revised.score.components.find(({ id }) => id === 'demo-technical-quality')
+  assert.equal(demo.raw_points_awarded, 23)
+  assert.equal(demo.prior_points_awarded, 24)
+  assert.equal(demo.points_awarded, 23)
+  assert.equal(demo.adjudication_adjustment, 0)
+  assert.equal(demo.prior_adjudication_adjustment, -1)
+  assert.equal(
+    module.validateTechnicalAdjudicationSupersession(provisional, revised).valid,
+    true,
+  )
+})
+
 test('technical adjudication rejects incomplete or out-of-range component scores', async () => {
   const module = await adjudicationModule()
   assert.ok(module, 'technical adjudication support must exist')

@@ -532,6 +532,34 @@ test('a completed publication can be superseded only by a validated technical ad
   const published = await readJson(join(repo, RESULTS_RELATIVE_DIR, runId, 'result.json'))
   assert.equal(published.technical_adjudication.revised_shared_technical_score, 58)
   assert.equal(published.official_score, 86.5)
+
+  const final = applyTechnicalAdjudication(published, {
+    approved_by: 'user',
+    approved_at: '2026-07-28T22:00:00.000Z',
+    rationale: 'Fresh rubric review superseded the provisional adjudication.',
+    component_scores: {
+      'demo-technical-quality': 23,
+      'scene-kit-correctness': 637 / 30,
+      'presentation-skill-correctness': 41 / 8,
+      'verification-tool-correctness': 13 / 3,
+    },
+    findings: ['the final rubric review found no consequential scoring ambiguity'],
+  })
+  await writeFile(join(runDir, 'result.json'), JSON.stringify(final))
+
+  const finalOutcome = await publishRun({ runDir, runId, result: final, repoDir: repo })
+
+  assert.equal(finalOutcome.published, true)
+  assert.notEqual(finalOutcome.commit, outcome.commit)
+  assert.equal(git(remote, 'rev-parse', 'HEAD'), finalOutcome.commit)
+  const finalPublished = await readJson(join(repo, RESULTS_RELATIVE_DIR, runId, 'result.json'))
+  assert.equal(finalPublished.technical_adjudication_history.length, 1)
+  assert.equal(
+    finalPublished.technical_adjudication_history[0].revised_shared_technical_score,
+    58,
+  )
+  assert.equal(finalPublished.technical_adjudication.revised_shared_technical_score, 53.691666666667)
+  assert.equal(finalPublished.official_score, 82.191666666667)
 })
 
 test('an invalid adjudication leaves the published snapshot unchanged and records the failure', async () => {

@@ -244,21 +244,34 @@ function componentSections(result) {
 function adjudicationSection(result) {
   const review = result.technical_adjudication
   if (!review) return ''
+  const history = result.technical_adjudication_history ?? []
   return section(
     'Technical score adjudication',
     table(['Field', 'Value'], [
       ['Approved by', review.approved_by],
       ['Approved at', review.approved_at],
-      ['Raw shared technical score', points(review.prior_shared_technical_score)],
+      ['Prior shared technical score', points(review.prior_shared_technical_score)],
       ['Revised shared technical score', points(review.revised_shared_technical_score)],
-      ['Raw official score', points(review.prior_official_score)],
+      ['Prior official score', points(review.prior_official_score)],
       ['Revised official score', points(review.revised_official_score)],
       ['Rationale', review.rationale],
     ])
     + table(
       ['Finding'],
       (review.findings ?? []).map((finding) => [finding]),
-    ),
+    )
+    + (history.length === 0
+      ? ''
+      : '<h3>Superseded technical adjudications</h3>'
+        + table(
+          ['Approved at', 'Prior shared', 'Revised shared', 'Rationale'],
+          history.map((prior) => [
+            prior.approved_at,
+            points(prior.prior_shared_technical_score),
+            points(prior.revised_shared_technical_score),
+            prior.rationale,
+          ]),
+        )),
   )
 }
 

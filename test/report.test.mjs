@@ -118,6 +118,35 @@ test('a technical adjudication is explicit and distinguishes raw from revised sc
   assert.match(html, /Adjudicated/)
 })
 
+test('a superseding adjudication renders the current review and its superseded audit history', () => {
+  const adjudicated = result({
+    official_score: 82.191666666667,
+    technical_adjudication_history: [{
+      approved_by: 'user',
+      approved_at: '2026-07-28T20:00:00.000Z',
+      rationale: 'Provisional review.',
+      prior_shared_technical_score: 59.9,
+      revised_shared_technical_score: 58,
+      findings: ['provisional finding'],
+    }],
+    technical_adjudication: {
+      approved_by: 'user',
+      approved_at: '2026-07-28T22:00:00.000Z',
+      rationale: 'Final rubric 3.2 review.',
+      prior_shared_technical_score: 58,
+      revised_shared_technical_score: 53.691666666667,
+      findings: ['final finding'],
+    },
+  })
+
+  const html = renderReport(adjudicated)
+
+  assert.match(html, /Prior shared technical score/)
+  assert.match(html, /Superseded technical adjudications/)
+  assert.match(html, /Provisional review/)
+  assert.match(html, /Final rubric 3\.2 review/)
+})
+
 test('technical adjudication audit text is escaped rather than rendered as markup', () => {
   const adjudicated = result({
     technical_adjudication: {
