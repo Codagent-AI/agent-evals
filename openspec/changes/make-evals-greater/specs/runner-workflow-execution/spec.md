@@ -122,6 +122,8 @@ Checkpoint provenance SHALL include the fixture repository and commit, Agent Run
 
 The harness SHALL reject a checkpoint when any recorded identity or score-affecting input no longer matches the resumed run.
 
+When a defect is confined to evaluator-owned phases after a candidate has completed the full implementation and acceptance workflow, the harness SHALL permit a fresh evaluator-only rescore from that completed run. It SHALL verify the source run, acceptance-artifact hashes, candidate branch, draft pull request, and final SHA; read the source run without modifying it; preserve candidate scoring applicability; and execute no Agent Runner workflow, candidate mutation, branch creation, push, or acceptance workflow.
+
 #### Scenario: Fine-grained checkpoint is valid
 - **WHEN** resume can verify an individual work unit's complete output and matching provenance
 - **THEN** the harness preserves that work and continues at the next incomplete unit
@@ -138,6 +140,11 @@ The harness SHALL reject a checkpoint when any recorded identity or score-affect
 - **WHEN** the recorded branch, PR, final SHA, acceptance-evidence hash, or another score-affecting input differs on resume
 - **THEN** the harness refuses to reuse the stale checkpoint
 - **AND** it reports which provenance changed
+
+#### Scenario: Evaluator defect is corrected after candidate completion
+- **WHEN** a completed candidate has trustworthy implementation and acceptance provenance but its evaluator-owned result is invalid
+- **THEN** the harness can create a fresh candidate result by rerunning only evaluator-owned phases against the exact recorded final SHA
+- **AND** it does not invoke Agent Runner, modify the candidate, create or push a branch, or repeat acceptance testing
 
 ### Requirement: Workflow execution provenance
 The evaluation result SHALL record the Agent Runner commit and clean-worktree result, CLI version, workflow path and SHA-256 hash, Agent Skills commit, clean-worktree result, and plugin-manifest hash, the configured lead, implementor, and reviewer profiles, workflow arguments, task-level Validator choice, run identifier, session directory, candidate repository and branch, draft-PR URL and base, final local and PR head SHA, every observed workflow step and outcome, final Validator result, candidate-reported CI status when present, acceptance attempt history, and hashes of required acceptance artifacts. It SHALL also record start, wait, resume, completion, and retry events without treating those events as product points.

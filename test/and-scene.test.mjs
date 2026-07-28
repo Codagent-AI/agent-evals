@@ -261,6 +261,38 @@ test('a reference baseline does not require a clean Agent Runner checkout', asyn
   assert.equal(missingResult.status, 0, missingResult.output)
 })
 
+test('an evaluator-only rescore mounts a completed run read-only and invokes no implementation tooling', async () => {
+  const context = await setup({ dirty: true })
+  const source = join(context.dir, 'completed-candidate')
+  await mkdir(source)
+
+  const result = await scored(context, ['--rescore-from', source])
+
+  assert.equal(result.status, 0, result.output)
+  assert.match(result.output, /type=bind\\,source=.*completed-candidate\\,target=\/rescore-source\\,readonly/)
+  assert.match(result.output, /--rescore-from \/rescore-source/)
+  assert.ok(!result.output.includes('bootstrap-agent-skills.sh'), result.output)
+  assert.ok(!result.output.includes('--lead-cli'), result.output)
+  assert.ok(!result.output.includes('--mount-claude-auth'), result.output)
+  assert.ok(result.output.includes('--mount-codex-auth'), result.output)
+})
+
+test('an evaluator-only rescore rejects modes that could mutate or replace its recorded candidate', async () => {
+  const context = await setup()
+  const source = join(context.dir, 'completed-candidate')
+  await mkdir(source)
+
+  for (const conflicting of [
+    ['--resume'],
+    ['--reference-baseline'],
+    ['--candidate-ref', referenceSha],
+  ]) {
+    const result = await scored(context, ['--rescore-from', source, ...conflicting])
+    assert.notEqual(result.status, 0)
+    assert.match(result.output, /--rescore-from cannot be combined/)
+  }
+})
+
 test('a dirty Agent Runner checkout is rejected on the host before the sandbox runs', async () => {
   const context = await setup({ dirty: true })
 

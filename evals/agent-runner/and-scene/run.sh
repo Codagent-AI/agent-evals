@@ -25,6 +25,7 @@ CONTAINER_AGENT_RUNNER_DIR="${CONTAINER_AGENT_RUNNER_DIR:-/agent-runner-source}"
 CONTAINER_AGENT_SKILLS_DIR="${CONTAINER_AGENT_SKILLS_DIR:-/agent-skills-source}"
 JUDGE_MODEL="${JUDGE_MODEL:-codex-default}"
 CANDIDATE_REF="${CANDIDATE_REF:-}"
+RESCORE_FROM="${RESCORE_FROM:-}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-}"
 LEAD_CLI="" LEAD_MODEL="" LEAD_EFFORT=""
 IMPLEMENTOR_CLI="" IMPLEMENTOR_MODEL="" IMPLEMENTOR_EFFORT=""
@@ -92,6 +93,9 @@ Options:
   --reference-ref REF    Implemented/reference ref.
                           Default: 171c7def1e12aca2a5f605a5e5feafb20d4e4d19
   --candidate-ref REF    Grade an existing candidate ref.
+  --rescore-from PATH    Re-run evaluator-owned phases against a completed,
+                          immutable candidate run. Never invokes Agent Runner,
+                          creates a branch, or changes candidate contents.
   --reference-baseline   Evaluate an existing candidate without invoking Agent
                           Runner. Role profiles are not required or applicable.
   --change-name NAME     OpenSpec change name. Default: create-and-scene
@@ -189,6 +193,10 @@ while (($#)); do
       CANDIDATE_REF="${2:?missing value for --candidate-ref}"
       shift 2
       ;;
+    --rescore-from)
+      RESCORE_FROM="${2:?missing value for --rescore-from}"
+      shift 2
+      ;;
     --reference-baseline)
       REFERENCE_BASELINE=1
       shift
@@ -281,6 +289,13 @@ if ((PROOF_BROWSER + RUN_AGENT + CALIBRATE != 1)); then
   exit 2
 fi
 
+if [[ -n "$RESCORE_FROM" && (
+  "$RESUME" == 1 || "$REFERENCE_BASELINE" == 1 || -n "$CANDIDATE_REF"
+) ]]; then
+  echo "--rescore-from cannot be combined with --resume, --reference-baseline, or --candidate-ref." >&2
+  exit 2
+fi
+
 # Calibration runs entirely on the host: no sandbox, no Agent Runner checkout,
 # no credentials. It is handled before every check those things require.
 if [[ "$CALIBRATE" == 1 ]]; then
@@ -335,19 +350,20 @@ require_role_profile() {
 }
 
 if [[ "$RUN_AGENT" == 1 ]]; then
-  # A reference baseline evaluates an existing candidate without invoking Agent
-  # Runner, so its workflow contract and worktree cleanliness do not apply. Only
-  # the sandbox adapter, checked above, is required to launch it.
+  # Both fresh candidate runs and evaluator-only rescoring use the calibrated
+  # candidate rubric. Reference baselines are the calibration input and are
+  # therefore exempt.
   if [[ "$REFERENCE_BASELINE" != 1 ]]; then
-    # A full Agent Runner evaluation costs real model time, so it does not start
-    # until calibration has proved the harness attributes quality to the right
-    # component and gate. The record is read by calibrate.mjs rather than parsed
-    # here, so the rule that blocks the run is the code that wrote it.
     if ! node "$SUITE_DIR/calibrate.mjs" --check-record "$CALIBRATION_RECORD"; then
       echo "Run calibration first: evals/agent-runner/and-scene/run.sh --calibrate" >&2
       exit 2
     fi
+  fi
 
+  # A reference baseline evaluates an existing candidate without invoking Agent
+  # Runner, so its workflow contract and worktree cleanliness do not apply. Only
+  # the sandbox adapter, checked above, is required to launch it.
+  if [[ "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
     # The suite requires a clean recorded Agent Runner revision before any
     # workflow starts or resumes; a dirty checkout stops the run here on the
     # host.
@@ -429,6 +445,21 @@ elif [[ "$ARTIFACT_DIR" != /* ]]; then
   ARTIFACT_DIR="$EVALS_ROOT/$ARTIFACT_DIR"
 fi
 
+if [[ -n "$RESCORE_FROM" ]]; then
+  if [[ "$RESCORE_FROM" != /* ]]; then
+    RESCORE_FROM="$EVALS_ROOT/$RESCORE_FROM"
+  fi
+  if [[ ! -d "$RESCORE_FROM" ]]; then
+    echo "Completed candidate run does not exist: $RESCORE_FROM" >&2
+    exit 2
+  fi
+  RESCORE_FROM="$(cd -- "$RESCORE_FROM" && pwd)"
+  if [[ "$ARTIFACT_DIR" == "$RESCORE_FROM" ]]; then
+    echo "--artifact-dir must differ from --rescore-from." >&2
+    exit 2
+  fi
+fi
+
 # The run directory basename is the stable run identity. A resume against the
 # same directory reuses it, so a restarted outer process addresses the same run
 # and the same container identity rather than starting a new one.
@@ -450,7 +481,7 @@ SELECTED_ADAPTERS_Q="$(shell_quote "$LEAD_CLI") $(shell_quote "$IMPLEMENTOR_CLI"
 # stays a fixed, quoted invocation rather than string-built shell.
 CONTROLLER_ARGS=(--run-dir /artifacts --run-id "$AND_SCENE_RUN_ID")
 CONTROLLER_ARGS+=(--agent-runner-dir "$CONTAINER_AGENT_RUNNER_DIR" --repo "$REPO")
-if [[ "$REFERENCE_BASELINE" != 1 ]]; then
+if [[ "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
   CONTROLLER_ARGS+=(--agent-skills-dir "$CONTAINER_AGENT_SKILLS_DIR")
 fi
 CONTROLLER_ARGS+=(--change-name "$CHANGE_NAME" --fixture-ref "$FIXTURE_REF" --judge-model "$JUDGE_MODEL")
@@ -465,6 +496,8 @@ if [[ "$RESUME" == 1 ]]; then
 fi
 if [[ "$REFERENCE_BASELINE" == 1 ]]; then
   CONTROLLER_ARGS+=(--reference-baseline)
+elif [[ -n "$RESCORE_FROM" ]]; then
+  CONTROLLER_ARGS+=(--rescore-from /rescore-source)
 else
   CONTROLLER_ARGS+=(--lead-cli "$LEAD_CLI" --lead-model "$LEAD_MODEL" --lead-effort "$LEAD_EFFORT")
   CONTROLLER_ARGS+=(--implementor-cli "$IMPLEMENTOR_CLI" --implementor-model "$IMPLEMENTOR_MODEL")
@@ -587,6 +620,15 @@ echo "and-scene browser proof passed" | tee /artifacts/tier1-result.txt
 PROOF
 )
 
+AGENT_SKILLS_BOOTSTRAP=""
+if [[ "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
+  AGENT_SKILLS_BOOTSTRAP="/eval-input/bootstrap-agent-skills.sh \\
+    $CONTAINER_AGENT_SKILLS_DIR_Q \\
+    \"\\\$AGENT_RUNNER_DIR/\\\$IMPLEMENTATION_WORKFLOW_PATH\" \\
+    $SELECTED_ADAPTERS_Q \\
+    2>&1 | tee /artifacts/logs/agent-skills-bootstrap.log"
+fi
+
 agent_script=$(cat <<AGENT
 set -euo pipefail
 mkdir -p /artifacts/logs
@@ -623,23 +665,23 @@ if [ -n "\$token" ]; then
   export GIT_TERMINAL_PROMPT=0
 fi
 
-if [[ "$REFERENCE_BASELINE" != 1 ]]; then
-  /eval-input/bootstrap-agent-skills.sh \
-    $CONTAINER_AGENT_SKILLS_DIR_Q \
-    "\$AGENT_RUNNER_DIR/\$IMPLEMENTATION_WORKFLOW_PATH" \
-    $SELECTED_ADAPTERS_Q \
-    2>&1 | tee /artifacts/logs/agent-skills-bootstrap.log
-fi
+$AGENT_SKILLS_BOOTSTRAP
 
 exec node /eval-input/controller.mjs $CONTROLLER_ARGS_Q
 AGENT
 )
 
 sandbox_args=(--artifact-dir "$ARTIFACT_DIR" --input-dir "$SUITE_DIR")
-if [[ "$REFERENCE_BASELINE" != 1 ]]; then
+if [[ "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
   sandbox_args+=(
     --docker-run-arg --mount
     --docker-run-arg "type=bind,source=$AGENT_SKILLS_DIR,target=$CONTAINER_AGENT_SKILLS_DIR,readonly"
+  )
+fi
+if [[ -n "$RESCORE_FROM" ]]; then
+  sandbox_args+=(
+    --docker-run-arg --mount
+    --docker-run-arg "type=bind,source=$RESCORE_FROM,target=/rescore-source,readonly"
   )
 fi
 if [[ "$DRY_RUN" == 1 ]]; then

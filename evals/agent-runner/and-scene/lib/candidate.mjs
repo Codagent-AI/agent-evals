@@ -245,6 +245,96 @@ export async function prepareCandidateWorktree({
   }
 }
 
+export async function prepareCandidateRescoreWorktree({
+  repo,
+  worktree,
+  source,
+  exec = defaultExec,
+}) {
+  if (!repo) throw new Error('candidate repository is required')
+  if (
+    !source?.repository
+    || !source.fixture_commit
+    || !source.final_sha
+    || !source.branch
+    || !source.base_branch
+  ) {
+    throw new Error('candidate rescore source identity is incomplete')
+  }
+  const repository = normalizeRepository(repo)
+  assertSame('candidate repository', repository, source.repository)
+  run(exec, 'git', ['clone', '--no-checkout', '--', repo, worktree], {}, 'candidate rescore clone')
+  const origin = normalizeRepository(run(
+    exec,
+    'git',
+    ['-C', worktree, 'remote', 'get-url', 'origin'],
+    {},
+    'candidate rescore origin lookup',
+  ))
+  assertSame('candidate origin repository', origin, repository)
+  const baseBranch = resolveRemoteDefaultBranch(exec, worktree)
+  assertSame('candidate default base branch', baseBranch, source.base_branch)
+
+  const fixtureCommit = run(
+    exec,
+    'git',
+    ['-C', worktree, 'rev-parse', '--verify', '--end-of-options', `${source.fixture_commit}^{commit}`],
+    {},
+    'candidate rescore fixture lookup',
+  )
+  const finalSha = run(
+    exec,
+    'git',
+    ['-C', worktree, 'rev-parse', '--verify', '--end-of-options', `${source.final_sha}^{commit}`],
+    {},
+    'candidate rescore final SHA lookup',
+  )
+  assertSame('candidate final SHA', finalSha, source.final_sha)
+  const remoteBranchSha = run(
+    exec,
+    'git',
+    [
+      '-C', worktree, 'rev-parse', '--verify', '--end-of-options',
+      `refs/remotes/origin/${source.branch}^{commit}`,
+    ],
+    {},
+    'candidate rescore remote branch lookup',
+  )
+  if (remoteBranchSha !== finalSha) {
+    throw new Error(
+      `candidate branch ${source.branch} is ${remoteBranchSha}, `
+      + `not recorded final SHA ${finalSha}`,
+    )
+  }
+  const ancestry = exec(
+    'git',
+    ['-C', worktree, 'merge-base', '--is-ancestor', fixtureCommit, finalSha],
+    { encoding: 'utf8' },
+  )
+  if (ancestry.status !== 0 || ancestry.error) {
+    throw new Error(
+      `candidate final SHA ${finalSha} does not descend from recorded fixture ${fixtureCommit}`,
+    )
+  }
+  run(
+    exec,
+    'git',
+    ['-C', worktree, 'checkout', '-b', source.branch, '--track', `origin/${source.branch}`],
+    {},
+    'candidate rescore branch checkout',
+  )
+  await installEvalExcludes(worktree)
+  return {
+    commit: fixtureCommit,
+    fixture_commit: fixtureCommit,
+    head_commit: finalSha,
+    repository,
+    worktree,
+    branch: source.branch,
+    base_branch: baseBranch,
+  }
+}
+
 function parseTrackedFiles(text) {
   if (!text) return []
   return text.split('\0').filter(Boolean).map((entry) => {

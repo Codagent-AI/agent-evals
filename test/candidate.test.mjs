@@ -7,6 +7,7 @@ import { test } from 'node:test'
 
 import {
   freezeCandidate,
+  prepareCandidateRescoreWorktree,
   prepareCandidateWorktree,
   verifyCandidateDelivery,
   verifyRecordedDeliveryIdentity,
@@ -356,6 +357,55 @@ test('a fresh candidate refuses a pre-existing local or remote branch collision'
       exec,
     }),
     /branch.*already exists|collision/i,
+  )
+})
+
+test('an evaluator-only rescore checks out the existing candidate branch without creating a new one', async () => {
+  const repo = await repository()
+  const branch = 'eval/and-scene/completed'
+  git(repo.source, 'branch', branch, repo.reference)
+  const worktree = join(repo.root, 'rescore')
+
+  const prepared = await prepareCandidateRescoreWorktree({
+    repo: repo.source,
+    worktree,
+    source: {
+      repository: repo.source,
+      fixture_commit: repo.fixture,
+      final_sha: repo.reference,
+      branch,
+      base_branch: git(repo.source, 'branch', '--show-current'),
+    },
+    exec,
+  })
+
+  assert.equal(prepared.fixture_commit, repo.fixture)
+  assert.equal(prepared.head_commit, repo.reference)
+  assert.equal(prepared.branch, branch)
+  assert.equal(git(worktree, 'branch', '--show-current'), branch)
+  assert.equal(git(worktree, 'rev-parse', 'HEAD'), repo.reference)
+  assert.equal(git(worktree, 'status', '--porcelain'), '')
+})
+
+test('an evaluator-only rescore rejects a source branch that moved from the recorded final SHA', async () => {
+  const repo = await repository()
+  const branch = 'eval/and-scene/completed'
+  git(repo.source, 'branch', branch, repo.reference)
+
+  await assert.rejects(
+    prepareCandidateRescoreWorktree({
+      repo: repo.source,
+      worktree: join(repo.root, 'rescore'),
+      source: {
+        repository: repo.source,
+        fixture_commit: repo.fixture,
+        final_sha: 'f'.repeat(40),
+        branch,
+        base_branch: git(repo.source, 'branch', '--show-current'),
+      },
+      exec,
+    }),
+    /final SHA|branch.*recorded/i,
   )
 })
 

@@ -121,6 +121,22 @@ inactive unfinished run, and rejects a changed fixture, role profile, Runner
 revision, workflow hash, Agent Skills revision or manifest, branch, draft PR,
 final SHA, rubric hash, evidence identity, or other score-affecting input.
 
+If implementation and acceptance completed but an evaluator-owned defect
+invalidated the result, create a fresh evaluator-only record from that completed
+run:
+
+```bash
+evals/agent-runner/and-scene/run.sh \
+  --run-agent \
+  --rescore-from artifacts/evals/and-scene/<completed-run-id> \
+  --artifact-dir artifacts/evals/and-scene/<rescore-run-id>
+```
+
+The source is mounted read-only. The harness verifies its workflow, evidence,
+branch, draft PR, and final SHA, then runs only evaluator-owned phases. It does
+not invoke Agent Runner, repeat acceptance, create or push a branch, or modify
+the candidate.
+
 Evaluate an existing candidate as a reference baseline without invoking Agent
 Runner. Role profiles are neither required nor applicable:
 

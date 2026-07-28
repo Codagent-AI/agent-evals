@@ -31,10 +31,12 @@ import {
 } from './lib/checkpoint.mjs'
 import {
   freezeCandidate,
+  prepareCandidateRescoreWorktree,
   prepareCandidateWorktree,
   verifyCandidateDelivery,
   verifyRecordedDeliveryIdentity,
 } from './lib/candidate.mjs'
+import { loadCandidateRescoreSource } from './lib/rescore.mjs'
 import { runCandidateVerification } from './lib/candidate-verification.mjs'
 import { createHostCandidateServer } from './lib/candidate-server-host.mjs'
 import { aggregateImplementationCost, summarizeEvalOwnedUsage } from './lib/cost.mjs'
@@ -124,6 +126,7 @@ const VALUES = new Map([
   ['--change-name', 'changeName'],
   ['--fixture-ref', 'fixtureRef'],
   ['--candidate-ref', 'candidateRef'],
+  ['--rescore-from', 'rescoreFrom'],
   ['--judge-model', 'judgeModel'],
   ['--capabilities', 'capabilitiesPath'],
   ['--lead-cli', 'leadCli'],
@@ -162,6 +165,11 @@ export function parseArgs(argv) {
     index += 1
   }
   if (!options.runDir) throw new Error('--run-dir is required')
+  if (options.rescoreFrom && (options.resume || options.referenceBaseline || options.candidateRef)) {
+    throw new Error(
+      '--rescore-from cannot be combined with --resume, --reference-baseline, or --candidate-ref',
+    )
+  }
   options.runId ??= basename(resolve(options.runDir))
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(options.runId)) {
     throw new Error('--run-id must be a single safe path component')
@@ -252,6 +260,7 @@ export async function runEvaluation({
   // The live models.dev catalog. Injected so pricing is exercisable offline and
   // so a test never depends on today's published rates.
   pricingFetch = null,
+  loadRescoreSource = loadCandidateRescoreSource,
   // Agent Runner resolves its run store from $HOME. The controller must read
   // the same store the spawned runner writes to, so the home is explicit and
   // is passed through to the child rather than being inherited implicitly.
@@ -272,6 +281,16 @@ export async function runEvaluation({
   const runId = options.runId
   const mode = options.referenceBaseline ? 'reference-baseline' : 'agent-runner'
   const runKind = options.referenceBaseline ? 'reference' : 'candidate'
+  const rescore = Boolean(options.rescoreFrom)
+
+  let importedRun = null
+  if (rescore) {
+    try {
+      importedRun = await loadRescoreSource({ sourceDir: options.rescoreFrom })
+    } catch (error) {
+      return failure([{ code: 'invalid-rescore-source', message: error.message }])
+    }
+  }
 
   let capabilities
   try {
@@ -284,9 +303,9 @@ export async function runEvaluation({
   }
 
   const validation = validateRoleProfiles({
-    lead: roleProfileFrom(options, 'lead'),
-    implementor: roleProfileFrom(options, 'implementor'),
-    reviewer: roleProfileFrom(options, 'reviewer'),
+    lead: importedRun?.role_profiles?.lead ?? roleProfileFrom(options, 'lead'),
+    implementor: importedRun?.role_profiles?.implementor ?? roleProfileFrom(options, 'implementor'),
+    reviewer: importedRun?.role_profiles?.reviewer ?? roleProfileFrom(options, 'reviewer'),
     capabilities,
     mode,
   })
@@ -294,7 +313,15 @@ export async function runEvaluation({
     return failure(validation.errors.map((error) => ({ code: 'invalid-role-profile', ...error })))
   }
 
-  const boundary = resolveBoundary({ skipValidator: options.skipValidator, changeName: options.changeName })
+  const importedSkipValidator = importedRun?.workflow?.arguments
+    ?.includes('skip_validator=true')
+  const boundary = resolveBoundary({
+    skipValidator: importedRun ? importedSkipValidator : options.skipValidator,
+    changeName: options.changeName,
+  })
+  if (importedRun?.workflow?.arguments) {
+    boundary.workflow_arguments = [...importedRun.workflow.arguments]
+  }
 
   let rubrics
   try {
@@ -310,7 +337,10 @@ export async function runEvaluation({
   let provenance = null
   let agentSkillsProvenance = null
   let workflowText = ''
-  if (mode === 'agent-runner') {
+  if (rescore) {
+    provenance = importedRun.agent_runner_provenance
+    agentSkillsProvenance = importedRun.agent_skills_provenance
+  } else if (mode === 'agent-runner') {
     if (!options.agentRunnerDir) {
       return failure([{ code: 'invalid-arguments', message: '--agent-runner-dir is required' }])
     }
@@ -380,7 +410,7 @@ export async function runEvaluation({
     repo: options.repo,
     worktree: candidateWorktree,
     runDir,
-    fixtureRevision: options.fixtureRef,
+    fixtureRevision: importedRun?.candidate_source.fixture_commit ?? options.fixtureRef,
     exec,
   })
   const selectedCandidateRef = mode === 'reference-baseline'
@@ -388,20 +418,30 @@ export async function runEvaluation({
     : options.fixtureRef
   let candidateSource
   try {
-    candidateSource = await prepareCandidateWorktree({
-      repo: options.repo,
-      worktree: candidateWorktree,
-      ref: selectedCandidateRef,
-      resume: options.resume,
-      expectedSource: checkpoint?.candidate_source ?? null,
-      runId,
-      kind: runKind,
-      exec,
-    })
+    candidateSource = rescore
+      ? await prepareCandidateRescoreWorktree({
+          repo: options.repo,
+          worktree: candidateWorktree,
+          source: {
+            ...importedRun.candidate_source,
+            final_sha: importedRun.delivery.final_sha,
+          },
+          exec,
+        })
+      : await prepareCandidateWorktree({
+          repo: options.repo,
+          worktree: candidateWorktree,
+          ref: selectedCandidateRef,
+          resume: options.resume,
+          expectedSource: checkpoint?.candidate_source ?? null,
+          runId,
+          kind: runKind,
+          exec,
+        })
   } catch (error) {
     return failure([{ code: 'candidate-worktree', message: error.message }])
   }
-  if (mode === 'agent-runner') {
+  if (mode === 'agent-runner' && !rescore) {
     const resolvedWorkflow = exec(
       'agent-runner',
       ['debug', '--show-workflow', IMPLEMENTATION_WORKFLOW_INSPECTION_REF],
@@ -440,7 +480,7 @@ export async function runEvaluation({
   // delivery; on resume, a previously frozen identity is re-derived rather
   // than trusted from the checkpoint alone.
   let frozenCandidate = null
-  if (mode === 'reference-baseline' || checkpoint?.identity?.candidate_identity) {
+  if (mode === 'reference-baseline' || rescore || checkpoint?.identity?.candidate_identity) {
     try {
       frozenCandidate = await freezeCurrentCandidate()
     } catch (error) {
@@ -455,6 +495,7 @@ export async function runEvaluation({
       commit: provenance?.commit ?? null,
       workflow_sha256: provenance?.workflow_sha256 ?? null,
       cli_version: provenance?.cli_version ?? null,
+      rescore_source: importedRun?.provenance_sha256 ?? null,
     }),
     agent_skills_provenance: hashJson({
       commit: agentSkillsProvenance?.commit ?? null,
@@ -523,13 +564,22 @@ export async function runEvaluation({
         run_id: runId,
         identity,
         kind: runKind,
-        delivery: {
-          repository: candidateSource.repository,
-          origin: candidateSource.repository,
-          fixture_commit: candidateSource.fixture_commit,
-          branch: candidateSource.branch,
-          base_branch: candidateSource.base_branch,
-        },
+        delivery: rescore
+          ? {
+              ...importedRun.delivery,
+              applicable: true,
+              repository: candidateSource.repository,
+              origin: candidateSource.repository,
+              runner: importedRun.runner,
+              acceptance: importedRun.delivery.acceptance,
+            }
+          : {
+              repository: candidateSource.repository,
+              origin: candidateSource.repository,
+              fixture_commit: candidateSource.fixture_commit,
+              branch: candidateSource.branch,
+              base_branch: candidateSource.base_branch,
+            },
       }),
       role_profiles: validation.profiles,
       agent_runner_provenance: provenance,
@@ -541,7 +591,7 @@ export async function runEvaluation({
         base_branch: candidateSource.base_branch,
       },
       workflow: boundary,
-      agent_runner: null,
+      agent_runner: importedRun?.runner ?? null,
     }
     await saveCheckpoint(checkpointPath, checkpoint)
   }
@@ -551,7 +601,7 @@ export async function runEvaluation({
   // evaluation profile there and running Agent Runner from the candidate
   // worktree is what actually makes the selected roles take effect; the user's
   // own configuration outside this run directory is never read or modified.
-  if (mode === 'agent-runner') {
+  if (mode === 'agent-runner' && !rescore) {
     await mkdir(join(candidateWorktree, '.agent-runner'), { recursive: true })
     await writeFile(
       join(candidateWorktree, '.agent-runner/config.yaml'),
@@ -562,23 +612,31 @@ export async function runEvaluation({
   }
 
   const record = {
-    workflowHistory: {
-      ok: mode === 'reference-baseline',
-      missing_steps: [],
-      prohibited_effects: [],
-      observed_steps: [],
-    },
-    observed_steps: [],
-    events: [],
+    workflowHistory: rescore
+      ? checkWorkflowHistory(importedRun.workflow.observed_steps)
+      : {
+          ok: mode === 'reference-baseline',
+          missing_steps: [],
+          prohibited_effects: [],
+          observed_steps: [],
+        },
+    observed_steps: importedRun?.workflow.observed_steps ?? [],
+    events: rescore
+      ? [{
+          event: 'imported-completed-run',
+          source_run_id: importedRun.source_run_id,
+          provenance_sha256: importedRun.provenance_sha256,
+        }]
+      : [],
     run: checkpoint.agent_runner,
     timings: [],
     browser: null,
     sourceEvidence: null,
     judging: null,
     score: null,
-    metrics: null,
-    pricing: null,
-    cost: null,
+    metrics: importedRun?.implementation_metrics ?? null,
+    pricing: importedRun?.pricing ?? null,
+    cost: importedRun?.cost ?? null,
     ambiguity: null,
     candidateEvidence: null,
     evaluatorEvidence: null,
@@ -652,6 +710,21 @@ export async function runEvaluation({
     'agent-runner': async () => {
       if (mode === 'reference-baseline') {
         record.events.push({ event: 'skipped', reason: 'reference-baseline' })
+        return
+      }
+      if (rescore) {
+        await writeJsonAtomic(join(runDir, 'phases/workflow-execution.json'), {
+          run: record.run,
+          workflow: boundary,
+          provenance,
+          events: record.events,
+          history: record.observed_steps,
+          history_verification: record.workflowHistory,
+          imported_from: {
+            run_id: importedRun.source_run_id,
+            provenance_sha256: importedRun.provenance_sha256,
+          },
+        })
         return
       }
 
@@ -1212,6 +1285,18 @@ export async function runEvaluation({
     },
 
     'metrics-pricing': async () => {
+      if (rescore) {
+        await writeJsonAtomic(join(runDir, 'phases/metrics-pricing.json'), {
+          metrics: record.metrics,
+          pricing: record.pricing,
+          cost: record.cost,
+          imported_from: {
+            run_id: importedRun.source_run_id,
+            provenance_sha256: importedRun.provenance_sha256,
+          },
+        })
+        return
+      }
       record.metrics = await readRunnerMetrics({
         sessionDir: record.run?.session_dir ?? null,
         runId: record.run?.run_id ?? runId,
