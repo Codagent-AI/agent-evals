@@ -93,6 +93,8 @@ async function sourceRun({ historyComplete = true, corruptEvidence = false } = {
       acceptance: {
         artifacts,
         workflow_history: workflowHistory,
+        manifest_sha256: '7'.repeat(64),
+        lineage: { accepted: false, mode: 'stale-evaluator-output' },
       },
       retained_for_manual_cleanup: true,
     },
@@ -162,6 +164,8 @@ test('a completed candidate run imports as a read-only evaluator rescore source'
   assert.ok(imported.delivery.acceptance.artifacts.every(({ path }) => (
     path.startsWith(imported.source_dir)
   )))
+  assert.equal(imported.delivery.acceptance.manifest_sha256, undefined)
+  assert.equal(imported.delivery.acceptance.lineage, undefined)
   assert.match(imported.provenance_sha256, /^[a-f0-9]{64}$/)
 })
 

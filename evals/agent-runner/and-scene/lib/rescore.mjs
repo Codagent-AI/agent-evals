@@ -136,7 +136,6 @@ export async function loadCandidateRescoreSource({ sourceDir }) {
       ...delivery,
       acceptance_artifacts: artifacts,
       acceptance: {
-        ...(state.delivery.acceptance ?? {}),
         artifacts,
         workflow_history: delivery.workflow_history,
       },
