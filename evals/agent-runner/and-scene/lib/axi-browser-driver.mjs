@@ -6,6 +6,30 @@
 import { spawnSync } from 'node:child_process'
 
 const MAX_OUTPUT_BYTES = 1024 * 1024
+const PRESENTATION_SELECTOR = '[data-presentation], [data-presentation-root]'
+const MODE_SELECTOR = '[data-presentation-mode]'
+const STAGE_SELECTOR = [
+  '[data-presentation-stage]',
+  '[data-presentation-chrome="stage"]',
+].join(', ')
+const TITLE_SELECTOR = [
+  '[data-presentation-title]',
+  '[data-presentation-header-title]',
+  '[data-presentation-footer-title]',
+  '[data-presentation-node="step-title"]',
+].join(', ')
+const CAPTION_SELECTOR = [
+  '[data-presentation-caption]',
+  '[data-presentation-node="caption"]',
+].join(', ')
+const TOC_SELECTOR = [
+  '[data-presentation-toc]',
+  '[data-presentation-chrome="toc"]',
+].join(', ')
+const CONTROL_SELECTOR = [
+  '[data-presentation-progress-dot]',
+  '[data-presentation-node="progress-dot"]',
+].join(', ')
 
 export class BrowserDriverError extends Error {
   constructor(message) {
@@ -27,9 +51,9 @@ function defaultCommand(args, input = '') {
 
 function failureMessage(result) {
   return result?.error?.message
-    ?? result?.stderr?.trim()
-    ?? result?.stdout?.trim()
-    ?? `chrome-devtools-axi exited with status ${result?.status ?? 'unknown'}`
+    || result?.stderr?.trim()
+    || result?.stdout?.trim()
+    || `chrome-devtools-axi exited with status ${result?.status ?? 'unknown'}`
 }
 
 export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {}) {
@@ -60,7 +84,7 @@ export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {
 
   return {
     async routes() {
-      return run(`
+      const routes = await run(`
 await page.open(${JSON.stringify(base.href)});
 await page.wait(50);
 const routes = await page.eval(() => [...document.querySelectorAll('a[href]')]
@@ -70,20 +94,30 @@ const routes = await page.eval(() => [...document.querySelectorAll('a[href]')]
   .filter(Boolean));
 console.log(JSON.stringify([...new Set(routes)]));
 `)
+      if (!Array.isArray(routes) || routes.some((route) => typeof route !== 'string')) {
+        throw new BrowserDriverError('browser adapter returned an invalid route list')
+      }
+      return routes
     },
 
     async open(route) {
       return run(`
 const opened = await page.open(${JSON.stringify(routeUrl(route))});
 await page.wait('[data-step-count]', 30000);
-const browsing = await page.eval(() => [...document.querySelectorAll('[data-presentation-caption], [data-presentation-toc]')]
-  .some((element) => element.getClientRects().length > 0
-    && getComputedStyle(element).display !== 'none'
-    && getComputedStyle(element).visibility !== 'hidden'));
+const initialMode = await page.eval(() => {
+  const explicit = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
+    ?.getAttribute('data-presentation-mode');
+  if (explicit === 'present' || explicit === 'browse') return explicit;
+  const browsing = [...document.querySelectorAll(${JSON.stringify(`${CAPTION_SELECTOR}, ${TOC_SELECTOR}`)})]
+    .some((element) => element.getClientRects().length > 0
+      && getComputedStyle(element).display !== 'none'
+      && getComputedStyle(element).visibility !== 'hidden');
+  return browsing ? 'browse' : 'present';
+});
 const progress = await page.eval(() => document.querySelector('[data-step-count]')?.getAttribute('data-step-index'));
 console.log(JSON.stringify({
   ...opened,
-  initialMode: browsing ? 'browse' : 'present',
+  initialMode,
   initialPosition: Number(progress),
 }));
 `)
@@ -96,16 +130,19 @@ console.log(JSON.stringify({
       return run(`
 const requiredMode = ${JSON.stringify(requiredMode)};
 const mode = await page.eval(() => {
+  const explicit = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
+    ?.getAttribute('data-presentation-mode');
+  if (explicit === 'present' || explicit === 'browse') return explicit;
   const visible = (element) => Boolean(element && element.getClientRects().length > 0
     && getComputedStyle(element).display !== 'none'
     && getComputedStyle(element).visibility !== 'hidden');
-  const browsing = [...document.querySelectorAll('[data-presentation-caption], [data-presentation-toc]')]
+  const browsing = [...document.querySelectorAll(${JSON.stringify(`${CAPTION_SELECTOR}, ${TOC_SELECTOR}`)})]
     .some(visible);
   return browsing ? 'browse' : 'present';
 });
 if (mode !== requiredMode) {
   await page.press('p');
-  await page.wait(50);
+  await page.wait(100);
 }
 console.log(JSON.stringify(true));
 `)
@@ -121,7 +158,7 @@ const readPosition = () => page.eval(() => Number(
   document.querySelector('[data-step-count]')?.getAttribute('data-step-index'),
 ));
 const positionedByControl = await page.eval(() => {
-  const controls = [...document.querySelectorAll('[data-presentation-progress-dot]')];
+  const controls = [...document.querySelectorAll(${JSON.stringify(CONTROL_SELECTOR)})];
   const target = controls[requiredPosition];
   if (!target) return false;
   target.click();
@@ -160,7 +197,10 @@ console.log(JSON.stringify(true));
       return run(`
 const readSettledState = () => page.eval(() => {
   const nodes = [...document.querySelectorAll(
-    '[data-step-count], [data-presentation-stage], [data-layout-id], [data-scene-entity], [data-node]',
+    ${JSON.stringify(
+      '[data-step-count], [data-presentation-stage], [data-presentation-node], '
+      + '[data-presentation-chrome], [data-layout-id], [data-scene-entity], [data-node]',
+    )},
   )];
   const animations = [...new Set(nodes.flatMap(
     (node) => node.getAnimations({ subtree: true }),
@@ -213,33 +253,40 @@ for (let attempt = 0; attempt < 50; attempt += 1) {
       return run(`
 const captured = await page.eval(() => {
   const progress = document.querySelector('[data-step-count]');
-  const presentation = document.querySelector('[data-presentation], [data-presentation-root]');
-  const title = document.querySelector(
-    '[data-presentation-title], [data-presentation-header-title], [data-presentation-footer-title]',
-  );
-  const caption = document.querySelector('[data-presentation-caption]');
-  const toc = document.querySelector('[data-presentation-toc]');
+  const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
+  const title = document.querySelector(${JSON.stringify(TITLE_SELECTOR)});
+  const caption = document.querySelector(${JSON.stringify(CAPTION_SELECTOR)});
+  const toc = document.querySelector(${JSON.stringify(TOC_SELECTOR)});
+  const explicitMode = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
+    ?.getAttribute('data-presentation-mode');
   const visible = (element) => Boolean(element && element.getClientRects().length > 0
     && getComputedStyle(element).display !== 'none'
     && getComputedStyle(element).visibility !== 'hidden');
   const browsing = visible(caption) || visible(toc);
-  const controls = [...document.querySelectorAll('[data-presentation-progress-dot]')].map((control, index) => ({
+  const controls = [...document.querySelectorAll(${JSON.stringify(CONTROL_SELECTOR)})].map((control, index) => ({
     name: control.getAttribute('aria-label') || ('Step ' + (index + 1)),
     role: control.getAttribute('role') || control.tagName.toLowerCase(),
     ariaCurrent: control.getAttribute('aria-current') === 'step',
     focusable: !control.disabled && control.tabIndex >= 0,
   }));
   const entityOccurrences = new Map();
+  const entitySelectors = [
+    '[data-layout-id]',
+    '[data-scene-entity]',
+    '[data-node]',
+    '[data-presentation-node]',
+    '[data-presentation-box]',
+    '[data-presentation-label]',
+    '[data-presentation-arrow]',
+    '[data-presentation-frame]',
+    '[data-presentation-emphasis]',
+    '[data-presentation-symbol-chip]',
+  ];
   const entityIds = [...document.querySelectorAll(
-    '[data-presentation-stage] [data-layout-id], '
-      + '[data-presentation-stage] [data-scene-entity], '
-      + '[data-presentation-stage] [data-node], '
-      + '[data-presentation-stage] [data-presentation-box], '
-      + '[data-presentation-stage] [data-presentation-label], '
-      + '[data-presentation-stage] [data-presentation-arrow], '
-      + '[data-presentation-stage] [data-presentation-frame], '
-      + '[data-presentation-stage] [data-presentation-emphasis], '
-      + '[data-presentation-stage] [data-presentation-symbol-chip]',
+    ${JSON.stringify(STAGE_SELECTOR)}
+      .split(', ')
+      .flatMap((stage) => entitySelectors.map((entity) => stage + ' ' + entity))
+      .join(', '),
   )]
     .map((element) => {
       const explicit = element.getAttribute('data-layout-id')
@@ -272,7 +319,9 @@ const captured = await page.eval(() => {
     sceneId: presentation?.getAttribute('data-presentation') || location.pathname,
     entityIds,
     titleProminent: visible(title),
-    mode: browsing ? 'browse' : 'present',
+    mode: explicitMode === 'present' || explicitMode === 'browse'
+      ? explicitMode
+      : (browsing ? 'browse' : 'present'),
     captionVisible: visible(caption) && Boolean(caption?.textContent?.trim()),
     controls,
     focused,
@@ -289,7 +338,7 @@ console.log(JSON.stringify(captured));
     async activate(name) {
       await run(`
 const activated = await page.eval(() => {
-  const target = [...document.querySelectorAll('[data-presentation-progress-dot]')]
+  const target = [...document.querySelectorAll(${JSON.stringify(CONTROL_SELECTOR)})]
     .find((element) => element.getAttribute('aria-label') === ${JSON.stringify(name)});
   if (!target) return false;
   target.click();
@@ -304,7 +353,7 @@ console.log(JSON.stringify(true));
     async focus(name) {
       await run(`
 const focused = await page.eval(() => {
-  const target = [...document.querySelectorAll('[data-presentation-progress-dot]')]
+  const target = [...document.querySelectorAll(${JSON.stringify(CONTROL_SELECTOR)})]
     .find((element) => element.getAttribute('aria-label') === ${JSON.stringify(name)});
   if (!target) return false;
   target.focus();
@@ -319,7 +368,7 @@ console.log(JSON.stringify(true));
       const left = direction === 'left'
       await run(`
 const dispatched = await page.eval(() => {
-  const target = document.querySelector('[data-presentation], [data-presentation-root]') || document.body;
+  const target = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)}) || document.body;
   const startX = ${left ? 200 : 20};
   const endX = ${left ? 20 : 200};
   const touch = (x) => new Touch({ identifier: 1, target, clientX: x, clientY: 100 });

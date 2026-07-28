@@ -112,6 +112,79 @@ test('candidate evidence is discovered from handoff aliases and copied byte-for-
   )
 })
 
+test('prepare-acceptance combined baseline and targeted markdown produces final-SHA lineage claims', async () => {
+  const context = await fixture()
+  await writeRequiredArtifacts(context, {
+    'acceptance-test-results.md': '',
+    'acceptance-flow-evidence.md': [
+      '# Acceptance Flow Evidence',
+      '',
+      '**Current verification scope:** `targeted` (fix re-review, pass 2)',
+      `**Revision this combined coverage supports:** \`${FINAL_SHA}\``,
+      `**Full baseline:** \`${BASELINE_SHA}\` (pass 1, \`full\`)`,
+      '',
+      '**Caller-supplied impact scope** (`acceptance-impact-scope.md`):',
+      'Flows 2 and 3 are bounded out because their implementation files are unchanged.',
+      '',
+      `## Flow 1 — Main flow — [TARGETED \`${FINAL_SHA.slice(0, 7)}\`]`,
+      'Observed result — PASS.',
+      '',
+      `## Flow 2 — Dependent flow — [targeted \`${FINAL_SHA.slice(0, 7)}\`]`,
+      'Observed result — PASS.',
+      '',
+      `## Flow 3 — Retained flow — [RETAINED BASELINE \`${BASELINE_SHA.slice(0, 7)}\`]`,
+      'Not re-exercised in this pass.',
+    ].join('\n'),
+    'acceptance-impact-scope.md': [
+      '# Acceptance Impact Scope',
+      `**Fix commit:** \`${FINAL_SHA.slice(0, 7)}\``,
+      `**Baseline reviewed:** \`${BASELINE_SHA.slice(0, 7)}\``,
+      '',
+      '## Flows the fix changes directly — re-exercise these',
+      '| Flow | Why | What changed |',
+      '|---|---|---|',
+      '| **1 — Main flow** | fix | `src/main.ts` and `presentation.css.template` changed |',
+      '',
+      '## Directly dependent flows that could regress — exercise these too',
+      '- **Flow 2 (dependent flow)** — it consumes `src/main.ts`.',
+      '',
+      '## Surfaces bounded out — prior evidence still holds',
+      '- Flow 3 is unaffected.',
+    ].join('\n'),
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  const flow = manifest.artifacts.find(({ role }) => role === 'acceptance-flow-record')
+  assert.equal(flow.claimed_revision, FINAL_SHA)
+  assert.deepEqual(flow.lineage_claims, [{
+    kind: 'full-flow',
+    revision: BASELINE_SHA,
+    trustworthy: true,
+    bounded_impact: false,
+    affected_flows: [],
+    dependent_flows: [],
+    covered_flows: ['flow-1', 'flow-2', 'flow-3'],
+    intervening_changes: [],
+    tracked_product_changed: null,
+  }, {
+    kind: 'targeted',
+    revision: FINAL_SHA,
+    trustworthy: true,
+    bounded_impact: true,
+    affected_flows: ['flow-1'],
+    dependent_flows: ['flow-2'],
+    covered_flows: ['flow-1', 'flow-2'],
+    intervening_changes: ['src/main.ts', 'presentation.css.template'],
+    tracked_product_changed: null,
+  }])
+})
+
 test('the current acceptance workflow markdown is accepted as screenshot metadata evidence', async () => {
   const context = await fixture()
   await writeRequiredArtifacts(context, {
@@ -137,6 +210,57 @@ test('the current acceptance workflow markdown is accepted as screenshot metadat
   assert.equal(metadata.origin.relative_path, 'output/acceptance-test.md')
   assert.equal(metadata.verification_state, 'verified')
   assert.ok(!manifest.findings.some(({ code }) => code === 'malformed-metadata'))
+})
+
+test('a malformed structured revision is not expanded to the final SHA', async () => {
+  const context = await fixture()
+  await writeRequiredArtifacts(context, {
+    'capture-metadata.json': JSON.stringify({
+      revision: FINAL_SHA.slice(0, 1),
+      captures: [{
+        path: 'captures/final.png',
+        flow: 'demo-flow',
+        state: 'final',
+      }],
+    }),
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  const metadata = manifest.artifacts.find(({ role }) => role === 'screenshot-metadata')
+  assert.equal(metadata.claimed_revision, FINAL_SHA.slice(0, 1))
+  assert.equal(metadata.verification_state, 'defective')
+  assert.ok(metadata.limitations.includes('malformed-revision'))
+})
+
+test('a valid uppercase revision prefix expands to the canonical final SHA', async () => {
+  const context = await fixture()
+  await writeRequiredArtifacts(context, {
+    'capture-metadata.json': JSON.stringify({
+      revision: FINAL_SHA.slice(0, 7).toUpperCase(),
+      captures: [{
+        path: 'captures/final.png',
+        flow: 'demo-flow',
+        state: 'final',
+      }],
+    }),
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  const metadata = manifest.artifacts.find(({ role }) => role === 'screenshot-metadata')
+  assert.equal(metadata.claimed_revision, FINAL_SHA)
+  assert.equal(metadata.verification_state, 'verified')
 })
 
 test('candidate references cannot traverse outside the worktree or recorded session', async () => {
@@ -382,6 +506,43 @@ test('manifest lineage verifies revision ancestry without treating broad retests
     exec: () => ({ status: 0, stdout: '' }),
   })
   assert.equal(broad.accepted, false)
+})
+
+test('bounded lineage matches explicitly named source suffixes without requiring test-only files', async () => {
+  const lineage = await validateCandidateEvidenceLineage({
+    finalSha: FINAL_SHA,
+    worktree: '/candidate',
+    manifest: {
+      artifacts: [{
+        id: 'flow',
+        lineage_claims: [
+          { kind: 'full-flow', revision: BASELINE_SHA, trustworthy: true },
+          {
+            kind: 'targeted',
+            revision: FINAL_SHA,
+            bounded_impact: true,
+            affected_flows: ['flow-1'],
+            dependent_flows: ['flow-2'],
+            covered_flows: ['flow-1', 'flow-2'],
+            intervening_changes: ['src/main.ts'],
+          },
+        ],
+      }],
+    },
+    exec: (command, args) => args.includes('diff')
+      ? {
+          status: 0,
+          stdout: [
+            'templates/bootstrap/src/main.ts',
+            'templates/bootstrap/src/main.test.ts',
+            'vitest.config.ts',
+          ].join('\0'),
+        }
+      : { status: 0, stdout: '' },
+  })
+
+  assert.equal(lineage.accepted, true)
+  assert.equal(lineage.mode, 'ancestor-plus-targeted')
 })
 
 test('manifest lineage independently rejects evidence-only alignment after product changes', async () => {

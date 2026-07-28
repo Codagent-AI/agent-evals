@@ -324,7 +324,10 @@ test('default artifact directories live under the agent-evals checkout', async (
   const context = await setup()
   const proof = await run(['--dry-run', '--proof-browser', '--agent-runner-dir', context.runner], context)
   const run_ = await run([
-    '--dry-run', '--run-agent', '--skip-validator', '--agent-runner-dir', context.runner, ...profileArgs,
+    '--dry-run', '--run-agent', '--skip-validator',
+    '--agent-runner-dir', context.runner,
+    '--agent-skills-dir', context.agentSkills,
+    ...profileArgs,
   ], context)
   assert.equal(proof.status, 0, proof.output)
   assert.equal(run_.status, 0, run_.output)

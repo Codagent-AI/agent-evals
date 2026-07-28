@@ -225,6 +225,17 @@ function extractReferences(text) {
 }
 
 function claimedRevision(text) {
+  for (const label of [
+    'Revision this combined coverage supports',
+    'Current head SHA',
+    'Final revision',
+    'Head SHA',
+    'Fix commit',
+  ]) {
+    const value = textField(text, label)
+    const sha = value?.match(/\b([a-f0-9]{7,40})\b/i)?.[1]
+    if (sha) return sha
+  }
   const scoped = text.match(
     /(?:revision|commit|head|sha)(?:\s+(?:is|at))?\s*[:=`-]\s*([a-f0-9]{7,40}|absent|pending|unavailable)/i,
   )
@@ -255,7 +266,10 @@ function ciClaims(text) {
 
 function textField(text, label) {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return text.match(new RegExp(`^\\s*${escaped}\\s*:\\s*(.+?)\\s*$`, 'im'))?.[1] ?? null
+  const value = text.match(
+    new RegExp(`^\\s*(?:\\*\\*)?${escaped}\\s*:(?:\\*\\*)?\\s*(.+?)\\s*$`, 'im'),
+  )?.[1]
+  return value?.replace(/^\s*[`*]+|[`*]+\s*$/g, '').trim() ?? null
 }
 
 function listField(text, label) {
@@ -291,7 +305,59 @@ function normalizeLineageClaim(raw, fallback = {}) {
   }
 }
 
-function lineageClaims({ role, text, parsed, revision, trustworthy, coverage }) {
+function flowIds(text, marker = null) {
+  const ids = []
+  for (const match of text.matchAll(/^##\s+Flow\s+(\d+)\b([^\n]*)$/gim)) {
+    if (marker && !match[2].toLowerCase().includes(marker.toLowerCase())) continue
+    ids.push(`flow-${Number(match[1])}`)
+  }
+  return [...new Set(ids)]
+}
+
+function section(text, heading) {
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return text.match(
+    new RegExp(`^##\\s+${escaped}[^\\n]*\\n([\\s\\S]*?)(?=^##\\s+|(?![\\s\\S]))`, 'im'),
+  )?.[1] ?? ''
+}
+
+function sectionFlowIds(text, heading) {
+  const body = section(text, heading)
+  const ids = []
+  for (const match of body.matchAll(/(?:\bFlow\s+|\|\s*\*\*)(\d+)\b/gi)) {
+    ids.push(`flow-${Number(match[1])}`)
+  }
+  return [...new Set(ids)]
+}
+
+function mentionedPaths(text) {
+  const paths = []
+  for (const match of text.matchAll(/`([^`\n]+)`/g)) {
+    const value = match[1].trim()
+    if (
+      !/\s/.test(value)
+      && !value.includes('*')
+      && (
+        value.includes('/')
+        || /\.(?:[cm]?[jt]sx?|css|md|json|ya?ml|html|template)$/i.test(value)
+      )
+    ) {
+      paths.push(value)
+    }
+  }
+  if (/\bboth step templates\b/i.test(text)) paths.push('Step.tsx.template')
+  return [...new Set(paths)]
+}
+
+function lineageClaims({
+  role,
+  text,
+  parsed,
+  revision,
+  trustworthy,
+  coverage,
+  impactText = '',
+}) {
   const structured = Array.isArray(parsed?.lineage)
     ? parsed.lineage
     : (Array.isArray(parsed?.lineage?.evidence) ? parsed.lineage.evidence : null)
@@ -302,10 +368,38 @@ function lineageClaims({ role, text, parsed, revision, trustworthy, coverage }) 
       covered_flows: coverage,
     }))
   }
+  if (role === 'acceptance-flow-record') {
+    const baseline = textField(text, 'Full baseline')?.match(/\b([a-f0-9]{7,40})\b/i)?.[1] ?? null
+    const scope = textField(text, 'Current verification scope')?.toLowerCase() ?? ''
+    if (baseline && scope.includes('targeted') && revision) {
+      const affectedFlows = sectionFlowIds(impactText, 'Flows the fix changes directly')
+      const dependentFlows = sectionFlowIds(impactText, 'Directly dependent flows')
+      return [
+        normalizeLineageClaim({}, {
+          kind: 'full-flow',
+          revision: baseline,
+          trustworthy,
+          covered_flows: flowIds(text),
+        }),
+        normalizeLineageClaim({}, {
+          kind: 'targeted',
+          revision,
+          trustworthy,
+          bounded_impact: /##\s+Surfaces bounded out\b/i.test(impactText),
+          affected_flows: affectedFlows,
+          dependent_flows: dependentFlows,
+          covered_flows: flowIds(text, '[TARGETED'),
+          intervening_changes: mentionedPaths(impactText),
+        }),
+      ]
+    }
+  }
   const declared = textField(text, 'Verification kind') ?? textField(text, 'Evidence kind')
   let kind = declared
   if (!kind && role === 'acceptance-flow-record' && /\bfull[- ]flow\b/i.test(text)) kind = 'full-flow'
-  if (!kind && /\btargeted (?:verification|retest)\b|\btargeted\b/i.test(text)) kind = 'targeted'
+  if (!kind && role === 'acceptance-flow-record' && /\btargeted (?:verification|retest)\b|\btargeted\b/i.test(text)) {
+    kind = 'targeted'
+  }
   if (!kind && /\bexternal (?:state )?alignment\b|\bevidence-only alignment\b/i.test(text)) {
     kind = 'external-alignment'
   }
@@ -483,6 +577,9 @@ export async function buildCandidateEvidenceManifest({
   const artifacts = []
   let totalBytes = 0
   let screenshotMetadata = null
+  const impactText = discovery.selected
+    .find(({ origin }) => basename(origin.relative_path).toLowerCase() === 'acceptance-impact-scope.md')
+    ?.bytes.toString('utf8') ?? ''
 
   for (const source of discovery.selected.sort((left, right) => (
     `${left.role}:${left.origin.namespace}:${left.origin.relative_path}`
@@ -523,8 +620,17 @@ export async function buildCandidateEvidenceManifest({
       ? source.bytes.toString('utf8')
       : ''
     const references = extractReferences(text)
-    const revision = parsed?.revision ?? parsed?.sha ?? claimedRevision(text)
+    const rawRevision = parsed?.revision ?? parsed?.sha ?? claimedRevision(text)
+    const validRevision = typeof rawRevision === 'string'
+      && /^[a-f0-9]{7,40}$/i.test(rawRevision)
+    const revision = (
+      validRevision
+      && delivery.final_sha.toLowerCase().startsWith(rawRevision.toLowerCase())
+    ) ? delivery.final_sha : rawRevision
     const verification = []
+    if (rawRevision !== null && rawRevision !== undefined && !validRevision) {
+      verification.push('malformed-revision')
+    }
     if (revision && revision !== delivery.final_sha) verification.push('claimed-revision-mismatch')
     if (metadataError) verification.push('malformed-metadata')
     const verificationState = verification.length === 0 ? 'verified' : 'defective'
@@ -558,6 +664,7 @@ export async function buildCandidateEvidenceManifest({
         revision,
         trustworthy: verificationState === 'verified',
         coverage: coverageFrom(parsed ?? text),
+        impactText,
       }),
       claims: evidenceClaims(text, parsed),
     })
@@ -687,6 +794,25 @@ function coversTargetedImpact(item) {
   return required.length > 0 && required.every((flow) => covered.has(flow))
 }
 
+function testOnlyChange(path) {
+  const name = basename(path)
+  return /\.(?:test|spec)\.[cm]?[jt]sx?$/i.test(name)
+    || /^(?:vitest|jest)\.config\.[cm]?[jt]s$/i.test(name)
+    || /(?:^|\/)(?:test|tests|__tests__)\//i.test(path)
+}
+
+function declaredChange(path, declared) {
+  return [...declared].some((entry) => {
+    if (entry === path || path.endsWith(`/${entry}`)) return true
+    if (entry.endsWith('/*')) {
+      const prefix = entry.slice(0, -1)
+      return path.startsWith(prefix) || path.includes(`/${prefix}`)
+    }
+    if (entry.endsWith('/')) return path.startsWith(entry) || path.includes(`/${entry}`)
+    return false
+  })
+}
+
 export function validateEvidenceLineage({ finalSha, revisions = [], evidence = [] }) {
   const findings = []
   const finalRevision = revisionNode(revisions, finalSha)
@@ -805,7 +931,7 @@ export async function validateCandidateEvidenceLineage({
       const declared = new Set(item.intervening_changes ?? [])
       const changesBounded = productChanges !== null
         && productChanges.length > 0
-        && productChanges.every((path) => declared.has(path))
+        && productChanges.every((path) => testOnlyChange(path) || declaredChange(path, declared))
       return {
         ...item,
         bounded_impact: item.bounded_impact === true && changesBounded,
