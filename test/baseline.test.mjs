@@ -65,6 +65,36 @@ test('a candidate and baseline scored by the same rubrics compare on shared 92 p
   assert.deepEqual(comparison.totals, { baseline: 92, candidate: 76, delta: -16 })
 })
 
+test('shared-score deltas are projected without floating-point noise', () => {
+  const baseline = result({
+    runId: 'baseline-1',
+    mode: 'reference-baseline',
+    official: 92,
+    components: [
+      { id: 'demo-technical-quality', applicable: true, points_awarded: 24, points_possible: 24, subcomponents: [] },
+      { id: 'scene-kit-correctness', applicable: true, points_awarded: 24, points_possible: 24, subcomponents: [] },
+      { id: 'presentation-skill-correctness', applicable: true, points_awarded: 7, points_possible: 7, subcomponents: [] },
+      { id: 'verification-tool-correctness', applicable: true, points_awarded: 7, points_possible: 7, subcomponents: [] },
+    ],
+    human: 30,
+  })
+  const candidate = result({
+    official: 88.4,
+    components: [
+      { id: 'demo-technical-quality', applicable: true, points_awarded: 23, points_possible: 24, subcomponents: [] },
+      { id: 'scene-kit-correctness', applicable: true, points_awarded: 23.4, points_possible: 24, subcomponents: [] },
+      { id: 'presentation-skill-correctness', applicable: true, points_awarded: 7, points_possible: 7, subcomponents: [] },
+      { id: 'verification-tool-correctness', applicable: true, points_awarded: 6.5, points_possible: 7, subcomponents: [] },
+    ],
+    human: 20.5,
+  })
+
+  const comparison = compareToBaseline({ candidate, baseline })
+
+  assert.deepEqual(comparison.totals, { baseline: 92, candidate: 80.4, delta: -11.6 })
+  assert.deepEqual(comparison.human_review, { baseline: 30, candidate: 20.5, delta: -9.5 })
+})
+
 test('component and subcomponent deltas are reported per identifier', () => {
   const baseline = result({
     runId: 'baseline-1',

@@ -502,6 +502,17 @@ export async function runHumanReview({
   let baselineResult = null
   for (const run of opened) {
     if (run.finalized) {
+      if (run.mode !== 'reference-baseline' && baselineResult) {
+        const baseline = compareToBaseline({ candidate: run.result, baseline: baselineResult })
+        if (baseline.comparable && run.result.baseline?.comparable !== true) {
+          const written = await writeResultArtifacts({
+            runDir: run.runDir,
+            result: { ...run.result, baseline },
+            renderReportImpl,
+          })
+          run.result = written.result
+        }
+      }
       // A review already finalized in an earlier session is a finished result,
       // never work to redo. Its publication, however, may still be unfinished,
       // so resume retries exactly that and nothing else.

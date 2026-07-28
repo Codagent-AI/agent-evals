@@ -469,6 +469,42 @@ test('a candidate reviewed against a completed baseline records the comparison',
   assert.equal(baselineResult.implementation_timing, 'not-applicable')
 })
 
+test('a finalized candidate can attach a later-finalized baseline without repeating either review', async () => {
+  const directory = await root()
+  const baseline = await pendingRun({
+    root: directory, name: 'baseline-1', mode: 'reference-baseline', candidate: 'reference-xyz',
+  })
+  const candidate = await pendingRun({ root: directory, name: 'run-1' })
+
+  await runHumanReview({
+    argv: ['--run-dir', candidate.runDir],
+    io: scriptedIo(answers({ rating: 3 })).io,
+    ...servers(),
+  })
+  await runHumanReview({
+    argv: ['--run-dir', baseline.runDir],
+    io: scriptedIo(answers({ rating: 5 })).io,
+    ...servers({ identity: 'reference-xyz' }),
+  })
+
+  const reopened = scriptedIo([])
+  const outcome = await runHumanReview({
+    argv: ['--run-dir', candidate.runDir, '--baseline-run-dir', baseline.runDir],
+    io: reopened.io,
+    ...servers(),
+  })
+
+  assert.equal(outcome.exitCode, 0, JSON.stringify(outcome.errors))
+  assert.deepEqual(reopened.asked, [], 'finalized reviews are never repeated')
+  const result = await readJson(join(candidate.runDir, 'result.json'))
+  assert.equal(result.baseline.comparable, true)
+  assert.equal(result.baseline.baseline_run_id, 'baseline-1')
+  assert.equal(result.baseline.totals.baseline, 92)
+  assert.equal(result.baseline.totals.candidate, 77)
+  assert.equal(result.baseline.totals.delta, -15)
+  assert.match(await readFile(join(candidate.runDir, 'report.html'), 'utf8'), /Reference baseline comparison/)
+})
+
 test('a cleanup failure after a durable verdict preserves the verdict and reports both', async () => {
   const directory = await root()
   const run = await pendingRun({ root: directory })

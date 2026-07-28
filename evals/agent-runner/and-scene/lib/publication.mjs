@@ -22,7 +22,7 @@
 import { copyFile, mkdir, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { readJson, writeJsonAtomic } from './persistence.mjs'
+import { hashJson, readJson, writeJsonAtomic } from './persistence.mjs'
 import { runTimed } from './subprocess.mjs'
 import { writeResultArtifacts } from './result.mjs'
 
@@ -139,6 +139,11 @@ function createPublicationCheckpoint(runId) {
   }
 }
 
+function comparableResultCore(result) {
+  const { baseline: _baseline, artifacts: _artifacts, ...core } = result ?? {}
+  return core
+}
+
 // Copy exactly the curated artifacts into the permanent results directory. A
 // missing required artifact raises before anything is staged, and an artifact
 // that is neither curated nor present is simply not part of the snapshot.
@@ -242,9 +247,32 @@ export async function publishRun({
 
   // A finished publication is a finished publication. Reopening the run — which
   // a paired review or a later resume does routinely — must not stage, commit,
-  // or push anything a second time.
+  // or push anything a second time. The one exception is a candidate reviewed
+  // before its reference: attaching the first complete shared comparison is an
+  // approved result enrichment, so it supersedes the earlier snapshot.
   if (checkpoint.stage === 'published') {
-    return { published: true, skipped: false, reason: null, commit: checkpoint.commit }
+    const publishedResult = await readJson(
+      join(resultsDirFor({ repoDir, runId }), 'result.json'),
+      null,
+    )
+    const publishedBaseline = publishedResult?.baseline ?? null
+    const nextBaseline = result.baseline ?? null
+    if (hashJson(publishedBaseline) === hashJson(nextBaseline)) {
+      return { published: true, skipped: false, reason: null, commit: checkpoint.commit }
+    }
+    const coreChanged = hashJson(comparableResultCore(publishedResult))
+      !== hashJson(comparableResultCore(result))
+    if (coreChanged || publishedBaseline?.comparable === true || nextBaseline?.comparable !== true) {
+      throw new PublicationError(
+        `cannot supersede completed publication ${runId} with a non-baseline result change`,
+        { stage: 'snapshot' },
+      )
+    }
+    checkpoint = {
+      ...createPublicationCheckpoint(runId),
+      supersedes: checkpoint.commit,
+    }
+    await writeJsonAtomic(checkpointPath, checkpoint)
   }
   const save = async (next) => {
     checkpoint = { ...checkpoint, ...next }

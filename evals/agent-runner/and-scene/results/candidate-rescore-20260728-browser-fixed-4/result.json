@@ -9070,7 +9070,247 @@
     "judge_coverage": "complete",
     "candidate_reported_ci": "complete"
   },
-  "baseline": null,
+  "baseline": {
+    "comparable": true,
+    "reason": null,
+    "baseline_run_id": "reference-cutover-20260728-browser-fixed-2",
+    "baseline_mode": "reference-baseline",
+    "denominator": 92,
+    "totals": {
+      "baseline": 92,
+      "candidate": 80.4,
+      "delta": -11.6
+    },
+    "components": [
+      {
+        "id": "demo-technical-quality",
+        "title": "Demo presentation technical quality",
+        "points_possible": 24,
+        "baseline": 24,
+        "candidate": 23,
+        "delta": -1
+      },
+      {
+        "id": "scene-kit-correctness",
+        "title": "Scene kit correctness",
+        "points_possible": 24,
+        "baseline": 24,
+        "candidate": 23.4,
+        "delta": -0.6
+      },
+      {
+        "id": "presentation-skill-correctness",
+        "title": "Presentation skill correctness",
+        "points_possible": 7,
+        "baseline": 7,
+        "candidate": 7,
+        "delta": 0
+      },
+      {
+        "id": "verification-tool-correctness",
+        "title": "Verification tool correctness",
+        "points_possible": 7,
+        "baseline": 7,
+        "candidate": 6.5,
+        "delta": -0.5
+      }
+    ],
+    "subcomponents": [
+      {
+        "id": "demo-canonical-content",
+        "title": "Canonical content, routing, and technical structure",
+        "points_possible": 5,
+        "baseline": 5,
+        "candidate": 5,
+        "delta": 0
+      },
+      {
+        "id": "demo-navigation-and-modes",
+        "title": "Navigation, modes, boundaries, and controls",
+        "points_possible": 5,
+        "baseline": 5,
+        "candidate": 5,
+        "delta": 0
+      },
+      {
+        "id": "demo-runtime-reliability",
+        "title": "Runtime reliability and accessibility baseline",
+        "points_possible": 4,
+        "baseline": 4,
+        "candidate": 4,
+        "delta": 0
+      },
+      {
+        "id": "demo-scene-kit-integration",
+        "title": "Uses scene-kit APIs without bypassing or duplicating them",
+        "points_possible": 4,
+        "baseline": 4,
+        "candidate": 4,
+        "delta": 0
+      },
+      {
+        "id": "demo-identity-and-grouping",
+        "title": "Uses stable identities and appropriate grouped-scene architecture",
+        "points_possible": 3,
+        "baseline": 3,
+        "candidate": 3,
+        "delta": 0
+      },
+      {
+        "id": "demo-code-boundaries",
+        "title": "Maintains clear boundaries and scope discipline",
+        "points_possible": 3,
+        "baseline": 3,
+        "candidate": 2,
+        "delta": -1
+      },
+      {
+        "id": "scene-step-model",
+        "title": "Step model, stable identity, and typed boundary",
+        "points_possible": 4,
+        "baseline": 4,
+        "candidate": 4,
+        "delta": 0
+      },
+      {
+        "id": "scene-entity-transitions",
+        "title": "Entity transitions and persistent grouped scenes",
+        "points_possible": 7,
+        "baseline": 7,
+        "candidate": 7,
+        "delta": 0
+      },
+      {
+        "id": "scene-modes-and-navigation",
+        "title": "Present/browse modes, navigation, controls, and boundaries",
+        "points_possible": 6,
+        "baseline": 6,
+        "candidate": 5.4,
+        "delta": -0.6
+      },
+      {
+        "id": "scene-fixed-canvas",
+        "title": "Fixed-canvas behavior",
+        "points_possible": 2,
+        "baseline": 2,
+        "candidate": 2,
+        "delta": 0
+      },
+      {
+        "id": "scene-style-and-attribution",
+        "title": "Style ownership, hooks, framework neutrality, and attribution",
+        "points_possible": 5,
+        "baseline": 5,
+        "candidate": 5,
+        "delta": 0
+      },
+      {
+        "id": "skill-requirement-gathering",
+        "title": "Requirement gathering and proceeding with partial detail",
+        "points_possible": 1,
+        "baseline": 1,
+        "candidate": 1,
+        "delta": 0
+      },
+      {
+        "id": "skill-scaffolding",
+        "title": "Scaffold detection, location, dependencies, and style neutrality",
+        "points_possible": 3,
+        "baseline": 3,
+        "candidate": 3,
+        "delta": 0
+      },
+      {
+        "id": "skill-presentation-lifecycle",
+        "title": "Create, modify, route, and preserve presentations",
+        "points_possible": 2,
+        "baseline": 2,
+        "candidate": 2,
+        "delta": 0
+      },
+      {
+        "id": "skill-self-verification",
+        "title": "Self-verification and fixing failures before completion",
+        "points_possible": 1,
+        "baseline": 1,
+        "candidate": 1,
+        "delta": 0
+      },
+      {
+        "id": "verification-missing-sample",
+        "title": "Detects a missing reference sample",
+        "points_possible": 1,
+        "baseline": 1,
+        "candidate": 1,
+        "delta": 0
+      },
+      {
+        "id": "verification-addressing-and-errors",
+        "title": "Preview addressing and runtime/step error detection",
+        "points_possible": 2,
+        "baseline": 2,
+        "candidate": 2,
+        "delta": 0
+      },
+      {
+        "id": "verification-capture",
+        "title": "Complete, settled screenshot capture",
+        "points_possible": 2,
+        "baseline": 2,
+        "candidate": 2,
+        "delta": 0
+      },
+      {
+        "id": "verification-warnings",
+        "title": "Overlap, active-state, and attribution warnings",
+        "points_possible": 2,
+        "baseline": 2,
+        "candidate": 1.5,
+        "delta": -0.5
+      }
+    ],
+    "gates": [
+      {
+        "id": "verification-build-whole-app",
+        "baseline": "pass",
+        "candidate": "pass",
+        "changed": false
+      },
+      {
+        "id": "verification-sample-outline",
+        "baseline": "pass",
+        "candidate": "pass",
+        "changed": false
+      },
+      {
+        "id": "verification-every-produced-step-renders",
+        "baseline": "pass",
+        "candidate": "pass",
+        "changed": false
+      },
+      {
+        "id": "verification-clear-outcome",
+        "baseline": "pass",
+        "candidate": "pass",
+        "changed": false
+      }
+    ],
+    "human_review": {
+      "baseline": 30,
+      "candidate": 20.5,
+      "delta": -9.5
+    },
+    "implementation_cost": {
+      "baseline": null,
+      "candidate": null,
+      "delta": null
+    },
+    "not_applicable": [
+      "agent_roles",
+      "implementation_cost",
+      "implementation_timing"
+    ]
+  },
   "artifacts": [
     {
       "path": "ambiguity-ledger.json",

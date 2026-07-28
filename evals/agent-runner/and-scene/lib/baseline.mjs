@@ -61,7 +61,9 @@ function subcomponentsOf(result) {
 }
 
 function pair(left, right) {
-  const delta = Number.isFinite(left) && Number.isFinite(right) ? right - left : null
+  const delta = Number.isFinite(left) && Number.isFinite(right)
+    ? Math.round((right - left) * 1e12) / 1e12
+    : null
   return { baseline: left ?? null, candidate: right ?? null, delta }
 }
 

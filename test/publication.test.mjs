@@ -427,6 +427,61 @@ test('a completed publication is not repeated when the run is reopened', async (
   assert.deepEqual(calls, [], 'a completed publication touches git again for nothing')
 })
 
+test('a completed publication is superseded when a comparable baseline is attached later', async () => {
+  const { repo, remote, dir } = await disposableRepo()
+  const { runDir, runId, result } = await finalizedRun(dir)
+
+  await publishRun({ runDir, runId, result, repoDir: repo })
+  const firstCommit = git(repo, 'rev-parse', 'HEAD')
+
+  const updated = {
+    ...result,
+    baseline: {
+      comparable: true,
+      baseline_run_id: 'reference-1',
+      denominator: 92,
+      totals: { baseline: 92, candidate: 80.4, delta: -11.6 },
+    },
+  }
+  await writeFile(join(runDir, 'result.json'), JSON.stringify(updated))
+
+  const outcome = await publishRun({ runDir, runId, result: updated, repoDir: repo })
+
+  assert.equal(outcome.published, true)
+  assert.notEqual(outcome.commit, firstCommit)
+  assert.equal(git(repo, 'rev-list', '--count', 'HEAD'), '3')
+  assert.equal(git(remote, 'rev-parse', 'HEAD'), outcome.commit)
+  const published = await readJson(join(repo, RESULTS_RELATIVE_DIR, runId, 'result.json'))
+  assert.equal(published.baseline.comparable, true)
+  assert.equal(published.baseline.baseline_run_id, 'reference-1')
+})
+
+test('late baseline attachment cannot change an already-published score', async () => {
+  const { repo, dir } = await disposableRepo()
+  const { runDir, runId, result } = await finalizedRun(dir)
+
+  await publishRun({ runDir, runId, result, repoDir: repo })
+  const firstCommit = git(repo, 'rev-parse', 'HEAD')
+  const updated = {
+    ...result,
+    official_score: result.official_score + 1,
+    baseline: {
+      comparable: true,
+      baseline_run_id: 'reference-1',
+      denominator: 92,
+      totals: { baseline: 92, candidate: 80.4, delta: -11.6 },
+    },
+  }
+  await writeFile(join(runDir, 'result.json'), JSON.stringify(updated))
+
+  await assert.rejects(
+    publishRun({ runDir, runId, result: updated, repoDir: repo }),
+    /non-baseline result change/,
+  )
+  assert.equal(git(repo, 'rev-parse', 'HEAD'), firstCommit)
+  assert.equal(git(repo, 'rev-list', '--count', 'HEAD'), '2')
+})
+
 // A real git adapter with one injected failure, so the commit is genuinely
 // durable when the push fails.
 function gitWithFailure(repo, fail) {
