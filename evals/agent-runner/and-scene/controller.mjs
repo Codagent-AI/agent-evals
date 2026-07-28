@@ -136,7 +136,7 @@ export function parseArgs(argv) {
     changeName: 'create-and-scene',
     judgeModel: 'codex-default',
     repo: 'https://github.com/Codagent-AI/and-scene.git',
-    fixtureRef: '7a4d1328a3555f07d75356f07937e007e45922b2',
+    fixtureRef: '7bf24ea74002c7a270d421aec96cda48e6ff68f3',
     capabilitiesPath: DEFAULT_CAPABILITIES,
   }
   for (let index = 0; index < argv.length; index += 1) {

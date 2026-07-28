@@ -230,7 +230,7 @@ Planning artifacts and tasks are already present, so the score does not measure
 proposal, specification, or task generation.
 
 The external fixture is pinned to commit
-`7a4d1328a3555f07d75356f07937e007e45922b2` in
+`7bf24ea74002c7a270d421aec96cda48e6ff68f3` in
 `https://github.com/Codagent-AI/and-scene.git`. The implemented reference commit
 `171c7def1e12aca2a5f605a5e5feafb20d4e4d19` is the comparable reference baseline.
 It is not a similarity target.

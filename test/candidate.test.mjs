@@ -61,6 +61,33 @@ test('a scored candidate rejects a fixture without final Validator configuration
   assert.equal(git(worktree, 'branch', '--show-current'), git(repo.source, 'branch', '--show-current'))
 })
 
+test('a scored candidate rejects a Validator base with no shared fixture history', async () => {
+  const repo = await repository()
+  const defaultBranch = git(repo.source, 'branch', '--show-current')
+  git(repo.source, 'checkout', '--orphan', 'unrelated-fixture')
+  git(repo.source, 'rm', '-qrf', '.')
+  await writeFile(join(repo.source, 'README.md'), 'unrelated fixture\n')
+  await mkdir(join(repo.source, '.validator'))
+  await writeFile(join(repo.source, '.validator/config.yml'), 'entry_points: []\n')
+  git(repo.source, 'add', '.')
+  git(repo.source, 'commit', '-qm', 'unrelated fixture')
+  const unrelatedFixture = git(repo.source, 'rev-parse', 'HEAD')
+  git(repo.source, 'checkout', '-q', defaultBranch)
+
+  await assert.rejects(
+    prepareCandidateWorktree({
+      repo: repo.source,
+      worktree: join(repo.root, 'candidate'),
+      ref: unrelatedFixture,
+      resume: false,
+      runId: 'run-with-unrelated-validator-base',
+      kind: 'candidate',
+      exec,
+    }),
+    /validator.*base.*share history|share history.*validator.*base/i,
+  )
+})
+
 test('fresh scored candidates clone and check out the fixture while baselines select their candidate', async () => {
   const repo = await repository()
   const scored = join(repo.root, 'scored')

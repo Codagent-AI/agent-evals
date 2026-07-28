@@ -77,7 +77,7 @@ function resolveRemoteDefaultBranch(exec, worktree) {
   return match[1]
 }
 
-function assertValidatorReadyFixture(exec, worktree, fixtureCommit) {
+function assertValidatorReadyFixture(exec, worktree, fixtureCommit, defaultBaseBranch) {
   const path = '.validator/config.yml'
   const config = exec(
     'git',
@@ -87,6 +87,22 @@ function assertValidatorReadyFixture(exec, worktree, fixtureCommit) {
   if (config.status !== 0 || config.error || !(config.stdout ?? '').trim()) {
     throw new Error(
       `candidate fixture ${fixtureCommit} is missing required final Validator configuration at ${path}`,
+    )
+  }
+  const configuredBase = (config.stdout ?? '').match(
+    /^base_branch:\s*(?:"([^"]+)"|'([^']+)'|([^#\s]+))/m,
+  )
+  const validatorBase = configuredBase
+    ? configuredBase.slice(1).find(Boolean)
+    : `origin/${defaultBaseBranch}`
+  const ancestry = exec(
+    'git',
+    ['-C', worktree, 'merge-base', validatorBase, fixtureCommit],
+    { encoding: 'utf8' },
+  )
+  if (ancestry.status !== 0 || ancestry.error) {
+    throw new Error(
+      `Validator base ${validatorBase} must share history with candidate fixture ${fixtureCommit}`,
     )
   }
 }
@@ -164,7 +180,7 @@ export async function prepareCandidateWorktree({
     assertSame('candidate fixture commit', fixtureCommit, expectedSource.fixture_commit)
   }
   if (kind === 'candidate') {
-    assertValidatorReadyFixture(exec, worktree, fixtureCommit)
+    assertValidatorReadyFixture(exec, worktree, fixtureCommit, baseBranch)
   }
   if (!resume) {
     if (branch) {
