@@ -146,6 +146,7 @@ export function parseArgs(argv) {
     resume: false,
     referenceBaseline: false,
     changeName: 'create-and-scene',
+    changeNameProvided: false,
     judgeModel: 'codex-default',
     repo: 'https://github.com/Codagent-AI/and-scene.git',
     fixtureRef: '729592e921413dea20bd77ccab0284222ef4ad8f',
@@ -162,6 +163,7 @@ export function parseArgs(argv) {
     const value = argv[index + 1]
     if (value === undefined) throw new Error(`missing value for ${argument}`)
     options[key] = value
+    if (key === 'changeName') options.changeNameProvided = true
     index += 1
   }
   if (!options.runDir) throw new Error('--run-dir is required')
@@ -291,6 +293,17 @@ export async function runEvaluation({
       return failure([{ code: 'invalid-rescore-source', message: error.message }])
     }
   }
+  if (
+    importedRun
+    && options.changeNameProvided
+    && options.changeName !== importedRun.change_name
+  ) {
+    return failure([{
+      code: 'rescore-change-name-conflict',
+      message: `--change-name ${options.changeName} conflicts with source change ${importedRun.change_name}`,
+    }])
+  }
+  const changeName = importedRun?.change_name ?? options.changeName
 
   let capabilities
   try {
@@ -317,7 +330,7 @@ export async function runEvaluation({
     ?.includes('skip_validator=true')
   const boundary = resolveBoundary({
     skipValidator: importedRun ? importedSkipValidator : options.skipValidator,
-    changeName: options.changeName,
+    changeName,
   })
   if (importedRun?.workflow?.arguments) {
     boundary.workflow_arguments = [...importedRun.workflow.arguments]
@@ -856,7 +869,7 @@ export async function runEvaluation({
             fixtureCommit: candidateSource.fixture_commit,
             branch: candidateSource.branch,
             expectedBase: candidateSource.base_branch,
-            changeName: options.changeName,
+            changeName,
             sessionDir: record.run?.session_dir,
             workflowHistory: record.observed_steps,
             exec,
@@ -954,7 +967,7 @@ export async function runEvaluation({
           worktree: candidateWorktree,
           runDir,
           finalSha,
-          changeName: options.changeName,
+          changeName,
           identities: {
             run: [runId, record.run?.run_id].filter(Boolean),
             branch: [candidateSource.branch].filter(Boolean),
@@ -964,7 +977,7 @@ export async function runEvaluation({
             ].filter((value) => value !== null && value !== undefined),
             baseline: mode === 'reference-baseline' ? [record.candidate.candidate_identity] : [],
             candidate: [record.candidate.candidate_identity],
-            change: [options.changeName],
+            change: [changeName],
           },
         })
       }

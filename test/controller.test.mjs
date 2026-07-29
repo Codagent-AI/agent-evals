@@ -150,13 +150,57 @@ function delivery(context) {
   }
 }
 
+function importedRescore(context, { changeName = 'create-and-scene' } = {}) {
+  const importedDelivery = delivery(context)
+  return {
+    source_dir: '/rescore-source',
+    source_run_id: 'completed-candidate-run',
+    provenance_sha256: '9'.repeat(64),
+    change_name: changeName,
+    candidate_source: {
+      repository: 'github.com/Codagent-AI/and-scene',
+      fixture_commit: context.commit,
+      branch: importedDelivery.branch,
+      base_branch: 'main',
+    },
+    delivery: importedDelivery,
+    runner: { run_id: 'runner-complete', session_dir: context.root },
+    role_profiles: {
+      lead: { cli: 'claude', model: 'opus', effort: 'high', agent: 'planner' },
+      implementor: { cli: 'claude', model: 'sonnet', effort: 'medium', agent: 'implementor' },
+      reviewer: { cli: 'claude', model: 'opus', effort: 'high', agent: 'reviewer' },
+    },
+    agent_runner_provenance: {
+      commit: '3'.repeat(40),
+      workflow_sha256: '4'.repeat(64),
+      complete: true,
+    },
+    agent_skills_provenance: {
+      commit: '5'.repeat(40),
+      manifest_sha256: '6'.repeat(64),
+      complete: true,
+    },
+    workflow: {
+      arguments: [`change_name=${changeName}`, 'skip_validator=true'],
+      observed_steps: history,
+    },
+    implementation_metrics: { active_duration_ms: 1234, attempts: [] },
+    cost: { total_usd: 1.25, complete: true },
+    pricing: { complete: true },
+  }
+}
+
 async function evaluate(context, extra = [], overrides = {}) {
+  const {
+    controllerChangeName = 'create-and-scene',
+    ...dependencies
+  } = overrides
   return runEvaluation({
     argv: [
       '--run-dir', context.runDir,
       '--agent-runner-dir', context.agentRunnerDir,
       '--agent-skills-dir', context.agentSkillsDir,
-      '--change-name', 'create-and-scene',
+      ...(controllerChangeName === null ? [] : ['--change-name', controllerChangeName]),
       ...extra,
     ],
     exec: context.exec,
@@ -183,7 +227,7 @@ async function evaluate(context, extra = [], overrides = {}) {
       }
       return JSON.stringify({ results: [] })
     },
-    ...overrides,
+    ...dependencies,
   })
 }
 
@@ -602,11 +646,12 @@ test('pending reference run-state marks delivery not applicable and verdict unav
 
 test('an evaluator-only rescore imports a completed candidate and never starts Agent Runner', async () => {
   const context = await environment()
-  const importedDelivery = delivery(context)
   const before = runnerInvocations(context).length
   let identityReverified = false
+  let neutralChange = null
 
   const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    controllerChangeName: null,
     verifyDelivery: async () => {
       throw new Error('rescore must not rediscover historical artifact paths')
     },
@@ -614,45 +659,21 @@ test('an evaluator-only rescore imports a completed candidate and never starts A
       identityReverified = recorded.final_sha === context.commit
       return { verified: true }
     },
-    loadRescoreSource: async () => ({
-      source_dir: '/rescore-source',
-      source_run_id: 'completed-candidate-run',
-      provenance_sha256: '9'.repeat(64),
-      candidate_source: {
-        repository: 'github.com/Codagent-AI/and-scene',
-        fixture_commit: context.commit,
-        branch: importedDelivery.branch,
-        base_branch: 'main',
-      },
-      delivery: importedDelivery,
-      runner: { run_id: 'runner-complete', session_dir: context.root },
-      role_profiles: {
-        lead: { cli: 'claude', model: 'opus', effort: 'high', agent: 'planner' },
-        implementor: { cli: 'claude', model: 'sonnet', effort: 'medium', agent: 'implementor' },
-        reviewer: { cli: 'claude', model: 'opus', effort: 'high', agent: 'reviewer' },
-      },
-      agent_runner_provenance: {
-        commit: '3'.repeat(40),
-        workflow_sha256: '4'.repeat(64),
-        complete: true,
-      },
-      agent_skills_provenance: {
-        commit: '5'.repeat(40),
-        manifest_sha256: '6'.repeat(64),
-        complete: true,
-      },
-      workflow: {
-        arguments: ['change_name=create-and-scene', 'skip_validator=true'],
-        observed_steps: history,
-      },
-      implementation_metrics: { active_duration_ms: 1234, attempts: [] },
-      cost: { total_usd: 1.25, complete: true },
-      pricing: { complete: true },
+    loadRescoreSource: async () => importedRescore(context, {
+      changeName: 'custom-scene-change',
     }),
+    materializeNeutral: async ({ changeName, identities }) => {
+      neutralChange = { changeName, identities: identities.change }
+      return null
+    },
   })
 
   assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
   assert.equal(identityReverified, true)
+  assert.deepEqual(neutralChange, {
+    changeName: 'custom-scene-change',
+    identities: ['custom-scene-change'],
+  })
   assert.equal(runnerInvocations(context).length, before)
   const written = await readJson(join(context.runDir, 'result.json'))
   assert.equal(written.mode, 'agent-runner')
@@ -660,6 +681,21 @@ test('an evaluator-only rescore imports a completed candidate and never starts A
   assert.equal(written.delivery.final_sha, context.commit)
   assert.equal(written.workflow.run_id, 'runner-complete')
   assert.equal(written.workflow.events[0].event, 'imported-completed-run')
+})
+
+test('an evaluator-only rescore rejects an explicit change name that conflicts with its source', async () => {
+  const context = await environment()
+
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    controllerChangeName: 'different-change',
+    loadRescoreSource: async () => importedRescore(context, {
+      changeName: 'source-change',
+    }),
+  })
+
+  assert.equal(result.exitCode, 2)
+  assert.ok(result.errors.some(({ code }) => code === 'rescore-change-name-conflict'))
+  assert.deepEqual(runnerInvocations(context), [])
 })
 
 test('browser probes are durable hashed evaluator-owned work units even when a probe fails', async () => {

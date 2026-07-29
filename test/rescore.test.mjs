@@ -17,7 +17,11 @@ const workflowHistory = [
   { step: 'verify-acceptance-handoff', outcome: 'success' },
 ]
 
-async function sourceRun({ historyComplete = true, corruptEvidence = false } = {}) {
+async function sourceRun({
+  historyComplete = true,
+  corruptEvidence = false,
+  changeName = 'create-and-scene',
+} = {}) {
   const sourceDir = await mkdtemp(join(tmpdir(), 'and-scene-rescore-source-'))
   const sessionDir = join(sourceDir, '.runtime/runner-session')
   const outputDir = join(sessionDir, 'output')
@@ -131,7 +135,7 @@ async function sourceRun({ historyComplete = true, corruptEvidence = false } = {
       history_complete: historyComplete,
       missing_steps: historyComplete ? [] : ['verify-acceptance-handoff'],
       prohibited_effects: [],
-      arguments: ['change_name=create-and-scene', 'skip_validator=true'],
+      arguments: [`change_name=${changeName}`, 'skip_validator=true'],
       run_id: state.agent_runner.run_id,
       session_dir: state.agent_runner.session_dir,
       observed_steps: workflowHistory,
@@ -151,8 +155,8 @@ async function sourceRun({ historyComplete = true, corruptEvidence = false } = {
   return { sourceDir, sessionDir, state, delivery }
 }
 
-test('a completed candidate run imports as a read-only evaluator rescore source', async () => {
-  const context = await sourceRun()
+test('a completed candidate run imports its immutable change name for evaluator-only rescoring', async () => {
+  const context = await sourceRun({ changeName: 'custom-scene-change' })
 
   const imported = await loadCandidateRescoreSource({ sourceDir: context.sourceDir })
 
@@ -160,6 +164,7 @@ test('a completed candidate run imports as a read-only evaluator rescore source'
   assert.equal(imported.candidate_source.fixture_commit, fixtureSha)
   assert.equal(imported.delivery.final_sha, finalSha)
   assert.equal(imported.delivery.pull_request.number, 9)
+  assert.equal(imported.change_name, 'custom-scene-change')
   assert.equal(imported.runner.session_dir, await realpath(context.sessionDir))
   assert.ok(imported.delivery.acceptance.artifacts.every(({ path }) => (
     path.startsWith(imported.source_dir)
@@ -184,5 +189,19 @@ test('candidate rescore rejects a source that did not complete the full workflow
   await assert.rejects(
     () => loadCandidateRescoreSource({ sourceDir: context.sourceDir }),
     /full implementation workflow/i,
+  )
+})
+
+test('candidate rescore rejects a missing or malformed workflow change name', async () => {
+  const missing = await sourceRun({ changeName: '' })
+  const malformed = await sourceRun({ changeName: '../other-change' })
+
+  await assert.rejects(
+    () => loadCandidateRescoreSource({ sourceDir: missing.sourceDir }),
+    /exactly one valid change_name/i,
+  )
+  await assert.rejects(
+    () => loadCandidateRescoreSource({ sourceDir: malformed.sourceDir }),
+    /exactly one valid change_name/i,
   )
 })

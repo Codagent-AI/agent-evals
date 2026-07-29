@@ -273,8 +273,23 @@ test('an evaluator-only rescore mounts a completed run read-only and invokes no 
   assert.match(result.output, /--rescore-from \/rescore-source/)
   assert.ok(!result.output.includes('bootstrap-agent-skills.sh'), result.output)
   assert.ok(!result.output.includes('--lead-cli'), result.output)
+  assert.ok(!result.output.includes('--change-name'), result.output)
   assert.ok(!result.output.includes('--mount-claude-auth'), result.output)
   assert.ok(result.output.includes('--mount-codex-auth'), result.output)
+})
+
+test('an evaluator-only rescore forwards an explicitly supplied change name for conflict validation', async () => {
+  const context = await setup({ dirty: true })
+  const source = join(context.dir, 'completed-candidate')
+  await mkdir(source)
+
+  const result = await scored(context, [
+    '--rescore-from', source,
+    '--change-name', 'custom-scene-change',
+  ])
+
+  assert.equal(result.status, 0, result.output)
+  assert.match(result.output, /--change-name custom-scene-change/)
 })
 
 test('an evaluator-only rescore rejects modes that could mutate or replace its recorded candidate', async () => {

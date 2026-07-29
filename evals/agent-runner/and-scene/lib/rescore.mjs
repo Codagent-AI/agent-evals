@@ -62,6 +62,16 @@ function validateDelivery(state, delivery) {
   }
 }
 
+function changeNameFromWorkflow(workflow) {
+  const values = (workflow?.arguments ?? [])
+    .filter((argument) => argument.startsWith('change_name='))
+    .map((argument) => argument.slice('change_name='.length))
+  if (values.length !== 1 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(values[0] ?? '')) {
+    throw new Error('rescore source workflow must contain exactly one valid change_name argument')
+  }
+  return values[0]
+}
+
 export async function loadCandidateRescoreSource({ sourceDir }) {
   const root = await realpath(resolve(sourceDir))
   const statePath = join(root, 'run-state.json')
@@ -88,6 +98,7 @@ export async function loadCandidateRescoreSource({ sourceDir }) {
   }
   same('run id', state.run_id, result.run_id)
   validateDelivery(state, delivery)
+  const changeName = changeNameFromWorkflow(result.workflow)
 
   const recordedArtifacts = delivery.acceptance_artifacts ?? []
   if (recordedArtifacts.length === 0) {
@@ -126,6 +137,7 @@ export async function loadCandidateRescoreSource({ sourceDir }) {
   return {
     source_dir: root,
     source_run_id: state.run_id,
+    change_name: changeName,
     provenance_sha256: hashJson({
       core: coreHashes,
       acceptance: artifacts.map(({ role, sha256 }) => ({ role, sha256 })),

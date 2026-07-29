@@ -36,7 +36,7 @@ function attemptedCommand(attempts) {
 
 function invoke(label, args, { worktree, exec }) {
   const timing = runTimed('npm', args, { label, cwd: worktree, exec })
-  if (timing.error && timing.status === -1) {
+  if (timing.error) {
     throw Object.assign(
       new Error(`cannot launch npm for candidate ${label}: ${timing.error}`),
       {

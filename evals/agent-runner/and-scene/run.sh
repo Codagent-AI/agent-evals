@@ -14,6 +14,11 @@ REPO="${REPO:-https://github.com/Codagent-AI/and-scene.git}"
 FIXTURE_REF="${FIXTURE_REF:-729592e921413dea20bd77ccab0284222ef4ad8f}"
 # Pin the known-good reference used for calibration and judge tiebreaks.
 REFERENCE_REF="${REFERENCE_REF:-171c7def1e12aca2a5f605a5e5feafb20d4e4d19}"
+if [[ -n "${CHANGE_NAME+x}" ]]; then
+  CHANGE_NAME_PROVIDED=1
+else
+  CHANGE_NAME_PROVIDED=0
+fi
 CHANGE_NAME="${CHANGE_NAME:-create-and-scene}"
 # The implementation workflow is hard-coded for this change. The suite records
 # whichever clean Agent Runner revision supplies it rather than pinning a commit.
@@ -203,6 +208,7 @@ while (($#)); do
       ;;
     --change-name)
       CHANGE_NAME="${2:?missing value for --change-name}"
+      CHANGE_NAME_PROVIDED=1
       shift 2
       ;;
     --skip-validator)
@@ -484,7 +490,10 @@ CONTROLLER_ARGS+=(--agent-runner-dir "$CONTAINER_AGENT_RUNNER_DIR" --repo "$REPO
 if [[ "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
   CONTROLLER_ARGS+=(--agent-skills-dir "$CONTAINER_AGENT_SKILLS_DIR")
 fi
-CONTROLLER_ARGS+=(--change-name "$CHANGE_NAME" --fixture-ref "$FIXTURE_REF" --judge-model "$JUDGE_MODEL")
+if [[ -z "$RESCORE_FROM" || "$CHANGE_NAME_PROVIDED" == 1 ]]; then
+  CONTROLLER_ARGS+=(--change-name "$CHANGE_NAME")
+fi
+CONTROLLER_ARGS+=(--fixture-ref "$FIXTURE_REF" --judge-model "$JUDGE_MODEL")
 if [[ -n "$CANDIDATE_REF" ]]; then
   CONTROLLER_ARGS+=(--candidate-ref "$CANDIDATE_REF")
 fi

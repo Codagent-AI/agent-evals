@@ -191,6 +191,30 @@ test('a confirmed review finalizes the official score without rerunning automate
   assert.equal(runState.outcome.product_verdict, result.product_verdict)
 })
 
+test('a confirmed review cannot turn incomplete automated scoring into a product failure', async () => {
+  const directory = await root()
+  const run = await pendingRun({ root: directory })
+  await writeJsonAtomic(join(run.runDir, 'phases/product-judging.json'), {
+    judges: {},
+    retries: {},
+    failed_jobs: [],
+  })
+
+  const outcome = await runHumanReview({
+    argv: ['--run-dir', run.runDir],
+    io: scriptedIo(answers()).io,
+    ...servers(),
+  })
+
+  assert.equal(outcome.exitCode, 1)
+  const result = await readJson(join(run.runDir, 'result.json'))
+  assert.equal(result.evaluation_status, 'evaluation-harness-failed')
+  assert.equal(result.product_verdict, 'unavailable')
+  assert.equal('official_score' in result, false)
+  assert.equal(result.failed_phase, 'official-result')
+  assert.match(result.failure.reason, /incomplete scoring inputs/i)
+})
+
 test('final human review preserves delivery identity, evidence summaries, and resume history', async () => {
   const directory = await root()
   const run = await pendingRun({ root: directory })

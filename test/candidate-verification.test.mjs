@@ -117,7 +117,7 @@ test('an inability to launch npm is an evaluation-harness failure', async () => 
   await assert.rejects(
     runCandidateVerification({
       worktree: '/candidate',
-      exec: () => ({ status: -1, error: new Error('spawn npm ENOENT'), stdout: '', stderr: '' }),
+      exec: () => ({ status: null, error: new Error('spawn npm ENOENT'), stdout: '', stderr: '' }),
     }),
     (error) => (
       error.owner === 'evaluation-harness'

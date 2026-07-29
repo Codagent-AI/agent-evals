@@ -310,6 +310,23 @@ async function reviewRun({
         // Unconfirmed: the run stays exactly as the automated command left it.
         return
       }
+      if (
+        !Number.isFinite(score?.official_score)
+        || (run.mode !== 'reference-baseline' && typeof score?.official_pass !== 'boolean')
+      ) {
+        throw Object.assign(
+          new Error(
+            `cannot finalize human review with incomplete scoring inputs: ${
+              (score?.incomplete ?? ['unknown']).join(', ')
+            }`,
+          ),
+          {
+            owner: 'evaluation-harness',
+            code: 'incomplete-official-score',
+            resumable: true,
+          },
+        )
+      }
       const event = run.mode === 'reference-baseline'
         ? {
             type: 'reference-finalized',
