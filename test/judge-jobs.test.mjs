@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
 
 import {
   PRODUCT_JUDGE_JOB_IDS,
+  buildSourceAuditRequest,
   buildJudgeRequest,
   parseJudgeOutput,
   runJudgeJob,
@@ -23,6 +27,7 @@ function judgeOutput(ids, overrides = {}) {
       verdict: 'pass',
       rationale: 'the delivered source implements this contract',
       evidence: ['src/presentation-kit/Scene.tsx:42'],
+      citations: ['src/presentation-kit/Scene.tsx'],
     })),
     ...overrides,
   })
@@ -165,12 +170,203 @@ test('source judges must verify behavior and resolve deterministic-fact contradi
       rubrics, job, authority,
       evidence: [{ id: 'fact', verdict: 'pass', note: 'token scan passed' }],
       sources: ['src/example.ts'],
+      neutral: {
+        root: '/run/neutral',
+        source_root: '/run/neutral/source',
+        requirements_root: '/run/neutral/requirements',
+      },
     })
     for (const pattern of patterns) assert.match(request.prompt, pattern, `${job}: ${pattern}`)
     assert.match(request.prompt, /exact symbol or test case/i, job)
     assert.match(request.prompt, /do not infer\s+behavior from a filename/i, job)
     assert.match(request.prompt, /inspect the setup and assertions/i, job)
     assert.match(request.prompt, /missing mechanism.*plausible behavior/i, job)
+    assert.match(request.prompt, /citations MUST contain exact relative paths[\s\S]*neutral\s+source file list/i, job)
+    assert.equal(request.source_audit, true, job)
+  }
+})
+
+test('source-judge pass verdicts require explicit neutral-source citation paths', () => {
+  const ids = criteriaForJob(automated, 'scene-kit')
+  const payload = JSON.stringify({
+    results: ids.map((id) => ({
+      id,
+      verdict: 'pass',
+      rationale: 'claimed mechanism',
+      evidence: ['src/presentation-kit/Scene.tsx'],
+    })),
+  })
+
+  assert.throws(
+    () => parseJudgeOutput(payload, ids, 'scene-kit', { requireSourceCitations: true }),
+    /source citations/i,
+  )
+})
+
+test('source citations are bounded before they can expand the closed-world packet', () => {
+  const ids = criteriaForJob(automated, 'scene-kit')
+  const payload = (citations) => JSON.stringify({
+    results: ids.map((id) => ({
+      id,
+      verdict: 'pass',
+      rationale: 'claimed mechanism',
+      evidence: ['source'],
+      citations,
+    })),
+  })
+
+  assert.throws(
+    () => parseJudgeOutput(
+      payload(Array.from({ length: 9 }, (_, index) => `src/file-${index}.ts`)),
+      ids,
+      'scene-kit',
+      { requireSourceCitations: true },
+    ),
+    /too many source citations/i,
+  )
+  assert.throws(
+    () => parseJudgeOutput(
+      payload([`src/${'x'.repeat(500)}.ts`]),
+      ids,
+      'scene-kit',
+      { requireSourceCitations: true },
+    ),
+    /source citation path is too long/i,
+  )
+})
+
+test('source audit receives only the exact cited files and primary claims', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const sourceRoot = join(root, 'source')
+  await mkdir(join(sourceRoot, 'src'), { recursive: true })
+  await writeFile(join(sourceRoot, 'src/nav.ts'), 'const touchStartX = 10\\n')
+  await writeFile(join(sourceRoot, 'src/unrelated.ts'), 'const secret = true\\n')
+  const primary = [{
+    id: 'navigation-touch-swipe',
+    verdict: 'pass',
+    rationale: 'tracks both axes',
+    evidence: ['src/nav.ts'],
+    citations: ['src/nav.ts'],
+  }]
+
+  try {
+    const request = await buildSourceAuditRequest({
+      request: {
+        job: 'scene-kit',
+        criteria: ['navigation-touch-swipe'],
+        authority,
+        cwd: root,
+        audit_cwd: join(root, 'audit-workspace'),
+        input_roots: { source: sourceRoot },
+      },
+      primaryResults: primary,
+    })
+
+    assert.equal(request.audit_stage, 'source-pass-audit')
+    assert.equal(request.cwd, join(root, 'audit-workspace'))
+    assert.equal(request.input_roots, null)
+    assert.equal(request.input_permissions.neutral_source, false)
+    assert.match(request.prompt, /tracks both axes/)
+    assert.match(request.prompt, /const touchStartX = 10/)
+    assert.doesNotMatch(request.prompt, /const secret = true/)
+    assert.match(request.prompt, /closed-world/i)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('source audit rejects citation paths outside the neutral source root', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const sourceRoot = join(root, 'source')
+  await mkdir(sourceRoot, { recursive: true })
+
+  try {
+    await assert.rejects(
+      buildSourceAuditRequest({
+        request: {
+          job: 'scene-kit',
+          criteria: ['navigation-touch-swipe'],
+          authority,
+          cwd: root,
+          input_roots: { source: sourceRoot },
+        },
+        primaryResults: [{
+          id: 'navigation-touch-swipe',
+          verdict: 'pass',
+          rationale: 'invented',
+          evidence: ['outside'],
+          citations: ['../outside.ts'],
+        }],
+      }),
+      /outside neutral source root/i,
+    )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('source audit rejects symlinks before reading a cited file', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const sourceRoot = join(root, 'source')
+  const outside = join(root, 'outside-secret.txt')
+  await mkdir(sourceRoot, { recursive: true })
+  await writeFile(outside, 'must not enter the judge prompt\n')
+  await symlink(outside, join(sourceRoot, 'linked.ts'))
+
+  try {
+    await assert.rejects(
+      buildSourceAuditRequest({
+        request: {
+          job: 'scene-kit',
+          criteria: ['navigation-touch-swipe'],
+          authority,
+          cwd: root,
+          input_roots: { source: sourceRoot },
+        },
+        primaryResults: [{
+          id: 'navigation-touch-swipe',
+          verdict: 'pass',
+          rationale: 'invented',
+          evidence: ['linked'],
+          citations: ['linked.ts'],
+        }],
+      }),
+      /symbolic link/i,
+    )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('source audit never truncates a cited file before judging its mechanism', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const sourceRoot = join(root, 'source')
+  const content = `${'const filler = 0\\n'.repeat(3000)}export const CRITICAL_MECHANISM = true\n`
+  await mkdir(sourceRoot, { recursive: true })
+  await writeFile(join(sourceRoot, 'large.ts'), content)
+
+  try {
+    const request = await buildSourceAuditRequest({
+      request: {
+        job: 'scene-kit',
+        criteria: ['navigation-touch-swipe'],
+        authority,
+        cwd: root,
+        input_roots: { source: sourceRoot },
+      },
+      primaryResults: [{
+        id: 'navigation-touch-swipe',
+        verdict: 'pass',
+        rationale: 'the mechanism is present at the end of the file',
+        evidence: ['large.ts'],
+        citations: ['large.ts'],
+      }],
+    })
+
+    assert.match(request.prompt, /CRITICAL_MECHANISM/)
+    assert.doesNotMatch(request.prompt, /"truncated": true/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
   }
 })
 
@@ -238,23 +434,101 @@ test('strict parsing rejects every shape of malformed judge output', () => {
 })
 
 test('a judge job retries locally once and succeeds on the second attempt', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const sourceRoot = join(root, 'source')
+  await mkdir(join(sourceRoot, 'src/presentation-kit'), { recursive: true })
+  await writeFile(
+    join(sourceRoot, 'src/presentation-kit/Scene.tsx'),
+    'export function Scene() { return null }\\n',
+  )
   const ids = criteriaForJob(automated, 'scene-kit')
-  const responses = ['{ truncated', judgeOutput(ids)]
+  const responses = ['{ truncated', judgeOutput(ids), judgeOutput(ids)]
   const invoked = []
 
-  const result = await runJudgeJob({
-    request: buildJudgeRequest({ rubrics, job: 'scene-kit', authority, evidence: [], sources: [] }),
-    invoke: async (request) => {
-      invoked.push(request.job)
-      return responses.shift()
-    },
-  })
+  try {
+    const result = await runJudgeJob({
+      request: buildJudgeRequest({
+        rubrics,
+        job: 'scene-kit',
+        authority,
+        evidence: [],
+        sources: ['src/presentation-kit/Scene.tsx'],
+        neutral: {
+          root,
+          source_root: sourceRoot,
+          requirements_root: join(root, 'requirements'),
+        },
+      }),
+      invoke: async (request) => {
+        invoked.push(request.audit_stage ?? 'primary')
+        return responses.shift()
+      },
+    })
 
-  assert.equal(result.ok, true)
-  assert.equal(result.attempts.length, 2)
-  assert.equal(result.attempts[0].ok, false)
-  assert.equal(result.results.length, ids.length)
-  assert.deepEqual(invoked, ['scene-kit', 'scene-kit'])
+    assert.equal(result.ok, true)
+    assert.equal(result.attempts.length, 2)
+    assert.equal(result.audit_attempts.length, 1)
+    assert.equal(result.attempts[0].ok, false)
+    assert.equal(result.results.length, ids.length)
+    assert.deepEqual(invoked, ['primary', 'primary', 'source-pass-audit'])
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('source judge credit requires primary and closed-world audit agreement', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const sourceRoot = join(root, 'source')
+  await mkdir(join(sourceRoot, 'src'), { recursive: true })
+  await writeFile(join(sourceRoot, 'src/nav.ts'), [
+    'const touchStartX = useRef<number | null>(null)',
+    'const delta = endX - touchStartX.current',
+  ].join('\n'))
+  const ids = ['navigation-touch-swipe', 'navigation-direct-jump']
+  const primary = JSON.stringify({
+    results: ids.map((id) => ({
+      id,
+      verdict: 'pass',
+      rationale: id === 'navigation-touch-swipe' ? 'tracks both axes' : 'direct controls call goTo',
+      evidence: ['src/nav.ts'],
+      citations: ['src/nav.ts'],
+    })),
+  })
+  const audit = JSON.stringify({
+    results: [
+      {
+        id: 'navigation-touch-swipe',
+        verdict: 'fail',
+        rationale: 'the closed-world source tracks only X',
+        evidence: ['src/nav.ts contains touchStartX but no vertical coordinate'],
+      },
+      {
+        id: 'navigation-direct-jump',
+        verdict: 'pass',
+        rationale: 'the closed-world source proves the mechanism',
+        evidence: ['src/nav.ts'],
+      },
+    ],
+  })
+  const request = {
+    job: 'scene-kit',
+    criteria: ids,
+    authority,
+    cwd: root,
+    input_roots: { source: sourceRoot },
+    source_audit: true,
+  }
+  const responses = [primary, audit]
+
+  try {
+    const result = await runJudgeJob({ request, invoke: async () => responses.shift() })
+    assert.equal(result.ok, true)
+    assert.equal(result.results[0].verdict, 'fail')
+    assert.match(result.results[0].rationale, /tracks only X/)
+    assert.equal(result.results[1].verdict, 'pass')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })
 
 test('an exhausted judge job leaves its component unobserved rather than failed', async () => {

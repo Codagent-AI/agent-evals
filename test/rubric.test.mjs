@@ -108,9 +108,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 3.4 preserves the technical scoring corrections and closes observed judge loopholes', async () => {
+test('rubric 3.5 preserves the technical scoring corrections and closes observed judge loopholes', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '3.4.0')
+  assert.equal(rubric.version, '3.5.0')
 
   const rows = new Map(
     rubric.components
