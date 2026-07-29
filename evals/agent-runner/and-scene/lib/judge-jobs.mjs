@@ -285,7 +285,7 @@ export function buildJudgeRequest({
     rubric_slice: slice,
     source_audit: !evidenceJob && Boolean(neutral?.source_root),
     source_audit_version: !evidenceJob && neutral?.source_root
-      ? 'closed-world-v2-tristate'
+      ? 'closed-world-v3-symmetric-tristate'
       : null,
     prompt,
   }
@@ -460,12 +460,13 @@ export async function buildSourceAuditRequest({ request, primaryResults }) {
     'Classify every primary result as confirmed, contradicted, or insufficient.',
     '- confirmed: the supplied source explicitly proves the primary verdict and every',
     '  focused executable test required by the review guidance.',
-    '- contradicted: the supplied source explicitly demonstrates behavior incompatible',
-    '  with a primary pass. Do not use this classification merely because proof is absent.',
+    '- contradicted: the supplied source explicitly proves the opposite of the primary',
+    '  verdict. This reverses either a pass or a fail; do not use it merely because proof',
+    '  for the primary verdict is absent.',
     '- insufficient: the cited packet omits source needed to prove or contradict the claim,',
     '  including a mechanism or focused test the primary judge asserted without supplying.',
-    'A primary fail remains fail. Do not infer behavior from unseen files, filenames,',
-    'comments, types, or plausible conventions. Use no source outside this packet.',
+    'Do not infer behavior from unseen files, filenames, comments, types, or plausible',
+    'conventions. Use no source outside this packet.',
     '',
     '# Rubric contract',
     request.rubric_slice ?? '',
@@ -544,11 +545,8 @@ function parseSourceAuditOutput(text, expectedIds, job) {
   return expectedIds.map((id) => seen.get(id))
 }
 
-function insufficientPassAudits(primaryResults, auditResults) {
-  const primary = new Map(primaryResults.map((result) => [result.id, result]))
-  return auditResults.filter((audit) => (
-    primary.get(audit.id)?.verdict === 'pass' && audit.classification === 'insufficient'
-  ))
+function insufficientAudits(auditResults) {
+  return auditResults.filter((audit) => audit.classification === 'insufficient')
 }
 
 function buildFocusedRejudgeRequest(request, insufficient) {
@@ -561,9 +559,10 @@ function buildFocusedRejudgeRequest(request, insufficient) {
       request.prompt,
       '',
       '# Previous source audit found insufficient citations',
-      'The prior response could not be verified from the paths it cited. Re-inspect the',
-      'neutral source. For each item below, either cite every exact source/test path needed',
-      'to prove the pass, or mark the criterion fail. Do not repeat an unsupported pass.',
+      'The prior verdict could not be verified from the paths it cited. Re-inspect the',
+      'neutral source. Return the verdict the source supports and cite every exact',
+      'implementation and focused-test path needed to prove it. Do not repeat an',
+      'unsupported pass or fail.',
       ...insufficient.map((result) => (
         `- ${result.id}: ${bounded(result.rationale, MAX_RATIONALE_CHARS)}`
       )),
@@ -576,12 +575,11 @@ function buildFocusedRejudgeRequest(request, insufficient) {
 function mergeSourceAudit(primaryResults, auditResults) {
   const audited = new Map(auditResults.map((result) => [result.id, result]))
   return primaryResults.map((primary) => {
-    if (primary.verdict === 'fail') return primary
     const audit = audited.get(primary.id)
     if (audit?.classification === 'contradicted') {
       return {
         id: primary.id,
-        verdict: 'fail',
+        verdict: primary.verdict === 'pass' ? 'fail' : 'pass',
         rationale: audit.rationale,
         citations: primary.citations,
         evidence: audit.evidence.map((item) => bounded(`source audit: ${item}`)),
@@ -664,7 +662,7 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
     lastAuditResults = request.criteria
       .map((id) => auditedResults.get(id))
       .filter(Boolean)
-    const insufficient = insufficientPassAudits(primaryResults, auditResults)
+    const insufficient = insufficientAudits(auditResults)
     const insufficientIds = new Set(insufficient.map(({ id }) => id))
     for (const result of mergeSourceAudit(primaryResults, auditResults)) {
       if (!insufficientIds.has(result.id)) resolvedResults.set(result.id, result)

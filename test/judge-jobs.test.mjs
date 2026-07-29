@@ -196,7 +196,7 @@ test('source judges must verify behavior and resolve deterministic-fact contradi
     assert.match(request.prompt, /missing mechanism.*plausible behavior/i, job)
     assert.match(request.prompt, /citations MUST contain exact relative paths[\s\S]*neutral\s+source file list/i, job)
     assert.equal(request.source_audit, true, job)
-    assert.equal(request.source_audit_version, 'closed-world-v2-tristate', job)
+    assert.equal(request.source_audit_version, 'closed-world-v3-symmetric-tristate', job)
   }
 })
 
@@ -547,6 +547,59 @@ test('source judge credit requires primary and closed-world audit agreement', as
   }
 })
 
+test('a contradicted source audit reverses either primary verdict', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const sourceRoot = join(root, 'source')
+  await mkdir(join(sourceRoot, 'src'), { recursive: true })
+  await writeFile(join(sourceRoot, 'src/nav.ts'), 'export const directJump = true\n')
+  const ids = ['incorrect-primary-pass', 'incorrect-primary-fail']
+  const primary = JSON.stringify({
+    results: [
+      {
+        id: ids[0],
+        verdict: 'pass',
+        rationale: 'claims a missing behavior exists',
+        evidence: ['src/nav.ts'],
+        citations: ['src/nav.ts'],
+      },
+      {
+        id: ids[1],
+        verdict: 'fail',
+        rationale: 'claims the implemented direct jump is absent',
+        evidence: ['src/nav.ts'],
+        citations: ['src/nav.ts'],
+      },
+    ],
+  })
+  const audit = auditOutput(ids, {
+    [ids[0]]: 'contradicted',
+    [ids[1]]: 'contradicted',
+  })
+  const responses = [primary, audit]
+
+  try {
+    const result = await runJudgeJob({
+      request: {
+        job: 'scene-kit',
+        criteria: ids,
+        authority,
+        cwd: root,
+        input_roots: { source: sourceRoot },
+        source_audit: true,
+      },
+      invoke: async () => responses.shift(),
+    })
+
+    assert.equal(result.ok, true)
+    assert.deepEqual(result.results.map(({ id, verdict }) => ({ id, verdict })), [
+      { id: ids[0], verdict: 'fail' },
+      { id: ids[1], verdict: 'pass' },
+    ])
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('insufficient audit citations trigger a focused re-judge instead of a product failure', async () => {
   const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
@@ -605,6 +658,63 @@ test('insufficient audit citations trigger a focused re-judge instead of a produ
     assert.equal(result.audit_attempts.length, 2)
     assert.match(prompts[2], /previous source audit found insufficient citations/i)
     assert.match(prompts[2], /omits the required mechanism/i)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('an insufficient primary fail is re-judged instead of charged to the candidate', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const sourceRoot = join(root, 'source')
+  await mkdir(join(sourceRoot, 'src'), { recursive: true })
+  await writeFile(join(sourceRoot, 'src/nav.ts'), 'export const directJump = true\n')
+  await writeFile(join(sourceRoot, 'src/nav.test.ts'), 'export const directJumpTest = true\n')
+  const ids = ['navigation-direct-jump']
+  const firstPrimary = JSON.stringify({
+    results: [{
+      id: ids[0],
+      verdict: 'fail',
+      rationale: 'the available evidence does not establish direct navigation',
+      evidence: ['src/nav.ts'],
+      citations: ['src/nav.ts'],
+    }],
+  })
+  const retryPrimary = JSON.stringify({
+    results: [{
+      id: ids[0],
+      verdict: 'pass',
+      rationale: 'the implementation and focused test establish direct navigation',
+      evidence: ['src/nav.ts', 'src/nav.test.ts'],
+      citations: ['src/nav.ts', 'src/nav.test.ts'],
+    }],
+  })
+  const responses = [
+    firstPrimary,
+    auditOutput(ids, { [ids[0]]: 'insufficient' }),
+    retryPrimary,
+    auditOutput(ids),
+  ]
+
+  try {
+    const result = await runJudgeJob({
+      request: {
+        job: 'scene-kit',
+        criteria: ids,
+        authority,
+        cwd: root,
+        audit_cwd: join(root, 'audit'),
+        input_roots: { source: sourceRoot },
+        input_permissions: { neutral_source: true },
+        source_audit: true,
+        prompt: 'primary rubric prompt',
+      },
+      invoke: async () => responses.shift(),
+    })
+
+    assert.equal(result.ok, true)
+    assert.equal(result.results[0].verdict, 'pass')
+    assert.equal(result.attempts.length, 2)
+    assert.equal(result.audit_attempts.length, 2)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
