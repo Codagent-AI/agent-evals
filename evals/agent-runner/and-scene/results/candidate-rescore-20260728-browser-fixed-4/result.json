@@ -7,9 +7,9 @@
   "product_verdict": "pass",
   "label": "PASS",
   "score_denominator": 100,
-  "official_score": 82.191666666667,
+  "official_score": 80.191666666667,
   "automated_subtotal": {
-    "points": 61.691666666667,
+    "points": 59.691666666667,
     "possible": 70,
     "observed_possible": 70,
     "complete": true
@@ -424,8 +424,8 @@
         ],
         "raw_points_awarded": 23,
         "adjudication_adjustment": 0,
-        "prior_points_awarded": 24,
-        "prior_adjudication_adjustment": -1
+        "prior_points_awarded": 23,
+        "prior_adjudication_adjustment": 0
       },
       {
         "id": "scene-kit-correctness",
@@ -863,8 +863,8 @@
         ],
         "raw_points_awarded": 23.4,
         "adjudication_adjustment": -2.166666666667,
-        "prior_points_awarded": 22.5,
-        "prior_adjudication_adjustment": -1.266666666667
+        "prior_points_awarded": 21.233333333333334,
+        "prior_adjudication_adjustment": 0
       },
       {
         "id": "presentation-skill-correctness",
@@ -1152,8 +1152,8 @@
         ],
         "raw_points_awarded": 7,
         "adjudication_adjustment": -1.875,
-        "prior_points_awarded": 6,
-        "prior_adjudication_adjustment": -0.875
+        "prior_points_awarded": 5.125,
+        "prior_adjudication_adjustment": 0
       },
       {
         "id": "verification-tool-correctness",
@@ -1342,8 +1342,8 @@
         ],
         "raw_points_awarded": 6.5,
         "adjudication_adjustment": -2.166666666667,
-        "prior_points_awarded": 5.5,
-        "prior_adjudication_adjustment": -1.166666666667
+        "prior_points_awarded": 4.333333333333333,
+        "prior_adjudication_adjustment": 0
       },
       {
         "id": "testing-evidence-quality",
@@ -1427,15 +1427,19 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 4,
+        "prior_points_awarded": 4,
+        "prior_adjudication_adjustment": 0,
+        "adjudication_adjustment": 0
       },
       {
         "id": "assumption-handling-quality",
         "title": "Assumption-handling quality",
         "applicable": true,
         "points_possible": 4,
-        "points_awarded": 4,
-        "points_observed": 4,
+        "points_awarded": 2,
+        "points_observed": 2,
         "points_observed_possible": 4,
         "floor": null,
         "complete": true,
@@ -1507,7 +1511,11 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 4,
+        "prior_points_awarded": 4,
+        "prior_adjudication_adjustment": -2,
+        "adjudication_adjustment": -2
       }
     ],
     "score_denominator": 100,
@@ -1570,7 +1578,7 @@
     ],
     "gates_passed": true,
     "automated_subtotal": {
-      "points": 61.691666666667,
+      "points": 59.691666666667,
       "possible": 70,
       "observed_possible": 70,
       "complete": true
@@ -1600,7 +1608,7 @@
       "lowest_rating": 3,
       "complete": true
     },
-    "official_score": 82.191666666667,
+    "official_score": 80.191666666667,
     "official_pass": true,
     "pass_failures": [],
     "incomplete": [],
@@ -14565,20 +14573,16 @@
   },
   "technical_adjudication": {
     "schema_version": 1,
-    "approved_by": "Paul (user-confirmed independent rubric 3.2 review)",
-    "approved_at": "2026-07-28T23:53:25.540Z",
-    "rationale": "A fresh independent source-and-evidence review applied rubric 3.2 after its ambiguity fixes and found no consequential rubric issues. This replaces the provisional technical adjudication with the exact criterion-weighted result.",
+    "approved_by": "Paul (user-requested independent workflow-quality review)",
+    "approved_at": "2026-07-29T02:04:29.830Z",
+    "rationale": "Two fresh focused judges independently reassessed the eight workflow-quality points from existing candidate-produced evidence. Testing evidence remains 4/4; assumption handling is revised to 2/4 because the workflow reproduced the stale-preview ownership defect but inaccurately classified it as environmental and optional hardening.",
     "findings": [
-      "All 14 deterministic browser criteria passed at the evaluated candidate SHA.",
-      "The required demo title input is ignored and is deducted once under demo code boundaries.",
-      "Newcomer delay is not connected to persistent-motion completion or an actually consumed shared transition contract.",
-      "Touch navigation does not reject predominantly vertical or multi-touch gestures.",
-      "Minimum-scale clamping can prevent the fixed canvas from fitting sufficiently small viewports.",
-      "Five scaffold branches lack eligible executable or revision-bound transcript proof.",
-      "IPv4 loopback passes, but preview-process ownership fails independently because a stale responder can be accepted.",
-      "Screenshot settlement uses a disconnected fixed delay.",
-      "Three visual-warning behaviors lack eligible retained raw executable output.",
-      "The rubric 3.2 correction audit found no consequential ambiguity, loophole, inconsistency, or arbitrary double counting."
+      "Testing-evidence quality remains 4/4: the packet is traceable, usable, final-revision applicable, and complete enough for independent judging.",
+      "The stale-preview conclusion is technically wrong, but the raw failure facts are candidly preserved; deducting testing-evidence credit would double-count the product defect already charged under verification ownership.",
+      "Assumption handling passes consequential-ambiguity surfacing and final-handoff preservation.",
+      "Assumption handling fails repository-fact distinction because a requirement-defined preview-ownership defect was classified as environmental contamination.",
+      "Assumption handling fails proportionate decision-making because clearing the stale process and treating the reproduced defect as optional hardening was not requirement-conforming.",
+      "Both focused reviews ended with no consequential scoring ambiguity."
     ],
     "reviewed_rubric": {
       "rubric_id": "and-scene-automated-product",
@@ -14591,13 +14595,19 @@
       "presentation-skill-correctness": 5.125,
       "verification-tool-correctness": 4.333333333333333
     },
-    "prior_shared_technical_score": 58,
+    "workflow_component_scores": {
+      "testing-evidence-quality": 4,
+      "assumption-handling-quality": 2
+    },
+    "prior_workflow_quality_score": 8,
+    "revised_workflow_quality_score": 6,
+    "prior_shared_technical_score": 53.691666666667,
     "revised_shared_technical_score": 53.691666666667,
-    "prior_automated_subtotal": 66,
-    "revised_automated_subtotal": 61.691666666667,
-    "prior_official_score": 86.5,
-    "revised_official_score": 82.191666666667,
-    "prior_result_fingerprint": "b1fbf5a94d722347acc9e829a884d4aa4fe60f2eaaa19531a02301265769b4fb"
+    "prior_automated_subtotal": 61.691666666667,
+    "revised_automated_subtotal": 59.691666666667,
+    "prior_official_score": 82.191666666667,
+    "revised_official_score": 80.191666666667,
+    "prior_result_fingerprint": "c75b73b8e5350cb024496bc45e222d712d06e5ed11a91994d22216f6910b8d60"
   },
   "technical_adjudication_history": [
     {
@@ -14626,6 +14636,42 @@
       "prior_official_score": 88.4,
       "revised_official_score": 86.5,
       "prior_result_fingerprint": "317c10b745cd091ffee650f4ac66b4dc0e62eb60f795fd36d1218a7461e4a0a8"
+    },
+    {
+      "schema_version": 1,
+      "approved_by": "Paul (user-confirmed independent rubric 3.2 review)",
+      "approved_at": "2026-07-28T23:53:25.540Z",
+      "rationale": "A fresh independent source-and-evidence review applied rubric 3.2 after its ambiguity fixes and found no consequential rubric issues. This replaces the provisional technical adjudication with the exact criterion-weighted result.",
+      "findings": [
+        "All 14 deterministic browser criteria passed at the evaluated candidate SHA.",
+        "The required demo title input is ignored and is deducted once under demo code boundaries.",
+        "Newcomer delay is not connected to persistent-motion completion or an actually consumed shared transition contract.",
+        "Touch navigation does not reject predominantly vertical or multi-touch gestures.",
+        "Minimum-scale clamping can prevent the fixed canvas from fitting sufficiently small viewports.",
+        "Five scaffold branches lack eligible executable or revision-bound transcript proof.",
+        "IPv4 loopback passes, but preview-process ownership fails independently because a stale responder can be accepted.",
+        "Screenshot settlement uses a disconnected fixed delay.",
+        "Three visual-warning behaviors lack eligible retained raw executable output.",
+        "The rubric 3.2 correction audit found no consequential ambiguity, loophole, inconsistency, or arbitrary double counting."
+      ],
+      "reviewed_rubric": {
+        "rubric_id": "and-scene-automated-product",
+        "version": "3.2.0",
+        "sha256": "e39ad48c48a94002c77201102ef790336cd8e5614f12b2c5202cdaef3b1d33d1"
+      },
+      "component_scores": {
+        "demo-technical-quality": 23,
+        "scene-kit-correctness": 21.233333333333334,
+        "presentation-skill-correctness": 5.125,
+        "verification-tool-correctness": 4.333333333333333
+      },
+      "prior_shared_technical_score": 58,
+      "revised_shared_technical_score": 53.691666666667,
+      "prior_automated_subtotal": 66,
+      "revised_automated_subtotal": 61.691666666667,
+      "prior_official_score": 86.5,
+      "revised_official_score": 82.191666666667,
+      "prior_result_fingerprint": "b1fbf5a94d722347acc9e829a884d4aa4fe60f2eaaa19531a02301265769b4fb"
     }
   ]
 }

@@ -18,8 +18,8 @@ summary { cursor: pointer; font-weight: 600; }
 </head>
 <body>
 <h1 class="pass">PASS</h1>
-<p><strong>Official score:</strong> 82.19 / 100</p>
-<p><strong>Automated subtotal:</strong> 61.69 / 70</p>
+<p><strong>Official score:</strong> 80.19 / 100</p>
+<p><strong>Automated subtotal:</strong> 59.69 / 70</p>
 <p><strong>Run:</strong> candidate-rescore-20260728-browser-fixed-4 (agent-runner)</p>
 <p><strong>Evaluation status:</strong> complete</p>
 <p><strong>Score denominator:</strong> 100</p>
@@ -29,8 +29,8 @@ summary { cursor: pointer; font-weight: 600; }
 <tr><td>scene-kit-correctness</td><td>Scene kit correctness</td><td>23.40</td><td>21.23</td><td>-2.17</td><td>24</td><td>15</td><td>complete</td></tr>
 <tr><td>presentation-skill-correctness</td><td>Presentation skill correctness</td><td>7</td><td>5.13</td><td>-1.88</td><td>7</td><td>none</td><td>complete</td></tr>
 <tr><td>verification-tool-correctness</td><td>Verification tool correctness</td><td>6.50</td><td>4.33</td><td>-2.17</td><td>7</td><td>none</td><td>complete</td></tr>
-<tr><td>testing-evidence-quality</td><td>Testing-evidence quality</td><td>4</td><td>4</td><td>none</td><td>4</td><td>none</td><td>complete</td></tr>
-<tr><td>assumption-handling-quality</td><td>Assumption-handling quality</td><td>4</td><td>4</td><td>none</td><td>4</td><td>none</td><td>complete</td></tr>
+<tr><td>testing-evidence-quality</td><td>Testing-evidence quality</td><td>4</td><td>4</td><td>0</td><td>4</td><td>none</td><td>complete</td></tr>
+<tr><td>assumption-handling-quality</td><td>Assumption-handling quality</td><td>4</td><td>2</td><td>-2</td><td>4</td><td>none</td><td>complete</td></tr>
 </tbody></table><table><thead><tr><th>Component</th><th>Subcomponent</th><th>Title</th><th>Awarded</th><th>Possible</th><th>State</th></tr></thead><tbody>
 <tr><td>demo-technical-quality</td><td>demo-canonical-content</td><td>Canonical content, routing, and technical structure</td><td>5</td><td>5</td><td>complete</td></tr>
 <tr><td>demo-technical-quality</td><td>demo-navigation-and-modes</td><td>Navigation, modes, boundaries, and controls</td><td>5</td><td>5</td><td>complete</td></tr>
@@ -57,28 +57,27 @@ summary { cursor: pointer; font-weight: 600; }
 </details>
 <details><summary>Technical score adjudication</summary>
 <table><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>
-<tr><td>Approved by</td><td>Paul (user-confirmed independent rubric 3.2 review)</td></tr>
-<tr><td>Approved at</td><td>2026-07-28T23:53:25.540Z</td></tr>
-<tr><td>Prior shared technical score</td><td>58</td></tr>
+<tr><td>Approved by</td><td>Paul (user-requested independent workflow-quality review)</td></tr>
+<tr><td>Approved at</td><td>2026-07-29T02:04:29.830Z</td></tr>
+<tr><td>Prior shared technical score</td><td>53.69</td></tr>
 <tr><td>Revised shared technical score</td><td>53.69</td></tr>
-<tr><td>Prior official score</td><td>86.50</td></tr>
-<tr><td>Revised official score</td><td>82.19</td></tr>
+<tr><td>Prior workflow-quality score</td><td>8</td></tr>
+<tr><td>Revised workflow-quality score</td><td>6</td></tr>
+<tr><td>Prior official score</td><td>82.19</td></tr>
+<tr><td>Revised official score</td><td>80.19</td></tr>
 <tr><td>Reviewed rubric</td><td>and-scene-automated-product 3.2.0</td></tr>
 <tr><td>Reviewed rubric SHA-256</td><td>e39ad48c48a94002c77201102ef790336cd8e5614f12b2c5202cdaef3b1d33d1</td></tr>
-<tr><td>Rationale</td><td>A fresh independent source-and-evidence review applied rubric 3.2 after its ambiguity fixes and found no consequential rubric issues. This replaces the provisional technical adjudication with the exact criterion-weighted result.</td></tr>
+<tr><td>Rationale</td><td>Two fresh focused judges independently reassessed the eight workflow-quality points from existing candidate-produced evidence. Testing evidence remains 4/4; assumption handling is revised to 2/4 because the workflow reproduced the stale-preview ownership defect but inaccurately classified it as environmental and optional hardening.</td></tr>
 </tbody></table><table><thead><tr><th>Finding</th></tr></thead><tbody>
-<tr><td>All 14 deterministic browser criteria passed at the evaluated candidate SHA.</td></tr>
-<tr><td>The required demo title input is ignored and is deducted once under demo code boundaries.</td></tr>
-<tr><td>Newcomer delay is not connected to persistent-motion completion or an actually consumed shared transition contract.</td></tr>
-<tr><td>Touch navigation does not reject predominantly vertical or multi-touch gestures.</td></tr>
-<tr><td>Minimum-scale clamping can prevent the fixed canvas from fitting sufficiently small viewports.</td></tr>
-<tr><td>Five scaffold branches lack eligible executable or revision-bound transcript proof.</td></tr>
-<tr><td>IPv4 loopback passes, but preview-process ownership fails independently because a stale responder can be accepted.</td></tr>
-<tr><td>Screenshot settlement uses a disconnected fixed delay.</td></tr>
-<tr><td>Three visual-warning behaviors lack eligible retained raw executable output.</td></tr>
-<tr><td>The rubric 3.2 correction audit found no consequential ambiguity, loophole, inconsistency, or arbitrary double counting.</td></tr>
+<tr><td>Testing-evidence quality remains 4/4: the packet is traceable, usable, final-revision applicable, and complete enough for independent judging.</td></tr>
+<tr><td>The stale-preview conclusion is technically wrong, but the raw failure facts are candidly preserved; deducting testing-evidence credit would double-count the product defect already charged under verification ownership.</td></tr>
+<tr><td>Assumption handling passes consequential-ambiguity surfacing and final-handoff preservation.</td></tr>
+<tr><td>Assumption handling fails repository-fact distinction because a requirement-defined preview-ownership defect was classified as environmental contamination.</td></tr>
+<tr><td>Assumption handling fails proportionate decision-making because clearing the stale process and treating the reproduced defect as optional hardening was not requirement-conforming.</td></tr>
+<tr><td>Both focused reviews ended with no consequential scoring ambiguity.</td></tr>
 </tbody></table><h3>Superseded technical adjudications</h3><table><thead><tr><th>Approved at</th><th>Prior shared</th><th>Revised shared</th><th>Rationale</th></tr></thead><tbody>
 <tr><td>2026-07-28T23:09:50.000Z</td><td>59.90</td><td>58</td><td>Independent source and runtime review corrected the active-state scanner false negatives and applied stricter engineering-quality standards than the original token- and existence-oriented source judgments.</td></tr>
+<tr><td>2026-07-28T23:53:25.540Z</td><td>58</td><td>53.69</td><td>A fresh independent source-and-evidence review applied rubric 3.2 after its ambiguity fixes and found no consequential rubric issues. This replaces the provisional technical adjudication with the exact criterion-weighted result.</td></tr>
 </tbody></table>
 </details>
 <details><summary>Hard gates</summary>

@@ -5,7 +5,7 @@
     "evaluation_status": "complete",
     "product_verdict": "pass",
     "score_denominator": 100,
-    "official_score": 82.191666666667,
+    "official_score": 80.191666666667,
     "failed_phase": null,
     "failure": null
   },
@@ -30,13 +30,13 @@
     },
     {
       "path": "report.html",
-      "bytes": 371878,
-      "sha256": "cead8f2335f806024c60419ae79fb6b17a5b68ec5934ea71916de79eaae552ca"
+      "bytes": 372284,
+      "sha256": "4e6da2d9b79b1f31a7cd47c32ec6cdb9bbda3718fca4c3059d05d95f3cd6b8c1"
     },
     {
       "path": "result.json",
-      "bytes": 606491,
-      "sha256": "908876915ef5bf60a11bf0da4e20eb894bb654e64d8a2e8299bdddc76b67769c"
+      "bytes": 609327,
+      "sha256": "4ca8be0f9b350bb5e6d5165187697e89367a5097ac32765a7be824941a5e88d8"
     }
   ]
 }
