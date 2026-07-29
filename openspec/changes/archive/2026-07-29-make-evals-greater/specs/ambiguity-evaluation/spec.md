@@ -16,7 +16,7 @@ If required assumption or handoff artifacts are absent, the harness SHALL preser
 - **THEN** the harness records a judge-discovered finding and links it to the supporting evidence
 - **AND** the unreported finding remains available to the scored surfacing criterion
 
-#### Scenario: Workflow reports no unresolved assumptions
+#### Scenario: Agent Runner artifacts contain no ambiguity evidence
 - **WHEN** the required workflow artifacts explicitly report no unresolved assumptions or context gaps and available evidence supports that statement
 - **THEN** the ledger records that no findings were observed for the evaluated artifacts
 - **AND** the absence of findings does not prevent full assumption-handling credit
@@ -46,7 +46,7 @@ An ambiguity-related product defect SHALL affect the applicable product-quality 
 - **THEN** the evaluation uses the implementation-workflow outcome rules
 - **AND** the diagnostic classification creates no additional score or gate
 
-#### Scenario: Genuine fixture gap is handled proportionately
+#### Scenario: Genuine fixture gap is found
 - **WHEN** a genuine specification gap is surfaced, distinguished from discoverable context, escalated proportionately, and preserved in the handoff
 - **THEN** the diagnostic ledger reports the gap
 - **AND** the candidate remains eligible for full assumption-handling credit

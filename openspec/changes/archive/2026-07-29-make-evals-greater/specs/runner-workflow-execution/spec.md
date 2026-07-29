@@ -10,17 +10,17 @@ The evaluation harness SHALL expose a `--skip-validator` option and SHALL hard-c
 
 The option SHALL default to false. Before starting the workflow, the harness SHALL verify that the `skip_validator` parameter and the required final Validator, draft-PR, acceptance-preparation, and handoff-verification steps exist. It SHALL also verify a clean pinned Agent Skills checkout containing every `codagent:*` skill named by the workflow and install that exact checkout for every selected workflow CLI before invoking an agent. The first complete evaluation required by this change SHALL explicitly use `--skip-validator`.
 
-#### Scenario: Task-level compliance is skipped
+#### Scenario: Validator is skipped
 - **WHEN** the eval is invoked with `--skip-validator`
 - **THEN** the harness passes `skip_validator=true`
 - **AND** Agent Runner continues through the final Validator, draft-PR, and acceptance workflow
 
-#### Scenario: Task-level compliance is included by default
+#### Scenario: Validator is included by default
 - **WHEN** the eval is invoked without `--skip-validator`
 - **THEN** the harness passes `skip_validator=false`
 - **AND** Agent Runner runs both task-level compliance and the final Validator before completing the workflow
 
-#### Scenario: Expected full-workflow contract is unavailable
+#### Scenario: Expected workflow contract is unavailable
 - **WHEN** `implement-change-v2.0.yaml` is unavailable or lacks the `skip_validator` parameter or any required final-workflow step
 - **THEN** the harness fails before starting Agent Runner
 - **AND** it identifies the missing workflow contract
@@ -30,44 +30,12 @@ The option SHALL default to false. Before starting the workflow, the harness SHA
 - **THEN** the harness fails before starting Agent Runner
 - **AND** it identifies the unavailable skill or provenance
 
-### Requirement: Publishing-side-effect boundary
-Before starting Agent Runner, the evaluation harness SHALL create a unique candidate branch named `eval/and-scene/<run-id>` from the pinned fixture commit in the configured fixture repository. The complete workflow SHALL push only that candidate branch and SHALL create or update only its draft pull request. The pull request SHALL have a non-empty base branch identity and SHALL remain a draft.
-
-The workflow SHALL NOT mark the pull request ready, merge it, archive the evaluated OpenSpec change, release the product, close the pull request, or delete the candidate branch. Candidate branches and draft pull requests SHALL be preserved for diagnosis and documented manual cleanup. The harness SHALL require credentials capable of pushing the candidate branch and managing its draft pull request before reporting workflow completion.
-
-The harness SHALL reject a workflow contract that declares a merge, ready-for-review, close, archive, release, or branch-deletion step. After workflow completion, it SHALL verify the observable delivery boundary from recorded workflow history, an existing remote candidate branch, the unarchived change location, and pull-request metadata limited to URL or number, state, draft state, base branch, head branch, and head SHA. It SHALL NOT query CI while performing this verification. An observable prohibited effect SHALL produce `evaluation_status=implementation-workflow-failed` with reason `workflow-side-effect-violation`.
-
-#### Scenario: Unique candidate branch is prepared
-- **WHEN** a fresh candidate evaluation starts
-- **THEN** the harness creates `eval/and-scene/<run-id>` at the pinned fixture commit before Agent Runner begins
-- **AND** it records the configured fixture origin and branch identity
-
-#### Scenario: Complete workflow opens a draft pull request
-- **WHEN** Agent Runner reaches its pull-request step
-- **THEN** it pushes the recorded candidate branch and creates or updates its draft pull request
-- **AND** the resulting pull request has a non-empty base identity and remains a draft
-
-#### Scenario: Publishing credentials are unavailable
-- **WHEN** the workflow cannot push the recorded branch or manage its draft pull request with the supplied credentials
-- **THEN** the evaluation reports an implementation-workflow failure
-- **AND** it does not report the candidate delivery as complete
-
-#### Scenario: Candidate is preserved after evaluation
-- **WHEN** an evaluation completes or fails after creating the candidate branch or draft pull request
-- **THEN** the harness leaves those external resources intact
-- **AND** it records them for diagnosis and manual cleanup
-
-#### Scenario: Prohibited publication is attempted
-- **WHEN** the workflow contract, recorded step or output history, or observable delivery state establishes that the evaluated workflow marked the pull request ready, merged it, archived the change, released the product, closed the pull request, or deleted the candidate branch
-- **THEN** the harness reports `evaluation_status=implementation-workflow-failed` with reason `workflow-side-effect-violation`
-- **AND** it records the unexpected action without treating the workflow as successfully complete
-
 ### Requirement: Ordered evaluation lifecycle
 For an Agent Runner candidate, the main evaluation command SHALL execute phases in this order: preflight the pinned fixture, unique candidate branch, Agent Runner checkout, Agent Skills checkout, workflow contract, credentials, lead, implementor, and reviewer profiles, evaluator, and run directory; install the pinned workflow skills for the selected CLIs; run or resume the complete Agent Runner workflow; verify candidate delivery and acceptance-handoff completeness; install dependencies, build, and run non-browser verification; start the evaluated final candidate server; run deterministic browser checks and capture evaluator evidence; run the six focused product judge jobs; run the separate non-scoring ambiguity diagnostic; ingest metrics and resolve pricing; write the pending-human-review result and HTML report; attempt candidate-server cleanup; update the pending artifacts with the cleanup outcome; and exit successfully.
 
 The separate human-review command SHALL later restore or start the same evaluated final candidate server; collect or resume human review; calculate the official candidate result; generate the final HTML report; attempt candidate-server cleanup; update the final artifacts; and publish a curated permanent result for a completed scored candidate pass or product-fail run. The candidate server SHALL be running before every browser-dependent phase and SHALL NOT be required to remain running between the automated and human-review commands. If verified product behavior makes the final candidate unable to build or serve, dependent browser and human-review phases SHALL NOT run, and the conclusive product-failure outcome rules SHALL apply instead.
 
-#### Scenario: Automated candidate evaluation follows the phase order
+#### Scenario: Automated evaluation follows the phase order
 - **WHEN** every automated candidate-evaluation phase completes successfully
 - **THEN** each phase begins only after its required predecessor has completed
 - **AND** scored product judging begins only after complete candidate delivery and acceptance-handoff evidence are verified
@@ -76,7 +44,7 @@ The separate human-review command SHALL later restore or start the same evaluate
 - **WHEN** the separate human-review command completes a pending candidate review
 - **THEN** it calculates the official result, writes the final report, attempts cleanup, updates the cleanup outcome, and then publishes the completed result
 
-#### Scenario: Paired fresh benchmark
+#### Scenario: Paired first benchmark
 - **WHEN** autonomous evaluation finishes the pending recreated reference and pending fresh Agent Runner candidate
 - **THEN** a later paired human-review invocation finalizes the reference before the candidate
 - **AND** it generates their shared-92 comparison without rerunning completed automated phases
@@ -110,7 +78,7 @@ If the recorded Agent Runner run is active, the harness SHALL verify that the ac
 - **THEN** the harness invokes `agent-runner --resume` with that exact run identifier
 - **AND** Agent Runner resumes against the recorded branch and draft pull request
 
-#### Scenario: Recorded identity cannot be verified
+#### Scenario: Recorded run cannot be verified
 - **WHEN** the harness cannot verify the recorded run, process, branch, pull request, or revision identity
 - **THEN** it reports an explicit workflow or resume-provenance error
 - **AND** it does not launch another Agent Runner run or silently select another candidate
@@ -136,7 +104,7 @@ When a defect is confined to evaluator-owned phases after a candidate has comple
 - **WHEN** a deterministic check or judged criterion completed with a product-fail verdict before interruption
 - **THEN** resume reuses that completed verdict when its provenance still matches
 
-#### Scenario: Candidate or evidence identity changed
+#### Scenario: Score-affecting provenance changed
 - **WHEN** the recorded branch, PR, final SHA, acceptance-evidence hash, or another score-affecting input differs on resume
 - **THEN** the harness refuses to reuse the stale checkpoint
 - **AND** it reports which provenance changed
@@ -163,6 +131,11 @@ The evaluation result SHALL record the Agent Runner commit and clean-worktree re
 - **WHEN** the harness cannot determine the Agent Runner revision, workflow hash, Agent Skills revision and manifest hash, configured workflow profiles, arguments, candidate identity, executed-step history, final Validator result, or acceptance-artifact identity
 - **THEN** it marks workflow provenance incomplete
 - **AND** it does not present the run as reproducible or ready for scored judging
+
+## REMOVED Requirements
+
+### Requirement: Publishing-side-effect boundary
+**Reason**: Replaced by branch-and-draft-PR delivery semantics; the old stop-point scenarios reference workflow steps this change eliminates.
 
 ## ADDED Requirements
 
@@ -195,3 +168,35 @@ Product defects, failed acceptance flows, limitations, unresolved assumptions, a
 - **WHEN** the completed workflow lacks a required candidate identity, Validator result, acceptance artifact, handoff, or assumptions ledger
 - **THEN** the evaluation reports `implementation-workflow-failed`
 - **AND** it preserves available diagnostics without beginning scored product judging
+
+### Requirement: Candidate delivery and publication boundary
+Before starting Agent Runner, the evaluation harness SHALL create a unique candidate branch named `eval/and-scene/<run-id>` from the pinned fixture commit in the configured fixture repository. The complete workflow SHALL push only that candidate branch and SHALL create or update only its draft pull request. The pull request SHALL have a non-empty base branch identity and SHALL remain a draft.
+
+The workflow SHALL NOT mark the pull request ready, merge it, archive the evaluated OpenSpec change, release the product, close the pull request, or delete the candidate branch. Candidate branches and draft pull requests SHALL be preserved for diagnosis and documented manual cleanup. The harness SHALL require credentials capable of pushing the candidate branch and managing its draft pull request before reporting workflow completion.
+
+The harness SHALL reject a workflow contract that declares a merge, ready-for-review, close, archive, release, or branch-deletion step. After workflow completion, it SHALL verify the observable delivery boundary from recorded workflow history, an existing remote candidate branch, the unarchived change location, and pull-request metadata limited to URL or number, state, draft state, base branch, head branch, and head SHA. It SHALL NOT query CI while performing this verification. An observable prohibited effect SHALL produce `evaluation_status=implementation-workflow-failed` with reason `workflow-side-effect-violation`.
+
+#### Scenario: Unique candidate branch is prepared
+- **WHEN** a fresh candidate evaluation starts
+- **THEN** the harness creates `eval/and-scene/<run-id>` at the pinned fixture commit before Agent Runner begins
+- **AND** it records the configured fixture origin and branch identity
+
+#### Scenario: Complete workflow opens a draft pull request
+- **WHEN** Agent Runner reaches its pull-request step
+- **THEN** it pushes the recorded candidate branch and creates or updates its draft pull request
+- **AND** the resulting pull request has a non-empty base identity and remains a draft
+
+#### Scenario: Publishing credentials are unavailable
+- **WHEN** the workflow cannot push the recorded branch or manage its draft pull request with the supplied credentials
+- **THEN** the evaluation reports an implementation-workflow failure
+- **AND** it does not report the candidate delivery as complete
+
+#### Scenario: Candidate is preserved after evaluation
+- **WHEN** an evaluation completes or fails after creating the candidate branch or draft pull request
+- **THEN** the harness leaves those external resources intact
+- **AND** it records them for diagnosis and manual cleanup
+
+#### Scenario: Prohibited publication is attempted
+- **WHEN** the workflow contract, recorded step or output history, or observable delivery state establishes that the evaluated workflow marked the pull request ready, merged it, archived the change, released the product, closed the pull request, or deleted the candidate branch
+- **THEN** the harness reports `evaluation_status=implementation-workflow-failed` with reason `workflow-side-effect-violation`
+- **AND** it records the unexpected action without treating the workflow as successfully complete

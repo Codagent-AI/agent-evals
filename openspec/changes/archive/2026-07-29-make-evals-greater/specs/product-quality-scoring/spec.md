@@ -33,21 +33,21 @@ The reference SHALL therefore have a score denominator of 92 without rescaling. 
 
 When the user explicitly approves a post-run technical adjudication, the harness SHALL preserve the raw automated criterion and component scores, record the approver, time, rationale, consequential findings, and replacement scores for exactly the four shared technical components, and recalculate the automated subtotal using those four replacement scores plus the unchanged raw scores of every other applicable automated component. It SHALL recalculate the official candidate score from that subtotal and the applicable human-review score, and SHALL recalculate the shared-92 comparison using only the four shared replacement scores and applicable human-review scores. An adjudication SHALL NOT masquerade as a new automated judge result or silently replace the raw score.
 
-#### Scenario: Complete candidate score
+#### Scenario: Complete product score
 - **WHEN** all six automated candidate components and human review have completed successfully
 - **THEN** the evaluator reports every component score and their sum out of 100
 
-#### Scenario: Candidate human review is pending
+#### Scenario: Human review is pending
 - **WHEN** candidate automated scoring has completed but human review has not
 - **THEN** the evaluator reports the automated subtotal out of 70
 - **AND** it does not report an official candidate score or pass verdict
 
-#### Scenario: Harness activity does not change candidate points
+#### Scenario: Harness activity does not change product points
 - **WHEN** evidence repair, retries, workflow execution, pricing, or other generic harness activity occurs
 - **THEN** that activity is recorded diagnostically
 - **AND** it neither awards nor deducts points outside the defined testing-evidence and assumption-handling criteria
 
-#### Scenario: Partial candidate evidence is preserved
+#### Scenario: Partial product evidence is preserved
 - **WHEN** a workflow or evaluation-harness failure prevents some criteria from being observed
 - **THEN** the evaluator preserves completed evidence and component results
 - **AND** it marks the remaining score incomplete rather than assigning failures to unobserved criteria
@@ -61,6 +61,11 @@ When the user explicitly approves a post-run technical adjudication, the harness
 - **WHEN** the recreated reference's applicable automated components and human review are complete
 - **THEN** the evaluator reports its score out of 92 without rescaling
 - **AND** it does not issue an official candidate pass/fail verdict for the reference
+
+#### Scenario: Reference baseline uses the same product rubric
+- **WHEN** the existing implementation is evaluated as a reference baseline
+- **THEN** the evaluator applies the same automated criteria, human questions, weights, gates, thresholds, rubric versions, and score calculation used for Agent Runner candidates on every component shared with the candidate
+- **AND** it marks the candidate-only components not applicable rather than scoring them against the reference
 
 #### Scenario: Shared comparison is reported
 - **WHEN** both the reference and candidate have complete applicable scores
@@ -259,7 +264,7 @@ The revised rubric SHALL classify each of the 68 legacy rubric criteria exactly 
 
 The replaced concerns SHALL remain observable through the testing-evidence criteria and SHALL NOT be scored under their legacy identifiers. The revised rubric SHALL additionally define four testing-evidence and four assumption-handling criteria, each assigned exactly once to its focused judge.
 
-#### Scenario: Legacy criteria are completely classified
+#### Scenario: Existing criteria are completely classified
 - **WHEN** the revised rubric is validated
 - **THEN** all 68 legacy criterion IDs appear in exactly one disposition
 - **AND** the disposition counts are 59 directly scored, four gates, two replaced, and three removed
@@ -308,11 +313,11 @@ The reference baseline SHALL NOT receive an official candidate pass/fail verdict
 - **WHEN** a candidate scores at least 70 overall, meets the demo, scene-kit, and human floors, has no human rating of 1, passes all four hard gates, and completes every required evaluation phase
 - **THEN** the official candidate pass verdict is true
 
-#### Scenario: Candidate misses the numerical threshold
+#### Scenario: Numerical threshold is missed
 - **WHEN** a completed candidate scores below 70 overall
 - **THEN** the official candidate pass verdict is false
 
-#### Scenario: Candidate misses a component floor
+#### Scenario: Component floor is missed
 - **WHEN** a completed candidate scores at least 70 overall but misses the demo, scene-kit, or human-review floor
 - **THEN** the official candidate pass verdict is false
 
@@ -350,7 +355,7 @@ The four implementation source-review jobs SHALL receive a neutral source snapsh
 
 The automated product rubric and human-review rubric SHALL have distinct explicit version identifiers. The result SHALL record each rubric's version and SHA-256 hash, every component's applicability, and the applicable candidate or reference denominator.
 
-#### Scenario: Six focused jobs return valid findings
+#### Scenario: Judge returns findings but does not control scoring
 - **WHEN** every focused judge returns exactly its assigned criteria with valid verdicts, rationales, and evidence
 - **THEN** the suite-owned scorer applies the fixed assignments and weights
 - **AND** it calculates the applicable candidate or reference score

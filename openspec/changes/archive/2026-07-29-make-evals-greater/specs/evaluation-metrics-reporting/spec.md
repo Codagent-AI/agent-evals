@@ -5,11 +5,11 @@ The harness SHALL atomically write a versioned `result.json` containing run kind
 
 The harness SHALL NOT rescale `automated_subtotal`, `available_component_scores`, a reference score, or the shared comparison. In human-facing output, provenance SHALL be labeled in plain language as "source and version details."
 
-#### Scenario: Complete candidate result is written
+#### Scenario: Complete result is written
 - **WHEN** official candidate scoring completes
 - **THEN** `result.json` contains the official score out of 100, full scoring breakdown, candidate and PR identity, metrics, source and version details, and completeness
 
-#### Scenario: Candidate human review is pending
+#### Scenario: Human review is pending
 - **WHEN** all candidate automated scoring completes without finalized human review
 - **THEN** `result.json` contains the automated subtotal out of 70 and no `official_score`
 
@@ -27,12 +27,12 @@ The harness SHALL NOT rescale `automated_subtotal`, `available_component_scores`
 - **WHEN** resumed evaluation produces additional durable results
 - **THEN** the harness atomically replaces `result.json` with a version containing both preserved and newly completed work
 
-#### Scenario: Local reference result is written
+#### Scenario: Reference baseline result is written
 - **WHEN** the existing implementation completes applicable automated and human scoring as a `reference-baseline` run
 - **THEN** its local `result.json` records a denominator of 92 and marks testing evidence and assumption handling not applicable
 - **AND** it marks Agent Runner roles, implementation cost, and implementation timing not applicable rather than zero
 
-#### Scenario: Candidate is linked to its local reference
+#### Scenario: Candidate is linked to its baseline
 - **WHEN** a completed candidate was reviewed against a completed reference with matching rubric provenance
 - **THEN** its result records the reference run identity plus the shared-92 total, component, subcomponent, and gate comparisons
 - **AND** it keeps the candidate's official score out of 100 separate from that comparison
@@ -55,11 +55,11 @@ The report SHALL present a concise score and outcome summary followed by expanda
 
 The harness SHALL generate or update the report whenever `result.json` reaches a durable pending, terminal, resumed, or finalized state.
 
-#### Scenario: Completed candidate passes
+#### Scenario: Completed product passes
 - **WHEN** official candidate scoring produces a pass verdict
 - **THEN** `report.html` prominently displays `PASS` and the official score out of 100
 
-#### Scenario: Completed candidate fails
+#### Scenario: Completed product fails
 - **WHEN** official candidate scoring produces a fail verdict
 - **THEN** `report.html` prominently displays `FAIL` and the official score out of 100
 
@@ -73,7 +73,7 @@ The harness SHALL generate or update the report whenever `result.json` reaches a
 - **THEN** `report.html` prominently displays `EVALUATION FAILED`
 - **AND** it states that the candidate verdict is unavailable while showing completed diagnostic results
 
-#### Scenario: Harness fails after candidate scoring
+#### Scenario: Harness fails after product scoring
 - **WHEN** an official candidate verdict was durably recorded before a later harness failure
 - **THEN** `report.html`, when available, prominently displays both the `PASS` or `FAIL` product verdict and the harness-failure status
 - **AND** it does not erase or change the candidate score
@@ -91,12 +91,12 @@ The harness SHALL generate or update the report whenever `result.json` reaches a
 - **THEN** it renders the two sources in visibly separate labeled sections
 - **AND** it does not present evaluator evidence as proof produced by the candidate
 
-#### Scenario: Shared comparison is rendered
+#### Scenario: Baseline comparison is rendered
 - **WHEN** a completed candidate references a completed local reference produced by matching automated and human rubric versions and hashes
 - **THEN** `report.html` displays their shared-92 totals, applicable components, subcomponents, gates, and deltas
 - **AND** it keeps the candidate's official score out of 100 visually separate
 
-#### Scenario: Reference rubric does not match
+#### Scenario: Baseline rubric does not match
 - **WHEN** a candidate and proposed local reference use different automated or human rubric versions or hashes
 - **THEN** the report refuses to present their scores as a direct comparison
 - **AND** it explains the provenance mismatch
@@ -116,12 +116,12 @@ After human review finalizes an Agent Runner candidate with `evaluation_status=c
 
 The only eligible run kind SHALL be an Agent Runner candidate with a finalized scored pass or product-fail result and completed human review. A conclusive product failure without an official score or human review SHALL remain a local diagnostic and SHALL NOT be published as the finalized benchmark result. A completed publication MAY be superseded without rerunning the evaluation only by its first comparable reference attachment or by a validated user-approved technical adjudication reproducible from the previously published result and the embedded adjudication record; any other score-changing replacement SHALL be rejected. Failed adjudication validation SHALL leave the published snapshot unchanged, record a durable diagnostic identifying the validation failure, and exit nonzero; only publication failures that can succeed without changing the adjudication input SHALL use a retryable publication checkpoint. The permanent snapshot SHALL exclude runtime state, cloned repositories, dependency and build output, Agent Runner session state and transcripts, raw LLM output, full logs, raw acceptance or evaluator screenshots, traces, raw pricing catalogs, credentials, and unrelated working-tree files. A commit or push failure SHALL preserve the completed candidate result, record a retryable publication checkpoint, and exit nonzero. Resume SHALL retry only the unfinished publication work, reuse an existing result commit, and SHALL NOT rerun evaluation or human review, create a duplicate commit, or force-push.
 
-#### Scenario: Completed candidate result is published permanently
+#### Scenario: Completed result is published permanently
 - **WHEN** human review finalizes an Agent Runner candidate with `evaluation_status=complete` and product verdict `pass` or `fail`
 - **THEN** the harness copies `result.json`, `report.html`, `human-review.json`, `ambiguity-ledger.json`, `implementation.diff`, and `artifact-manifest.json` into `evals/agent-runner/and-scene/results/<run-id>/`
 - **AND** from the agent-evals working directory it commits only that exact result directory and runs `git push` on the current branch's configured upstream
 
-#### Scenario: Ineligible result is not published
+#### Scenario: Incomplete result is not published
 - **WHEN** a run is not a finalized scored Agent Runner candidate pass or product-fail result with completed human review
 - **THEN** the harness does not create or push a permanent result commit for that run
 
@@ -130,7 +130,7 @@ The only eligible run kind SHALL be an Agent Runner candidate with a finalized s
 - **THEN** its result and report include evidence summaries, ownership, hashes, final-revision provenance, coverage findings, and contradictions
 - **AND** an auditor can distinguish candidate proof from evaluator diagnostics
 
-#### Scenario: Permanent snapshot excludes raw evidence and runtime data
+#### Scenario: Permanent snapshot excludes runtime data
 - **WHEN** the harness prepares a permanent result directory
 - **THEN** it excludes `.runtime`, cloned repositories, dependency and build output, Agent Runner session state and transcripts, raw LLM output, full logs, raw screenshots, traces, raw pricing catalogs, credentials, and unrelated working-tree files
 

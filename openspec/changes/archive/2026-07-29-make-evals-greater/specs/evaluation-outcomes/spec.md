@@ -5,11 +5,11 @@ The evaluation SHALL report execution status independently from candidate produc
 
 A candidate product verdict SHALL be `pass` only after all required automated scoring, human scoring, and product gates have been completed from sufficient evidence. A candidate product verdict SHALL ordinarily be `fail` only after the same inputs establish that the pass contract was missed. As a narrow exception, deterministic evidence that reproducible product behavior prevents the frozen final candidate from installing, building, or serving SHALL be sufficient for a conclusive `fail` verdict without an official score or fabricated human ratings. A completed local reference SHALL use `product_verdict=not-applicable` because the candidate pass contract does not apply. The evaluation SHALL NOT infer product failure from a failed workflow, failed harness, unfinished human review, or candidate-reported CI state.
 
-#### Scenario: Complete candidate passes
+#### Scenario: Complete product passes
 - **WHEN** all required candidate evaluation work completes and the official score and product gates satisfy the pass rules
 - **THEN** `evaluation_status` is `complete` and `product_verdict` is `pass`
 
-#### Scenario: Complete candidate fails
+#### Scenario: Complete product fails
 - **WHEN** all required candidate evaluation work completes but the official score or a product gate fails the pass rules
 - **THEN** `evaluation_status` is `complete` and `product_verdict` is `fail`
 
@@ -32,7 +32,7 @@ The evaluation SHALL use `pending-human-review` when all required applicable aut
 
 A pending candidate SHALL report its automated subtotal out of 70. A pending local reference SHALL report its applicable automated subtotal out of 62 and SHALL mark testing evidence and assumption handling not applicable.
 
-#### Scenario: Candidate automated scoring awaits reviewer
+#### Scenario: Automated scoring awaits reviewer
 - **WHEN** candidate automated scoring is complete and no finalized human-review record is available
 - **THEN** `evaluation_status` is `pending-human-review`, `product_verdict` is `unavailable`, and no official score is issued
 - **AND** the result reports the automated subtotal out of 70
@@ -42,7 +42,7 @@ A pending candidate SHALL report its automated subtotal out of 70. A pending loc
 - **THEN** `evaluation_status` is `pending-human-review`, `product_verdict` is `unavailable`, and no final reference score is issued
 - **AND** the result reports the applicable automated subtotal out of 62
 
-#### Scenario: Candidate human review is finalized
+#### Scenario: Human review is finalized
 - **WHEN** a pending candidate resumes and finalizes valid human-review responses
 - **THEN** the evaluation replaces the pending state with `complete`
 - **AND** it calculates the applicable `pass` or `fail` candidate verdict
@@ -129,11 +129,11 @@ Once an official candidate score and product verdict have been computed from com
 
 Once a complete local reference score out of 92 has been durably recorded with `product_verdict=not-applicable`, a later harness failure SHALL preserve that score and verdict applicability. A failure before a candidate verdict or complete reference score is durably recorded SHALL preserve completed components diagnostically while leaving the verdict unavailable.
 
-#### Scenario: Cleanup fails after a passing candidate verdict
+#### Scenario: Cleanup fails after a passing verdict
 - **WHEN** a passing candidate score and verdict are durably recorded and candidate-server cleanup subsequently fails
 - **THEN** `evaluation_status` is `evaluation-harness-failed`, `product_verdict` remains `pass`, and the cleanup failure is prominently reported
 
-#### Scenario: Report generation fails after a failing candidate verdict
+#### Scenario: Report generation fails after a failing verdict
 - **WHEN** a failing candidate score and verdict are durably recorded and HTML report generation subsequently fails
 - **THEN** `evaluation_status` is `evaluation-harness-failed`, `product_verdict` remains `fail`, and `result.json` records the missing required report
 
@@ -142,7 +142,7 @@ Once a complete local reference score out of 92 has been durably recorded with `
 - **THEN** `evaluation_status` is `evaluation-harness-failed`
 - **AND** the reference score and `product_verdict=not-applicable` remain unchanged
 
-#### Scenario: Failure occurs before durable scoring
+#### Scenario: Failure occurs before durable verdict
 - **WHEN** a harness failure occurs after some scoring work but before the applicable candidate verdict or complete reference score is durably recorded
 - **THEN** `product_verdict` remains `unavailable`
 - **AND** completed component results are preserved diagnostically
@@ -172,7 +172,7 @@ The harness SHALL checkpoint evaluation status, product-verdict applicability, s
 
 When a harness failure coexists with a valid candidate verdict or complete reference score, human-facing output SHALL display both facts prominently and SHALL explain the harness failure separately from product findings.
 
-#### Scenario: Candidate verdict is available
+#### Scenario: Product verdict is available
 - **WHEN** `product_verdict` is `pass` or `fail`
 - **THEN** the result artifacts display the matching `PASS` or `FAIL` label
 - **AND** they display the official score out of 100 when complete scoring produced one
@@ -191,7 +191,7 @@ When a harness failure coexists with a valid candidate verdict or complete refer
 - **WHEN** workflow or harness failure leaves `product_verdict` unavailable
 - **THEN** the result artifacts display `EVALUATION FAILED` and identify the owning phase and reason
 
-#### Scenario: Harness failure follows valid scoring
+#### Scenario: Harness failure follows valid verdict
 - **WHEN** `evaluation_status` is `evaluation-harness-failed` after a valid candidate verdict or complete reference score
 - **THEN** the result artifacts prominently display both the preserved scoring result and harness-failure status
 - **AND** they do not convert the preserved verdict or applicability
