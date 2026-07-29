@@ -1,6 +1,6 @@
 {
   "rubric_id": "and-scene-automated-product",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "total_points": 100,
   "automated_points": 70,
   "human_points": 30,
@@ -56,7 +56,10 @@
           "points": 4,
           "evaluator": "llm-source-review",
           "job": "demo-integration",
-          "criteria": ["demo-scene-kit-api-use"]
+          "criteria": ["demo-scene-kit-api-use"],
+          "review_guidance": [
+            "Judge scene-kit use at the Talk orchestration and shared Scene boundaries. Do not require every thin step-state module when the verified shared Scene boundary proves the reusable API mechanism; if the rationale makes an all-step claim, cite every step module it relies on."
+          ]
         },
         {
           "id": "demo-identity-and-grouping",
@@ -64,7 +67,10 @@
           "points": 3,
           "evaluator": "llm-source-review",
           "job": "demo-integration",
-          "criteria": ["demo-stable-identity-and-grouping"]
+          "criteria": ["demo-stable-identity-and-grouping"],
+          "review_guidance": [
+            "An all-nine-step identity or grouping claim MUST cite every step module plus the shared Scene mechanism, or cite a focused executable test together with every imported implementation needed to evaluate its setup and assertions. A beginning/middle/end sample is insufficient."
+          ]
         },
         {
           "id": "demo-code-boundaries",
@@ -80,7 +86,8 @@
           "review_guidance": [
             "Confirm that public API inputs and shared constants consumed by the delivered demo are actually used. Score a dead or misleading contract under demo-clear-code-boundaries exactly once, even when its declaration lives in shared scene-kit source; do not duplicate that deduction in another component.",
             "For demo-clear-code-boundaries, trace the required presentation title input through the delivered demo and fail when the public title contract is ignored rather than consumed.",
-            "Accept any semantic current-state attribute paired with a stable presentation-owned active-state hook; do not require one hard-coded hook spelling."
+            "Accept any semantic current-state attribute paired with a stable presentation-owned active-state hook; do not require one hard-coded hook spelling.",
+            "For demo-scope-discipline, inspect the presentation registry, Talk boundary, complete presentation-local implementation, and the shared Presentation boundary. Do not demand proof of absence across unrelated source files; fail only when the inspected architecture shows demo-specific logic outside its local boundary or duplicated shared mechanisms."
           ]
         }
       ]

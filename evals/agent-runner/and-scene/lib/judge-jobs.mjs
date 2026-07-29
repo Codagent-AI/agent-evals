@@ -27,7 +27,7 @@ const SOURCE_AUDIT_CYCLES = 2
 const MAX_EVIDENCE_ITEMS = 60
 const MAX_SOURCE_PATHS = 200
 const MAX_RATIONALE_CHARS = 4000
-const MAX_SOURCE_CITATIONS = 8
+const MAX_SOURCE_CITATIONS = 24
 const MAX_SOURCE_PATH_CHARS = 500
 const MAX_AUDIT_PACKET_CHARS = 300_000
 
@@ -173,6 +173,8 @@ function sourceJudgePrompt({ definition, slice, sources, evidence }) {
     'When a test is cited, inspect the setup and assertions and confirm that they exercise',
     'this exact scenario. Never replace a missing mechanism with plausible behavior. If the',
     'mechanism or focused evidence required by the review guidance is absent, mark it fail.',
+    'Keep each claim no broader than the criterion requires. If a verdict does depend on',
+    'every member of a multi-file set, cite every member rather than a representative sample.',
     'For every result, citations MUST contain exact relative paths copied from the neutral',
     'source file list. These paths will be opened and independently audited; invented paths,',
     'descriptions in place of paths, and uncited pass claims invalidate the judge output.',
@@ -285,7 +287,7 @@ export function buildJudgeRequest({
     rubric_slice: slice,
     source_audit: !evidenceJob && Boolean(neutral?.source_root),
     source_audit_version: !evidenceJob && neutral?.source_root
-      ? 'closed-world-v3-symmetric-tristate'
+      ? 'closed-world-v4-multifile'
       : null,
     prompt,
   }

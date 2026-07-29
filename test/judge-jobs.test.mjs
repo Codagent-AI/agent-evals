@@ -196,7 +196,7 @@ test('source judges must verify behavior and resolve deterministic-fact contradi
     assert.match(request.prompt, /missing mechanism.*plausible behavior/i, job)
     assert.match(request.prompt, /citations MUST contain exact relative paths[\s\S]*neutral\s+source file list/i, job)
     assert.equal(request.source_audit, true, job)
-    assert.equal(request.source_audit_version, 'closed-world-v3-symmetric-tristate', job)
+    assert.equal(request.source_audit_version, 'closed-world-v4-multifile', job)
   }
 })
 
@@ -217,7 +217,7 @@ test('source-judge pass verdicts require explicit neutral-source citation paths'
   )
 })
 
-test('source citations are bounded before they can expand the closed-world packet', () => {
+test('source citations support multi-file claims while remaining bounded', () => {
   const ids = criteriaForJob(automated, 'scene-kit')
   const payload = (citations) => JSON.stringify({
     results: ids.map((id) => ({
@@ -229,9 +229,17 @@ test('source citations are bounded before they can expand the closed-world packe
     })),
   })
 
+  assert.doesNotThrow(
+    () => parseJudgeOutput(
+      payload(Array.from({ length: 12 }, (_, index) => `src/file-${index}.ts`)),
+      ids,
+      'scene-kit',
+      { requireSourceCitations: true },
+    ),
+  )
   assert.throws(
     () => parseJudgeOutput(
-      payload(Array.from({ length: 9 }, (_, index) => `src/file-${index}.ts`)),
+      payload(Array.from({ length: 25 }, (_, index) => `src/file-${index}.ts`)),
       ids,
       'scene-kit',
       { requireSourceCitations: true },

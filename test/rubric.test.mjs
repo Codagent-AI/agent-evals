@@ -108,9 +108,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 3.5 preserves the technical scoring corrections and closes observed judge loopholes', async () => {
+test('rubric 3.6 preserves the technical corrections and makes multi-file proof auditable', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '3.5.0')
+  assert.equal(rubric.version, '3.6.0')
 
   const rows = new Map(
     rubric.components
@@ -136,6 +136,9 @@ test('rubric 3.5 preserves the technical scoring corrections and closes observed
   assert.match(guidance('verification-addressing-and-errors'), /strictPort.*insufficient/i)
   assert.match(guidance('verification-capture'), /fixed.*delay.*insufficient/i)
   assert.match(guidance('verification-warnings'), /assert.*warning output/i)
+  assert.match(guidance('demo-scene-kit-integration'), /shared Scene.*boundar/i)
+  assert.match(guidance('demo-identity-and-grouping'), /every step module/i)
+  assert.match(guidance('demo-code-boundaries'), /unrelated source files/i)
 })
 
 test('each of the six scored judge jobs maps to exactly one component', async () => {
