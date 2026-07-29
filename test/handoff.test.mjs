@@ -1,0 +1,254 @@
+import assert from 'node:assert/strict'
+import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { test } from 'node:test'
+
+import { runEvaluation } from '../evals/agent-runner/and-scene/controller.mjs'
+import { loadCheckpoint } from '../evals/agent-runner/and-scene/lib/checkpoint.mjs'
+import { readJson } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
+import { WORKFLOW_RELATIVE_PATH } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
+
+const workflowYaml = `name: implement-change
+params:
+  - name: change_name
+    required: true
+  - name: skip_validator
+    default: false
+steps:
+  - id: plan
+  - id: implement-tasks
+  - id: review-assumptions
+  - id: simplify
+  - id: run-validator
+  - id: open-draft-pr
+  - id: verify-draft-pr
+  - id: prepare-acceptance
+  - id: verify-acceptance-handoff
+`
+
+const profileArgs = [
+  '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+  '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
+  '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+]
+
+async function environment() {
+  const root = await mkdtemp(join(tmpdir(), 'agent-evals-handoff-'))
+  const agentRunnerDir = join(root, 'agent-runner')
+  const agentSkillsDir = join(root, 'agent-skills')
+  await mkdir(join(agentRunnerDir, 'workflows/openspec'), { recursive: true })
+  await writeFile(join(agentRunnerDir, WORKFLOW_RELATIVE_PATH), workflowYaml)
+  await mkdir(join(agentSkillsDir, '.claude-plugin'), { recursive: true })
+  await writeFile(join(agentSkillsDir, '.claude-plugin/marketplace.json'), '{"name":"codagent"}\n')
+  const home = join(root, 'container-home')
+  await mkdir(home, { recursive: true })
+
+  const exec = (command, args) => {
+    if (command === 'git') {
+      const verb = args.join(' ')
+      if (verb.includes('show') && verb.includes('.validator/config.yml')) {
+        return { status: 0, stdout: 'entry_points: []\n' }
+      }
+      if (verb.includes('show-ref --verify --quiet')) return { status: 1, stdout: '' }
+      if (verb.includes('--is-inside-work-tree')) return { status: 0, stdout: 'true\n' }
+      if (verb.includes('remote get-url origin')) {
+        return { status: 0, stdout: 'https://github.com/Codagent-AI/and-scene.git\n' }
+      }
+      if (verb.includes('ls-remote --symref origin HEAD')) {
+        return { status: 0, stdout: 'ref: refs/heads/main\tHEAD\n' }
+      }
+      if (verb.includes('merge-base --is-ancestor')) return { status: 0, stdout: '' }
+      if (verb.includes('branch --show-current')) {
+        return { status: 0, stdout: 'eval/and-scene/run-1\n' }
+      }
+      if (verb.includes('status --porcelain')) return { status: 0, stdout: '' }
+      if (verb.includes('rev-parse')) return { status: 0, stdout: `${'a'.repeat(40)}\n` }
+    }
+    if (command === 'gh' && args[0] === 'auth') return { status: 0, stdout: '' }
+    if (command === 'gh' && args[0] === 'repo' && args[1] === 'view') {
+      return { status: 0, stdout: 'WRITE\n' }
+    }
+    if (command === 'agent-runner' && args[0] === '--version') return { status: 0, stdout: 'agent-runner 2.4.0\n' }
+    if (command === 'agent-runner' && args[0] === 'debug') return { status: 0, stdout: workflowYaml }
+    return { status: 0, stdout: '' }
+  }
+
+  const runDir = join(root, 'run-1')
+  const source = join(runDir, '.runtime/candidate-worktree/src/index.ts')
+  await mkdir(join(source, '..'), { recursive: true })
+  await writeFile(source, 'export const fixture = true\n')
+  return { root, agentRunnerDir, agentSkillsDir, exec, home, runDir }
+}
+
+function candidateServer({ stopFails = false } = {}) {
+  const started = []
+  const stopped = []
+  const live = new Set()
+  let servedIdentity = null
+  return {
+    started,
+    stopped,
+    isProcessAlive: (pid) => live.has(pid),
+    candidateServer: {
+      start: async (request) => {
+        started.push(request)
+        servedIdentity = request.candidate
+        live.add(9001)
+        return { pid: 9001, url: 'http://127.0.0.1:4173/' }
+      },
+      probe: async () => ({ ok: true, candidate_identity: servedIdentity }),
+      stop: async (server) => {
+        if (stopFails) throw new Error('permission denied')
+        stopped.push(server.pid)
+        live.delete(server.pid)
+      },
+    },
+  }
+}
+
+function scoredJudgeOutput(request) {
+  return JSON.stringify({
+    results: request.criteria.map((id) => ({
+      id,
+      verdict: 'pass',
+      rationale: 'the handoff fixture supplies verified implementation evidence',
+      evidence: ['handoff-fixture:verified'],
+    })),
+  })
+}
+
+async function evaluate(context, extra = {}) {
+  const { judgeInvoke, ...injected } = extra
+  return runEvaluation({
+    argv: [
+      '--run-dir', context.runDir,
+      '--agent-runner-dir', context.agentRunnerDir,
+      '--agent-skills-dir', context.agentSkillsDir,
+      '--change-name', 'create-and-scene',
+      '--candidate-ref', 'candidate-abc',
+      '--skip-validator',
+      ...profileArgs,
+    ],
+    exec: context.exec,
+    home: context.home,
+    readRunnerState: () => ({
+      run_id: 'run-7',
+      session_dir: '/sessions/run-7',
+      workflow_name: 'implement-change',
+      workflow_completed: true,
+    }),
+    observedSteps: () => [
+      { step: 'run-validator', outcome: 'success' },
+      { step: 'open-draft-pr', outcome: 'success' },
+      { step: 'verify-draft-pr', outcome: 'success' },
+      { step: 'prepare-acceptance', outcome: 'success' },
+      { step: 'verify-acceptance-handoff', outcome: 'success' },
+    ],
+    verifyDelivery: async () => ({
+      final_sha: 'a'.repeat(40),
+      pull_request: {
+        number: 53,
+        url: 'https://example.test/pull/53',
+        state: 'OPEN',
+        draft: true,
+        base: 'main',
+        head_branch: 'eval/and-scene/run-1',
+        head_sha: 'a'.repeat(40),
+      },
+      final_validator: { step: 'run-validator', outcome: 'success' },
+      workflow_history: [],
+      acceptance_artifacts: [],
+    }),
+    isProcessAlive: () => false,
+    judgeInvoke: async (request) => (
+      Array.isArray(request.criteria)
+        ? scoredJudgeOutput(request)
+        : (judgeInvoke?.(request) ?? JSON.stringify({ found: false }))
+    ),
+    ...injected,
+  })
+}
+
+test('the automated command hands off at pending-human-review with all three artifacts', async () => {
+  const context = await environment()
+  const infra = candidateServer()
+
+  const result = await evaluate(context, infra)
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(written.evaluation_status, 'pending-human-review')
+  assert.equal(written.product_verdict, 'unavailable')
+  assert.equal('official_score' in written, false)
+  assert.equal(written.label, 'PENDING HUMAN REVIEW')
+  assert.equal('human_review' in written, false)
+
+  const report = await readFile(join(context.runDir, 'report.html'), 'utf8')
+  assert.match(report, /PENDING HUMAN REVIEW/)
+
+  const manifest = await readJson(join(context.runDir, 'artifact-manifest.json'))
+  assert.ok(manifest.artifacts.some(({ path }) => path === 'result.json'))
+  assert.ok(manifest.artifacts.some(({ path }) => path === 'report.html'))
+  assert.ok(!manifest.artifacts.some(({ path }) => path.startsWith('.runtime')))
+})
+
+test('the candidate server is recorded durably and stopped before the command exits', async () => {
+  const context = await environment()
+  const infra = candidateServer()
+
+  await evaluate(context, infra)
+
+  const checkpoint = await loadCheckpoint(join(context.runDir, 'run-state.json'))
+  assert.deepEqual(checkpoint.candidate_server, {
+    pid: 9001,
+    url: 'http://127.0.0.1:4173/',
+    candidate_identity: infra.started[0].candidate,
+  })
+  assert.deepEqual(infra.stopped, [9001])
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(written.cleanup.completed, true)
+  assert.equal(written.candidate_server.url, 'http://127.0.0.1:4173/')
+})
+
+test('a cleanup failure at handoff is diagnostic and still exits successfully', async () => {
+  const context = await environment()
+  const infra = candidateServer({ stopFails: true })
+
+  const result = await evaluate(context, infra)
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(written.evaluation_status, 'pending-human-review')
+  assert.equal(written.cleanup.completed, false)
+  assert.match(written.cleanup.error, /permission denied/)
+  assert.equal('official_score' in written, false)
+  assert.match(await readFile(join(context.runDir, 'report.html'), 'utf8'), /permission denied/)
+})
+
+test('the handoff never asks a human-review question or invents a verdict', async () => {
+  const context = await environment()
+  const asked = []
+
+  const result = await evaluate(context, {
+    ...candidateServer(),
+    io: { ask: (prompt) => { asked.push(prompt); return '5' }, write: () => {} },
+  })
+
+  assert.equal(result.exitCode, 0)
+  assert.deepEqual(asked, [])
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.equal('official_score' in written, false)
+  assert.equal(written.product_verdict, 'unavailable')
+})
+
+test('without a candidate-server adapter the run still reaches a durable pending result', async () => {
+  const context = await environment()
+
+  const result = await evaluate(context)
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(written.evaluation_status, 'pending-human-review')
+  assert.equal(written.candidate_server, null)
+})

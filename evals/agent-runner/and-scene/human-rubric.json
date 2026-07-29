@@ -1,0 +1,104 @@
+{
+  "rubric_id": "and-scene-human-review",
+  "version": "1.0.0",
+  "points": 30,
+  "floor": 15,
+  "question_count": 13,
+  "rating_scale": { "min": 1, "max": 5 },
+  "min_individual_rating": 2,
+  "rationale_required_at_or_below": 3,
+  "anchors": [
+    { "rating": 1, "anchor": "Unacceptable — broken, unusable, or severely deficient" },
+    { "rating": 2, "anchor": "Poor — major visible or usability issues materially hurt the experience" },
+    { "rating": 3, "anchor": "Adequate — functional and understandable, with noticeable issues" },
+    { "rating": 4, "anchor": "Strong — clear and polished, with only minor issues" },
+    { "rating": 5, "anchor": "Excellent — highly intentional and cohesive, with no meaningful problems" }
+  ],
+  "dimensions": [
+    { "id": "per-step", "title": "Average of the nine per-step ratings", "points": 10, "aggregate": "average" },
+    { "id": "readability", "title": "Readability and visual hierarchy", "points": 5, "aggregate": "single" },
+    { "id": "navigation", "title": "Navigation and interaction usability", "points": 4, "aggregate": "single" },
+    { "id": "responsive", "title": "Responsive visual quality", "points": 4, "aggregate": "single" },
+    { "id": "cohesion", "title": "Overall cohesion and polish", "points": 7, "aggregate": "single" }
+  ],
+  "questions": [
+    {
+      "id": "step-1",
+      "number": 1,
+      "dimension": "per-step",
+      "text": "Rate step 1, \"You have a topic.\" Considering its initial composition and entrance, how clearly and intentionally does it present the required content?"
+    },
+    {
+      "id": "step-2",
+      "number": 2,
+      "dimension": "per-step",
+      "text": "Rate step 2, \"The skill interviews you.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?"
+    },
+    {
+      "id": "step-3",
+      "number": 3,
+      "dimension": "per-step",
+      "text": "Rate step 3, \"Answers become steps.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?"
+    },
+    {
+      "id": "step-4",
+      "number": 4,
+      "dimension": "per-step",
+      "text": "Rate step 4, \"The deck grows.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?"
+    },
+    {
+      "id": "step-5",
+      "number": 5,
+      "dimension": "per-step",
+      "text": "Rate step 5, \"You set the depth.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?"
+    },
+    {
+      "id": "step-6",
+      "number": 6,
+      "dimension": "per-step",
+      "text": "Rate step 6, \"It assembles the scene.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?"
+    },
+    {
+      "id": "step-7",
+      "number": 7,
+      "dimension": "per-step",
+      "text": "Rate step 7, \"It checks its own work.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?"
+    },
+    {
+      "id": "step-8",
+      "number": 8,
+      "dimension": "per-step",
+      "text": "Rate step 8, \"Changed your mind? Loop it.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?"
+    },
+    {
+      "id": "step-9",
+      "number": 9,
+      "dimension": "per-step",
+      "text": "Rate step 9, \"You're looking at one.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?"
+    },
+    {
+      "id": "readability",
+      "number": 10,
+      "dimension": "readability",
+      "text": "Rate the presentation's readability and visual hierarchy, including typography, contrast, legibility, scanning order, emphasis, labels, and captions across the presentation."
+    },
+    {
+      "id": "navigation",
+      "number": 11,
+      "dimension": "navigation",
+      "text": "Rate the presentation's navigation and interaction usability, including discoverability, current-step feedback, controls, present/browse switching, and supported navigation methods."
+    },
+    {
+      "id": "responsive",
+      "number": 12,
+      "dimension": "responsive",
+      "text": "Rate the presentation's responsive visual quality: whether it remains readable, composed, and usable across desktop and narrow viewports without problematic clipping, overlap, or chrome interference."
+    },
+    {
+      "id": "cohesion",
+      "number": 13,
+      "dimension": "cohesion",
+      "text": "Rate the presentation's overall cohesion and polish, including consistency, visual rhythm, intentionality, detail quality, and whether it feels finished as a whole."
+    }
+  ]
+}

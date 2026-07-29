@@ -1,0 +1,453 @@
+{
+  "rubric_id": "and-scene-automated-product",
+  "version": "3.10.0",
+  "total_points": 100,
+  "automated_points": 70,
+  "human_points": 30,
+  "pass_threshold": 70,
+  "components": [
+    {
+      "id": "demo-technical-quality",
+      "title": "Demo presentation technical quality",
+      "points": 24,
+      "floor": 15,
+      "subcomponents": [
+        {
+          "id": "demo-canonical-content",
+          "title": "Canonical content, routing, and technical structure",
+          "points": 5,
+          "evaluator": "deterministic-browser",
+          "criteria": [
+            "demo-route-and-registration",
+            "demo-nine-step-content-and-order",
+            "demo-required-scene-content",
+            "demo-evolving-scene-structure",
+            "quality-captions-and-navigation"
+          ]
+        },
+        {
+          "id": "demo-navigation-and-modes",
+          "title": "Navigation, modes, boundaries, and controls",
+          "points": 5,
+          "evaluator": "deterministic-browser",
+          "criteria": [
+            "demo-present-mode-behavior",
+            "demo-browse-mode-behavior",
+            "demo-mode-position-preservation",
+            "demo-supported-navigation",
+            "demo-navigation-boundaries-and-control-keys"
+          ]
+        },
+        {
+          "id": "demo-runtime-reliability",
+          "title": "Runtime reliability and accessibility baseline",
+          "points": 4,
+          "evaluator": "deterministic-browser",
+          "criteria": [
+            "demo-step-and-transition-reliability",
+            "demo-mode-interaction-reliability",
+            "demo-control-semantics",
+            "demo-focus-and-keyboard-accessibility"
+          ]
+        },
+        {
+          "id": "demo-scene-kit-integration",
+          "title": "Uses scene-kit APIs without bypassing or duplicating them",
+          "points": 4,
+          "evaluator": "llm-source-review",
+          "job": "demo-integration",
+          "criteria": ["demo-scene-kit-api-use"],
+          "review_guidance": [
+            "Judge scene-kit use at the Talk orchestration and shared Scene boundaries. Do not require every thin step-state module when the verified shared Scene boundary proves the reusable API mechanism; if the rationale makes an all-step claim, cite every step module it relies on."
+          ]
+        },
+        {
+          "id": "demo-identity-and-grouping",
+          "title": "Uses stable identities and appropriate grouped-scene architecture",
+          "points": 3,
+          "evaluator": "llm-source-review",
+          "job": "demo-integration",
+          "criteria": ["demo-stable-identity-and-grouping"],
+          "review_guidance": [
+            "An all-nine-step identity or grouping claim MUST cite every step module plus the shared Scene mechanism, or cite a focused executable test together with every imported implementation needed to evaluate its setup and assertions. A beginning/middle/end sample is insufficient.",
+            "For the delivered grouped-scene path, prove grouping by tracing each step's groupKey through Stage, and prove stable entity identity by tracing the presentation-owned ENTITY constants through Scene layoutId props to the node consumers. Cite every file used by that proof chain.",
+            "Do not claim that groupKey itself derives entity identity: groupKey preserves the grouped Scene mount, while the separate presentation-owned layoutId values preserve entity identity."
+          ]
+        },
+        {
+          "id": "demo-code-boundaries",
+          "title": "Maintains clear boundaries and scope discipline",
+          "points": 3,
+          "evaluator": "llm-source-review",
+          "job": "demo-integration",
+          "criteria": [
+            "demo-clear-code-boundaries",
+            "quality-active-chrome-and-attribution-local",
+            "demo-scope-discipline"
+          ],
+          "review_guidance": [
+            "Confirm that public API inputs and shared constants consumed by the delivered demo are actually used. Score a dead or misleading contract under demo-clear-code-boundaries exactly once, even when its declaration lives in shared scene-kit source; do not duplicate that deduction in another component.",
+            "For demo-clear-code-boundaries, trace the required presentation title input through the delivered demo and fail when the public title contract is ignored rather than consumed.",
+            "Accept any semantic current-state attribute paired with a stable presentation-owned active-state hook; do not require one hard-coded hook spelling.",
+            "For quality-active-chrome-and-attribution-local, local means the attribution implementation and default are project-local rather than supplied by an external package or remote embed. It does not require the demo to inject or customize attribution through its public Presentation call.",
+            "For demo-scope-discipline, inspect the presentation registry, Talk boundary, complete presentation-local implementation, and the shared Presentation boundary. Do not demand proof of absence across unrelated source files; fail only when the inspected architecture shows demo-specific logic outside its local boundary or duplicated shared mechanisms."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "scene-kit-correctness",
+      "title": "Scene kit correctness",
+      "points": 24,
+      "floor": 15,
+      "subcomponents": [
+        {
+          "id": "scene-step-model",
+          "title": "Step model, stable identity, and typed boundary",
+          "points": 4,
+          "evaluator": "llm-source-review",
+          "job": "scene-kit",
+          "criteria": [
+            "scene-step-narration-and-identity",
+            "scene-order-derived-numbering",
+            "scene-typed-payload-boundary"
+          ]
+        },
+        {
+          "id": "scene-entity-transitions",
+          "title": "Entity transitions and persistent grouped scenes",
+          "points": 7,
+          "evaluator": "llm-source-review",
+          "job": "scene-kit",
+          "criteria": [
+            "entity-persisting-morph",
+            "entity-newcomer-after-settle",
+            "entity-departing-exit",
+            "grouped-scene-updates-in-place",
+            "grouped-continuing-entities-not-newcomers",
+            "grouped-intentional-composition"
+          ],
+          "review_guidance": [
+            "Require persisting motion and newcomer delay to use the same settlement contract, or executable evidence that newcomers actually wait until continuing entities settle; constants or primitives that are merely present are insufficient.",
+            "A shared timing value or constant is insufficient by itself: the persistent motion must consume that exact configuration, or the newcomer must wait on an observable completion signal from the persistent motion.",
+            "Require departing and grouped-scene behavior to be exercised by implementation or focused tests, not inferred only from component names.",
+            "For entity-departing-exit, an opt-in wrapper alone is insufficient when plain conditional removal still disappears synchronously. Require the scene-kit boundary to preserve departing entities for the approved general transition scenario, or focused integration evidence that ordinary authored entities use the exit mechanism.",
+            "For entity-newcomer-after-settle, inspect the exact continuing-entity motion path and newcomer entry path. Fail when the former does not consume the shared settlement contract or the latter waits only on an unrelated fixed delay.",
+            "For entity-persisting-morph, an implemented persisting layout-animation mechanism combined with stable entity identity is technical proof; do not require the sample deck to rearrange an entity or require a focused test unless the claimed mechanism itself remains ambiguous.",
+            "Do not double-deduct entity-persisting-morph solely because entity-newcomer-after-settle lacks a shared settlement contract; score the implemented persisting layout mechanism independently.",
+            "For grouped-continuing-entities-not-newcomers, credit an explicit implementation showing that the grouped scene and continuing child state remain mounted across updates and do not replay newcomer state. Require another focused test only when that implementation path is not explicit."
+          ]
+        },
+        {
+          "id": "scene-modes-and-navigation",
+          "title": "Present/browse modes, navigation, controls, and boundaries",
+          "points": 6,
+          "evaluator": "llm-source-review",
+          "job": "scene-kit",
+          "criteria": [
+            "mode-present-title-focused",
+            "mode-browse-reading-focused",
+            "mode-toggle-preserves-position",
+            "navigation-keyboard",
+            "navigation-touch-swipe",
+            "navigation-direct-jump",
+            "navigation-active-state",
+            "navigation-controls-keep-keys",
+            "navigation-clamp-start",
+            "navigation-clamp-end"
+          ],
+          "review_guidance": [
+            "A touch swipe must be demonstrably predominantly horizontal and must not treat vertical scrolling or multi-touch gestures as navigation.",
+            "For navigation-touch-swipe, inspect whether the implementation records both horizontal and vertical coordinates and the touch count, and require focused assertions for predominantly vertical and multi-touch rejection. Horizontal distance alone fails.",
+            "Equivalent semantic current-state attributes and stable active hooks satisfy the active-state contract; judge behavior rather than exact token spelling.",
+            "For mode-browse-reading-focused, require the active step's title, multi-line caption, wide-viewport table of contents, previous/next controls, and progress indicators exactly as specified.",
+            "Browse mode does not require rendering all steps at once or a separate full-deck reading stack; fail only when the required active-step reading chrome is absent.",
+            "For navigation-controls-keep-keys, focused controls retain their own keyboard semantics: presentation navigation must not intercept supported keys while focus is on an interactive control. Do not interpret this criterion as requiring global presentation navigation to run from a focused control."
+          ]
+        },
+        {
+          "id": "scene-fixed-canvas",
+          "title": "Fixed-canvas behavior",
+          "points": 2,
+          "evaluator": "llm-source-review",
+          "job": "scene-kit",
+          "criteria": ["canvas-uniform-scaling", "canvas-default-dimensions"],
+          "review_guidance": [
+            "For canvas-uniform-scaling, require one uniform fit scale that actually fits the available viewport. A minimum-scale clamp that can force the authored canvas to overflow a smaller viewport fails even when both axes use the same numeric scale.",
+            "Inspect narrow-boundary tests below the minimum clamp rather than crediting a formula or constant name."
+          ]
+        },
+        {
+          "id": "scene-style-and-attribution",
+          "title": "Style ownership, hooks, framework neutrality, and attribution",
+          "points": 5,
+          "evaluator": "llm-source-review",
+          "job": "scene-kit",
+          "criteria": [
+            "style-kit-hooks",
+            "style-unstyled-kit-output",
+            "style-framework-optional",
+            "style-coordinate-heavy-diagrams",
+            "attribution-default-link",
+            "attribution-styling-hook",
+            "attribution-top-left-opt-in"
+          ],
+          "review_guidance": [
+            "For attribution-styling-hook, a stable class or data hook targetable by presentation-owned or host-owned CSS satisfies the contract. It does not require a caller-provided className or style prop.",
+            "For attribution-top-left-opt-in, verify that no default top-left and-scene brand is rendered and that the host can explicitly supply branding. This is a top-left brand rule, not an attribution placement option; the default attribution remains bottom-right."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "presentation-skill-correctness",
+      "title": "Presentation skill correctness",
+      "points": 7,
+      "floor": null,
+      "subcomponents": [
+        {
+          "id": "skill-requirement-gathering",
+          "title": "Requirement gathering and proceeding with partial detail",
+          "points": 1,
+          "evaluator": "llm-source-review",
+          "job": "presentation-skill",
+          "criteria": [
+            "skill-missing-details-one-at-a-time",
+            "skill-partial-detail-proceeds",
+            "skill-complete-prompt-proceeds"
+          ],
+          "review_guidance": [
+            "The normative skill instructions are the implementation for these agent-interaction policies. Credit explicit, unambiguous instructions that require one-at-a-time questioning, permit proceeding with partial detail, and bypass redundant questions for a complete prompt.",
+            "This subcomponent does not require a separate interaction driver or revision-bound transcript unless the instructions are ambiguous or contradictory."
+          ]
+        },
+        {
+          "id": "skill-scaffolding",
+          "title": "Scaffold detection, location, dependencies, and style neutrality",
+          "points": 3,
+          "evaluator": "llm-source-review",
+          "job": "presentation-skill",
+          "criteria": [
+            "skill-empty-directory-scaffold",
+            "skill-already-scaffolded",
+            "skill-partial-scaffold",
+            "skill-scaffold-style-neutral",
+            "skill-template-path-resolution",
+            "skill-monorepo-target",
+            "skill-standalone-target",
+            "skill-nonempty-confirmation"
+          ],
+          "review_guidance": [
+            "Prose instructions alone are insufficient for full scaffold credit when behavior can be exercised; require focused executable tests or verified workflow evidence for empty, existing, partial scaffold, monorepo, standalone, and ambiguous nonempty targets.",
+            "Confirm template path resolution and dependency installation from the resolved target rather than crediting their mention.",
+            "Accepted proof may be a temporary-directory driver that materializes the target state and verifies resulting files and dependencies, or a revision-bound workflow transcript with the inputs, user choice, mutations, and outcome. Interactive confirmation does not require a live human in a unit test, but prose that merely says to ask is not evidence that the branch behaves correctly.",
+            "A test name, filename, shared helper, or empty-directory happy path does not prove the other scaffold branches. For each criterion, inspect the test setup and assertions and require that they construct that exact target state and verify its specific outcome."
+          ]
+        },
+        {
+          "id": "skill-presentation-lifecycle",
+          "title": "Create, modify, route, and preserve presentations",
+          "points": 2,
+          "evaluator": "llm-source-review",
+          "job": "presentation-skill",
+          "criteria": [
+            "skill-new-presentation-routed",
+            "skill-presentation-owns-style",
+            "skill-existing-presentations-preserved",
+            "skill-modify-ambiguous-target",
+            "skill-scoped-modification"
+          ],
+          "review_guidance": [
+            "The normative skill instructions are the implementation for target selection, preservation, and scoped editing behavior. Credit explicit instructions that preserve existing presentations, resolve ambiguous modification targets before editing, and confine edits to the chosen presentation.",
+            "Implemented registry, routing, and presentation-owned styling mechanisms must still support those instructions; do not demand a separate multi-turn interaction transcript when the policy and supporting mechanisms are explicit."
+          ]
+        },
+        {
+          "id": "skill-self-verification",
+          "title": "Self-verification and fixing failures before completion",
+          "points": 1,
+          "evaluator": "llm-source-review",
+          "job": "presentation-skill",
+          "criteria": [
+            "skill-checks-run-before-done",
+            "skill-failures-fixed-before-success"
+          ],
+          "review_guidance": [
+            "The normative skill instructions are the implementation of the agent's completion gate. Credit explicit instructions that require build, render, and browser composition checks before success and require fixing and rerunning failures before completion.",
+            "Do not require an automated agent-remediation loop or interaction transcript; the verification tooling itself is scored separately for its executable technical behavior."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "verification-tool-correctness",
+      "title": "Verification tool correctness",
+      "points": 7,
+      "floor": null,
+      "subcomponents": [
+        {
+          "id": "verification-missing-sample",
+          "title": "Detects a missing reference sample",
+          "points": 1,
+          "evaluator": "llm-source-review",
+          "job": "verification-tooling",
+          "criteria": ["verification-missing-sample-fails"],
+          "review_guidance": [
+            "Credit an explicit reachable failure branch that detects the missing canonical sample and produces a nonzero verification outcome. This criterion does not require a dedicated missing-sample regression test when the implementation mechanism is explicit."
+          ]
+        },
+        {
+          "id": "verification-addressing-and-errors",
+          "title": "Preview addressing and runtime/step error detection",
+          "points": 2,
+          "evaluator": "llm-source-review",
+          "job": "verification-tooling",
+          "criteria": [
+            "verification-ipv4-loopback",
+            "verification-preview-process-ownership",
+            "verification-console-page-error-fails",
+            "verification-step-error-fails"
+          ],
+          "review_guidance": [
+            "Score preview ownership only under verification-preview-process-ownership. Score IPv4 loopback only under verification-ipv4-loopback, based on whether preview binding, readiness probes, and browser URLs consistently use 127.0.0.1.",
+            "For verification-preview-process-ownership, the verifier must prove it is connected to the preview process it started and must fail if that child exits; a fixed port must not permit an unrelated stale server to satisfy readiness.",
+            "Vite --strictPort is insufficient by itself: readiness must race or otherwise check the spawned child process so an already-listening stale responder cannot be accepted after the intended child exits.",
+            "Require focused executable evidence that console, page, and step failures propagate with the failing step identified."
+          ]
+        },
+        {
+          "id": "verification-capture",
+          "title": "Complete, settled screenshot capture",
+          "points": 2,
+          "evaluator": "llm-source-review",
+          "job": "verification-tooling",
+          "criteria": [
+            "quality-project-local-screenshot-helper",
+            "visual-helper-captures-steps",
+            "visual-helper-settled-screenshots"
+          ],
+          "review_guidance": [
+            "Settlement must observe animation completion or consume the exact transition configuration that persistent scene motion uses. Merely duplicating a numeric delay or importing a value that persistent motion does not consume is insufficient.",
+            "A fixed settlement delay is insufficient even when it is longer than named animation durations; require an observed completion condition or a transition contract consumed by both runtime motion and capture.",
+            "Require executable evidence that every produced step is captured from the intended preview.",
+            "The project-local screenshot helper is a separate inspection command from the build and render verifier. For quality-project-local-screenshot-helper, credit an implemented project-local helper that the skill can invoke; this criterion does not require the build or render verifier itself to invoke that helper."
+          ]
+        },
+        {
+          "id": "verification-warnings",
+          "title": "Overlap, active-state, and attribution warnings",
+          "points": 2,
+          "evaluator": "llm-source-review",
+          "job": "verification-tooling",
+          "criteria": [
+            "visual-helper-overlap-warning",
+            "visual-helper-allow-overlap",
+            "visual-helper-active-state-warning",
+            "visual-helper-attribution-warning"
+          ],
+          "review_guidance": [
+            "Require executable warning regressions or verified browser evidence; token presence and uncalled helper functions are insufficient.",
+            "Evidence from an earlier revision may count only when verified lineage establishes that revision as an ancestor of the final SHA, hashes prove the relevant warning implementation is unchanged, and retained raw executable output demonstrates the behavior. A narrative claim that an earlier pass verified it is insufficient.",
+            "A passing warning criterion must cite a focused test whose setup triggers that exact warning and whose assertions verify the warning output or retained raw executable evidence. A generic alignment test filename or source inspection alone is insufficient.",
+            "Active-state comparison may use aria-current or any stable active-state hook, but it must compare rendered active and inactive styles.",
+            "Overlap detection must inspect representative nested text/chrome and prove intentional-overlap suppression without hiding unrelated collisions."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "testing-evidence-quality",
+      "title": "Testing-evidence quality",
+      "points": 4,
+      "floor": null,
+      "reference_applicable": false,
+      "subcomponents": [
+        {
+          "id": "testing-evidence-quality-criteria",
+          "title": "Verified candidate-produced testing evidence",
+          "points": 4,
+          "evaluator": "llm-evidence-review",
+          "job": "testing-evidence",
+          "criteria": [
+            "testing-evidence-traceable-coverage",
+            "testing-evidence-usable-proof",
+            "testing-evidence-final-revision-applicability",
+            "testing-evidence-complete-honest-record"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "assumption-handling-quality",
+      "title": "Assumption-handling quality",
+      "points": 4,
+      "floor": null,
+      "reference_applicable": false,
+      "subcomponents": [
+        {
+          "id": "assumption-handling-quality-criteria",
+          "title": "Observable assumption handling",
+          "points": 4,
+          "evaluator": "llm-evidence-review",
+          "job": "assumption-handling",
+          "criteria": [
+            "assumption-consequential-ambiguities-surfaced",
+            "assumption-repository-facts-distinguished",
+            "assumption-decisions-and-escalations-proportionate",
+            "assumption-final-handoff-preserves-decisions"
+          ],
+          "review_guidance": [
+            "Compare candidate classifications against approved requirements and discoverable repository facts. An environmental trigger does not make observed candidate behavior requirement-conforming.",
+            "When the workflow reproduces behavior that violates an approved requirement but calls it not a finding or optional hardening, fail assumption-repository-facts-distinguished and assumption-decisions-and-escalations-proportionate even if the raw observation was surfaced and preserved.",
+            "Score assumption-final-handoff-preserves-decisions independently: fail it for omission of an unresolved decision, consequence, material limitation, or actionable option; do not fail it solely for a misclassification when the raw observation, consequence, and action remain preserved.",
+            "Do not use an assumption-handling deduction to replace the technical product deduction or to reduce testing-evidence credit when the evidence record remains candid and usable."
+          ]
+        }
+      ]
+    }
+  ],
+  "gates": [
+    {
+      "id": "verification-build-whole-app",
+      "requirement": "The complete application builds successfully"
+    },
+    {
+      "id": "verification-sample-outline",
+      "requirement": "The canonical nine-step sample exists, is registered and reachable, and matches its required outline"
+    },
+    {
+      "id": "verification-every-produced-step-renders",
+      "requirement": "Every produced step renders without runtime or console errors"
+    },
+    {
+      "id": "verification-clear-outcome",
+      "requirement": "Verification produces an unambiguous machine-readable pass/fail result"
+    }
+  ],
+  "replaced": [
+    {
+      "id": "quality-visual-composition-inspected",
+      "replacement": "testing-evidence-usable-proof",
+      "reason": "Observable visual inspection proof is evaluated once under testing-evidence quality."
+    },
+    {
+      "id": "quality-visual-warnings-reviewed",
+      "replacement": "testing-evidence-complete-honest-record",
+      "reason": "Visual warning disposition is evaluated once under testing-evidence quality."
+    }
+  ],
+  "removed": [
+    {
+      "id": "skill-optional-ascii-mockup",
+      "reason": "Describes optional behavior, so it cannot award or deduct product points."
+    },
+    {
+      "id": "quality-builds-clean",
+      "reason": "The verification-build-whole-app hard gate covers this outcome more strongly."
+    },
+    {
+      "id": "quality-renders-without-errors",
+      "reason": "The verification-every-produced-step-renders hard gate covers this outcome more strongly."
+    }
+  ]
+}

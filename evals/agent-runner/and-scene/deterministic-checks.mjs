@@ -1,24 +1,23 @@
 #!/usr/bin/env node
+// Static source evidence about the delivered candidate.
+//
+// These scans no longer produce criterion verdicts of their own. The scored
+// criteria come from the live browser evaluation and the four product judges;
+// what this module produces is bounded, cited evidence those judges reason
+// over, plus the source half of the canonical-sample hard gate.
 import { opendir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { pathToFileURL } from 'node:url'
+
+import { DEMO_STEP_TITLES } from './lib/demo-contract.mjs'
 
 const MAX_TEXT_FILES = 500
 const MAX_TEXT_FILE_BYTES = 512 * 1024
 const MAX_TOTAL_TEXT_BYTES = 4 * 1024 * 1024
 const MAX_SCAN_ENTRIES = 2000
 
-const SAMPLE_TITLES = [
-  'You have a topic',
-  'The skill interviews you',
-  'Answers become steps',
-  'The deck grows',
-  'You set the depth',
-  'It assembles the scene',
-  'It checks its own work',
-  'Changed your mind? Loop it.',
-  "You're looking at one",
-]
+// The canonical outline is normative and shared with the browser evaluation.
+const SAMPLE_TITLES = DEMO_STEP_TITLES
 
 async function textFiles(root, directory, budget) {
   const base = join(root, directory)
@@ -83,11 +82,29 @@ function hasTokens(text, tokens) {
   return tokens.every((token) => lower.includes(token.toLowerCase()))
 }
 
-export async function runDeterministicChecks(root, { screenshotManifest } = {}) {
+// The full scan: the evidence rows plus the bounded list of candidate source
+// paths that produced them. Judges need the paths to know what there is to
+// review; without them a judge would be answering source-review criteria having
+// been shown no source at all.
+export async function collectSourceEvidence(root, options = {}) {
   const scanBudget = { entries: 0, files: 0, bytes: 0, exceeded: [] }
+  const evidence = await runDeterministicChecks(root, { ...options, scanBudget })
+  return {
+    evidence,
+    files: scanBudget.paths,
+    budget_exceeded: [...new Set(scanBudget.exceeded)],
+  }
+}
+
+export async function runDeterministicChecks(root, { screenshotManifest, scanBudget: injected } = {}) {
+  const scanBudget = injected ?? { entries: 0, files: 0, bytes: 0, exceeded: [] }
+  scanBudget.paths = []
   const sourceFiles = await textFiles(root, 'src', scanBudget)
   const scriptFiles = await textFiles(root, 'scripts', scanBudget)
   const skillFiles = await textFiles(root, 'skills', scanBudget)
+  scanBudget.paths = [...sourceFiles, ...scriptFiles, ...skillFiles]
+    .map(({ path }) => path)
+    .sort()
   const source = sourceFiles.map(({ text }) => text).join('\n')
   const verify = scriptFiles.find(({ path }) => path === 'scripts/verify.mjs')?.text || ''
   const screenshotFile = [...scriptFiles, ...skillFiles]
@@ -112,10 +129,12 @@ export async function runDeterministicChecks(root, { screenshotManifest } = {}) 
   }
 
   const attribution = source.includes('made by and-scene') && source.includes('github.com/Codagent-AI/and-scene')
-  const activeState = source.includes('aria-current') && (source.includes('data-active') || source.includes('is-active'))
+  const stableActiveHook = (text) => /data-(?:[a-z0-9-]*-)?active\b|is-active\b/i.test(text)
+  const activeState = source.includes('aria-current') && stableActiveHook(source)
   const localHelper = Boolean(screenshotFile) && screenshot.includes('playwright')
   const overlap = hasTokens(screenshot, ['overlap', 'warning']) && (screenshot.includes('data-allow-overlap') || screenshot.includes('allow-overlap'))
-  const activeWarning = hasTokens(screenshot, ['getComputedStyle', 'active', 'inactive', 'warning']) && screenshot.includes('aria-current')
+  const activeWarning = hasTokens(screenshot, ['getComputedStyle', 'active', 'inactive', 'warning'])
+    && (screenshot.includes('aria-current') || stableActiveHook(screenshot))
   const attributionTarget = screenshot.includes('made by and-scene') || screenshot.includes('data-presentation-attribution')
   const attributionMissing = /missing[^\n]{0,40}attribution/i.test(screenshot)
     || /!\s*(?:isVisible\()?attribution/.test(screenshot)

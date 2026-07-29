@@ -1,0 +1,42 @@
+{
+  "schema_version": 2,
+  "run_id": "candidate-rescore-20260728-browser-fixed-4",
+  "projection": {
+    "evaluation_status": "complete",
+    "product_verdict": "pass",
+    "score_denominator": 100,
+    "official_score": 80.191666666667,
+    "failed_phase": null,
+    "failure": null
+  },
+  "excluded": [
+    ".runtime"
+  ],
+  "artifacts": [
+    {
+      "path": "ambiguity-ledger.json",
+      "bytes": 22794,
+      "sha256": "8d729279cf1d1bcc43e739d2b8f0a1c28b76d49f0f37300b70b0a962fa00b32a"
+    },
+    {
+      "path": "human-review.json",
+      "bytes": 6519,
+      "sha256": "8b87355ccd19e0e20abda587db5af9c19e81bca84c46c65235eb454e670a8d70"
+    },
+    {
+      "path": "implementation.diff",
+      "bytes": 292517,
+      "sha256": "01b96eb02c448d3dde37f15f90e215bce37a2d753c37c64469a183019a3db478"
+    },
+    {
+      "path": "report.html",
+      "bytes": 371904,
+      "sha256": "fd044276d75eddf2e06a33bfb01cb21abd948942b6b06a4cb30bbb019681e4ce"
+    },
+    {
+      "path": "result.json",
+      "bytes": 611134,
+      "sha256": "691613a2270c2fef9880ff3e80337bd70ac173f474194831de4ec62358c2dea7"
+    }
+  ]
+}
