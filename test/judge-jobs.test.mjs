@@ -196,7 +196,7 @@ test('source judges must verify behavior and resolve deterministic-fact contradi
     assert.match(request.prompt, /missing mechanism.*plausible behavior/i, job)
     assert.match(request.prompt, /citations MUST contain exact relative paths[\s\S]*neutral\s+source file list/i, job)
     assert.equal(request.source_audit, true, job)
-    assert.equal(request.source_audit_version, 'closed-world-v5-three-cycle', job)
+    assert.equal(request.source_audit_version, 'closed-world-v6-cumulative-three-cycle', job)
   }
 })
 
@@ -768,10 +768,10 @@ test('a second insufficient audit receives one final focused source retry', asyn
   const responses = [
     primary(['src/scene.ts'], 'stable identity exists'),
     auditOutput(ids, { [ids[0]]: 'insufficient' }),
-    primary(['src/scene.ts', 'src/node.ts'], 'stable identity uses layout motion'),
+    primary(['src/node.ts'], 'stable identity uses layout motion'),
     auditOutput(ids, { [ids[0]]: 'insufficient' }),
     primary(
-      ['src/scene.ts', 'src/node.ts', 'src/node.test.ts'],
+      ['src/node.test.ts'],
       'stable identity uses tested layout motion',
     ),
     auditOutput(ids),
@@ -802,6 +802,11 @@ test('a second insufficient audit receives one final focused source retry', asyn
     assert.equal(result.attempts.length, 3)
     assert.equal(result.audit_attempts.length, 3)
     assert.match(requests[4].prompt, /previous source audit found insufficient citations/i)
+    assert.match(requests[3].prompt, /stableIdentity/)
+    assert.match(requests[3].prompt, /layoutMotion/)
+    assert.match(requests[5].prompt, /stableIdentity/)
+    assert.match(requests[5].prompt, /layoutMotion/)
+    assert.match(requests[5].prompt, /morphTest/)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
