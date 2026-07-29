@@ -140,6 +140,8 @@ test('a superseding adjudication renders the current review and its superseded a
       },
       prior_shared_technical_score: 58,
       revised_shared_technical_score: 53.691666666667,
+      prior_workflow_quality_score: 8,
+      revised_workflow_quality_score: 6,
       findings: ['final finding'],
     },
   })
@@ -152,6 +154,8 @@ test('a superseding adjudication renders the current review and its superseded a
   assert.match(html, /Final rubric 3\.2 review/)
   assert.match(html, /and-scene-automated-product 3\.2\.0/)
   assert.match(html, new RegExp('c{64}'))
+  assert.match(html, /Prior workflow-quality score/)
+  assert.match(html, /Revised workflow-quality score/)
 })
 
 test('technical adjudication audit text is escaped rather than rendered as markup', () => {

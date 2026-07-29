@@ -543,6 +543,10 @@ test('a completed publication can be superseded only by a validated technical ad
       'presentation-skill-correctness': 41 / 8,
       'verification-tool-correctness': 13 / 3,
     },
+    workflow_component_scores: {
+      'testing-evidence-quality': 4,
+      'assumption-handling-quality': 2,
+    },
     findings: ['the final rubric review found no consequential scoring ambiguity'],
   })
   await writeFile(join(runDir, 'result.json'), JSON.stringify(final))
@@ -559,7 +563,7 @@ test('a completed publication can be superseded only by a validated technical ad
     58,
   )
   assert.equal(finalPublished.technical_adjudication.revised_shared_technical_score, 53.691666666667)
-  assert.equal(finalPublished.official_score, 82.191666666667)
+  assert.equal(finalPublished.official_score, 80.191666666667)
 })
 
 test('an invalid adjudication leaves the published snapshot unchanged and records the failure', async () => {

@@ -10,6 +10,10 @@ import { SHARED_COMPONENT_IDS } from './baseline.mjs'
 import { hashJson } from './persistence.mjs'
 
 export const TECHNICAL_ADJUDICATION_SCHEMA_VERSION = 1
+const WORKFLOW_COMPONENT_IDS = [
+  'testing-evidence-quality',
+  'assumption-handling-quality',
+]
 
 function round(value) {
   return Math.round(value * 1e12) / 1e12
@@ -73,14 +77,34 @@ function validateReview(result, review) {
   if (hashJson(supplied) !== hashJson(expected)) {
     throw new Error('technical adjudication must score exactly the four shared technical components')
   }
+  const hasWorkflowScores = Object.hasOwn(review ?? {}, 'workflow_component_scores')
+  if (hasWorkflowScores) {
+    if (
+      review.workflow_component_scores === null
+      || typeof review.workflow_component_scores !== 'object'
+      || Array.isArray(review.workflow_component_scores)
+    ) {
+      throw new Error('technical adjudication workflow_component_scores must be an object')
+    }
+    const suppliedWorkflow = Object.keys(review.workflow_component_scores).sort()
+    const expectedWorkflow = [...WORKFLOW_COMPONENT_IDS].sort()
+    if (hashJson(suppliedWorkflow) !== hashJson(expectedWorkflow)) {
+      throw new Error(
+        'technical adjudication must score exactly the two workflow-quality components when supplied',
+      )
+    }
+  }
 
   const indexed = new Map((result.score?.components ?? []).map((component) => [component.id, component]))
-  for (const id of SHARED_COMPONENT_IDS) {
+  const reviewedIds = hasWorkflowScores
+    ? [...SHARED_COMPONENT_IDS, ...WORKFLOW_COMPONENT_IDS]
+    : SHARED_COMPONENT_IDS
+  for (const id of reviewedIds) {
     const component = indexed.get(id)
     if (!component || !Number.isFinite(component.points_awarded)) {
       throw new Error(`technical adjudication requires a complete raw score for ${id}`)
     }
-    const revised = review.component_scores[id]
+    const revised = review.component_scores[id] ?? review.workflow_component_scores[id]
     if (!Number.isFinite(revised) || revised < 0 || revised > component.points_possible) {
       throw new Error(
         `${id} adjudicated score ${JSON.stringify(revised)} is outside 0-${component.points_possible}`,
@@ -120,17 +144,36 @@ export function applyTechnicalAdjudication(result, review) {
   const componentScores = Object.fromEntries(
     SHARED_COMPONENT_IDS.map((id) => [id, review.component_scores[id]]),
   )
+  const workflowComponentScores = Object.hasOwn(review, 'workflow_component_scores')
+    ? Object.fromEntries(
+        WORKFLOW_COMPONENT_IDS.map((id) => [id, review.workflow_component_scores[id]]),
+      )
+    : null
+  const allComponentScores = {
+    ...componentScores,
+    ...(workflowComponentScores ?? {}),
+  }
   const priorShared = round(
     result.score.components
       .filter(({ id }) => SHARED_COMPONENT_IDS.includes(id))
       .reduce((sum, { points_awarded: points }) => sum + points, 0),
   )
   const revisedShared = round(Object.values(componentScores).reduce((sum, points) => sum + points, 0))
+  const priorWorkflow = workflowComponentScores
+    ? round(
+        result.score.components
+          .filter(({ id }) => WORKFLOW_COMPONENT_IDS.includes(id))
+          .reduce((sum, { points_awarded: points }) => sum + points, 0),
+      )
+    : null
+  const revisedWorkflow = workflowComponentScores
+    ? round(Object.values(workflowComponentScores).reduce((sum, points) => sum + points, 0))
+    : null
   const components = result.score.components.map((component) => {
-    if (!Object.hasOwn(componentScores, component.id)) return component
+    if (!Object.hasOwn(allComponentScores, component.id)) return component
     const prior = component.points_awarded
     const raw = component.raw_points_awarded ?? prior
-    const revised = componentScores[component.id]
+    const revised = allComponentScores[component.id]
     return {
       ...component,
       raw_points_awarded: raw,
@@ -168,6 +211,13 @@ export function applyTechnicalAdjudication(result, review) {
         }
       : {}),
     component_scores: componentScores,
+    ...(workflowComponentScores
+      ? {
+          workflow_component_scores: workflowComponentScores,
+          prior_workflow_quality_score: priorWorkflow,
+          revised_workflow_quality_score: revisedWorkflow,
+        }
+      : {}),
     prior_shared_technical_score: priorShared,
     revised_shared_technical_score: revisedShared,
     prior_automated_subtotal: result.score.automated_subtotal?.points
@@ -231,6 +281,9 @@ export function validateTechnicalAdjudicationSupersession(published, next) {
       ? { reviewed_rubric: record.reviewed_rubric }
       : {}),
     component_scores: record.component_scores,
+    ...(Object.hasOwn(record, 'workflow_component_scores')
+      ? { workflow_component_scores: record.workflow_component_scores }
+      : {}),
   }
   try {
     const expected = applyTechnicalAdjudication(published, review)

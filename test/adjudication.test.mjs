@@ -141,6 +141,10 @@ test('a reviewed adjudication can supersede a provisional adjudication without l
       'presentation-skill-correctness': 41 / 8,
       'verification-tool-correctness': 13 / 3,
     },
+    workflow_component_scores: {
+      'testing-evidence-quality': 4,
+      'assumption-handling-quality': 2,
+    },
     findings: ['fresh independent review found no consequential rubric issues'],
   }
 
@@ -151,14 +155,20 @@ test('a reviewed adjudication can supersede a provisional adjudication without l
   assert.equal(revised.technical_adjudication_history.length, 1)
   assert.deepEqual(revised.technical_adjudication_history[0], provisional.technical_adjudication)
   assert.deepEqual(revised.technical_adjudication.reviewed_rubric, finalReview.reviewed_rubric)
-  assert.equal(revised.automated_subtotal.points, 61.691666666667)
-  assert.equal(revised.official_score, 82.191666666667)
+  assert.equal(revised.technical_adjudication.prior_workflow_quality_score, 8)
+  assert.equal(revised.technical_adjudication.revised_workflow_quality_score, 6)
+  assert.equal(revised.automated_subtotal.points, 59.691666666667)
+  assert.equal(revised.official_score, 80.191666666667)
   const demo = revised.score.components.find(({ id }) => id === 'demo-technical-quality')
   assert.equal(demo.raw_points_awarded, 23)
   assert.equal(demo.prior_points_awarded, 24)
   assert.equal(demo.points_awarded, 23)
   assert.equal(demo.adjudication_adjustment, 0)
   assert.equal(demo.prior_adjudication_adjustment, -1)
+  const assumptions = revised.score.components.find(({ id }) => id === 'assumption-handling-quality')
+  assert.equal(assumptions.raw_points_awarded, 4)
+  assert.equal(assumptions.points_awarded, 2)
+  assert.equal(assumptions.adjudication_adjustment, -2)
   assert.equal(
     module.validateTechnicalAdjudicationSupersession(provisional, revised).valid,
     true,

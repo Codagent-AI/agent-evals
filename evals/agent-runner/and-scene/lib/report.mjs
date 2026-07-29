@@ -252,6 +252,12 @@ function adjudicationSection(result) {
       ['Approved at', review.approved_at],
       ['Prior shared technical score', points(review.prior_shared_technical_score)],
       ['Revised shared technical score', points(review.revised_shared_technical_score)],
+      ...(Number.isFinite(review.revised_workflow_quality_score)
+        ? [
+            ['Prior workflow-quality score', points(review.prior_workflow_quality_score)],
+            ['Revised workflow-quality score', points(review.revised_workflow_quality_score)],
+          ]
+        : []),
       ['Prior official score', points(review.prior_official_score)],
       ['Revised official score', points(review.revised_official_score)],
       ...(review.reviewed_rubric
