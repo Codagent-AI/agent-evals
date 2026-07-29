@@ -1,6 +1,6 @@
 {
   "rubric_id": "and-scene-automated-product",
-  "version": "3.6.0",
+  "version": "3.7.0",
   "total_points": 100,
   "automated_points": 70,
   "human_points": 30,
@@ -87,6 +87,7 @@
             "Confirm that public API inputs and shared constants consumed by the delivered demo are actually used. Score a dead or misleading contract under demo-clear-code-boundaries exactly once, even when its declaration lives in shared scene-kit source; do not duplicate that deduction in another component.",
             "For demo-clear-code-boundaries, trace the required presentation title input through the delivered demo and fail when the public title contract is ignored rather than consumed.",
             "Accept any semantic current-state attribute paired with a stable presentation-owned active-state hook; do not require one hard-coded hook spelling.",
+            "For quality-active-chrome-and-attribution-local, local means the attribution implementation and default are project-local rather than supplied by an external package or remote embed. It does not require the demo to inject or customize attribution through its public Presentation call.",
             "For demo-scope-discipline, inspect the presentation registry, Talk boundary, complete presentation-local implementation, and the shared Presentation boundary. Do not demand proof of absence across unrelated source files; fail only when the inspected architecture shows demo-specific logic outside its local boundary or duplicated shared mechanisms."
           ]
         }

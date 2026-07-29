@@ -19,7 +19,7 @@ import { lstat, readFile, realpath } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 
 export const JUDGE_ATTEMPTS = 2
-const SOURCE_AUDIT_CYCLES = 2
+const SOURCE_AUDIT_CYCLES = 3
 
 // How much candidate-controlled text any one job may carry. Candidate material
 // is quoted evidence inside a delimited block, never instruction, and it is
@@ -287,7 +287,7 @@ export function buildJudgeRequest({
     rubric_slice: slice,
     source_audit: !evidenceJob && Boolean(neutral?.source_root),
     source_audit_version: !evidenceJob && neutral?.source_root
-      ? 'closed-world-v4-multifile'
+      ? 'closed-world-v5-three-cycle'
       : null,
     prompt,
   }

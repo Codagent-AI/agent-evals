@@ -108,9 +108,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 3.6 preserves the technical corrections and makes multi-file proof auditable', async () => {
+test('rubric 3.7 preserves technical corrections and makes source boundaries auditable', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '3.6.0')
+  assert.equal(rubric.version, '3.7.0')
 
   const rows = new Map(
     rubric.components
@@ -139,6 +139,7 @@ test('rubric 3.6 preserves the technical corrections and makes multi-file proof 
   assert.match(guidance('demo-scene-kit-integration'), /shared Scene.*boundar/i)
   assert.match(guidance('demo-identity-and-grouping'), /every step module/i)
   assert.match(guidance('demo-code-boundaries'), /unrelated source files/i)
+  assert.match(guidance('demo-code-boundaries'), /project-local.*does not require.*inject/i)
 })
 
 test('each of the six scored judge jobs maps to exactly one component', async () => {

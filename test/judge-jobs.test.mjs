@@ -196,7 +196,7 @@ test('source judges must verify behavior and resolve deterministic-fact contradi
     assert.match(request.prompt, /missing mechanism.*plausible behavior/i, job)
     assert.match(request.prompt, /citations MUST contain exact relative paths[\s\S]*neutral\s+source file list/i, job)
     assert.equal(request.source_audit, true, job)
-    assert.equal(request.source_audit_version, 'closed-world-v4-multifile', job)
+    assert.equal(request.source_audit_version, 'closed-world-v5-three-cycle', job)
   }
 })
 
@@ -728,6 +728,65 @@ test('an insufficient primary fail is re-judged instead of charged to the candid
   }
 })
 
+test('a second insufficient audit receives one final focused source retry', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const sourceRoot = join(root, 'source')
+  await mkdir(join(sourceRoot, 'src'), { recursive: true })
+  await writeFile(join(sourceRoot, 'src/scene.ts'), 'export const stableIdentity = true\n')
+  await writeFile(join(sourceRoot, 'src/node.ts'), 'export const layoutMotion = true\n')
+  await writeFile(join(sourceRoot, 'src/node.test.ts'), 'export const morphTest = true\n')
+  const ids = ['entity-persisting-morph']
+  const primary = (citations, rationale) => JSON.stringify({
+    results: [{
+      id: ids[0],
+      verdict: 'pass',
+      rationale,
+      evidence: citations,
+      citations,
+    }],
+  })
+  const responses = [
+    primary(['src/scene.ts'], 'stable identity exists'),
+    auditOutput(ids, { [ids[0]]: 'insufficient' }),
+    primary(['src/scene.ts', 'src/node.ts'], 'stable identity uses layout motion'),
+    auditOutput(ids, { [ids[0]]: 'insufficient' }),
+    primary(
+      ['src/scene.ts', 'src/node.ts', 'src/node.test.ts'],
+      'stable identity uses tested layout motion',
+    ),
+    auditOutput(ids),
+  ]
+  const requests = []
+
+  try {
+    const result = await runJudgeJob({
+      request: {
+        job: 'scene-kit',
+        criteria: ids,
+        authority,
+        cwd: root,
+        audit_cwd: join(root, 'audit'),
+        input_roots: { source: sourceRoot },
+        input_permissions: { neutral_source: true },
+        source_audit: true,
+        prompt: 'primary rubric prompt',
+      },
+      invoke: async (request) => {
+        requests.push(request)
+        return responses.shift()
+      },
+    })
+
+    assert.equal(result.ok, true)
+    assert.equal(result.results[0].verdict, 'pass')
+    assert.equal(result.attempts.length, 3)
+    assert.equal(result.audit_attempts.length, 3)
+    assert.match(requests[4].prompt, /previous source audit found insufficient citations/i)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('a focused citation retry preserves already contradicted criteria', async () => {
   const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
@@ -811,6 +870,8 @@ test('unresolved insufficient citations leave the judge job unobserved', async (
     auditOutput(ids, { [ids[0]]: 'insufficient' }),
     primary,
     auditOutput(ids, { [ids[0]]: 'insufficient' }),
+    primary,
+    auditOutput(ids, { [ids[0]]: 'insufficient' }),
   ]
 
   try {
@@ -831,6 +892,8 @@ test('unresolved insufficient citations leave the judge job unobserved', async (
 
     assert.equal(result.ok, false)
     assert.equal(result.results, null)
+    assert.equal(result.attempts.length, 3)
+    assert.equal(result.audit_attempts.length, 3)
     assert.match(result.audit_attempts.at(-1).error, /insufficient source citations/i)
   } finally {
     await rm(root, { recursive: true, force: true })
