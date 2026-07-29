@@ -167,6 +167,10 @@ test('source judges must verify behavior and resolve deterministic-fact contradi
       sources: ['src/example.ts'],
     })
     for (const pattern of patterns) assert.match(request.prompt, pattern, `${job}: ${pattern}`)
+    assert.match(request.prompt, /exact symbol or test case/i, job)
+    assert.match(request.prompt, /do not infer\s+behavior from a filename/i, job)
+    assert.match(request.prompt, /inspect the setup and assertions/i, job)
+    assert.match(request.prompt, /missing mechanism.*plausible behavior/i, job)
   }
 })
 

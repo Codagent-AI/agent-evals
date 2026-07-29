@@ -108,9 +108,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 3.3 preserves the technical scoring corrections', async () => {
+test('rubric 3.4 preserves the technical scoring corrections and closes observed judge loopholes', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '3.3.0')
+  assert.equal(rubric.version, '3.4.0')
 
   const rows = new Map(
     rubric.components
@@ -128,6 +128,14 @@ test('rubric 3.3 preserves the technical scoring corrections', async () => {
   assert.match(guidance('verification-warnings'), /earlier revision/i)
   assert.match(guidance('verification-warnings'), /raw executable/i)
   assert.match(guidance('demo-code-boundaries'), /exactly once/i)
+  assert.match(guidance('demo-code-boundaries'), /title.*consum/i)
+  assert.match(guidance('scene-entity-transitions'), /plain conditional|opt-in wrapper/i)
+  assert.match(guidance('scene-modes-and-navigation'), /both.*horizontal.*vertical/i)
+  assert.match(guidance('scene-fixed-canvas'), /minimum.*clamp.*overflow/i)
+  assert.match(guidance('skill-scaffolding'), /test name|filename/i)
+  assert.match(guidance('verification-addressing-and-errors'), /strictPort.*insufficient/i)
+  assert.match(guidance('verification-capture'), /fixed.*delay.*insufficient/i)
+  assert.match(guidance('verification-warnings'), /assert.*warning output/i)
 })
 
 test('each of the six scored judge jobs maps to exactly one component', async () => {
