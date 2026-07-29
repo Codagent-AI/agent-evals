@@ -1,7 +1,7 @@
 // Publication as the human-review command performs it: after finalization, from
 // the agent-evals working directory, against a disposable repository and remote.
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -127,6 +127,9 @@ test('a confirmed review publishes the finalized result and pushes it upstream',
   const dir = await mkdtemp(join(tmpdir(), 'agent-evals-publish-cmd-'))
   const { repo, remote } = await disposableRepo(dir)
   const run = await pendingRun(dir)
+  await mkdir(join(run.runDir, '.runtime'), { recursive: true })
+  await writeFile(join(run.runDir, '.runtime', 'candidate-worktree'), 'disposable\n')
+  await writeFile(join(run.runDir, 'acceptance-flow-evidence.md'), 'durable evidence\n')
 
   const outcome = await runHumanReview({
     argv: ['--run-dir', run.runDir],
@@ -140,6 +143,22 @@ test('a confirmed review publishes the finalized result and pushes it upstream',
   const published = await readJson(join(repo, RESULTS_RELATIVE_DIR, run.name, 'result.json'))
   assert.equal(published.evaluation_status, 'complete')
   assert.equal((await readJson(join(run.runDir, 'publication.json'))).stage, 'published')
+  await assert.rejects(access(join(run.runDir, '.runtime')), { code: 'ENOENT' })
+  assert.equal(
+    await readFile(join(run.runDir, 'acceptance-flow-evidence.md'), 'utf8'),
+    'durable evidence\n',
+  )
+
+  await mkdir(join(run.runDir, '.runtime'), { recursive: true })
+  await writeFile(join(run.runDir, '.runtime', 'leftover'), 'interrupted cleanup\n')
+  const resumed = await runHumanReview({
+    argv: ['--run-dir', run.runDir],
+    io: { write: () => {}, ask: () => assert.fail('a finalized run must not prompt again') },
+    ...servers(),
+    publication: { repoDir: repo, git: realGit() },
+  })
+  assert.equal(resumed.exitCode, 0, JSON.stringify(resumed.errors))
+  await assert.rejects(access(join(run.runDir, '.runtime')), { code: 'ENOENT' })
 })
 
 test('an unconfirmed review publishes nothing', async () => {
@@ -165,6 +184,8 @@ test('a push failure exits nonzero and resume retries publication without re-ask
   const dir = await mkdtemp(join(tmpdir(), 'agent-evals-publish-cmd-'))
   const { repo, remote } = await disposableRepo(dir)
   const run = await pendingRun(dir)
+  await mkdir(join(run.runDir, '.runtime'), { recursive: true })
+  await writeFile(join(run.runDir, '.runtime', 'candidate-worktree'), 'needed for retry\n')
 
   const failed = await runHumanReview({
     argv: ['--run-dir', run.runDir],
@@ -180,6 +201,10 @@ test('a push failure exits nonzero and resume retries publication without re-ask
   assert.equal(result.official_score, 100)
   const checkpoint = await readJson(join(run.runDir, 'publication.json'))
   assert.equal(checkpoint.stage, 'push')
+  assert.equal(
+    await readFile(join(run.runDir, '.runtime', 'candidate-worktree'), 'utf8'),
+    'needed for retry\n',
+  )
   const commit = git(repo, 'rev-parse', 'HEAD')
   assert.equal(checkpoint.commit, commit)
 
@@ -198,6 +223,7 @@ test('a push failure exits nonzero and resume retries publication without re-ask
   assert.equal(git(repo, 'rev-list', '--count', 'HEAD'), '2')
   assert.equal(git(remote, 'rev-parse', 'HEAD'), commit)
   assert.equal((await readJson(join(run.runDir, 'publication.json'))).stage, 'published')
+  await assert.rejects(access(join(run.runDir, '.runtime')), { code: 'ENOENT' })
   assert.equal(
     (await readFile(join(repo, RESULTS_RELATIVE_DIR, run.name, 'implementation.diff'), 'utf8')),
     'diff --git a/App.tsx b/App.tsx\n',

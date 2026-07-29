@@ -19,7 +19,7 @@
 // checkpoint, leaves the result untouched, and exits nonzero. Resume picks up at
 // the recorded stage: an existing result commit is reused rather than duplicated
 // and only the unfinished push is retried.
-import { copyFile, mkdir, readdir } from 'node:fs/promises'
+import { copyFile, mkdir, readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { hashJson, readJson, writeJsonAtomic } from './persistence.mjs'
@@ -145,6 +145,13 @@ function comparableResultCore(result) {
   return core
 }
 
+async function cleanupPublishedRuntime(runDir) {
+  // A published result is reproducible from its immutable candidate identity
+  // and permanent curated snapshot. Keep the run's evidence and checkpoints,
+  // but discard cloned repositories, dependencies, and other runtime scratch.
+  await rm(join(runDir, '.runtime'), { recursive: true, force: true })
+}
+
 // Copy exactly the curated artifacts into the permanent results directory. A
 // missing required artifact raises before anything is staged, and an artifact
 // that is neither curated nor present is simply not part of the snapshot.
@@ -262,6 +269,7 @@ export async function publishRun({
     const coreChanged = hashJson(comparableResultCore(publishedResult))
       !== hashJson(comparableResultCore(result))
     if (!baselineChanged && !coreChanged) {
+      await cleanupPublishedRuntime(runDir)
       return { published: true, skipped: false, reason: null, commit: checkpoint.commit }
     }
     const approvedBaselineAttachment = !coreChanged
@@ -345,5 +353,6 @@ export async function publishRun({
   }
 
   await save({ stage: 'published', error: null, completed_at: new Date().toISOString() })
+  await cleanupPublishedRuntime(runDir)
   return { published: true, skipped: false, reason: null, commit: checkpoint.commit }
 }
