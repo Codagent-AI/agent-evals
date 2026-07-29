@@ -104,13 +104,13 @@ The result SHALL identify the failed eval phase, observed error, completed check
 - **WHEN** an eval-owned browser or evidence phase fails before sufficient product evidence is produced
 - **THEN** `evaluation_status` is `evaluation-harness-failed` and `product_verdict` is `unavailable`
 
-#### Scenario: Candidate server failure is product-owned
-- **WHEN** the harness operates correctly but reproducible product behavior prevents the frozen final candidate from building or serving
+#### Scenario: Candidate installation, build, or server failure is product-owned
+- **WHEN** the harness operates correctly but reproducible product behavior prevents the frozen final candidate from installing, building, or serving
 - **THEN** the evaluation applies the conclusive product-failure outcome
 - **AND** it does not report `evaluation-harness-failed`
 
 #### Scenario: Required scored judge output is missing
-- **WHEN** any required demo, scene-kit, presentation-skill, verification, testing-evidence, or assumption-handling judge job returns missing or invalid output
+- **WHEN** any judge job required for the applicable candidate or reference mode returns missing or invalid output
 - **THEN** `evaluation_status` is `evaluation-harness-failed`
 - **AND** the scorer does not substitute zero points or change the score denominator
 
@@ -171,7 +171,7 @@ The harness SHALL checkpoint evaluation status, product-verdict applicability, s
 - **THEN** the result remains failed and identifies why resume is unavailable
 
 ### Requirement: Consistent outcome presentation
-`result.json` SHALL be the authoritative machine-readable outcome and `report.html` SHALL render the same current evaluation status, product-verdict applicability, score denominator, official score availability, failed or pending phase, and reason. Candidate-facing output SHALL use prominent `PASS` or `FAIL` labels when a candidate verdict is available, `PENDING HUMAN REVIEW` when review is outstanding, and `EVALUATION FAILED` when workflow or harness failure leaves the verdict unavailable. A conclusive unscored product failure SHALL display `FAIL`, state that the official score and human review are unavailable because the delivered product could not build or serve, and preserve the available evidence. A complete local reference SHALL use `REFERENCE — COMPLETE`, its score out of 92, and no candidate pass/fail label.
+`result.json` SHALL be the authoritative machine-readable outcome and `report.html` SHALL render the same current evaluation status, product-verdict applicability, score denominator, official score availability, failed or pending phase, and reason. Candidate-facing output SHALL use prominent `PASS` or `FAIL` labels when a candidate verdict is available, `PENDING HUMAN REVIEW` when review is outstanding, and `EVALUATION FAILED` when workflow or harness failure leaves the verdict unavailable. A conclusive unscored product failure SHALL display `FAIL`, state that the official score and human review are unavailable because the delivered product could not install, build, or serve, and preserve the available evidence. A complete local reference SHALL use `REFERENCE — COMPLETE`, its score out of 92, and no candidate pass/fail label.
 
 When a harness failure coexists with a valid candidate verdict or complete reference score, human-facing output SHALL display both facts prominently and SHALL explain the harness failure separately from product findings.
 
@@ -181,7 +181,7 @@ When a harness failure coexists with a valid candidate verdict or complete refer
 - **AND** they display the official score out of 100 when complete scoring produced one
 
 #### Scenario: Conclusive product failure has no official score
-- **WHEN** `evaluation_status` is `complete`, `product_verdict` is `fail`, and product-owned build or serve failure prevented complete scoring
+- **WHEN** `evaluation_status` is `complete`, `product_verdict` is `fail`, and product-owned installation, build, or serve failure prevented complete scoring
 - **THEN** the result artifacts display `FAIL`, no official score, and no fabricated human ratings
 - **AND** they explain the conclusive product failure and display available component and hard-gate evidence
 
@@ -202,4 +202,3 @@ When a harness failure coexists with a valid candidate verdict or complete refer
 #### Scenario: Report and result disagree
 - **WHEN** report generation detects that its rendered outcome, applicability, or denominator would differ from the current `result.json`
 - **THEN** the harness fails report generation rather than publishing contradictory outcome information
-

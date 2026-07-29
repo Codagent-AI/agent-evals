@@ -41,7 +41,7 @@ The harness SHALL NOT rescale `automated_subtotal`, `available_component_scores`
 - **AND** it does not convert them into an unofficial total
 
 #### Scenario: Conclusive product failure is written without a score
-- **WHEN** product-owned build or serve failure conclusively fails the candidate before complete scoring
+- **WHEN** product-owned installation, build, or serve failure conclusively fails the candidate before complete scoring
 - **THEN** `result.json` records `evaluation_status=complete`, `product_verdict=fail`, the failed hard gate, and available component results
 - **AND** it contains no `official_score` or fabricated human responses
 
@@ -81,8 +81,8 @@ The harness SHALL generate or update the report whenever `result.json` reaches a
 - **THEN** `report.html` prominently displays `FAIL` and the official score out of 100
 
 #### Scenario: Conclusive unscored candidate fails
-- **WHEN** product-owned build or serve failure conclusively produces a fail verdict before official scoring
-- **THEN** `report.html` prominently displays `FAIL`, explains that the product could not build or serve, and shows available component and hard-gate evidence
+- **WHEN** product-owned installation, build, or serve failure conclusively produces a fail verdict before official scoring
+- **THEN** `report.html` prominently displays `FAIL`, explains that the product could not install, build, or serve, and shows available component and hard-gate evidence
 - **AND** it displays no official score or fabricated human ratings
 
 #### Scenario: Evaluation infrastructure fails
@@ -317,13 +317,13 @@ The result SHALL identify the failed eval phase, observed error, completed check
 - **WHEN** an eval-owned browser or evidence phase fails before sufficient product evidence is produced
 - **THEN** `evaluation_status` is `evaluation-harness-failed` and `product_verdict` is `unavailable`
 
-#### Scenario: Candidate server failure is product-owned
-- **WHEN** the harness operates correctly but reproducible product behavior prevents the frozen final candidate from building or serving
+#### Scenario: Candidate installation, build, or server failure is product-owned
+- **WHEN** the harness operates correctly but reproducible product behavior prevents the frozen final candidate from installing, building, or serving
 - **THEN** the evaluation applies the conclusive product-failure outcome
 - **AND** it does not report `evaluation-harness-failed`
 
 #### Scenario: Required scored judge output is missing
-- **WHEN** any required demo, scene-kit, presentation-skill, verification, testing-evidence, or assumption-handling judge job returns missing or invalid output
+- **WHEN** any judge job required for the applicable candidate or reference mode returns missing or invalid output
 - **THEN** `evaluation_status` is `evaluation-harness-failed`
 - **AND** the scorer does not substitute zero points or change the score denominator
 
@@ -384,7 +384,7 @@ The harness SHALL checkpoint evaluation status, product-verdict applicability, s
 - **THEN** the result remains failed and identifies why resume is unavailable
 
 ### Requirement: Consistent outcome presentation
-`result.json` SHALL be the authoritative machine-readable outcome and `report.html` SHALL render the same current evaluation status, product-verdict applicability, score denominator, official score availability, failed or pending phase, and reason. Candidate-facing output SHALL use prominent `PASS` or `FAIL` labels when a candidate verdict is available, `PENDING HUMAN REVIEW` when review is outstanding, and `EVALUATION FAILED` when workflow or harness failure leaves the verdict unavailable. A conclusive unscored product failure SHALL display `FAIL`, state that the official score and human review are unavailable because the delivered product could not build or serve, and preserve the available evidence. A complete local reference SHALL use `REFERENCE — COMPLETE`, its score out of 92, and no candidate pass/fail label.
+`result.json` SHALL be the authoritative machine-readable outcome and `report.html` SHALL render the same current evaluation status, product-verdict applicability, score denominator, official score availability, failed or pending phase, and reason. Candidate-facing output SHALL use prominent `PASS` or `FAIL` labels when a candidate verdict is available, `PENDING HUMAN REVIEW` when review is outstanding, and `EVALUATION FAILED` when workflow or harness failure leaves the verdict unavailable. A conclusive unscored product failure SHALL display `FAIL`, state that the official score and human review are unavailable because the delivered product could not install, build, or serve, and preserve the available evidence. A complete local reference SHALL use `REFERENCE — COMPLETE`, its score out of 92, and no candidate pass/fail label.
 
 When a harness failure coexists with a valid candidate verdict or complete reference score, human-facing output SHALL display both facts prominently and SHALL explain the harness failure separately from product findings.
 
@@ -394,7 +394,7 @@ When a harness failure coexists with a valid candidate verdict or complete refer
 - **AND** they display the official score out of 100 when complete scoring produced one
 
 #### Scenario: Conclusive product failure has no official score
-- **WHEN** `evaluation_status` is `complete`, `product_verdict` is `fail`, and product-owned build or serve failure prevented complete scoring
+- **WHEN** `evaluation_status` is `complete`, `product_verdict` is `fail`, and product-owned installation, build, or serve failure prevented complete scoring
 - **THEN** the result artifacts display `FAIL`, no official score, and no fabricated human ratings
 - **AND** they explain the conclusive product failure and display available component and hard-gate evidence
 
@@ -421,7 +421,7 @@ Source: `specs/runner-workflow-execution/spec.md`
 ### Requirement: Ordered evaluation lifecycle
 For an Agent Runner candidate, the main evaluation command SHALL execute phases in this order: preflight the pinned fixture, unique candidate branch, Agent Runner checkout, workflow contract, credentials, profiles, evaluator, and run directory; run or resume the complete Agent Runner workflow; verify candidate delivery and acceptance-handoff completeness; install dependencies, build, and run non-browser verification; start the evaluated final candidate server; run deterministic browser checks and capture evaluator evidence; run the six focused product judge jobs; run the separate non-scoring ambiguity diagnostic; ingest metrics and resolve pricing; write the pending-human-review result and HTML report; attempt candidate-server cleanup; update the pending artifacts with the cleanup outcome; and exit successfully.
 
-The separate human-review command SHALL later restore or start the same evaluated final candidate server; collect or resume human review; calculate the official candidate result; generate the final HTML report; attempt candidate-server cleanup; update the final artifacts; and publish a curated permanent result for a completed scored candidate pass or product-fail run. The candidate server SHALL be running before every browser-dependent phase and SHALL NOT be required to remain running between the automated and human-review commands. If verified product behavior makes the final candidate unable to build or serve, dependent browser and human-review phases SHALL NOT run, and the conclusive product-failure outcome rules SHALL apply instead.
+The separate human-review command SHALL later restore or start the same evaluated final candidate server; collect or resume human review; calculate the official candidate result; generate the final HTML report; attempt candidate-server cleanup; update the final artifacts; and publish a curated permanent result for a completed scored candidate pass or product-fail run. The candidate server SHALL be running before every browser-dependent phase and SHALL NOT be required to remain running between the automated and human-review commands. If verified product behavior makes the final candidate unable to install, build, or serve, dependent browser and human-review phases SHALL NOT run, and the conclusive product-failure outcome rules SHALL apply instead.
 
 #### Scenario: Automated candidate evaluation follows the phase order
 - **WHEN** every automated candidate-evaluation phase completes successfully
@@ -442,13 +442,13 @@ The separate human-review command SHALL later restore or start the same evaluate
 - **THEN** dependent phases do not run with fabricated or stale inputs
 - **AND** final outcome reporting and cleanup still run when possible
 
-#### Scenario: Delivered product cannot build or serve
-- **WHEN** deterministic verification establishes that the frozen final candidate cannot build or serve because of reproducible product behavior
+#### Scenario: Delivered product cannot install, build, or serve
+- **WHEN** deterministic verification establishes that the frozen final candidate cannot install, build, or serve because of reproducible product behavior
 - **THEN** dependent browser and human-review phases do not run
 - **AND** the evaluation applies the conclusive product-failure outcome without classifying the product defect as a harness failure
 
 ### Requirement: Workflow execution provenance
-The evaluation result SHALL record the Agent Runner commit and clean-worktree result, CLI version, workflow path and SHA-256 hash, workflow arguments, task-level Validator choice, run identifier, session directory, candidate repository and branch, draft-PR URL and base, final local and PR head SHA, every observed workflow step and outcome, final Validator result, candidate-reported CI status when present, acceptance attempt history, and hashes of required acceptance artifacts. It SHALL also record start, wait, resume, completion, and retry events without treating those events as product points.
+The evaluation result SHALL record the evaluation run identifier; the distinct Agent Runner run identifier; the Agent Runner commit and clean-worktree result, CLI version, workflow path and SHA-256 hash; workflow arguments; task-level Validator choice; session directory; candidate repository and branch; draft-PR URL and base; final local and PR head SHA; every observed workflow step and outcome; final Validator result; candidate-reported CI status when present; acceptance attempt history; and hashes of required acceptance artifacts. It SHALL also record start, wait, resume, completion, and retry events without treating those events as product points.
 
 #### Scenario: Fresh Agent Runner run is recorded
 - **WHEN** the harness starts a new Agent Runner run

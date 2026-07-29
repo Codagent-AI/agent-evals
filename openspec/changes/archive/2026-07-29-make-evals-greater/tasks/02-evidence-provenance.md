@@ -206,7 +206,7 @@ Source: `specs/product-quality-scoring/spec.md`
 ### Requirement: Controlled scoring and rubric provenance
 The suite-owned scorer SHALL own criterion identifiers, evaluator assignments, point allocations, component applicability, score denominators, hard gates, thresholds, and final calculations. Neither an LLM judge nor the human-review interface SHALL change those policies while producing evaluation results. Every machine-evaluated criterion result SHALL include its identifier, pass/fail verdict, rationale, and cited verified evidence.
 
-The evaluator SHALL run six focused scored judge jobs: demo integration, scene kit, presentation skill, verification tooling, testing evidence, and assumption handling. Each job SHALL return exactly the criteria assigned to it and no others. Missing, duplicated, unknown, malformed, or cross-job criterion output SHALL fail scoring rather than change a denominator, silently ignore a criterion, or reuse output from another job.
+For candidates, the evaluator SHALL run six focused scored judge jobs: demo integration, scene kit, presentation skill, verification tooling, testing evidence, and assumption handling. For references, it SHALL run the four applicable implementation source-review jobs and SHALL omit testing-evidence and assumption-handling judging as not applicable. Each applicable job SHALL return exactly the criteria assigned to it and no others. Missing, duplicated, unknown, malformed, or cross-job criterion output from an applicable job SHALL fail scoring rather than change a denominator, silently ignore a criterion, or reuse output from another job.
 
 The four implementation source-review jobs SHALL receive a neutral source snapshot that retains relevant product source and approved requirements while stripping Git metadata, remotes, branch names, pull-request identity, baseline or candidate labels, OpenSpec change identity, and evaluation markers. The harness SHALL materialize the approved normative requirement descriptions and scenarios as a separate neutral requirements bundle, omit their original change path and change name, and record the bundle's source and content hash. The original OpenSpec change directory SHALL NOT be exposed to those four judges. The testing-evidence and assumption-handling judges SHALL receive the verified workflow and revision provenance required by their assigned criteria. Candidate source and evidence SHALL be treated as untrusted data, not instructions.
 
@@ -218,9 +218,14 @@ The automated product rubric and human-review rubric SHALL have distinct explici
 - **AND** it calculates the applicable candidate or reference score
 
 #### Scenario: Required judge output is missing
-- **WHEN** any of the six required scored judge jobs produces no valid output
+- **WHEN** any scored judge job required for the applicable candidate or reference mode produces no valid output
 - **THEN** rubric validation fails
 - **AND** no official score or verdict is produced from incomplete judge coverage
+
+#### Scenario: Reference omits non-applicable workflow judges
+- **WHEN** a reference evaluation runs scored judging
+- **THEN** it runs the four implementation source-review jobs
+- **AND** it omits testing-evidence and assumption-handling jobs and records those components as not applicable
 
 #### Scenario: Criterion coverage is invalid
 - **WHEN** evaluator output contains a missing, duplicate, unknown, malformed, or cross-job criterion result

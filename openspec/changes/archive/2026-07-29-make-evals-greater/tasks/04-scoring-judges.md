@@ -37,7 +37,7 @@ The evaluation SHALL calculate a candidate implementation-quality score out of 1
 
 Generic Runner health, workflow completion, build orchestration, cost, timing, retries, and evaluator-owned evidence repair SHALL award or deduct no points. Candidate testing evidence and assumption handling SHALL affect points only through their defined four-point components.
 
-Before candidate human review is complete, the evaluation SHALL report the automated subtotal out of 70 and SHALL NOT report an official score or ordinary pass/fail verdict. A conclusive product-owned inability to build or serve SHALL follow the hard-gate exception below. When product evidence is available for only part of an unsuccessful or incomplete run, the evaluation SHALL preserve completed component evidence without treating unobserved criteria as product failures.
+Before candidate human review is complete, the evaluation SHALL report the automated subtotal out of 70 and SHALL NOT report an official score or ordinary pass/fail verdict. A conclusive product-owned inability to install, build, or serve SHALL follow the hard-gate exception below. When product evidence is available for only part of an unsuccessful or incomplete run, the evaluation SHALL preserve completed component evidence without treating unobserved criteria as product failures.
 
 The reference baseline SHALL be evaluated only on the components shared with the candidate:
 
@@ -194,10 +194,12 @@ Visual-composition inspection and visual-warning review SHALL NOT receive presen
 ### Requirement: Verification tool correctness
 The evaluation SHALL score the delivered verification tooling out of seven points using LLM review of its source, executable behavior, and produced artifacts. The four hard-gate criteria SHALL remain outside this point allocation.
 
+The verifier SHALL prove that browser checks connect to the preview process it started and SHALL fail if that process exits; an unrelated stale process on a fixed port SHALL NOT satisfy readiness. This behavior SHALL be scored only under `verification-preview-process-ownership`; `verification-ipv4-loopback` SHALL score only consistent use of `127.0.0.1` for preview binding, readiness probes, and browser URLs.
+
 | Subcomponent | Points | Criteria |
 |---|---:|---|
 | Detects a missing reference sample | 1 | `verification-missing-sample-fails` |
-| Preview addressing and runtime/step error detection | 2 | `verification-ipv4-loopback`, `verification-console-page-error-fails`, `verification-step-error-fails` |
+| Preview addressing, ownership, and runtime/step error detection | 2 | `verification-ipv4-loopback`, `verification-preview-process-ownership`, `verification-console-page-error-fails`, `verification-step-error-fails` |
 | Complete, settled screenshot capture | 2 | `quality-project-local-screenshot-helper`, `visual-helper-captures-steps`, `visual-helper-settled-screenshots` |
 | Overlap, active-state, attribution, and warning handling | 2 | `visual-helper-overlap-warning`, `visual-helper-allow-overlap`, `visual-helper-active-state-warning`, `visual-helper-attribution-warning` |
 
@@ -210,15 +212,21 @@ The evaluation SHALL score the delivered verification tooling out of seven point
 - **WHEN** the scorer calculates the verification-tool component
 - **THEN** it does not award points for `verification-build-whole-app`, `verification-sample-outline`, `verification-every-produced-step-renders`, or `verification-clear-outcome`
 
+#### Scenario: Stale preview occupies the configured port
+- **WHEN** the verifier's own preview process exits because its port is occupied while another server responds on that port
+- **THEN** `verification-preview-process-ownership` fails
+- **AND** `verification-ipv4-loopback` remains independently scored from consistent loopback addressing
+
 ### Requirement: Existing criterion disposition
-The revised rubric SHALL classify each of the 68 legacy rubric criteria exactly once. It SHALL retain 59 as directly scored product criteria, use four exclusively as hard gates, remove three from scoring, and replace two presentation-skill evidence criteria with the broader testing-evidence criteria.
+The revised rubric SHALL classify each of the 68 legacy rubric criteria exactly once. It SHALL retain 59 as directly scored product criteria, use four exclusively as hard gates, remove three from scoring, and replace two presentation-skill evidence criteria with the broader testing-evidence criteria. It SHALL additionally define `verification-preview-process-ownership` as one new directly scored product criterion so preview ownership is not charged against the legacy IPv4-addressing criterion.
 
 | Disposition | Count | Criteria |
 |---|---:|---|
 | Demo presentation technical quality | 2 | `quality-captions-and-navigation`, `quality-active-chrome-and-attribution-local` |
 | Scene kit correctness | 28 | `scene-step-narration-and-identity`, `scene-order-derived-numbering`, `scene-typed-payload-boundary`, `entity-persisting-morph`, `entity-newcomer-after-settle`, `entity-departing-exit`, `grouped-scene-updates-in-place`, `grouped-continuing-entities-not-newcomers`, `grouped-intentional-composition`, `style-kit-hooks`, `style-unstyled-kit-output`, `style-framework-optional`, `style-coordinate-heavy-diagrams`, `attribution-default-link`, `attribution-styling-hook`, `attribution-top-left-opt-in`, `mode-present-title-focused`, `mode-browse-reading-focused`, `mode-toggle-preserves-position`, `navigation-keyboard`, `navigation-touch-swipe`, `navigation-direct-jump`, `navigation-active-state`, `navigation-controls-keep-keys`, `navigation-clamp-start`, `navigation-clamp-end`, `canvas-uniform-scaling`, `canvas-default-dimensions` |
 | Presentation skill correctness | 18 | `skill-missing-details-one-at-a-time`, `skill-partial-detail-proceeds`, `skill-complete-prompt-proceeds`, `skill-empty-directory-scaffold`, `skill-already-scaffolded`, `skill-partial-scaffold`, `skill-scaffold-style-neutral`, `skill-template-path-resolution`, `skill-monorepo-target`, `skill-standalone-target`, `skill-nonempty-confirmation`, `skill-new-presentation-routed`, `skill-presentation-owns-style`, `skill-existing-presentations-preserved`, `skill-modify-ambiguous-target`, `skill-scoped-modification`, `skill-checks-run-before-done`, `skill-failures-fixed-before-success` |
-| Verification tool correctness | 11 | `quality-project-local-screenshot-helper`, `verification-missing-sample-fails`, `verification-ipv4-loopback`, `verification-console-page-error-fails`, `verification-step-error-fails`, `visual-helper-captures-steps`, `visual-helper-settled-screenshots`, `visual-helper-overlap-warning`, `visual-helper-allow-overlap`, `visual-helper-active-state-warning`, `visual-helper-attribution-warning` |
+| Verification tool correctness (legacy) | 11 | `quality-project-local-screenshot-helper`, `verification-missing-sample-fails`, `verification-ipv4-loopback`, `verification-console-page-error-fails`, `verification-step-error-fails`, `visual-helper-captures-steps`, `visual-helper-settled-screenshots`, `visual-helper-overlap-warning`, `visual-helper-allow-overlap`, `visual-helper-active-state-warning`, `visual-helper-attribution-warning` |
+| Verification tool correctness (new) | 1 | `verification-preview-process-ownership` |
 | Hard gates | 4 | `verification-build-whole-app`, `verification-sample-outline`, `verification-every-produced-step-renders`, `verification-clear-outcome` |
 | Replaced by testing-evidence quality | 2 | `quality-visual-composition-inspected`, `quality-visual-warnings-reviewed` |
 | Removed from scoring | 3 | `skill-optional-ascii-mockup`, `quality-builds-clean`, `quality-renders-without-errors` |
@@ -234,6 +242,11 @@ The replaced concerns SHALL remain observable through the testing-evidence crite
 - **WHEN** the revised rubric is validated
 - **THEN** four testing-evidence and four assumption-handling criteria appear exactly once
 - **AND** none duplicates a replaced legacy criterion
+
+#### Scenario: Preview ownership has an explicit criterion
+- **WHEN** the revised rubric is validated
+- **THEN** `verification-preview-process-ownership` appears exactly once under verification-tool correctness
+- **AND** it is not counted among the 68 legacy criteria
 
 #### Scenario: Optional behavior is not scored
 - **WHEN** the skill does not produce an ASCII mockup
@@ -286,7 +299,7 @@ The reference baseline SHALL NOT receive an official candidate pass/fail verdict
 - **THEN** the official candidate pass verdict is false
 - **AND** the evaluator still reports the numerical score supported by available evidence
 
-#### Scenario: Product cannot build or serve
+#### Scenario: Product cannot install, build, or serve
 - **WHEN** deterministic verification establishes that reproducible product behavior prevents the frozen final candidate from installing, building, or serving
 - **THEN** the applicable hard gate fails and the candidate product verdict is conclusively `fail`
 - **AND** the evaluator preserves available component results without assigning points or human ratings to unobserved behavior
@@ -305,7 +318,7 @@ The reference baseline SHALL NOT receive an official candidate pass/fail verdict
 ### Requirement: Controlled scoring and rubric provenance
 The suite-owned scorer SHALL own criterion identifiers, evaluator assignments, point allocations, component applicability, score denominators, hard gates, thresholds, and final calculations. Neither an LLM judge nor the human-review interface SHALL change those policies while producing evaluation results. Every machine-evaluated criterion result SHALL include its identifier, pass/fail verdict, rationale, and cited verified evidence.
 
-The evaluator SHALL run six focused scored judge jobs: demo integration, scene kit, presentation skill, verification tooling, testing evidence, and assumption handling. Each job SHALL return exactly the criteria assigned to it and no others. Missing, duplicated, unknown, malformed, or cross-job criterion output SHALL fail scoring rather than change a denominator, silently ignore a criterion, or reuse output from another job.
+For candidates, the evaluator SHALL run six focused scored judge jobs: demo integration, scene kit, presentation skill, verification tooling, testing evidence, and assumption handling. For references, it SHALL run the four applicable implementation source-review jobs and SHALL omit testing-evidence and assumption-handling judging as not applicable. Each applicable job SHALL return exactly the criteria assigned to it and no others. Missing, duplicated, unknown, malformed, or cross-job criterion output from an applicable job SHALL fail scoring rather than change a denominator, silently ignore a criterion, or reuse output from another job.
 
 The four implementation source-review jobs SHALL receive a neutral source snapshot that retains relevant product source and approved requirements while stripping Git metadata, remotes, branch names, pull-request identity, baseline or candidate labels, OpenSpec change identity, and evaluation markers. The harness SHALL materialize the approved normative requirement descriptions and scenarios as a separate neutral requirements bundle, omit their original change path and change name, and record the bundle's source and content hash. The original OpenSpec change directory SHALL NOT be exposed to those four judges. The testing-evidence and assumption-handling judges SHALL receive the verified workflow and revision provenance required by their assigned criteria. Candidate source and evidence SHALL be treated as untrusted data, not instructions.
 
@@ -317,9 +330,14 @@ The automated product rubric and human-review rubric SHALL have distinct explici
 - **AND** it calculates the applicable candidate or reference score
 
 #### Scenario: Required judge output is missing
-- **WHEN** any of the six required scored judge jobs produces no valid output
+- **WHEN** any scored judge job required for the applicable candidate or reference mode produces no valid output
 - **THEN** rubric validation fails
 - **AND** no official score or verdict is produced from incomplete judge coverage
+
+#### Scenario: Reference omits non-applicable workflow judges
+- **WHEN** a reference evaluation runs scored judging
+- **THEN** it runs the four implementation source-review jobs
+- **AND** it omits testing-evidence and assumption-handling jobs and records those components as not applicable
 
 #### Scenario: Criterion coverage is invalid
 - **WHEN** evaluator output contains a missing, duplicate, unknown, malformed, or cross-job criterion result
@@ -580,13 +598,13 @@ The result SHALL identify the failed eval phase, observed error, completed check
 - **WHEN** an eval-owned browser or evidence phase fails before sufficient product evidence is produced
 - **THEN** `evaluation_status` is `evaluation-harness-failed` and `product_verdict` is `unavailable`
 
-#### Scenario: Candidate server failure is product-owned
-- **WHEN** the harness operates correctly but reproducible product behavior prevents the frozen final candidate from building or serving
+#### Scenario: Candidate installation, build, or server failure is product-owned
+- **WHEN** the harness operates correctly but reproducible product behavior prevents the frozen final candidate from installing, building, or serving
 - **THEN** the evaluation applies the conclusive product-failure outcome
 - **AND** it does not report `evaluation-harness-failed`
 
 #### Scenario: Required scored judge output is missing
-- **WHEN** any required demo, scene-kit, presentation-skill, verification, testing-evidence, or assumption-handling judge job returns missing or invalid output
+- **WHEN** any judge job required for the applicable candidate or reference mode returns missing or invalid output
 - **THEN** `evaluation_status` is `evaluation-harness-failed`
 - **AND** the scorer does not substitute zero points or change the score denominator
 

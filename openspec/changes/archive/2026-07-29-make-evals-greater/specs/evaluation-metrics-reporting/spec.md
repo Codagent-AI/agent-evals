@@ -19,7 +19,7 @@ The harness SHALL NOT rescale `automated_subtotal`, `available_component_scores`
 - **AND** it does not convert them into an unofficial total
 
 #### Scenario: Conclusive product failure is written without a score
-- **WHEN** product-owned build or serve failure conclusively fails the candidate before complete scoring
+- **WHEN** product-owned installation, build, or serve failure conclusively fails the candidate before complete scoring
 - **THEN** `result.json` records `evaluation_status=complete`, `product_verdict=fail`, the failed hard gate, and available component results
 - **AND** it contains no `official_score` or fabricated human responses
 
@@ -64,8 +64,8 @@ The harness SHALL generate or update the report whenever `result.json` reaches a
 - **THEN** `report.html` prominently displays `FAIL` and the official score out of 100
 
 #### Scenario: Conclusive unscored candidate fails
-- **WHEN** product-owned build or serve failure conclusively produces a fail verdict before official scoring
-- **THEN** `report.html` prominently displays `FAIL`, explains that the product could not build or serve, and shows available component and hard-gate evidence
+- **WHEN** product-owned installation, build, or serve failure conclusively produces a fail verdict before official scoring
+- **THEN** `report.html` prominently displays `FAIL`, explains that the product could not install, build, or serve, and shows available component and hard-gate evidence
 - **AND** it displays no official score or fabricated human ratings
 
 #### Scenario: Evaluation infrastructure fails

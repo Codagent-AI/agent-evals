@@ -15,7 +15,7 @@ The evaluation SHALL calculate a candidate implementation-quality score out of 1
 
 Generic Runner health, workflow completion, build orchestration, cost, timing, retries, and evaluator-owned evidence repair SHALL award or deduct no points. Candidate testing evidence and assumption handling SHALL affect points only through their defined four-point components.
 
-Before candidate human review is complete, the evaluation SHALL report the automated subtotal out of 70 and SHALL NOT report an official score or ordinary pass/fail verdict. A conclusive product-owned inability to build or serve SHALL follow the hard-gate exception below. When product evidence is available for only part of an unsuccessful or incomplete run, the evaluation SHALL preserve completed component evidence without treating unobserved criteria as product failures.
+Before candidate human review is complete, the evaluation SHALL report the automated subtotal out of 70 and SHALL NOT report an official score or ordinary pass/fail verdict. A conclusive product-owned inability to install, build, or serve SHALL follow the hard-gate exception below. When product evidence is available for only part of an unsuccessful or incomplete run, the evaluation SHALL preserve completed component evidence without treating unobserved criteria as product failures.
 
 The reference baseline SHALL be evaluated only on the components shared with the candidate:
 
@@ -330,7 +330,7 @@ The reference baseline SHALL NOT receive an official candidate pass/fail verdict
 - **THEN** the official candidate pass verdict is false
 - **AND** the evaluator still reports the numerical score supported by available evidence
 
-#### Scenario: Product cannot build or serve
+#### Scenario: Product cannot install, build, or serve
 - **WHEN** deterministic verification establishes that reproducible product behavior prevents the frozen final candidate from installing, building, or serving
 - **THEN** the applicable hard gate fails and the candidate product verdict is conclusively `fail`
 - **AND** the evaluator preserves available component results without assigning points or human ratings to unobserved behavior
@@ -349,7 +349,7 @@ The reference baseline SHALL NOT receive an official candidate pass/fail verdict
 ### Requirement: Controlled scoring and rubric provenance
 The suite-owned scorer SHALL own criterion identifiers, evaluator assignments, point allocations, component applicability, score denominators, hard gates, thresholds, and final calculations. Neither an LLM judge nor the human-review interface SHALL change those policies while producing evaluation results. Every machine-evaluated criterion result SHALL include its identifier, pass/fail verdict, rationale, and cited verified evidence.
 
-The evaluator SHALL run six focused scored judge jobs: demo integration, scene kit, presentation skill, verification tooling, testing evidence, and assumption handling. Each job SHALL return exactly the criteria assigned to it and no others. Missing, duplicated, unknown, malformed, or cross-job criterion output SHALL fail scoring rather than change a denominator, silently ignore a criterion, or reuse output from another job.
+For candidates, the evaluator SHALL run six focused scored judge jobs: demo integration, scene kit, presentation skill, verification tooling, testing evidence, and assumption handling. For references, it SHALL run the four applicable implementation source-review jobs and SHALL omit testing-evidence and assumption-handling judging as not applicable. Each applicable job SHALL return exactly the criteria assigned to it and no others. Missing, duplicated, unknown, malformed, or cross-job criterion output from an applicable job SHALL fail scoring rather than change a denominator, silently ignore a criterion, or reuse output from another job.
 
 The four implementation source-review jobs SHALL receive a neutral source snapshot that retains relevant product source and approved requirements while stripping Git metadata, remotes, branch names, pull-request identity, baseline or candidate labels, OpenSpec change identity, and evaluation markers. The harness SHALL materialize the approved normative requirement descriptions and scenarios as a separate neutral requirements bundle, omit their original change path and change name, and record the bundle's source and content hash. The original OpenSpec change directory SHALL NOT be exposed to those four judges. The testing-evidence and assumption-handling judges SHALL receive the verified workflow and revision provenance required by their assigned criteria. Candidate source and evidence SHALL be treated as untrusted data, not instructions.
 
@@ -361,9 +361,14 @@ The automated product rubric and human-review rubric SHALL have distinct explici
 - **AND** it calculates the applicable candidate or reference score
 
 #### Scenario: Required judge output is missing
-- **WHEN** any of the six required scored judge jobs produces no valid output
+- **WHEN** any scored judge job required for the applicable candidate or reference mode produces no valid output
 - **THEN** rubric validation fails
 - **AND** no official score or verdict is produced from incomplete judge coverage
+
+#### Scenario: Reference omits non-applicable workflow judges
+- **WHEN** a reference evaluation runs scored judging
+- **THEN** it runs the four implementation source-review jobs
+- **AND** it omits testing-evidence and assumption-handling jobs and records those components as not applicable
 
 #### Scenario: Criterion coverage is invalid
 - **WHEN** evaluator output contains a missing, duplicate, unknown, malformed, or cross-job criterion result

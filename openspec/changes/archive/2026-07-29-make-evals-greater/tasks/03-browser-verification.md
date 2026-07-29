@@ -113,7 +113,7 @@ The reference baseline SHALL NOT receive an official candidate pass/fail verdict
 - **THEN** the official candidate pass verdict is false
 - **AND** the evaluator still reports the numerical score supported by available evidence
 
-#### Scenario: Product cannot build or serve
+#### Scenario: Product cannot install, build, or serve
 - **WHEN** deterministic verification establishes that reproducible product behavior prevents the frozen final candidate from installing, building, or serving
 - **THEN** the applicable hard gate fails and the candidate product verdict is conclusively `fail`
 - **AND** the evaluator preserves available component results without assigning points or human ratings to unobserved behavior
@@ -134,7 +134,7 @@ Source: `specs/runner-workflow-execution/spec.md`
 ### Requirement: Ordered evaluation lifecycle
 For an Agent Runner candidate, the main evaluation command SHALL execute phases in this order: preflight the pinned fixture, unique candidate branch, Agent Runner checkout, workflow contract, credentials, profiles, evaluator, and run directory; run or resume the complete Agent Runner workflow; verify candidate delivery and acceptance-handoff completeness; install dependencies, build, and run non-browser verification; start the evaluated final candidate server; run deterministic browser checks and capture evaluator evidence; run the six focused product judge jobs; run the separate non-scoring ambiguity diagnostic; ingest metrics and resolve pricing; write the pending-human-review result and HTML report; attempt candidate-server cleanup; update the pending artifacts with the cleanup outcome; and exit successfully.
 
-The separate human-review command SHALL later restore or start the same evaluated final candidate server; collect or resume human review; calculate the official candidate result; generate the final HTML report; attempt candidate-server cleanup; update the final artifacts; and publish a curated permanent result for a completed scored candidate pass or product-fail run. The candidate server SHALL be running before every browser-dependent phase and SHALL NOT be required to remain running between the automated and human-review commands. If verified product behavior makes the final candidate unable to build or serve, dependent browser and human-review phases SHALL NOT run, and the conclusive product-failure outcome rules SHALL apply instead.
+The separate human-review command SHALL later restore or start the same evaluated final candidate server; collect or resume human review; calculate the official candidate result; generate the final HTML report; attempt candidate-server cleanup; update the final artifacts; and publish a curated permanent result for a completed scored candidate pass or product-fail run. The candidate server SHALL be running before every browser-dependent phase and SHALL NOT be required to remain running between the automated and human-review commands. If verified product behavior makes the final candidate unable to install, build, or serve, dependent browser and human-review phases SHALL NOT run, and the conclusive product-failure outcome rules SHALL apply instead.
 
 #### Scenario: Automated candidate evaluation follows the phase order
 - **WHEN** every automated candidate-evaluation phase completes successfully
@@ -155,8 +155,8 @@ The separate human-review command SHALL later restore or start the same evaluate
 - **THEN** dependent phases do not run with fabricated or stale inputs
 - **AND** final outcome reporting and cleanup still run when possible
 
-#### Scenario: Delivered product cannot build or serve
-- **WHEN** deterministic verification establishes that the frozen final candidate cannot build or serve because of reproducible product behavior
+#### Scenario: Delivered product cannot install, build, or serve
+- **WHEN** deterministic verification establishes that the frozen final candidate cannot install, build, or serve because of reproducible product behavior
 - **THEN** dependent browser and human-review phases do not run
 - **AND** the evaluation applies the conclusive product-failure outcome without classifying the product defect as a harness failure
 
@@ -225,13 +225,13 @@ The result SHALL identify the failed eval phase, observed error, completed check
 - **WHEN** an eval-owned browser or evidence phase fails before sufficient product evidence is produced
 - **THEN** `evaluation_status` is `evaluation-harness-failed` and `product_verdict` is `unavailable`
 
-#### Scenario: Candidate server failure is product-owned
-- **WHEN** the harness operates correctly but reproducible product behavior prevents the frozen final candidate from building or serving
+#### Scenario: Candidate installation, build, or server failure is product-owned
+- **WHEN** the harness operates correctly but reproducible product behavior prevents the frozen final candidate from installing, building, or serving
 - **THEN** the evaluation applies the conclusive product-failure outcome
 - **AND** it does not report `evaluation-harness-failed`
 
 #### Scenario: Required scored judge output is missing
-- **WHEN** any required demo, scene-kit, presentation-skill, verification, testing-evidence, or assumption-handling judge job returns missing or invalid output
+- **WHEN** any judge job required for the applicable candidate or reference mode returns missing or invalid output
 - **THEN** `evaluation_status` is `evaluation-harness-failed`
 - **AND** the scorer does not substitute zero points or change the score denominator
 
