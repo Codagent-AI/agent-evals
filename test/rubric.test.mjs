@@ -113,9 +113,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 3.8 distinguishes implemented skill policy from criteria requiring executable proof', async () => {
+test('rubric 3.9 distinguishes implemented policy from criteria requiring executable proof', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '3.8.0')
+  assert.equal(rubric.version, '3.9.0')
 
   const rows = new Map(
     rubric.components
@@ -150,6 +150,8 @@ test('rubric 3.8 distinguishes implemented skill policy from criteria requiring 
   assert.match(guidance('scene-entity-transitions'), /continuing.*remain.*mounted/i)
   assert.match(guidance('scene-modes-and-navigation'), /active step.*multi-line caption/i)
   assert.match(guidance('scene-modes-and-navigation'), /not.*all steps.*at once/i)
+  assert.match(guidance('scene-modes-and-navigation'), /focused controls.*own keyboard semantics/i)
+  assert.match(guidance('scene-modes-and-navigation'), /not.*global presentation navigation/i)
   assert.match(guidance('scene-style-and-attribution'), /stable.*(?:class|data).*hook/i)
   assert.match(guidance('scene-style-and-attribution'), /does not require.*caller.*prop/i)
   assert.match(guidance('scene-style-and-attribution'), /top-left.*brand.*not.*attribution placement/i)
@@ -159,6 +161,8 @@ test('rubric 3.8 distinguishes implemented skill policy from criteria requiring 
   assert.match(guidance('skill-self-verification'), /normative skill instructions.*implementation/i)
   assert.match(guidance('verification-missing-sample'), /explicit.*failure branch/i)
   assert.match(guidance('verification-missing-sample'), /does not require.*dedicated.*test/i)
+  assert.match(guidance('verification-capture'), /project-local screenshot helper.*separate inspection command/i)
+  assert.match(guidance('verification-capture'), /does not require.*build.*render verifier.*invoke/i)
 })
 
 test('each of the six scored judge jobs maps to exactly one component', async () => {

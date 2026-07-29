@@ -1,6 +1,6 @@
 {
   "rubric_id": "and-scene-automated-product",
-  "version": "3.8.0",
+  "version": "3.9.0",
   "total_points": 100,
   "automated_points": 70,
   "human_points": 30,
@@ -159,7 +159,8 @@
             "For navigation-touch-swipe, inspect whether the implementation records both horizontal and vertical coordinates and the touch count, and require focused assertions for predominantly vertical and multi-touch rejection. Horizontal distance alone fails.",
             "Equivalent semantic current-state attributes and stable active hooks satisfy the active-state contract; judge behavior rather than exact token spelling.",
             "For mode-browse-reading-focused, require the active step's title, multi-line caption, wide-viewport table of contents, previous/next controls, and progress indicators exactly as specified.",
-            "Browse mode does not require rendering all steps at once or a separate full-deck reading stack; fail only when the required active-step reading chrome is absent."
+            "Browse mode does not require rendering all steps at once or a separate full-deck reading stack; fail only when the required active-step reading chrome is absent.",
+            "For navigation-controls-keep-keys, focused controls retain their own keyboard semantics: presentation navigation must not intercept supported keys while focus is on an interactive control. Do not interpret this criterion as requiring global presentation navigation to run from a focused control."
           ]
         },
         {
@@ -326,7 +327,8 @@
           "review_guidance": [
             "Settlement must observe animation completion or consume the exact transition configuration that persistent scene motion uses. Merely duplicating a numeric delay or importing a value that persistent motion does not consume is insufficient.",
             "A fixed settlement delay is insufficient even when it is longer than named animation durations; require an observed completion condition or a transition contract consumed by both runtime motion and capture.",
-            "Require executable evidence that every produced step is captured from the intended preview."
+            "Require executable evidence that every produced step is captured from the intended preview.",
+            "The project-local screenshot helper is a separate inspection command from the build and render verifier. For quality-project-local-screenshot-helper, credit an implemented project-local helper that the skill can invoke; this criterion does not require the build or render verifier itself to invoke that helper."
           ]
         },
         {
