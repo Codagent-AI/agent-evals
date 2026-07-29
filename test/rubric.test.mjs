@@ -108,9 +108,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 3.2 gives preview ownership its own criterion and removes scoring ambiguities', async () => {
+test('rubric 3.3 preserves the technical scoring corrections', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '3.2.0')
+  assert.equal(rubric.version, '3.3.0')
 
   const rows = new Map(
     rubric.components
@@ -194,6 +194,19 @@ test('the four testing-evidence and four assumption-handling criteria are assign
     'assumption-final-handoff-preserves-decisions',
   ])
   assert.equal(new Set(rows.map(({ id }) => id)).size, rows.length)
+})
+
+test('assumption handling guidance catches requirement violations misclassified as environment issues', async () => {
+  const rubric = await automatedRubric()
+  const component = rubric.components.find(({ id }) => id === 'assumption-handling-quality')
+  const guidance = component.subcomponents[0].review_guidance.join('\n')
+
+  assert.match(guidance, /approved requirement/i)
+  assert.match(guidance, /environment(?:al)? trigger/i)
+  assert.match(guidance, /not a finding|optional hardening/i)
+  assert.match(guidance, /assumption-repository-facts-distinguished/)
+  assert.match(guidance, /assumption-decisions-and-escalations-proportionate/)
+  assert.match(guidance, /omission/i)
 })
 
 test('the four hard gates are excluded from the scored verification component', async () => {

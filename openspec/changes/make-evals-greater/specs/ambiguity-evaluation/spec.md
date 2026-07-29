@@ -114,6 +114,13 @@ The component SHALL have no independent score floor. For a reference-baseline ev
 - **WHEN** an agent escalates or stops despite sufficient authority and evidence for a requirement-conforming decision
 - **THEN** the decisions-and-escalations criterion fails
 
+#### Scenario: Reproduced product defect is misclassified as environmental
+- **WHEN** workflow evidence reproduces candidate behavior that violates an approved requirement but the workflow calls it environmental, not a finding, or optional hardening
+- **THEN** the repository-facts distinction criterion fails
+- **AND** the decisions-and-escalations criterion fails when the workflow clears the environmental trigger without reporting the observed candidate defect
+- **AND** the surfaced-ambiguities criterion remains independently scored from whether the observation was recorded
+- **AND** the final-handoff criterion remains eligible to pass when the handoff preserves the raw observation, consequence, and actionable correction rather than omitting them
+
 #### Scenario: Final handoff is incomplete
 - **WHEN** unresolved decisions, known consequences, or material limitations are omitted from the final handoff
 - **THEN** the final-handoff criterion fails

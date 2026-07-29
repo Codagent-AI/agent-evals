@@ -67,6 +67,18 @@ test('reference runs four applicable jobs while candidate calibration runs all s
   )
 })
 
+test('calibration covers a reproduced defect misclassified as environmental hardening', () => {
+  const candidate = calibrationCases(rubrics.automated.rubric)
+    .find(({ id }) => id === 'assumption-misclassified-product-defect-regression')
+
+  assert.ok(candidate)
+  assert.deepEqual(candidate.fail_criteria, [
+    'assumption-repository-facts-distinguished',
+    'assumption-decisions-and-escalations-proportionate',
+  ])
+  assert.equal(candidate.target.id, 'assumption-handling-quality')
+})
+
 test('every approved degradation degrades exactly its intended component or gate', async () => {
   const ledger = await runCalibration({ rubrics, outDir: await out() })
 

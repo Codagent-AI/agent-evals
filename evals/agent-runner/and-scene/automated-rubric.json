@@ -1,6 +1,6 @@
 {
   "rubric_id": "and-scene-automated-product",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "total_points": 100,
   "automated_points": 70,
   "human_points": 30,
@@ -347,6 +347,12 @@
             "assumption-repository-facts-distinguished",
             "assumption-decisions-and-escalations-proportionate",
             "assumption-final-handoff-preserves-decisions"
+          ],
+          "review_guidance": [
+            "Compare candidate classifications against approved requirements and discoverable repository facts. An environmental trigger does not make observed candidate behavior requirement-conforming.",
+            "When the workflow reproduces behavior that violates an approved requirement but calls it not a finding or optional hardening, fail assumption-repository-facts-distinguished and assumption-decisions-and-escalations-proportionate even if the raw observation was surfaced and preserved.",
+            "Score assumption-final-handoff-preserves-decisions independently: fail it for omission of an unresolved decision, consequence, material limitation, or actionable option; do not fail it solely for a misclassification when the raw observation, consequence, and action remain preserved.",
+            "Do not use an assumption-handling deduction to replace the technical product deduction or to reduce testing-evidence credit when the evidence record remains candid and usable."
           ]
         }
       ]

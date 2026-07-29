@@ -134,6 +134,11 @@ test('assumption handling receives only its fixed criteria and assumption eviden
   assert.equal(request.input_permissions.ambiguity_sources, true)
   assert.match(request.prompt, /four fixed assumption-handling criteria/i)
   assert.match(request.prompt, /verified assumption packet/)
+  assert.match(request.prompt, /compare candidate classifications against.*requirements/i)
+  assert.match(request.prompt, /environment(?:al)? trigger/i)
+  assert.match(request.prompt, /not a finding.*optional hardening/i)
+  assert.match(request.prompt, /repository-facts.*decisions-and-escalations/i)
+  assert.match(request.prompt, /handoff.*omitted/i)
   assert.doesNotMatch(request.prompt, /classification.*points/i)
 })
 

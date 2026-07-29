@@ -180,7 +180,7 @@ export function applyTechnicalAdjudication(result, review) {
       ...(result.technical_adjudication
         ? {
             prior_points_awarded: prior,
-            prior_adjudication_adjustment: round(revised - prior),
+            prior_adjudication_adjustment: round(prior - raw),
           }
         : {}),
       points_awarded: revised,

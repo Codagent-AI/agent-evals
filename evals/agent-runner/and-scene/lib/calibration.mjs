@@ -207,6 +207,18 @@ export function calibrationCases(rubric) {
       expected_official_pass: true,
     },
     {
+      id: 'assumption-misclassified-product-defect-regression',
+      description: 'a reproduced requirement violation dismissed as environmental hardening loses fact-distinction and decision-quality credit',
+      target: { kind: 'component', id: 'assumption-handling-quality' },
+      fail_criteria: [
+        'assumption-repository-facts-distinguished',
+        'assumption-decisions-and-escalations-proportionate',
+      ],
+      fail_gates: [],
+      human: null,
+      expected_official_pass: true,
+    },
+    {
       id: 'preview-process-ownership-regression',
       description: 'a verifier that can attach to a stale preview loses process-ownership credit',
       target: { kind: 'component', id: 'verification-tool-correctness' },

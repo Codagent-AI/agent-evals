@@ -138,6 +138,11 @@ function evidenceJudgePrompt({ job, definition, slice, view }) {
         'Score only the four fixed assumption-handling criteria listed below.',
         'Diagnostic ambiguity severity and fixture proposals have no scoring effect.',
         'A genuine unresolved gap and an evidence-backed no-findings conclusion remain eligible for full credit.',
+        'Compare candidate classifications against approved requirements and discoverable repository facts.',
+        'An environmental trigger does not excuse candidate behavior that violates a requirement.',
+        'If reproduced nonconforming behavior is called not a finding or optional hardening, fail the',
+        'repository-facts and decisions-and-escalations criteria as directed by the rubric guidance.',
+        'Score the final-handoff criterion independently: it fails when material decisions or limitations are omitted.',
       ]
   return [
     `You are reviewing ${definition.brief}.`,

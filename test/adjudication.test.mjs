@@ -164,10 +164,11 @@ test('a reviewed adjudication can supersede a provisional adjudication without l
   assert.equal(demo.prior_points_awarded, 24)
   assert.equal(demo.points_awarded, 23)
   assert.equal(demo.adjudication_adjustment, 0)
-  assert.equal(demo.prior_adjudication_adjustment, -1)
+  assert.equal(demo.prior_adjudication_adjustment, 1)
   const assumptions = revised.score.components.find(({ id }) => id === 'assumption-handling-quality')
   assert.equal(assumptions.raw_points_awarded, 4)
   assert.equal(assumptions.points_awarded, 2)
+  assert.equal(assumptions.prior_adjudication_adjustment, 0)
   assert.equal(assumptions.adjudication_adjustment, -2)
   assert.equal(
     module.validateTechnicalAdjudicationSupersession(provisional, revised).valid,
