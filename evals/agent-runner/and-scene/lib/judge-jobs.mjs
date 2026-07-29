@@ -150,6 +150,17 @@ function quoteEvidence(evidence) {
 }
 
 function sourceJudgePrompt({ definition, slice, sources, evidence }) {
+  const jobSpecificEvidence = definition.id === 'presentation-skill'
+    ? [
+        'For presentation-skill review, the normative instructions in SKILL.md are the implemented agent policy',
+        'for instruction-governed behavior. Explicit, unambiguous instructions may establish questioning, '
+          + 'target selection, preservation and scoping, and the required verification loop; do not demand '
+          + 'a separate interaction driver or transcript unless that subcomponent\'s review guidance requires one.',
+        'The scaffold review guidance still requires focused executable tests or verified workflow evidence',
+        'for the scaffold branches it names.',
+        '',
+      ]
+    : []
   return [
     `You are reviewing ${definition.brief}.`,
     '',
@@ -168,8 +179,10 @@ function sourceJudgePrompt({ definition, slice, sources, evidence }) {
     'when the implementation demonstrates different behavior.',
     '',
     'Evidence discipline is mandatory. For every pass, cite the exact symbol or test case',
-    'you inspected and explain the mechanism that satisfies the criterion. Do not infer',
-    'behavior from a filename, helper name, prose instruction, comment, or type signature.',
+    'you inspected and explain the mechanism that satisfies the criterion. Except for the',
+    'presentation-skill policy rule below, do not infer behavior from a filename, helper name,',
+    'prose instruction, comment, or type signature.',
+    ...jobSpecificEvidence,
     'When a test is cited, inspect the setup and assertions and confirm that they exercise',
     'this exact scenario. Never replace a missing mechanism with plausible behavior. If the',
     'mechanism or focused evidence required by the review guidance is absent, mark it fail.',

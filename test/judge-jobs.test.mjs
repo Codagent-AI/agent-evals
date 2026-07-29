@@ -200,6 +200,26 @@ test('source judges must verify behavior and resolve deterministic-fact contradi
   }
 })
 
+test('presentation-skill judges treat normative skill policy as implementation except where guidance requires execution', () => {
+  const request = buildJudgeRequest({
+    rubrics,
+    job: 'presentation-skill',
+    authority,
+    evidence: [],
+    sources: ['skills/presentation/SKILL.md'],
+    neutral: {
+      root: '/run/neutral',
+      source_root: '/run/neutral/source',
+      requirements_root: '/run/neutral/requirements',
+    },
+  })
+
+  assert.match(request.prompt, /normative instructions in SKILL\.md are the implemented agent policy/i)
+  assert.match(request.prompt, /questioning.*target selection.*preservation.*verification loop/i)
+  assert.match(request.prompt, /do not demand a separate interaction driver/i)
+  assert.match(request.prompt, /scaffold.*review guidance.*focused executable/i)
+})
+
 test('source-judge pass verdicts require explicit neutral-source citation paths', () => {
   const ids = criteriaForJob(automated, 'scene-kit')
   const payload = JSON.stringify({

@@ -92,7 +92,12 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
     'demo-code-boundaries',
     'scene-entity-transitions',
     'scene-modes-and-navigation',
+    'scene-style-and-attribution',
+    'skill-requirement-gathering',
     'skill-scaffolding',
+    'skill-presentation-lifecycle',
+    'skill-self-verification',
+    'verification-missing-sample',
     'verification-addressing-and-errors',
     'verification-capture',
     'verification-warnings',
@@ -108,9 +113,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 3.7 preserves technical corrections and makes source boundaries auditable', async () => {
+test('rubric 3.8 distinguishes implemented skill policy from criteria requiring executable proof', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '3.7.0')
+  assert.equal(rubric.version, '3.8.0')
 
   const rows = new Map(
     rubric.components
@@ -140,6 +145,20 @@ test('rubric 3.7 preserves technical corrections and makes source boundaries aud
   assert.match(guidance('demo-identity-and-grouping'), /every step module/i)
   assert.match(guidance('demo-code-boundaries'), /unrelated source files/i)
   assert.match(guidance('demo-code-boundaries'), /project-local.*does not require.*inject/i)
+  assert.match(guidance('scene-entity-transitions'), /persisting.*layout.*mechanism/i)
+  assert.match(guidance('scene-entity-transitions'), /do not.*double.*deduct.*newcomer/i)
+  assert.match(guidance('scene-entity-transitions'), /continuing.*remain.*mounted/i)
+  assert.match(guidance('scene-modes-and-navigation'), /active step.*multi-line caption/i)
+  assert.match(guidance('scene-modes-and-navigation'), /not.*all steps.*at once/i)
+  assert.match(guidance('scene-style-and-attribution'), /stable.*(?:class|data).*hook/i)
+  assert.match(guidance('scene-style-and-attribution'), /does not require.*caller.*prop/i)
+  assert.match(guidance('scene-style-and-attribution'), /top-left.*brand.*not.*attribution placement/i)
+  assert.match(guidance('skill-requirement-gathering'), /normative skill instructions.*implementation/i)
+  assert.match(guidance('skill-requirement-gathering'), /does not require.*interaction driver/i)
+  assert.match(guidance('skill-presentation-lifecycle'), /normative skill instructions.*implementation/i)
+  assert.match(guidance('skill-self-verification'), /normative skill instructions.*implementation/i)
+  assert.match(guidance('verification-missing-sample'), /explicit.*failure branch/i)
+  assert.match(guidance('verification-missing-sample'), /does not require.*dedicated.*test/i)
 })
 
 test('each of the six scored judge jobs maps to exactly one component', async () => {
