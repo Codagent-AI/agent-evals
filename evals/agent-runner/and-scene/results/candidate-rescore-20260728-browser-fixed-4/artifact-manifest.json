@@ -30,13 +30,13 @@
     },
     {
       "path": "report.html",
-      "bytes": 372284,
-      "sha256": "4e6da2d9b79b1f31a7cd47c32ec6cdb9bbda3718fca4c3059d05d95f3cd6b8c1"
+      "bytes": 371904,
+      "sha256": "fd044276d75eddf2e06a33bfb01cb21abd948942b6b06a4cb30bbb019681e4ce"
     },
     {
       "path": "result.json",
-      "bytes": 609327,
-      "sha256": "4ca8be0f9b350bb5e6d5165187697e89367a5097ac32765a7be824941a5e88d8"
+      "bytes": 611134,
+      "sha256": "691613a2270c2fef9880ff3e80337bd70ac173f474194831de4ec62358c2dea7"
     }
   ]
 }

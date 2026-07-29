@@ -864,7 +864,7 @@
         "raw_points_awarded": 23.4,
         "adjudication_adjustment": -2.166666666667,
         "prior_points_awarded": 21.233333333333334,
-        "prior_adjudication_adjustment": 0
+        "prior_adjudication_adjustment": -2.166666666667
       },
       {
         "id": "presentation-skill-correctness",
@@ -1153,7 +1153,7 @@
         "raw_points_awarded": 7,
         "adjudication_adjustment": -1.875,
         "prior_points_awarded": 5.125,
-        "prior_adjudication_adjustment": 0
+        "prior_adjudication_adjustment": -1.875
       },
       {
         "id": "verification-tool-correctness",
@@ -1343,7 +1343,7 @@
         "raw_points_awarded": 6.5,
         "adjudication_adjustment": -2.166666666667,
         "prior_points_awarded": 4.333333333333333,
-        "prior_adjudication_adjustment": 0
+        "prior_adjudication_adjustment": -2.166666666667
       },
       {
         "id": "testing-evidence-quality",
@@ -1513,7 +1513,7 @@
           }
         ],
         "raw_points_awarded": 4,
-        "prior_points_awarded": 4,
+        "prior_points_awarded": 2,
         "prior_adjudication_adjustment": -2,
         "adjudication_adjustment": -2
       }
@@ -14573,16 +14573,13 @@
   },
   "technical_adjudication": {
     "schema_version": 1,
-    "approved_by": "Paul (user-requested independent workflow-quality review)",
-    "approved_at": "2026-07-29T02:04:29.830Z",
-    "rationale": "Two fresh focused judges independently reassessed the eight workflow-quality points from existing candidate-produced evidence. Testing evidence remains 4/4; assumption handling is revised to 2/4 because the workflow reproduced the stale-preview ownership defect but inaccurately classified it as environmental and optional hardening.",
+    "approved_by": "Paul (workflow-quality review audit correction)",
+    "approved_at": "2026-07-29T02:10:51.253Z",
+    "rationale": "Preserve the confirmed 80.1917 score while correcting prior-adjustment audit semantics. The score remains based on rubric 3.2; rubric 3.3 governs future evaluations.",
     "findings": [
-      "Testing-evidence quality remains 4/4: the packet is traceable, usable, final-revision applicable, and complete enough for independent judging.",
-      "The stale-preview conclusion is technically wrong, but the raw failure facts are candidly preserved; deducting testing-evidence credit would double-count the product defect already charged under verification ownership.",
-      "Assumption handling passes consequential-ambiguity surfacing and final-handoff preservation.",
-      "Assumption handling fails repository-fact distinction because a requirement-defined preview-ownership defect was classified as environmental contamination.",
-      "Assumption handling fails proportionate decision-making because clearing the stale process and treating the reproduced defect as optional hardening was not requirement-conforming.",
-      "Both focused reviews ended with no consequential scoring ambiguity."
+      "Testing evidence remains 4/4 and assumption handling remains 2/4.",
+      "The prior-adjudication adjustment now records the superseded state rather than the new score delta.",
+      "Rubric 3.3 adds explicit future-judge guidance and calibration for requirement violations misclassified as environmental hardening."
     ],
     "reviewed_rubric": {
       "rubric_id": "and-scene-automated-product",
@@ -14599,15 +14596,15 @@
       "testing-evidence-quality": 4,
       "assumption-handling-quality": 2
     },
-    "prior_workflow_quality_score": 8,
+    "prior_workflow_quality_score": 6,
     "revised_workflow_quality_score": 6,
     "prior_shared_technical_score": 53.691666666667,
     "revised_shared_technical_score": 53.691666666667,
-    "prior_automated_subtotal": 61.691666666667,
+    "prior_automated_subtotal": 59.691666666667,
     "revised_automated_subtotal": 59.691666666667,
-    "prior_official_score": 82.191666666667,
+    "prior_official_score": 80.191666666667,
     "revised_official_score": 80.191666666667,
-    "prior_result_fingerprint": "c75b73b8e5350cb024496bc45e222d712d06e5ed11a91994d22216f6910b8d60"
+    "prior_result_fingerprint": "cf34be0745b8991d61760ed4b4300cda1b27727ea99415b13ffd95f49ba11d9c"
   },
   "technical_adjudication_history": [
     {
@@ -14672,6 +14669,44 @@
       "prior_official_score": 86.5,
       "revised_official_score": 82.191666666667,
       "prior_result_fingerprint": "b1fbf5a94d722347acc9e829a884d4aa4fe60f2eaaa19531a02301265769b4fb"
+    },
+    {
+      "schema_version": 1,
+      "approved_by": "Paul (user-requested independent workflow-quality review)",
+      "approved_at": "2026-07-29T02:04:29.830Z",
+      "rationale": "Two fresh focused judges independently reassessed the eight workflow-quality points from existing candidate-produced evidence. Testing evidence remains 4/4; assumption handling is revised to 2/4 because the workflow reproduced the stale-preview ownership defect but inaccurately classified it as environmental and optional hardening.",
+      "findings": [
+        "Testing-evidence quality remains 4/4: the packet is traceable, usable, final-revision applicable, and complete enough for independent judging.",
+        "The stale-preview conclusion is technically wrong, but the raw failure facts are candidly preserved; deducting testing-evidence credit would double-count the product defect already charged under verification ownership.",
+        "Assumption handling passes consequential-ambiguity surfacing and final-handoff preservation.",
+        "Assumption handling fails repository-fact distinction because a requirement-defined preview-ownership defect was classified as environmental contamination.",
+        "Assumption handling fails proportionate decision-making because clearing the stale process and treating the reproduced defect as optional hardening was not requirement-conforming.",
+        "Both focused reviews ended with no consequential scoring ambiguity."
+      ],
+      "reviewed_rubric": {
+        "rubric_id": "and-scene-automated-product",
+        "version": "3.2.0",
+        "sha256": "e39ad48c48a94002c77201102ef790336cd8e5614f12b2c5202cdaef3b1d33d1"
+      },
+      "component_scores": {
+        "demo-technical-quality": 23,
+        "scene-kit-correctness": 21.233333333333334,
+        "presentation-skill-correctness": 5.125,
+        "verification-tool-correctness": 4.333333333333333
+      },
+      "workflow_component_scores": {
+        "testing-evidence-quality": 4,
+        "assumption-handling-quality": 2
+      },
+      "prior_workflow_quality_score": 8,
+      "revised_workflow_quality_score": 6,
+      "prior_shared_technical_score": 53.691666666667,
+      "revised_shared_technical_score": 53.691666666667,
+      "prior_automated_subtotal": 61.691666666667,
+      "revised_automated_subtotal": 59.691666666667,
+      "prior_official_score": 82.191666666667,
+      "revised_official_score": 80.191666666667,
+      "prior_result_fingerprint": "c75b73b8e5350cb024496bc45e222d712d06e5ed11a91994d22216f6910b8d60"
     }
   ]
 }
