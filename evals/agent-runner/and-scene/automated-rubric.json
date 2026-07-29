@@ -1,6 +1,6 @@
 {
   "rubric_id": "and-scene-automated-product",
-  "version": "3.9.0",
+  "version": "3.10.0",
   "total_points": 100,
   "automated_points": 70,
   "human_points": 30,
@@ -69,7 +69,9 @@
           "job": "demo-integration",
           "criteria": ["demo-stable-identity-and-grouping"],
           "review_guidance": [
-            "An all-nine-step identity or grouping claim MUST cite every step module plus the shared Scene mechanism, or cite a focused executable test together with every imported implementation needed to evaluate its setup and assertions. A beginning/middle/end sample is insufficient."
+            "An all-nine-step identity or grouping claim MUST cite every step module plus the shared Scene mechanism, or cite a focused executable test together with every imported implementation needed to evaluate its setup and assertions. A beginning/middle/end sample is insufficient.",
+            "For the delivered grouped-scene path, prove grouping by tracing each step's groupKey through Stage, and prove stable entity identity by tracing the presentation-owned ENTITY constants through Scene layoutId props to the node consumers. Cite every file used by that proof chain.",
+            "Do not claim that groupKey itself derives entity identity: groupKey preserves the grouped Scene mount, while the separate presentation-owned layoutId values preserve entity identity."
           ]
         },
         {

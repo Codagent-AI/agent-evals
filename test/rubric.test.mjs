@@ -113,9 +113,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 3.9 distinguishes implemented policy from criteria requiring executable proof', async () => {
+test('rubric 3.10 distinguishes implemented policy from criteria requiring executable proof', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '3.9.0')
+  assert.equal(rubric.version, '3.10.0')
 
   const rows = new Map(
     rubric.components
@@ -143,6 +143,9 @@ test('rubric 3.9 distinguishes implemented policy from criteria requiring execut
   assert.match(guidance('verification-warnings'), /assert.*warning output/i)
   assert.match(guidance('demo-scene-kit-integration'), /shared Scene.*boundar/i)
   assert.match(guidance('demo-identity-and-grouping'), /every step module/i)
+  assert.match(guidance('demo-identity-and-grouping'), /groupKey.*Stage/i)
+  assert.match(guidance('demo-identity-and-grouping'), /ENTITY constants.*Scene.*layoutId.*node consumers/i)
+  assert.match(guidance('demo-identity-and-grouping'), /do not claim.*groupKey.*derives.*entity identit/i)
   assert.match(guidance('demo-code-boundaries'), /unrelated source files/i)
   assert.match(guidance('demo-code-boundaries'), /project-local.*does not require.*inject/i)
   assert.match(guidance('scene-entity-transitions'), /persisting.*layout.*mechanism/i)
