@@ -18,7 +18,7 @@ const WORKFLOW = 'implement-change'
 function step(overrides = {}) {
   return {
     record_id: 'implement-task#1',
-    prefix: 'implement-tasks[0]/implement-single-task',
+    prefix: 'implement-tasks:0/implement-single-task/sub:implement-task',
     id: 'generate-code',
     kind: 'step',
     type: 'agent',
@@ -246,14 +246,42 @@ test('Runner-owned acceptance-tester calls are attributed to the acceptance-revi
 test('task-loop position attributes validator remediation to the implementor but not final validation', () => {
   const text = JSON.stringify(metrics({
     steps: [
-      step({ id: 'fix-violations', prefix: 'implement-tasks[0]/implement-single-task/sub:run-validator-v1.0/fix-violations' }),
-      step({ record_id: 'final-fix#1', id: 'fix-violations', prefix: 'run-validator/sub:run-validator-v1.0/fix-violations' }),
+      step({ id: 'fix-violations', prefix: 'implement-tasks:0/implement-single-task/sub:implement-task/run-validator/sub:run-validator' }),
+      step({ record_id: 'final-fix#1', id: 'fix-violations', prefix: 'run-validator/sub:run-validator' }),
     ],
   }))
 
   const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
 
   assert.deepEqual(ingested.attempts.map((attempt) => attempt.agent_role), ['task-implementor', 'lead-agent'])
+})
+
+// Agent Runner renders a loop iteration as `<step-id>:<n>` and joins nesting
+// segments with `/` (internal/exec/step_audit.go, executionIdentityPrefix).
+// Attribution must key on that emitted form, not on a bracketed one.
+test('a real Agent Runner loop-iteration prefix attributes task work to the implementor', () => {
+  const text = JSON.stringify(metrics({
+    steps: [
+      step({ prefix: 'implement-tasks:0/implement-single-task/sub:implement-task' }),
+      step({
+        record_id: 'task-fix#1',
+        id: 'fix-violations',
+        prefix: 'implement-tasks:0/implement-single-task/sub:implement-task/run-validator/sub:run-validator/validator-retry:0',
+      }),
+      step({
+        record_id: 'final-fix#1',
+        id: 'fix-violations',
+        prefix: 'run-validator/sub:run-validator/validator-retry:0',
+      }),
+    ],
+  }))
+
+  const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
+
+  assert.deepEqual(
+    ingested.attempts.map((attempt) => attempt.agent_role),
+    ['task-implementor', 'task-implementor', 'lead-agent'],
+  )
 })
 
 test('incomplete Runner history is preserved rather than presented as complete', () => {

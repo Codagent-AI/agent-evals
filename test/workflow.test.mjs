@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict'
 import { access, readFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 
+import {
+  WORKFLOW_RELATIVE_PATH,
+  resolveAgentRunnerDir,
+} from '../evals/agent-runner/and-scene/lib/provenance.mjs'
 import {
   checkWorkflowHistory,
   classifyRunnerRun,
@@ -168,12 +173,9 @@ test('completed workflow history requires every final delivery step and rejects 
 })
 
 test('available Agent Runner checkout satisfies the pinned core workflow contract', async (t) => {
-  const agentRunnerDir = process.env.AGENT_RUNNER_DIR
-  if (!agentRunnerDir) {
-    t.skip('AGENT_RUNNER_DIR is not configured; skipping live Agent Runner contract check')
-    return
-  }
-  const workflowPath = join(agentRunnerDir, 'workflows/core/implement-change-v1.0.yaml')
+  const evalsRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
+  const agentRunnerDir = resolveAgentRunnerDir({ env: process.env, evalsRoot })
+  const workflowPath = join(agentRunnerDir, WORKFLOW_RELATIVE_PATH)
   try {
     await access(workflowPath, constants.R_OK)
   } catch {

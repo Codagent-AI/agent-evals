@@ -12,6 +12,7 @@ import {
   compareProvenance,
   readAgentSkillsProvenance,
   readWorkflowProvenance,
+  resolveAgentRunnerDir,
 } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
 
 const workflowYaml = 'name: implement-change\nsteps:\n  - id: verify-acceptance-handoff\n'
@@ -217,4 +218,29 @@ test('compareProvenance reports a changed commit, workflow hash, and CLI version
     { field: 'commit', recorded: 'a', current: 'z' },
     { field: 'cli_version', recorded: 'c', current: 'c2' },
   ])
+})
+
+// run.sh resolves the Agent Runner checkout as AGENT_RUNNER_DIR, falling back to
+// the sibling `../agent-runner`. The suite's own checks resolve it the same way,
+// so a workstation with the conventional layout exercises the live contract
+// check without extra configuration.
+test('an explicit AGENT_RUNNER_DIR selects the Agent Runner checkout', () => {
+  assert.equal(
+    resolveAgentRunnerDir({ env: { AGENT_RUNNER_DIR: '/somewhere/agent-runner' }, evalsRoot: '/repos/agent-evals' }),
+    '/somewhere/agent-runner',
+  )
+})
+
+test('an unset AGENT_RUNNER_DIR falls back to the sibling checkout run.sh defaults to', () => {
+  assert.equal(
+    resolveAgentRunnerDir({ env: {}, evalsRoot: '/repos/agent-evals' }),
+    '/repos/agent-runner',
+  )
+})
+
+test('a blank AGENT_RUNNER_DIR falls back rather than selecting an empty path', () => {
+  assert.equal(
+    resolveAgentRunnerDir({ env: { AGENT_RUNNER_DIR: '   ' }, evalsRoot: '/repos/agent-evals' }),
+    '/repos/agent-runner',
+  )
 })

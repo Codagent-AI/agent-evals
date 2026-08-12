@@ -118,7 +118,9 @@ Agent Runner records each executed step as a path whose segments identify the en
 ## ADDED Requirements
 
 ### Requirement: Workflow contract regression detection
-The suite's automated checks SHALL verify the pinned workflow contract against a real Agent Runner checkout when one is available at the configured Agent Runner directory, and SHALL skip that verification with an explicit message when no checkout is available. The check SHALL NOT require network access, a built Agent Runner binary, or a running workflow.
+The suite's automated checks SHALL verify the pinned workflow contract against a real Agent Runner checkout when one is available, and SHALL skip that verification with an explicit message naming the resolved path when no checkout is available. The check SHALL NOT require network access, a built Agent Runner binary, or a running workflow.
+
+The checks SHALL resolve the Agent Runner checkout the same way the host entry point does: an explicitly configured directory when one is set, and otherwise the sibling checkout beside the repository. Verification SHALL NOT depend on explicit configuration when the conventional layout is present, so that the check runs by default on a workstation holding both repositories.
 
 #### Scenario: Real checkout satisfies the contract
 - **WHEN** the automated checks run with an available Agent Runner checkout whose pinned workflow declares every required parameter and required final-workflow step
@@ -132,7 +134,12 @@ The suite's automated checks SHALL verify the pinned workflow contract against a
 - **WHEN** the pinned workflow in an available Agent Runner checkout declares a required final-workflow step only inside a loop, group, or nested step definition
 - **THEN** the automated checks fail and identify that step
 
+#### Scenario: Sibling checkout is used without explicit configuration
+- **WHEN** the automated checks run with no Agent Runner directory configured and the sibling checkout present
+- **THEN** the contract verification runs against that sibling checkout
+- **AND** it is not skipped
+
 #### Scenario: No Agent Runner checkout is available
-- **WHEN** the automated checks run without an available Agent Runner checkout
-- **THEN** the contract verification is skipped with an explicit message
+- **WHEN** the automated checks run and neither a configured nor a sibling Agent Runner checkout is readable
+- **THEN** the contract verification is skipped with an explicit message naming the resolved path
 - **AND** the remaining automated checks still run

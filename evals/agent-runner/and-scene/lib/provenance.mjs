@@ -4,12 +4,20 @@
 // requires a clean worktree and records whichever revision it used, so a run
 // stays reproducible without freezing the evaluated product.
 import { spawnSync } from 'node:child_process'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 import { hashFile } from './persistence.mjs'
 
 export const WORKFLOW_RELATIVE_PATH = 'workflows/core/implement-change-v1.0.yaml'
 export const AGENT_SKILLS_MANIFEST_PATH = '.claude-plugin/marketplace.json'
+
+// `run.sh` reads AGENT_RUNNER_DIR and otherwise falls back to the sibling
+// checkout. The suite's own checks resolve it identically so the conventional
+// layout needs no extra configuration to be exercised.
+export function resolveAgentRunnerDir({ env = {}, evalsRoot }) {
+  const configured = typeof env.AGENT_RUNNER_DIR === 'string' ? env.AGENT_RUNNER_DIR.trim() : ''
+  return configured || resolve(evalsRoot, '..', 'agent-runner')
+}
 
 export const PROVENANCE_FIELDS = ['commit', 'workflow_sha256', 'cli_version']
 export const AGENT_SKILLS_PROVENANCE_FIELDS = ['commit', 'manifest_sha256']

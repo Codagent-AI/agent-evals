@@ -55,7 +55,7 @@ const CATALOG_BODY = JSON.stringify({
 function attempt(overrides = {}) {
   return {
     record_id: 'implement-tasks#1',
-    prefix: 'implement-tasks[0]/implement-single-task',
+    prefix: 'implement-tasks:0/implement-single-task/sub:implement-task',
     id: 'generate-code',
     kind: 'step',
     type: 'agent',

@@ -43,6 +43,13 @@ function rejected(reason, source = null) {
   }
 }
 
+// Agent Runner joins nesting segments with `/` and renders a loop iteration as
+// `<step-id>:<n>` (`executionIdentityPrefix` in internal/exec/step_audit.go), so
+// per-task work sits under `implement-tasks:<n>`. The same validator
+// sub-workflow also runs as the workflow's final `run-validator` step, and only
+// this position distinguishes the two.
+const TASK_LOOP_PREFIX = /^implement-tasks(?::\d+)?(?:\/|$)/
+
 function nonEmptyString(value) {
   return typeof value === 'string' && value.length > 0
 }
@@ -62,7 +69,7 @@ function usageStateOf(usage, invokedCli) {
 function agentRole(raw) {
   if (!raw.agent_invoked) return null
   if (raw.kind === 'agent-call' && raw.target_name === 'acceptance-tester') return 'acceptance-reviewer'
-  if (typeof raw.prefix === 'string' && /^implement-tasks(?:\[|\/)/.test(raw.prefix)) {
+  if (typeof raw.prefix === 'string' && TASK_LOOP_PREFIX.test(raw.prefix)) {
     return 'task-implementor'
   }
   return 'lead-agent'
