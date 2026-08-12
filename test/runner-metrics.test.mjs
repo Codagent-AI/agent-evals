@@ -228,19 +228,32 @@ test('resumed attempts are retained alongside the earlier ones', () => {
   assert.deepEqual(ingested.sessions, ['session-1', 'session-2'])
 })
 
-test('Runner-owned reviewer calls are attributed to the acceptance-reviewer profile', () => {
+test('Runner-owned acceptance-tester calls are attributed to the acceptance-reviewer profile', () => {
   const text = JSON.stringify(metrics({
     steps: [step({
-      record_id: 'prepare-acceptance/reviewer-call#1',
-      id: 'reviewer-call',
+      record_id: 'prepare-acceptance/acceptance-tester#1',
+      id: 'acceptance-tester',
       kind: 'agent-call',
-      target_name: 'reviewer',
+      target_name: 'acceptance-tester',
     })],
   }))
 
   const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
 
   assert.equal(ingested.attempts[0].agent_role, 'acceptance-reviewer')
+})
+
+test('task-loop position attributes validator remediation to the implementor but not final validation', () => {
+  const text = JSON.stringify(metrics({
+    steps: [
+      step({ id: 'fix-violations', prefix: 'implement-tasks[0]/implement-single-task/sub:run-validator-v1.0/fix-violations' }),
+      step({ record_id: 'final-fix#1', id: 'fix-violations', prefix: 'run-validator/sub:run-validator-v1.0/fix-violations' }),
+    ],
+  }))
+
+  const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
+
+  assert.deepEqual(ingested.attempts.map((attempt) => attempt.agent_role), ['task-implementor', 'lead-agent'])
 })
 
 test('incomplete Runner history is preserved rather than presented as complete', () => {

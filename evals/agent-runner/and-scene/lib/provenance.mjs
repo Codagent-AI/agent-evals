@@ -8,7 +8,7 @@ import { join } from 'node:path'
 
 import { hashFile } from './persistence.mjs'
 
-export const WORKFLOW_RELATIVE_PATH = 'workflows/openspec/implement-change-v2.0.yaml'
+export const WORKFLOW_RELATIVE_PATH = 'workflows/core/implement-change-v1.0.yaml'
 export const AGENT_SKILLS_MANIFEST_PATH = '.claude-plugin/marketplace.json'
 
 export const PROVENANCE_FIELDS = ['commit', 'workflow_sha256', 'cli_version']

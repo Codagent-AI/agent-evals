@@ -39,14 +39,14 @@ function execStub(overrides = {}) {
 async function checkout({ workflow = workflowYaml } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'agent-evals-provenance-'))
   if (workflow !== null) {
-    await mkdir(join(dir, 'workflows/openspec'), { recursive: true })
+    await mkdir(join(dir, 'workflows/core'), { recursive: true })
     await writeFile(join(dir, WORKFLOW_RELATIVE_PATH), workflow)
   }
   return dir
 }
 
 test('the pinned workflow path is the versioned implement-change contract', () => {
-  assert.equal(WORKFLOW_RELATIVE_PATH, 'workflows/openspec/implement-change-v2.0.yaml')
+  assert.equal(WORKFLOW_RELATIVE_PATH, 'workflows/core/implement-change-v1.0.yaml')
 })
 
 test('a clean Agent Skills checkout records its commit and plugin manifest hash', async () => {
@@ -128,11 +128,11 @@ test('an unstaged change stops the evaluation before Agent Runner', async () => 
   await assert.rejects(
     () => readWorkflowProvenance({
       agentRunnerDir: dir,
-      exec: execStub({ 'git status --porcelain': { status: 0, stdout: ' M workflows/openspec/implement-change-v2.0.yaml\n' } }),
+      exec: execStub({ 'git status --porcelain': { status: 0, stdout: ' M workflows/core/implement-change-v1.0.yaml\n' } }),
     }),
     (error) => {
       assert.equal(error.code, 'dirty-agent-runner-checkout')
-      assert.match(error.message, /implement-change-v2\.0\.yaml/)
+      assert.match(error.message, /implement-change-v1\.0\.yaml/)
       return true
     },
   )

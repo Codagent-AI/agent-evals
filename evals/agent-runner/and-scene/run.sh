@@ -22,7 +22,7 @@ fi
 CHANGE_NAME="${CHANGE_NAME:-create-and-scene}"
 # The implementation workflow is hard-coded for this change. The suite records
 # whichever clean Agent Runner revision supplies it rather than pinning a commit.
-WORKFLOW_RELATIVE_PATH="workflows/openspec/implement-change-v2.0.yaml"
+WORKFLOW_RELATIVE_PATH="workflows/core/implement-change-v1.0.yaml"
 # sandbox-run.sh mounts the validated host checkout here with its Git metadata.
 # Its separate /tmp/agent-runner-local copy is only the build source and cannot
 # satisfy the controller's clean-worktree provenance check.
@@ -83,7 +83,7 @@ Options:
   --dry-run              Print the sandbox command instead of running it.
   --agent-runner-dir PATH
                           Agent Runner checkout. Must be a clean Git worktree
-                          containing workflows/openspec/implement-change-v2.0.yaml.
+                          containing workflows/core/implement-change-v1.0.yaml.
                           Default: sibling ../agent-runner.
   --agent-skills-dir PATH
                           Agent Skills checkout. Must be a clean Git worktree
@@ -110,7 +110,7 @@ Options:
   --resume               Reopen run-state.json, revalidate the recorded fixture,
                           Runner, branch, draft PR, final SHA, and evidence, then
                           wait for/resume the exact Runner run as needed.
-  --lead-cli CLI         Lead-agent CLI adapter (implement-change planner).
+  --lead-cli CLI         Lead-agent CLI adapter (core implement-change lead).
   --lead-model MODEL     Lead-agent model.
   --lead-effort EFFORT   Lead-agent effort.
   --implementor-cli CLI  Task-implementor CLI adapter.
@@ -648,7 +648,7 @@ fi
 
 # The implementation workflow is fixed for this change; the controller records
 # the clean Agent Runner revision that supplies it.
-IMPLEMENTATION_WORKFLOW=implement-change
+IMPLEMENTATION_WORKFLOW=core:implement-change
 IMPLEMENTATION_WORKFLOW_PATH=$WORKFLOW_RELATIVE_PATH
 REPO=$REPO_Q
 FIXTURE_REF=$FIXTURE_REF_Q

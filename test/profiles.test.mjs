@@ -15,7 +15,7 @@ const capabilities = {
     claude: {
       models: ['opus', 'sonnet'],
       efforts: ['low', 'medium', 'high'],
-      roles: ['planner', 'implementor', 'reviewer'],
+      roles: ['lead', 'implementor', 'tester'],
     },
     codex: { models: ['gpt-5'], efforts: ['medium', 'high'], roles: ['implementor'] },
   },
@@ -25,8 +25,8 @@ const lead = { cli: 'claude', model: 'opus', effort: 'high' }
 const implementor = { cli: 'claude', model: 'sonnet', effort: 'medium' }
 const reviewer = { cli: 'claude', model: 'opus', effort: 'high' }
 
-test('roles map to the implement-change planner, implementor, and reviewer agents', () => {
-  assert.deepEqual(ROLE_AGENTS, { lead: 'planner', implementor: 'implementor', reviewer: 'reviewer' })
+test('roles map to the core workflow lead, implementor, and tester agents', () => {
+  assert.deepEqual(ROLE_AGENTS, { lead: 'lead', implementor: 'implementor', reviewer: 'tester' })
 })
 
 test('independently selected profiles are accepted and normalized', () => {
@@ -34,12 +34,12 @@ test('independently selected profiles are accepted and normalized', () => {
 
   assert.equal(result.ok, true)
   assert.deepEqual(result.errors, [])
-  assert.deepEqual(result.profiles.lead, { cli: 'claude', model: 'opus', effort: 'high', agent: 'planner' })
+  assert.deepEqual(result.profiles.lead, { cli: 'claude', model: 'opus', effort: 'high', agent: 'lead' })
   assert.deepEqual(result.profiles.implementor, {
     cli: 'claude', model: 'sonnet', effort: 'medium', agent: 'implementor',
   })
   assert.deepEqual(result.profiles.reviewer, {
-    cli: 'claude', model: 'opus', effort: 'high', agent: 'reviewer',
+    cli: 'claude', model: 'opus', effort: 'high', agent: 'tester',
   })
 })
 
@@ -95,14 +95,14 @@ test('an unsupported lead CLI names the failing role and field', () => {
   ])
 })
 
-test('a CLI that cannot run the planner role autonomously is rejected for the lead', () => {
+test('a CLI that cannot run the lead role autonomously is rejected for the lead', () => {
   const result = validateRoleProfiles({
     lead: { ...lead, cli: 'codex', model: 'gpt-5' }, implementor, reviewer, capabilities,
   })
 
   assert.equal(result.ok, false)
   assert.deepEqual(result.errors.map((error) => [error.role, error.field]), [['lead', 'role']])
-  assert.match(result.errors[0].message, /planner/)
+  assert.match(result.errors[0].message, /lead/)
 })
 
 test('an unavailable implementor model names the failing role and field', () => {
@@ -133,13 +133,13 @@ test('renderEvalConfig materializes all workflow roles autonomously in an eval-s
   const config = renderEvalConfig(profiles)
 
   assert.match(config, /^active_profile: eval$/m)
-  assert.match(config, /^ {6}planner:$/m)
+  assert.match(config, /^ {6}lead:$/m)
   assert.match(config, /^ {6}implementor:$/m)
-  assert.match(config, /^ {6}reviewer:$/m)
+  assert.match(config, /^ {6}tester:$/m)
   assert.equal(config.match(/default_mode: autonomous/g).length, 3)
-  assert.match(config, /planner:\n {8}default_mode: autonomous\n {8}cli: claude\n {8}model: opus\n {8}effort: high/)
+  assert.match(config, /lead:\n {8}default_mode: autonomous\n {8}cli: claude\n {8}model: opus\n {8}effort: high/)
   assert.match(config, /implementor:\n {8}default_mode: autonomous\n {8}cli: claude\n {8}model: sonnet\n {8}effort: medium/)
-  assert.match(config, /reviewer:\n {8}default_mode: autonomous\n {8}cli: claude\n {8}model: opus\n {8}effort: high/)
+  assert.match(config, /tester:\n {8}default_mode: autonomous\n {8}cli: claude\n {8}model: opus\n {8}effort: high/)
 })
 
 test('renderEvalConfig never inherits host or project Agent Runner settings', () => {
@@ -179,7 +179,7 @@ test('an observed attempt matching its configuration is linked to the role', () 
   const { profiles } = validateRoleProfiles({ lead, implementor, reviewer, capabilities })
 
   const report = reconcileRoleAttempts(profiles, [
-    { agent: 'planner', cli: 'claude', provider: 'anthropic', model: 'opus', effort: 'high', session: 'lead-agent', step: 'plan', attempt: 1 },
+    { agent: 'lead', cli: 'claude', provider: 'anthropic', model: 'opus', effort: 'high', session: 'lead-agent', step: 'plan', attempt: 1 },
   ])
 
   assert.equal(report.roles.lead.attempts[0].matches_configuration, true)
@@ -225,8 +225,8 @@ test('every retried and resumed attempt is retained under its role', () => {
   const report = reconcileRoleAttempts(profiles, [
     { agent: 'implementor', cli: 'claude', provider: 'anthropic', model: 'sonnet', effort: 'medium', session: 's', step: 'implement', attempt: 1 },
     { agent: 'implementor', cli: 'claude', provider: 'anthropic', model: 'sonnet', effort: 'medium', session: 's', step: 'implement', attempt: 2 },
-    { agent: 'planner', cli: 'claude', provider: 'anthropic', model: 'opus', effort: 'high', session: 'lead-agent', step: 'simplify', attempt: 1 },
-    { agent: 'reviewer', cli: 'claude', provider: 'anthropic', model: 'opus', effort: 'high', session: 'acceptance-tester', step: 'prepare-acceptance', attempt: 1 },
+    { agent: 'lead', cli: 'claude', provider: 'anthropic', model: 'opus', effort: 'high', session: 'lead-agent', step: 'simplify', attempt: 1 },
+    { agent: 'tester', cli: 'claude', provider: 'anthropic', model: 'opus', effort: 'high', session: 'acceptance-tester', step: 'prepare-acceptance', attempt: 1 },
   ])
 
   assert.deepEqual(report.roles.implementor.attempts.map((a) => a.observed.attempt), [1, 2])

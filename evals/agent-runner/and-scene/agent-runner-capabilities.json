@@ -5,12 +5,12 @@
     "claude": {
       "models": ["opus", "sonnet", "haiku"],
       "efforts": ["low", "medium", "high"],
-      "roles": ["planner", "implementor", "reviewer"]
+      "roles": ["lead", "implementor", "tester"]
     },
     "codex": {
       "models": ["gpt-5", "gpt-5-codex"],
       "efforts": ["low", "medium", "high"],
-      "roles": ["planner", "implementor", "reviewer"]
+      "roles": ["lead", "implementor", "tester"]
     }
   }
 }

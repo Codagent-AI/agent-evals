@@ -1,12 +1,20 @@
-// Agent Runner complete `implement-change-v2.0` integration.
+// Agent Runner complete core `implement-change-v1.0` integration.
 //
 // Agent Runner owns workflow execution and its internal resume point. The eval
 // owns the immutable workflow contract and never supplies an early stop.
 
 export const IMPLEMENTATION_WORKFLOW = 'implement-change'
-export const IMPLEMENTATION_WORKFLOW_LOGICAL_NAME = 'openspec:implement-change'
-export const IMPLEMENTATION_WORKFLOW_INSPECTION_REF = 'openspec:implement-change'
-export const IMPLEMENTATION_WORKFLOW_PATH = 'workflows/openspec/implement-change-v2.0.yaml'
+export const IMPLEMENTATION_WORKFLOW_LOGICAL_NAME = 'core:implement-change'
+export const IMPLEMENTATION_WORKFLOW_INSPECTION_REF = 'core:implement-change'
+export const IMPLEMENTATION_WORKFLOW_PATH = 'workflows/core/implement-change-v1.0.yaml'
+
+export const REQUIRED_WORKFLOW_PARAMETERS = [
+  'change_name',
+  'change_dir',
+  'change_label',
+  'artifact_validation_instruction',
+  'skip_validator',
+]
 
 export const REQUIRED_FINAL_WORKFLOW_STEPS = [
   'run-validator',
@@ -31,6 +39,9 @@ export function isProhibitedWorkflowStep(step) {
 }
 
 export function resolveBoundary({ skipValidator = false, changeName }) {
+  if (String(changeName).includes('{{')) {
+    throw new Error('workflow arguments cannot contain an unresolved placeholder')
+  }
   const skip = String(Boolean(skipValidator))
   return {
     workflow: IMPLEMENTATION_WORKFLOW,
@@ -39,7 +50,13 @@ export function resolveBoundary({ skipValidator = false, changeName }) {
     task_level_compliance: skip === 'true' ? 'skipped' : 'required',
     final_validator: 'required',
     stop_step: null,
-    workflow_arguments: [`change_name=${changeName}`, `skip_validator=${skip}`],
+    workflow_arguments: [
+      `change_name=${changeName}`,
+      `change_dir=openspec/changes/${changeName}`,
+      'change_label=OpenSpec change',
+      `artifact_validation_instruction=When an approved artifact changed, run \`openspec validate --type change "${changeName}"\`.`,
+      `skip_validator=${skip}`,
+    ],
   }
 }
 
@@ -58,12 +75,12 @@ export function parseWorkflowContract(text) {
       continue
     }
     if (section === 'parameters') {
-      const listed = rawLine.match(/^\s+-\s+name:\s*(\S+)/)
+      const listed = rawLine.match(/^ {2}-\s+name:\s*(\S+)/)
       if (listed) { parameters.push(listed[1]); continue }
       const mapped = rawLine.match(/^ {2}([A-Za-z_][\w-]*):/)
       if (mapped) parameters.push(mapped[1])
     } else if (section === 'steps') {
-      const step = rawLine.match(/^\s+-\s+id:\s*(\S+)/)
+      const step = rawLine.match(/^ {2}-\s+id:\s*(\S+)/)
       if (step) steps.push(step[1])
     }
   }
@@ -73,11 +90,10 @@ export function parseWorkflowContract(text) {
 export function verifyWorkflowContract(text) {
   const contract = parseWorkflowContract(text)
   const errors = []
-  if (!contract.parameters.includes('skip_validator')) {
-    errors.push(`workflow ${IMPLEMENTATION_WORKFLOW} lacks the skip_validator parameter`)
-  }
-  if (!contract.parameters.includes('change_name')) {
-    errors.push(`workflow ${IMPLEMENTATION_WORKFLOW} lacks the change_name parameter`)
+  for (const parameter of REQUIRED_WORKFLOW_PARAMETERS) {
+    if (!contract.parameters.includes(parameter)) {
+      errors.push(`workflow ${IMPLEMENTATION_WORKFLOW} lacks the ${parameter} parameter`)
+    }
   }
   for (const step of REQUIRED_FINAL_WORKFLOW_STEPS) {
     if (!contract.steps.includes(step)) {
@@ -186,6 +202,7 @@ export function checkWorkflowHistory(history = []) {
   const missingSteps = REQUIRED_FINAL_WORKFLOW_STEPS.filter((step) => !completed.has(step))
   const prohibitedEffects = normalized.flatMap((entry) => (
     historyStepPath(entry)
+      .map((step) => String(step).replace(/^sub:/, ''))
       .filter(isProhibitedWorkflowStep)
       .map((step) => ({ ...entry, step }))
   ))

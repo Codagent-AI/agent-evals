@@ -60,7 +60,7 @@ function result(overrides = {}) {
     },
     workflow: {
       workflow: 'implement-change',
-      workflow_path: 'workflows/openspec/implement-change-v2.0.yaml',
+      workflow_path: 'workflows/core/implement-change-v1.0.yaml',
       configured_stop_step: null,
       observed_steps: ['plan'],
       events: [],

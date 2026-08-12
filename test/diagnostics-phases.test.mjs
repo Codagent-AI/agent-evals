@@ -17,6 +17,12 @@ const workflowYaml = `name: implement-change
 params:
   - name: change_name
     required: true
+  - name: change_dir
+    required: true
+  - name: change_label
+    required: true
+  - name: artifact_validation_instruction
+    required: true
   - name: skip_validator
     default: false
 steps:
@@ -95,7 +101,7 @@ async function environment({ metrics = runMetrics(), sessionFiles = {} } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'agent-evals-diagnostics-'))
   const agentRunnerDir = join(root, 'agent-runner')
   const agentSkillsDir = join(root, 'agent-skills')
-  await mkdir(join(agentRunnerDir, 'workflows/openspec'), { recursive: true })
+  await mkdir(join(agentRunnerDir, 'workflows/core'), { recursive: true })
   await writeFile(join(agentRunnerDir, WORKFLOW_RELATIVE_PATH), workflowYaml)
   await mkdir(join(agentSkillsDir, '.claude-plugin'), { recursive: true })
   await writeFile(join(agentSkillsDir, '.claude-plugin/marketplace.json'), '{"name":"codagent"}\n')

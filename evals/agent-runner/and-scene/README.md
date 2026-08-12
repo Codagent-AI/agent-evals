@@ -30,6 +30,10 @@ starting Agent Runner, the suite verifies the workflow's named Codagent skills
 against the pinned Agent Skills checkout and installs that local plugin for
 each selected CLI.
 
+The profile names remain stable at the CLI boundary, but map to the workflow's
+`lead`, `implementor`, and `tester` agents respectively; acceptance work runs
+through the `acceptance-tester` named session.
+
 The implementation agents use unrestricted permissions inside the container.
 The container is the isolation boundary. Run trusted fixtures and pass only the
 credentials the evaluation needs. Use a short-lived, repository-scoped token
@@ -262,7 +266,8 @@ The external fixture is pinned to commit
 It is not a similarity target.
 
 The suite runs Agent Runner's exact
-`workflows/openspec/implement-change-v2.0.yaml` workflow through completion.
+`workflows/core/implement-change-v1.0.yaml` workflow through completion, invoked
+as `core:implement-change` with the OpenSpec artifact parameters supplied by the suite.
 There is no early `--until` boundary. `--skip-validator` sets only the
 workflow's task-level `skip_validator` parameter; the final Validator, draft
 pull request, acceptance preparation, and handoff verification always remain
@@ -641,7 +646,7 @@ they can be reused.
 
 Preflight failures exit 2 before any workflow starts and name the exact cause: a
 dirty Agent Runner or Agent Skills checkout, a missing or non-conforming
-`implement-change-v2.0.yaml`, a missing workflow-named Codagent skill, missing
+`implement-change-v1.0.yaml`, a missing workflow-named Codagent skill, missing
 publishing credentials, an invalid role profile with its role and field, a
 role-profile mismatch on resume, a resume-provenance change, or a stale
 run-state identity.

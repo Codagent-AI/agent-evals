@@ -43,13 +43,6 @@ function rejected(reason, source = null) {
   }
 }
 
-const IMPLEMENTOR_STEPS = new Set([
-  'generate-code',
-  'commit-leftovers-if-needed',
-  'session-report',
-  'fix-violations',
-])
-
 function nonEmptyString(value) {
   return typeof value === 'string' && value.length > 0
 }
@@ -68,8 +61,11 @@ function usageStateOf(usage, invokedCli) {
 
 function agentRole(raw) {
   if (!raw.agent_invoked) return null
-  if (raw.kind === 'agent-call' && raw.target_name === 'reviewer') return 'acceptance-reviewer'
-  return IMPLEMENTOR_STEPS.has(raw.id) ? 'task-implementor' : 'lead-agent'
+  if (raw.kind === 'agent-call' && raw.target_name === 'acceptance-tester') return 'acceptance-reviewer'
+  if (typeof raw.prefix === 'string' && /^implement-tasks(?:\[|\/)/.test(raw.prefix)) {
+    return 'task-implementor'
+  }
+  return 'lead-agent'
 }
 
 // Agent Runner preserves category details and separately provides canonical

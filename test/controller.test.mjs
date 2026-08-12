@@ -14,6 +14,12 @@ const workflowYaml = `name: implement-change
 params:
   - name: change_name
     required: true
+  - name: change_dir
+    required: true
+  - name: change_label
+    required: true
+  - name: artifact_validation_instruction
+    required: true
   - name: skip_validator
     default: "false"
 steps:
@@ -51,7 +57,7 @@ async function environment({
   const root = await mkdtemp(join(tmpdir(), 'agent-evals-controller-'))
   const agentRunnerDir = join(root, 'agent-runner')
   const agentSkillsDir = join(root, 'agent-skills')
-  await mkdir(join(agentRunnerDir, 'workflows/openspec'), { recursive: true })
+  await mkdir(join(agentRunnerDir, 'workflows/core'), { recursive: true })
   if (workflow !== null) await writeFile(join(agentRunnerDir, WORKFLOW_RELATIVE_PATH), workflow)
   await mkdir(join(agentSkillsDir, '.claude-plugin'), { recursive: true })
   await writeFile(join(agentSkillsDir, '.claude-plugin/marketplace.json'), '{"name":"codagent"}\n')
@@ -166,9 +172,9 @@ function importedRescore(context, { changeName = 'create-and-scene' } = {}) {
     delivery: importedDelivery,
     runner: { run_id: 'runner-complete', session_dir: context.root },
     role_profiles: {
-      lead: { cli: 'claude', model: 'opus', effort: 'high', agent: 'planner' },
+      lead: { cli: 'claude', model: 'opus', effort: 'high', agent: 'lead' },
       implementor: { cli: 'claude', model: 'sonnet', effort: 'medium', agent: 'implementor' },
-      reviewer: { cli: 'claude', model: 'opus', effort: 'high', agent: 'reviewer' },
+      reviewer: { cli: 'claude', model: 'opus', effort: 'high', agent: 'tester' },
     },
     agent_runner_provenance: {
       commit: '3'.repeat(40),
@@ -283,8 +289,11 @@ test('--skip-validator launches the verified workflow by logical name without --
   const [invocation] = runnerInvocations(context)
   assert.deepEqual(invocation.args, [
     'run',
-    'openspec:implement-change',
+    'core:implement-change',
     'change_name=create-and-scene',
+    'change_dir=openspec/changes/create-and-scene',
+    'change_label=OpenSpec change',
+    'artifact_validation_instruction=When an approved artifact changed, run `openspec validate --type change "create-and-scene"`.',
     'skip_validator=true',
   ])
   assert.ok(!invocation.args.includes('--until'))
@@ -366,7 +375,7 @@ test('the candidate branch identity exists in run-state before Runner starts', a
   assert.equal(state.agent_skills_provenance.commit, context.commit)
   assert.match(state.agent_skills_provenance.manifest_sha256, /^[a-f0-9]{64}$/)
   assert.match(state.identity.agent_skills_provenance, /^[a-f0-9]{64}$/)
-  assert.equal(state.role_profiles.reviewer.agent, 'reviewer')
+  assert.equal(state.role_profiles.reviewer.agent, 'tester')
 })
 
 test('an explicit host run identity survives the fixed container artifact mount', async () => {

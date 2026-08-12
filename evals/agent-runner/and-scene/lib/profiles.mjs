@@ -2,13 +2,13 @@
 //
 // Each role independently selects a CLI adapter, model, and effort. The two
 // implementation roles and the independent acceptance role map onto the
-// `planner`, `implementor`, and `reviewer` agents of a single end-to-end
-// `implement-change-v2.0` run; they are never scored separately.
+// `lead`, `implementor`, and `tester` agents of a single end-to-end core
+// `implement-change` run; they are never scored separately.
 
 export const ROLE_AGENTS = {
-  lead: 'planner',
+  lead: 'lead',
   implementor: 'implementor',
-  reviewer: 'reviewer',
+  reviewer: 'tester',
 }
 
 const ROLES = Object.keys(ROLE_AGENTS)
