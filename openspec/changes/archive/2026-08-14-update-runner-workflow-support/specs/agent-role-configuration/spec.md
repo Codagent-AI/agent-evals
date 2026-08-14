@@ -33,7 +33,7 @@ The harness SHALL NOT configure a role through a deprecated agent alias, and SHA
 ### Requirement: Profile validation
 Before starting Agent Runner, the harness SHALL validate every role profile against the capabilities of the recorded Agent Runner revision. Validation SHALL reject unsupported CLI adapters, unavailable or invalid model identifiers, invalid effort values, and configurations that cannot run the applicable workflow role autonomously. A validation failure SHALL identify the affected role and invalid field without launching an implementation workflow.
 
-#### Scenario: All profiles are valid
+#### Scenario: Both profiles are valid
 - **WHEN** every selected profile uses supported and available settings for its workflow role
 - **THEN** the harness permits the Agent Runner workflow to start
 
