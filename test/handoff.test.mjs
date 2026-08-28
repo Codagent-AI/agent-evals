@@ -17,6 +17,8 @@ params:
     required: true
   - name: change_label
     required: true
+  - name: change_kind
+    required: true
   - name: artifact_validation_instruction
     required: true
   - name: skip_validator

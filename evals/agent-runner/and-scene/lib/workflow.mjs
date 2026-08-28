@@ -12,6 +12,7 @@ export const REQUIRED_WORKFLOW_PARAMETERS = [
   'change_name',
   'change_dir',
   'change_label',
+  'change_kind',
   'artifact_validation_instruction',
   'skip_validator',
 ]
@@ -54,6 +55,7 @@ export function resolveBoundary({ skipValidator = false, changeName }) {
       `change_name=${changeName}`,
       `change_dir=openspec/changes/${changeName}`,
       'change_label=OpenSpec change',
+      'change_kind=openspec',
       `artifact_validation_instruction=When an approved artifact changed, run \`openspec validate --type change "${changeName}"\`.`,
       `skip_validator=${skip}`,
     ],

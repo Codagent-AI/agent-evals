@@ -25,6 +25,8 @@ params:
     required: true
   - name: change_label
     required: true
+  - name: change_kind
+    required: true
   - name: artifact_validation_instruction
     required: true
   - name: skip_validator
@@ -58,6 +60,7 @@ test('the exact full workflow has no early stop boundary and supplies resolved O
     'change_name=create-and-scene',
     'change_dir=openspec/changes/create-and-scene',
     'change_label=OpenSpec change',
+    'change_kind=openspec',
     'artifact_validation_instruction=When an approved artifact changed, run `openspec validate --type change "create-and-scene"`.',
     'skip_validator=true',
   ])
@@ -89,7 +92,7 @@ test('the validator option defaults to false', () => {
 
 test('the workflow contract exposes direct top-level list and mapping parameters plus ordered steps', () => {
   assert.deepEqual(parseWorkflowContract(workflowYaml).parameters, [
-    'change_name', 'change_dir', 'change_label', 'artifact_validation_instruction', 'skip_validator',
+    'change_name', 'change_dir', 'change_label', 'change_kind', 'artifact_validation_instruction', 'skip_validator',
   ])
   assert.deepEqual(
     parseWorkflowContract('parameters:\n  change_name:\n  skip_validator:\nsteps:\n  - id: run-validator\n').parameters,
@@ -120,7 +123,7 @@ test('full-workflow preflight requires the parameter and every final delivery st
     assert.match(result.errors.join(' '), new RegExp(missing), missing)
   }
 
-  for (const parameter of ['change_name', 'change_dir', 'change_label', 'artifact_validation_instruction', 'skip_validator']) {
+  for (const parameter of ['change_name', 'change_dir', 'change_label', 'change_kind', 'artifact_validation_instruction', 'skip_validator']) {
     const noParameter = verifyWorkflowContract(workflowYaml.replace(`  - name: ${parameter}\n`, ''))
     assert.match(noParameter.errors.join(' '), new RegExp(parameter))
   }

@@ -18,6 +18,8 @@ params:
     required: true
   - name: change_label
     required: true
+  - name: change_kind
+    required: true
   - name: artifact_validation_instruction
     required: true
   - name: skip_validator
@@ -345,6 +347,7 @@ test('--skip-validator launches the verified workflow by logical name without --
     'change_name=create-and-scene',
     'change_dir=openspec/changes/create-and-scene',
     'change_label=OpenSpec change',
+    'change_kind=openspec',
     'artifact_validation_instruction=When an approved artifact changed, run `openspec validate --type change "create-and-scene"`.',
     'skip_validator=true',
   ])
