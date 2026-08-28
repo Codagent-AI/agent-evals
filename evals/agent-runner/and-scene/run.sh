@@ -633,7 +633,7 @@ AGENT_SKILLS_BOOTSTRAP=""
 if [[ "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
   AGENT_SKILLS_BOOTSTRAP="/eval-input/bootstrap-agent-skills.sh \\
     $CONTAINER_AGENT_SKILLS_DIR_Q \\
-    \"\\\$AGENT_RUNNER_DIR/\\\$IMPLEMENTATION_WORKFLOW_PATH\" \\
+    \"\$AGENT_RUNNER_DIR/\$IMPLEMENTATION_WORKFLOW_PATH\" \\
     $SELECTED_ADAPTERS_Q \\
     2>&1 | tee /artifacts/logs/agent-skills-bootstrap.log"
 fi

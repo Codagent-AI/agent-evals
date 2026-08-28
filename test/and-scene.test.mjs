@@ -7,6 +7,7 @@ import { test } from 'node:test'
 import { spawnSync } from 'node:child_process'
 
 import { calibrationIdentity } from '../evals/agent-runner/and-scene/lib/calibration.mjs'
+import { validateRoleProfiles } from '../evals/agent-runner/and-scene/lib/profiles.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const runScript = join(root, 'evals/agent-runner/and-scene/run.sh')
@@ -141,6 +142,22 @@ test('scored mode mounts one clean pinned Agent Skills checkout for every select
   assert.match(result.output, /claude claude claude/)
 })
 
+test('scored mode lets the sandbox expand the Agent Runner workflow path', async () => {
+  const context = await setup()
+
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
+
+  assert.equal(result.status, 0, result.output)
+  assert.ok(
+    result.output.includes('"$AGENT_RUNNER_DIR/$IMPLEMENTATION_WORKFLOW_PATH"'),
+    result.output,
+  )
+  assert.ok(
+    !result.output.includes('"\\$AGENT_RUNNER_DIR/\\$IMPLEMENTATION_WORKFLOW_PATH"'),
+    result.output,
+  )
+})
+
 test('scored mode validates provenance from the mounted Agent Runner checkout', async () => {
   const context = await setup()
 
@@ -201,6 +218,21 @@ test('all role profiles are required before the sandbox is invoked', async () =>
   assert.match(noImplementor.output, /task-implementor profile/)
   assert.notEqual(noReviewer.status, 0)
   assert.match(noReviewer.output, /acceptance-reviewer profile/)
+})
+
+test('the pinned capabilities accept the current recommended Codex profiles', async () => {
+  const capabilities = JSON.parse(await readFile(
+    join(root, 'evals/agent-runner/and-scene/agent-runner-capabilities.json'),
+    'utf8',
+  ))
+  const result = validateRoleProfiles({
+    lead: { cli: 'codex', model: 'gpt-5.6-sol', effort: 'high' },
+    implementor: { cli: 'codex', model: 'gpt-5.6-terra', effort: 'high' },
+    reviewer: { cli: 'claude', model: 'sonnet', effort: 'high' },
+    capabilities,
+  })
+
+  assert.equal(result.ok, true, JSON.stringify(result.errors))
 })
 
 test('a partially specified role profile is rejected', async () => {
