@@ -39,6 +39,31 @@ const history = [
   { step: 'verify-acceptance-handoff', outcome: 'success' },
 ]
 
+const planningTestPlan = `# Test plan
+
+## Coverage Strategy
+Browser coverage.
+## Integration Tests
+None.
+## End-to-End Tests
+None.
+## Agent Acceptance Tests
+### AT-001: Exercise the demo
+- Classification: Required
+- Covers: Demo behavior
+- Actor and surface: User in a browser
+- Setup: Start the built application
+- Steps: Open the demo
+- Expected: The demo renders
+- Evidence: Browser snapshot
+- Effects and cleanup: Stop the application
+- Permitted substitutes: None
+## Human-Only Testing
+None.
+## Coverage Map
+AT-001
+`
+
 const profiles = [
   '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
   '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
@@ -52,6 +77,7 @@ async function environment({
   commit = 'a'.repeat(40),
   ghAuthenticated = true,
   ghPermission = 'WRITE',
+  planningReady = true,
   runnerResult = { status: 0, stdout: '' },
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'agent-evals-controller-'))
@@ -78,6 +104,23 @@ async function environment({
       if (joined.includes('show') && joined.includes('.validator/config.yml')) {
         return { status: 0, stdout: 'entry_points: []\n' }
       }
+      if (joined.includes('show') && joined.includes('/test-plan.md')) {
+        return planningReady
+          ? { status: 0, stdout: planningTestPlan }
+          : { status: 1, stderr: 'missing test plan' }
+      }
+      if (joined.includes('show') && joined.includes('/tasks.md')) {
+        return { status: 0, stdout: '- [Demo task](tasks/01-demo.md)\n' }
+      }
+      if (joined.includes('show') && /\/(?:proposal|design|tasks)\.md/.test(joined)) {
+        return { status: 0, stdout: '# Planning artifact\n' }
+      }
+      if (joined.includes('show') && /\/specs\/[^/]+\/spec\.md/.test(joined)) {
+        return { status: 0, stdout: '# Specification\n' }
+      }
+      if (joined.includes('show') && /\/tasks\/[^/]+\.md/.test(joined)) {
+        return { status: 0, stdout: '# Task\n' }
+      }
       if (joined.includes('show-ref --verify --quiet')) return { status: 1, stdout: '' }
       if (joined.includes('--is-inside-work-tree')) return { status: 0, stdout: 'true\n' }
       if (joined.includes('remote get-url origin')) {
@@ -92,7 +135,16 @@ async function environment({
       if (joined.includes('status --porcelain')) return { status: 0, stdout: dirty }
       if (joined.includes('merge-base --is-ancestor')) return { status: 0, stdout: '' }
       if (joined.includes('diff --binary')) return { status: 0, stdout: '' }
-      if (joined.includes('ls-tree')) return { status: 0, stdout: '' }
+      if (joined.includes('ls-tree')) {
+        const planningPath = args.at(-1)
+        if (planningPath.endsWith('/specs')) {
+          return { status: 0, stdout: `${planningPath}/demo/spec.md\n` }
+        }
+        if (planningPath.endsWith('/tasks')) {
+          return { status: 0, stdout: `${planningPath}/01-demo.md\n` }
+        }
+        return { status: 0, stdout: '' }
+      }
       if (joined.includes('rev-parse')) return { status: 0, stdout: `${commit}\n` }
       return { status: 0, stdout: '' }
     }
@@ -297,6 +349,36 @@ test('--skip-validator launches the verified workflow by logical name without --
     'skip_validator=true',
   ])
   assert.ok(!invocation.args.includes('--until'))
+})
+
+test('fixture planning preflight validates the selected change directory', async () => {
+  const context = await environment()
+
+  const result = await evaluate(context, ['--skip-validator', ...profiles], {
+    controllerChangeName: 'custom-scene-change',
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const inspectedPaths = context.invocations
+    .filter(({ command, args }) => command === 'git' && args.includes('show'))
+    .flatMap(({ args }) => args)
+  assert.ok(
+    inspectedPaths.some((argument) => argument.includes(
+      ':openspec/changes/custom-scene-change/test-plan.md',
+    )),
+    JSON.stringify(inspectedPaths),
+  )
+})
+
+test('an incompatible fixture is a typed harness preflight failure and launches no Runner', async () => {
+  const context = await environment({ planningReady: false })
+
+  const result = await evaluate(context, ['--skip-validator', ...profiles])
+
+  assert.equal(result.exitCode, 2)
+  assert.equal(result.errors[0].code, 'fixture-planning-contract')
+  assert.match(result.errors[0].message, /test-plan\.md/)
+  assert.equal(runnerInvocations(context).length, 0)
 })
 
 test('logical workflow resolution must match the verified pinned workflow before Runner starts', async () => {

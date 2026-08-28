@@ -256,14 +256,22 @@ retry.
 ## What it evaluates
 
 The suite measures implementation of the `create-and-scene` OpenSpec change.
-Planning artifacts and tasks are already present, so the score does not measure
-proposal, specification, or task generation.
+The score does not measure proposal, specification, test-plan, or task
+generation. Before creating the candidate branch or invoking Agent Runner, the
+suite therefore verifies that the selected fixture contains the complete
+structured planning contract: non-empty proposal, design, specifications,
+test plan, task index, and linked task files; the required test-plan sections;
+and at least one fully defined `AT-*` obligation represented in the coverage
+map. An incompatible fixture exits as `fixture-planning-contract`, with no
+agent call.
 
 The external fixture is pinned to commit
-`729592e921413dea20bd77ccab0284222ef4ad8f` in
+`892dfbcf3762bc95cdbae6f05b18cc2b168a5fab` in
 `https://github.com/Codagent-AI/and-scene.git`. The implemented reference commit
 `171c7def1e12aca2a5f605a5e5feafb20d4e4d19` is the comparable reference baseline.
-It is not a similarity target.
+It is not a similarity target. The fixture includes the reviewed structured test
+plan merged by `Codagent-AI/and-scene#11`; advance it only to another reviewed
+planning-only fixture revision.
 
 The suite runs Agent Runner's exact
 `workflows/core/implement-change-v1.0.yaml` workflow through completion, invoked

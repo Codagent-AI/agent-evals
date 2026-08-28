@@ -149,7 +149,7 @@ export function parseArgs(argv) {
     changeNameProvided: false,
     judgeModel: 'codex-default',
     repo: 'https://github.com/Codagent-AI/and-scene.git',
-    fixtureRef: '729592e921413dea20bd77ccab0284222ef4ad8f',
+    fixtureRef: '892dfbcf3762bc95cdbae6f05b18cc2b168a5fab',
     capabilitiesPath: DEFAULT_CAPABILITIES,
   }
   for (let index = 0; index < argv.length; index += 1) {
@@ -449,10 +449,11 @@ export async function runEvaluation({
           expectedSource: checkpoint?.candidate_source ?? null,
           runId,
           kind: runKind,
+          changeName,
           exec,
         })
   } catch (error) {
-    return failure([{ code: 'candidate-worktree', message: error.message }])
+    return failure([{ code: error.code ?? 'candidate-worktree', message: error.message }])
   }
   if (mode === 'agent-runner' && !rescore) {
     const resolvedWorkflow = exec(

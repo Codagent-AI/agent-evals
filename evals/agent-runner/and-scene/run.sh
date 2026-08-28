@@ -9,9 +9,10 @@ set -euo pipefail
 
 REPO="${REPO:-https://github.com/Codagent-AI/and-scene.git}"
 # Pin the fixture to an exact commit, not a moving branch head, so scored runs
-# are reproducible. This is the head of eval/create-and-scene-spec-only as of
-# 2026-07-17; bump it deliberately when the fixture snapshot changes.
-FIXTURE_REF="${FIXTURE_REF:-729592e921413dea20bd77ccab0284222ef4ad8f}"
+# are reproducible. This is the reviewed planning-only fixture merged into
+# eval/create-and-scene-spec-only on 2026-08-28; bump it deliberately when the
+# fixture snapshot changes.
+FIXTURE_REF="${FIXTURE_REF:-892dfbcf3762bc95cdbae6f05b18cc2b168a5fab}"
 # Pin the known-good reference used for calibration and judge tiebreaks.
 REFERENCE_REF="${REFERENCE_REF:-171c7def1e12aca2a5f605a5e5feafb20d4e4d19}"
 if [[ -n "${CHANGE_NAME+x}" ]]; then
@@ -94,7 +95,7 @@ Options:
                           run:   artifacts/evals/and-scene/<timestamp>
   --repo URL             and-scene repository URL.
   --fixture-ref REF      Implementation-ready fixture ref.
-                          Default: 729592e921413dea20bd77ccab0284222ef4ad8f
+                          Default: 892dfbcf3762bc95cdbae6f05b18cc2b168a5fab
   --reference-ref REF    Implemented/reference ref.
                           Default: 171c7def1e12aca2a5f605a5e5feafb20d4e4d19
   --candidate-ref REF    Grade an existing candidate ref.
