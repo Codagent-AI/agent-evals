@@ -1,0 +1,42 @@
+{
+  "schema_version": 2,
+  "run_id": "config-20260828T201451Z",
+  "projection": {
+    "evaluation_status": "complete",
+    "product_verdict": "fail",
+    "score_denominator": 100,
+    "official_score": 69.40515873015873,
+    "failed_phase": null,
+    "failure": null
+  },
+  "excluded": [
+    ".runtime"
+  ],
+  "artifacts": [
+    {
+      "path": "ambiguity-ledger.json",
+      "bytes": 26551,
+      "sha256": "b686e69a690af524fc5dc7cbcda6bca51e28d930f078a1d63009fdd4ccb215d6"
+    },
+    {
+      "path": "human-review.json",
+      "bytes": 6461,
+      "sha256": "c81e00f69c2fa3b632cac7211c78c3edd9d6b18fe6a07e87b94c8f18cfa3e31e"
+    },
+    {
+      "path": "implementation.diff",
+      "bytes": 309130,
+      "sha256": "f32f81cdc1517b95f72447b693cd32ba4105824492b71d4e1e639a384da8ed2c"
+    },
+    {
+      "path": "report.html",
+      "bytes": 567914,
+      "sha256": "5916d3d5bef91cddd8be81c73d417a2d812f73ee9d2f4b6e524bf64f02a7ca69"
+    },
+    {
+      "path": "result.json",
+      "bytes": 846275,
+      "sha256": "12dd6642717c5a0ca1c04c1facc5fe3bdab19f1cf47e2aaa32419cb4d2852f3c"
+    }
+  ]
+}
