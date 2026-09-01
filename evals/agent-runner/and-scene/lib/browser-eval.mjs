@@ -11,6 +11,10 @@
 // directly, so the whole demo contract is exercisable against an in-memory
 // stand-in and the browser adapter stays a thin, replaceable edge.
 import { DEMO_CONTRACT } from './demo-contract.mjs'
+import {
+  isBrowserInfrastructureDiagnostic,
+  probeContainsBrowserInfrastructureDiagnostic,
+} from './browser-diagnostics.mjs'
 import { hashJson } from './persistence.mjs'
 
 // The candidate controls every string and number that crosses this boundary, so
@@ -72,6 +76,14 @@ function missingEvidence(message) {
   return Object.assign(new Error(message), {
     owner: 'evaluation-harness',
     code: 'browser-evidence-missing',
+  })
+}
+
+function browserInfrastructureFailure(message) {
+  return Object.assign(new Error(message), {
+    owner: 'evaluation-harness',
+    code: 'browser-driver-failed',
+    resumable: true,
   })
 }
 
@@ -474,7 +486,11 @@ export async function runBrowserEvaluation({
     }
     const dependencies = { revision, route: contract.route }
     const inputSha256 = hashJson(inputs)
-    const reused = await loadProbe?.({ id, inputs, dependencies })
+    const loaded = await loadProbe?.({ id, inputs, dependencies })
+    // Old checkpoints may have mistaken an AXI/Chrome startup diagnostic for
+    // page-console output. Never preserve that candidate verdict: rerun the
+    // probe under the current browser preflight and replace its artifact.
+    const reused = probeContainsBrowserInfrastructureDiagnostic(loaded) ? null : loaded
     if (reused) {
       const record = { ...reused, reused: true }
       probeRecords.push(record)
@@ -505,6 +521,9 @@ export async function runBrowserEvaluation({
     let probeFailureReportingAvailable = true
     try {
       for (const failure of await driver.failures()) {
+        if (isBrowserInfrastructureDiagnostic(failure)) {
+          throw browserInfrastructureFailure(failure)
+        }
         const safe = bounded(failure)
         failures.add(safe)
         probeFailures.push(safe)

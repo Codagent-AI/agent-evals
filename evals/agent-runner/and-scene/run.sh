@@ -647,6 +647,36 @@ if [[ " \${NODE_OPTIONS:-} " != *" --dns-result-order="* ]]; then
   export NODE_OPTIONS="\${NODE_OPTIONS:-} --dns-result-order=ipv4first"
 fi
 
+# Some sandbox images expose a broken stable-Chrome symlink even though the
+# Playwright browser cache contains a working Chromium. AXI otherwise fails
+# every deterministic browser probe before it reaches the candidate. Attach it
+# to that cached browser explicitly when stable Chrome cannot launch.
+if ! /opt/google/chrome/chrome --version >/dev/null 2>&1; then
+  AXI_CHROMIUM="\$(find /ms-playwright -type f -path '*/chrome-linux*/chrome' -perm -111 -print -quit 2>/dev/null || true)"
+  if [[ -z "\$AXI_CHROMIUM" ]]; then
+    echo "Could not find a runnable Chromium for chrome-devtools-axi." >&2
+    exit 1
+  fi
+  AXI_PROFILE_DIR="\$(mktemp -d /tmp/and-scene-axi-profile.XXXXXX)"
+  "\$AXI_CHROMIUM" \
+    --headless=new \
+    --no-sandbox \
+    --disable-gpu \
+    --remote-debugging-address=127.0.0.1 \
+    --remote-debugging-port=9333 \
+    --user-data-dir="\$AXI_PROFILE_DIR" \
+    >/tmp/and-scene-axi-chromium.log 2>&1 &
+  export CHROME_DEVTOOLS_AXI_BROWSER_URL=http://127.0.0.1:9333
+  for _ in {1..100}; do
+    if curl -fsS "\$CHROME_DEVTOOLS_AXI_BROWSER_URL/json/version" >/dev/null; then break; fi
+    sleep 0.1
+  done
+  if ! curl -fsS "\$CHROME_DEVTOOLS_AXI_BROWSER_URL/json/version" >/dev/null; then
+    echo "Sandbox Chromium did not expose its DevTools endpoint." >&2
+    exit 1
+  fi
+fi
+
 # The implementation workflow is fixed for this change; the controller records
 # the clean Agent Runner revision that supplies it.
 IMPLEMENTATION_WORKFLOW=core:implement-change

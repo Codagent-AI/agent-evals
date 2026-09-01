@@ -5,6 +5,8 @@
 // browser-eval.mjs, keeping browser mechanics out of scoring logic.
 import { spawnSync } from 'node:child_process'
 
+import { isBrowserInfrastructureDiagnostic } from './browser-diagnostics.mjs'
+
 const MAX_OUTPUT_BYTES = 1024 * 1024
 const PRESENTATION_SELECTOR = '[data-presentation], [data-presentation-root]'
 const MODE_SELECTOR = '[data-presentation-mode]'
@@ -387,6 +389,9 @@ console.log(JSON.stringify(dispatched));
 
     async failures() {
       const output = await invoke(['console', '--type', 'error'])
+      if (isBrowserInfrastructureDiagnostic(output)) {
+        throw new BrowserDriverError(`browser adapter failed: ${output.trim()}`)
+      }
       if (output.includes('<no console messages found>')) return []
       return output.split('\n')
         .map((line) => line.trim())

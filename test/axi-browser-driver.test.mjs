@@ -177,6 +177,31 @@ test('the AXI driver rejects a successful CLI invocation that returns a diagnost
   ))
 })
 
+test('the AXI driver rejects Chrome launch diagnostics instead of reporting them as page console failures', async () => {
+  const { createAxiBrowserDriver } = await import(
+    '../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs'
+  )
+  const driver = createAxiBrowserDriver({
+    baseUrl: 'http://127.0.0.1:4319/',
+    command: async () => ({
+      status: 0,
+      stdout: [
+        'Could not find Google Chrome executable for channel \'stable\' at:',
+        '- /opt/google/chrome/chrome.',
+        'Run `chrome-devtools-axi console-get <id>` to see a specific message',
+        'Run `chrome-devtools-axi console --type error` to filter by type',
+      ].join('\n'),
+      stderr: '',
+    }),
+  })
+
+  await assert.rejects(driver.failures(), (error) => (
+    error.owner === 'evaluation-harness'
+      && error.code === 'browser-driver-failed'
+      && /Chrome executable/.test(error.message)
+  ))
+})
+
 test('the AXI driver turns CLI failures into harness errors', async () => {
   const { createAxiBrowserDriver } = await import(
     '../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs'

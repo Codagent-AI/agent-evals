@@ -108,6 +108,7 @@ const DEFAULT_CAPABILITIES = join(SUITE_DIR, 'agent-runner-capabilities.json')
 const BROWSER_EVALUATOR_FILES = [
   'lib/browser-eval.mjs',
   'lib/axi-browser-driver.mjs',
+  'lib/browser-diagnostics.mjs',
   'lib/demo-contract.mjs',
 ]
 const GITHUB_WRITE_PERMISSIONS = new Set(['WRITE', 'MAINTAIN', 'ADMIN'])

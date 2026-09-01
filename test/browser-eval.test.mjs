@@ -292,6 +292,49 @@ test('matching pass and fail probe records can be reused without operating the b
   assert.deepEqual(actions, [])
 })
 
+test('a cached probe containing a browser infrastructure failure is rerun instead of failing the candidate', async () => {
+  const staleRouteProbe = {
+    id: 'demo-route-and-registration',
+    initial_state: { mode: null, position: null },
+    established_state: { mode: 'browse', position: 0 },
+    settled_state: { settled: false, strategy: 'probe-failed-before-settle' },
+    sessions: [],
+    result: {
+      id: 'demo-route-and-registration',
+      verdict: 'fail',
+      rationale: `the demo route ${DEMO_CONTRACT.route} is not registered`,
+      evidence: ['evidence/evaluator/browser-probes/demo-route-and-registration.json'],
+      observed: true,
+    },
+    failures: [
+      'Could not find Google Chrome executable for channel &#39;stable&#39; at:',
+      '- /opt/google/chrome/chrome.',
+      'Run `chrome-devtools-axi console-get &lt;id&gt;` to see a specific message',
+      'Run `chrome-devtools-axi console --type error` to filter by type',
+    ],
+    failure_reporting_available: true,
+  }
+  const actions = []
+  const saved = []
+
+  const result = await runBrowserEvaluation({
+    driver: createDemo({ actions }),
+    build: passingBuild,
+    verification: passingVerification,
+    evidenceArtifacts: fixtureEvidenceArtifacts,
+    loadProbe: async ({ id }) => id === staleRouteProbe.id ? staleRouteProbe : null,
+    saveProbe: async ({ id }) => { saved.push(id) },
+  })
+
+  assert.equal(verdictOf(result, 'demo-route-and-registration'), 'pass')
+  assert.equal(verdictOf(result, 'verification-sample-outline'), 'pass')
+  assert.equal(verdictOf(result, 'verification-every-produced-step-renders'), 'pass')
+  assert.deepEqual(result.failures, [])
+  assert.equal(result.probes.find(({ id }) => id === staleRouteProbe.id).reused, false)
+  assert.ok(saved.includes(staleRouteProbe.id))
+  assert.ok(actions.some(({ action }) => action === 'open'))
+})
+
 test('probe checkpoint inputs include the evaluator implementation fingerprint', async () => {
   const observed = []
   await runBrowserEvaluation({
