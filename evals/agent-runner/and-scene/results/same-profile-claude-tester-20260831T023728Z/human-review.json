@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "candidate": {
+    "candidate_identity": "f153633dd695965d54117a11787dc8d1e5b3344399a78f8678a82d0ec9091fb5",
+    "run_id": "same-profile-claude-tester-20260831T023728Z"
+  },
+  "rubric": {
+    "rubric_id": "and-scene-human-review",
+    "version": "2.1.0",
+    "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
+  },
+  "readiness_confirmed": true,
+  "responses": [
+    {
+      "id": "text-appearance",
+      "number": 1,
+      "dimension": "text-appearance",
+      "question_text": "Across the full presentation, how good do the titles, captions, labels, and other content text look and read? Judge whether important content text is visibly present, typography, sizing, weight, spacing, line breaks, contrast, legibility, visual hierarchy, and whether the wording is clear, intentional, and audience-ready rather than sounding like an internal annotation. Do not judge navigation controls or presentation chrome here, and do not judge the placement or styling of non-text elements.",
+      "rating": 4,
+      "rationale": ""
+    },
+    {
+      "id": "element-appearance",
+      "number": 2,
+      "dimension": "element-appearance",
+      "question_text": "How well designed are the individual scene elements, such as boxes, arrows, icons, illustrations, and diagram nodes? Judge their shapes, proportions, fills, borders, detail, consistency, and overall craft. Do not judge their text, placement, movement, or navigation chrome here.",
+      "rating": 4,
+      "rationale": ""
+    },
+    {
+      "id": "composition",
+      "number": 3,
+      "dimension": "composition",
+      "question_text": "At a normal wide viewport, how well are the text and visual elements arranged relative to one another? Judge alignment, spacing, grouping, balance, focal points, use of space, and whether anything feels crowded, disconnected, clipped, or unintentionally overlapping. Judge viewport adaptation separately under responsive visual quality.",
+      "rating": 3,
+      "rationale": "some misalignment and crowding"
+    },
+    {
+      "id": "motion",
+      "number": 4,
+      "dimension": "motion",
+      "question_text": "As you advance through the presentation, how well do the animations and scene changes work? Judge smoothness, pacing, meaningful entrances and exits, continuity of persistent elements, and whether each step visibly evolves the existing scene instead of feeling like an unrelated replacement.",
+      "rating": 4,
+      "rationale": ""
+    },
+    {
+      "id": "visual-identity",
+      "number": 5,
+      "dimension": "visual-identity",
+      "question_text": "Taken as a whole, how strong is the presentation’s visual identity? Judge its color palette, background treatment, stylistic consistency, brand character, polish, memorability, and whether it feels intentionally designed and finished. Judge the craft of individual scene elements separately.",
+      "rating": 3,
+      "rationale": "some overall layout issues on the page that lower it to a 3"
+    },
+    {
+      "id": "navigation-chrome",
+      "number": 6,
+      "dimension": "navigation-chrome",
+      "question_text": "How clear, discoverable, and visually integrated are the presentation controls and chrome? Judge progress indicators, previous/next controls, table of contents, mode switching, and attribution. Focus on their appearance and ease of understanding, not whether every input method technically works or how content captions are styled.",
+      "rating": 5,
+      "rationale": ""
+    },
+    {
+      "id": "responsive",
+      "number": 7,
+      "dimension": "responsive",
+      "question_text": "Compare the presentation at wide and narrow viewport sizes. How well does its hierarchy and composition adapt? Judge scaling, density, readability, control accessibility, clipping, overlap, and whether the narrow version still feels intentionally composed. Judge baseline wide-screen composition separately.",
+      "rating": 4,
+      "rationale": ""
+    }
+  ],
+  "score": {
+    "complete": true,
+    "subtotals": [
+      {
+        "id": "text-appearance",
+        "title": "Text appearance, hierarchy, and wording",
+        "points": 3,
+        "points_possible": 4,
+        "ratings": [
+          4
+        ]
+      },
+      {
+        "id": "element-appearance",
+        "title": "Visual design of elements",
+        "points": 3,
+        "points_possible": 4,
+        "ratings": [
+          4
+        ]
+      },
+      {
+        "id": "composition",
+        "title": "Composition and placement",
+        "points": 2.5,
+        "points_possible": 5,
+        "ratings": [
+          3
+        ]
+      },
+      {
+        "id": "motion",
+        "title": "Motion and scene evolution",
+        "points": 4.5,
+        "points_possible": 6,
+        "ratings": [
+          4
+        ]
+      },
+      {
+        "id": "visual-identity",
+        "title": "Overall visual identity",
+        "points": 2.5,
+        "points_possible": 5,
+        "ratings": [
+          3
+        ]
+      },
+      {
+        "id": "navigation-chrome",
+        "title": "Navigation and presentation chrome",
+        "points": 3,
+        "points_possible": 3,
+        "ratings": [
+          5
+        ]
+      },
+      {
+        "id": "responsive",
+        "title": "Responsive visual quality",
+        "points": 2.25,
+        "points_possible": 3,
+        "ratings": [
+          4
+        ]
+      }
+    ],
+    "total": 20.75,
+    "possible": 30,
+    "floor": 15,
+    "lowest_rating": 3,
+    "gate_passed": true,
+    "gate_failures": []
+  },
+  "complete": true,
+  "completed_at": "2026-09-01T02:42:23.017Z"
+}

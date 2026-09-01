@@ -1,0 +1,42 @@
+{
+  "schema_version": 2,
+  "run_id": "same-profile-claude-tester-20260831T023728Z",
+  "projection": {
+    "evaluation_status": "complete",
+    "product_verdict": "fail",
+    "score_denominator": 100,
+    "official_score": 76.33571428571429,
+    "failed_phase": null,
+    "failure": null
+  },
+  "excluded": [
+    ".runtime"
+  ],
+  "artifacts": [
+    {
+      "path": "ambiguity-ledger.json",
+      "bytes": 2327,
+      "sha256": "e5f73d9c1793d52155443682d60e9dc8dede7b638c7c36ef01a66dc994b8a421"
+    },
+    {
+      "path": "human-review.json",
+      "bytes": 5610,
+      "sha256": "edd29642a385fd26973b6aa35c5ccfc3d014d55ea6385b26ec8546c04f889f5e"
+    },
+    {
+      "path": "implementation.diff",
+      "bytes": 329913,
+      "sha256": "7bedc47ab16a8c0821f4d1a42b9872ca484164772c82d1685e9167738054fa5e"
+    },
+    {
+      "path": "report.html",
+      "bytes": 408418,
+      "sha256": "71c4e4d3d220744902b1bea4a63bf2497698495b539209ccca2cf7bb431b129c"
+    },
+    {
+      "path": "result.json",
+      "bytes": 1154622,
+      "sha256": "2738f2fb1d270fda10046d823b3a3b183969df7289292a98cf362c70aeee337e"
+    }
+  ]
+}
