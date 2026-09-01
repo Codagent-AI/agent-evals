@@ -131,7 +131,7 @@ test('scored mode delegates the lifecycle to the suite controller', async () => 
   ]) assert.ok(result.output.includes(expected), `missing ${expected}\n${result.output}`)
 })
 
-test('scored mode attaches AXI to the sandbox Playwright Chromium when stable Chrome is unavailable', async () => {
+test('scored mode always attaches AXI to the sandbox Playwright Chromium', async () => {
   const context = await setup()
 
   const result = await scored(context, ['--skip-validator', ...profileArgs])
@@ -141,6 +141,7 @@ test('scored mode attaches AXI to the sandbox Playwright Chromium when stable Ch
   assert.match(result.output, /--remote-debugging-port=9333/)
   assert.match(result.output, /CHROME_DEVTOOLS_AXI_BROWSER_URL=http:\/\/127\.0\.0\.1:9333/)
   assert.match(result.output, /Could not find a runnable Chromium for chrome-devtools-axi/)
+  assert.doesNotMatch(result.output, /\/opt\/google\/chrome\/chrome.*--version/)
 })
 
 test('scored mode mounts one clean pinned Agent Skills checkout for every selected role', async () => {
