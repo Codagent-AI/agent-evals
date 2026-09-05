@@ -50,7 +50,7 @@ async function durableInputs(root, jobs = allJobs) {
   })
   await writeJsonAtomic(human, {
     total: 30,
-    ratings: Array.from({ length: 13 }, () => 5),
+    ratings: Array.from({ length: 7 }, () => 5),
   })
   return { browser, judging, human }
 }

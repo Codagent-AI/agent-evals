@@ -125,6 +125,16 @@ inactive unfinished run, and rejects a changed fixture, role profile, Runner
 revision, workflow hash, Agent Skills revision or manifest, branch, draft PR,
 final SHA, rubric hash, evidence identity, or other score-affecting input.
 
+If a Claude lead, implementor, or acceptance tester exhausts its session allowance,
+the controller recognizes the Claude/Anthropic identity and limit message in
+the current Agent Runner execution's durable `audit.log`. When that record also
+contains an explicit UTC reset no more than six hours away, the controller
+waits until one minute after the reset and resumes the exact persisted Runner
+run. The wait is not recorded as active machine time. Generic HTTP 429 errors,
+missing or stale reset times, longer waits, and quota messages from earlier
+execution sessions remain ordinary resumable failures rather than guessed
+delays.
+
 If implementation and acceptance completed but an evaluator-owned defect
 invalidated the result, create a fresh evaluator-only record from that completed
 run:
@@ -308,7 +318,7 @@ focused modules under `lib/`:
 | `lib/runner-state.mjs` | Reading Agent Runner run state by identifier or newest timestamp |
 | `lib/outcomes.mjs` | Evaluation status and product verdict model |
 | `lib/phases.mjs` | The ordered lifecycle and its failure ownership |
-| `lib/human-review.mjs` | The 13 versioned questions, anchored responses, and the 30-point calculation |
+| `lib/human-review.mjs` | The seven versioned questions, anchored responses, and the 30-point calculation |
 | `lib/candidate-server.mjs` | Candidate-server identity, provenance-safe reuse, and cleanup |
 | `lib/candidate-server-host.mjs` | Launching and probing the host candidate server |
 | `lib/result.mjs` | Result assembly, the artifact manifest, and the durable artifact set |
@@ -432,6 +442,15 @@ The automated command runs these phases in order:
 A phase that cannot produce its outputs stops its dependents rather than letting
 them run on stale or fabricated inputs. Result writing and cleanup still run.
 
+The result consumes Agent Runner's versioned `run-metrics.json` directly. It
+accepts schema v1 for older runs and schema v2 for stable role/tool plus
+requested/effective model identity. `result.json` and `report.html` show
+implementation usage by role, tool, provider, and effective model, including
+canonical input/output totals, cache and reasoning detail, pricing source,
+verification state, and a run-wide token total. Eval-owned Codex judge usage is
+captured separately in `phases/eval-owned-usage.jsonl`; it is never priced or
+included in implementation cost.
+
 ## Human review
 
 The automated command never asks a human-review question and never issues an
@@ -443,12 +462,13 @@ evals/agent-runner/and-scene/human-review.sh --run-dir artifacts/evals/and-scene
 
 It restores or restarts the exact candidate revision the automated rubric and
 judges scored, prints its URL, and waits for an explicit non-scoring readiness
-confirmation before question 1. It then asks the 13 versioned questions in
-order, one at a time, each rated 1-5 against shared anchors, with a rationale
-required for 3 or lower. Every accepted answer is saved immediately, so an
-interrupted review resumes at the first unanswered question with the candidate
-URL and readiness confirmation presented again. Nothing becomes official until
-the reviewer explicitly confirms the full summary; before that the run stays
+confirmation before question 1. It then asks the seven versioned questions in
+order, one at a time. Each prompt displays five question-specific labels and
+descriptions that refine the shared 1-5 anchors; a rationale is required for 3
+or lower. Every accepted answer is saved immediately, so an interrupted review
+resumes at the first unanswered question with the candidate URL and readiness
+confirmation presented again. Nothing becomes official until the reviewer
+explicitly confirms the full summary; before that the run stays
 `pending-human-review`.
 
 Once the reviewer confirms, the run is finalized and published; see
@@ -459,12 +479,13 @@ keeps its own candidate, rubric, response, score, and completion state, and the
 candidate's result records baseline totals, component, subcomponent, and gate
 deltas — only when both runs used identical rubric versions and hashes.
 
-The human-review score is 30 points: 10 for the average of the nine per-step
-ratings, 5 for readability and visual hierarchy, 4 for navigation and
-interaction usability, 4 for responsive visual quality, and 7 for overall
-cohesion and polish. Each rating `r` earns `(r - 1) / 4` of its points, summed
-without intermediate rounding. The component gate passes only at 15 or more with
-no individual rating of 1.
+The human-review score is 30 points: 4 for text appearance, hierarchy, and
+wording; 4 for the visual design of individual elements; 5 for composition and
+placement; 6 for motion and scene evolution; 5 for overall visual identity; 3
+for navigation and presentation chrome; and 3 for responsive visual quality.
+Each rating `r` earns `(r - 1) / 4` of its dimension's points, summed without
+intermediate rounding. The component gate passes only at 15 or more with no
+individual rating of 1.
 
 The review serves the candidate itself. `serve-candidate.mjs` is a dependency-free
 static server for the build at `.runtime/candidate-worktree/dist`, bound to a

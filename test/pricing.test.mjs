@@ -10,6 +10,7 @@ import {
   fetchPricingCatalog,
   lookupCatalogEntry,
   parsePricingFinding,
+  needsPricingLookup,
   resolveAttemptCost,
   resolveImplementationPricing,
 } from '../evals/agent-runner/and-scene/lib/pricing.mjs'
@@ -384,6 +385,12 @@ test('an attempt with no usable usage is never priced', async () => {
 
 test('the pricing finding schema is enforced on the judge response', () => {
   assert.equal(PRICING_FINDING_SCHEMA.type, 'object')
+  assert.equal(PRICING_FINDING_SCHEMA.additionalProperties, false)
+  assert.deepEqual(
+    [...PRICING_FINDING_SCHEMA.required].sort(),
+    Object.keys(PRICING_FINDING_SCHEMA.properties).sort(),
+  )
+  assert.equal(PRICING_FINDING_SCHEMA.properties.rates.additionalProperties, false)
   assert.throws(
     () => parsePricingFinding('not json', attempt()),
     /valid JSON/,
@@ -392,6 +399,22 @@ test('the pricing finding schema is enforced on the judge response', () => {
     () => parsePricingFinding(JSON.stringify({ found: true, matched_model: 'gpt-5-codex' }), attempt()),
     /source_url/,
   )
+})
+
+test('missing provider or model identity never triggers catalog or judge lookup', async () => {
+  let judgeCalls = 0
+  const unidentified = attempt({ model: null })
+
+  assert.equal(needsPricingLookup([unidentified]), false)
+  const resolution = await resolveAttemptCost({
+    attempt: unidentified,
+    catalog: await loadedCatalog(),
+    invoke: async () => { judgeCalls += 1; return '{}' },
+  })
+
+  assert.equal(judgeCalls, 0)
+  assert.equal(resolution.state, 'unavailable')
+  assert.match(resolution.reason, /provider.*model identity|model identity/)
 })
 
 test('a pricing request names the attempt model and its needed categories', () => {
@@ -421,6 +444,9 @@ test('pricing resolution covers every CLI attempt and records the catalog once',
   assert.equal(resolution.catalog.sha256, hashString(CATALOG_BODY))
   assert.equal(resolution.costs[0].source, 'models.dev')
   assert.equal(resolution.costs[1].source, 'agent-runner-reported')
+  assert.equal(resolution.complete, true)
+  assert.equal(resolution.verified, true)
+  assert.deepEqual(resolution.sources.sort(), ['agent-runner-reported', 'models.dev'])
 })
 
 test('pricing lookup never carries a scoring effect', async () => {

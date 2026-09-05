@@ -36,6 +36,15 @@ function addTokens(into, tokens) {
   return totals
 }
 
+function addTokenTotals(into, totals) {
+  if (!totals || typeof totals !== 'object') return into
+  const next = into ?? { input: 0, output: 0, total: 0 }
+  for (const category of ['input', 'output', 'total']) {
+    if (Number.isFinite(totals[category])) next[category] += totals[category]
+  }
+  return next
+}
+
 function verificationOf(sources) {
   if (sources.length === 0) return null
   return sources.includes('judge-web-search') ? 'unverified' : 'verified'
@@ -58,12 +67,15 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
     const key = rowKey(attempt)
     const row = rows.get(key) ?? {
       agent_role: attempt.agent_role,
+      tool: attempt.tool ?? null,
       provider: attempt.provider,
       model: attempt.model,
       attempt_count: 0,
       attempt_ids: [],
       tokens: null,
+      token_totals: null,
       attempts_missing_usage: 0,
+      attempts_missing_token_totals: 0,
       resolved_amount_usd: 0,
       resolved_count: 0,
       sources: [],
@@ -74,8 +86,11 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
     row.attempt_ids.push(attempt.attempt_id)
     if (attempt.usage?.state === 'available') {
       row.tokens = addTokens(row.tokens, attempt.usage.tokens)
+      row.token_totals = addTokenTotals(row.token_totals, attempt.usage.token_totals)
+      if (!attempt.usage.token_totals) row.attempts_missing_token_totals += 1
     } else {
       row.attempts_missing_usage += 1
+      row.attempts_missing_token_totals += 1
     }
 
     const resolution = byAttempt.get(attempt.attempt_id)
@@ -99,14 +114,18 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
     const rowComplete = row.unresolved_attempts.length === 0
     return {
       agent_role: row.agent_role,
+      tool: row.tool,
       provider: row.provider,
       model: row.model,
       attempt_count: row.attempt_count,
       attempt_ids: row.attempt_ids,
       tokens: row.tokens,
+      token_totals: row.token_totals,
       token_categories: row.tokens ? Object.keys(row.tokens).sort() : [],
       usage_complete: row.attempts_missing_usage === 0,
       attempts_missing_usage: row.attempts_missing_usage,
+      token_totals_complete: row.attempts_missing_token_totals === 0,
+      attempts_missing_token_totals: row.attempts_missing_token_totals,
       cost: {
         // A row missing any attempt's cost reports what is known and says so,
         // rather than presenting a partial sum as the row's cost.
@@ -119,9 +138,35 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
       complete: rowComplete,
     }
   })
+  const attemptCount = rendered.reduce((sum, row) => sum + row.attempt_count, 0)
+  const attemptsMissingUsage = rendered.reduce((sum, row) => sum + row.attempts_missing_usage, 0)
+  const attemptsMissingTokenTotals = rendered.reduce(
+    (sum, row) => sum + row.attempts_missing_token_totals,
+    0,
+  )
+  const usageTokens = rendered.reduce((sum, row) => addTokens(sum, row.tokens), null)
+  const usageTokenTotals = rendered.reduce(
+    (sum, row) => addTokenTotals(sum, row.token_totals),
+    null,
+  )
+  const usageComplete = attemptsComplete
+    && attemptCount > 0
+    && attemptsMissingUsage === 0
+    && attemptsMissingTokenTotals === 0
 
   return {
     rows: rendered,
+    usage: {
+      state: usageComplete
+        ? 'available'
+        : (usageTokens || usageTokenTotals ? 'partial' : 'unavailable'),
+      complete: usageComplete,
+      attempt_count: attemptCount,
+      attempts_missing_usage: attemptsMissingUsage,
+      attempts_missing_token_totals: attemptsMissingTokenTotals,
+      tokens: usageTokens,
+      token_totals: usageTokenTotals,
+    },
     total: {
       state: complete ? 'available' : 'unavailable',
       estimated_api_cost_usd: complete ? roundUsd(knownSubtotal) : null,
@@ -142,20 +187,50 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
 // look like a property of the candidate.
 export function summarizeEvalOwnedUsage(entries = []) {
   let tokens = null
+  let tokenTotals = null
+  let available = 0
+  const grouped = new Map()
   for (const entry of entries) {
-    tokens = addTokens(tokens, entry.tokens)
-  }
-  return {
-    state: entries.length > 0 ? 'available' : 'unavailable',
-    priced: false,
-    included_in_implementation_total: false,
-    tokens,
-    token_categories: tokens ? Object.keys(tokens).sort() : [],
-    by_phase: entries.map((entry) => ({
+    const state = entry.usage?.state ?? (entry.tokens ? 'available' : 'unavailable')
+    const measured = state === 'available' && entry.tokens
+    if (measured) {
+      available += 1
+      tokens = addTokens(tokens, entry.tokens)
+      tokenTotals = addTokenTotals(tokenTotals, entry.token_totals)
+    }
+    const key = JSON.stringify([entry.phase ?? null, entry.provider ?? null, entry.model ?? null])
+    const row = grouped.get(key) ?? {
       phase: entry.phase ?? null,
       provider: entry.provider ?? null,
       model: entry.model ?? null,
-      tokens: entry.tokens ?? null,
+      attempt_count: 0,
+      attempts_missing_usage: 0,
+      tokens: null,
+      token_totals: null,
+    }
+    row.attempt_count += 1
+    if (measured) {
+      row.tokens = addTokens(row.tokens, entry.tokens)
+      row.token_totals = addTokenTotals(row.token_totals, entry.token_totals)
+    } else {
+      row.attempts_missing_usage += 1
+    }
+    grouped.set(key, row)
+  }
+  const missing = entries.length - available
+  return {
+    state: entries.length === 0 ? 'unavailable' : (missing === 0 ? 'available' : (available > 0 ? 'partial' : 'unavailable')),
+    complete: entries.length > 0 && missing === 0,
+    attempt_count: entries.length,
+    attempts_missing_usage: missing,
+    priced: false,
+    included_in_implementation_total: false,
+    tokens,
+    token_totals: tokenTotals,
+    token_categories: tokens ? Object.keys(tokens).sort() : [],
+    by_phase: [...grouped.values()].map((row) => ({
+      ...row,
+      usage_complete: row.attempts_missing_usage === 0,
     })),
   }
 }

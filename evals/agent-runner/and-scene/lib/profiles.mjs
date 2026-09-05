@@ -139,6 +139,9 @@ export function compareRoleSelections(recorded, requested) {
 
 const AGENT_ROLES = Object.fromEntries(Object.entries(ROLE_AGENTS).map(([role, agent]) => [agent, role]))
 const REPORTED_ROLES = {
+  lead: 'lead',
+  implementor: 'implementor',
+  tester: 'reviewer',
   'lead-agent': 'lead',
   'task-implementor': 'implementor',
   'acceptance-reviewer': 'reviewer',

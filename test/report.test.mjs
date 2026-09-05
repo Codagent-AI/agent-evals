@@ -55,8 +55,8 @@ function result(overrides = {}) {
     },
     human_review: {
       complete: true,
-      responses: [{ number: 1, question_text: 'Rate step 1', rating: 4, rationale: 'clear' }],
-      score: { total: 24, possible: 30, gate_passed: true, subtotals: [{ id: 'per-step', title: 'Per step', points: 8, points_possible: 10 }] },
+      responses: [{ number: 1, question_text: 'Rate text appearance', rating: 4, rationale: 'clear' }],
+      score: { total: 24, possible: 30, gate_passed: true, subtotals: [{ id: 'text-appearance', title: 'Text appearance, hierarchy, and wording', points: 3, points_possible: 4 }] },
     },
     workflow: {
       workflow: 'implement-change',
@@ -176,6 +176,33 @@ test('technical adjudication audit text is escaped rather than rendered as marku
   assert.match(html, /&lt;script&gt;/)
   assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/)
   assert.match(html, /&lt;svg onload=alert\(&quot;finding&quot;\)&gt;/)
+})
+
+test('a replacement human review shows its score and superseded-review audit trail', () => {
+  const html = renderReport(result({
+    human_review_history: [{
+      rubric: { version: '1.0.0', sha256: 'old-hash' },
+      score: { total: 20.36, possible: 30 },
+    }],
+    human_review_supersession: {
+      approved_by: 'Paul (user)',
+      approved_at: '2026-08-29T12:00:00.000Z',
+      rationale: 'Confirmed replacement visual review.',
+      prior_rubric: { version: '1.0.0', sha256: 'old-hash' },
+      reviewed_rubric: { version: '2.1.0', sha256: 'new-hash' },
+      prior_human_score: 20.36,
+      revised_human_score: 17,
+      prior_official_score: 76.4,
+      revised_official_score: 73.04,
+    },
+  }))
+
+  assert.match(html, /Human-review supersession/)
+  assert.match(html, /20\.36/)
+  assert.match(html, /17/)
+  assert.match(html, /1\.0\.0/)
+  assert.match(html, /2\.1\.0/)
+  assert.match(html, /Confirmed replacement visual review/)
 })
 
 test('a failing verdict leads with FAIL and the official score', () => {
@@ -428,6 +455,65 @@ test('details for every reported dimension are expandable', () => {
   }
   // Plain language, never the word "provenance", in human-facing output.
   assert.doesNotMatch(html, /provenance/i)
+})
+
+test('implementation metrics render as a readable per-role and model table', () => {
+  const html = renderReport(result({
+    cost: {
+      rows: [{
+        agent_role: 'implementor',
+        tool: 'agent-runner',
+        provider: 'openai',
+        model: 'gpt-5.6-terra',
+        attempt_count: 2,
+        tokens: {
+          input: 1500,
+          cached_input: 500,
+          cache_write: 100,
+          output: 300,
+          reasoning: 75,
+        },
+        token_totals: { input: 1500, output: 300, total: 1800 },
+        usage_complete: true,
+        cost: { state: 'available', amount_usd: 0.42, sources: ['models.dev'] },
+        verification: 'verified',
+      }],
+      usage: {
+        state: 'available', complete: true,
+        tokens: { input: 1500, cached_input: 500, cache_write: 100, output: 300, reasoning: 75 },
+        token_totals: { input: 1500, output: 300, total: 1800 },
+      },
+      total: {
+        state: 'available', complete: true, estimated_api_cost_usd: 0.42,
+        known_cost_subtotal_usd: 0.42,
+      },
+      eval_owned: {
+        state: 'available', complete: true, priced: false,
+        included_in_implementation_total: false,
+        tokens: { input: 100, output: 20 },
+        by_phase: [{
+          phase: 'product-judging', provider: 'openai', model: 'gpt-5.6-sol',
+          tokens: { input: 100, output: 20 },
+        }],
+      },
+    },
+  }))
+
+  assert.match(html, /<th>Role<\/th>/)
+  assert.match(html, /<th>Model<\/th>/)
+  assert.match(html, /<th>Canonical input<\/th>/)
+  assert.match(html, /<th>Cached input<\/th>/)
+  assert.match(html, /<th>Reasoning detail<\/th>/)
+  assert.match(html, /<th>Cost source<\/th>/)
+  assert.match(html, /<th>Verification<\/th>/)
+  assert.match(html, /gpt-5\.6-terra/)
+  assert.match(html, /models\.dev/)
+  assert.match(html, />1,500<\/td>/)
+  assert.match(html, />1,800<\/td>/)
+  assert.match(html, /Implementation token total/)
+  assert.match(html, /Eval-owned model usage/)
+  assert.match(html, /product-judging/)
+  assert.doesNotMatch(html, /&quot;agent_role&quot;/)
 })
 
 test('a comparable baseline renders totals, components, gates, and deltas', () => {

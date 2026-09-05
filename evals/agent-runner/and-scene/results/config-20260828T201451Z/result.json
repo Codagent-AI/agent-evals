@@ -4,12 +4,12 @@
   "run_kind": "candidate",
   "mode": "agent-runner",
   "evaluation_status": "complete",
-  "product_verdict": "fail",
-  "label": "FAIL",
+  "product_verdict": "pass",
+  "label": "PASS",
   "score_denominator": 100,
-  "official_score": 69.40515873015873,
+  "official_score": 73.044047619048,
   "automated_subtotal": {
-    "points": 49.04404761904762,
+    "points": 56.044047619048,
     "possible": 70,
     "observed_possible": 70,
     "complete": true
@@ -68,8 +68,8 @@
     },
     "human": {
       "rubric_id": "and-scene-human-review",
-      "version": "1.0.0",
-      "sha256": "e653ac069b959574ef913b52f1bb7c9ac6eb1d3c3066b009a8a9ed7b09d0396a"
+      "version": "2.1.0",
+      "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
     }
   },
   "score": {
@@ -93,8 +93,8 @@
         "title": "Demo presentation technical quality",
         "applicable": true,
         "points_possible": 24,
-        "points_awarded": 18,
-        "points_observed": 18,
+        "points_awarded": 23,
+        "points_observed": 23,
         "points_observed_possible": 24,
         "floor": 15,
         "complete": true,
@@ -403,7 +403,9 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 18,
+        "adjudication_adjustment": 5
       },
       {
         "id": "scene-kit-correctness",
@@ -789,7 +791,9 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 18.752380952380953,
+        "adjudication_adjustment": 0
       },
       {
         "id": "presentation-skill-correctness",
@@ -1048,7 +1052,9 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 5.125,
+        "adjudication_adjustment": 0
       },
       {
         "id": "verification-tool-correctness",
@@ -1245,15 +1251,17 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 4.166666666666667,
+        "adjudication_adjustment": 0
       },
       {
         "id": "testing-evidence-quality",
         "title": "Testing-evidence quality",
         "applicable": true,
         "points_possible": 4,
-        "points_awarded": 2,
-        "points_observed": 2,
+        "points_awarded": 3,
+        "points_observed": 3,
         "points_observed_possible": 4,
         "floor": null,
         "complete": true,
@@ -1328,15 +1336,17 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 2,
+        "adjudication_adjustment": 1
       },
       {
         "id": "assumption-handling-quality",
         "title": "Assumption-handling quality",
         "applicable": true,
         "points_possible": 4,
-        "points_awarded": 1,
-        "points_observed": 1,
+        "points_awarded": 2,
+        "points_observed": 2,
         "points_observed_possible": 4,
         "floor": null,
         "complete": true,
@@ -1410,7 +1420,9 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 1,
+        "adjudication_adjustment": 1
       }
     ],
     "score_denominator": 100,
@@ -1424,18 +1436,22 @@
           "phases/verification.json",
           "&gt; and-scene@0.0.0 build &gt; tsc -b &amp;&amp; vite build [36mvite v8.1.3 [32mbuilding client environment for production... [36m [39m [2K transforming...✓ 446 modules transformed. rendering chunks…"
         ],
-        "observed": true
+        "observed": true,
+        "raw_verdict": "pass",
+        "adjudication_changed": false
       },
       {
         "id": "verification-sample-outline",
         "requirement": "The canonical nine-step sample exists, is registered and reachable, and matches its required outline",
-        "verdict": "fail",
+        "verdict": "pass",
         "rationale": "the canonical nine-step sample must be registered, reachable, and match its outline",
         "evidence": [
           "evidence/evaluator/browser-probes/demo-route-and-registration.json",
           "evidence/evaluator/browser-probes/demo-nine-step-content-and-order.json"
         ],
-        "observed": true
+        "observed": true,
+        "raw_verdict": "fail",
+        "adjudication_changed": true
       },
       {
         "id": "verification-every-produced-step-renders",
@@ -1458,7 +1474,9 @@
           "evidence/evaluator/browser-probes/demo-control-semantics.json",
           "evidence/evaluator/browser-probes/demo-focus-and-keyboard-accessibility.json"
         ],
-        "observed": true
+        "observed": true,
+        "raw_verdict": "pass",
+        "adjudication_changed": false
       },
       {
         "id": "verification-clear-outcome",
@@ -1468,57 +1486,40 @@
         "evidence": [
           "phases/verification.json"
         ],
-        "observed": true
+        "observed": true,
+        "raw_verdict": "pass",
+        "adjudication_changed": false
       }
     ],
-    "gates_passed": false,
+    "gates_passed": true,
     "automated_subtotal": {
-      "points": 49.04404761904762,
+      "points": 56.044047619048,
       "possible": 70,
       "observed_possible": 70,
       "complete": true
     },
     "human_review": {
       "applicable": true,
-      "points_awarded": 20.36111111111111,
+      "points_awarded": 17,
       "points_possible": 30,
-      "points": 20.36111111111111,
+      "points": 17,
       "possible": 30,
       "floor": 15,
       "ratings": [
-        4,
         3,
         4,
+        2,
         3,
-        4,
         3,
-        3,
-        4,
-        3,
-        4,
         5,
-        4,
-        3
+        4
       ],
-      "lowest_rating": 3,
+      "lowest_rating": 2,
       "complete": true
     },
-    "official_score": 69.40515873015873,
-    "official_pass": false,
-    "pass_failures": [
-      {
-        "rule": "total",
-        "id": null,
-        "value": 69.40515873015873,
-        "required": 70
-      },
-      {
-        "rule": "hard-gate",
-        "id": "verification-sample-outline",
-        "value": "fail",
-        "required": "pass"
-      }
-    ],
+    "official_score": 73.044047619048,
+    "official_pass": true,
+    "pass_failures": [],
     "incomplete": [],
     "harness": {
       "judge_retries": {
@@ -1541,157 +1542,83 @@
     },
     "rubric": {
       "rubric_id": "and-scene-human-review",
-      "version": "1.0.0",
-      "sha256": "e653ac069b959574ef913b52f1bb7c9ac6eb1d3c3066b009a8a9ed7b09d0396a"
+      "version": "2.1.0",
+      "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
     },
     "readiness_confirmed": true,
     "responses": [
       {
-        "id": "step-1",
+        "id": "text-appearance",
         "number": 1,
-        "dimension": "per-step",
-        "question_text": "Rate step 1, \"You have a topic.\" Considering its initial composition and entrance, how clearly and intentionally does it present the required content?",
-        "rating": 4,
-        "rationale": ""
+        "dimension": "text-appearance",
+        "question_text": "Across the full presentation, how good do the titles, captions, labels, and other content text look and read? Judge whether important content text is visibly present, typography, sizing, weight, spacing, line breaks, contrast, legibility, visual hierarchy, and whether the wording is clear, intentional, and audience-ready rather than sounding like an internal annotation. Do not judge navigation controls or presentation chrome here, and do not judge the placement or styling of non-text elements.",
+        "rating": 3,
+        "rationale": "Caption font is very tiny; ‘self-reference reveal’ reads awkwardly."
       },
       {
-        "id": "step-2",
+        "id": "element-appearance",
         "number": 2,
-        "dimension": "per-step",
-        "question_text": "Rate step 2, \"The skill interviews you.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?",
-        "rating": 3,
-        "rationale": "significant overlap in elements"
+        "dimension": "element-appearance",
+        "question_text": "How well designed are the individual scene elements, such as boxes, arrows, icons, illustrations, and diagram nodes? Judge their shapes, proportions, fills, borders, detail, consistency, and overall craft. Do not judge their text, placement, movement, or navigation chrome here.",
+        "rating": 4,
+        "rationale": ""
       },
       {
-        "id": "step-3",
+        "id": "composition",
         "number": 3,
-        "dimension": "per-step",
-        "question_text": "Rate step 3, \"Answers become steps.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?",
-        "rating": 4,
-        "rationale": ""
+        "dimension": "composition",
+        "question_text": "At a normal wide viewport, how well are the text and visual elements arranged relative to one another? Judge alignment, spacing, grouping, balance, focal points, use of space, and whether anything feels crowded, disconnected, clipped, or unintentionally overlapping. Judge viewport adaptation separately under responsive visual quality.",
+        "rating": 2,
+        "rationale": "Too many elements overlap incorrectly."
       },
       {
-        "id": "step-4",
+        "id": "motion",
         "number": 4,
-        "dimension": "per-step",
-        "question_text": "Rate step 4, \"The deck grows.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?",
+        "dimension": "motion",
+        "question_text": "As you advance through the presentation, how well do the animations and scene changes work? Judge smoothness, pacing, meaningful entrances and exits, continuity of persistent elements, and whether each step visibly evolves the existing scene instead of feeling like an unrelated replacement.",
         "rating": 3,
-        "rationale": "incorrect placement"
+        "rationale": "It’s just aight dog."
       },
       {
-        "id": "step-5",
+        "id": "visual-identity",
         "number": 5,
-        "dimension": "per-step",
-        "question_text": "Rate step 5, \"You set the depth.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?",
-        "rating": 4,
-        "rationale": ""
+        "dimension": "visual-identity",
+        "question_text": "Taken as a whole, how strong is the presentation’s visual identity? Judge its color palette, background treatment, stylistic consistency, brand character, polish, memorability, and whether it feels intentionally designed and finished. Judge the craft of individual scene elements separately.",
+        "rating": 3,
+        "rationale": "Ordinary; nothing impressive."
       },
       {
-        "id": "step-6",
+        "id": "navigation-chrome",
         "number": 6,
-        "dimension": "per-step",
-        "question_text": "Rate step 6, \"It assembles the scene.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?",
-        "rating": 3,
-        "rationale": "incorrect placement"
-      },
-      {
-        "id": "step-7",
-        "number": 7,
-        "dimension": "per-step",
-        "question_text": "Rate step 7, \"It checks its own work.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?",
-        "rating": 3,
-        "rationale": "incorrect placement"
-      },
-      {
-        "id": "step-8",
-        "number": 8,
-        "dimension": "per-step",
-        "question_text": "Rate step 8, \"Changed your mind? Loop it.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?",
-        "rating": 4,
-        "rationale": ""
-      },
-      {
-        "id": "step-9",
-        "number": 9,
-        "dimension": "per-step",
-        "question_text": "Rate step 9, \"You're looking at one.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?",
-        "rating": 3,
-        "rationale": "wrong caption"
-      },
-      {
-        "id": "readability",
-        "number": 10,
-        "dimension": "readability",
-        "question_text": "Rate the presentation's readability and visual hierarchy, including typography, contrast, legibility, scanning order, emphasis, labels, and captions across the presentation.",
-        "rating": 4,
-        "rationale": ""
-      },
-      {
-        "id": "navigation",
-        "number": 11,
-        "dimension": "navigation",
-        "question_text": "Rate the presentation's navigation and interaction usability, including discoverability, current-step feedback, controls, present/browse switching, and supported navigation methods.",
+        "dimension": "navigation-chrome",
+        "question_text": "How clear, discoverable, and visually integrated are the presentation controls and chrome? Judge progress indicators, previous/next controls, table of contents, mode switching, and attribution. Focus on their appearance and ease of understanding, not whether every input method technically works or how content captions are styled.",
         "rating": 5,
         "rationale": ""
       },
       {
         "id": "responsive",
-        "number": 12,
+        "number": 7,
         "dimension": "responsive",
-        "question_text": "Rate the presentation's responsive visual quality: whether it remains readable, composed, and usable across desktop and narrow viewports without problematic clipping, overlap, or chrome interference.",
+        "question_text": "Compare the presentation at wide and narrow viewport sizes. How well does its hierarchy and composition adapt? Judge scaling, density, readability, control accessibility, clipping, overlap, and whether the narrow version still feels intentionally composed. Judge baseline wide-screen composition separately.",
         "rating": 4,
         "rationale": ""
-      },
-      {
-        "id": "cohesion",
-        "number": 13,
-        "dimension": "cohesion",
-        "question_text": "Rate the presentation's overall cohesion and polish, including consistency, visual rhythm, intentionality, detail quality, and whether it feels finished as a whole.",
-        "rating": 3,
-        "rationale": "missing title"
       }
     ],
     "score": {
       "complete": true,
       "subtotals": [
         {
-          "id": "per-step",
-          "title": "Average of the nine per-step ratings",
-          "points": 6.111111111111111,
-          "points_possible": 10,
+          "id": "text-appearance",
+          "title": "Text appearance, hierarchy, and wording",
+          "points": 2,
+          "points_possible": 4,
           "ratings": [
-            4,
-            3,
-            4,
-            3,
-            4,
-            3,
-            3,
-            4,
             3
           ]
         },
         {
-          "id": "readability",
-          "title": "Readability and visual hierarchy",
-          "points": 3.75,
-          "points_possible": 5,
-          "ratings": [
-            4
-          ]
-        },
-        {
-          "id": "navigation",
-          "title": "Navigation and interaction usability",
-          "points": 4,
-          "points_possible": 4,
-          "ratings": [
-            5
-          ]
-        },
-        {
-          "id": "responsive",
-          "title": "Responsive visual quality",
+          "id": "element-appearance",
+          "title": "Visual design of elements",
           "points": 3,
           "points_possible": 4,
           "ratings": [
@@ -1699,24 +1626,60 @@
           ]
         },
         {
-          "id": "cohesion",
-          "title": "Overall cohesion and polish",
-          "points": 3.5,
-          "points_possible": 7,
+          "id": "composition",
+          "title": "Composition and placement",
+          "points": 1.25,
+          "points_possible": 5,
+          "ratings": [
+            2
+          ]
+        },
+        {
+          "id": "motion",
+          "title": "Motion and scene evolution",
+          "points": 3,
+          "points_possible": 6,
           "ratings": [
             3
           ]
+        },
+        {
+          "id": "visual-identity",
+          "title": "Overall visual identity",
+          "points": 2.5,
+          "points_possible": 5,
+          "ratings": [
+            3
+          ]
+        },
+        {
+          "id": "navigation-chrome",
+          "title": "Navigation and presentation chrome",
+          "points": 3,
+          "points_possible": 3,
+          "ratings": [
+            5
+          ]
+        },
+        {
+          "id": "responsive",
+          "title": "Responsive visual quality",
+          "points": 2.25,
+          "points_possible": 3,
+          "ratings": [
+            4
+          ]
         }
       ],
-      "total": 20.36111111111111,
+      "total": 17,
       "possible": 30,
       "floor": 15,
-      "lowest_rating": 3,
+      "lowest_rating": 2,
       "gate_passed": true,
       "gate_failures": []
     },
     "complete": true,
-    "completed_at": "2026-08-29T01:09:47.762Z"
+    "completed_at": "2026-08-29T23:23:16.407Z"
   },
   "browser_evaluation": {
     "criteria": [
@@ -11035,8 +10998,8 @@
     },
     {
       "path": "human-review.json",
-      "bytes": 6461,
-      "sha256": "c81e00f69c2fa3b632cac7211c78c3edd9d6b18fe6a07e87b94c8f18cfa3e31e"
+      "bytes": 5657,
+      "sha256": "56ad23f65c484d8bd0e6cdfe5a5a4aae5c96e4dccd8732a78990a53481d54a21"
     },
     {
       "path": "implementation.diff",
@@ -17780,5 +17743,262 @@
   "report": {
     "written": true,
     "error": null
+  },
+  "technical_adjudication": {
+    "schema_version": 1,
+    "approved_by": "Paul (user)",
+    "approved_at": "2026-08-28T21:24:38-04:00",
+    "rationale": "A criterion-by-criterion harness audit corrected deterministic browser false negatives and final-revision evidence parsing while retaining independently supported deductions.",
+    "findings": [
+      "Five browser deductions were false negatives caused by omitted candidate-equivalent stable title/progress hooks and a synthetic touchstart event missing changedTouches.",
+      "The canonical nine-step outline exists, is registered, and is reachable; the old probe compared the overall browse deck title instead of active present-mode step titles, so the outline hard gate was a false failure.",
+      "Browse mode still lacks the active step title required by the rubric, so its independent browse-behavior deduction remains.",
+      "The acceptance record documents a full run at the final SHA; the old lineage parser ignored its qualified Tested revision and Verification scope fields.",
+      "Every other automated deduction was individually reviewed against the frozen candidate source, rubric guidance, and retained evidence and remains unchanged."
+    ],
+    "reviewed_rubric": {
+      "rubric_id": "and-scene-automated-product",
+      "version": "3.10.0",
+      "sha256": "a0bd5197cd6a79b14be4905d0f6041038b8fc48a0a0a032ed0263b3c566a1ce9"
+    },
+    "component_scores": {
+      "demo-technical-quality": 23,
+      "scene-kit-correctness": 18.752380952380953,
+      "presentation-skill-correctness": 5.125,
+      "verification-tool-correctness": 4.166666666666667
+    },
+    "workflow_component_scores": {
+      "testing-evidence-quality": 3,
+      "assumption-handling-quality": 2
+    },
+    "prior_workflow_quality_score": 3,
+    "revised_workflow_quality_score": 5,
+    "prior_gate_verdicts": {
+      "verification-build-whole-app": "pass",
+      "verification-sample-outline": "fail",
+      "verification-every-produced-step-renders": "pass",
+      "verification-clear-outcome": "pass"
+    },
+    "revised_gate_verdicts": {
+      "verification-build-whole-app": "pass",
+      "verification-sample-outline": "pass",
+      "verification-every-produced-step-renders": "pass",
+      "verification-clear-outcome": "pass"
+    },
+    "prior_shared_technical_score": 46.044047619048,
+    "revised_shared_technical_score": 51.044047619048,
+    "prior_automated_subtotal": 49.04404761904762,
+    "revised_automated_subtotal": 56.044047619048,
+    "prior_official_score": 69.40515873015873,
+    "revised_official_score": 76.405158730159,
+    "prior_result_fingerprint": "2a6a16e372e16927cea580e96cb6b9ba7942a0bb7214259d4774ee06c49a7c1a"
+  },
+  "human_review_history": [
+    {
+      "schema_version": 1,
+      "candidate": {
+        "candidate_identity": "1af535c8b9abcaa2d258419fda508d82b263c10765a7fe077b8c0100e9066a57",
+        "run_id": "config-20260828T201451Z"
+      },
+      "rubric": {
+        "rubric_id": "and-scene-human-review",
+        "version": "1.0.0",
+        "sha256": "e653ac069b959574ef913b52f1bb7c9ac6eb1d3c3066b009a8a9ed7b09d0396a"
+      },
+      "readiness_confirmed": true,
+      "responses": [
+        {
+          "id": "step-1",
+          "number": 1,
+          "dimension": "per-step",
+          "question_text": "Rate step 1, \"You have a topic.\" Considering its initial composition and entrance, how clearly and intentionally does it present the required content?",
+          "rating": 4,
+          "rationale": ""
+        },
+        {
+          "id": "step-2",
+          "number": 2,
+          "dimension": "per-step",
+          "question_text": "Rate step 2, \"The skill interviews you.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?",
+          "rating": 3,
+          "rationale": "significant overlap in elements"
+        },
+        {
+          "id": "step-3",
+          "number": 3,
+          "dimension": "per-step",
+          "question_text": "Rate step 3, \"Answers become steps.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?",
+          "rating": 4,
+          "rationale": ""
+        },
+        {
+          "id": "step-4",
+          "number": 4,
+          "dimension": "per-step",
+          "question_text": "Rate step 4, \"The deck grows.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?",
+          "rating": 3,
+          "rationale": "incorrect placement"
+        },
+        {
+          "id": "step-5",
+          "number": 5,
+          "dimension": "per-step",
+          "question_text": "Rate step 5, \"You set the depth.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?",
+          "rating": 4,
+          "rationale": ""
+        },
+        {
+          "id": "step-6",
+          "number": 6,
+          "dimension": "per-step",
+          "question_text": "Rate step 6, \"It assembles the scene.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?",
+          "rating": 3,
+          "rationale": "incorrect placement"
+        },
+        {
+          "id": "step-7",
+          "number": 7,
+          "dimension": "per-step",
+          "question_text": "Rate step 7, \"It checks its own work.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?",
+          "rating": 3,
+          "rationale": "incorrect placement"
+        },
+        {
+          "id": "step-8",
+          "number": 8,
+          "dimension": "per-step",
+          "question_text": "Rate step 8, \"Changed your mind? Loop it.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?",
+          "rating": 4,
+          "rationale": ""
+        },
+        {
+          "id": "step-9",
+          "number": 9,
+          "dimension": "per-step",
+          "question_text": "Rate step 9, \"You're looking at one.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?",
+          "rating": 3,
+          "rationale": "wrong caption"
+        },
+        {
+          "id": "readability",
+          "number": 10,
+          "dimension": "readability",
+          "question_text": "Rate the presentation's readability and visual hierarchy, including typography, contrast, legibility, scanning order, emphasis, labels, and captions across the presentation.",
+          "rating": 4,
+          "rationale": ""
+        },
+        {
+          "id": "navigation",
+          "number": 11,
+          "dimension": "navigation",
+          "question_text": "Rate the presentation's navigation and interaction usability, including discoverability, current-step feedback, controls, present/browse switching, and supported navigation methods.",
+          "rating": 5,
+          "rationale": ""
+        },
+        {
+          "id": "responsive",
+          "number": 12,
+          "dimension": "responsive",
+          "question_text": "Rate the presentation's responsive visual quality: whether it remains readable, composed, and usable across desktop and narrow viewports without problematic clipping, overlap, or chrome interference.",
+          "rating": 4,
+          "rationale": ""
+        },
+        {
+          "id": "cohesion",
+          "number": 13,
+          "dimension": "cohesion",
+          "question_text": "Rate the presentation's overall cohesion and polish, including consistency, visual rhythm, intentionality, detail quality, and whether it feels finished as a whole.",
+          "rating": 3,
+          "rationale": "missing title"
+        }
+      ],
+      "score": {
+        "complete": true,
+        "subtotals": [
+          {
+            "id": "per-step",
+            "title": "Average of the nine per-step ratings",
+            "points": 6.111111111111111,
+            "points_possible": 10,
+            "ratings": [
+              4,
+              3,
+              4,
+              3,
+              4,
+              3,
+              3,
+              4,
+              3
+            ]
+          },
+          {
+            "id": "readability",
+            "title": "Readability and visual hierarchy",
+            "points": 3.75,
+            "points_possible": 5,
+            "ratings": [
+              4
+            ]
+          },
+          {
+            "id": "navigation",
+            "title": "Navigation and interaction usability",
+            "points": 4,
+            "points_possible": 4,
+            "ratings": [
+              5
+            ]
+          },
+          {
+            "id": "responsive",
+            "title": "Responsive visual quality",
+            "points": 3,
+            "points_possible": 4,
+            "ratings": [
+              4
+            ]
+          },
+          {
+            "id": "cohesion",
+            "title": "Overall cohesion and polish",
+            "points": 3.5,
+            "points_possible": 7,
+            "ratings": [
+              3
+            ]
+          }
+        ],
+        "total": 20.36111111111111,
+        "possible": 30,
+        "floor": 15,
+        "lowest_rating": 3,
+        "gate_passed": true,
+        "gate_failures": []
+      },
+      "complete": true,
+      "completed_at": "2026-08-29T01:09:47.762Z"
+    }
+  ],
+  "human_review_supersession": {
+    "schema_version": 1,
+    "approved_by": "Paul (user)",
+    "approved_at": "2026-08-29T23:23:16.407Z",
+    "rationale": "The reviewer confirmed a replacement human review using the seven-question visual rubric v2.1.0 after the rubric was clarified and versioned.",
+    "prior_rubric": {
+      "rubric_id": "and-scene-human-review",
+      "version": "1.0.0",
+      "sha256": "e653ac069b959574ef913b52f1bb7c9ac6eb1d3c3066b009a8a9ed7b09d0396a"
+    },
+    "reviewed_rubric": {
+      "rubric_id": "and-scene-human-review",
+      "version": "2.1.0",
+      "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
+    },
+    "prior_human_score": 20.36111111111111,
+    "revised_human_score": 17,
+    "prior_official_score": 76.405158730159,
+    "revised_official_score": 73.044047619048,
+    "prior_result_fingerprint": "5a580432eea8e39a265f3499b42e134dff6acd89d318a4ac7c9c0f13498eff5e"
   }
 }

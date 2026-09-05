@@ -249,6 +249,11 @@ export async function runBrowserEvaluation({
       if (first.stepCount !== contract.step_count) {
         return [false, `the demo reports ${bounded(first.stepCount)} steps, expected ${contract.step_count}`, []]
       }
+      // The browse header may also contain an overall deck title. Read the
+      // canonical per-step titles in present mode so that a generic deck-title
+      // hook cannot be mistaken for the active step title. Browse-mode title
+      // visibility is checked independently below.
+      await session({ mode: 'present', position: 0 })
       const states = await walk()
       const mismatch = contract.step_titles.findIndex((title, position) => states[position]?.title !== title)
       if (mismatch !== -1) {
@@ -323,9 +328,20 @@ export async function runBrowserEvaluation({
     'demo-browse-mode-behavior': async () => {
       const page = await session(PROBE_REQUIREMENTS['demo-browse-mode-behavior'])
       const state = await page.state()
+      const activeTitle = contract.step_titles[state.stepIndex]
+      const controls = state.controls ?? []
+      const complete = state.mode === 'browse'
+        && state.titleProminent === true
+        && state.title === activeTitle
+        && state.captionVisible === true
+        && state.tocVisible === true
+        && state.progressVisible === true
+        && state.previousVisible === true
+        && state.nextVisible === true
+        && controls.length === state.stepCount
       return [
-        state.mode === 'browse' && state.captionVisible === true,
-        `browse mode reports mode ${bounded(state.mode)} with reading content visible ${state.captionVisible}`,
+        complete,
+        `browse mode ${bounded(state.mode)} at viewport ${bounded(state.viewport?.width)}×${bounded(state.viewport?.height)}; active title ${state.title === activeTitle}; caption ${state.captionVisible}; toc ${state.tocVisible}; progress ${state.progressVisible}; previous/next ${state.previousVisible}/${state.nextVisible}; controls ${controls.length}/${state.stepCount}`,
         [],
       ]
     },

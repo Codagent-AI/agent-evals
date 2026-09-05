@@ -114,7 +114,7 @@ function scriptedIo(inputs) {
 }
 
 function answers({ rating = 5, tail = ['confirm'] } = {}) {
-  return ['yes', ...Array(13).fill(0).flatMap(() => [String(rating), rating <= 3 ? 'noted' : '']), ...tail]
+  return ['yes', ...Array(7).fill(0).flatMap(() => [String(rating), rating <= 3 ? 'noted' : '']), ...tail]
 }
 
 function servers({
@@ -324,7 +324,7 @@ test('an unconfirmed review leaves the run pending with no official score', asyn
   assert.equal('official_score' in result, false)
   const review = await readJson(join(run.runDir, 'human-review.json'))
   assert.equal(review.complete, false)
-  assert.equal(review.responses.length, 13, 'valid answers are preserved')
+  assert.equal(review.responses.length, 7, 'valid answers are preserved')
 })
 
 test('an interrupted review still attempts candidate-server cleanup', async () => {
@@ -346,14 +346,14 @@ test('a review resumes at the first unanswered question after an interruption', 
   await runHumanReview({ argv: ['--run-dir', run.runDir], io: first.io, ...servers() })
   assert.equal((await readJson(join(run.runDir, 'human-review.json'))).responses.length, 4)
 
-  const second = scriptedIo(['yes', ...Array(9).fill(0).flatMap(() => ['4', '']), 'confirm'])
+  const second = scriptedIo(['yes', ...Array(3).fill(0).flatMap(() => ['4', '']), 'confirm'])
   const outcome = await runHumanReview({ argv: ['--run-dir', run.runDir], io: second.io, ...servers() })
 
   assert.equal(outcome.exitCode, 0, JSON.stringify(outcome.errors))
   const review = await readJson(join(run.runDir, 'human-review.json'))
-  assert.equal(review.responses.length, 13)
+  assert.equal(review.responses.length, 7)
   assert.deepEqual(review.responses.slice(0, 4).map(({ rating }) => rating), [5, 5, 5, 5])
-  assert.deepEqual(review.responses.slice(4).map(({ rating }) => rating), Array(9).fill(4))
+  assert.deepEqual(review.responses.slice(4).map(({ rating }) => rating), Array(3).fill(4))
 })
 
 test('a saved review naming a different candidate is refused with a resume-provenance error', async () => {
@@ -449,7 +449,7 @@ test('a paired review resumes the first run with an unanswered question', async 
   const first = scriptedIo([...answers({ rating: 5 }), 'yes', ...Array(3).fill(0).flatMap(() => ['4', ''])])
   await runHumanReview({ argv, io: first.io, ...infra, onRunStart })
 
-  const second = scriptedIo(['yes', ...Array(10).fill(0).flatMap(() => ['4', '']), 'confirm'])
+  const second = scriptedIo(['yes', ...Array(4).fill(0).flatMap(() => ['4', '']), 'confirm'])
   const outcome = await runHumanReview({ argv, io: second.io, ...infra, onRunStart })
 
   assert.equal(outcome.exitCode, 0, JSON.stringify(outcome.errors))
@@ -458,7 +458,7 @@ test('a paired review resumes the first run with an unanswered question', async 
   assert.ok(!second.written.join('\n').includes('Question 1 of'), 'no finalized answer is repeated')
   const candidateReview = await readJson(join(candidate.runDir, 'human-review.json'))
   assert.equal(candidateReview.complete, true)
-  assert.equal(candidateReview.responses.length, 13)
+  assert.equal(candidateReview.responses.length, 7)
 })
 
 test('a candidate reviewed against a completed baseline records the comparison', async () => {

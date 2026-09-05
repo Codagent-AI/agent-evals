@@ -81,6 +81,7 @@ async function environment({
   ghPermission = 'WRITE',
   planningReady = true,
   runnerResult = { status: 0, stdout: '' },
+  runnerResults = null,
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'agent-evals-controller-'))
   const agentRunnerDir = join(root, 'agent-runner')
@@ -162,7 +163,12 @@ async function environment({
     if (command === 'agent-runner' && args[0] === 'debug') {
       return { status: 0, stdout: resolvedWorkflow }
     }
-    if (command === 'agent-runner') return runnerResult
+    if (command === 'agent-runner') {
+      const runnerIndex = invocations.filter(({ command: invoked, args: invokedArgs }) => (
+        invoked === 'agent-runner' && (invokedArgs[0] === 'run' || invokedArgs[0] === '--resume')
+      )).length - 1
+      return runnerResults?.[runnerIndex] ?? runnerResult
+    }
     return { status: 0, stdout: '' }
   }
   return { root, runDir, home, agentRunnerDir, agentSkillsDir, exec, invocations, commit }
@@ -627,6 +633,78 @@ test('an inactive unfinished Runner resumes only its exact recorded run', async 
 
   assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
   assert.deepEqual(runnerInvocations(context).slice(before).map(({ args }) => args), [
+    ['--resume', 'runner-7'],
+  ])
+})
+
+test('a Claude quota exit waits for reset and resumes the exact Runner run', async () => {
+  const context = await environment({
+    runnerResults: [
+      { status: 1, stdout: '' },
+      { status: 0, stdout: '' },
+    ],
+  })
+  const waits = []
+  const result = await evaluate(context, profiles, {
+    readRunnerState: () => {
+      const runnerCalls = runnerInvocations(context).length
+      if (runnerCalls === 0) return null
+      return {
+        run_id: 'runner-7',
+        session_dir: '/sessions/runner-7',
+        workflow_name: 'implement-change',
+        workflow_completed: runnerCalls >= 2,
+        history: runnerCalls >= 2 ? history : [],
+      }
+    },
+    waitForClaudeQuotaReset: async ({ sessionDir }) => {
+      waits.push(sessionDir)
+      return { waited: true, reset_at: '2026-08-30T22:00:00.000Z' }
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.deepEqual(waits, ['/sessions/runner-7'])
+  assert.deepEqual(runnerInvocations(context).map(({ args }) => args[0]), ['run', '--resume'])
+})
+
+test('a Claude tester quota during an outer resume waits and retries that same run', async () => {
+  const context = await environment({
+    runnerResults: [
+      { status: 0, stdout: '' },
+      { status: 1, stdout: '' },
+      { status: 0, stdout: '' },
+    ],
+  })
+  await evaluate(context, profiles)
+  const before = runnerInvocations(context).length
+  const waits = []
+
+  const result = await evaluate(context, ['--resume', ...profiles], {
+    readRunnerState: () => {
+      const calls = runnerInvocations(context).length
+      return {
+        run_id: 'runner-7',
+        session_dir: '/sessions/runner-7',
+        workflow_name: 'implement-change',
+        workflow_completed: calls >= 3,
+        history: calls >= 3 ? history : [],
+      }
+    },
+    waitForClaudeQuotaReset: async ({ sessionDir }) => {
+      waits.push(sessionDir)
+      return {
+        waited: true,
+        role: 'tester',
+        reset_at: '2026-08-30T04:30:00.000Z',
+      }
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.deepEqual(waits, ['/sessions/runner-7'])
+  assert.deepEqual(runnerInvocations(context).slice(before).map(({ args }) => args), [
+    ['--resume', 'runner-7'],
     ['--resume', 'runner-7'],
   ])
 })

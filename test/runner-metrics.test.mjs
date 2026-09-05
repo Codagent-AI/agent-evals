@@ -7,7 +7,6 @@ import { test } from 'node:test'
 import { hashString } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
 import {
   RUNNER_METRICS_FILENAME,
-  RUNNER_METRICS_SCHEMA_VERSION,
   ingestRunnerMetrics,
   readRunnerMetrics,
 } from '../evals/agent-runner/and-scene/lib/runner-metrics.mjs'
@@ -46,7 +45,7 @@ function step(overrides = {}) {
 
 function metrics(overrides = {}) {
   return {
-    schema_version: RUNNER_METRICS_SCHEMA_VERSION,
+    schema_version: 1,
     run_id: RUN_ID,
     workflow: WORKFLOW,
     history_complete: true,
@@ -153,8 +152,115 @@ test('metrics naming another workflow are rejected', () => {
   assert.match(ingested.reason, /implement-change/)
 })
 
+test('schema-v2 metrics use Runner role, tool, and effective invocation identity', () => {
+  const text = JSON.stringify(metrics({
+    schema_version: 2,
+    steps: [step({
+      role: 'implementor',
+      tool: 'agent-runner',
+      usage: {
+        ...step().usage,
+        model: null,
+        identity: {
+          requested_cli: 'codex',
+          requested_model: 'gpt-5.6-terra',
+          requested_effort: 'high',
+          effective_cli: 'codex',
+          effective_provider: 'openai',
+          effective_model: 'gpt-5.6-terra',
+          effective_effort: 'high',
+          provider_source: 'adapter',
+          model_source: 'invocation',
+          effort_source: 'invocation',
+        },
+      },
+    })],
+  }))
+
+  const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
+
+  assert.equal(ingested.state, 'ingested')
+  assert.equal(ingested.source.schema_version, 2)
+  assert.equal(ingested.attempts[0].agent_role, 'implementor')
+  assert.equal(ingested.attempts[0].tool, 'agent-runner')
+  assert.equal(ingested.attempts[0].model, 'gpt-5.6-terra')
+  assert.equal(ingested.attempts[0].effort, 'high')
+  assert.equal(ingested.attempts[0].requested_model, 'gpt-5.6-terra')
+  assert.equal(ingested.attempts[0].identity.model_source, 'invocation')
+})
+
+test('schema-v2 nested model records remain attributable to their tool-owned role', () => {
+  const text = JSON.stringify(metrics({
+    schema_version: 2,
+    steps: [step({
+      record_id: 'validator/review-1#1',
+      id: 'review-1',
+      kind: 'nested-agent',
+      role: 'implementation-validator',
+      tool: 'agent-validator',
+      invocation_id: 'review-1',
+      usage: {
+        ...step().usage,
+        identity: {
+          requested_cli: 'codex',
+          requested_model: 'gpt-5.6-sol',
+          effective_cli: 'codex',
+          effective_provider: 'openai',
+          effective_model: 'gpt-5.6-sol',
+          provider_source: 'adapter',
+          model_source: 'invocation',
+        },
+      },
+    })],
+  }))
+
+  const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
+
+  assert.equal(ingested.state, 'ingested')
+  assert.equal(ingested.attempts[0].agent_role, 'implementation-validator')
+  assert.equal(ingested.attempts[0].tool, 'agent-validator')
+})
+
+test('schema-v2 legacy unknown identity remains unavailable rather than becoming a model name', () => {
+  const text = JSON.stringify(metrics({
+    schema_version: 2,
+    steps: [step({
+      role: 'legacy-unknown',
+      tool: 'agent-runner',
+      usage: {
+        ...step().usage,
+        provider: '',
+        model: '',
+        effort: '',
+        identity: {
+          requested_cli: 'codex',
+          requested_model: 'unknown',
+          requested_effort: 'unknown',
+          effective_cli: 'codex',
+          effective_provider: 'unknown',
+          effective_model: 'unknown',
+          effective_effort: 'unknown',
+          provider_source: 'legacy',
+          model_source: 'legacy',
+          effort_source: 'legacy',
+        },
+      },
+    })],
+  }))
+
+  const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
+
+  assert.equal(ingested.state, 'ingested')
+  assert.equal(ingested.attempts[0].provider, null)
+  assert.equal(ingested.attempts[0].model, null)
+  assert.equal(ingested.attempts[0].effort, null)
+  assert.equal(ingested.attempts[0].requested_model, null)
+  assert.equal(ingested.attempts[0].identity.model_source, 'legacy')
+  assert.equal(ingested.coverage.effective_profile_incomplete, 1)
+})
+
 test('an unsupported schema version is rejected', () => {
-  const text = JSON.stringify(metrics({ schema_version: 2 }))
+  const text = JSON.stringify(metrics({ schema_version: 3 }))
 
   const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
 

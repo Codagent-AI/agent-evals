@@ -94,6 +94,7 @@ import {
   waitForRunnerRun,
 } from './lib/runner-state.mjs'
 import { runTimed, summarizeTimings } from './lib/subprocess.mjs'
+import { waitForClaudeQuotaReset as waitForDetectedClaudeQuota } from './lib/claude-quota.mjs'
 import {
   checkWorkflowHistory,
   classifyRunnerRun,
@@ -242,6 +243,7 @@ export async function runEvaluation({
   readRunnerState,
   observedSteps,
   waitForRun = null,
+  waitForClaudeQuotaReset = waitForDetectedClaudeQuota,
   handlers: handlerOverrides = {},
   // Product evidence sources. Each is injected so the whole scored lifecycle is
   // exercisable without a browser or a model call, and so a source that is
@@ -743,6 +745,22 @@ export async function runEvaluation({
         return
       }
 
+      async function waitAfterClaudeQuota(timing, runId) {
+        const failedState = await readState(runId ?? null)
+        if (failedState?.run_id) await persistRunnerState(failedState)
+        const quota = await waitForClaudeQuotaReset({
+          sessionDir: failedState?.session_dir ?? null,
+          log,
+        })
+        if (!quota.waited) throw new Error(runnerFailure(timing))
+        record.events.push({
+          event: 'claude-quota-wait',
+          role: quota.role ?? null,
+          reset_at: quota.reset_at ?? null,
+        })
+        return failedState
+      }
+
       let state = await readState(checkpoint.agent_runner?.run_id ?? null)
       let runnerStateSnapshot = state
       let decision = classifyRunnerRun({
@@ -756,6 +774,7 @@ export async function runEvaluation({
       })
       while (decision.action !== 'continue') {
         const action = decision.action
+        let quotaWaited = false
         record.events.push({
           event: action,
           status: decision.status,
@@ -787,9 +806,8 @@ export async function runEvaluation({
           })
           record.timings.push(timing)
           if (!timing.ok) {
-            const failedState = await readState(record.run?.run_id ?? null)
-            if (failedState?.run_id) await persistRunnerState(failedState)
-            throw new Error(runnerFailure(timing))
+            waitedState = await waitAfterClaudeQuota(timing, record.run?.run_id)
+            quotaWaited = true
           }
         } else if (action === 'resume') {
           const [command, ...args] = decision.command
@@ -801,9 +819,11 @@ export async function runEvaluation({
           })
           record.timings.push(timing)
           if (!timing.ok) {
-            const failedState = await readState(record.run?.run_id ?? decision.run_id ?? null)
-            if (failedState?.run_id) await persistRunnerState(failedState)
-            throw new Error(runnerFailure(timing))
+            waitedState = await waitAfterClaudeQuota(
+              timing,
+              record.run?.run_id ?? decision.run_id,
+            )
+            quotaWaited = true
           }
         } else if (action === 'wait') {
           waitedState = waitForRun
@@ -827,7 +847,7 @@ export async function runEvaluation({
           state,
           isProcessAlive: isRunnerProcessAlive,
         })
-        if (decision.action === 'resume' && action !== 'wait') {
+        if (decision.action === 'resume' && action !== 'wait' && !quotaWaited) {
           throw new Error(
             `Agent Runner ${action} exited before completing the full ${boundary.workflow} workflow`,
           )
@@ -1347,7 +1367,11 @@ export async function runEvaluation({
           attemptsComplete: record.metrics.complete,
         }),
         // Reported beside implementation cost and never inside it.
-        eval_owned: summarizeEvalOwnedUsage([]),
+        eval_owned: summarizeEvalOwnedUsage(
+          typeof judgeInvoke?.readUsageEntries === 'function'
+            ? await judgeInvoke.readUsageEntries()
+            : [],
+        ),
       }
 
       await writeJsonAtomic(join(runDir, 'phases/metrics-pricing.json'), {

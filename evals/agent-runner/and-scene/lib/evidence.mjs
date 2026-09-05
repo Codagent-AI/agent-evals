@@ -236,6 +236,10 @@ function claimedRevision(text) {
     const sha = value?.match(/\b([a-f0-9]{7,40})\b/i)?.[1]
     if (sha) return sha
   }
+  const qualified = text.match(
+    /^\s*(?:[-*+]\s*)?(?:\*\*)?(?:tested revision|current head sha|final revision|head sha)(?:\s*\([^\n)]*\))?\s*:(?:\*\*)?\s*[`*]*([a-f0-9]{7,40})\b/im,
+  )
+  if (qualified) return qualified[1]
   const scoped = text.match(
     /(?:revision|commit|head|sha)(?:\s+(?:is|at))?\s*[:=`-]\s*([a-f0-9]{7,40}|absent|pending|unavailable)/i,
   )
@@ -249,6 +253,8 @@ function coverageFrom(value) {
     for (const match of value.matchAll(/^\s*(?:coverage|covered flows|requirements?)\s*:\s*([^\n]+)/gim)) {
       rows.push(...match[1].split(/[,;]/))
     }
+    for (const match of value.matchAll(/^\s*\|\s*(AT-\d+)\s*\|/gim)) rows.push(match[1])
+    for (const match of value.matchAll(/^\s*#{2,}\s+(AT-\d+)\b/gim)) rows.push(match[1])
   } else if (value && typeof value === 'object') {
     for (const field of ['coverage', 'covered_flows', 'flow', 'flows', 'requirements']) {
       if (Array.isArray(value[field])) rows.push(...value[field])
@@ -267,7 +273,11 @@ function ciClaims(text) {
 function textField(text, label) {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const value = text.match(
-    new RegExp(`^\\s*(?:\\*\\*)?${escaped}\\s*:(?:\\*\\*)?\\s*(.+?)\\s*$`, 'im'),
+    new RegExp(
+      `^\\s*(?:[-*+]\\s*)?(?:\\*\\*)?${escaped}`
+      + `(?:\\s*\\([^\\n)]*\\))?\\s*:(?:\\*\\*)?\\s*(.+?)\\s*$`,
+      'im',
+    ),
   )?.[1]
   return value?.replace(/^\s*[`*]+|[`*]+\s*$/g, '').trim() ?? null
 }
@@ -395,7 +405,11 @@ function lineageClaims({
     }
   }
   const declared = textField(text, 'Verification kind') ?? textField(text, 'Evidence kind')
+  const scope = textField(text, 'Verification scope')
+    ?? textField(text, 'Current verification scope')
   let kind = declared
+  if (!kind && /^full\b/i.test(scope ?? '')) kind = 'full-flow'
+  if (!kind && /^targeted\b/i.test(scope ?? '')) kind = 'targeted'
   if (!kind && role === 'acceptance-flow-record' && /\bfull[- ]flow\b/i.test(text)) kind = 'full-flow'
   if (!kind && role === 'acceptance-flow-record' && /\btargeted (?:verification|retest)\b|\btargeted\b/i.test(text)) {
     kind = 'targeted'

@@ -110,7 +110,8 @@ Options:
                           preparation, and handoff verification still run.
   --resume               Reopen run-state.json, revalidate the recorded fixture,
                           Runner, branch, draft PR, final SHA, and evidence, then
-                          wait for/resume the exact Runner run as needed.
+                          wait for/resume the exact Runner run as needed. Explicit
+                          Claude quota resets up to six hours are waited out.
   --lead-cli CLI         Lead-agent CLI adapter (core implement-change lead).
   --lead-model MODEL     Lead-agent model.
   --lead-effort EFFORT   Lead-agent effort.

@@ -7,9 +7,9 @@
   "product_verdict": "pass",
   "label": "PASS",
   "score_denominator": 100,
-  "official_score": 71.62142857142857,
+  "official_score": 76.621428571429,
   "automated_subtotal": {
-    "points": 51.121428571428574,
+    "points": 56.121428571429,
     "possible": 70,
     "observed_possible": 70,
     "complete": true
@@ -114,8 +114,8 @@
         "title": "Demo presentation technical quality",
         "applicable": true,
         "points_possible": 24,
-        "points_awarded": 19,
-        "points_observed": 19,
+        "points_awarded": 24,
+        "points_observed": 24,
         "points_observed_possible": 24,
         "floor": 15,
         "complete": true,
@@ -431,7 +431,9 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 19,
+        "adjudication_adjustment": 5
       },
       {
         "id": "scene-kit-correctness",
@@ -815,7 +817,9 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 19.038095238095238,
+        "adjudication_adjustment": 0
       },
       {
         "id": "presentation-skill-correctness",
@@ -1077,7 +1081,9 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 4.75,
+        "adjudication_adjustment": 0
       },
       {
         "id": "verification-tool-correctness",
@@ -1285,7 +1291,9 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 5.333333333333333,
+        "adjudication_adjustment": 0
       },
       {
         "id": "testing-evidence-quality",
@@ -1509,7 +1517,7 @@
     ],
     "gates_passed": true,
     "automated_subtotal": {
-      "points": 51.121428571428574,
+      "points": 56.121428571429,
       "possible": 70,
       "observed_possible": 70,
       "complete": true
@@ -1533,7 +1541,7 @@
       "lowest_rating": 3,
       "complete": true
     },
-    "official_score": 71.62142857142857,
+    "official_score": 76.621428571429,
     "official_pass": true,
     "pass_failures": [],
     "incomplete": [],
@@ -24803,5 +24811,30 @@
   "report": {
     "written": true,
     "error": null
+  },
+  "technical_adjudication": {
+    "schema_version": 1,
+    "approved_by": "Paul (user)",
+    "approved_at": "2026-09-05T17:22:27.536Z",
+    "rationale": "User-approved correction after the deterministic browser harness was shown to miss accessible semantic navigation controls and responsive chrome because it required optional per-control selectors and did not establish a wide viewport. A post-fix real-browser replay of the frozen candidate passed all 14 deterministic browser criteria.",
+    "findings": [
+      "The candidate exposed nine accessible progress buttons inside a semantic presentation-progress region, but the original harness required optional per-control data attributes and observed zero controls.",
+      "The candidate exposed working Previous and Next buttons inside its presentation step-controls region, but the original harness required optional directional-control data attributes.",
+      "The table of contents is intentionally responsive at a minimum width of 900px, while the original harness did not establish or record a viewport before asserting its visibility.",
+      "At 1280×720 with semantic discovery, the frozen candidate passed direct jump, control semantics, focus, keyboard, browse chrome, and every other deterministic browser criterion."
+    ],
+    "component_scores": {
+      "demo-technical-quality": 24,
+      "scene-kit-correctness": 19.038095238095238,
+      "presentation-skill-correctness": 4.75,
+      "verification-tool-correctness": 5.333333333333333
+    },
+    "prior_shared_technical_score": 48.121428571429,
+    "revised_shared_technical_score": 53.121428571429,
+    "prior_automated_subtotal": 51.121428571428574,
+    "revised_automated_subtotal": 56.121428571429,
+    "prior_official_score": 71.62142857142857,
+    "revised_official_score": 76.621428571429,
+    "prior_result_fingerprint": "a05b6a874529bd31b3fad9e34a7e27c09350d2190e8c8fe190023bb5bd86da56"
   }
 }

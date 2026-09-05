@@ -8,14 +8,17 @@ issues:
       does not verify that the worktree belongs to the requested repository or that HEAD matches the
       checkpointed fixture commit. A resumed evaluation can therefore silently use a different
       repository or revision and produce a score for the wrong candidate identity.
-    code_snippet: |2
+    code_snippet: >2
           `candidate ref lookup ${ref}`,
         )
         run(exec, 'git', ['-C', worktree, 'checkout', '--detach', commit], {}, `candidate checkout ${ref}`)
       }
 
+
       await installEvalExcludes(worktree)
-      const commit = run(exec, 'git', ['-C', worktree, 'rev-parse', 'HEAD'], {}, 'candidate commit lookup')
+
+      const commit = run(exec, 'git', ['-C', worktree, 'rev-parse', 'HEAD'], {}, 'candidate commit
+      lookup')
     category: bug
     difficulty: hard
     priority: high
@@ -42,3 +45,237 @@ issues:
     difficulty: hard
     priority: high
     source: 2026-07-20 agent-evals
+  - id: prompt-injection-mutable-audit-evidence
+    file: internal/devaudit/value_audit.go
+    line_range:
+      - 875
+      - 875
+    description: An untrusted workflow package is given to an autonomous crosscheck that can write the
+      audit session, allowing prompt injection to overwrite evidence or request files before
+      validation trusts them.
+    code_snippet: |-
+      if err != nil {
+      	return ModelValueBatch{}, err
+      }
+      if len(args) == 0 {
+      	return ModelValueBatch{}, fmt.Errorf("crosscheck adapter produced no command")
+      }
+    category: security
+    difficulty: hard
+    priority: high
+    source: 2026-09-01 agent-runner
+  - id: unbounded-git-history-export
+    file: internal/devaudit/lifecycle.go
+    line_range:
+      - 352
+      - 352
+    description: Git evidence traverses every ref and invokes git show per commit, creating unbounded
+      output and an N+1 process workload that can exhaust resources on long-lived repositories.
+    code_snippet: |-
+      if err != nil {
+      	evidence.Reason = "git commit metadata unavailable"
+      	return stateio.WriteJSONAtomic(filepath.Join(snapshotDir, "git-evidence.json"), evidence)
+      }
+      for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+    category: performance
+    difficulty: medium
+    priority: high
+    source: 2026-09-01 agent-runner
+  - id: unscoped-evidence-index-lineage
+    file: internal/devaudit/value_audit.go
+    line_range:
+      - 286
+      - 286
+    description: Observation skeletons do not associate evidence with its logical leaf or producer
+      execution session, making inherited and overlapping evidence impossible to attribute
+      correctly.
+    code_snippet: >-
+      skeleton := ObservationSkeleton{
+      	SchemaVersion: valueSchemaVersion, ObservationID: observationID(request.AuditRunID, request.ExecutionSessionID, path), ObservedAtUTC: observedAt,
+      	Workflow: request.SourceWorkflow, SourceRunID: request.SourceRunID, ExecutionSessionID: request.ExecutionSessionID, AuditRunID: request.AuditRunID,
+      	Trigger: request.Trigger, StepID: path, Lineage: lineage, StepOutcome: outcome,
+      }
+    category: bug
+    difficulty: hard
+    priority: critical
+    source: 2026-09-01 agent-runner
+  - id: packages-omit-prioritized-evidence
+    file: internal/devaudit/value_audit.go
+    line_range:
+      - 493
+      - 493
+    description: Leaf package bounding includes only reference IDs and drops them by size, omitting
+      required prioritized detailed evidence from metrics, Git, validation, artifacts, and narrative
+      output.
+    code_snippet: |-
+      func boundLeafDetail(leaf LeafEvidence) LeafEvidence {
+      	result := leaf
+      	result.Evidence = append([]EvidenceReference(nil), leaf.Evidence...)
+      	for len(result.Evidence) > 0 && encodedJSONBytes(result) > defaultLeafDetailBytes {
+      		result.Evidence = result.Evidence[:len(result.Evidence)-1]
+      	}
+      }
+    category: bug
+    difficulty: hard
+    priority: critical
+    source: 2026-09-01 agent-runner
+  - id: consultation-references-not-resolvable
+    file: internal/devaudit/value_audit.go
+    line_range:
+      - 421
+      - 421
+    description: Evidence discovery exports opaque IDs without a local manifest mapping IDs to
+      snapshotted artifacts, so crosscheck agents cannot safely resolve their consultation
+      references.
+    code_snippet: >-
+      category := evidenceCategory(rel)
+
+      if category == "" {
+      	return nil
+      }
+
+      sum := sha256.Sum256([]byte(rel))
+
+      refs = append(refs, EvidenceReference{ID: category + "-" + hex.EncodeToString(sum[:8]),
+      Category: category, Status: "available"})
+    category: bug
+    difficulty: medium
+    priority: high
+    source: 2026-09-01 agent-runner
+  - id: missing-per-step-git-boundaries
+    file: internal/devaudit/lifecycle.go
+    line_range:
+      - 345
+      - 345
+    description: Git capture records global history rather than each source step's start/end revision,
+      index, working-tree, and untracked-file boundaries, preventing correct interval attribution.
+    code_snippet: |-
+      func exportGitEvidence(projectRoot, snapshotDir string) error {
+      	evidence := snapshottedGitEvidence{Commits: []snapshottedGitCommit{}}
+      	if strings.TrimSpace(projectRoot) == "" {
+      		evidence.Reason = "project root unavailable"
+      	}
+      }
+    category: bug
+    difficulty: hard
+    priority: critical
+    source: 2026-09-01 agent-runner
+  - id: deferred-commit-missing-working-tree-paths
+    file: internal/devaudit/value_audit.go
+    line_range:
+      - 386
+      - 386
+    description: Deferred-commit attribution compares ChangedPaths, but working-tree deltas never
+      populate those paths, so later bulk commits cannot be matched and change statistics can be
+      double counted.
+    code_snippet: >-
+      if !hasPathOverlap(leaves[prior].Skeleton.Git.ChangedPaths,
+      leaves[index].Skeleton.Git.ChangedPaths) {
+      	continue
+      }
+
+      leaves[prior].Skeleton.Git.Attribution = "deferred_commit"
+
+      leaves[prior].Skeleton.Git.DeferredSHAs = append(leaves[prior].Skeleton.Git.DeferredSHAs,
+      leaves[index].Skeleton.Git.CommitSHAs...)
+    category: bug
+    difficulty: hard
+    priority: critical
+    source: 2026-09-01 agent-runner
+  - id: missing-observation-project-outcome
+    file: internal/devaudit/value_audit.go
+    line_range:
+      - 273
+      - 273
+    description: Observation skeleton construction omits mandatory Project and SourceOutcome identities,
+      leaving exported audit facts unable to identify the project or finalized source result.
+    code_snippet: |-
+      observedAt := ""
+      for _, session := range artifact.Sessions {
+      	if session.ExecutionSessionID == request.ExecutionSessionID {
+      		observedAt = session.EndedAt
+      	}
+      }
+    category: bug
+    difficulty: medium
+    priority: high
+    source: 2026-09-01 agent-runner
+  - id: writable-crosscheck-evidence-workspace
+    file: internal/devaudit/value_audit.go
+    line_range:
+      - 847
+      - 847
+    description: Crosscheck sessions use the audit session as a writable work directory rather than
+      isolating read-only evidence from a dedicated output boundary, so models can modify files
+      validation trusts.
+    code_snippet: |-
+      for _, pkg := range packages {
+      	output, err := invoke(request, pkg)
+      	if err != nil {
+      		return outputs, fmt.Errorf("value model session for %s: %w", pkg.BatchID, err)
+      	}
+      }
+    category: security
+    difficulty: hard
+    priority: critical
+    source: 2026-09-01 agent-runner
+  - id: partial-value-batches-discarded
+    file: internal/devaudit/value_audit.go
+    line_range:
+      - 794
+      - 794
+    description: When a later value batch fails, earlier successful outputs are returned but not
+      persisted, losing validated partial evidence and diagnostics needed to recover or inspect the
+      failure.
+    code_snippet: >-
+      return stateio.WriteJSONAtomic(filepath.Join(request.AuditSessionDir,
+      "value-consultations.json"), consultationLedger(result.Observations,
+      prepared.Index.References))
+
+      }
+
+
+      type consultationLedgerEntry struct {
+      	ObservationID string `json:"observation_id"`
+      	ReferenceID string `json:"reference_id"`
+    category: bug
+    difficulty: medium
+    priority: high
+    source: 2026-09-01 agent-runner
+  - id: missing-crosscheck-invocation-provenance
+    file: internal/devaudit/value_audit.go
+    line_range:
+      - 672
+      - 672
+    description: Validated observations do not preserve the actual adapter, effort, and fresh crosscheck
+      session identity, breaking replay and provenance for model judgments.
+    code_snippet: |-
+      SnapshotBefore: prepared.Index.Fingerprints.SnapshotBefore, SnapshotAfter: currentSnapshot,
+      OutputBefore: prepared.Index.Fingerprints.OutputBefore, OutputAfter: outputAfter,
+      }, Observations: observations}, nil
+      }
+
+      func validateJudgment(judgment ModelValueJudgment, knownRefs map[string]struct{}) error {
+    category: bug
+    difficulty: hard
+    priority: high
+    source: 2026-09-01 agent-runner
+  - id: missing-audit-pipeline-integration-tests
+    file: internal/devaudit/provider_test.go
+    line_range:
+      - 40
+      - 40
+    description: Audit coverage only loads workflow configuration and hand-writes metrics instead of
+      exercising real runner/event evidence projection with multi-session, Git, crosscheck batching,
+      and partial-failure fixtures, allowing required behavior to regress silently.
+    code_snippet: |-
+      func TestAuditWorkflowUsesBoundedEvidenceAndValueStageHandlers(t *testing.T) {
+      	workflow, err := loader.LoadWorkflow("builtin:audit/run-audit-v1.0.yaml", loader.Options{})
+      	if err != nil {
+      		t.Fatalf("load audit workflow: %v", err)
+      	}
+      }
+    category: bug
+    difficulty: hard
+    priority: high
+    source: 2026-09-01 agent-runner

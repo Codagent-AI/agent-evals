@@ -34,7 +34,12 @@ function createDemo(knobs = {}) {
     controlsKeepKeys = true,
     focusedControlConsumesArrows = false,
     titleProminentInPresent = true,
+    activeTitleVisibleInBrowse = true,
     captionVisibleInBrowse = true,
+    tocVisibleInBrowse = true,
+    previousVisibleInBrowse = true,
+    nextVisibleInBrowse = true,
+    progressVisibleInBrowse = true,
     initialMode = 'present',
     captionHiddenInPresent = false,
     actions = [],
@@ -42,6 +47,7 @@ function createDemo(knobs = {}) {
     failures = [],
     controlCount = stepCount,
     controlsOnlyInBrowse = false,
+    viewport = { width: 1280, height: 720 },
     throwOn = null,
   } = knobs
 
@@ -87,7 +93,9 @@ function createDemo(knobs = {}) {
         stepIndex: index,
         stepCount,
         mode,
-        title: titles[index % titles.length],
+        title: mode === 'browse' && !activeTitleVisibleInBrowse
+          ? 'Overall presentation title'
+          : titles[index % titles.length],
         caption: captionHiddenInPresent && mode === 'present'
           ? ''
           : captions[index % captions.length] ?? '',
@@ -95,8 +103,14 @@ function createDemo(knobs = {}) {
         entityIds: replaceEntities
           ? [`only-${index}`]
           : ['stage', `beat-${index}`, `beat-${index + 1}`],
-        titleProminent: mode === 'present' ? titleProminentInPresent : false,
+        titleProminent: mode === 'present'
+          ? titleProminentInPresent
+          : activeTitleVisibleInBrowse,
         captionVisible: mode === 'browse' ? captionVisibleInBrowse : false,
+        tocVisible: mode === 'browse' ? tocVisibleInBrowse : false,
+        previousVisible: mode === 'browse' ? previousVisibleInBrowse : false,
+        nextVisible: mode === 'browse' ? nextVisibleInBrowse : false,
+        progressVisible: mode === 'browse' ? progressVisibleInBrowse : false,
         controls: controlsOnlyInBrowse && mode !== 'browse'
           ? []
           : Array.from({ length: controlCount }, (_, position) => ({
@@ -106,6 +120,7 @@ function createDemo(knobs = {}) {
               focusable,
             })),
         focused,
+        viewport,
       }
     },
     async press(key) {
@@ -209,7 +224,7 @@ test('opening records and preserves the presentation initial mode', async () => 
   }
 })
 
-test('caption and canonical-content probes enter browse mode before traversal', async () => {
+test('caption and scene-content probes enter browse mode before traversal', async () => {
   const actions = []
   const result = await evaluate({
     initialMode: 'present',
@@ -218,7 +233,6 @@ test('caption and canonical-content probes enter browse mode before traversal', 
   })
 
   for (const id of [
-    'demo-nine-step-content-and-order',
     'demo-required-scene-content',
     'demo-evolving-scene-structure',
     'quality-captions-and-navigation',
@@ -236,6 +250,20 @@ test('caption and canonical-content probes enter browse mode before traversal', 
   assert.ok(actions.some((entry) => entry.action === 'set-mode' && entry.mode === 'browse'))
 })
 
+test('the canonical outline is read from active step titles without confusing the deck title', async () => {
+  const actions = []
+  const result = await evaluate({
+    initialMode: 'browse',
+    activeTitleVisibleInBrowse: false,
+    actions,
+  })
+
+  assert.equal(verdictOf(result, 'demo-nine-step-content-and-order'), 'pass')
+  assert.equal(verdictOf(result, 'verification-sample-outline'), 'pass')
+  assert.equal(verdictOf(result, 'demo-browse-mode-behavior'), 'fail')
+  assert.ok(actions.some((entry) => entry.action === 'set-mode' && entry.mode === 'present'))
+})
+
 test('mode-specific and navigation probes establish their declared state from either initial mode', async () => {
   const actions = []
   const result = await evaluate({ initialMode: 'browse', actions })
@@ -251,6 +279,13 @@ test('mode-specific and navigation probes establish their declared state from ei
     0,
   )
   assert.ok(actions.some((entry) => entry.action === 'set-mode' && entry.mode === 'present'))
+})
+
+test('browse-mode evidence records the viewport used for responsive chrome assertions', async () => {
+  const result = await evaluate({ viewport: { width: 1280, height: 720 } })
+  const probe = result.probes.find(({ id }) => id === 'demo-browse-mode-behavior')
+
+  assert.match(probe.result.rationale, /viewport 1280×720/)
 })
 
 test('direct-jump navigation enters browse mode when present mode intentionally hides its controls', async () => {
@@ -432,6 +467,11 @@ test('each broken demo behaviour fails its own criterion', async () => {
     ['quality-captions-and-navigation', { controlCount: 0 }],
     ['demo-present-mode-behavior', { titleProminentInPresent: false }],
     ['demo-browse-mode-behavior', { captionVisibleInBrowse: false }],
+    ['demo-browse-mode-behavior', { activeTitleVisibleInBrowse: false }],
+    ['demo-browse-mode-behavior', { tocVisibleInBrowse: false }],
+    ['demo-browse-mode-behavior', { previousVisibleInBrowse: false }],
+    ['demo-browse-mode-behavior', { nextVisibleInBrowse: false }],
+    ['demo-browse-mode-behavior', { progressVisibleInBrowse: false }],
     ['demo-mode-position-preservation', { preservePositionAcrossModes: false }],
     ['demo-supported-navigation', { swipeWorks: false }],
     ['demo-supported-navigation', { directJumpWorks: false }],

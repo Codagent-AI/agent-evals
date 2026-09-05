@@ -308,10 +308,10 @@ test('the human rubric requires one question per counted question and a covered 
   const { human } = await loadRubrics()
 
   assert.deepEqual(
-    validateHumanRubric({ ...human.rubric, questions: human.rubric.questions.slice(0, 12) }),
+    validateHumanRubric({ ...human.rubric, questions: human.rubric.questions.slice(0, 6) }),
     [
-      'human rubric declares question_count 13 but defines 12 questions',
-      'human rubric dimension cohesion has no questions',
+      'human rubric declares question_count 7 but defines 6 questions',
+      'human rubric dimension responsive has no questions',
     ],
   )
   assert.ok(
@@ -327,7 +327,7 @@ test('the human rubric requires one question per counted question and a covered 
 test('the human rubric dimension points must sum to its total points', async () => {
   const { human } = await loadRubrics()
   const dimensions = human.rubric.dimensions.map((dimension, index) => (
-    index === 0 ? { ...dimension, points: 11 } : dimension
+    index === 0 ? { ...dimension, points: 5 } : dimension
   ))
 
   assert.deepEqual(
@@ -345,6 +345,20 @@ test('the human rubric requires one anchor for every rating on its scale', async
   )
 })
 
+test('every human-review question requires ordered question-specific rating options', async () => {
+  const { human } = await loadRubrics()
+  const questions = human.rubric.questions.map((question, index) => (
+    index === 0
+      ? { ...question, rating_options: question.rating_options.slice(0, 4) }
+      : question
+  ))
+
+  assert.deepEqual(
+    validateHumanRubric({ ...human.rubric, questions }),
+    ['human rubric question text-appearance requires one rating option for each rating 1 through 5'],
+  )
+})
+
 test('the human rubric requires unique, ordered question numbers', async () => {
   const { human } = await loadRubrics()
   const questions = human.rubric.questions.map((question, index) => (
@@ -353,6 +367,6 @@ test('the human rubric requires unique, ordered question numbers', async () => {
 
   assert.ok(
     validateHumanRubric({ ...human.rubric, questions })
-      .some((error) => error.includes('numbered 1 through 13 in order')),
+      .some((error) => error.includes('numbered 1 through 7 in order')),
   )
 })

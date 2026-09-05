@@ -189,6 +189,24 @@ test('an observed attempt matching its configuration is linked to the role', () 
   assert.deepEqual(report.mismatches, [])
 })
 
+test('Runner schema-v2 profile role names reconcile without legacy aliases', () => {
+  const { profiles } = validateRoleProfiles({ lead, implementor, reviewer, capabilities })
+
+  const report = reconcileRoleAttempts(profiles, [{
+    agent_role: 'implementor',
+    cli: 'claude',
+    provider: 'anthropic',
+    model: 'sonnet',
+    effort: 'medium',
+    session: 'task-1',
+    step: 'generate-code',
+    attempt: 1,
+  }])
+
+  assert.equal(report.roles.implementor.attempts.length, 1)
+  assert.equal(report.roles.implementor.attempts[0].matches_configuration, true)
+})
+
 test('an effective setting differing from configuration preserves both values', () => {
   const { profiles } = validateRoleProfiles({ lead, implementor, reviewer, capabilities })
 

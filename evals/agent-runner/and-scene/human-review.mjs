@@ -9,7 +9,7 @@
 //
 // It never recomputes automated evidence. Everything it scores comes from the
 // durable phase artifacts the automated run already validated, and the only new
-// input is the reviewer's 13 answers.
+// input is the reviewer's seven answers.
 //
 // Paired mode reviews a pending reference baseline first and then the Agent
 // Runner candidate, keeping independent candidate, rubric, response, score, and

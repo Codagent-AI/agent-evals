@@ -227,16 +227,18 @@ function scoredJudgeOutput(request) {
   })
 }
 
-function fixtureJudge(custom) {
-  return async (request) => {
+function fixtureJudge(custom, usageEntries = []) {
+  const invoke = async (request) => {
     if (Array.isArray(request.criteria)) return scoredJudgeOutput(request)
     if (custom) return custom(request)
     return JSON.stringify({ found: false })
   }
+  invoke.readUsageEntries = async () => usageEntries
+  return invoke
 }
 
 async function evaluate(context, overrides = {}) {
-  const { resume = false, judgeInvoke, ...injected } = overrides
+  const { resume = false, judgeInvoke, evalOwnedUsage = [], ...injected } = overrides
   return runEvaluation({
     argv: [
       '--run-dir', context.runDir,
@@ -280,7 +282,7 @@ async function evaluate(context, overrides = {}) {
     }),
     verifyResumeDelivery: async () => ({ verified: true }),
     pricingFetch: catalogFetch(),
-    judgeInvoke: fixtureJudge(judgeInvoke),
+    judgeInvoke: fixtureJudge(judgeInvoke, evalOwnedUsage),
     ...injected,
   })
 }
@@ -304,6 +306,49 @@ test('matching Runner metrics are ingested with their source hash preserved', as
   assert.equal(
     record.role_configuration.roles.implementor.attempts[0].observed.model,
     'sonnet',
+  )
+})
+
+test('Runner schema-v2 effective identity and role flow through pricing and profile reconciliation', async () => {
+  const v2Attempt = attempt({
+    role: 'implementor',
+    tool: 'agent-runner',
+    usage: {
+      ...attempt().usage,
+      cli: null,
+      provider: null,
+      model: null,
+      effort: null,
+      identity: {
+        requested_cli: 'claude',
+        requested_model: 'sonnet',
+        requested_effort: 'medium',
+        effective_cli: 'claude',
+        effective_provider: 'anthropic',
+        effective_model: 'sonnet',
+        effective_effort: 'medium',
+        provider_source: 'adapter',
+        model_source: 'invocation',
+        effort_source: 'invocation',
+      },
+    },
+  })
+  const context = await environment({
+    metrics: runMetrics({ schema_version: 2, steps: [v2Attempt] }),
+  })
+
+  const result = await evaluate(context)
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const record = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(record.implementation_metrics.source.schema_version, 2)
+  assert.equal(record.cost.rows[0].agent_role, 'implementor')
+  assert.equal(record.cost.rows[0].tool, 'agent-runner')
+  assert.equal(record.cost.rows[0].model, 'sonnet')
+  assert.equal(record.role_configuration.roles.implementor.attempts.length, 1)
+  assert.equal(
+    record.role_configuration.roles.implementor.attempts[0].matches_configuration,
+    true,
   )
 })
 
@@ -462,12 +507,26 @@ test('a resume that reuses every phase keeps the recorded diagnostics in the res
 test('the eval-owned judge usage is reported but never priced', async () => {
   const context = await environment()
 
-  const result = await evaluate(context)
+  const result = await evaluate(context, {
+    evalOwnedUsage: [{
+      phase: 'product-judging',
+      provider: 'openai',
+      model: 'gpt-5.6-sol',
+      usage: { state: 'available', source: 'codex:turn.completed' },
+      tokens: { input: 1200, cached_input: 800, output: 300, reasoning: 75 },
+      token_totals: { input: 1200, output: 300, total: 1500 },
+    }],
+  })
 
   assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
   const record = await readJson(join(context.runDir, 'result.json'))
   assert.equal(record.cost.eval_owned.priced, false)
   assert.equal(record.cost.eval_owned.included_in_implementation_total, false)
+  assert.equal(record.cost.eval_owned.state, 'available')
+  assert.deepEqual(record.cost.eval_owned.tokens, {
+    input: 1200, cached_input: 800, output: 300, reasoning: 75,
+  })
+  assert.deepEqual(record.cost.eval_owned.token_totals, { input: 1200, output: 300, total: 1500 })
 })
 
 test('an ambiguity ledger is written durably and referenced from the result', async () => {

@@ -41,7 +41,7 @@ function inputs({ failures = [], gateFailures = [], omit = [], humanReview = nul
   }
 }
 
-const fullHumanReview = { total: 30, ratings: Array.from({ length: 13 }, () => 5) }
+const fullHumanReview = { total: 30, ratings: Array.from({ length: 7 }, () => 5) }
 
 function component(result, id) {
   return result.components.find((entry) => entry.id === id)
@@ -146,7 +146,7 @@ test('missing a component floor fails the official verdict even above the total 
   assert.equal(kitFloor.official_pass, false)
 
   const humanFloor = scoreProduct(inputs({
-    humanReview: { total: 14, ratings: Array.from({ length: 13 }, () => 3) },
+    humanReview: { total: 14, ratings: Array.from({ length: 7 }, () => 3) },
   }))
   assert.equal(humanFloor.official_score, 84)
   assert.equal(humanFloor.official_pass, false)
@@ -154,7 +154,7 @@ test('missing a component floor fails the official verdict even above the total 
 })
 
 test('any individual human rating of one fails the official verdict', () => {
-  const ratings = Array.from({ length: 13 }, () => 5)
+  const ratings = Array.from({ length: 7 }, () => 5)
   ratings[6] = 1
   const result = scoreProduct(inputs({ humanReview: { total: 28, ratings } }))
 
@@ -289,15 +289,15 @@ test('the result records both rubric versions and hashes', () => {
 
 test('a malformed human review is rejected rather than scored', () => {
   assert.throws(
-    () => scoreProduct(inputs({ humanReview: { total: 31, ratings: Array.from({ length: 13 }, () => 5) } })),
+    () => scoreProduct(inputs({ humanReview: { total: 31, ratings: Array.from({ length: 7 }, () => 5) } })),
     /human review total/,
   )
   assert.throws(
-    () => scoreProduct(inputs({ humanReview: { total: 20, ratings: Array.from({ length: 12 }, () => 4) } })),
-    /human review requires 13 ratings/,
+    () => scoreProduct(inputs({ humanReview: { total: 20, ratings: Array.from({ length: 6 }, () => 4) } })),
+    /human review requires 7 ratings/,
   )
   assert.throws(
-    () => scoreProduct(inputs({ humanReview: { total: 20, ratings: Array.from({ length: 13 }, () => 9) } })),
+    () => scoreProduct(inputs({ humanReview: { total: 20, ratings: Array.from({ length: 7 }, () => 9) } })),
     /human review rating/,
   )
 })

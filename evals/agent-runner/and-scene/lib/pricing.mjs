@@ -28,22 +28,35 @@ const CATEGORY_RATE_KEYS = {
   cached_input: 'cache_read',
   cache_write: 'cache_write',
   output: 'output',
+  reasoning: 'output',
   reasoning_output: 'output',
 }
 
 export const PRICING_FINDING_SCHEMA = {
   type: 'object',
-  required: ['found'],
+  additionalProperties: false,
+  required: [
+    'found', 'reason', 'source_url', 'matched_provider', 'matched_model',
+    'unit', 'rates', 'rationale', 'judge_model',
+  ],
   properties: {
     found: { type: 'boolean' },
-    reason: { type: 'string' },
-    source_url: { type: 'string' },
-    matched_provider: { type: 'string' },
-    matched_model: { type: 'string' },
-    unit: { enum: [PRICING_UNIT, 'usd_per_thousand_tokens'] },
-    rates: { type: 'object', additionalProperties: { type: 'number' } },
-    rationale: { type: 'string', minLength: 1 },
-    judge_model: { type: 'string' },
+    reason: { type: ['string', 'null'] },
+    source_url: { type: ['string', 'null'] },
+    matched_provider: { type: ['string', 'null'] },
+    matched_model: { type: ['string', 'null'] },
+    unit: { enum: [PRICING_UNIT, 'usd_per_thousand_tokens', null] },
+    rates: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['input', 'cached_input', 'cache_write', 'output', 'reasoning', 'reasoning_output'],
+      properties: Object.fromEntries(
+        ['input', 'cached_input', 'cache_write', 'output', 'reasoning', 'reasoning_output']
+          .map((category) => [category, { type: ['number', 'null'] }]),
+      ),
+    },
+    rationale: { type: ['string', 'null'] },
+    judge_model: { type: ['string', 'null'] },
   },
 }
 
@@ -263,6 +276,15 @@ export async function resolveAttemptCost({ attempt, catalog, invoke, authority =
     }
   }
 
+  if (!attempt.provider || !attempt.model) {
+    return {
+      ...base,
+      ...unavailable('exact provider and model identity are required for pricing'),
+      source: null,
+      verification: null,
+    }
+  }
+
   const entry = lookupCatalogEntry(catalog, attempt.provider, attempt.model)
   const calculated = calculateCatalogCost({ entry, tokens })
   if (calculated.state === 'resolved') {
@@ -350,6 +372,8 @@ export async function resolveAttemptCost({ attempt, catalog, invoke, authority =
 export function needsPricingLookup(attempts = []) {
   return attempts.some((attempt) => (
     attempt.invoked_cli
+    && attempt.provider
+    && attempt.model
     && !(attempt.cost?.state === 'available' && nonNegative(attempt.cost.estimated_api_cost_usd))
   ))
 }
@@ -361,8 +385,15 @@ export async function resolveImplementationPricing({ attempts = [], catalog, inv
   for (const attempt of attempts.filter((entry) => entry.invoked_cli)) {
     costs.push(await resolveAttemptCost({ attempt, catalog, invoke, authority }))
   }
+  const unresolved = costs.filter((entry) => entry.state !== 'resolved')
+  const sources = [...new Set(costs.map((entry) => entry.source).filter(Boolean))]
+  const complete = unresolved.length === 0
   return {
     costs,
+    complete,
+    verified: complete && !sources.includes('judge-web-search'),
+    sources,
+    unresolved_attempts: unresolved.map((entry) => entry.attempt_id),
     catalog: {
       url: catalog?.url ?? MODELS_DEV_URL,
       state: catalog?.state ?? 'not-required',

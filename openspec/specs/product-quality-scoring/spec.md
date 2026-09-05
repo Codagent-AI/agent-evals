@@ -34,7 +34,13 @@ The reference baseline SHALL be evaluated only on the components shared with the
 
 The reference SHALL therefore have a score denominator of 92 without rescaling. Before its human review is complete, it SHALL report an applicable automated subtotal out of 62. After human review, it SHALL report its score out of 92 without an official candidate pass/fail verdict. Candidate reports SHALL retain the candidate's official score out of 100 and SHALL separately compare the candidate and reference on the shared 92 points.
 
-When the user explicitly approves a post-run technical adjudication, the harness SHALL preserve the raw automated criterion and component scores, record the approver, time, rationale, consequential findings, and replacement scores for exactly the four shared technical components, and recalculate the automated subtotal using those four replacement scores plus the unchanged raw scores of every other applicable automated component. It SHALL recalculate the official candidate score from that subtotal and the applicable human-review score, and SHALL recalculate the shared-92 comparison using only the four shared replacement scores and applicable human-review scores. An adjudication SHALL NOT masquerade as a new automated judge result or silently replace the raw score.
+When the user explicitly approves a post-run technical adjudication, the harness SHALL preserve the raw automated criterion and component scores, record the approver, time, rationale, consequential findings, and replacement scores for exactly the four shared technical components, and recalculate the automated subtotal using those four replacement scores plus the unchanged raw scores of every other applicable automated component. It MAY additionally replace exactly the two workflow-quality component scores and/or explicitly adjudicate all four observed hard-gate verdicts when the technical review found a deterministic harness defect. It SHALL preserve every raw gate verdict, record the prior and revised gate sets, recalculate the official candidate score from the revised subtotal and applicable human-review score, recalculate the complete pass contract and product verdict, and recalculate the shared-92 comparison using only the four shared replacement scores and applicable human-review scores. An adjudication SHALL NOT masquerade as a new automated judge result or silently replace the raw score or gate evidence.
+
+#### Scenario: A deterministic hard gate is technically adjudicated
+- **WHEN** a user-approved technical review proves that a harness defect produced an incorrect observed gate verdict
+- **THEN** the adjudication supplies verdicts for exactly all four recorded hard gates
+- **AND** the result preserves the raw gate verdicts and records the prior and revised sets
+- **AND** the harness recalculates threshold, floor, rating, and hard-gate pass failures plus the product verdict
 
 #### Scenario: Complete product score
 - **WHEN** all six automated candidate components and human review have completed successfully
@@ -95,6 +101,8 @@ The evaluation SHALL score the delivered demo presentation out of 24 using the f
 
 The deterministic evaluator SHALL preserve the presentation's initial mode when opening it. Before traversing captions and canonical content, it SHALL explicitly enter browse mode. Before a mode-specific probe, it SHALL explicitly enter that probe's required present or browse mode. It SHALL NOT treat captions intentionally hidden in present mode as missing content.
 
+Before asserting responsive presentation chrome, the deterministic evaluator SHALL establish and record a suite-owned viewport. It SHALL discover navigation through either stable presentation-owned hooks or equivalent semantic navigation regions, native interactive descendants, accessible names, and current-state attributes. The absence of one non-normative per-control selector SHALL NOT be treated as a product failure. When a conforming page exposes multiple indistinguishable controls and the evaluator cannot identify the intended target deterministically, it SHALL report the observation as unavailable with a harness diagnostic rather than fabricate a product failure.
+
 The canonical-content checks SHALL verify the registered demo route, the nine required steps in their specified order, their normative titles, captions, and scene content, and their implementation as one evolving scene. The navigation checks SHALL exercise present and browse modes, mode changes, supported navigation inputs, direct controls, and end boundaries. The reliability and accessibility checks SHALL exercise step transitions and mode interactions, monitor browser failures, and inspect control semantics, current-state exposure, focus behavior, and keyboard operability.
 
 The deterministic browser evaluator SHALL have real-browser regression coverage against the pinned reference presentation. The reference regression SHALL require caption and canonical-content criteria to pass and SHALL NOT rely only on mocked mode state.
@@ -119,6 +127,16 @@ Deterministic source facts supplied to an LLM source judge SHALL be treated as l
 #### Scenario: Presenter captions are intentionally hidden
 - **WHEN** present mode intentionally hides captions that are visible in browse mode
 - **THEN** the evaluator does not fail canonical-content or caption criteria from the present-mode state
+
+#### Scenario: Semantic navigation omits optional per-control hooks
+- **WHEN** the presentation exposes progress and directional navigation as accessible native controls inside stable semantic regions
+- **AND** those controls do not use the evaluator's optional per-control hook spelling
+- **THEN** the deterministic evaluator discovers and exercises the controls by their observable semantics
+
+#### Scenario: Responsive chrome is inspected reproducibly
+- **WHEN** the evaluator asserts browse-mode table-of-contents, progress, or directional-control visibility
+- **THEN** it first establishes the suite-owned viewport
+- **AND** the evidence records the observed viewport dimensions
 
 #### Scenario: Pinned reference browser regression runs
 - **WHEN** the corrected deterministic browser evaluator is tested against the real pinned reference presentation

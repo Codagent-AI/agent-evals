@@ -4,13 +4,18 @@
 Define durable evaluation usage, cost, timing, result, report, reference-comparison, and publication artifacts.
 ## Requirements
 ### Requirement: Agent Runner metrics ingestion
-The evaluation harness SHALL consume schema-version-1 `run-metrics.json` as the supported source for Agent Runner implementation-workflow attempts, token usage, reported cost, and active duration. It SHALL validate that the artifact names the recorded Agent Runner run and workflow, preserve a copy and SHA-256 hash of the source artifact, and retain every attempt across retries and resumed execution sessions.
+The evaluation harness SHALL consume Agent Runner `run-metrics.json` schema versions 1 and 2 as the supported source for implementation-workflow attempts, token usage, reported cost, and active duration. It SHALL validate that the artifact names the recorded Agent Runner run and workflow, preserve a copy and SHA-256 hash of the source artifact, and retain every attempt across retries and resumed execution sessions.
 
-The harness SHALL preserve reported token categories, usage and cost coverage, unavailable reasons, and `history_complete`. It SHALL NOT reconstruct missing Agent Runner metrics from transcripts, audit-log text, or CLI output, and SHALL NOT represent missing metrics as zero.
+The harness SHALL preserve reported token categories, canonical input/output/overall totals, usage and cost coverage, unavailable reasons, and `history_complete`. For schema version 2 it SHALL use stable role/tool identity and effective provider/model/effort for attribution and pricing while preserving the separately requested identity and identity provenance. Structured nested model records SHALL remain distinct attempts. The harness SHALL NOT reconstruct missing Agent Runner metrics from transcripts, audit-log text, or CLI output, and SHALL NOT represent missing metrics as zero.
 
 #### Scenario: Valid Agent Runner metrics are ingested
-- **WHEN** the recorded Agent Runner run provides a schema-version-1 `run-metrics.json` with matching run identity
-- **THEN** the harness preserves the source artifact and imports all attempts, usage states, costs, durations, coverage, and history completeness
+- **WHEN** the recorded Agent Runner run provides a supported `run-metrics.json` with matching run identity
+- **THEN** the harness preserves the source artifact and imports all attempts, identities, usage states, canonical totals, costs, durations, coverage, and history completeness
+
+#### Scenario: Schema-version-2 effective identity is available
+- **WHEN** an attempt reports requested and effective invocation identity plus stable role and tool fields
+- **THEN** the harness attributes and prices the attempt using its effective identity
+- **AND** it preserves the requested identity and source fields for diagnosis
 
 #### Scenario: Agent Runner metric is unavailable
 - **WHEN** a step's usage or cost is explicitly unavailable in `run-metrics.json`
@@ -28,7 +33,7 @@ The harness SHALL preserve reported token categories, usage and cost coverage, u
 ### Requirement: Agent-and-model implementation cost aggregation
 The harness SHALL assign each Agent Runner agent attempt to its workflow agent role and actual provider/model using workflow, step, role-configuration, and usage source-and-version details. It SHALL aggregate attempts by the exact tuple `agent role + provider + model`, preserving token categories and summing every attempt and retry.
 
-Each aggregate row SHALL contain its agent role, provider, model, attempt count, available token-category totals, cost amount, cost source, verification state, and completeness. The result SHALL report a numeric total estimated API cost only when every Agent Runner agent attempt that invoked a CLI has a resolved cost. If any such attempt remains unresolved, it SHALL report a known-cost subtotal and an unavailable/incomplete total; it SHALL NOT obtain a numeric total by treating unresolved attempts as zero.
+Each aggregate row SHALL contain its agent role, tool, provider, model, attempt count, available token-category totals, canonical token totals, cost amount, cost source, verification state, and completeness. The result SHALL also report the canonical total tokens across all implementation attempts when complete. The result SHALL report a numeric total estimated API cost only when every Agent Runner agent attempt that invoked a CLI has a resolved cost. If any such attempt remains unresolved, it SHALL report a known-cost subtotal and an unavailable/incomplete total; it SHALL NOT obtain a numeric total by treating unresolved attempts as zero.
 
 #### Scenario: Repeated attempts use the same agent and model
 - **WHEN** an agent role invokes the same provider/model more than once through retries or resume
@@ -80,7 +85,7 @@ If no exact defensible match or sufficient usage can be established, the attempt
 ### Requirement: Implementation-only cost scope
 Only agent invocations executed inside the Agent Runner implementation workflow SHALL contribute to agent-and-model costs and the total estimated API cost. Eval-owned judging, evidence or screenshot repair, pricing lookup or parsing, deterministic checks, human review, scoring, and report generation SHALL NOT be priced or included in that total.
 
-The harness MAY report eval-owned usage when available, but SHALL keep it outside implementation cost aggregation. Cost SHALL remain report-only and SHALL NOT affect product points, gates, or pass status.
+The harness SHALL durably capture eval-owned Codex usage when the CLI reports it, including phase, provider, model, raw token categories, and canonical token totals. Missing eval-owned telemetry SHALL remain explicitly unavailable or partial. Eval-owned usage SHALL stay outside implementation cost aggregation and SHALL NOT be priced. Cost SHALL remain report-only and SHALL NOT affect product points, gates, or pass status.
 
 #### Scenario: Implementation agent incurs cost
 - **WHEN** a lead-agent or task-implementor invocation inside Agent Runner has a resolved cost

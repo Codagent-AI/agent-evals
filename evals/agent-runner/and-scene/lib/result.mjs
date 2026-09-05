@@ -63,6 +63,42 @@ function judgeCoverage(judging) {
   return complete ? 'complete' : 'incomplete'
 }
 
+function implementationUsageCompleteness(metrics, cost) {
+  if (!metrics || metrics.state === 'rejected') return 'unavailable'
+  if (metrics.history_complete === false || metrics.complete === false) return 'incomplete'
+
+  const available = metrics.coverage?.usage_available
+  const unavailable = metrics.coverage?.usage_unavailable
+  if (Number.isFinite(available) && Number.isFinite(unavailable)) {
+    if (available === 0 && unavailable > 0) return 'unavailable'
+    if (unavailable > 0) return 'incomplete'
+  }
+
+  if (cost?.usage?.complete === false) {
+    return cost.usage.state === 'unavailable' ? 'unavailable' : 'incomplete'
+  }
+  const rows = cost?.rows
+  if (
+    Array.isArray(rows)
+    && rows.some((row) => row.usage_complete === false || row.token_totals_complete === false)
+  ) return 'incomplete'
+  if (cost?.implementation?.usage_complete === false) return 'unavailable'
+  return 'complete'
+}
+
+function implementationCostCompleteness(cost) {
+  if (cost?.total?.complete === true) return 'complete'
+  if (cost?.implementation?.complete === true) return 'complete'
+  return 'incomplete'
+}
+
+function pricingCompleteness(pricing) {
+  if (!pricing) return 'unavailable'
+  if (pricing.complete === false) return 'incomplete'
+  if (pricing.verified === true) return 'verified'
+  return 'unverified'
+}
+
 function completenessOf({
   mode,
   score,
@@ -88,13 +124,13 @@ function completenessOf({
     human_review: humanReview?.complete ? 'complete' : 'pending',
     implementation_usage: mode === 'reference-baseline'
       ? NOT_APPLICABLE
-      : (cost?.implementation?.usage_complete === false ? 'unavailable' : (cost ? 'complete' : 'unavailable')),
+      : implementationUsageCompleteness(metrics, cost),
     // Cost can be complete while usage is unavailable: Agent Runner may report an
     // attempt cost without the token breakdown behind it.
     implementation_cost: mode === 'reference-baseline'
       ? NOT_APPLICABLE
-      : (cost?.implementation?.complete ? 'complete' : 'incomplete'),
-    pricing: pricing ? (pricing.verified ? 'verified' : 'unverified') : 'unavailable',
+      : implementationCostCompleteness(cost),
+    pricing: pricingCompleteness(pricing),
     timing: timing ? 'complete' : 'unavailable',
     // Agent Runner's own report that it lost metric records is preserved as
     // itself rather than folded into the coverage computed from what survived.

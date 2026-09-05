@@ -185,6 +185,55 @@ test('prepare-acceptance combined baseline and targeted markdown produces final-
   }])
 })
 
+test('a full acceptance record with qualified revision and scope fields supports the final SHA', async () => {
+  const context = await fixture()
+  await writeRequiredArtifacts(context, {
+    'acceptance-test-results.md': '',
+    'acceptance-flow-evidence.md': [
+      '# Acceptance flow evidence',
+      '',
+      `- Tested revision (local HEAD == expected PR head throughout every flow): \`${FINAL_SHA}\``,
+      '- Verification scope: **full** (first acceptance pass; no prior baseline existed)',
+      '',
+      '| AT ID | Classification | Outcome | Tested SHA |',
+      '| --- | --- | --- | --- |',
+      `| AT-001 | Required | **PASS** | \`${FINAL_SHA.slice(0, 7)}\` |`,
+      `| AT-002 | Required | **PASS** | \`${FINAL_SHA.slice(0, 7)}\` |`,
+      '',
+      'A targeted re-review later rechecked AT-002 at the same SHA without product changes.',
+    ].join('\n'),
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+  const flow = manifest.artifacts.find(({ role }) => role === 'acceptance-flow-record')
+  const lineage = await validateCandidateEvidenceLineage({
+    finalSha: FINAL_SHA,
+    worktree: context.worktree,
+    manifest,
+  })
+
+  assert.equal(flow.claimed_revision, FINAL_SHA)
+  assert.deepEqual(flow.coverage, ['AT-001', 'AT-002'])
+  assert.deepEqual(flow.lineage_claims, [{
+    kind: 'full-flow',
+    revision: FINAL_SHA,
+    trustworthy: true,
+    bounded_impact: false,
+    affected_flows: [],
+    dependent_flows: [],
+    covered_flows: ['AT-001', 'AT-002'],
+    intervening_changes: [],
+    tracked_product_changed: null,
+  }])
+  assert.equal(lineage.final_revision_supported, true)
+  assert.equal(lineage.mode, 'final-full-flow')
+})
+
 test('the current acceptance workflow markdown is accepted as screenshot metadata evidence', async () => {
   const context = await fixture()
   await writeRequiredArtifacts(context, {

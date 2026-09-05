@@ -24,46 +24,53 @@ The separate `human-review.sh` command SHALL accept a pending run directory, kee
 
 #### Scenario: Paired baseline and candidate review
 - **WHEN** `human-review.sh` receives a pending reference-baseline run and a pending Agent Runner candidate run
-- **THEN** it completes the 13 reference-baseline questions before the 13 candidate questions
+- **THEN** it completes the seven reference-baseline questions before the seven candidate questions
 - **AND** it preserves independent candidate, rubric, response, score, and completion state for each run
 
-### Requirement: Versioned v1 human-review questions
-The v1 human-review rubric SHALL ask exactly the following 13 questions, one at a time and in the listed order. Each question SHALL collect one rating and its rationale before the next question is displayed.
+### Requirement: Versioned v2 human-review questions
+The v2 human-review rubric SHALL ask exactly the following seven whole-presentation visual questions, one at a time and in the listed order. Each question SHALL collect one rating and its rationale before the next question is displayed.
 
 | # | Dimension | Question |
 |---:|---|---|
-| 1 | Step 1 | Rate step 1, "You have a topic." Considering its initial composition and entrance, how clearly and intentionally does it present the required content? |
-| 2 | Step 2 | Rate step 2, "The skill interviews you." Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity? |
-| 3 | Step 3 | Rate step 3, "Answers become steps." Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity? |
-| 4 | Step 4 | Rate step 4, "The deck grows." Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity? |
-| 5 | Step 5 | Rate step 5, "You set the depth." Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity? |
-| 6 | Step 6 | Rate step 6, "It assembles the scene." Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity? |
-| 7 | Step 7 | Rate step 7, "It checks its own work." Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity? |
-| 8 | Step 8 | Rate step 8, "Changed your mind? Loop it." Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity? |
-| 9 | Step 9 | Rate step 9, "You're looking at one." Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity? |
-| 10 | Readability and visual hierarchy | Rate the presentation's readability and visual hierarchy, including typography, contrast, legibility, scanning order, emphasis, labels, and captions across the presentation. |
-| 11 | Navigation and interaction usability | Rate the presentation's navigation and interaction usability, including discoverability, current-step feedback, controls, present/browse switching, and supported navigation methods. |
-| 12 | Responsive visual quality | Rate the presentation's responsive visual quality: whether it remains readable, composed, and usable across desktop and narrow viewports without problematic clipping, overlap, or chrome interference. |
-| 13 | Overall cohesion and polish | Rate the presentation's overall cohesion and polish, including consistency, visual rhythm, intentionality, detail quality, and whether it feels finished as a whole. |
+| 1 | Text appearance, hierarchy, and wording | Across the full presentation, how good do the titles, captions, labels, and other content text look and read? Judge whether important content text is visibly present, typography, sizing, weight, spacing, line breaks, contrast, legibility, visual hierarchy, and whether the wording is clear, intentional, and audience-ready rather than sounding like an internal annotation. Do not judge navigation controls or presentation chrome here, and do not judge the placement or styling of non-text elements. |
+| 2 | Visual design of elements | How well designed are the individual scene elements, such as boxes, arrows, icons, illustrations, and diagram nodes? Judge their shapes, proportions, fills, borders, detail, consistency, and overall craft. Do not judge their text, placement, movement, or navigation chrome here. |
+| 3 | Composition and placement | At a normal wide viewport, how well are the text and visual elements arranged relative to one another? Judge alignment, spacing, grouping, balance, focal points, use of space, and whether anything feels crowded, disconnected, clipped, or unintentionally overlapping. Judge viewport adaptation separately under responsive visual quality. |
+| 4 | Motion and scene evolution | As you advance through the presentation, how well do the animations and scene changes work? Judge smoothness, pacing, meaningful entrances and exits, continuity of persistent elements, and whether each step visibly evolves the existing scene instead of feeling like an unrelated replacement. |
+| 5 | Overall visual identity | Taken as a whole, how strong is the presentation’s visual identity? Judge its color palette, background treatment, stylistic consistency, brand character, polish, memorability, and whether it feels intentionally designed and finished. Judge the craft of individual scene elements separately. |
+| 6 | Navigation and presentation chrome | How clear, discoverable, and visually integrated are the presentation controls and chrome? Judge progress indicators, previous/next controls, table of contents, mode switching, and attribution. Focus on their appearance and ease of understanding, not whether every input method technically works or how content captions are styled. |
+| 7 | Responsive visual quality | Compare the presentation at wide and narrow viewport sizes. How well does its hierarchy and composition adapt? Judge scaling, density, readability, control accessibility, clipping, overlap, and whether the narrow version still feels intentionally composed. Judge baseline wide-screen composition separately. |
 
 #### Scenario: Questions are asked in order
 - **WHEN** a reviewer completes a valid response to a question
-- **THEN** the harness displays only the next numbered question in the v1 sequence
+- **THEN** the harness displays only the next numbered question in the v2 sequence
 
-#### Scenario: First step has no incoming transition
-- **WHEN** the harness asks question 1
-- **THEN** it asks about the step's initial composition and entrance rather than a transition from a previous step
+#### Scenario: Visual concerns are separated
+- **WHEN** the harness asks the seven questions
+- **THEN** text appearance, element design, composition, motion, visual identity, navigation chrome, and responsive quality are each judged separately
+- **AND** no question asks for a separate rating for an individual presentation step
 
-#### Scenario: Later steps include transition quality
-- **WHEN** the harness asks any question from 2 through 9
-- **THEN** the question asks the reviewer to consider both that step's composition and its transition from the previous step
+### Requirement: Question-specific rating options
+Each question prompt SHALL display five rating labels and descriptions written specifically for that question, in rating order from 1 through 5. The question-specific labels SHALL be:
 
-#### Scenario: Global dimensions follow slide questions
-- **WHEN** all nine per-step questions have valid responses
-- **THEN** the harness asks readability, navigation, responsive quality, and overall cohesion questions in that order
+| Question | 1 | 2 | 3 | 4 | 5 |
+|---:|---|---|---|---|---|
+| 1 | Missing or unusable | Weak and confusing | Serviceable but flawed | Clear and polished | Exceptional text system |
+| 2 | Broken or crude | Weak and inconsistent | Serviceable but basic | Polished and coherent | Exceptional visual craft |
+| 3 | Broken composition | Poorly arranged | Workable but uneven | Strong composition | Masterful composition |
+| 4 | Broken or disorienting | Choppy or disconnected | Functional but uneven | Smooth and meaningful | Exceptional choreography |
+| 5 | Incoherent or unfinished | Weak or unappealing | Coherent but ordinary | Distinctive and polished | Exceptional and memorable |
+| 6 | Unusable or visually broken | Confusing and disconnected | Understandable but awkward | Clear and integrated | Effortless and elegant |
+| 7 | Broken at a supported size | Adapts poorly | Usable but compromised | Strong across sizes | Exceptionally responsive |
+
+The descriptions SHALL refine the shared anchors for the question without changing their rating order or scoring fractions.
+
+#### Scenario: A question is displayed
+- **WHEN** the harness asks any human-review question
+- **THEN** it displays that question's five labels and descriptions
+- **AND** it does not substitute the generic shared-anchor text for those question-specific choices
 
 ### Requirement: Anchored human responses
-Every human-review question SHALL accept a whole-number rating from 1 through 5 and a rationale together. The v1 rubric SHALL use the following anchors for every question.
+Every human-review question SHALL accept a whole-number rating from 1 through 5 and a rationale together. The v2 rubric SHALL use the following anchors for every question.
 
 | Rating | Anchor |
 |---:|---|
@@ -96,20 +103,22 @@ The harness SHALL calculate the human-review score out of 30 using the following
 
 | Dimension | Points |
 |---|---:|
-| Average of the nine per-step ratings | 10 |
-| Readability and visual hierarchy | 5 |
-| Navigation and interaction usability | 4 |
-| Responsive visual quality | 4 |
-| Overall cohesion and polish | 7 |
+| Text appearance, hierarchy, and wording | 4 |
+| Visual design of elements | 4 |
+| Composition and placement | 5 |
+| Motion and scene evolution | 6 |
+| Overall visual identity | 5 |
+| Navigation and presentation chrome | 3 |
+| Responsive visual quality | 3 |
 
-For each rating `r`, the harness SHALL calculate its earned fraction as `(r - 1) / 4`, mapping ratings 1 through 5 to 0%, 25%, 50%, 75%, and 100% respectively. The per-step subtotal SHALL equal the average earned fraction of questions 1 through 9 multiplied by 10. Each global-dimension subtotal SHALL equal that question's earned fraction multiplied by its listed points. The harness SHALL sum the five subtotals without intermediate rounding.
+For each rating `r`, the harness SHALL calculate its earned fraction as `(r - 1) / 4`, mapping ratings 1 through 5 to 0%, 25%, 50%, 75%, and 100% respectively. Each dimension subtotal SHALL equal its question's earned fraction multiplied by its listed points. The harness SHALL sum the seven subtotals without intermediate rounding.
 
 The human-review component gate SHALL pass only when the score is at least 15 out of 30 and no individual rating is 1.
 
 #### Scenario: Human score is calculated
-- **WHEN** all 13 questions have valid responses
+- **WHEN** all seven questions have valid responses
 - **THEN** the harness applies the anchored conversion and listed dimension weights without intermediate rounding
-- **AND** it reports the five subtotals and their sum out of 30
+- **AND** it reports the seven subtotals and their sum out of 30
 
 #### Scenario: Human component passes
 - **WHEN** the human-review score is at least 15 and every rating is at least 2
@@ -124,7 +133,7 @@ The human-review component gate SHALL pass only when the score is at least 15 ou
 - **THEN** the human-review component gate fails
 
 ### Requirement: Review confirmation and finalization
-After question 13 has a valid response, the harness SHALL display every rating and rationale, each dimension subtotal, the total human-review score, and the human component-gate result. The reviewer SHALL be able to select and revise an answer, after which the harness SHALL recalculate and redisplay the summary. The human review SHALL become final only after the reviewer explicitly confirms the complete summary.
+After question 7 has a valid response, the harness SHALL display every rating and rationale, each dimension subtotal, the total human-review score, and the human component-gate result. The reviewer SHALL be able to select and revise an answer, after which the harness SHALL recalculate and redisplay the summary. The human review SHALL become final only after the reviewer explicitly confirms the complete summary.
 
 #### Scenario: Reviewer confirms the summary
 - **WHEN** the reviewer explicitly confirms the displayed responses and calculated score

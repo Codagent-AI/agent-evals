@@ -16,7 +16,8 @@ import { join } from 'node:path'
 import { hashString } from './persistence.mjs'
 
 export const RUNNER_METRICS_FILENAME = 'run-metrics.json'
-export const RUNNER_METRICS_SCHEMA_VERSION = 1
+export const RUNNER_METRICS_SCHEMA_VERSION = 2
+export const SUPPORTED_RUNNER_METRICS_SCHEMA_VERSIONS = [1, RUNNER_METRICS_SCHEMA_VERSION]
 
 // States Agent Runner may report for a usage or cost value. `not-applicable`
 // covers steps that never invoked a CLI, which is distinct from an agent
@@ -52,6 +53,15 @@ const TASK_LOOP_PREFIX = /^implement-tasks(?::\d+)?(?:\/|$)/
 
 function nonEmptyString(value) {
   return typeof value === 'string' && value.length > 0
+}
+
+function knownIdentityValue(value) {
+  return nonEmptyString(value) && value !== 'unknown' ? value : null
+}
+
+function effectiveIdentityValue(identity, field, ...legacyValues) {
+  if (nonEmptyString(identity[field])) return knownIdentityValue(identity[field])
+  return legacyValues.map(knownIdentityValue).find((value) => value !== null) ?? null
 }
 
 function attemptIdOf(raw, index) {
@@ -104,6 +114,7 @@ function normalizeAttempt(raw, index) {
     throw new Error(`attempt ${attemptId} has malformed usage`)
   }
   const rawUsage = raw.usage ?? null
+  const identity = rawUsage?.identity ?? {}
   const usageState = usageStateOf(rawUsage, invokedCli)
   const reportedCost = Number.isFinite(raw.estimated_api_cost_usd) && raw.estimated_api_cost_usd >= 0
   const missingCostState = invokedCli ? 'unavailable' : 'not-applicable'
@@ -112,12 +123,21 @@ function normalizeAttempt(raw, index) {
     attempt_id: attemptId,
     step: raw.id ?? raw.step ?? null,
     prefix: raw.prefix ?? null,
-    agent_role: raw.agent_role ?? agentRole(raw),
+    agent_role: raw.role ?? raw.agent_role ?? agentRole(raw),
+    tool: raw.tool ?? null,
     invoked_cli: invokedCli,
-    cli: rawUsage?.cli ?? raw.cli ?? null,
-    provider: rawUsage?.provider ?? raw.provider ?? null,
-    model: rawUsage?.model ?? raw.model ?? null,
-    effort: rawUsage?.effort ?? raw.effort ?? null,
+    cli: effectiveIdentityValue(identity, 'effective_cli', rawUsage?.cli, raw.cli),
+    provider: effectiveIdentityValue(identity, 'effective_provider', rawUsage?.provider, raw.provider),
+    model: effectiveIdentityValue(identity, 'effective_model', rawUsage?.model, raw.model),
+    effort: effectiveIdentityValue(identity, 'effective_effort', rawUsage?.effort, raw.effort),
+    requested_cli: knownIdentityValue(identity.requested_cli),
+    requested_model: knownIdentityValue(identity.requested_model),
+    requested_effort: knownIdentityValue(identity.requested_effort),
+    identity: {
+      provider_source: identity.provider_source ?? null,
+      model_source: identity.model_source ?? null,
+      effort_source: identity.effort_source ?? null,
+    },
     usage_source: rawUsage?.source ?? raw.usage_source ?? null,
     usage_source_version: null,
     session: raw.session_id ?? raw.session ?? null,
@@ -169,7 +189,7 @@ export function ingestRunnerMetrics({ text, runId, workflow, path = null }) {
     return rejected(`run-metrics.json is not readable JSON: ${error.message}`, source)
   }
 
-  if (payload?.schema_version !== RUNNER_METRICS_SCHEMA_VERSION) {
+  if (!SUPPORTED_RUNNER_METRICS_SCHEMA_VERSIONS.includes(payload?.schema_version)) {
     return rejected(
       `unsupported run-metrics.json schema version ${JSON.stringify(payload?.schema_version)}`,
       source,

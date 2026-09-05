@@ -3,9 +3,9 @@
   "run_id": "config-20260828T201451Z",
   "projection": {
     "evaluation_status": "complete",
-    "product_verdict": "fail",
+    "product_verdict": "pass",
     "score_denominator": 100,
-    "official_score": 69.40515873015873,
+    "official_score": 73.044047619048,
     "failed_phase": null,
     "failure": null
   },
@@ -20,8 +20,8 @@
     },
     {
       "path": "human-review.json",
-      "bytes": 6461,
-      "sha256": "c81e00f69c2fa3b632cac7211c78c3edd9d6b18fe6a07e87b94c8f18cfa3e31e"
+      "bytes": 5657,
+      "sha256": "56ad23f65c484d8bd0e6cdfe5a5a4aae5c96e4dccd8732a78990a53481d54a21"
     },
     {
       "path": "implementation.diff",
@@ -30,13 +30,13 @@
     },
     {
       "path": "report.html",
-      "bytes": 567914,
-      "sha256": "5916d3d5bef91cddd8be81c73d417a2d812f73ee9d2f4b6e524bf64f02a7ca69"
+      "bytes": 410193,
+      "sha256": "bb78de2a9eeeb0041ce09387c629e720445003f6ae8281cda67e80afd50b9b9e"
     },
     {
       "path": "result.json",
-      "bytes": 846275,
-      "sha256": "12dd6642717c5a0ca1c04c1facc5fe3bdab19f1cf47e2aaa32419cb4d2852f3c"
+      "bytes": 856639,
+      "sha256": "5684310cd6ac1ccb75d1b4268e7408435134c2e428772b54441251da12445e13"
     }
   ]
 }
