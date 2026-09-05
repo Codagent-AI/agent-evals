@@ -1,0 +1,42 @@
+{
+  "schema_version": 2,
+  "run_id": "local-codex-tester-20260901T030537Z",
+  "projection": {
+    "evaluation_status": "complete",
+    "product_verdict": "pass",
+    "score_denominator": 100,
+    "official_score": 71.62142857142857,
+    "failed_phase": null,
+    "failure": null
+  },
+  "excluded": [
+    ".runtime"
+  ],
+  "artifacts": [
+    {
+      "path": "ambiguity-ledger.json",
+      "bytes": 2328,
+      "sha256": "480a5f763dcdd991918a8a02d0aaec9a74d345778edfd388df7e8abc986a38ba"
+    },
+    {
+      "path": "human-review.json",
+      "bytes": 5576,
+      "sha256": "223f2e8156649eae5008753184811603aefa5325940e7d6f4f360dd7ada55f61"
+    },
+    {
+      "path": "implementation.diff",
+      "bytes": 301147,
+      "sha256": "246deb608a40de0f6deb71f8abc0b3ab5dcd9a4a3928d48fe0961ae9d4c94ecf"
+    },
+    {
+      "path": "report.html",
+      "bytes": 385811,
+      "sha256": "5910de37903a8f2fb71f91aafc6ea438e82d3b65f61e74a56d38b72ff99621d5"
+    },
+    {
+      "path": "result.json",
+      "bytes": 1097562,
+      "sha256": "a9006397d70ccc85ab155dcc94a6f59749ed3964c9dc53f0059a2d2488765230"
+    }
+  ]
+}
