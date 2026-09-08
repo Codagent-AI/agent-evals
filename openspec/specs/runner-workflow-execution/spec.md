@@ -110,6 +110,8 @@ The evaluation harness SHALL generate and durably record its evaluation run iden
 
 If the recorded Agent Runner run is active, the harness SHALL verify that the active process owns that run and wait for the same run rather than launching or resuming another. If the run completed the full workflow and its delivery identity still matches, the harness SHALL continue to the next eval phase. If the run is inactive and unfinished, the harness SHALL invoke `agent-runner --resume <run-id>` and allow Agent Runner to choose its internal resume point. If the run, process, branch, pull request, or revision identity cannot be verified, the harness SHALL stop with an explicit workflow or resume-provenance error. It SHALL never start a duplicate implementation run, candidate branch, or draft pull request merely because the outer eval process restarted.
 
+Agent Runner development builds MAY launch linked audit runs asynchronously after the source workflow finalizes. When the source state reports linked audits, the harness SHALL wait until every link is `completed` or `failed` before delivery verification, artifact ingestion, or scoring, so the disposable evaluation container cannot exit underneath a live audit. An audit launch or execution warning SHALL remain diagnostic and SHALL NOT replace the source workflow outcome. During recovery without a checkpointed source-run identifier, the harness SHALL exclude `runKind: audit` siblings from source-run discovery; an audit run remains inspectable by its exact identifier but SHALL NOT be adopted as the implementation workflow.
+
 #### Scenario: Recorded Agent Runner run is still active
 - **WHEN** eval resume verifies that the recorded Agent Runner run is owned by a live process
 - **THEN** the harness waits for that same run
@@ -118,6 +120,16 @@ If the recorded Agent Runner run is active, the harness SHALL verify that the ac
 #### Scenario: Recorded Agent Runner run completed
 - **WHEN** eval resume verifies that the recorded run completed the full workflow and its branch, PR, and final-head identity still match
 - **THEN** the harness preserves its outputs and continues to the next incomplete eval phase
+
+#### Scenario: Source completes with a linked audit still active
+- **WHEN** the source implementation workflow is complete but its durable audit link is reserved, launching, or started
+- **THEN** the harness waits for the linked audit to become completed or failed before delivery verification
+- **AND** it does not let the disposable container exit while the linked audit remains active
+
+#### Scenario: Recovery sees a newer audit child
+- **WHEN** the harness restarts after source finalization but before recording the source run identifier and the newest persisted sibling has `runKind: audit`
+- **THEN** source-run discovery ignores that child and adopts the newest ordinary workflow run
+- **AND** exact-id audit inspection remains possible
 
 #### Scenario: Recorded Agent Runner run terminated unfinished
 - **WHEN** eval resume verifies that the recorded run is inactive and unfinished
@@ -276,4 +288,3 @@ The checks SHALL resolve the Agent Runner checkout the same way the host entry p
 - **WHEN** the automated checks run and neither a configured nor a sibling Agent Runner checkout is readable
 - **THEN** the contract verification is skipped with an explicit message naming the resolved path
 - **AND** the remaining automated checks still run
-

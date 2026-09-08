@@ -189,6 +189,47 @@ test('schema-v2 metrics use Runner role, tool, and effective invocation identity
   assert.equal(ingested.attempts[0].identity.model_source, 'invocation')
 })
 
+test('schema-v3 metrics preserve Runner execution-session and Git attribution', () => {
+  const text = JSON.stringify(metrics({
+    schema_version: 3,
+    sessions: [{
+      execution_session_id: 'execution-1',
+      started_at: '2026-09-05T12:00:00Z',
+      last_observed_at: '2026-09-05T12:00:01Z',
+      ended_at: '2026-09-05T12:00:01Z',
+      duration_ms: 1000,
+      status: 'closed',
+    }],
+    session_rollups: [{
+      execution_session_id: 'execution-1',
+      duration_ms: 1000,
+      step_count: 1,
+      totals: metrics().totals,
+    }],
+    repository_changes: { files_changed: 2, lines_added: 20, lines_deleted: 3 },
+    steps: [step({
+      execution_session_id: 'execution-1',
+      execution_session_coverage: 'exact',
+      git_changes: { files_changed: 1, lines_added: 12, lines_deleted: 2 },
+    })],
+  }))
+
+  const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
+
+  assert.equal(ingested.state, 'ingested')
+  assert.equal(ingested.source.schema_version, 3)
+  assert.equal(ingested.attempts[0].execution_session_id, 'execution-1')
+  assert.equal(ingested.attempts[0].execution_session_coverage, 'exact')
+  assert.deepEqual(ingested.attempts[0].git_changes, {
+    files_changed: 1, lines_added: 12, lines_deleted: 2,
+  })
+  assert.deepEqual(ingested.execution_sessions, JSON.parse(text).sessions)
+  assert.deepEqual(ingested.session_rollups, JSON.parse(text).session_rollups)
+  assert.deepEqual(ingested.repository_changes, {
+    files_changed: 2, lines_added: 20, lines_deleted: 3,
+  })
+})
+
 test('schema-v2 nested model records remain attributable to their tool-owned role', () => {
   const text = JSON.stringify(metrics({
     schema_version: 2,
@@ -260,7 +301,7 @@ test('schema-v2 legacy unknown identity remains unavailable rather than becoming
 })
 
 test('an unsupported schema version is rejected', () => {
-  const text = JSON.stringify(metrics({ schema_version: 3 }))
+  const text = JSON.stringify(metrics({ schema_version: 4 }))
 
   const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
 

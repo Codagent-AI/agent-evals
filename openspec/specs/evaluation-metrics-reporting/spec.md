@@ -4,9 +4,9 @@
 Define durable evaluation usage, cost, timing, result, report, reference-comparison, and publication artifacts.
 ## Requirements
 ### Requirement: Agent Runner metrics ingestion
-The evaluation harness SHALL consume Agent Runner `run-metrics.json` schema versions 1 and 2 as the supported source for implementation-workflow attempts, token usage, reported cost, and active duration. It SHALL validate that the artifact names the recorded Agent Runner run and workflow, preserve a copy and SHA-256 hash of the source artifact, and retain every attempt across retries and resumed execution sessions.
+The evaluation harness SHALL consume Agent Runner `run-metrics.json` schema versions 1, 2, and 3 as the supported source for implementation-workflow attempts, token usage, reported cost, and active duration. It SHALL validate that the artifact names the recorded Agent Runner run and workflow, preserve a copy and SHA-256 hash of the source artifact, and retain every attempt across retries and resumed execution sessions.
 
-The harness SHALL preserve reported token categories, canonical input/output/overall totals, usage and cost coverage, unavailable reasons, and `history_complete`. For schema version 2 it SHALL use stable role/tool identity and effective provider/model/effort for attribution and pricing while preserving the separately requested identity and identity provenance. Structured nested model records SHALL remain distinct attempts. The harness SHALL NOT reconstruct missing Agent Runner metrics from transcripts, audit-log text, or CLI output, and SHALL NOT represent missing metrics as zero.
+The harness SHALL preserve reported token categories, canonical input/output/overall totals, usage and cost coverage, unavailable reasons, and `history_complete`. For schema versions 2 and 3 it SHALL use stable role/tool identity and effective provider/model/effort for attribution and pricing while preserving the separately requested identity and identity provenance. For schema version 3 it SHALL additionally preserve execution-session identity and coverage, execution-session rollups, and step-level and repository-level Git change attribution. Structured nested model records SHALL remain distinct attempts. The harness SHALL NOT reconstruct missing Agent Runner metrics from transcripts, audit-log text, or CLI output, and SHALL NOT represent missing metrics as zero.
 
 #### Scenario: Valid Agent Runner metrics are ingested
 - **WHEN** the recorded Agent Runner run provides a supported `run-metrics.json` with matching run identity
@@ -16,6 +16,10 @@ The harness SHALL preserve reported token categories, canonical input/output/ove
 - **WHEN** an attempt reports requested and effective invocation identity plus stable role and tool fields
 - **THEN** the harness attributes and prices the attempt using its effective identity
 - **AND** it preserves the requested identity and source fields for diagnosis
+
+#### Scenario: Schema-version-3 execution attribution is available
+- **WHEN** the recorded run reports schema-version-3 execution sessions, session rollups, and Git change attribution
+- **THEN** the harness preserves those fields alongside every existing identity, usage, cost, duration, and coverage field
 
 #### Scenario: Agent Runner metric is unavailable
 - **WHEN** a step's usage or cost is explicitly unavailable in `run-metrics.json`
@@ -118,7 +122,7 @@ Timing SHALL exclude time while the eval process is stopped, time awaiting a hum
 - **THEN** pending time and reviewer interaction time do not contribute to any reported duration
 
 ### Requirement: Detailed result artifact
-The harness SHALL atomically write a versioned `result.json` containing run kind; evaluation status and candidate product verdict when applicable; score denominator; component applicability; `official_score` when complete candidate scoring produced one; `automated_subtotal` when all applicable automated scoring is complete; `available_component_scores` for individually completed components; component, subcomponent, criterion, and gate results; any user-approved technical adjudication with raw scores, revised scores, approver, time, rationale, and findings; automated and human rubric provenance; human responses and rationales; Agent Runner workflow and agent-role provenance; candidate repository, branch, draft-PR URL, base, draft state, final local SHA, and final PR SHA; final Validator results and candidate-reported CI status when present; verified acceptance-evidence lineage; separate candidate-produced and evaluator-produced evidence summaries; per-agent/model implementation usage and costs; pricing evidence and verification state; machine phase timing; checkpoint and resume history; independent completeness fields; artifact references; and the shared-92 reference comparison when applicable.
+The harness SHALL atomically write a versioned `result.json` containing run kind; evaluation status and candidate product verdict when applicable; score denominator; component applicability; `official_score` when complete candidate scoring produced one; `automated_subtotal` when all applicable automated scoring is complete; `available_component_scores` for individually completed components; component, subcomponent, criterion, and gate results; any user-approved technical adjudication with raw scores, revised scores, approver, time, rationale, and findings; automated and human rubric provenance; human responses and rationales; Agent Runner workflow, agent-role provenance, and linked-audit lifecycle states and warnings; candidate repository, branch, draft-PR URL, base, draft state, final local SHA, and final PR SHA; final Validator results and candidate-reported CI status when present; verified acceptance-evidence lineage; separate candidate-produced and evaluator-produced evidence summaries; per-agent/model implementation usage and costs; pricing evidence and verification state; machine phase timing; checkpoint and resume history; independent completeness fields; artifact references; and the shared-92 reference comparison when applicable.
 
 The harness SHALL NOT rescale `automated_subtotal`, `available_component_scores`, a reference score, or the shared comparison. In human-facing output, provenance SHALL be labeled in plain language as "source and version details."
 
@@ -143,6 +147,10 @@ The harness SHALL NOT rescale `automated_subtotal`, `available_component_scores`
 #### Scenario: Result is updated after resume
 - **WHEN** resumed evaluation produces additional durable results
 - **THEN** the harness atomically replaces `result.json` with a version containing both preserved and newly completed work
+
+#### Scenario: Linked audit finishes or fails
+- **WHEN** Agent Runner reports a completed or failed linked audit for the source execution session
+- **THEN** `result.json` records its run identity, execution-session identity, trigger, terminal state, and warning without changing product scoring
 
 #### Scenario: Reference baseline result is written
 - **WHEN** the existing implementation completes applicable automated and human scoring as a `reference-baseline` run

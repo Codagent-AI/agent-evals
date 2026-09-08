@@ -88,6 +88,7 @@ import {
   readWorkflowProvenance,
 } from './lib/provenance.mjs'
 import {
+  hasPendingLinkedAudits,
   isAgentRunnerProcessAlive,
   readRunnerState as readPersistedRunnerState,
   resolveProjectsDir,
@@ -215,6 +216,17 @@ function runnerFailure(timing) {
   const diagnostic = details.length > 0 ? details.join(': ') : 'unknown subprocess failure'
   const output = timing.output_path ? `; output: ${timing.output_path}` : ''
   return `${timing.label} failed (${diagnostic})${output}`
+}
+
+function linkedAuditsOf(state) {
+  if (!Array.isArray(state?.audit?.links)) return []
+  return state.audit.links.map((link) => ({
+    run_id: link.auditRunId ?? null,
+    execution_session_id: link.executionSessionId ?? null,
+    trigger: link.trigger ?? null,
+    state: link.state ?? null,
+    warning: link.warning ?? null,
+  }))
 }
 
 async function fingerprintFiles(paths) {
@@ -646,6 +658,7 @@ export async function runEvaluation({
         }]
       : [],
     run: checkpoint.agent_runner,
+    linkedAudits: importedRun?.workflow.linked_audits ?? [],
     timings: [],
     browser: null,
     sourceEvidence: null,
@@ -859,6 +872,38 @@ export async function runEvaluation({
       if (state?.run_id && record.run?.run_id !== state.run_id) {
         await persistRunnerState(state)
       }
+
+      // Development Agent Runner builds may return after launching a linked
+      // audit in a detached process. Delivery inspection and scoring must not
+      // race that process or let the container exit underneath it.
+      if (hasPendingLinkedAudits(runnerStateSnapshot)) {
+        record.events.push({
+          event: 'wait-linked-audits',
+          status: 'active',
+          audit_run_ids: linkedAuditsOf(runnerStateSnapshot).map((audit) => audit.run_id),
+        })
+        log('agent-runner: wait-linked-audits')
+        runnerStateSnapshot = waitForRun
+          ? await waitForRun(runnerStateSnapshot.run_id)
+          : await waitForRunnerRun({
+              readState,
+              runId: runnerStateSnapshot.run_id,
+              isProcessAlive: isRunnerProcessAlive,
+            })
+        state = runnerStateSnapshot
+        if (!state?.run_id) {
+          throw new Error('Agent Runner linked-audit wait lost the recorded source run')
+        }
+        if (hasPendingLinkedAudits(state)) {
+          throw new Error(`Agent Runner linked audits for ${state.run_id} did not reach a terminal state`)
+        }
+        record.events.push({
+          event: 'linked-audits-terminal',
+          status: 'completed',
+          audits: linkedAuditsOf(state),
+        })
+      }
+      record.linkedAudits = linkedAuditsOf(runnerStateSnapshot)
       record.events.push({ event: 'continue', status: decision.status, reason: null, adopted: false })
 
       record.observed_steps = await readSteps(runnerStateSnapshot)
@@ -868,6 +913,7 @@ export async function runEvaluation({
         workflow: boundary,
         provenance,
         events: record.events,
+        linked_audits: record.linkedAudits,
         history: record.observed_steps,
         history_verification: record.workflowHistory,
       })
@@ -1442,6 +1488,7 @@ export async function runEvaluation({
           provenance,
           agent_skills_provenance: agentSkillsProvenance,
           events: record.events,
+          linked_audits: record.linkedAudits,
         },
         // A reference baseline invoked no implementation workflow, so its usage,
         // cost, and duration are absent rather than zero.

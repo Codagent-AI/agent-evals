@@ -16,8 +16,8 @@ import { join } from 'node:path'
 import { hashString } from './persistence.mjs'
 
 export const RUNNER_METRICS_FILENAME = 'run-metrics.json'
-export const RUNNER_METRICS_SCHEMA_VERSION = 2
-export const SUPPORTED_RUNNER_METRICS_SCHEMA_VERSIONS = [1, RUNNER_METRICS_SCHEMA_VERSION]
+export const RUNNER_METRICS_SCHEMA_VERSION = 3
+export const SUPPORTED_RUNNER_METRICS_SCHEMA_VERSIONS = [1, 2, RUNNER_METRICS_SCHEMA_VERSION]
 
 // States Agent Runner may report for a usage or cost value. `not-applicable`
 // covers steps that never invoked a CLI, which is distinct from an agent
@@ -142,6 +142,9 @@ function normalizeAttempt(raw, index) {
     usage_source_version: null,
     session: raw.session_id ?? raw.session ?? null,
     duration_ms: Number.isFinite(raw.duration_ms) ? raw.duration_ms : null,
+    execution_session_id: knownIdentityValue(raw.execution_session_id),
+    execution_session_coverage: raw.execution_session_coverage ?? null,
+    git_changes: raw.git_changes ?? null,
     usage: {
       state: usageState,
       reason: rawUsage?.reason ?? (invokedCli && !rawUsage ? 'agent runner reported no usage' : null),
@@ -253,6 +256,9 @@ export function ingestRunnerMetrics({ text, runId, workflow, path = null }) {
     attempts,
     attempt_count: attempts.length,
     sessions: [...new Set(attempts.map((entry) => entry.session).filter((value) => value !== null))],
+    execution_sessions: Array.isArray(payload.sessions) ? payload.sessions : [],
+    session_rollups: Array.isArray(payload.session_rollups) ? payload.session_rollups : [],
+    repository_changes: payload.repository_changes ?? null,
     coverage,
   }
 }

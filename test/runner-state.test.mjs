@@ -67,6 +67,24 @@ test('discovery without a recorded identifier selects the newest session by file
   assert.equal(state.run_id, 'run-new')
 })
 
+test('discovery without a recorded identifier ignores newer linked audit runs', async () => {
+  const dir = await projects({
+    'run-source': { workflowName: 'implement-change', currentStep: 'simplify' },
+    'audit-child': {
+      workflowName: 'run-audit',
+      runKind: 'audit',
+      currentStep: 'value-audit',
+      audit: { sourceRunId: 'run-source', lifecycleState: 'started' },
+    },
+  })
+  await utimes(join(dir, 'encoded-project/runs/run-source/state.json'), new Date('2026-09-05'), new Date('2026-09-05'))
+  await utimes(join(dir, 'encoded-project/runs/audit-child/state.json'), new Date('2026-09-06'), new Date('2026-09-06'))
+
+  const state = await readRunnerState(dir, null)
+
+  assert.equal(state.run_id, 'run-source')
+})
+
 test('the separate Agent Runner lock file is normalized onto discovered state', async () => {
   const dir = await projects({
     'run-active': { workflowName: 'implement-change', currentStep: { stepId: 'implement-tasks' } },
@@ -97,6 +115,42 @@ test('production waiting polls until Agent Runner releases its run lock', async 
   assert.equal(reads, 3)
   assert.equal(sleeps, 2)
   assert.equal(state.step_completed, true)
+})
+
+test('production waiting continues after source unlock until linked audits are terminal', async () => {
+  let reads = 0
+  let sleeps = 0
+  const state = await waitForRunnerRun({
+    runId: 'run-source',
+    readState: async () => {
+      reads += 1
+      if (reads === 1) {
+        return {
+          run_id: 'run-source',
+          lock: { pid: 4321, run_id: 'run-source' },
+          audit: { links: [] },
+        }
+      }
+      return {
+        run_id: 'run-source',
+        lock: null,
+        workflow_completed: true,
+        audit: {
+          links: [{
+            auditRunId: 'audit-child',
+            state: reads === 2 ? 'started' : 'completed',
+          }],
+        },
+      }
+    },
+    isProcessAlive: () => true,
+    intervalMs: 0,
+    sleep: async () => { sleeps += 1 },
+  })
+
+  assert.equal(reads, 3)
+  assert.equal(sleeps, 2)
+  assert.equal(state.audit.links[0].state, 'completed')
 })
 
 test('runner liveness rejects a reused PID owned by an unrelated process', () => {

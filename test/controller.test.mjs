@@ -607,6 +607,92 @@ test('an active recorded Runner process is waited for rather than duplicated', a
   assert.equal(runnerInvocations(context).length, before)
 })
 
+test('a fresh Runner execution waits for its linked audit before delivery verification', async () => {
+  const context = await environment()
+  let auditFinished = false
+  const waited = []
+
+  const result = await evaluate(context, profiles, {
+    readRunnerState: () => runnerInvocations(context).length === 0
+      ? null
+      : {
+          run_id: 'runner-7',
+          session_dir: '/sessions/runner-7',
+          workflow_name: 'implement-change',
+          workflow_completed: true,
+          history,
+          audit: {
+            links: [{ auditRunId: 'audit-child', state: auditFinished ? 'completed' : 'started' }],
+          },
+        },
+    waitForRun: async (runId) => {
+      waited.push(runId)
+      auditFinished = true
+      return {
+        run_id: runId,
+        session_dir: '/sessions/runner-7',
+        workflow_name: 'implement-change',
+        workflow_completed: true,
+        history,
+        audit: { links: [{ auditRunId: 'audit-child', state: 'completed' }] },
+      }
+    },
+    verifyDelivery: async () => {
+      assert.equal(auditFinished, true)
+      return delivery(context)
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.deepEqual(waited, ['runner-7'])
+  const execution = await readJson(join(context.runDir, 'phases/workflow-execution.json'))
+  assert.deepEqual(execution.linked_audits, [{
+    run_id: 'audit-child',
+    execution_session_id: null,
+    trigger: null,
+    state: 'completed',
+    warning: null,
+  }])
+  const report = await readJson(join(context.runDir, 'result.json'))
+  assert.deepEqual(report.workflow.linked_audits, execution.linked_audits)
+})
+
+test('an already-terminal linked audit warning is recorded without changing source success', async () => {
+  const context = await environment()
+
+  const result = await evaluate(context, profiles, {
+    readRunnerState: () => runnerInvocations(context).length === 0
+      ? null
+      : {
+          run_id: 'runner-7',
+          session_dir: '/sessions/runner-7',
+          workflow_name: 'implement-change',
+          workflow_completed: true,
+          history,
+          audit: {
+            links: [{
+              auditRunId: 'audit-child',
+              executionSessionId: 'execution-1',
+              trigger: 'automatic',
+              state: 'failed',
+              warning: 'crosscheck profile unavailable',
+            }],
+          },
+        },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.equal(result.outcome.evaluation_status, 'pending-human-review')
+  const report = await readJson(join(context.runDir, 'result.json'))
+  assert.deepEqual(report.workflow.linked_audits, [{
+    run_id: 'audit-child',
+    execution_session_id: 'execution-1',
+    trigger: 'automatic',
+    state: 'failed',
+    warning: 'crosscheck profile unavailable',
+  }])
+})
+
 test('an inactive unfinished Runner resumes only its exact recorded run', async () => {
   const context = await environment()
   await evaluate(context, profiles)
