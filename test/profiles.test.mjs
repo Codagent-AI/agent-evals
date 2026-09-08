@@ -13,11 +13,10 @@ import {
 const capabilities = {
   clis: {
     claude: {
-      models: ['opus', 'sonnet'],
       efforts: ['low', 'medium', 'high'],
       roles: ['lead', 'implementor', 'tester'],
     },
-    codex: { models: ['gpt-5'], efforts: ['medium', 'high'], roles: ['implementor'] },
+    codex: { efforts: ['medium', 'high'], roles: ['implementor'] },
   },
 }
 
@@ -105,15 +104,13 @@ test('a CLI that cannot run the lead role autonomously is rejected for the lead'
   assert.match(result.errors[0].message, /lead/)
 })
 
-test('an unavailable implementor model names the failing role and field', () => {
+test('new model identifiers are accepted without a harness capability update', () => {
   const result = validateRoleProfiles({
-    lead, implementor: { ...implementor, model: 'opus-9' }, reviewer, capabilities,
+    lead, implementor: { ...implementor, model: 'gpt-6-astra' }, reviewer, capabilities,
   })
 
-  assert.equal(result.ok, false)
-  assert.deepEqual(result.errors, [
-    { role: 'implementor', field: 'model', value: 'opus-9', message: 'unavailable model for claude: opus-9' },
-  ])
+  assert.equal(result.ok, true, JSON.stringify(result.errors))
+  assert.equal(result.profiles.implementor.model, 'gpt-6-astra')
 })
 
 test('an invalid implementor effort names the failing role and field', () => {

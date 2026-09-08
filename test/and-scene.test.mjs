@@ -233,14 +233,16 @@ test('all role profiles are required before the sandbox is invoked', async () =>
   assert.match(noReviewer.output, /acceptance-reviewer profile/)
 })
 
-test('the pinned capabilities accept the current recommended Codex profiles', async () => {
+test('the pinned capabilities do not enumerate volatile model names', async () => {
   const capabilities = JSON.parse(await readFile(
     join(root, 'evals/agent-runner/and-scene/agent-runner-capabilities.json'),
     'utf8',
   ))
+  assert.equal(Object.hasOwn(capabilities.clis.codex, 'models'), false)
+  assert.equal(Object.hasOwn(capabilities.clis.claude, 'models'), false)
   const result = validateRoleProfiles({
-    lead: { cli: 'codex', model: 'gpt-5.6-sol', effort: 'high' },
-    implementor: { cli: 'codex', model: 'gpt-5.6-terra', effort: 'high' },
+    lead: { cli: 'codex', model: 'gpt-6-astra', effort: 'high' },
+    implementor: { cli: 'codex', model: 'future-codex-model', effort: 'high' },
     reviewer: { cli: 'claude', model: 'sonnet', effort: 'high' },
     capabilities,
   })

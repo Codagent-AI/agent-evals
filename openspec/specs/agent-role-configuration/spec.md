@@ -34,11 +34,16 @@ The harness SHALL NOT configure a role through a deprecated agent alias, and SHA
 - **THEN** the lead-agent, task-implementor, and acceptance-reviewer profiles are not required and are all reported not applicable
 
 ### Requirement: Profile validation
-Before starting Agent Runner, the harness SHALL validate every role profile against the capabilities of the recorded Agent Runner revision. Validation SHALL reject unsupported CLI adapters, unavailable or invalid model identifiers, invalid effort values, and configurations that cannot run the applicable workflow role autonomously. A validation failure SHALL identify the affected role and invalid field without launching an implementation workflow.
+Before starting Agent Runner, the harness SHALL validate every role profile against the stable capabilities of the recorded Agent Runner revision. Validation SHALL reject unsupported CLI adapters, missing or syntactically invalid model identifiers, invalid effort values, and configurations that cannot run the applicable workflow role autonomously. The harness SHALL NOT maintain or enforce a static allowlist of model names; Agent Runner and the selected CLI SHALL determine model availability at execution time. A validation failure SHALL identify the affected role and invalid field without launching an implementation workflow.
 
 #### Scenario: Both profiles are valid
 - **WHEN** every selected profile uses supported and available settings for its workflow role
 - **THEN** the harness permits the Agent Runner workflow to start
+
+#### Scenario: A newly available model is selected
+- **WHEN** a role specifies a syntactically valid model identifier that is not named in the eval harness
+- **THEN** the harness permits the Agent Runner workflow to start
+- **AND** Agent Runner and the selected CLI determine whether the model is available
 
 #### Scenario: Lead profile is invalid
 - **WHEN** the selected lead-agent profile contains a setting Agent Runner cannot use for the `lead` role
@@ -119,4 +124,3 @@ Independent role configuration SHALL NOT create isolated lead-agent evaluations,
 #### Scenario: Runs use different role combinations
 - **WHEN** evaluators compare end-to-end runs with different lead-agent or task-implementor profiles
 - **THEN** each run retains its role-level diagnostic data while its official result remains the score of its delivered product
-

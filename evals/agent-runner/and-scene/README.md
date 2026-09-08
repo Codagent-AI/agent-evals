@@ -642,8 +642,9 @@ failure list only proves clean rendering when the failure list was readable.
   hash-verified browser pass and fail work units
 - `automated-rubric.json` and `human-rubric.json` in the suite for the scoring
   policy every result cites by version and hash
-- `agent-runner-capabilities.json` in the suite for the role capabilities that
-  profile validation checks against
+- `agent-runner-capabilities.json` in the suite for stable adapter, role, and
+  effort capabilities that profile validation checks against; model names are
+  intentionally not enumerated
 - `publication.json` for the publication stage, its result commit, which curated
   files were published, and any retryable error
 - `results/<run-id>/` in the suite for the permanent published record of a
@@ -659,7 +660,8 @@ Run `evals/agent-runner/and-scene/run.sh --help` for every option. The
 implementation workflow and its full delivery contract are hard-coded; there is no
 `--workflow`, `--until`, or `--workflow-arg` override. Update
 `agent-runner-capabilities.json` deliberately when the recorded Agent Runner
-revision gains or drops an adapter, model, or effort.
+revision gains or drops an adapter, role, or effort. Model availability is
+resolved by Agent Runner and the selected CLI when the workflow runs.
 
 ## Troubleshooting
 
@@ -701,7 +703,7 @@ archive, release, or branch deletion is reported as
 Update the fixture SHA deliberately when the implementation-ready snapshot
 changes. Keep runs pinned to exact commits, and update
 `agent-runner-capabilities.json` when the recorded Agent Runner revision changes
-its supported adapters, models, or efforts. Recalibrate after any rubric,
+its supported adapters, roles, or efforts. Recalibrate after any rubric,
 scorer, gate, or reporting change: the record is what unblocks the next full
 evaluation, and a stale one is worth nothing. Run targeted tests during
 development and `npm run check` before trusting a change.

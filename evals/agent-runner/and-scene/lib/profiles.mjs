@@ -16,6 +16,7 @@ const ROLES = Object.keys(ROLE_AGENTS)
 export const PROFILE_FIELDS = ['cli', 'model', 'effort']
 
 const NOT_APPLICABLE = 'not-applicable'
+const MODEL_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$/
 
 function validateOne(role, profile, capabilities) {
   const agent = ROLE_AGENTS[role]
@@ -39,12 +40,15 @@ function validateOne(role, profile, capabilities) {
       message: `${profile.cli} cannot run the ${agent} role autonomously`,
     })
   }
-  if (!adapter.models.includes(profile.model)) {
+  // Model availability belongs to Agent Runner and the selected CLI. The eval
+  // harness only enforces a safe, explicit identifier so newly released or
+  // locally configured models do not require a harness update.
+  if (typeof profile.model !== 'string' || !MODEL_IDENTIFIER.test(profile.model)) {
     errors.push({
       role,
       field: 'model',
       value: profile.model ?? null,
-      message: `unavailable model for ${profile.cli}: ${profile.model}`,
+      message: `invalid model identifier for ${profile.cli}: ${profile.model ?? ''}`,
     })
   }
   if (!adapter.efforts.includes(profile.effort)) {
