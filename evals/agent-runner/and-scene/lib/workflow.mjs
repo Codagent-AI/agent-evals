@@ -49,7 +49,7 @@ export function resolveBoundary({ skipValidator = false, changeName }) {
     workflow_path: IMPLEMENTATION_WORKFLOW_PATH,
     skip_validator: skip,
     task_level_compliance: skip === 'true' ? 'skipped' : 'required',
-    final_validator: 'required',
+    final_validator: skip === 'true' ? 'skipped' : 'required',
     stop_step: null,
     workflow_arguments: [
       `change_name=${changeName}`,
@@ -196,12 +196,23 @@ function historyStepPath(entry) {
     : [entry.step]
 }
 
-export function checkWorkflowHistory(history = []) {
+export function checkWorkflowHistory(history = [], { skipValidator = false } = {}) {
   const normalized = history.map(normalizeHistoryEntry).filter(({ step }) => step)
-  const completed = new Set(
-    normalized.filter(({ outcome }) => outcome === 'success').map(({ step }) => step),
-  )
-  const missingSteps = REQUIRED_FINAL_WORKFLOW_STEPS.filter((step) => !completed.has(step))
+  const expectedOutcomes = Object.fromEntries(REQUIRED_FINAL_WORKFLOW_STEPS.map((step) => [
+    step,
+    step === 'run-validator' && skipValidator ? 'skipped' : 'success',
+  ]))
+  const terminalOutcomes = new Map()
+  for (const entry of normalized) {
+    const path = historyStepPath(entry)
+    if (path.length === 1 && entry.outcome) terminalOutcomes.set(entry.step, entry.outcome)
+  }
+  const missingSteps = REQUIRED_FINAL_WORKFLOW_STEPS.filter((step) => !terminalOutcomes.has(step))
+  const invalidOutcomes = REQUIRED_FINAL_WORKFLOW_STEPS.flatMap((step) => {
+    const observed = terminalOutcomes.get(step)
+    const expected = expectedOutcomes[step]
+    return observed && observed !== expected ? [{ step, expected, observed }] : []
+  })
   const prohibitedEffects = normalized.flatMap((entry) => (
     historyStepPath(entry)
       .map((step) => String(step).replace(/^sub:/, ''))
@@ -209,8 +220,9 @@ export function checkWorkflowHistory(history = []) {
       .map((step) => ({ ...entry, step }))
   ))
   return {
-    ok: missingSteps.length === 0 && prohibitedEffects.length === 0,
+    ok: missingSteps.length === 0 && invalidOutcomes.length === 0 && prohibitedEffects.length === 0,
     missing_steps: missingSteps,
+    invalid_outcomes: invalidOutcomes,
     prohibited_effects: prohibitedEffects,
     observed_steps: normalized.map(({ step }) => step),
   }
@@ -218,8 +230,8 @@ export function checkWorkflowHistory(history = []) {
 
 // Compatibility for result consumers while the reported concept changes from
 // an early boundary to complete workflow history.
-export function checkBoundary({ observedSteps }) {
-  const checked = checkWorkflowHistory(observedSteps)
+export function checkBoundary({ observedSteps, skipValidator = false }) {
+  const checked = checkWorkflowHistory(observedSteps, { skipValidator })
   return {
     ok: checked.ok,
     unexpected_step: checked.prohibited_effects[0]?.step ?? null,

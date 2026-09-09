@@ -101,9 +101,14 @@ evals/agent-runner/and-scene/run.sh \
   --reviewer-cli claude --reviewer-model opus --reviewer-effort high
 ```
 
-`--skip-validator` passes `skip_validator=true` only to task-level compliance.
-Without it, task-level compliance also runs. Both paths complete the final
-Validator, draft-PR, acceptance-preparation, and handoff-verification steps.
+`--skip-validator` passes `skip_validator=true` to skip all workflow-owned
+Agent Validator execution: task-level compliance, the final Validator, and
+acceptance-remediation Validator calls. Without it, all of those Validator
+paths remain enabled. Both modes still complete the draft-PR,
+acceptance-preparation, and handoff-verification steps. In skipped mode the
+harness requires an explicit skipped outcome for the top-level `run-validator`
+step; an absent, interrupted, or unexpectedly successful step is not accepted
+as proof of intentional skipping.
 The first complete benchmark candidate explicitly uses `--skip-validator`.
 The harness never queries CI and never permits merge, ready-for-review, close,
 archive, release, or candidate-branch deletion behavior.
@@ -286,10 +291,11 @@ planning-only fixture revision.
 The suite runs Agent Runner's exact
 `workflows/core/implement-change-v1.0.yaml` workflow through completion, invoked
 as `core:implement-change` with the OpenSpec artifact parameters supplied by the suite.
-There is no early `--until` boundary. `--skip-validator` sets only the
-workflow's task-level `skip_validator` parameter; the final Validator, draft
+There is no early `--until` boundary. `--skip-validator` skips task-level,
+final, and acceptance-remediation Agent Validator execution while the draft
 pull request, acceptance preparation, and handoff verification always remain
-required. The Agent Runner checkout must be a clean Git worktree; the suite
+required. The final `run-validator` step must be recorded as `skipped` in that
+mode and `success` when validation is enabled. The Agent Runner checkout must be a clean Git worktree; the suite
 records whichever commit, workflow hash, and CLI version it used. The Agent
 Skills checkout must also be clean; the suite records its commit and plugin
 manifest hash.
@@ -428,8 +434,9 @@ The automated command runs these phases in order:
    evaluator inputs, and run directory.
 2. Start, wait for, resume, or continue the one recorded complete Runner run.
 3. Verify the clean delivered branch, remote head, and open draft PR whose base
-   exactly matches the recorded `origin/HEAD`, plus its head, final Validator,
-   unarchived change, and acceptance handoff.
+   exactly matches the recorded `origin/HEAD`, plus its head, the final
+   Validator's required successful or intentional skipped outcome, unarchived
+   change, and acceptance handoff.
 4. Freeze the verified final source revision.
 5. Install dependencies, build, and run non-browser verification.
 6. Start the evaluated candidate server.

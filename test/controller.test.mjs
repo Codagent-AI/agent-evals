@@ -392,8 +392,28 @@ test('a complete below-minimum automated score finishes without human review', a
 
 test('--skip-validator launches the verified workflow by logical name without --until', async () => {
   const context = await environment()
+  const skippedHistory = [
+    { step: 'run-validator', outcome: 'skipped' },
+    ...history.slice(1),
+  ]
 
-  const result = await evaluate(context, ['--skip-validator', ...profiles])
+  const result = await evaluate(context, ['--skip-validator', ...profiles], {
+    readRunnerState: () => runnerInvocations(context).length === 0
+      ? null
+      : {
+          run_id: 'runner-7',
+          session_dir: '/sessions/runner-7',
+          workflow_name: 'implement-change',
+          workflow_completed: true,
+          history: skippedHistory,
+        },
+    observedSteps: (state) => state.history,
+    verifyDelivery: async () => ({
+      ...delivery(context),
+      final_validator: skippedHistory[0],
+      workflow_history: skippedHistory,
+    }),
+  })
 
   assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
   const [invocation] = runnerInvocations(context)
@@ -408,6 +428,12 @@ test('--skip-validator launches the verified workflow by logical name without --
     'skip_validator=true',
   ])
   assert.ok(!invocation.args.includes('--until'))
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(written.workflow.task_level_compliance, 'skipped')
+  assert.equal(written.workflow.final_validator, 'skipped')
+  assert.equal(written.workflow.history_complete, true)
+  assert.deepEqual(written.workflow.invalid_outcomes, [])
+  assert.equal(written.delivery.final_validator.outcome, 'skipped')
 })
 
 test('fixture planning preflight validates the selected change directory', async () => {
@@ -452,7 +478,7 @@ test('logical workflow resolution must match the verified pinned workflow before
   assert.match(JSON.stringify(result.errors), /workflow-resolution/)
 })
 
-test('task-level validation is included by default while the final Validator remains required', async () => {
+test('task-level and final validation are included by default', async () => {
   const context = await environment()
 
   const result = await evaluate(context, profiles)

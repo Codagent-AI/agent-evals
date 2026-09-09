@@ -735,6 +735,7 @@ export async function verifyCandidateDelivery({
   changeName,
   sessionDir,
   workflowHistory,
+  skipValidator = false,
   exec = defaultExec,
   inspectPullRequest = (options) => inspectDraftPullRequest({ ...options, exec }),
 }) {
@@ -745,7 +746,7 @@ export async function verifyCandidateDelivery({
       { missing_delivery_output: 'candidate-base-branch' },
     )
   }
-  const history = checkWorkflowHistory(workflowHistory)
+  const history = checkWorkflowHistory(workflowHistory, { skipValidator })
   if (history.prohibited_effects.length > 0) {
     const unexpected = history.prohibited_effects[0]
     throw deliveryError(
@@ -759,6 +760,14 @@ export async function verifyCandidateDelivery({
       'incomplete-workflow-history',
       `completed workflow history is missing: ${history.missing_steps.join(', ')}`,
       { missing_delivery_output: history.missing_steps },
+    )
+  }
+  if (history.invalid_outcomes.length > 0) {
+    const invalid = history.invalid_outcomes[0]
+    throw deliveryError(
+      'invalid-workflow-step-outcome',
+      `${invalid.step} expected ${invalid.expected}, observed ${invalid.observed}`,
+      { invalid_workflow_outcome: invalid },
     )
   }
 

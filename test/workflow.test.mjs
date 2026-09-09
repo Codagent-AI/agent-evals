@@ -74,13 +74,15 @@ test('workflow arguments reject an unresolved change-name placeholder', () => {
   )
 })
 
-test('skip-validator only changes the task-level compliance workflow argument', () => {
+test('skip-validator marks task-level and final Validator execution as skipped', () => {
   const skipped = resolveBoundary({ skipValidator: true, changeName: 'create-and-scene' })
   const included = resolveBoundary({ skipValidator: false, changeName: 'create-and-scene' })
 
   assert.equal(skipped.skip_validator, 'true')
   assert.equal(included.skip_validator, 'false')
-  assert.equal(skipped.final_validator, 'required')
+  assert.equal(skipped.task_level_compliance, 'skipped')
+  assert.equal(skipped.final_validator, 'skipped')
+  assert.equal(included.task_level_compliance, 'required')
   assert.equal(included.final_validator, 'required')
   assert.equal(skipped.stop_step, null)
   assert.equal(included.stop_step, null)
@@ -148,6 +150,7 @@ test('completed workflow history requires every final delivery step and rejects 
   assert.deepEqual(checkWorkflowHistory(requiredHistory), {
     ok: true,
     missing_steps: [],
+    invalid_outcomes: [],
     prohibited_effects: [],
     observed_steps: requiredHistory.map(({ step }) => step),
   })
@@ -173,6 +176,48 @@ test('completed workflow history requires every final delivery step and rejects 
   ])
   assert.equal(subworkflow.ok, false)
   assert.equal(subworkflow.prohibited_effects[0].step, 'archive-change-v1.0')
+})
+
+test('skipped validation requires an explicit skipped final Validator outcome', () => {
+  const skippedHistory = [
+    { step: 'run-validator', outcome: 'skipped' },
+    ...requiredHistory.slice(1),
+  ]
+
+  assert.deepEqual(checkWorkflowHistory(skippedHistory, { skipValidator: true }), {
+    ok: true,
+    missing_steps: [],
+    invalid_outcomes: [],
+    prohibited_effects: [],
+    observed_steps: skippedHistory.map(({ step }) => step),
+  })
+
+  const absent = checkWorkflowHistory(skippedHistory.slice(1), { skipValidator: true })
+  assert.equal(absent.ok, false)
+  assert.deepEqual(absent.missing_steps, ['run-validator'])
+
+  const unexpectedlyRan = checkWorkflowHistory(requiredHistory, { skipValidator: true })
+  assert.equal(unexpectedlyRan.ok, false)
+  assert.deepEqual(unexpectedlyRan.invalid_outcomes, [{
+    step: 'run-validator',
+    expected: 'skipped',
+    observed: 'success',
+  }])
+})
+
+test('enabled validation requires a successful final Validator outcome', () => {
+  const skippedHistory = [
+    { step: 'run-validator', outcome: 'skipped' },
+    ...requiredHistory.slice(1),
+  ]
+
+  const checked = checkWorkflowHistory(skippedHistory, { skipValidator: false })
+  assert.equal(checked.ok, false)
+  assert.deepEqual(checked.invalid_outcomes, [{
+    step: 'run-validator',
+    expected: 'success',
+    observed: 'skipped',
+  }])
 })
 
 test('available Agent Runner checkout satisfies the pinned core workflow contract', async (t) => {

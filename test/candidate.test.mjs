@@ -906,6 +906,52 @@ test('delivery verification proves branch, remote head, draft PR identity, and f
     command === 'gh' && /check|status|ci/i.test(args.join(' '))
   )), JSON.stringify(calls))
 
+  const skippedDelivery = await verifyCandidateDelivery({
+    worktree,
+    fixtureCommit: repo.fixture,
+    branch: 'eval/and-scene/run-123',
+    expectedBase: 'main',
+    changeName: 'create-and-scene',
+    sessionDir,
+    skipValidator: true,
+    workflowHistory: [
+      { step: 'run-validator', outcome: 'skipped' },
+      { step: 'open-draft-pr', outcome: 'success' },
+      { step: 'verify-draft-pr', outcome: 'success' },
+      { step: 'prepare-acceptance', outcome: 'success' },
+      { step: 'verify-acceptance-handoff', outcome: 'success' },
+    ],
+    exec: (command, args, options) => {
+      if (command === 'git' && args.includes('ls-remote')) {
+        return { status: 0, stdout: `${head}\trefs/heads/eval/and-scene/run-123\n` }
+      }
+      return exec(command, args, options)
+    },
+    inspectPullRequest: async () => delivery.pull_request,
+  })
+  assert.equal(skippedDelivery.final_validator.outcome, 'skipped')
+
+  await assert.rejects(
+    verifyCandidateDelivery({
+      worktree,
+      fixtureCommit: repo.fixture,
+      branch: 'eval/and-scene/run-123',
+      expectedBase: 'main',
+      changeName: 'create-and-scene',
+      sessionDir,
+      skipValidator: true,
+      workflowHistory: delivery.workflow_history,
+      exec: (command, args, options) => {
+        if (command === 'git' && args.includes('ls-remote')) {
+          return { status: 0, stdout: `${head}\trefs/heads/eval/and-scene/run-123\n` }
+        }
+        return exec(command, args, options)
+      },
+      inspectPullRequest: async () => delivery.pull_request,
+    }),
+    /run-validator.*expected skipped.*observed success/i,
+  )
+
   await assert.rejects(
     verifyCandidateDelivery({
       worktree,

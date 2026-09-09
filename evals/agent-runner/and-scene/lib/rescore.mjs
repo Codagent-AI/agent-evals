@@ -32,7 +32,7 @@ function sourcePath(sourceDir, recordedPath) {
   return path
 }
 
-function validateDelivery(state, delivery) {
+function validateDelivery(state, delivery, { skipValidator }) {
   if (delivery?.verified !== true) throw new Error('rescore source delivery was not verified')
   for (const field of ['fixture_commit', 'branch', 'base_branch', 'final_sha']) {
     same(`delivery ${field}`, state.delivery?.[field], delivery[field])
@@ -56,10 +56,20 @@ function validateDelivery(state, delivery) {
   ) {
     throw new Error('rescore source does not describe an aligned open draft pull request')
   }
-  const history = checkWorkflowHistory(delivery.workflow_history ?? [])
+  const history = checkWorkflowHistory(delivery.workflow_history ?? [], { skipValidator })
   if (!history.ok) {
     throw new Error('rescore source did not complete the full implementation workflow')
   }
+}
+
+function skipValidatorFromWorkflow(workflow) {
+  const values = (workflow?.arguments ?? [])
+    .filter((argument) => argument.startsWith('skip_validator='))
+    .map((argument) => argument.slice('skip_validator='.length))
+  if (values.length !== 1 || !['true', 'false'].includes(values[0])) {
+    throw new Error('rescore source workflow must contain exactly one valid skip_validator argument')
+  }
+  return values[0] === 'true'
 }
 
 function changeNameFromWorkflow(workflow) {
@@ -97,7 +107,8 @@ export async function loadCandidateRescoreSource({ sourceDir }) {
     throw new Error('rescore source did not complete the full implementation workflow')
   }
   same('run id', state.run_id, result.run_id)
-  validateDelivery(state, delivery)
+  const skipValidator = skipValidatorFromWorkflow(result.workflow)
+  validateDelivery(state, delivery, { skipValidator })
   const changeName = changeNameFromWorkflow(result.workflow)
 
   const recordedArtifacts = delivery.acceptance_artifacts ?? []

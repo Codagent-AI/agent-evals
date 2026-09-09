@@ -105,9 +105,10 @@ Options:
   --reference-baseline   Evaluate an existing candidate without invoking Agent
                           Runner. Role profiles are not required or applicable.
   --change-name NAME     OpenSpec change name. Default: create-and-scene
-  --skip-validator       Pass skip_validator=true to skip task-level compliance
-                          only. The final Validator, draft PR, acceptance
-                          preparation, and handoff verification still run.
+  --skip-validator       Pass skip_validator=true to skip all Agent Validator
+                          execution: task-level, final, and acceptance-remediation.
+                          Draft PR, acceptance preparation, and handoff verification
+                          still run.
   --resume               Reopen run-state.json, revalidate the recorded fixture,
                           Runner, branch, draft PR, final SHA, and evidence, then
                           wait for/resume the exact Runner run as needed. Explicit

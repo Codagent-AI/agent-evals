@@ -642,10 +642,13 @@ export async function runEvaluation({
 
   const record = {
     workflowHistory: rescore
-      ? checkWorkflowHistory(importedRun.workflow.observed_steps)
+      ? checkWorkflowHistory(importedRun.workflow.observed_steps, {
+          skipValidator: importedSkipValidator,
+        })
       : {
           ok: mode === 'reference-baseline',
           missing_steps: [],
+          invalid_outcomes: [],
           prohibited_effects: [],
           observed_steps: [],
         },
@@ -907,7 +910,9 @@ export async function runEvaluation({
       record.events.push({ event: 'continue', status: decision.status, reason: null, adopted: false })
 
       record.observed_steps = await readSteps(runnerStateSnapshot)
-      record.workflowHistory = checkWorkflowHistory(record.observed_steps)
+      record.workflowHistory = checkWorkflowHistory(record.observed_steps, {
+        skipValidator: boundary.skip_validator === 'true',
+      })
       await writeJsonAtomic(join(runDir, 'phases/workflow-execution.json'), {
         run: record.run,
         workflow: boundary,
@@ -940,6 +945,7 @@ export async function runEvaluation({
             changeName,
             sessionDir: record.run?.session_dir,
             workflowHistory: record.observed_steps,
+            skipValidator: boundary.skip_validator === 'true',
             exec,
           })
         }
@@ -1485,6 +1491,7 @@ export async function runEvaluation({
           observed_steps: record.observed_steps,
           history_complete: record.workflowHistory.ok,
           missing_steps: record.workflowHistory.missing_steps,
+          invalid_outcomes: record.workflowHistory.invalid_outcomes,
           prohibited_effects: record.workflowHistory.prohibited_effects,
           run_id: record.run?.run_id ?? null,
           session_dir: record.run?.session_dir ?? null,

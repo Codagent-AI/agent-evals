@@ -526,6 +526,7 @@ test('help documents the exact fixture pin, role profiles, and validator option'
   assert.ok(result.stdout.includes(referenceSha))
   assert.ok(result.stdout.includes('--agent-runner-dir PATH'))
   assert.ok(result.stdout.includes('--skip-validator'))
+  assert.match(result.stdout, /skip all Agent Validator\s+execution/i)
   assert.ok(result.stdout.includes('--lead-cli'))
   assert.ok(result.stdout.includes('--implementor-cli'))
   assert.ok(result.stdout.includes('--calibrate'))

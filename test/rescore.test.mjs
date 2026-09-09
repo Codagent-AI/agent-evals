@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, realpath, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -10,7 +10,7 @@ import { loadCandidateRescoreSource } from '../evals/agent-runner/and-scene/lib/
 const fixtureSha = '1'.repeat(40)
 const finalSha = '2'.repeat(40)
 const workflowHistory = [
-  { step: 'run-validator', outcome: 'success' },
+  { step: 'run-validator', outcome: 'skipped' },
   { step: 'open-draft-pr', outcome: 'success' },
   { step: 'verify-draft-pr', outcome: 'success' },
   { step: 'prepare-acceptance', outcome: 'success' },
@@ -189,6 +189,31 @@ test('candidate rescore rejects a source that did not complete the full workflow
   await assert.rejects(
     () => loadCandidateRescoreSource({ sourceDir: context.sourceDir }),
     /full implementation workflow/i,
+  )
+})
+
+test('candidate rescore rejects validation history that contradicts skip-validator mode', async () => {
+  const context = await sourceRun()
+  const deliveryPath = join(context.sourceDir, 'phases/delivery-verification.json')
+  const resultPath = join(context.sourceDir, 'result.json')
+  const runStatePath = join(context.sourceDir, 'run-state.json')
+  const successfulValidator = { step: 'run-validator', outcome: 'success' }
+  const replaceValidator = (history) => [successfulValidator, ...history.slice(1)]
+
+  context.delivery.final_validator = successfulValidator
+  context.delivery.workflow_history = replaceValidator(context.delivery.workflow_history)
+  context.state.delivery.final_validator = successfulValidator
+  context.state.delivery.acceptance.workflow_history = context.delivery.workflow_history
+  const result = JSON.parse(await readFile(resultPath, 'utf8'))
+  result.workflow.observed_steps = context.delivery.workflow_history
+  result.delivery = context.state.delivery
+  await writeFile(deliveryPath, `${JSON.stringify(context.delivery)}\n`)
+  await writeFile(runStatePath, `${JSON.stringify(context.state)}\n`)
+  await writeFile(resultPath, `${JSON.stringify(result)}\n`)
+
+  await assert.rejects(
+    () => loadCandidateRescoreSource({ sourceDir: context.sourceDir }),
+    /full implementation workflow|validator/i,
   )
 })
 
