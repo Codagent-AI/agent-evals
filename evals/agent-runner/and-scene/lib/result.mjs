@@ -24,7 +24,7 @@ import { summarizeEvidenceManifest } from './evidence.mjs'
 import { hashFile, readJson, writeJsonAtomic, writeTextAtomic } from './persistence.mjs'
 import { renderReport } from './report.mjs'
 
-export const RESULT_SCHEMA_VERSION = 5
+export const RESULT_SCHEMA_VERSION = 6
 export const ARTIFACT_MANIFEST_SCHEMA_VERSION = 2
 
 // Runtime scratch: candidate worktrees, linked run stores, and anything else a
@@ -99,6 +99,42 @@ function pricingCompleteness(pricing) {
   return 'unverified'
 }
 
+function modelAttributionCompleteness(metrics) {
+  if (!metrics || metrics.state === 'rejected') return 'unavailable'
+  const attempts = (metrics.attempts ?? []).filter((attempt) => attempt.invoked_cli !== false)
+  if (attempts.length === 0) return 'unavailable'
+  const states = attempts.map((attempt) => (
+    attempt.identity?.per_model_attribution
+    ?? (attempt.provider && attempt.model ? 'complete' : 'unavailable')
+  ))
+  if (states.every((state) => state === 'complete')) return 'complete'
+  if (states.every((state) => state === 'unavailable')) return 'unavailable'
+  return 'partial'
+}
+
+function implementationIdentityCompleteness(metrics) {
+  if (!metrics || metrics.state === 'rejected') return 'unavailable'
+  const attempts = (metrics.attempts ?? []).filter((attempt) => attempt.invoked_cli !== false)
+  if (attempts.length === 0) return 'unavailable'
+  const states = attempts.map((attempt) => {
+    const observed = attempt.identity?.observed
+    if (Array.isArray(observed)) {
+      if (observed.length > 0 && observed.every((identity) => identity.provider && identity.model)) {
+        return 'complete'
+      }
+      const hasIdentityEvidence = observed.length > 0
+        || ['adapter', 'model', 'provider', 'effort'].some(
+          (field) => attempt.identity?.requested?.[field] || attempt.identity?.resolved?.[field],
+        )
+      return hasIdentityEvidence ? 'partial' : 'unavailable'
+    }
+    return attempt.provider && attempt.model ? 'complete' : 'unavailable'
+  })
+  if (states.every((state) => state === 'complete')) return 'complete'
+  if (states.every((state) => state === 'unavailable')) return 'unavailable'
+  return 'partial'
+}
+
 function completenessOf({
   mode,
   score,
@@ -130,13 +166,28 @@ function completenessOf({
     implementation_cost: mode === 'reference-baseline'
       ? NOT_APPLICABLE
       : implementationCostCompleteness(cost),
+    implementation_identity: mode === 'reference-baseline'
+      ? NOT_APPLICABLE
+      : implementationIdentityCompleteness(metrics),
+    per_model_attribution: mode === 'reference-baseline'
+      ? NOT_APPLICABLE
+      : modelAttributionCompleteness(metrics),
     pricing: pricingCompleteness(pricing),
     timing: timing ? 'complete' : 'unavailable',
     // Agent Runner's own report that it lost metric records is preserved as
     // itself rather than folded into the coverage computed from what survived.
     metric_history: mode === 'reference-baseline'
       ? NOT_APPLICABLE
-      : (metrics ? (metrics.history_complete === false ? 'incomplete' : 'complete') : 'unavailable'),
+      : (metrics
+          ? (metrics.history_complete === false || metrics.measurement_history_complete === false
+              ? 'incomplete'
+              : 'complete')
+          : 'unavailable'),
+    metric_delivery: mode === 'reference-baseline'
+      ? NOT_APPLICABLE
+      : (metrics?.delivery_complete === null || metrics?.delivery_complete === undefined
+          ? NOT_APPLICABLE
+          : (metrics.delivery_complete ? 'complete' : 'incomplete')),
     workflow_provenance: evidence?.workflow_provenance
       ?? (mode === 'reference-baseline' ? NOT_APPLICABLE : 'incomplete'),
     candidate_evidence: mode === 'reference-baseline'

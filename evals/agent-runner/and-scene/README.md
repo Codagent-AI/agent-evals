@@ -444,13 +444,19 @@ A phase that cannot produce its outputs stops its dependents rather than letting
 them run on stale or fabricated inputs. Result writing and cleanup still run.
 
 The result consumes Agent Runner's versioned `run-metrics.json` directly. It
-accepts schema v1 for older runs and schema v2 for stable role/tool plus
-requested/effective model identity. `result.json` and `report.html` show
-implementation usage by role, tool, provider, and effective model, including
-canonical input/output totals, cache and reasoning detail, pricing source,
-verification state, and a run-wide token total. Eval-owned Codex judge usage is
-captured separately in `phases/eval-owned-usage.jsonl`; it is never priced or
-included in implementation cost.
+accepts legacy schemas v1-v3 and the authoritative schema-v4 measurement
+projection. For v4, native measurements and current Validator measurement
+heads are the usage sources; the `steps` compatibility view is never counted a
+second time. The suite preserves requested, resolved, and observed identities,
+field-level availability and precision, delivery/history gaps, per-model
+allocations and unallocated usage, and scoped provider cost evidence.
+Unsupported outer or nested versions are rejected instead of falling back to
+an older compatibility view. `result.json` and `report.html` show implementation
+usage by role, tool, provider, model, and allocation, including dispatch and
+participation counts, canonical totals, pricing source, verification state, and
+independent completeness dimensions. Eval-owned Codex judge usage is captured
+separately in `phases/eval-owned-usage.jsonl`; it is never priced or included in
+implementation cost.
 
 ## Human review
 

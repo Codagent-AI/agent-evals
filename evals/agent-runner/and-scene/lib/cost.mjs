@@ -23,7 +23,7 @@ function roundUsd(value) {
 }
 
 function rowKey(attempt) {
-  return JSON.stringify([attempt.agent_role, attempt.provider, attempt.model])
+  return JSON.stringify([attempt.agent_role, attempt.provider, attempt.model, attempt.allocation ?? 'attempt'])
 }
 
 function addTokens(into, tokens) {
@@ -38,11 +38,15 @@ function addTokens(into, tokens) {
 
 function addTokenTotals(into, totals) {
   if (!totals || typeof totals !== 'object') return into
-  const next = into ?? { input: 0, output: 0, total: 0 }
+  const next = into ? { ...into } : {}
   for (const category of ['input', 'output', 'total']) {
-    if (Number.isFinite(totals[category])) next[category] += totals[category]
+    if (Number.isFinite(totals[category])) next[category] = (next[category] ?? 0) + totals[category]
   }
-  return next
+  return Object.keys(next).length > 0 ? next : into
+}
+
+function completeTokenTotals(totals) {
+  return ['input', 'output', 'total'].every((category) => Number.isFinite(totals?.[category]))
 }
 
 function verificationOf(sources) {
@@ -59,54 +63,137 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
   const rows = new Map()
   const unresolved = []
   let knownSubtotal = 0
+  let usageTokens = null
+  let usageTokenTotals = null
+  let attemptsMissingUsage = 0
+  let attemptsMissingTokenTotals = 0
+  const cliAttempts = attempts.filter((entry) => entry.invoked_cli)
 
   // Only work executed inside the Agent Runner implementation workflow is
   // priced. Shell steps, and every eval-owned invocation, are out of scope by
   // construction rather than by subtraction.
-  for (const attempt of attempts.filter((entry) => entry.invoked_cli)) {
-    const key = rowKey(attempt)
-    const row = rows.get(key) ?? {
-      agent_role: attempt.agent_role,
-      tool: attempt.tool ?? null,
-      provider: attempt.provider,
-      model: attempt.model,
-      attempt_count: 0,
-      attempt_ids: [],
-      tokens: null,
-      token_totals: null,
-      attempts_missing_usage: 0,
-      attempts_missing_token_totals: 0,
-      resolved_amount_usd: 0,
-      resolved_count: 0,
-      sources: [],
-      unresolved_attempts: [],
-    }
-
-    row.attempt_count += 1
-    row.attempt_ids.push(attempt.attempt_id)
-    if (attempt.usage?.state === 'available') {
-      row.tokens = addTokens(row.tokens, attempt.usage.tokens)
-      row.token_totals = addTokenTotals(row.token_totals, attempt.usage.token_totals)
-      if (!attempt.usage.token_totals) row.attempts_missing_token_totals += 1
+  for (const attempt of cliAttempts) {
+    const measured = ['available', 'partial'].includes(attempt.usage?.state)
+    if (measured) {
+      usageTokens = addTokens(usageTokens, attempt.usage.tokens)
+      usageTokenTotals = addTokenTotals(usageTokenTotals, attempt.usage.token_totals)
+      if (!completeTokenTotals(attempt.usage.token_totals)) attemptsMissingTokenTotals += 1
     } else {
-      row.attempts_missing_usage += 1
-      row.attempts_missing_token_totals += 1
+      attemptsMissingUsage += 1
+      attemptsMissingTokenTotals += 1
     }
 
     const resolution = byAttempt.get(attempt.attempt_id)
-    // Non-negative, not merely finite: a negative amount is malformed data, and
-    // admitting one would let a single bad row silently reduce the total.
     if (resolution?.state === 'resolved' && Number.isFinite(resolution.amount_usd) && resolution.amount_usd >= 0) {
-      row.resolved_amount_usd += resolution.amount_usd
-      row.resolved_count += 1
       knownSubtotal += resolution.amount_usd
-      if (!row.sources.includes(resolution.source)) row.sources.push(resolution.source)
     } else {
-      row.unresolved_attempts.push(attempt.attempt_id)
+      if (Number.isFinite(resolution?.known_subtotal_usd) && resolution.known_subtotal_usd >= 0) {
+        knownSubtotal += resolution.known_subtotal_usd
+      }
       unresolved.push(attempt.attempt_id)
     }
 
-    rows.set(key, row)
+    const fragments = (attempt.allocations?.length ?? 0) > 0 || attempt.unallocated_usage
+      ? [
+          ...(attempt.allocations ?? []).map((allocation) => ({
+            ...allocation,
+            allocation: 'attributed',
+          })),
+          ...(attempt.unallocated_usage ? [{
+            ...attempt.unallocated_usage,
+            allocation: 'unallocated',
+            provider: null,
+            model: null,
+            effort: null,
+          }] : []),
+        ]
+      : [{
+          allocation: 'attempt',
+          allocation_id: null,
+          provider: attempt.provider,
+          model: attempt.model,
+          effort: attempt.effort,
+          usage: attempt.usage,
+        }]
+
+    for (const fragment of fragments) {
+      const descriptor = {
+        agent_role: attempt.agent_role,
+        tool: attempt.tool ?? null,
+        provider: fragment.provider ?? null,
+        model: fragment.model ?? null,
+        allocation: fragment.allocation,
+      }
+      const key = rowKey(descriptor)
+      const row = rows.get(key) ?? {
+        ...descriptor,
+        attempt_count: 0,
+        participating_attempt_count: 0,
+        attempt_ids: [],
+        allocation_ids: [],
+        tokens: null,
+        token_totals: null,
+        attempts_missing_usage: 0,
+        attempts_partial_usage: 0,
+        attempts_missing_token_totals: 0,
+        missing_usage_attempt_ids: [],
+        partial_usage_attempt_ids: [],
+        missing_token_total_attempt_ids: [],
+        resolved_amount_usd: 0,
+        resolved_count: 0,
+        sources: [],
+        unresolved_attempts: [],
+      }
+      if (!row.attempt_ids.includes(attempt.attempt_id)) {
+        row.attempt_count += 1
+        row.participating_attempt_count += 1
+        row.attempt_ids.push(attempt.attempt_id)
+      }
+      if (fragment.allocation_id) row.allocation_ids.push(fragment.allocation_id)
+      const fragmentMeasured = fragment.usage?.tokens || fragment.usage?.token_totals
+      if (fragmentMeasured) {
+        row.tokens = addTokens(row.tokens, fragment.usage.tokens)
+        row.token_totals = addTokenTotals(row.token_totals, fragment.usage.token_totals)
+        if (fragment.usage.state === 'partial' && !row.partial_usage_attempt_ids?.includes(attempt.attempt_id)) {
+          row.attempts_partial_usage += 1
+          row.partial_usage_attempt_ids.push(attempt.attempt_id)
+        }
+        if (
+          !completeTokenTotals(fragment.usage.token_totals)
+          && !row.missing_token_total_attempt_ids?.includes(attempt.attempt_id)
+        ) {
+          row.attempts_missing_token_totals += 1
+          row.missing_token_total_attempt_ids.push(attempt.attempt_id)
+        }
+      } else {
+        if (!row.missing_usage_attempt_ids?.includes(attempt.attempt_id)) {
+          row.attempts_missing_usage += 1
+          row.missing_usage_attempt_ids.push(attempt.attempt_id)
+        }
+        if (!row.missing_token_total_attempt_ids?.includes(attempt.attempt_id)) {
+          row.attempts_missing_token_totals += 1
+          row.missing_token_total_attempt_ids.push(attempt.attempt_id)
+        }
+      }
+
+      const allocationCost = resolution?.allocation_costs?.find(
+        (entry) => entry.allocation_id === fragment.allocation_id,
+      )
+      const rowAmount = allocationCost?.amount_usd
+        ?? (fragment.allocation === 'attempt' && resolution?.state === 'resolved' ? resolution.amount_usd : null)
+      if (Number.isFinite(rowAmount) && rowAmount >= 0) {
+        row.resolved_amount_usd += rowAmount
+        row.resolved_count += 1
+        const source = allocationCost?.source ?? resolution.source
+        if (source && !row.sources.includes(source)) row.sources.push(source)
+      }
+      if (!Number.isFinite(rowAmount) || rowAmount < 0 || allocationCost?.state === 'incomplete') {
+        if (!row.unresolved_attempts.includes(attempt.attempt_id)) {
+          row.unresolved_attempts.push(attempt.attempt_id)
+        }
+      }
+      rows.set(key, row)
+    }
   }
 
   const complete = unresolved.length === 0 && attemptsComplete
@@ -117,13 +204,17 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
       tool: row.tool,
       provider: row.provider,
       model: row.model,
+      allocation: row.allocation,
       attempt_count: row.attempt_count,
+      participating_attempt_count: row.participating_attempt_count,
       attempt_ids: row.attempt_ids,
+      allocation_ids: row.allocation_ids,
       tokens: row.tokens,
       token_totals: row.token_totals,
       token_categories: row.tokens ? Object.keys(row.tokens).sort() : [],
-      usage_complete: row.attempts_missing_usage === 0,
+      usage_complete: row.attempts_missing_usage === 0 && row.attempts_partial_usage === 0,
       attempts_missing_usage: row.attempts_missing_usage,
+      attempts_partial_usage: row.attempts_partial_usage,
       token_totals_complete: row.attempts_missing_token_totals === 0,
       attempts_missing_token_totals: row.attempts_missing_token_totals,
       cost: {
@@ -138,24 +229,16 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
       complete: rowComplete,
     }
   })
-  const attemptCount = rendered.reduce((sum, row) => sum + row.attempt_count, 0)
-  const attemptsMissingUsage = rendered.reduce((sum, row) => sum + row.attempts_missing_usage, 0)
-  const attemptsMissingTokenTotals = rendered.reduce(
-    (sum, row) => sum + row.attempts_missing_token_totals,
-    0,
-  )
-  const usageTokens = rendered.reduce((sum, row) => addTokens(sum, row.tokens), null)
-  const usageTokenTotals = rendered.reduce(
-    (sum, row) => addTokenTotals(sum, row.token_totals),
-    null,
-  )
+  const attemptCount = cliAttempts.length
   const usageComplete = attemptsComplete
     && attemptCount > 0
     && attemptsMissingUsage === 0
     && attemptsMissingTokenTotals === 0
+    && cliAttempts.every((attempt) => attempt.usage?.state === 'available')
 
   return {
     rows: rendered,
+    dispatch_count: attemptCount,
     usage: {
       state: usageComplete
         ? 'available'

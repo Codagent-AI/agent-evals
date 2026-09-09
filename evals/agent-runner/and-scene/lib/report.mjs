@@ -81,7 +81,7 @@ function implementationUsageSection(result) {
   const rows = Array.isArray(cost?.rows) ? cost.rows : []
   const implementation = table(
     [
-      'Role', 'Tool', 'Provider', 'Model', 'Attempts', 'Canonical input', 'Cached input',
+      'Role', 'Tool', 'Provider', 'Model', 'Allocation', 'Participating attempts', 'Canonical input', 'Cached input',
       'Cache write', 'Canonical output', 'Reasoning detail', 'Canonical total',
       'Usage', 'Cost', 'Cost state', 'Cost source', 'Verification',
     ],
@@ -90,7 +90,8 @@ function implementationUsageSection(result) {
       row.tool ?? 'unknown',
       row.provider ?? 'unknown',
       row.model ?? 'unknown',
-      tokenCount(row.attempt_count),
+      row.allocation ?? 'attempt',
+      tokenCount(row.participating_attempt_count ?? row.attempt_count),
       tokenCount(row.token_totals?.input),
       tokenCount(row.tokens?.cached_input),
       tokenCount(row.tokens?.cache_write),
@@ -111,6 +112,7 @@ function implementationUsageSection(result) {
       ['Metric', 'Value'],
       [
         ['State', usage?.state ?? 'unavailable'],
+        ['Implementation dispatches', tokenCount(cost?.dispatch_count ?? usage?.attempt_count)],
         ['Canonical input', tokenCount(usage?.token_totals?.input)],
         ['Cached input detail', tokenCount(usage?.tokens?.cached_input)],
         ['Cache write detail', tokenCount(usage?.tokens?.cache_write)],
@@ -155,7 +157,10 @@ function implementationUsageSection(result) {
         state: metrics.state ?? null,
         reason: metrics.reason ?? null,
         history_complete: metrics.history_complete ?? null,
+        delivery_complete: metrics.delivery_complete ?? null,
         attempt_count: metrics.attempt_count ?? null,
+        dispatch_count: metrics.dispatch_count ?? null,
+        measurement_aggregate_version: metrics.measurement_aggregate_version ?? null,
         active_duration_ms: metrics.active_duration_ms ?? null,
         coverage: metrics.coverage ?? null,
       }

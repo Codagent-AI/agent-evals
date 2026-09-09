@@ -246,6 +246,51 @@ test('implementation usage is incomplete when canonical run token totals are par
   assert.equal(result.completeness.implementation_cost, 'complete')
 })
 
+test('Validator delivery and per-model attribution remain separate completeness dimensions', () => {
+  const result = assemble({
+    cost: {
+      usage: { state: 'available', complete: true },
+      rows: [{ usage_complete: false, token_totals_complete: false, allocation: 'unallocated' }],
+      total: { state: 'unavailable', complete: false },
+    },
+    metrics: {
+      state: 'ingested',
+      complete: false,
+      history_complete: true,
+      measurement_history_complete: true,
+      delivery_complete: false,
+      attempts: [{
+        identity: {
+          requested: { adapter: 'codex', model: 'configured-model' },
+          resolved: { adapter: 'codex', model: 'configured-model' },
+          observed: [{ provider: null, model: 'observed-model' }],
+          per_model_attribution: 'partial',
+        },
+      }],
+      coverage: { usage_available: 1, usage_partial: 0, usage_unavailable: 0 },
+    },
+  })
+
+  assert.equal(result.completeness.metric_history, 'complete')
+  assert.equal(result.completeness.metric_delivery, 'incomplete')
+  assert.equal(result.completeness.implementation_usage, 'incomplete')
+  assert.equal(result.completeness.implementation_identity, 'partial')
+  assert.equal(result.completeness.per_model_attribution, 'partial')
+})
+
+test('producer measurement history can be incomplete while delivery remains complete', () => {
+  const result = assemble({
+    metrics: {
+      state: 'ingested', complete: false, history_complete: true,
+      measurement_history_complete: false, delivery_complete: true,
+      attempts: [], coverage: { usage_available: 0, usage_unavailable: 0 },
+    },
+  })
+
+  assert.equal(result.completeness.metric_history, 'incomplete')
+  assert.equal(result.completeness.metric_delivery, 'complete')
+})
+
 test('judge coverage is incomplete when a required judge is absent without a recorded failure', () => {
   const judging = completeJudging()
   delete judging.judges['assumption-handling']

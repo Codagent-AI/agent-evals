@@ -135,6 +135,68 @@ function attemptBillingTokens(attempt) {
     : attempt.usage?.tokens
 }
 
+function reportedCostSummary(attempt) {
+  const evidence = Array.isArray(attempt.provider_reported_costs)
+    ? attempt.provider_reported_costs
+    : []
+  const usd = evidence.filter((cost) => (
+    cost.amount?.availability !== 'unavailable'
+    && nonNegative(cost.amount?.value)
+    && cost.currency?.availability === 'available'
+    && cost.currency.value === 'USD'
+  ))
+  const allocationGroups = new Map()
+  for (const cost of usd.filter((entry) => entry.scope === 'allocation' && entry.allocation_id)) {
+    const group = allocationGroups.get(cost.allocation_id) ?? []
+    group.push(cost)
+    allocationGroups.set(cost.allocation_id, group)
+  }
+  const allocationCosts = [...allocationGroups.entries()]
+    .filter(([, costs]) => costs.length === 1)
+    .map(([allocationId, [cost]]) => ({
+      allocation_id: allocationId,
+      amount_usd: cost.amount.value,
+      cost_evidence_id: cost.cost_evidence_id,
+      state: cost.coverage === 'full' ? 'resolved' : 'incomplete',
+      coverage: cost.coverage,
+      overlap: cost.overlap,
+      source: 'agent-runner-reported',
+    }))
+  const allocationIds = new Set((attempt.allocations ?? []).map((allocation) => allocation.allocation_id))
+  const exhaustiveAllocations = allocationIds.size > 0
+    && !attempt.unallocated_usage
+    && allocationCosts.length === allocationIds.size
+    && allocationCosts.every((cost) => allocationIds.has(cost.allocation_id))
+    && usd.filter((entry) => entry.scope === 'allocation').every((cost) => (
+      cost.coverage === 'full' && cost.overlap === 'established'
+    ))
+  const additiveAllocationIds = allocationCosts.length === 1
+    ? new Set(allocationCosts.map((cost) => cost.allocation_id))
+    : new Set(usd.filter((cost) => (
+      cost.scope === 'allocation'
+      && cost.allocation_id
+      && cost.overlap === 'established'
+      && allocationGroups.get(cost.allocation_id)?.length === 1
+    )).map((cost) => cost.allocation_id))
+  let knownSubtotal = allocationCosts
+    .filter((cost) => additiveAllocationIds.has(cost.allocation_id))
+    .reduce((sum, cost) => sum + cost.amount_usd, 0)
+  // A lone partial whole-attempt charge is still a known subtotal. When
+  // allocation charges also exist, however, its overlap with them is not an
+  // independently established disjoint scope, so it is retained as evidence
+  // but not added again.
+  const attemptCosts = usd.filter((entry) => entry.scope === 'attempt')
+  if (allocationCosts.length === 0 && attemptCosts.length === 1) {
+    knownSubtotal = attemptCosts[0].amount.value
+  }
+  return {
+    evidence,
+    known_subtotal_usd: knownSubtotal,
+    complete_amount_usd: exhaustiveAllocations ? Number(knownSubtotal.toFixed(10)) : null,
+    allocation_costs: allocationCosts,
+  }
+}
+
 export function calculateCatalogCost({ entry, tokens }) {
   if (!entry) return unavailable('no exact models.dev provider/model match')
   const malformed = malformedCategory(tokens)
@@ -242,7 +304,22 @@ function calculateFindingCost({ finding, tokens }) {
 }
 
 export async function resolveAttemptCost({ attempt, catalog, invoke, authority = null }) {
-  const base = { attempt_id: attempt.attempt_id, provenance: null }
+  const reported = reportedCostSummary(attempt)
+  const base = {
+    attempt_id: attempt.attempt_id,
+    provenance: null,
+    provider_reported_costs: reported.evidence,
+    known_subtotal_usd: reported.known_subtotal_usd,
+    allocation_costs: reported.allocation_costs,
+  }
+  const unresolved = (reason, extra = {}) => ({
+    ...base,
+    ...unavailable(reason),
+    state: reported.known_subtotal_usd > 0 ? 'incomplete' : 'unavailable',
+    source: reported.known_subtotal_usd > 0 ? 'provider-reported' : null,
+    verification: reported.known_subtotal_usd > 0 ? 'reported' : null,
+    ...extra,
+  })
 
   // Agent Runner's own reported cost wins outright: it measured the attempt, and
   // a lookup could only second-guess it with less information.
@@ -251,38 +328,89 @@ export async function resolveAttemptCost({ attempt, catalog, invoke, authority =
       ...base,
       state: 'resolved',
       amount_usd: attempt.cost.estimated_api_cost_usd,
+      known_subtotal_usd: attempt.cost.estimated_api_cost_usd,
       source: 'agent-runner-reported',
       verification: 'reported',
       reason: null,
     }
   }
 
-  const tokens = attempt.usage?.state === 'available' ? attemptBillingTokens(attempt) : null
-  const malformed = malformedCategory(tokens)
-  if (malformed) {
+  if (reported.complete_amount_usd !== null) {
     return {
       ...base,
-      ...unavailable(`token category ${malformed} has an unusable count`),
-      source: null,
-      verification: null,
-    }
-  }
-  if (billedCategories(tokens).length === 0) {
-    return {
-      ...base,
-      ...unavailable('no reported token usage to price this attempt with'),
-      source: null,
-      verification: null,
+      state: 'resolved',
+      amount_usd: reported.complete_amount_usd,
+      known_subtotal_usd: reported.complete_amount_usd,
+      source: 'agent-runner-reported',
+      verification: 'reported',
+      reason: null,
     }
   }
 
-  if (!attempt.provider || !attempt.model) {
+  // A dispatch can use several observed models. When all usage is allocated,
+  // price each exact identity separately and add the disjoint allocations;
+  // never collapse them into a made-up whole-attempt model identity.
+  if ((attempt.allocations?.length ?? 0) > 0 && !attempt.unallocated_usage) {
+    const allocationCosts = []
+    for (const allocation of attempt.allocations) {
+      const tokens = allocation.usage?.billing_tokens
+      if (!allocation.provider || !allocation.model || billedCategories(tokens).length === 0) {
+        return unresolved('every model allocation needs exact identity and billable usage for pricing')
+      }
+      const resolution = await resolveAttemptCost({
+        attempt: {
+          attempt_id: `${attempt.attempt_id}:${allocation.allocation_id}`,
+          invoked_cli: true,
+          provider: allocation.provider,
+          model: allocation.model,
+          usage: { state: 'available', billing_tokens: tokens },
+          cost: { state: 'unavailable', amount_usd: null },
+          provider_reported_costs: [],
+          allocations: [],
+          unallocated_usage: null,
+        },
+        catalog,
+        invoke,
+        authority,
+      })
+      if (resolution.state !== 'resolved') {
+        return unresolved(`allocation ${allocation.allocation_id} could not be priced: ${resolution.reason}`)
+      }
+      allocationCosts.push({
+        allocation_id: allocation.allocation_id,
+        amount_usd: resolution.amount_usd,
+        source: resolution.source,
+        verification: resolution.verification,
+        provenance: resolution.provenance,
+      })
+    }
+    const amount = Number(allocationCosts.reduce((sum, cost) => sum + cost.amount_usd, 0).toFixed(10))
+    const sources = [...new Set(allocationCosts.map((cost) => cost.source))]
+    const unverified = allocationCosts.some((cost) => cost.verification === 'unverified')
     return {
       ...base,
-      ...unavailable('exact provider and model identity are required for pricing'),
-      source: null,
-      verification: null,
+      state: 'resolved',
+      amount_usd: amount,
+      known_subtotal_usd: amount,
+      allocation_costs: allocationCosts,
+      source: unverified ? 'judge-web-search' : (sources.length === 1 ? sources[0] : 'mixed-allocation-pricing'),
+      verification: unverified ? 'unverified' : 'catalog',
+      reason: null,
+      provenance: { allocations: allocationCosts.map(({ allocation_id, provenance }) => ({ allocation_id, provenance })) },
     }
+  }
+
+  const tokens = attempt.usage?.state === 'available' ? attemptBillingTokens(attempt) : null
+  const malformed = malformedCategory(tokens)
+  if (malformed) {
+    return unresolved(`token category ${malformed} has an unusable count`)
+  }
+  if (billedCategories(tokens).length === 0) {
+    return unresolved('no reported token usage to price this attempt with')
+  }
+
+  if (!attempt.provider || !attempt.model) {
+    return unresolved('exact provider and model identity are required for pricing')
   }
 
   const entry = lookupCatalogEntry(catalog, attempt.provider, attempt.model)
@@ -292,6 +420,7 @@ export async function resolveAttemptCost({ attempt, catalog, invoke, authority =
       ...base,
       state: 'resolved',
       amount_usd: calculated.amount_usd,
+      known_subtotal_usd: calculated.amount_usd,
       source: 'models.dev',
       verification: 'catalog',
       reason: null,
@@ -311,40 +440,36 @@ export async function resolveAttemptCost({ attempt, catalog, invoke, authority =
   }
 
   if (!invoke) {
-    return { ...base, ...unavailable(calculated.reason), source: null, verification: null }
+    return unresolved(calculated.reason)
   }
 
   let finding
   try {
     finding = parsePricingFinding(await invoke(buildPricingRequest({ attempt, authority })), attempt)
   } catch (error) {
-    return { ...base, ...unavailable(error.message), source: null, verification: null }
+    return unresolved(error.message)
   }
   if (!finding.found) {
-    return { ...base, ...unavailable(finding.reason), source: null, verification: null }
+    return unresolved(finding.reason)
   }
   // An answer about another model is an answer to another question. Accepting it
   // is exactly the similar-name inference this module forbids.
   if (finding.matched_model !== attempt.model || finding.matched_provider !== attempt.provider) {
-    return {
-      ...base,
-      ...unavailable(
-        `the judge matched ${finding.matched_provider}/${finding.matched_model}, not ${attempt.provider}/${attempt.model}`,
-      ),
-      source: null,
-      verification: null,
-    }
+    return unresolved(
+      `the judge matched ${finding.matched_provider}/${finding.matched_model}, not ${attempt.provider}/${attempt.model}`,
+    )
   }
 
   const priced = calculateFindingCost({ finding, tokens })
   if (priced.state !== 'resolved') {
-    return { ...base, ...priced, source: null, verification: null }
+    return unresolved(priced.reason)
   }
 
   return {
     ...base,
     state: 'resolved',
     amount_usd: priced.amount_usd,
+    known_subtotal_usd: priced.amount_usd,
     source: 'judge-web-search',
     // A judge-found rate may contribute to the total, but it is never presented
     // as verified: a reader must be able to see which figures rest on a search.
@@ -372,9 +497,14 @@ export async function resolveAttemptCost({ attempt, catalog, invoke, authority =
 export function needsPricingLookup(attempts = []) {
   return attempts.some((attempt) => (
     attempt.invoked_cli
-    && attempt.provider
-    && attempt.model
     && !(attempt.cost?.state === 'available' && nonNegative(attempt.cost.estimated_api_cost_usd))
+    && reportedCostSummary(attempt).complete_amount_usd === null
+    && (
+      (attempt.provider && attempt.model)
+      || ((attempt.allocations?.length ?? 0) > 0
+        && !attempt.unallocated_usage
+        && attempt.allocations.every((allocation) => allocation.provider && allocation.model))
+    )
   ))
 }
 

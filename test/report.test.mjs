@@ -490,7 +490,9 @@ test('implementation metrics render as a readable per-role and model table', () 
         tool: 'agent-runner',
         provider: 'openai',
         model: 'gpt-5.6-terra',
+        allocation: 'attributed',
         attempt_count: 2,
+        participating_attempt_count: 2,
         tokens: {
           input: 1500,
           cached_input: 500,
@@ -526,16 +528,20 @@ test('implementation metrics render as a readable per-role and model table', () 
 
   assert.match(html, /<th>Role<\/th>/)
   assert.match(html, /<th>Model<\/th>/)
+  assert.match(html, /<th>Allocation<\/th>/)
+  assert.match(html, /<th>Participating attempts<\/th>/)
   assert.match(html, /<th>Canonical input<\/th>/)
   assert.match(html, /<th>Cached input<\/th>/)
   assert.match(html, /<th>Reasoning detail<\/th>/)
   assert.match(html, /<th>Cost source<\/th>/)
   assert.match(html, /<th>Verification<\/th>/)
   assert.match(html, /gpt-5\.6-terra/)
+  assert.match(html, />attributed<\/td>/)
   assert.match(html, /models\.dev/)
   assert.match(html, />1,500<\/td>/)
   assert.match(html, />1,800<\/td>/)
   assert.match(html, /Implementation token total/)
+  assert.match(html, /Implementation dispatches/)
   assert.match(html, /Eval-owned model usage/)
   assert.match(html, /product-judging/)
   assert.doesNotMatch(html, /&quot;agent_role&quot;/)

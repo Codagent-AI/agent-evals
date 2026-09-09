@@ -4,9 +4,11 @@
 Define durable evaluation usage, cost, timing, result, report, reference-comparison, and publication artifacts.
 ## Requirements
 ### Requirement: Agent Runner metrics ingestion
-The evaluation harness SHALL consume Agent Runner `run-metrics.json` schema versions 1, 2, and 3 as the supported source for implementation-workflow attempts, token usage, reported cost, and active duration. It SHALL validate that the artifact names the recorded Agent Runner run and workflow, preserve a copy and SHA-256 hash of the source artifact, and retain every attempt across retries and resumed execution sessions.
+The evaluation harness SHALL consume Agent Runner `run-metrics.json` schema versions 1 through 4 as its only supported source for implementation-workflow attempts, token usage, reported cost, and active duration. It SHALL NOT read Validator-private telemetry directly or reconstruct missing metrics from transcripts, audit-log text, or CLI output. It SHALL validate that the artifact names the recorded Agent Runner run and workflow, preserve a copy and SHA-256 hash of the source artifact, and retain every attempt across retries and resumed execution sessions.
 
-The harness SHALL preserve reported token categories, canonical input/output/overall totals, usage and cost coverage, unavailable reasons, and `history_complete`. For schema versions 2 and 3 it SHALL use stable role/tool identity and effective provider/model/effort for attribution and pricing while preserving the separately requested identity and identity provenance. For schema version 3 it SHALL additionally preserve execution-session identity and coverage, execution-session rollups, and step-level and repository-level Git change attribution. Structured nested model records SHALL remain distinct attempts. The harness SHALL NOT reconstruct missing Agent Runner metrics from transcripts, audit-log text, or CLI output, and SHALL NOT represent missing metrics as zero.
+For schema v4, `native_measurements`, supported current `measurement_heads`, `measurement_totals`, and `validator_contexts` SHALL be authoritative. The harness SHALL NOT add the `steps` compatibility projection to those measurements. It SHALL preserve the selected record revision and digest, Runner attribution, producer/source versions, invocation records including confirmed zero-dispatch invocations, requested/resolved/observed identities, exact field envelopes, precision and derivation, per-model allocations, unallocated usage, and provider-reported cost evidence. Unsupported outer, aggregate, native, or producer measurement versions and unsupported fields SHALL be rejected rather than replaced with compatibility data or an older head.
+
+History, delivery, usage, identity, per-model attribution, and pricing completeness SHALL remain independent. Delivery gaps, unavailable and partial values, approximate precision, and unknown inclusion or overlap SHALL remain explicit. In particular, an unavailable cache-write value SHALL NOT become zero, uncached input SHALL NOT be derived by subtraction unless the source establishes those semantics, and a grand total SHALL remain unavailable unless its components are complete and non-overlapping. Schemas v1-v3 retain their existing legacy mappings and limitations.
 
 #### Scenario: Valid Agent Runner metrics are ingested
 - **WHEN** the recorded Agent Runner run provides a supported `run-metrics.json` with matching run identity
@@ -20,6 +22,21 @@ The harness SHALL preserve reported token categories, canonical input/output/ove
 #### Scenario: Schema-version-3 execution attribution is available
 - **WHEN** the recorded run reports schema-version-3 execution sessions, session rollups, and Git change attribution
 - **THEN** the harness preserves those fields alongside every existing identity, usage, cost, duration, and coverage field
+
+#### Scenario: Schema-version-4 authoritative measurements are available
+- **WHEN** a matching schema-v4 artifact contains native measurements and supported current Validator measurement heads
+- **THEN** the harness counts each dispatched model attempt exactly once from those authoritative sources
+- **AND** it preserves invocation, revision, digest, attribution, identity, token-envelope, allocation, cost-evidence, and completeness data
+- **AND** it does not add usage from the compatibility `steps` view
+
+#### Scenario: Validator delivery is incomplete
+- **WHEN** schema v4 reports a missing, blocked, conflicting, or unsupported Validator measurement delivery
+- **THEN** delivery is incomplete with its gaps preserved and totals that could omit work remain incomplete
+- **AND** independently established history and usable sibling measurements remain available
+
+#### Scenario: Unsupported nested contract is present
+- **WHEN** schema v4 contains an unsupported aggregate, native-measurement, or producer-measurement version or field
+- **THEN** the harness rejects the artifact instead of using a stale head or compatibility projection
 
 #### Scenario: Agent Runner metric is unavailable
 - **WHEN** a step's usage or cost is explicitly unavailable in `run-metrics.json`
@@ -37,7 +54,7 @@ The harness SHALL preserve reported token categories, canonical input/output/ove
 ### Requirement: Agent-and-model implementation cost aggregation
 The harness SHALL assign each Agent Runner agent attempt to its workflow agent role and actual provider/model using workflow, step, role-configuration, and usage source-and-version details. It SHALL aggregate attempts by the exact tuple `agent role + provider + model`, preserving token categories and summing every attempt and retry.
 
-Each aggregate row SHALL contain its agent role, tool, provider, model, attempt count, available token-category totals, canonical token totals, cost amount, cost source, verification state, and completeness. The result SHALL also report the canonical total tokens across all implementation attempts when complete. The result SHALL report a numeric total estimated API cost only when every Agent Runner agent attempt that invoked a CLI has a resolved cost. If any such attempt remains unresolved, it SHALL report a known-cost subtotal and an unavailable/incomplete total; it SHALL NOT obtain a numeric total by treating unresolved attempts as zero.
+Each aggregate row SHALL contain its agent role, tool, provider, model, allocation kind, participating-attempt count, available token-category totals, canonical token totals, cost amount, cost source, verification state, and completeness. A multi-model dispatch SHALL remain one dispatch while producing separate attributed model rows and, when applicable, an explicit unallocated row; row participation counts are non-additive. The result SHALL count the authoritative attempt total once and SHALL also report canonical total tokens across all implementation attempts when complete. The result SHALL report a numeric total estimated API cost only when every Agent Runner agent attempt that invoked a CLI has a resolved cost. If any such attempt remains unresolved, it SHALL report a known-cost subtotal and an unavailable/incomplete total; it SHALL NOT obtain a numeric total by treating unresolved attempts as zero.
 
 #### Scenario: Repeated attempts use the same agent and model
 - **WHEN** an agent role invokes the same provider/model more than once through retries or resume
@@ -46,6 +63,11 @@ Each aggregate row SHALL contain its agent role, tool, provider, model, attempt 
 #### Scenario: One role uses different models
 - **WHEN** attempts for one agent role use different actual models
 - **THEN** the result reports a separate aggregate row for each provider/model
+
+#### Scenario: One dispatch uses several models
+- **WHEN** one authoritative attempt contains attributed model allocations and an unallocated remainder
+- **THEN** the result reports each allocation and the unallocated remainder separately while keeping the dispatch count at one
+- **AND** it counts the attempt-level usage only once in the implementation total
 
 #### Scenario: Every implementation attempt has resolved cost
 - **WHEN** every Agent Runner agent attempt that invoked a CLI has a reported or calculated cost
@@ -57,7 +79,9 @@ Each aggregate row SHALL contain its agent role, tool, provider, model, attempt 
 - **AND** the total estimated API cost remains unavailable and is marked incomplete
 
 ### Requirement: Real-time pricing resolution
-For each Agent Runner agent attempt without a reported USD cost, the harness SHALL first attempt an exact provider/model lookup from the current `https://models.dev/api.json` catalog. A successful catalog calculation SHALL require compatible token usage and rates for every billed token category needed by that provider/model. The harness SHALL record the retrieval time, response SHA-256 hash, requested and matched provider/model identifiers, rates, units, and token categories used.
+For each Agent Runner agent attempt without exhaustive, non-overlapping reported USD cost, the harness SHALL first attempt an exact provider/model lookup from the current `https://models.dev/api.json` catalog. A successful catalog calculation SHALL require compatible token usage and rates for every billed token category needed by that provider/model. A fully attributed multi-model attempt SHALL be priced from its exact allocations separately; an unallocated remainder prevents a complete allocation-derived estimate. The harness SHALL record the retrieval time, response SHA-256 hash, requested and matched provider/model identifiers, rates, units, and token categories used.
+
+Provider-reported cost SHALL remain distinct evidence with its attempt or allocation scope, currency, coverage, and overlap. Only an exhaustive full-attempt USD cost or exhaustive, disjoint full allocation costs MAY resolve an attempt directly. Partial, unknown-currency, unknown-scope, or potentially overlapping amounts MAY contribute a labeled known subtotal only when doing so cannot double count; they SHALL NOT be promoted to a full-attempt cost.
 
 If models.dev is unavailable or does not provide an exact usable match, the LLM judge SHALL be authorized to search for another pricing source and return a pricing finding. A judge-found rate SHALL have verification state `unverified`, MAY contribute to the total, and SHALL record the source URL, retrieval time, extracted rates and units, applicable token categories, requested and matched model identifiers, model-matching rationale, and judge model. Pricing lookup SHALL NOT affect product scoring.
 
@@ -67,6 +91,11 @@ If no exact defensible match or sufficient usage can be established, the attempt
 - **WHEN** an Agent Runner agent attempt contains a non-null reported USD cost
 - **THEN** the harness uses that value without performing a pricing lookup for the attempt
 - **AND** it labels the cost as Agent Runner reported
+
+#### Scenario: Provider reports allocation costs
+- **WHEN** one multi-model attempt reports exhaustive, disjoint, full USD costs for every allocation and no unallocated work
+- **THEN** the harness resolves the attempt from their sum while retaining every scoped cost record
+- **AND** partial, overlapping, unknown-scope, or unknown-currency evidence does not become a complete attempt cost
 
 #### Scenario: Models.dev provides an exact usable match
 - **WHEN** Agent Runner does not report cost and models.dev contains exact provider/model rates compatible with the attempt's usage
@@ -122,7 +151,7 @@ Timing SHALL exclude time while the eval process is stopped, time awaiting a hum
 - **THEN** pending time and reviewer interaction time do not contribute to any reported duration
 
 ### Requirement: Detailed result artifact
-The harness SHALL atomically write a versioned `result.json` containing run kind; evaluation status and candidate product verdict when applicable; score denominator; component applicability; `official_score` when complete candidate scoring produced one; `automated_subtotal` when all applicable automated scoring is complete; a nullable `score.automated_pass` eligibility decision and structured `score.automated_failures`; `available_component_scores` for individually completed components; component, subcomponent, criterion, and gate results; any user-approved technical adjudication with raw scores, revised scores, approver, time, rationale, and findings; automated and human rubric provenance; human responses and rationales; Agent Runner workflow, agent-role provenance, and linked-audit lifecycle states and warnings; candidate repository, branch, draft-PR URL, base, draft state, final local SHA, and final PR SHA; final Validator results and candidate-reported CI status when present; verified acceptance-evidence lineage; separate candidate-produced and evaluator-produced evidence summaries; per-agent/model implementation usage and costs; pricing evidence and verification state; machine phase timing; checkpoint and resume history; independent completeness fields; artifact references; and the shared-92 reference comparison when applicable.
+The harness SHALL atomically write a versioned `result.json` containing run kind; evaluation status and candidate product verdict when applicable; score denominator; component applicability; `official_score` when complete candidate scoring produced one; `automated_subtotal` when all applicable automated scoring is complete; a nullable `score.automated_pass` eligibility decision and structured `score.automated_failures`; `available_component_scores` for individually completed components; component, subcomponent, criterion, and gate results; any user-approved technical adjudication with raw scores, revised scores, approver, time, rationale, and findings; automated and human rubric provenance; human responses and rationales; Agent Runner workflow, agent-role provenance, and linked-audit lifecycle states and warnings; candidate repository, branch, draft-PR URL, base, draft state, final local SHA, and final PR SHA; final Validator results and candidate-reported CI status when present; verified acceptance-evidence lineage; separate candidate-produced and evaluator-produced evidence summaries; per-agent/model/allocation implementation usage and costs with dispatch counts; pricing evidence and verification state; machine phase timing; checkpoint and resume history; independent history, delivery, usage, identity, per-model-attribution, and pricing completeness fields; artifact references; and the shared-92 reference comparison when applicable.
 
 The harness SHALL NOT rescale `automated_subtotal`, `available_component_scores`, a reference score, or the shared comparison. In human-facing output, provenance SHALL be labeled in plain language as "source and version details."
 
