@@ -468,7 +468,7 @@ SELECTED_ADAPTERS_Q="$(shell_quote "$LEAD_CLI") $(shell_quote "$IMPLEMENTOR_CLI"
 # stays a fixed, quoted invocation rather than string-built shell.
 CONTROLLER_ARGS=(--run-dir /artifacts --run-id "$AND_SCENE_RUN_ID")
 CONTROLLER_ARGS+=(--agent-runner-dir "$CONTAINER_AGENT_RUNNER_DIR" --repo "$REPO")
-if [[ "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
+if [[ "$RUN_AGENT" == 1 && "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
   CONTROLLER_ARGS+=(--agent-skills-dir "$CONTAINER_AGENT_SKILLS_DIR")
 fi
 if [[ -z "$RESCORE_FROM" || "$CHANGE_NAME_PROVIDED" == 1 ]]; then
@@ -689,7 +689,31 @@ AGENT
 )
 
 sandbox_args=(--artifact-dir "$ARTIFACT_DIR" --input-dir "$SUITE_DIR")
-if [[ "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
+if [[ "$RUN_AGENT" == 1 && "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
+  # A linked worktree's .git file points at host-absolute backing directories.
+  # The source mount alone therefore is not enough for Git inside the sandbox
+  # to verify the pinned revision. Mount both resolved directories at their
+  # original paths read-only; do not rewrite Git metadata or the checkout.
+  append_git_metadata_mounts() {
+    local checkout="$1" git_dir common_dir directory
+    local -a directories=()
+    git_dir="$(git -C "$checkout" rev-parse --path-format=absolute --git-dir)"
+    common_dir="$(git -C "$checkout" rev-parse --path-format=absolute --git-common-dir)"
+    directories=("$git_dir" "$common_dir")
+    for directory in "${directories[@]}"; do
+      directory="$(cd -- "$directory" && pwd -P)"
+      if [[ " ${MOUNTED_GIT_METADATA:-} " == *" $directory "* ]]; then
+        continue
+      fi
+      MOUNTED_GIT_METADATA="${MOUNTED_GIT_METADATA:-} $directory"
+      sandbox_args+=(
+        --docker-run-arg --mount
+        --docker-run-arg "type=bind,source=$directory,target=$directory,readonly"
+      )
+    done
+  }
+  append_git_metadata_mounts "$AGENT_RUNNER_DIR"
+  append_git_metadata_mounts "$AGENT_SKILLS_DIR"
   sandbox_args+=(
     --docker-run-arg --mount
     --docker-run-arg "type=bind,source=$AGENT_SKILLS_DIR,target=$CONTAINER_AGENT_SKILLS_DIR,readonly"
