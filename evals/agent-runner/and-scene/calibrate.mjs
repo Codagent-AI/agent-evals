@@ -6,28 +6,21 @@
 // right component or gate, and everything it needs to answer that is the rubric
 // plus suite-owned evidence.
 //
-// Two jobs, deliberately in one small entry point:
-//
-//   * `--out DIR` runs the calibration and writes its diagnostics there,
-//     refreshing the durable pass/fail record at `--record`.
-//   * `--check-record PATH` is the gate `run.sh` consults before a full Agent
-//     Runner evaluation. The JSON lives here rather than in Bash so the rule
-//     that blocks an expensive run is the same code the calibration wrote.
+// `--out DIR` runs the calibration and writes its diagnostics there. It is an
+// explicit maintainer check, not a prerequisite or runtime input for candidate
+// evaluations.
 //
 // Nothing it writes is an official result. Calibration artifacts carry
 // `mode: 'calibration'`, live under the ignored artifacts tree, and are refused
 // by publication.
 import { mkdir } from 'node:fs/promises'
-import { dirname, resolve } from 'node:path'
+import { resolve } from 'node:path'
 
-import { calibrationIdentity, runCalibration } from './lib/calibration.mjs'
-import { hashJson, readJson, writeJsonAtomic } from './lib/persistence.mjs'
+import { runCalibration } from './lib/calibration.mjs'
 import { loadRubrics } from './lib/rubric.mjs'
 
 const VALUES = new Map([
   ['--out', 'outDir'],
-  ['--record', 'recordPath'],
-  ['--check-record', 'checkRecordPath'],
 ])
 
 export function parseArgs(argv) {
@@ -40,49 +33,8 @@ export function parseArgs(argv) {
     options[key] = value
     index += 1
   }
-  if (!options.outDir && !options.checkRecordPath) {
-    throw new Error('--out is required unless --check-record is given')
-  }
+  if (!options.outDir) throw new Error('--out is required')
   return options
-}
-
-// The gate. A record that is missing, unreadable, stale, or not a pass blocks
-// the run and says which, so the operator knows whether to calibrate or to fix a
-// defect calibration already found.
-//
-// "Stale" is the important one: a record is a statement about the rubrics and
-// harness that produced it. Once either changes, the current harness has never
-// been calibrated, and an old pass must not be allowed to unblock an expensive
-// evaluation on its behalf.
-export async function checkCalibrationRecord(path) {
-  const record = await readJson(path, null)
-  if (record === null) {
-    return { passed: false, reason: `no calibration record at ${path}` }
-  }
-
-  const identity = await calibrationIdentity()
-  if (record.schema_version !== identity.schema_version) {
-    return {
-      passed: false,
-      reason: `the calibration record has schema version ${record.schema_version ?? 'none'}, `
-        + `not ${identity.schema_version}; recalibrate`,
-    }
-  }
-  if (hashJson(record.rubrics ?? null) !== hashJson(identity.rubrics)) {
-    return { passed: false, reason: 'the rubrics changed since the last calibration; recalibrate' }
-  }
-  if (record.harness_fingerprint !== identity.harness_fingerprint) {
-    return { passed: false, reason: 'the evaluation harness changed since the last calibration; recalibrate' }
-  }
-
-  if (record.passed !== true) {
-    const failures = (record.failures ?? []).map(({ case: id, problem }) => `${id}: ${problem}`)
-    return {
-      passed: false,
-      reason: `the last calibration failed${failures.length > 0 ? `: ${failures.join('; ')}` : ''}`,
-    }
-  }
-  return { passed: true, reason: null }
 }
 
 export async function runCalibrationCommand({ argv, log = () => {} }) {
@@ -91,12 +43,6 @@ export async function runCalibrationCommand({ argv, log = () => {} }) {
     options = parseArgs(argv)
   } catch (error) {
     return { exitCode: 2, errors: [{ code: 'invalid-arguments', message: error.message }] }
-  }
-
-  if (options.checkRecordPath) {
-    const outcome = await checkCalibrationRecord(resolve(options.checkRecordPath))
-    if (!outcome.passed) return { exitCode: 1, errors: [{ code: 'calibration-gate', message: outcome.reason }] }
-    return { exitCode: 0, errors: [] }
   }
 
   const outDir = resolve(options.outDir)
@@ -110,20 +56,6 @@ export async function runCalibrationCommand({ argv, log = () => {} }) {
   }
 
   const ledger = await runCalibration({ rubrics, outDir, log })
-
-  if (options.recordPath) {
-    const recordPath = resolve(options.recordPath)
-    await mkdir(dirname(recordPath), { recursive: true })
-    await writeJsonAtomic(recordPath, {
-      // The identity the gate re-verifies: this record speaks for these rubrics
-      // and this harness, and for nothing else.
-      ...await calibrationIdentity(rubrics),
-      passed: ledger.passed,
-      calibration_dir: outDir,
-      failures: ledger.failures,
-      completed_at: new Date().toISOString(),
-    })
-  }
 
   return {
     exitCode: ledger.passed ? 0 : 1,

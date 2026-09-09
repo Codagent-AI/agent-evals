@@ -41,8 +41,8 @@ with `--env GITHUB_TOKEN` or an env file for candidate delivery.
 
 ## Run the suite
 
-The supported order is: browser proof, calibration, reference baseline, full
-candidate run, paired human review, publication.
+The supported order is: browser proof, optional calibration or reference
+baseline, full candidate run, human review, publication.
 
 First prove the sandbox can build the fixture, launch Chromium, and inspect the
 reference app through `chrome-devtools-axi`:
@@ -81,9 +81,8 @@ normal deterministic run also establishes present or browse mode and starting
 position independently for every navigation, reliability, and accessibility
 probe. Opening records the product's initial mode before any state change.
 
-Then calibrate. A full `--run-agent` evaluation is blocked until calibration
-passes, because a run that costs real model time should not be the thing that
-discovers the harness scores the wrong component:
+Run calibration when developing or reviewing scoring changes. It is a
+standalone maintainer diagnostic and is not required before `--run-agent`:
 
 ```bash
 evals/agent-runner/and-scene/run.sh --calibrate
@@ -181,8 +180,9 @@ artifacts default to `artifacts/evals/and-scene-calibration/<timestamp>/`. Use
 
 ## Calibration
 
-Calibration is the rollout gate, not a score. It runs on the host and invokes no
-sandbox, no Agent Runner, no browser, and no human.
+Calibration is an optional diagnostic, not a score or candidate-run gate. It
+runs on the host and invokes no sandbox, no Agent Runner, no browser, and no
+human.
 
 It evaluates the known-good reference and a suite-owned set of degraded
 mutations against the real rubric, judge-job, scoring, gate, result, and report
@@ -216,27 +216,18 @@ unintended regression, and `cases/<case-id>/` holds each case's diagnostic
 calibration result carries `mode: calibration`, which publication refuses by
 name, so no calibration artifact can become a permanent record.
 
-The durable pass/fail record defaults to
-`artifacts/evals/and-scene-calibration/latest.json` and is what `--run-agent`
-consults. Override it with `--calibration-record PATH`. A missing or failed
-record stops a full evaluation with exit 2 before any container starts. A
-reference baseline invokes no Agent Runner and is exempt.
-
-A record speaks only for the rubrics and harness that produced it. It carries
-both rubrics' version and hash plus a fingerprint over the modules that decide
-what a case scores, gates, and reports — the scorer, rubric loader, judge jobs,
-human review, outcomes, result, report, and the calibration cases themselves.
-Edit any of them and the record no longer matches: the gate refuses it and asks
-for a recalibration rather than letting an old pass unblock an expensive run on
-the new harness's behalf.
+Calibration writes its findings only into the selected calibration artifact
+directory. It creates no separate receipt, and `--run-agent` never checks for
+one. Automation therefore needs only the harness revision and normal candidate
+inputs; it does not need shared calibration storage.
 
 If calibration exposes a rubric defect rather than a harness defect, revise the
 spec and rubric through review and calibrate again.
 
 ## First benchmark rollout
 
-After calibration passes, the two runs the paired human review needs are
-produced without any human input:
+The two runs a paired human review needs can be produced without any human
+input:
 
 ```bash
 # 1. The pending reference baseline for the existing implementation.
@@ -333,9 +324,9 @@ focused modules under `lib/`:
 | `lib/publication.mjs` | The curated snapshot, path-limited commit, and retryable push |
 | `lib/calibration.mjs` | Known-good/degraded calibration cases and their expectations |
 
-`calibrate.mjs` is the third entry point. It runs the calibration on the host
-and also owns the gate `run.sh` consults, so the rule that blocks an expensive
-run is the same code that wrote the record.
+`calibrate.mjs` is the third entry point. It runs the optional calibration
+diagnostic on the host and writes the detailed ledger into its artifact
+directory.
 
 `human-review.sh` is the second thin host entry point, for the literal human
 review; `human-review.mjs` owns its lifecycle. It runs on the host rather than
@@ -716,11 +707,11 @@ publishing credentials, an invalid role profile with its role and field, a
 role-profile mismatch on resume, a resume-provenance change, or a stale
 run-state identity.
 
-For a blocked full evaluation, run `--calibrate` and read `calibration.json`.
-Its `failures` name the case and the exact expectation that broke, and each
-case's `problems` and `unintended_regressions` say whether the harness scored
-the wrong component, opened the wrong gate, or turned a product regression into
-a harness failure.
+To diagnose or review scoring behavior, run `--calibrate` and read
+`calibration.json`. Its `failures` name the case and the exact expectation that
+broke, and each case's `problems` and `unintended_regressions` say whether the
+harness scored the wrong component, opened the wrong gate, or turned a product
+regression into a harness failure.
 
 For publication failures, `publication.json` records the stage, the result
 commit if one exists, and the git error. Re-run the review command against the
@@ -737,10 +728,10 @@ archive, release, or branch deletion is reported as
 Update the fixture SHA deliberately when the implementation-ready snapshot
 changes. Keep runs pinned to exact commits, and update
 `agent-runner-capabilities.json` when the recorded Agent Runner revision changes
-its supported adapters, roles, or efforts. Recalibrate after any rubric,
-scorer, gate, or reporting change: the record is what unblocks the next full
-evaluation, and a stale one is worth nothing. Run targeted tests during
-development and `npm run check` before trusting a change.
+its supported adapters, roles, or efforts. Run calibration while reviewing
+rubric, scorer, gate, or reporting changes, then run targeted tests during
+development and `npm run check` before trusting a change. Candidate execution
+does not depend on retaining calibration artifacts.
 
 Published result directories are immutable historical records. Correct an
 erroneous publication with a later revert commit rather than by rewriting

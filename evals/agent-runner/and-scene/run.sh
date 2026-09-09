@@ -45,9 +45,6 @@ RUN_AGENT=0
 CALIBRATE=0
 SUITE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 EVALS_ROOT="$(cd -- "$SUITE_DIR/../../.." && pwd)"
-# The durable record of the last calibration. A full Agent Runner evaluation is
-# blocked until it says calibration passed.
-CALIBRATION_RECORD="${CALIBRATION_RECORD:-$EVALS_ROOT/artifacts/evals/and-scene-calibration/latest.json}"
 AGENT_RUNNER_DIR="${AGENT_RUNNER_DIR:-$EVALS_ROOT/../agent-runner}"
 AGENT_SKILLS_DIR="${AGENT_SKILLS_DIR:-$EVALS_ROOT/../agent-skills}"
 SANDBOX_RUNNER="${SANDBOX_RUNNER:-}"
@@ -76,9 +73,8 @@ Modes:
   --run-agent            Run the Agent Runner evaluation harness.
   --calibrate            Run autonomous known-good/degraded calibration on the
                           host. It invokes no sandbox, no Agent Runner, no
-                          browser, and no human, and its artifacts are ignored
-                          diagnostics that are never published. A full
-                          --run-agent evaluation is blocked until it passes.
+                          browser, and no human. Its artifacts are optional,
+                          ignored diagnostics that are never published.
 
 Options:
   --dry-run              Print the sandbox command instead of running it.
@@ -126,10 +122,6 @@ Options:
   --reviewer-effort EFFORT
                           Acceptance-reviewer effort.
   --judge-model MODEL    Eval-owned judge model. Default: the Codex CLI default.
-  --calibration-record PATH
-                          Durable calibration pass/fail record. Written by
-                          --calibrate and required by --run-agent. Default:
-                          artifacts/evals/and-scene-calibration/latest.json
   --env NAME             Pass through one named environment variable.
                           Repeatable.
   --env-file PATH        Read simple NAME=value or export NAME=value entries
@@ -164,10 +156,6 @@ while (($#)); do
     --calibrate)
       CALIBRATE=1
       shift
-      ;;
-    --calibration-record)
-      CALIBRATION_RECORD="${2:?missing value for --calibration-record}"
-      shift 2
       ;;
     --dry-run)
       DRY_RUN=1
@@ -313,7 +301,7 @@ if [[ "$CALIBRATE" == 1 ]]; then
   elif [[ "$ARTIFACT_DIR" != /* ]]; then
     ARTIFACT_DIR="$EVALS_ROOT/$ARTIFACT_DIR"
   fi
-  calibrate_command=(node "$SUITE_DIR/calibrate.mjs" --out "$ARTIFACT_DIR" --record "$CALIBRATION_RECORD")
+  calibrate_command=(node "$SUITE_DIR/calibrate.mjs" --out "$ARTIFACT_DIR")
   if [[ "$DRY_RUN" == 1 ]]; then
     printf '%q ' "${calibrate_command[@]}"
     printf '\n'
@@ -359,16 +347,6 @@ require_role_profile() {
 }
 
 if [[ "$RUN_AGENT" == 1 ]]; then
-  # Both fresh candidate runs and evaluator-only rescoring use the calibrated
-  # candidate rubric. Reference baselines are the calibration input and are
-  # therefore exempt.
-  if [[ "$REFERENCE_BASELINE" != 1 ]]; then
-    if ! node "$SUITE_DIR/calibrate.mjs" --check-record "$CALIBRATION_RECORD"; then
-      echo "Run calibration first: evals/agent-runner/and-scene/run.sh --calibrate" >&2
-      exit 2
-    fi
-  fi
-
   # A reference baseline evaluates an existing candidate without invoking Agent
   # Runner, so its workflow contract and worktree cleanliness do not apply. Only
   # the sandbox adapter, checked above, is required to launch it.
