@@ -155,6 +155,21 @@ test('scored mode mounts one clean pinned Agent Skills checkout for every select
   assert.match(result.output, /claude claude claude/)
 })
 
+test('scored mode exposes linked-worktree Git metadata read-only to the sandbox', async () => {
+  const context = await setup()
+
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
+
+  assert.equal(result.status, 0, result.output)
+  const command = result.output.replaceAll('\\', '')
+  for (const checkout of ['agent-runner', 'agent-skills']) {
+    assert.match(
+      command,
+      new RegExp(`source=[^ ]*${checkout}/\\.git,target=[^ ]*${checkout}/\\.git,readonly`),
+    )
+  }
+})
+
 test('scored mode lets the sandbox expand the Agent Runner workflow path', async () => {
   const context = await setup()
 
