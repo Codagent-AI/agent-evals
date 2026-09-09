@@ -122,7 +122,7 @@ Timing SHALL exclude time while the eval process is stopped, time awaiting a hum
 - **THEN** pending time and reviewer interaction time do not contribute to any reported duration
 
 ### Requirement: Detailed result artifact
-The harness SHALL atomically write a versioned `result.json` containing run kind; evaluation status and candidate product verdict when applicable; score denominator; component applicability; `official_score` when complete candidate scoring produced one; `automated_subtotal` when all applicable automated scoring is complete; `available_component_scores` for individually completed components; component, subcomponent, criterion, and gate results; any user-approved technical adjudication with raw scores, revised scores, approver, time, rationale, and findings; automated and human rubric provenance; human responses and rationales; Agent Runner workflow, agent-role provenance, and linked-audit lifecycle states and warnings; candidate repository, branch, draft-PR URL, base, draft state, final local SHA, and final PR SHA; final Validator results and candidate-reported CI status when present; verified acceptance-evidence lineage; separate candidate-produced and evaluator-produced evidence summaries; per-agent/model implementation usage and costs; pricing evidence and verification state; machine phase timing; checkpoint and resume history; independent completeness fields; artifact references; and the shared-92 reference comparison when applicable.
+The harness SHALL atomically write a versioned `result.json` containing run kind; evaluation status and candidate product verdict when applicable; score denominator; component applicability; `official_score` when complete candidate scoring produced one; `automated_subtotal` when all applicable automated scoring is complete; a nullable `score.automated_pass` eligibility decision and structured `score.automated_failures`; `available_component_scores` for individually completed components; component, subcomponent, criterion, and gate results; any user-approved technical adjudication with raw scores, revised scores, approver, time, rationale, and findings; automated and human rubric provenance; human responses and rationales; Agent Runner workflow, agent-role provenance, and linked-audit lifecycle states and warnings; candidate repository, branch, draft-PR URL, base, draft state, final local SHA, and final PR SHA; final Validator results and candidate-reported CI status when present; verified acceptance-evidence lineage; separate candidate-produced and evaluator-produced evidence summaries; per-agent/model implementation usage and costs; pricing evidence and verification state; machine phase timing; checkpoint and resume history; independent completeness fields; artifact references; and the shared-92 reference comparison when applicable.
 
 The harness SHALL NOT rescale `automated_subtotal`, `available_component_scores`, a reference score, or the shared comparison. In human-facing output, provenance SHALL be labeled in plain language as "source and version details."
 
@@ -131,8 +131,18 @@ The harness SHALL NOT rescale `automated_subtotal`, `available_component_scores`
 - **THEN** `result.json` contains the official score out of 100, full scoring breakdown, candidate and PR identity, metrics, source and version details, and completeness
 
 #### Scenario: Human review is pending
-- **WHEN** all candidate automated scoring completes without finalized human review
+- **WHEN** all candidate automated scoring completes, `score.automated_pass=true`, and human review is not finalized
 - **THEN** `result.json` contains the automated subtotal out of 70 and no `official_score`
+
+#### Scenario: Automated requirements fail before human review
+- **WHEN** complete candidate automated scoring produces `score.automated_pass=false`
+- **THEN** `result.json` records `evaluation_status=complete`, `product_verdict=fail`, the automated subtotal, and structured `score.automated_failures`
+- **AND** it contains no `official_score` or human-review record
+
+#### Scenario: Automated eligibility is unavailable
+- **WHEN** required automated scoring or gate evidence is incomplete
+- **THEN** `score.automated_pass` is null and `score.automated_failures` is empty
+- **AND** the owning workflow or harness failure is reported instead of a product verdict inferred from missing evidence
 
 #### Scenario: Evaluation stops after some components complete
 - **WHEN** an incomplete evaluation has evidence-backed completed component results
@@ -204,8 +214,13 @@ The harness SHALL generate or update the report whenever `result.json` reaches a
 - **AND** it does not erase or change the candidate score
 
 #### Scenario: Human review is pending
-- **WHEN** automated evaluation completes without finalized human review
+- **WHEN** automated evaluation completes with the candidate eligible for human review and no finalized human review
 - **THEN** `report.html` prominently displays `PENDING HUMAN REVIEW` and the applicable automated subtotal and denominator
+
+#### Scenario: Automated requirements conclusively fail
+- **WHEN** complete automated evidence establishes that the candidate cannot satisfy the official pass contract
+- **THEN** `report.html` prominently displays `FAIL`, the automated subtotal, and the automated requirement failure
+- **AND** it states that no official score was produced because human review was not required
 
 #### Scenario: Candidate content contains markup
 - **WHEN** report content includes candidate-controlled HTML or script-like text

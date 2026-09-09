@@ -24,7 +24,7 @@ import { summarizeEvidenceManifest } from './evidence.mjs'
 import { hashFile, readJson, writeJsonAtomic, writeTextAtomic } from './persistence.mjs'
 import { renderReport } from './report.mjs'
 
-export const RESULT_SCHEMA_VERSION = 4
+export const RESULT_SCHEMA_VERSION = 5
 export const ARTIFACT_MANIFEST_SCHEMA_VERSION = 2
 
 // Runtime scratch: candidate worktrees, linked run stores, and anything else a

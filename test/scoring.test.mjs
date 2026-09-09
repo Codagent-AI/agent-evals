@@ -47,6 +47,13 @@ function component(result, id) {
   return result.components.find((entry) => entry.id === id)
 }
 
+function subcomponentCriteria(componentId, subcomponentId) {
+  return automated.components
+    .find(({ id }) => id === componentId)
+    .subcomponents.find(({ id }) => id === subcomponentId)
+    .criteria
+}
+
 test('an all-pass automated evaluation scores the full 70-point subtotal', () => {
   const result = scoreProduct(inputs())
 
@@ -73,10 +80,73 @@ test('an all-pass automated evaluation scores the full 70-point subtotal', () =>
 test('a pending human review reports the subtotal but no official total or verdict', () => {
   const result = scoreProduct(inputs())
 
+  assert.equal(result.automated_pass_threshold, 40)
+  assert.equal(result.automated_pass, true)
+  assert.deepEqual(result.automated_failures, [])
   assert.equal(result.human_review, null)
   assert.equal(result.official_score, null)
   assert.equal(result.official_pass, null)
   assert.deepEqual(result.incomplete, ['human-review'])
+})
+
+test('an automated subtotal of exactly 40 remains eligible for human review', () => {
+  const failures = [
+    ...criteriaForJob(automated, 'presentation-skill'),
+    ...criteriaForJob(automated, 'verification-tooling'),
+    ...criteriaForJob(automated, 'testing-evidence'),
+    ...criteriaForJob(automated, 'assumption-handling'),
+    ...subcomponentCriteria('demo-technical-quality', 'demo-canonical-content'),
+    ...subcomponentCriteria('demo-technical-quality', 'demo-code-boundaries'),
+  ]
+
+  const result = scoreProduct(inputs({ failures }))
+
+  assert.equal(result.automated_subtotal.points, 40)
+  assert.equal(component(result, 'demo-technical-quality').points_awarded, 16)
+  assert.equal(result.automated_pass, true)
+  assert.deepEqual(result.automated_failures, [])
+})
+
+test('a complete automated subtotal below 40 fails before human review', () => {
+  const failures = [
+    ...criteriaForJob(automated, 'presentation-skill'),
+    ...criteriaForJob(automated, 'verification-tooling'),
+    ...criteriaForJob(automated, 'testing-evidence'),
+    ...criteriaForJob(automated, 'assumption-handling'),
+    ...subcomponentCriteria('demo-technical-quality', 'demo-canonical-content'),
+    ...subcomponentCriteria('demo-technical-quality', 'demo-code-boundaries'),
+    subcomponentCriteria('scene-kit-correctness', 'scene-step-model')[0],
+  ]
+
+  const result = scoreProduct(inputs({ failures }))
+
+  assert.ok(result.automated_subtotal.points < 40)
+  assert.ok(component(result, 'demo-technical-quality').points_awarded >= 15)
+  assert.ok(component(result, 'scene-kit-correctness').points_awarded >= 15)
+  assert.equal(result.automated_pass, false)
+  assert.deepEqual(result.automated_failures, [{
+    rule: 'automated-total',
+    id: null,
+    value: result.automated_subtotal.points,
+    required: 40,
+  }])
+})
+
+test('component floors and hard gates fail automated eligibility before human review', () => {
+  const floorFailure = scoreProduct(inputs({ failures: deterministicCriteria(automated) }))
+  assert.equal(floorFailure.human_review, null)
+  assert.equal(floorFailure.automated_pass, false)
+  assert.ok(floorFailure.automated_failures.some(
+    ({ rule, id }) => rule === 'component-floor' && id === 'demo-technical-quality',
+  ))
+
+  const gate = GATE_IDS[0]
+  const gateFailure = scoreProduct(inputs({ gateFailures: [gate] }))
+  assert.equal(gateFailure.human_review, null)
+  assert.equal(gateFailure.automated_pass, false)
+  assert.ok(gateFailure.automated_failures.some(
+    ({ rule, id }) => rule === 'hard-gate' && id === gate,
+  ))
 })
 
 test('a completed human review produces the official 100-point score and pass verdict', () => {
@@ -231,6 +301,8 @@ test('unobserved evaluator output leaves its component incomplete instead of fai
   assert.equal(result.automated_subtotal.observed_possible, 46)
   assert.equal(result.official_score, null)
   assert.equal(result.official_pass, null)
+  assert.equal(result.automated_pass, null)
+  assert.deepEqual(result.automated_failures, [])
   assert.ok(result.incomplete.includes('scene-kit-correctness'))
 })
 

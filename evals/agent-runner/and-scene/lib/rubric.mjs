@@ -202,6 +202,12 @@ export function validateAutomatedRubric(rubric) {
   if (rubric.automated_points + rubric.human_points !== rubric.total_points) {
     errors.push('automated_points plus human_points must equal total_points')
   }
+  const minimumViableAutomatedScore = rubric.pass_threshold - rubric.human_points
+  if (rubric.automated_pass_threshold !== minimumViableAutomatedScore) {
+    errors.push(
+      `automated_pass_threshold must be ${minimumViableAutomatedScore}, the minimum score that can reach pass_threshold with maximum human points`,
+    )
+  }
   const componentPolicy = rubric.components.map(({ id, points, floor = null }) => [id, points, floor])
   if (JSON.stringify(componentPolicy) !== JSON.stringify(COMPONENT_POLICY)) {
     errors.push('components must use the approved 24/24/7/7/4/4 allocation and floors')

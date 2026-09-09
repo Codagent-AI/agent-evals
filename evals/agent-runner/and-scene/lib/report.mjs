@@ -209,12 +209,12 @@ function summaryBlock(result) {
       + `${escapeHtml(String(result.score_denominator ?? 100))}</p>`,
     )
   } else if (result.product_failure) {
+    const automatedFailure = result.product_failure.phase === 'automated-scoring'
+    lines.push(automatedFailure
+      ? '<p><strong>No official score:</strong> automated requirements failed, so human review was not required.</p>'
+      : '<p><strong>No official score:</strong> the official score and human review are unavailable because the delivered product could not build or serve.</p>')
     lines.push(
-      '<p><strong>No official score:</strong> the official score and human review are unavailable '
-      + 'because the delivered product could not build or serve.</p>',
-    )
-    lines.push(
-      `<div class="banner"><strong>Conclusive product failure`
+      `<div class="banner"><strong>${automatedFailure ? 'Automated product failure' : 'Conclusive product failure'}`
       + `${result.product_failure.gate ? ` (${escapeHtml(result.product_failure.gate)})` : ''}:</strong> `
       + `${escapeHtml(result.product_failure.reason ?? 'the delivered product could not build or serve')}</div>`,
     )

@@ -6,7 +6,7 @@ Define evaluation statuses that distinguish product verdicts, implementation-wor
 ### Requirement: Separate evaluation status and product verdict
 The evaluation SHALL report execution status independently from candidate product quality. `evaluation_status` SHALL be exactly one of `complete`, `pending-human-review`, `implementation-workflow-failed`, or `evaluation-harness-failed`. `product_verdict` SHALL be exactly one of `pass`, `fail`, `unavailable`, or `not-applicable`.
 
-A candidate product verdict SHALL be `pass` only after all required automated scoring, human scoring, and product gates have been completed from sufficient evidence. A candidate product verdict SHALL ordinarily be `fail` only after the same inputs establish that the pass contract was missed. As a narrow exception, deterministic evidence that reproducible product behavior prevents the frozen final candidate from installing, building, or serving SHALL be sufficient for a conclusive `fail` verdict without an official score or fabricated human ratings. A completed local reference SHALL use `product_verdict=not-applicable` because the candidate pass contract does not apply. The evaluation SHALL NOT infer product failure from a failed workflow, failed harness, unfinished human review, or candidate-reported CI state.
+A candidate product verdict SHALL be `pass` only after all required automated scoring, human scoring, and product gates have been completed from sufficient evidence. A candidate product verdict SHALL ordinarily be `fail` only after the same inputs establish that the pass contract was missed. Complete automated evidence SHALL also be sufficient for a conclusive `fail` without human review when the candidate scores below 40 out of 70, misses either automated component floor, or fails any required hard gate, because no human result can satisfy the official pass contract. As a further narrow exception, deterministic evidence that reproducible product behavior prevents the frozen final candidate from installing, building, or serving SHALL be sufficient for a conclusive `fail` verdict without an official score or fabricated human ratings. A completed local reference SHALL use `product_verdict=not-applicable` because the candidate pass contract does not apply. The evaluation SHALL NOT infer product failure from incomplete automated evidence, a failed workflow, failed harness, unfinished eligible human review, or candidate-reported CI state.
 
 #### Scenario: Complete product passes
 - **WHEN** all required candidate evaluation work completes and the official score and product gates satisfy the pass rules
@@ -21,6 +21,11 @@ A candidate product verdict SHALL be `pass` only after all required automated sc
 - **THEN** `evaluation_status` is `complete` and `product_verdict` is `fail`
 - **AND** `official_score` and human ratings remain unavailable while completed component and hard-gate evidence is preserved
 
+#### Scenario: Complete automated result cannot pass
+- **WHEN** complete candidate automated scoring is below 40 out of 70, misses an automated component floor, or fails a required hard gate
+- **THEN** `evaluation_status` is `complete` and `product_verdict` is `fail`
+- **AND** the result preserves the automated score and structured failures but contains no `official_score` or human ratings
+
 #### Scenario: Complete local reference is reported
 - **WHEN** all applicable reference scoring and human review complete
 - **THEN** `evaluation_status` is `complete` and `product_verdict` is `not-applicable`
@@ -31,12 +36,12 @@ A candidate product verdict SHALL be `pass` only after all required automated sc
 - **THEN** `product_verdict` is `unavailable` rather than `fail`
 
 ### Requirement: Pending human-review outcome
-The evaluation SHALL use `pending-human-review` when all required applicable automated scoring has completed but the required human review has not been finalized. This state SHALL contain the applicable automated subtotal, score denominator, and completed diagnostics but SHALL NOT contain an official candidate score or pass/fail verdict.
+The evaluation SHALL use `pending-human-review` when all required applicable automated scoring has completed, the candidate remains eligible to pass every automated requirement, and the required human review has not been finalized. This state SHALL contain the applicable automated subtotal, score denominator, and completed diagnostics but SHALL NOT contain an official candidate score or pass/fail verdict.
 
 A pending candidate SHALL report its automated subtotal out of 70. A pending local reference SHALL report its applicable automated subtotal out of 62 and SHALL mark testing evidence and assumption handling not applicable.
 
 #### Scenario: Automated scoring awaits reviewer
-- **WHEN** candidate automated scoring is complete and no finalized human-review record is available
+- **WHEN** candidate automated scoring is complete, its subtotal is at least 40 out of 70, its automated component floors and hard gates pass, and no finalized human-review record is available
 - **THEN** `evaluation_status` is `pending-human-review`, `product_verdict` is `unavailable`, and no official score is issued
 - **AND** the result reports the automated subtotal out of 70
 
@@ -56,7 +61,7 @@ A pending candidate SHALL report its automated subtotal out of 70. A pending loc
 - **AND** it reports the reference score out of 92 with `product_verdict=not-applicable`
 
 #### Scenario: Noninteractive run reaches human review
-- **WHEN** the main evaluation command completes applicable automated scoring
+- **WHEN** the main evaluation command completes applicable automated scoring and the result remains eligible for human review
 - **THEN** it exits successfully with a durable `pending-human-review` result rather than attempting human review or reporting failure
 
 #### Scenario: Handoff cleanup is incomplete
@@ -171,7 +176,7 @@ The harness SHALL checkpoint evaluation status, product-verdict applicability, s
 - **THEN** the result remains failed and identifies why resume is unavailable
 
 ### Requirement: Consistent outcome presentation
-`result.json` SHALL be the authoritative machine-readable outcome and `report.html` SHALL render the same current evaluation status, product-verdict applicability, score denominator, official score availability, failed or pending phase, and reason. Candidate-facing output SHALL use prominent `PASS` or `FAIL` labels when a candidate verdict is available, `PENDING HUMAN REVIEW` when review is outstanding, and `EVALUATION FAILED` when workflow or harness failure leaves the verdict unavailable. A conclusive unscored product failure SHALL display `FAIL`, state that the official score and human review are unavailable because the delivered product could not install, build, or serve, and preserve the available evidence. A complete local reference SHALL use `REFERENCE — COMPLETE`, its score out of 92, and no candidate pass/fail label.
+`result.json` SHALL be the authoritative machine-readable outcome and `report.html` SHALL render the same current evaluation status, product-verdict applicability, score denominator, official score availability, failed or pending phase, and reason. Candidate-facing output SHALL use prominent `PASS` or `FAIL` labels when a candidate verdict is available, `PENDING HUMAN REVIEW` when review is outstanding, and `EVALUATION FAILED` when workflow or harness failure leaves the verdict unavailable. A conclusive unscored product failure SHALL display `FAIL`, state why human review was not required and why an official score is unavailable, and preserve the available evidence. A complete local reference SHALL use `REFERENCE — COMPLETE`, its score out of 92, and no candidate pass/fail label.
 
 When a harness failure coexists with a valid candidate verdict or complete reference score, human-facing output SHALL display both facts prominently and SHALL explain the harness failure separately from product findings.
 
@@ -181,7 +186,7 @@ When a harness failure coexists with a valid candidate verdict or complete refer
 - **AND** they display the official score out of 100 when complete scoring produced one
 
 #### Scenario: Conclusive product failure has no official score
-- **WHEN** `evaluation_status` is `complete`, `product_verdict` is `fail`, and product-owned installation, build, or serve failure prevented complete scoring
+- **WHEN** `evaluation_status` is `complete`, `product_verdict` is `fail`, and either a complete automated result cannot satisfy the pass contract or product-owned installation, build, or serve failure prevented complete scoring
 - **THEN** the result artifacts display `FAIL`, no official score, and no fabricated human ratings
 - **AND** they explain the conclusive product failure and display available component and hard-gate evidence
 

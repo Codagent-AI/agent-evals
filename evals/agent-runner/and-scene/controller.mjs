@@ -5,11 +5,11 @@
 // state machine: preflight, role configuration, Agent Runner run identity and
 // resumption, durable checkpoints, and the ordered phase lifecycle.
 //
-// The command deliberately stops at `pending-human-review`: it writes the
-// automated result, its report, and the artifact manifest, attempts
-// candidate-server cleanup, and exits successfully. The literal human review
-// that turns that into an official score lives in `human-review.mjs`, because it
-// runs on human time and must never cost the completed automated work.
+// The command writes the automated result, its report, and the artifact
+// manifest, then attempts candidate-server cleanup. Eligible candidates stop at
+// `pending-human-review`; candidates that cannot reach the official threshold
+// or fail an automated floor or gate finish as product failures without an
+// invented official score. Literal human review lives in `human-review.mjs`.
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { basename, dirname, join, resolve } from 'node:path'
@@ -1345,6 +1345,9 @@ export async function runEvaluation({
       return [{
         type: 'automated-scoring-complete',
         automated_subtotal: record.score.automated_subtotal.points,
+        automated_possible: record.score.automated_subtotal.possible,
+        automated_pass: record.score.automated_pass,
+        automated_failures: record.score.automated_failures,
       }]
     },
 

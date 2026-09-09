@@ -299,6 +299,31 @@ test('a conclusive unscored product failure explains build or serve failure with
   assert.doesNotMatch(html, /product verdict is unavailable/i)
 })
 
+test('a below-minimum automated failure preserves its subtotal and explains why review was skipped', () => {
+  const failed = result({
+    evaluation_status: 'complete',
+    product_verdict: 'fail',
+    label: 'FAIL',
+    human_review: undefined,
+    automated_subtotal: { points: 37, possible: 70, observed_possible: 70, complete: true },
+    product_failure: {
+      phase: 'automated-scoring',
+      reason: 'Automated score below minimum: 37/70; required 40/70',
+      failures: [{ rule: 'automated-total', id: null, value: 37, required: 40 }],
+    },
+  })
+  delete failed.official_score
+
+  const html = renderReport(failed)
+
+  assert.match(html, /<h1[^>]*>\s*FAIL\s*<\/h1>/)
+  assert.match(html, /37\s*\/\s*70/)
+  assert.match(html, /Automated score below minimum: 37\/70; required 40\/70/)
+  assert.match(html, /human review was not required/i)
+  assert.doesNotMatch(html, /could not build or serve/i)
+  assert.doesNotMatch(html, /Official score:\s*\d/)
+})
+
 test('a harness failure after a durable verdict displays both facts', () => {
   const html = renderReport(result({
     evaluation_status: 'evaluation-harness-failed',

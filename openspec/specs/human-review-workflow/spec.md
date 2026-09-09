@@ -4,14 +4,19 @@
 Define the separate resumable human-review workflow, its versioned questions and scoring, and final result handoff.
 ## Requirements
 ### Requirement: Human-review handoff
-After automated browser evaluation and LLM judging complete, the main evaluation command SHALL set the run state to `pending-human-review`, write the automated result and HTML report, attempt candidate-server cleanup, and exit successfully without asking human-review questions, an official total score, or a pass verdict.
+After automated browser evaluation and LLM judging complete, the main evaluation command SHALL write the automated result and HTML report, attempt candidate-server cleanup, and exit successfully without asking human-review questions or issuing an official total score. It SHALL set an eligible run to `pending-human-review`. If complete automated evidence already proves that the candidate cannot pass, it SHALL instead finish with a product-fail verdict and SHALL NOT offer a human-review command.
 
 The separate `human-review.sh` command SHALL accept a pending run directory, keep or restore the evaluated candidate server, print its URL, and wait for an explicit non-scoring readiness confirmation before asking the first human-review question. The candidate served to the reviewer SHALL be the same candidate revision evaluated by the automated rubric and LLM judge. If the candidate server is unavailable or does not match the evaluated candidate, the command SHALL NOT collect ratings and SHALL report an evaluation-harness failure.
 
 #### Scenario: Automated evaluation reaches human handoff
-- **WHEN** automated browser evaluation and LLM judging complete
+- **WHEN** automated browser evaluation and LLM judging complete and the candidate meets every automated eligibility requirement
 - **THEN** the main evaluation command durably records `pending-human-review`, writes the automated result and report, attempts cleanup, and exits successfully
 - **AND** it does not ask human-review questions or issue an official total or pass verdict
+
+#### Scenario: Automated failure does not request human review
+- **WHEN** complete automated scoring is below 40 out of 70, misses an automated component floor, or fails a required hard gate
+- **THEN** the main evaluation command writes the final automated product-fail result and report, attempts cleanup, and exits successfully
+- **AND** it does not ask human-review questions, offer a human-review command, or issue an official score
 
 #### Scenario: Human-review command opens a pending run
 - **WHEN** a reviewer invokes `human-review.sh` for a pending run with matching candidate and rubric provenance

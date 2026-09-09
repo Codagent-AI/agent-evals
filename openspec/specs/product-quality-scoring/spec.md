@@ -18,7 +18,7 @@ The evaluation SHALL calculate a candidate implementation-quality score out of 1
 
 Generic Runner health, workflow completion, build orchestration, cost, timing, retries, and evaluator-owned evidence repair SHALL award or deduct no points. Candidate testing evidence and assumption handling SHALL affect points only through their defined four-point components.
 
-Before candidate human review is complete, the evaluation SHALL report the automated subtotal out of 70 and SHALL NOT report an official score or ordinary pass/fail verdict. A conclusive product-owned inability to install, build, or serve SHALL follow the hard-gate exception below. When product evidence is available for only part of an unsuccessful or incomplete run, the evaluation SHALL preserve completed component evidence without treating unobserved criteria as product failures.
+Before candidate human review is complete, the evaluation SHALL report the automated subtotal out of 70 and SHALL NOT report an official score. A candidate SHALL remain eligible for human review only when its complete automated subtotal is at least 40 out of 70, both automated component floors are met, and all four hard gates pass. Failure of any of those complete automated requirements SHALL produce a conclusive product-fail verdict without asking for human review, because no human result can make the candidate pass. A conclusive product-owned inability to install, build, or serve SHALL follow the hard-gate exception below. When product evidence is available for only part of an unsuccessful or incomplete run, the evaluation SHALL preserve completed component evidence without treating unobserved criteria as product failures.
 
 The reference baseline SHALL be evaluated only on the components shared with the candidate:
 
@@ -47,9 +47,19 @@ When the user explicitly approves a post-run technical adjudication, the harness
 - **THEN** the evaluator reports every component score and their sum out of 100
 
 #### Scenario: Human review is pending
-- **WHEN** candidate automated scoring has completed but human review has not
+- **WHEN** candidate automated scoring has completed, the subtotal is at least 40 out of 70, both automated component floors are met, all four hard gates pass, and human review has not
 - **THEN** the evaluator reports the automated subtotal out of 70
 - **AND** it does not report an official candidate score or pass verdict
+
+#### Scenario: Automated subtotal cannot reach the official threshold
+- **WHEN** complete candidate automated scoring produces 37 out of 70
+- **THEN** the evaluator records `product_verdict=fail` and explains `Automated score below minimum: 37/70; required 40/70`
+- **AND** it does not request human review or report an official score out of 100
+
+#### Scenario: Automated subtotal exactly reaches eligibility
+- **WHEN** complete candidate automated scoring produces exactly 40 out of 70, both automated component floors are met, and all four hard gates pass
+- **THEN** the evaluator records the candidate as eligible for human review
+- **AND** it does not issue an official score or product verdict before that review
 
 #### Scenario: Harness activity does not change product points
 - **WHEN** evidence repair, retries, workflow execution, pricing, or other generic harness activity occurs
@@ -326,6 +336,8 @@ The evaluation SHALL apply the following four product hard gates separately from
 
 An official candidate pass SHALL require all of the following: a total score of at least 70 out of 100; at least 15 out of 24 for demo technical quality; at least 15 out of 24 for scene-kit correctness; at least 15 out of 30 for human review; no individual human rating of 1; all four hard gates passing; and successful completion of the evaluation phases required to establish those results. The presentation-skill, verification-tool, testing-evidence, and assumption-handling components SHALL have no separate minimum scores.
 
+Before human review, a complete candidate automated result SHALL pass automated eligibility only when the automated subtotal is at least 40 out of 70, both 15-out-of-24 automated component floors are met, and all four hard gates pass. The 40-point threshold SHALL equal the 70-point official threshold minus the maximum 30 human-review points. A failed automated eligibility requirement SHALL conclusively fail the candidate without human review or an official score. An incomplete automated score, floor, or gate SHALL leave automated eligibility unavailable and SHALL NOT be converted into a product failure.
+
 Failure of a hard gate SHALL prevent an official candidate pass but SHALL NOT erase the numerical score supported by available evidence. A workflow failure, evaluation-harness failure, or pending human review that prevents the official pass contract from being evaluated SHALL make the candidate product verdict unavailable rather than converting unobserved behavior into a product failure. As a narrow exception, a reproducible product-owned inability to install dependencies, build, or serve the frozen final candidate SHALL conclusively fail the applicable hard gate and candidate product verdict even when it prevents browser or human evidence from being collected. That exception SHALL preserve completed component results, leave unobserved criteria unscored, and SHALL NOT fabricate an official score or human ratings. A harness failure after an official score and verdict have been durably recorded SHALL preserve that product result under the evaluation-outcomes rules.
 
 The reference baseline SHALL NOT receive an official candidate pass/fail verdict, candidate total threshold, component-floor gate, or human-rating gate.
@@ -351,6 +363,16 @@ The reference baseline SHALL NOT receive an official candidate pass/fail verdict
 - **THEN** the official candidate pass verdict is false
 - **AND** the evaluator still reports the numerical score supported by available evidence
 
+#### Scenario: Automated component floor fails before human review
+- **WHEN** complete automated scoring misses either 15-out-of-24 automated component floor
+- **THEN** automated eligibility fails and the candidate product verdict is conclusively `fail`
+- **AND** the evaluator does not request human review or fabricate an official score
+
+#### Scenario: Automated hard gate fails before human review
+- **WHEN** complete automated scoring fails any required hard gate
+- **THEN** automated eligibility fails and the candidate product verdict is conclusively `fail`
+- **AND** the evaluator preserves the automated subtotal without requesting human review or fabricating an official score
+
 #### Scenario: Product cannot install, build, or serve
 - **WHEN** deterministic verification establishes that reproducible product behavior prevents the frozen final candidate from installing, building, or serving
 - **THEN** the applicable hard gate fails and the candidate product verdict is conclusively `fail`
@@ -361,6 +383,11 @@ The reference baseline SHALL NOT receive an official candidate pass/fail verdict
 - **WHEN** workflow failure, harness failure, or pending human review prevents the official candidate pass contract from being evaluated
 - **THEN** the evaluator does not report an official candidate pass or fail verdict
 - **AND** it reports the applicable incomplete outcome separately
+
+#### Scenario: Automated eligibility evidence is incomplete
+- **WHEN** any required automated component or hard gate cannot be scored reliably
+- **THEN** automated eligibility is unavailable rather than pass or fail
+- **AND** the evaluator reports the owning workflow or harness failure instead of assigning a low product score
 
 #### Scenario: Reference score is complete
 - **WHEN** the reference's applicable automated and human components are complete

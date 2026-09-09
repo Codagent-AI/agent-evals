@@ -113,9 +113,10 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 3.10 distinguishes implemented policy from criteria requiring executable proof', async () => {
+test('rubric 3.11 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '3.10.0')
+  assert.equal(rubric.version, '3.11.0')
+  assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(
     rubric.components
@@ -263,6 +264,10 @@ test('rubric validation rejects mis-summed points, duplicate ids, and unknown ev
   const misSummed = clone()
   misSummed.components[0].subcomponents[0].points += 1
   assert.match(validateAutomatedRubric(misSummed).join('\n'), /points/)
+
+  const wrongAutomatedThreshold = clone()
+  wrongAutomatedThreshold.automated_pass_threshold = 39
+  assert.match(validateAutomatedRubric(wrongAutomatedThreshold).join('\n'), /minimum score.*maximum human points/)
 
   const duplicated = clone()
   duplicated.components[1].subcomponents[0].criteria.push(

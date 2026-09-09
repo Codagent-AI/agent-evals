@@ -1,10 +1,11 @@
 {
   "rubric_id": "and-scene-automated-product",
-  "version": "3.10.0",
+  "version": "3.11.0",
   "total_points": 100,
   "automated_points": 70,
   "human_points": 30,
   "pass_threshold": 70,
+  "automated_pass_threshold": 40,
   "components": [
     {
       "id": "demo-technical-quality",

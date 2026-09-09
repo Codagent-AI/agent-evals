@@ -436,8 +436,9 @@ The automated command runs these phases in order:
 7. Run deterministic browser checks and capture evaluator evidence.
 8. Run product judging, then the separate ambiguity diagnostic.
 9. Ingest metrics and resolve pricing.
-10. Write the `pending-human-review` result and HTML report.
-11. Attempt candidate-server cleanup, update the pending artifacts, and exit.
+10. Write the HTML report and either an eligible `pending-human-review` result
+    or a conclusive automated product-fail result.
+11. Attempt candidate-server cleanup, update the result artifacts, and exit.
 
 A phase that cannot produce its outputs stops its dependents rather than letting
 them run on stale or fabricated inputs. Result writing and cleanup still run.
@@ -454,7 +455,8 @@ included in implementation cost.
 ## Human review
 
 The automated command never asks a human-review question and never issues an
-official total or pass verdict. The literal review is a separate command:
+official total. A candidate proceeds to the separate literal review only if its
+complete automated result remains eligible to pass:
 
 ```sh
 evals/agent-runner/and-scene/human-review.sh --run-dir artifacts/evals/and-scene/<run>
@@ -501,7 +503,9 @@ process is left running and untouched, and a new server is started elsewhere.
 
 ## Publication
 
-A normal automated run ends at `pending-human-review` and is never published.
+An automated run that remains eligible ends at `pending-human-review` and is
+never published. A conclusive automated product failure also remains a local
+diagnostic and is not published.
 Once the review finalizes a scored Agent Runner candidate with a `complete`
 result, a `pass` or `fail` product verdict, and completed human review, the
 review command copies exactly these six files into
@@ -555,11 +559,14 @@ unfinished push.
 reference score uses `not-applicable` and the `REFERENCE — COMPLETE` headline.
 
 Execution status and product quality are independent. A failed workflow or
-harness never becomes a product failure, and a durably recorded product verdict
-survives a later harness failure — reported as `PASS — HARNESS FAILURE` or
-`FAIL — HARNESS FAILURE`. A completed reference likewise retains its score as
-`REFERENCE — COMPLETE — HARNESS FAILURE`. Cleanup failure after a durably
-written pending result is recorded diagnostically and still exits successfully.
+harness never becomes a product failure. A complete automated score below 40 of
+70, either automated component below its 15-of-24 floor, or any failed hard gate
+does become a conclusive product failure because human review cannot make that
+candidate pass. A durably recorded product verdict survives a later harness
+failure — reported as `PASS — HARNESS FAILURE` or `FAIL — HARNESS FAILURE`. A
+completed reference likewise retains its score as `REFERENCE — COMPLETE —
+HARNESS FAILURE`. Cleanup failure after a durably written result is recorded
+diagnostically and still exits successfully.
 
 `result.json` is the authoritative machine-readable outcome and `report.html`
 renders the same current status, verdict, score availability, and failed or
@@ -585,7 +592,21 @@ denominator of 92. Runner health, workflow
 completion, evidence collection, judge execution, cost, timing, retries, and
 evidence repair award and deduct no product points; they are recorded
 diagnostically. Until a human review exists, a run reports its automated
-subtotal out of 70 and no official total or pass verdict.
+subtotal out of 70 and no official total. A complete automated result must score
+at least 40 of 70, meet both automated 15-of-24 component floors, and pass all
+four hard gates to proceed to human review. A failed requirement produces
+`evaluation_status=complete` and `product_verdict=fail` without inventing an
+official score. Incomplete automated evidence instead produces the owning
+workflow or harness failure; it is never converted into a low score.
+
+Agent Factory and other orchestrators should consume the suite policy from
+`result.json`: `evaluation_status=complete` with `product_verdict=fail` is a
+finished failed repetition, while `evaluation_status=pending-human-review` with
+`product_verdict=unavailable` is eligible for review. The nested
+`score.automated_pass` field is `false`, `true`, or `null` for failed, eligible,
+or incomplete automated eligibility respectively, and
+`score.automated_failures` gives structured threshold, component-floor, and
+hard-gate reasons. Consumers must not recalculate the 40-point policy.
 
 `automated-rubric.json` and `human-rubric.json` own criterion identifiers,
 evaluator assignment, points, gates, and thresholds. Neither the judge nor the
@@ -609,7 +630,7 @@ visual taste, which belongs to human review.
 
 Four hard gates sit outside the point total: `verification-build-whole-app`,
 `verification-sample-outline`, `verification-every-produced-step-renders`, and
-`verification-clear-outcome`. A failed gate blocks an official pass without
+`verification-clear-outcome`. A failed gate ends automated eligibility without
 erasing the numerical score. An official pass needs at least 70 overall, 15 of
 24 for demo quality, 15 of 24 for scene-kit correctness, 15 of 30 for human
 review, no individual human rating of 1, all four gates, and every required

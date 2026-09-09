@@ -340,6 +340,56 @@ function browserDemo({ captions = DEMO_CONTRACT.step_captions } = {}) {
   }
 }
 
+test('a complete below-minimum automated score finishes without human review', async () => {
+  const context = await environment()
+  let servedIdentity = null
+  const candidateServer = {
+    probe: async () => ({ ok: true, candidate_identity: servedIdentity }),
+    start: async ({ candidate }) => {
+      servedIdentity = candidate
+      return { pid: 9876, url: 'http://127.0.0.1:4319/' }
+    },
+    stop: async () => {},
+  }
+
+  const result = await evaluate(context, profiles, {
+    isProcessAlive: () => true,
+    verifyCandidate: async () => ({
+      build: { ok: true, log: 'built' },
+      verification: { machine_readable: true, passed: true },
+      timings: [],
+    }),
+    candidateServer,
+    browserDriver: browserDemo(),
+    judgeInvoke: async (request) => {
+      if (Array.isArray(request.criteria)) {
+        return JSON.stringify({
+          results: request.criteria.map((id) => ({
+            id,
+            verdict: 'fail',
+            rationale: 'the delivered implementation does not satisfy this criterion',
+            evidence: ['controller-fixture:verified'],
+          })),
+        })
+      }
+      if (request.job === 'ambiguity-diagnostics') {
+        return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
+      }
+      return JSON.stringify({ results: [] })
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(written.evaluation_status, 'complete')
+  assert.equal(written.product_verdict, 'fail')
+  assert.ok(written.automated_subtotal.points < 40)
+  assert.equal('official_score' in written, false)
+  assert.equal('human_review' in written, false)
+  assert.equal(written.product_failure.phase, 'automated-scoring')
+  assert.match(written.product_failure.reason, /Automated score below minimum: .*\/70; required 40\/70/)
+})
+
 test('--skip-validator launches the verified workflow by logical name without --until', async () => {
   const context = await environment()
 
