@@ -611,12 +611,19 @@ PROOF
 )
 
 AGENT_SKILLS_BOOTSTRAP=""
+AGENT_SESSION_STATE_BOOTSTRAP=""
 if [[ "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
   AGENT_SKILLS_BOOTSTRAP="/eval-input/bootstrap-agent-skills.sh \\
     $CONTAINER_AGENT_SKILLS_DIR_Q \\
     \"\$AGENT_RUNNER_DIR/\$IMPLEMENTATION_WORKFLOW_PATH\" \\
     $SELECTED_ADAPTERS_Q \\
     2>&1 | tee /artifacts/logs/agent-skills-bootstrap.log"
+  # Agent Runner checkpoints live under /artifacts already, but their recorded
+  # CLI session IDs refer to rollout/transcript files normally written under
+  # the disposable HOME. Persist only those private state directories for real
+  # implementation workflows; reference and rescore modes start no such roles.
+  AGENT_SESSION_STATE_BOOTSTRAP="/eval-input/prepare-agent-session-state.sh \
+    /artifacts/.runtime/agent-session-state"
 fi
 
 agent_script=$(cat <<AGENT
@@ -681,6 +688,8 @@ if [ -n "\$token" ]; then
   export GIT_ASKPASS="\$HOME/.git-askpass"
   export GIT_TERMINAL_PROMPT=0
 fi
+
+$AGENT_SESSION_STATE_BOOTSTRAP
 
 $AGENT_SKILLS_BOOTSTRAP
 

@@ -122,6 +122,21 @@ test('scored mode delegates the lifecycle to the suite controller', async () => 
   ]) assert.ok(result.output.includes(expected), `missing ${expected}\n${result.output}`)
 })
 
+test('scored mode prepares private per-evaluation agent session state before the controller starts', async () => {
+  const context = await setup()
+
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
+
+  assert.equal(result.status, 0, result.output)
+  const prepareMatch = result.output.match(
+    /\/eval-input\/prepare-agent-session-state\.sh\s+\/artifacts\/\.runtime\/agent-session-state/,
+  )
+  const prepare = prepareMatch?.index ?? -1
+  const controller = result.output.indexOf('exec node /eval-input/controller.mjs')
+  assert.ok(prepare >= 0, result.output)
+  assert.ok(controller > prepare, result.output)
+})
+
 test('scored mode permits the nested Codex judge sandbox to create user namespaces', async () => {
   const context = await setup()
 
@@ -296,6 +311,7 @@ test('a reference baseline requires no role profiles', async () => {
   assert.equal(result.status, 0, result.output)
   assert.ok(result.output.includes('--reference-baseline'), result.output)
   assert.ok(result.output.includes('--candidate-ref'), result.output)
+  assert.ok(!result.output.includes('prepare-agent-session-state.sh'), result.output)
 })
 
 test('a reference baseline defaults to the pinned known-good candidate', async () => {
@@ -333,6 +349,7 @@ test('an evaluator-only rescore mounts a completed run read-only and invokes no 
   assert.equal(result.status, 0, result.output)
   assert.match(result.output, /type=bind\\,source=.*completed-candidate\\,target=\/rescore-source\\,readonly/)
   assert.match(result.output, /--rescore-from \/rescore-source/)
+  assert.ok(!result.output.includes('prepare-agent-session-state.sh'), result.output)
   assert.ok(!result.output.includes('bootstrap-agent-skills.sh'), result.output)
   assert.ok(!result.output.includes('--lead-cli'), result.output)
   assert.ok(!result.output.includes('--change-name'), result.output)

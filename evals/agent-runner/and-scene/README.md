@@ -128,6 +128,11 @@ It verifies live process ownership before waiting, resumes only the exact
 inactive unfinished run, and rejects a changed fixture, role profile, Runner
 revision, workflow hash, Agent Skills revision or manifest, branch, draft PR,
 final SHA, rubric hash, evidence identity, or other score-affecting input.
+The run's private `.runtime/agent-session-state/` also retains the Codex rollout
+directories and Claude project transcripts addressed by those recorded session
+IDs. Replacement containers link those allowlisted directories into their
+otherwise disposable home, so genuine CLI continuation survives without
+retaining auth files, CLI settings, or the rest of either home directory.
 
 If a Claude lead, implementor, or acceptance tester exhausts its session allowance,
 the controller recognizes the Claude/Anthropic identity and limit message in
@@ -334,7 +339,10 @@ in the sandbox: the reviewer needs the candidate URL in their own browser, and a
 review that spans hours must outlive the container that produced the run.
 
 Agent Runner owns the sandbox, workflow execution, run locks, sessions, its own
-internal resume point, and `run-metrics.json`. None of that is copied here.
+internal resume point, and `run-metrics.json`. The suite does not interpret or
+publish its private session contents; it only gives Runner's CLI session stores
+a per-run persistent location so Runner can honor its recorded resume point in
+a replacement container.
 
 ## Evidence ownership and aliases
 
@@ -400,7 +408,15 @@ artifacts/evals/and-scene/<run-id>/
 └── .runtime/
     ├── candidate-worktree/
     │   └── .agent-runner/config.yaml
-    └── agent-runner-projects/
+    ├── agent-runner-projects/
+    └── agent-session-state/
+        ├── codex/
+        │   ├── archived_sessions/
+        │   ├── memories/
+        │   ├── sessions/
+        │   └── shell_snapshots/
+        └── claude/
+            └── projects/
 ```
 
 `.runtime/` persists across disposable containers. Agent Runner layers built-in
@@ -411,7 +427,9 @@ creates `eval/and-scene/<run-id>` exactly at the pinned fixture before Runner
 starts; any local or remote branch collision is refused. Resumes require that
 exact repository, worktree, branch, Runner run, workflow revision, draft PR,
 final SHA, and evidence identity. Credentials stay in the ephemeral container
-home and are never written into the run directory.
+home and are never written into the run directory. The retained CLI session
+directories are private recovery state, excluded from the curated publication
+along with every other `.runtime/` entry.
 
 Candidate runs require GitHub credentials capable of pushing the recorded
 branch and creating or updating its draft pull request. The branch and draft PR
