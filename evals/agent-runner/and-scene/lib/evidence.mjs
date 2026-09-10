@@ -573,17 +573,6 @@ export async function buildCandidateEvidenceManifest({
   }
 
   const discovery = await discoverCandidateFiles({ worktree, sessionDir })
-  const presentRoles = new Set(discovery.selected.map(({ role }) => role))
-  const missingRoles = EVIDENCE_ROLE_REGISTRY
-    .filter(({ required, role }) => required && !presentRoles.has(role))
-    .map(({ role }) => role)
-  if (missingRoles.length > 0) {
-    throw new EvidenceReadinessError(
-      `required candidate evidence roles are missing or unreadable: ${missingRoles.join(', ')}`,
-      missingRoles,
-    )
-  }
-
   const root = join(resolve(runDir), 'evidence', 'candidate')
   const artifactRoot = join(root, 'artifacts')
   await mkdir(artifactRoot, { recursive: true })
@@ -685,14 +674,16 @@ export async function buildCandidateEvidenceManifest({
   }
 
   const materializedRoles = new Set(artifacts.map(({ role }) => role))
-  const omittedRequiredRoles = EVIDENCE_ROLE_REGISTRY
+  const missingRoles = EVIDENCE_ROLE_REGISTRY
     .filter(({ required, role }) => required && !materializedRoles.has(role))
     .map(({ role }) => role)
-  if (omittedRequiredRoles.length > 0) {
-    throw new EvidenceReadinessError(
-      `required candidate evidence roles exceed materialization bounds: ${omittedRequiredRoles.join(', ')}`,
-      omittedRequiredRoles,
-    )
+  for (const role of missingRoles) {
+    findings.push(finding(
+      'missing-evidence-role',
+      `candidate evidence does not include the expected ${role} role`,
+      null,
+      { role },
+    ))
   }
 
   if (screenshotMetadata) {
@@ -747,12 +738,23 @@ export async function buildCandidateEvidenceManifest({
         }
       }
     }
+  } else if (!materializedRoles.has('screenshot-metadata')) {
+    for (const artifact of artifacts.filter(({ role }) => role === 'screenshot')) {
+      artifact.verification_state = 'defective'
+      artifact.limitations.push('missing-capture-metadata')
+      findings.push(finding(
+        'screenshot-metadata-inconsistent',
+        `screenshot has no candidate-provided capture metadata: ${artifact.origin.relative_path}`,
+        artifact.id,
+      ))
+    }
   }
 
   const manifest = {
     schema_version: CANDIDATE_EVIDENCE_SCHEMA_VERSION,
     ownership: 'candidate-produced',
-    readiness: 'ready',
+    readiness: missingRoles.length === 0 ? 'ready' : 'incomplete',
+    missing_roles: missingRoles,
     delivery: {
       final_sha: delivery.final_sha,
       pr_head_sha: delivery.pull_request.head_sha,
@@ -779,19 +781,22 @@ export async function inspectCandidateEvidenceReadiness({ worktree, sessionDir }
   const missingRoles = EVIDENCE_ROLE_REGISTRY
     .filter(({ required, role }) => required && !presentRoles.has(role))
     .map(({ role }) => role)
-  if (missingRoles.length > 0) {
-    throw new EvidenceReadinessError(
-      `required candidate evidence roles are missing or unreadable: ${missingRoles.join(', ')}`,
-      missingRoles,
-    )
-  }
   return {
     artifacts: discovery.selected.map(({ role, origin, bytes }) => ({
       role: role === 'screenshot' ? 'acceptance-screenshot' : role,
       path: origin.absolute_path,
       sha256: hashString(bytes),
     })),
-    findings: discovery.findings,
+    missing_roles: missingRoles,
+    findings: [
+      ...discovery.findings,
+      ...missingRoles.map((role) => finding(
+        'missing-evidence-role',
+        `candidate evidence does not include the expected ${role} role`,
+        null,
+        { role },
+      )),
+    ],
   }
 }
 
@@ -1247,6 +1252,8 @@ export function summarizeEvidenceManifest(manifest) {
     final_sha: manifest.delivery?.final_sha ?? manifest.final_sha ?? null,
     manifest_sha256: manifest.manifest_sha256 ?? null,
     ci_claims: manifest.ci_claims ?? [],
+    missing_roles: manifest.missing_roles ?? [],
+    findings: manifest.findings ?? [],
     artifacts: (manifest.artifacts ?? []).map((artifact) => ({
       id: artifact.id,
       kind: artifact.kind,

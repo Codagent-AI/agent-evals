@@ -347,7 +347,8 @@ claims but never count as candidate testing proof. The harness preserves
 candidate-reported CI text and its claimed revision verbatim and does not query
 CI.
 
-The required semantic roles and accepted filenames are:
+The semantic roles expected for complete candidate evidence and their accepted
+filenames are:
 
 | Role | Accepted aliases |
 |---|---|
@@ -359,9 +360,11 @@ The required semantic roles and accepted filenames are:
 | Assumptions ledger | `acceptance-assumptions.md`, `assumptions-ledger.md`, `acceptance-assumption-ledger.md`, `assumptions.md` |
 
 Referenced session reports and assumption/context-gap audits are retained when
-present. Missing required roles stop scored judging as an implementation
-workflow failure. Present but stale, malformed, weakly traceable, or
-wrong-revision content remains judgeable and is recorded as an evidence defect.
+present. Missing expected roles make candidate-evidence coverage incomplete but
+do not stop independent scored judging. Screenshots without capture metadata are
+retained as defective, unverified candidate evidence. Present but stale,
+malformed, weakly traceable, or wrong-revision content likewise remains
+judgeable and is recorded as an evidence defect.
 
 Product-source judges run from `neutral/judge/`, which contains only a
 byte-exact final-commit source snapshot under neutralized paths and
@@ -424,10 +427,13 @@ The automated command runs these phases in order:
    Agent Skills checkout and required skills, publishing credentials, profiles,
    evaluator inputs, and run directory.
 2. Start, wait for, resume, or continue the one recorded complete Runner run.
-3. Verify the clean delivered branch, remote head, and open draft PR whose base
+3. Verify the delivered branch, remote head, and open draft PR whose base
    exactly matches the recorded `origin/HEAD`, plus its head, the final
    Validator's required successful or intentional skipped outcome, unarchived
-   change, and acceptance handoff.
+   change, and acceptance handoff. Tracked changes and arbitrary untracked files
+   still fail delivery; untracked raster screenshots under
+   `artifacts/presentation-inspection/` are retained as explicitly identified
+   candidate evidence and do not make the committed product revision dirty.
 4. Freeze the verified final source revision.
 5. Install dependencies, build, and run non-browser verification.
 6. Start the evaluated candidate server.
@@ -621,7 +627,8 @@ and intermediate values are never rounded.
 Deterministic browser checks exercise the built, running demo: routing, the
 canonical nine steps, evolving-scene structure, present/browse modes,
 navigation, end boundaries, transition reliability, control semantics, focus,
-and keyboard operability. Each probe is stored in
+keyboard operability, and uniform fixed-canvas fitting at both wide and 64×64
+viewport boundaries. Each probe is stored in
 `evidence/evaluator/browser-probes/` as an evaluator-owned, revision-bound
 work unit with input/output hashes, required mode and position, initial and
 settled state, runtime failures, and its pass or fail result. Matching negative
@@ -630,7 +637,13 @@ screenshots carry the same ownership, revision, mode, position, settle, and
 hash metadata. Focused component judge jobs review delivered source and
 candidate-produced evidence.
 Judges receive only their own rubric slice, get no screenshots, and do not judge
-visual taste, which belongs to human review.
+visual taste, which belongs to human review. Source judges may cite only durable
+files from the neutral source snapshot; ad-hoc command output is never evidence
+because the independent closed-world auditor cannot inspect it. Malformed judge
+output receives up to three local attempts. Source-audit convergence receives
+up to five progress-making citation cycles, while an unchanged insufficient
+claim stops immediately as a harness protocol failure instead of spending more
+model calls on identical evidence.
 
 Four hard gates sit outside the point total: `verification-build-whole-app`,
 `verification-sample-outline`, `verification-every-produced-step-renders`, and

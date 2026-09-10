@@ -122,6 +122,15 @@ test('scored mode delegates the lifecycle to the suite controller', async () => 
   ]) assert.ok(result.output.includes(expected), `missing ${expected}\n${result.output}`)
 })
 
+test('scored mode permits the nested Codex judge sandbox to create user namespaces', async () => {
+  const context = await setup()
+
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
+
+  assert.equal(result.status, 0, result.output)
+  assert.match(result.output, /--docker-run-arg --security-opt --docker-run-arg seccomp=unconfined/)
+})
+
 test('scored mode always attaches AXI to the sandbox Playwright Chromium', async () => {
   const context = await setup()
 

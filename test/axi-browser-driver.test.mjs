@@ -96,6 +96,36 @@ test('the AXI driver establishes mode and position explicitly and waits for sett
   assert.doesNotMatch(calls[2].input, /^await page\.wait\(100\);/m)
 })
 
+test('the AXI driver records durable canvas geometry after an explicit viewport resize', async () => {
+  const { createAxiBrowserDriver } = await import(
+    '../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs'
+  )
+  const calls = []
+  const geometry = {
+    viewport: { width: 64, height: 64 },
+    authored: { width: 880, height: 495 },
+    rendered: { left: 0, top: 0, right: 44, bottom: 24.75, width: 44, height: 24.75 },
+    available: { left: 0, top: 0, right: 64, bottom: 64, width: 64, height: 64 },
+    scale: { x: 0.05, y: 0.05 },
+  }
+  const driver = createAxiBrowserDriver({
+    baseUrl: 'http://127.0.0.1:4319/',
+    command: async (args, input) => {
+      calls.push({ args, input })
+      if (args[0] === 'resize') return { status: 0, stdout: '', stderr: '' }
+      return { status: 0, stdout: `${JSON.stringify(geometry)}\n`, stderr: '' }
+    },
+  })
+
+  await driver.resize(64, 64)
+  assert.deepEqual(await driver.canvasGeometry(), geometry)
+  assert.deepEqual(calls[0].args, ['resize', '64', '64'])
+  assert.match(calls[1].input, /getBoundingClientRect/)
+  assert.match(calls[1].input, /data-presentation-canvas/)
+  assert.match(calls[1].input, /offsetWidth/)
+  assert.match(calls[1].input, /overflowX/)
+})
+
 test('the AXI driver observes compatible stable presentation hooks without requiring one DOM vocabulary', async () => {
   const { createAxiBrowserDriver } = await import(
     '../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs'

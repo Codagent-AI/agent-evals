@@ -18,8 +18,8 @@ import { componentApplicable, criteriaForJob } from './rubric.mjs'
 import { lstat, readFile, realpath } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 
-export const JUDGE_ATTEMPTS = 2
-const SOURCE_AUDIT_CYCLES = 3
+export const JUDGE_ATTEMPTS = 3
+const SOURCE_AUDIT_CYCLES = 5
 
 // How much candidate-controlled text any one job may carry. Candidate material
 // is quoted evidence inside a delimited block, never instruction, and it is
@@ -186,6 +186,11 @@ function sourceJudgePrompt({ definition, slice, sources, evidence }) {
     'When a test is cited, inspect the setup and assertions and confirm that they exercise',
     'this exact scenario. Never replace a missing mechanism with plausible behavior. If the',
     'mechanism or focused evidence required by the review guidance is absent, mark it fail.',
+    'Ad-hoc commands you run during review are not durable evidence and are invisible to the',
+    'independent auditor. Do not cite tool output or claim executable checks unless their',
+    'implementation and assertions exist in a cited source file. An explicit source counterexample',
+    'may prove a fail without a focused test unless the review guidance says',
+    'that this particular failure can only be distinguished through executable evidence.',
     'Keep each claim no broader than the criterion requires. If a verdict does depend on',
     'every member of a multi-file set, cite every member rather than a representative sample.',
     'For every result, citations MUST contain exact relative paths copied from the neutral',
@@ -269,10 +274,18 @@ export function buildJudgeRequest({
 
   const view = evidenceViews[job] ?? null
   const evidenceJob = ['testing-evidence', 'assumption-handling'].includes(job)
+  const manifestSources = neutral?.manifest?.entries
+    ?.filter(({ namespace, path }) => (
+      namespace === 'neutral-source' && typeof path === 'string' && path.startsWith('source/')
+    ))
+    .map(({ path }) => path.slice('source/'.length))
+  const discoverableSources = manifestSources?.length > 0
+    ? [...new Set(manifestSources)].sort()
+    : sources
   const responseSchema = evidenceJob ? JUDGE_RESULT_SCHEMA : SOURCE_JUDGE_RESULT_SCHEMA
   const body = evidenceJob
     ? evidenceJudgePrompt({ job, definition, slice, view })
-    : sourceJudgePrompt({ definition, slice, sources, evidence })
+    : sourceJudgePrompt({ definition, slice, sources: discoverableSources, evidence })
   const prompt = [
     ...body,
     '',
@@ -300,7 +313,7 @@ export function buildJudgeRequest({
     rubric_slice: slice,
     source_audit: !evidenceJob && Boolean(neutral?.source_root),
     source_audit_version: !evidenceJob && neutral?.source_root
-      ? 'closed-world-v6-cumulative-three-cycle'
+      ? 'closed-world-v7-progressive-five-cycle'
       : null,
     prompt,
   }
@@ -486,6 +499,10 @@ export async function buildSourceAuditRequest({
     '  for the primary verdict is absent.',
     '- insufficient: the cited packet omits source needed to prove or contradict the claim,',
     '  including a mechanism or focused test the primary judge asserted without supplying.',
+    'A missing focused test does not by itself make a fail verdict insufficient when the',
+    'supplied implementation is an explicit source counterexample to the criterion. Evaluate',
+    'only the supplied durable evidence; never rely on commands or tool output mentioned by',
+    'the primary judge because those observations are not present in this packet.',
     'Do not infer behavior from unseen files, filenames, comments, types, or plausible',
     'conventions. Use no source outside this packet.',
     '',
@@ -583,7 +600,9 @@ function buildFocusedRejudgeRequest(request, insufficient) {
       'The prior verdict could not be verified from the paths it cited. Re-inspect the',
       'neutral source. Return the verdict the source supports and cite every exact',
       'implementation and focused-test path needed to prove it. Do not repeat an',
-      'unsupported pass or fail.',
+      'unsupported pass or fail, and do not cite ad-hoc command output. If the cited',
+      'implementation itself is an explicit counterexample, explain that source mechanism',
+      'directly instead of claiming an uncaptured executable check.',
       ...insufficient.map((result) => (
         `- ${result.id}: ${bounded(result.rationale, MAX_RATIONALE_CHARS)}`
       )),
@@ -616,6 +635,7 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
   const resolvedResults = new Map()
   const auditedResults = new Map()
   const accumulatedCitations = new Set()
+  const priorInsufficientProof = new Map()
   let activeRequest = request
   let lastAuditResults = null
 
@@ -713,6 +733,32 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
       ...auditHistory.at(-1),
       ok: false,
       error,
+    }
+    const primaryById = new Map(primaryResults.map((result) => [result.id, result]))
+    const noProgress = []
+    for (const { id } of insufficient) {
+      const primary = primaryById.get(id)
+      const proof = hashJson({
+        id,
+        verdict: primary?.verdict ?? null,
+        citations: [...(primary?.citations ?? [])].sort(),
+      })
+      if (priorInsufficientProof.get(id) === proof) noProgress.push(id)
+      priorInsufficientProof.set(id, proof)
+    }
+    if (noProgress.length > 0) {
+      auditHistory[auditHistory.length - 1] = {
+        ...auditHistory.at(-1),
+        error: `no source-evidence progress: ${noProgress.join(', ')}`,
+      }
+      return {
+        job: request.job,
+        ok: false,
+        results: null,
+        attempts: history,
+        audit_results: lastAuditResults,
+        audit_attempts: auditHistory,
+      }
     }
     if (cycle < SOURCE_AUDIT_CYCLES) {
       activeRequest = buildFocusedRejudgeRequest(request, insufficient)

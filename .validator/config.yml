@@ -18,6 +18,8 @@ entry_points:
           command: bash -n evals/agent-runner/and-scene/run.sh && node --check evals/agent-runner/and-scene/scene-shots.mjs
           working_directory: "."
   - path: evals/*
+    exclude:
+      - "**/results"
     checks:
       - test
       - syntax

@@ -1277,6 +1277,7 @@ export async function runEvaluation({
             source_root: join(runDir, record.neutral.source.root),
             requirements_root: join(runDir, record.neutral.requirements.root),
             audit_root: join(runDir, '.runtime/judge-workspace'),
+            manifest: record.neutral.manifest,
           } : null,
           evidenceViews,
           mode,

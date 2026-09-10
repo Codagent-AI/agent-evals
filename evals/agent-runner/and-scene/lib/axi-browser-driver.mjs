@@ -14,6 +14,11 @@ const STAGE_SELECTOR = [
   '[data-presentation-stage]',
   '[data-presentation-chrome="stage"]',
 ].join(', ')
+const CANVAS_SELECTOR = [
+  '[data-presentation-canvas]',
+  '[data-presentation-node="canvas"]',
+  '[data-testid="presentation-canvas"]',
+].join(', ')
 const TITLE_SELECTORS = [
   '[data-presentation-present-title]',
   '[data-presentation-step-title]',
@@ -188,6 +193,14 @@ export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {
   }
 
   return {
+    async resize(width, height) {
+      if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) {
+        throw new BrowserDriverError(`invalid viewport size: ${width}×${height}`)
+      }
+      await invoke(['resize', String(width), String(height)])
+      return { width, height }
+    },
+
     async routes() {
       const routes = await run(`
 await page.open(${JSON.stringify(base.href)});
@@ -353,6 +366,62 @@ for (let attempt = 0; attempt < 50; attempt += 1) {
   await page.wait(100);
   if (attempt === 49) throw new Error('timed out waiting for a settled browser state');
 }
+`)
+    },
+
+    async canvasGeometry() {
+      return run(`
+const geometry = await page.eval(() => {
+  const canvas = document.querySelector(${JSON.stringify(CANVAS_SELECTOR)})
+    || document.querySelector(${JSON.stringify(STAGE_SELECTOR)});
+  if (!canvas) throw new Error('presentation canvas or stage was not found');
+  const rendered = canvas.getBoundingClientRect();
+  const authored = { width: canvas.offsetWidth, height: canvas.offsetHeight };
+  let available = {
+    left: 0,
+    top: 0,
+    right: window.innerWidth,
+    bottom: window.innerHeight,
+  };
+  for (let ancestor = canvas.parentElement; ancestor; ancestor = ancestor.parentElement) {
+    const style = getComputedStyle(ancestor);
+    const rect = ancestor.getBoundingClientRect();
+    if (/^(?:auto|scroll|hidden|clip)$/.test(style.overflowX)) {
+      available.left = Math.max(available.left, rect.left);
+      available.right = Math.min(available.right, rect.right);
+    }
+    if (/^(?:auto|scroll|hidden|clip)$/.test(style.overflowY)) {
+      available.top = Math.max(available.top, rect.top);
+      available.bottom = Math.min(available.bottom, rect.bottom);
+    }
+  }
+  const value = (number) => Math.round(number * 1000) / 1000;
+  return {
+    viewport: { width: window.innerWidth, height: window.innerHeight },
+    authored,
+    rendered: {
+      left: value(rendered.left),
+      top: value(rendered.top),
+      right: value(rendered.right),
+      bottom: value(rendered.bottom),
+      width: value(rendered.width),
+      height: value(rendered.height),
+    },
+    available: {
+      left: value(available.left),
+      top: value(available.top),
+      right: value(available.right),
+      bottom: value(available.bottom),
+      width: value(Math.max(0, available.right - available.left)),
+      height: value(Math.max(0, available.bottom - available.top)),
+    },
+    scale: {
+      x: authored.width > 0 ? value(rendered.width / authored.width) : null,
+      y: authored.height > 0 ? value(rendered.height / authored.height) : null,
+    },
+  };
+});
+console.log(JSON.stringify(geometry));
 `)
     },
 

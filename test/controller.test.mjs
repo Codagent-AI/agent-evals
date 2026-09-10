@@ -300,9 +300,26 @@ async function evaluate(context, extra = [], overrides = {}) {
 function browserDemo({ captions = DEMO_CONTRACT.step_captions } = {}) {
   let index = 0
   let mode = 'present'
+  let viewport = { width: 1280, height: 720 }
   return {
     async routes() { return [DEMO_CONTRACT.route] },
-    async open() { index = 0; mode = 'present' },
+    async open() { index = 0; mode = 'present'; viewport = { width: 1280, height: 720 } },
+    async resize(width, height) { viewport = { width, height } },
+    async canvasGeometry() {
+      const scale = viewport.width < 100 ? 0.05 : 1
+      const width = 880 * scale
+      const height = 495 * scale
+      return {
+        viewport,
+        authored: { width: 880, height: 495 },
+        rendered: { left: 0, top: 0, right: width, bottom: height, width, height },
+        available: {
+          left: 0, top: 0, right: viewport.width, bottom: viewport.height,
+          width: viewport.width, height: viewport.height,
+        },
+        scale: { x: scale, y: scale },
+      }
+    },
     async setMode(required) { mode = required },
     async setPosition(required) { index = required },
     async settle() { return { settled: true, strategy: 'mock-idle' } },
@@ -940,10 +957,9 @@ test('exhausted required judge output is a harness failure that preserves other 
     score.components.find(({ id }) => id === 'testing-evidence-quality').points_awarded,
     null,
   )
-  assert.equal(
-    score.components.find(({ id }) => id === 'scene-kit-correctness').points_awarded,
-    24,
-  )
+  const sceneKit = score.components.find(({ id }) => id === 'scene-kit-correctness')
+  assert.equal(sceneKit.points_awarded, null)
+  assert.equal(sceneKit.points_observed, 23)
 })
 
 test('fresh collisions and legacy checkpoint-only runs are not silently resumed', async () => {
@@ -1060,7 +1076,7 @@ test('browser probes are durable hashed evaluator-owned work units even when a p
   assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
   const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
   const units = state.phases['browser-evaluation'].units
-  assert.equal(Object.keys(units).length, 14)
+  assert.equal(Object.keys(units).length, 15)
   assert.ok(Object.values(units).every(({ state: unitState }) => unitState === 'complete'))
   for (const [id, unit] of Object.entries(units)) {
     assert.equal(unit.outputs.length, 1, id)

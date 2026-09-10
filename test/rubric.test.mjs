@@ -49,7 +49,8 @@ test('the automated rubric allocates the approved 24/24/7/7/4/4 automated compon
       ['scene-step-model', 4],
       ['scene-entity-transitions', 7],
       ['scene-modes-and-navigation', 6],
-      ['scene-fixed-canvas', 2],
+      ['scene-fixed-canvas-uniform-fit', 1],
+      ['scene-fixed-canvas', 1],
       ['scene-style-and-attribution', 5],
       ['skill-requirement-gathering', 1],
       ['skill-scaffolding', 3],
@@ -113,9 +114,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 3.11 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
+test('rubric 3.12 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '3.11.0')
+  assert.equal(rubric.version, '3.12.0')
   assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(
@@ -137,7 +138,7 @@ test('rubric 3.11 defines pre-human automated eligibility and distinguishes proo
   assert.match(guidance('demo-code-boundaries'), /title.*consum/i)
   assert.match(guidance('scene-entity-transitions'), /plain conditional|opt-in wrapper/i)
   assert.match(guidance('scene-modes-and-navigation'), /both.*horizontal.*vertical/i)
-  assert.match(guidance('scene-fixed-canvas'), /minimum.*clamp.*overflow/i)
+  assert.match(guidance('scene-fixed-canvas-uniform-fit'), /64×64.*equal.*scale/i)
   assert.match(guidance('skill-scaffolding'), /test name|filename/i)
   assert.match(guidance('verification-addressing-and-errors'), /strictPort.*insufficient/i)
   assert.match(guidance('verification-capture'), /fixed.*delay.*insufficient/i)
@@ -167,6 +168,33 @@ test('rubric 3.11 defines pre-human automated eligibility and distinguishes proo
   assert.match(guidance('verification-missing-sample'), /does not require.*dedicated.*test/i)
   assert.match(guidance('verification-capture'), /project-local screenshot helper.*separate inspection command/i)
   assert.match(guidance('verification-capture'), /does not require.*build.*render verifier.*invoke/i)
+})
+
+test('uniform canvas fitting is deterministic while default authored dimensions remain source-reviewed', async () => {
+  const rubric = await automatedRubric()
+  const fixedCanvas = rubric.components
+    .flatMap(({ subcomponents }) => subcomponents)
+    .filter(({ id }) => id.startsWith('scene-fixed-canvas'))
+
+  assert.deepEqual(fixedCanvas.map(({ evaluator, job, criteria, points }) => ({
+    evaluator,
+    job: job ?? null,
+    criteria,
+    points,
+  })), [
+    {
+      evaluator: 'deterministic-browser',
+      job: null,
+      criteria: ['canvas-uniform-scaling'],
+      points: 1,
+    },
+    {
+      evaluator: 'llm-source-review',
+      job: 'scene-kit',
+      criteria: ['canvas-default-dimensions'],
+      points: 1,
+    },
+  ])
 })
 
 test('each of the six scored judge jobs maps to exactly one component', async () => {

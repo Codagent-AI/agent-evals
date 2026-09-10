@@ -55,6 +55,8 @@ const INFRASTRUCTURE_FAILURE_PATTERNS = [
   /\bHTTP(?:\/\d(?:\.\d)?)?\s+(?:502|503|504)\b/i,
 ]
 
+const MISSING_PLAYWRIGHT_BROWSER = /browserType\.launch: Executable doesn't exist at \/ms-playwright\//i
+
 function isInfrastructureFailure(attempt) {
   const output = outputOf(attempt)
   return !attempt.ok && INFRASTRUCTURE_FAILURE_PATTERNS.some((pattern) => pattern.test(output))
@@ -90,6 +92,8 @@ export async function runCandidateVerification({
   let build = null
   const buildAttempts = []
   let verification = null
+  const verificationAttempts = []
+  let playwrightBrowser = null
   if (install.ok) {
     build = invoke('build', ['run', 'build'], { worktree, exec })
     buildAttempts.push(build)
@@ -103,12 +107,36 @@ export async function runCandidateVerification({
     if (build.ok) {
       verification = invoke('verification', ['run', 'verify'], { worktree, exec })
       timings.push(verification)
+      verificationAttempts.push(verification)
+      if (!verification.ok && MISSING_PLAYWRIGHT_BROWSER.test(outputOf(verification))) {
+        playwrightBrowser = invoke(
+          'playwright-browser-install',
+          ['exec', '--', 'playwright', 'install', 'chromium'],
+          { worktree, exec },
+        )
+        timings.push(playwrightBrowser)
+        if (!playwrightBrowser.ok) {
+          throw Object.assign(
+            new Error(
+              `candidate verification browser could not be provisioned: ${outputOf(playwrightBrowser)}`,
+            ),
+            {
+              owner: 'evaluation-harness',
+              code: 'candidate-browser-infrastructure-failed',
+              resumable: true,
+            },
+          )
+        }
+        verification = invoke('verification-confirmation', ['run', 'verify'], { worktree, exec })
+        timings.push(verification)
+        verificationAttempts.push(verification)
+      }
     }
   }
 
   const buildCommand = build ? attemptedCommand(buildAttempts) : skipped('dependency installation failed')
   const verificationCommand = verification
-    ? attemptedCommand([verification])
+    ? attemptedCommand(verificationAttempts)
     : skipped(build ? 'candidate build failed' : 'dependency installation failed')
   const installCommand = attemptedCommand(installAttempts)
   const buildOk = install.ok && build?.ok === true
@@ -122,6 +150,9 @@ export async function runCandidateVerification({
       install: installCommand,
       build: buildCommand,
       verification: verificationCommand,
+      playwright_browser: playwrightBrowser
+        ? commandResult(playwrightBrowser)
+        : skipped('candidate verifier did not require a matching Playwright browser'),
     },
     build: {
       ok: buildOk,

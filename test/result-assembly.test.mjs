@@ -373,6 +373,13 @@ test('candidate and evaluator evidence defects remain independently incomplete',
       candidate: {
         ownership: 'candidate-produced',
         readiness: 'incomplete',
+        missing_roles: ['screenshot-metadata'],
+        findings: [{
+          id: 'finding-missing-metadata',
+          code: 'missing-evidence-role',
+          role: 'screenshot-metadata',
+          message: 'candidate evidence does not include screenshot metadata',
+        }],
         artifacts: [{ id: 'candidate-flow', ownership: 'candidate-produced' }],
       },
       evaluator: {
@@ -391,6 +398,8 @@ test('candidate and evaluator evidence defects remain independently incomplete',
   assert.equal(result.completeness.judge_coverage, 'incomplete')
   assert.equal(result.completeness.candidate_reported_ci, 'unavailable')
   assert.equal(result.completeness.workflow_provenance, 'incomplete')
+  assert.deepEqual(result.evidence.candidate.missing_roles, ['screenshot-metadata'])
+  assert.equal(result.evidence.candidate.findings[0].code, 'missing-evidence-role')
 })
 
 test('a conclusive product failure omits score and human-review fields while preserving its failed gate', () => {

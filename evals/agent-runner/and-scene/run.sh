@@ -689,6 +689,16 @@ AGENT
 )
 
 sandbox_args=(--artifact-dir "$ARTIFACT_DIR" --input-dir "$SUITE_DIR")
+# Codex's read-only sandbox uses Linux user namespaces. Docker's default
+# seccomp profile blocks their creation, which prevents source judges from
+# inspecting even the neutral read-only checkout. The outer Agent Runner
+# container remains the evaluator's isolation boundary.
+if [[ "$PROOF_BROWSER" != 1 ]]; then
+  sandbox_args+=(
+    --docker-run-arg --security-opt
+    --docker-run-arg seccomp=unconfined
+  )
+fi
 if [[ "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
   sandbox_args+=(
     --docker-run-arg --mount

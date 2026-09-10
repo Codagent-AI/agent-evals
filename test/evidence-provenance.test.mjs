@@ -258,6 +258,10 @@ test('the current acceptance workflow markdown is accepted as screenshot metadat
   const metadata = manifest.artifacts.find(({ role }) => role === 'screenshot-metadata')
   assert.equal(metadata.origin.relative_path, 'output/acceptance-test.md')
   assert.equal(metadata.verification_state, 'verified')
+  assert.equal(
+    manifest.artifacts.find(({ role }) => role === 'screenshot').verification_state,
+    'verified',
+  )
   assert.ok(!manifest.findings.some(({ code }) => code === 'malformed-metadata'))
 })
 
@@ -330,47 +334,44 @@ test('candidate references cannot traverse outside the worktree or recorded sess
   assert.ok(!manifest.artifacts.some(({ origin }) => origin.relative_path.includes('secret.md')))
 })
 
-test('missing structural roles produce a typed implementation-workflow failure', async () => {
+test('missing candidate evidence roles remain judgeable as incomplete coverage', async () => {
   const context = await fixture()
   await writeRequiredArtifacts(context)
   await writeFile(join(context.sessionDir, 'output', 'capture-metadata.json'), '')
 
-  await assert.rejects(
-    buildCandidateEvidenceManifest({
-      worktree: context.worktree,
-      sessionDir: context.sessionDir,
-      runDir: context.runDir,
-      delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
-    }),
-    (error) => {
-      assert.ok(error instanceof EvidenceReadinessError)
-      assert.equal(error.owner, 'implementation-workflow')
-      assert.equal(error.code, 'missing-evidence-role')
-      assert.ok(error.missing_roles.includes('screenshot-metadata'))
-      return true
-    },
-  )
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  assert.equal(manifest.readiness, 'incomplete')
+  assert.deepEqual(manifest.missing_roles, ['screenshot-metadata'])
+  assert.ok(manifest.findings.some(({ code, role }) => (
+    code === 'missing-evidence-role' && role === 'screenshot-metadata'
+  )))
+  const screenshot = manifest.artifacts.find(({ role }) => role === 'screenshot')
+  assert.equal(screenshot.verification_state, 'defective')
+  assert.ok(screenshot.limitations.includes('missing-capture-metadata'))
 })
 
-test('an oversized required artifact remains a structural readiness failure', async () => {
+test('an oversized candidate artifact is omitted without stopping judging', async () => {
   const context = await fixture()
   await writeRequiredArtifacts(context, {
     'acceptance-test-results.md': Buffer.alloc((16 * 1024 * 1024) + 1, 0x61),
   })
 
-  await assert.rejects(
-    buildCandidateEvidenceManifest({
-      worktree: context.worktree,
-      sessionDir: context.sessionDir,
-      runDir: context.runDir,
-      delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
-    }),
-    (error) => {
-      assert.ok(error instanceof EvidenceReadinessError)
-      assert.ok(error.missing_roles.includes('acceptance-flow-record'))
-      return true
-    },
-  )
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  assert.equal(manifest.readiness, 'incomplete')
+  assert.ok(manifest.missing_roles.includes('acceptance-flow-record'))
+  assert.ok(manifest.findings.some(({ code }) => code === 'artifact-bounds-exceeded'))
 })
 
 test('evidence discovery preserves non-ENOENT directory failures as harness errors', async () => {
