@@ -16,6 +16,11 @@ if [[ "$HOME_DIR" != /* || "$HOME_DIR" == / ]]; then
   exit 2
 fi
 
+STATE_PARENT="$(dirname -- "$STATE_ROOT")"
+if [[ -L "$STATE_PARENT" || (-e "$STATE_PARENT" && ! -d "$STATE_PARENT") ]]; then
+  echo "Agent session state parent is not a private directory: $STATE_PARENT" >&2
+  exit 2
+fi
 if [[ -L "$STATE_ROOT" || (-e "$STATE_ROOT" && ! -d "$STATE_ROOT") ]]; then
   echo "Agent session state root is not a private directory: $STATE_ROOT" >&2
   exit 2

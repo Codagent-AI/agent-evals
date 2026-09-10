@@ -105,3 +105,20 @@ test('recovery refuses a session-state directory redirected outside the evaluati
   assert.match(result.stderr, /not a private directory/i)
   assert.equal(await exists(join(foreign, 'archived_sessions')), false)
 })
+
+test('recovery refuses a symlinked ancestor of the session-state directory', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-session-ancestor-symlink-'))
+  const evaluationRoot = join(dir, 'evaluation-a')
+  const foreign = join(dir, 'foreign')
+  const stateRoot = join(evaluationRoot, '.runtime', 'agent-session-state')
+  const home = join(dir, 'home')
+  await mkdir(evaluationRoot)
+  await mkdir(foreign)
+  await symlink(foreign, join(evaluationRoot, '.runtime'))
+
+  const result = invokePrepare(home, stateRoot)
+
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /not a private directory/i)
+  assert.equal(await exists(join(foreign, 'agent-session-state')), false)
+})
