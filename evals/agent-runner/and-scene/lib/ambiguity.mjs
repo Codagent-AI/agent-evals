@@ -62,6 +62,7 @@ export const AMBIGUITY_RESULT_SCHEMA = {
         properties: {
           origin: {
             type: 'object',
+            additionalProperties: false,
             properties: {
               run_id: { type: 'string' },
               step: { type: 'string' },
@@ -85,6 +86,7 @@ export const AMBIGUITY_RESULT_SCHEMA = {
       items: {
         type: 'object',
         required: ['finding_id', 'fixture_target', 'observed_problem', 'proposed_clarification', 'evidence'],
+        additionalProperties: false,
         properties: {
           finding_id: { type: 'string' },
           fixture_target: { type: 'string' },

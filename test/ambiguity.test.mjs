@@ -457,3 +457,11 @@ test('resumed diagnostics merge onto the previously written ledger', async () =>
   assert.equal(outcome.ledger.findings.length, 2)
   assert.equal(outcome.ledger.findings[0].id, findingId(finding()))
 })
+
+test('ambiguity response schema closes every nested object for Codex structured output', () => {
+  const finding = AMBIGUITY_RESULT_SCHEMA.properties.findings.items
+  const proposal = AMBIGUITY_RESULT_SCHEMA.properties.proposals.items
+
+  assert.equal(finding.properties.origin.additionalProperties, false)
+  assert.equal(proposal.additionalProperties, false)
+})
