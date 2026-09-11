@@ -221,7 +221,7 @@ test('source judges must verify behavior and resolve deterministic-fact contradi
     assert.match(request.prompt, /missing mechanism.*plausible behavior/i, job)
     assert.match(request.prompt, /citations MUST contain exact relative paths[\s\S]*neutral\s+source file list/i, job)
     assert.equal(request.source_audit, true, job)
-    assert.equal(request.source_audit_version, 'closed-world-v7-progressive-five-cycle', job)
+    assert.equal(request.source_audit_version, 'closed-world-v8-absence-confirmed-fail', job)
   }
 })
 
@@ -340,6 +340,8 @@ test('source audit receives only the exact cited files and primary claims', asyn
     assert.match(request.prompt, /insufficient/i)
     assert.match(request.prompt, /contradicted/i)
     assert.match(request.prompt, /missing focused test.*does not.*insufficient/i)
+    assert.match(request.prompt, /absence of that evidence confirms the fail/i)
+    assert.match(request.prompt, /do not classify a fail as insufficient merely/i)
     assert.match(request.prompt, /only.*supplied.*evidence/i)
   } finally {
     await rm(root, { recursive: true, force: true })

@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import {
   ROLE_AGENTS,
   compareRoleSelections,
+  normalizeRoleProfiles,
   reconcileRoleAttempts,
   renderEvalConfig,
   renderEvalSettings,
@@ -30,6 +31,25 @@ const tester = { cli: 'claude', model: 'opus', effort: 'high' }
 
 test('roles map to the core workflow lead, implementor, and tester agents', () => {
   assert.deepEqual(ROLE_AGENTS, { lead: 'lead', implementor: 'implementor', tester: 'tester' })
+})
+
+test('a persisted reviewer profile is normalized to tester', () => {
+  const reviewer = { cli: 'claude', model: 'opus', effort: 'high', agent: 'reviewer' }
+  const normalized = normalizeRoleProfiles({
+    lead,
+    implementor,
+    reviewer,
+  })
+
+  assert.deepEqual(normalized.tester, reviewer)
+  assert.equal('reviewer' in normalized, false)
+})
+
+test('an explicit tester profile is not replaced by a legacy reviewer profile', () => {
+  const reviewer = { cli: 'codex', model: 'gpt-5', effort: 'high', agent: 'reviewer' }
+  const normalized = normalizeRoleProfiles({ tester, reviewer })
+
+  assert.deepEqual(normalized.tester, tester)
 })
 
 test('independently selected profiles are accepted and normalized', () => {

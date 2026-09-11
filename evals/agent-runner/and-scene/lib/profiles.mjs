@@ -125,6 +125,13 @@ export function renderEvalSettings() {
   return 'autonomous_permission_mode: yolo\n'
 }
 
+export function normalizeRoleProfiles(profiles) {
+  if (!profiles || typeof profiles !== 'object') return profiles
+  if (profiles.tester != null || profiles.reviewer == null) return profiles
+  const { reviewer, ...rest } = profiles
+  return { ...rest, tester: reviewer }
+}
+
 export function compareRoleSelections(recorded, requested) {
   return ROLES.flatMap((role) => {
     const before = recorded?.[role]

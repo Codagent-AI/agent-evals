@@ -6,6 +6,7 @@ import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 import { loadCheckpoint } from './checkpoint.mjs'
 import { hashFile, hashJson, readJson } from './persistence.mjs'
+import { normalizeRoleProfiles } from './profiles.mjs'
 import { checkWorkflowHistory } from './workflow.mjs'
 
 const ARTIFACT_ROOT = '/artifacts'
@@ -164,7 +165,7 @@ export async function loadCandidateRescoreSource({ sourceDir }) {
       },
     },
     runner: { ...runner, session_dir: sessionDir },
-    role_profiles: state.role_profiles,
+    role_profiles: normalizeRoleProfiles(state.role_profiles),
     agent_runner_provenance: state.agent_runner_provenance,
     agent_skills_provenance: state.agent_skills_provenance,
     workflow: result.workflow,
