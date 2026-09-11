@@ -38,8 +38,10 @@ async function setup({ workflow = 'name: implement-change\n', dirty = false } = 
   await mkdir(dirname(sandbox), { recursive: true })
   await mkdir(join(home, '.codex'), { recursive: true })
   await mkdir(join(home, '.claude'), { recursive: true })
+  await mkdir(join(home, '.cursor'), { recursive: true })
   await writeFile(join(home, '.codex/auth.json'), '{}\n')
   await writeFile(join(home, '.claude/.credentials.json'), '{}\n')
+  await writeFile(join(home, '.cursor/auth.json'), '{}\n')
   await writeFile(sandbox, '#!/usr/bin/env bash\nprintf \'%q \' "$@"\nprintf \'\\n\'\n')
   await chmod(sandbox, 0o755)
   if (workflow !== null) {
@@ -270,6 +272,7 @@ test('the pinned capabilities do not enumerate volatile model names', async () =
   ))
   assert.equal(Object.hasOwn(capabilities.clis.codex, 'models'), false)
   assert.equal(Object.hasOwn(capabilities.clis.claude, 'models'), false)
+  assert.equal(Object.hasOwn(capabilities.clis.cursor, 'models'), false)
   const result = validateRoleProfiles({
     lead: { cli: 'codex', model: 'gpt-6-astra', effort: 'high' },
     implementor: { cli: 'codex', model: 'future-codex-model', effort: 'high' },
@@ -278,6 +281,26 @@ test('the pinned capabilities do not enumerate volatile model names', async () =
   })
 
   assert.equal(result.ok, true, JSON.stringify(result.errors))
+})
+
+test('Cursor is a first-class role CLI and forwards family model names', async () => {
+  const context = await setup()
+  const cursorArgs = [
+    '--lead-cli', 'cursor', '--lead-model', 'grok', '--lead-effort', 'high',
+    '--implementor-cli', 'cursor', '--implementor-model', 'grok-4.6', '--implementor-effort', 'medium',
+    '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+  ]
+
+  const result = await scored(context, ['--skip-validator', ...cursorArgs])
+
+  assert.equal(result.status, 0, result.output)
+  assert.ok(result.output.includes('--mount-cursor-auth'), result.output)
+  assert.ok(result.output.includes('--mount-claude-auth'), result.output)
+  assert.ok(result.output.includes('--lead-cli cursor'), result.output)
+  assert.ok(result.output.includes('--lead-model grok'), result.output)
+  assert.ok(result.output.includes('--implementor-cli cursor'), result.output)
+  assert.ok(result.output.includes('--implementor-model grok-4.6'), result.output)
+  assert.match(result.output, /cursor cursor claude/)
 })
 
 test('a partially specified role profile is rejected', async () => {
@@ -562,6 +585,7 @@ test('help documents the exact fixture pin, role profiles, and validator option'
   assert.ok(result.stdout.includes('--lead-cli'))
   assert.ok(result.stdout.includes('--implementor-cli'))
   assert.ok(result.stdout.includes('--calibrate'))
+  assert.ok(result.stdout.includes('--mount-cursor-auth'))
   assert.ok(!result.stdout.includes('--calibration-record'))
 })
 

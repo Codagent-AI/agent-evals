@@ -25,8 +25,8 @@ if [[ -L "$STATE_ROOT" || (-e "$STATE_ROOT" && ! -d "$STATE_ROOT") ]]; then
   echo "Agent session state root is not a private directory: $STATE_ROOT" >&2
   exit 2
 fi
-mkdir -p "$STATE_ROOT" "$HOME_DIR/.codex" "$HOME_DIR/.claude"
-chmod 700 "$STATE_ROOT" "$HOME_DIR/.codex" "$HOME_DIR/.claude" 2>/dev/null || true
+mkdir -p "$STATE_ROOT" "$HOME_DIR/.codex" "$HOME_DIR/.claude" "$HOME_DIR/.cursor"
+chmod 700 "$STATE_ROOT" "$HOME_DIR/.codex" "$HOME_DIR/.claude" "$HOME_DIR/.cursor" 2>/dev/null || true
 
 link_private_state_dir() {
   local relative="$1" target="$2" persistent parent existing_target
@@ -73,3 +73,7 @@ link_private_state_dir codex/shell_snapshots "$HOME_DIR/.codex/shell_snapshots"
 # Agent Runner's Claude adapter resolves --resume from this exact transcript
 # store. Settings and .credentials.json intentionally remain outside it.
 link_private_state_dir claude/projects "$HOME_DIR/.claude/projects"
+
+# Agent Runner's Cursor adapter discovers and resumes chats from this store.
+# auth.json and cli-config.json intentionally remain outside it.
+link_private_state_dir cursor/chats "$HOME_DIR/.cursor/chats"

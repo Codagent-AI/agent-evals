@@ -34,7 +34,7 @@ consult `run.sh --help` before constructing an unfamiliar invocation.
   second run in that directory. `result.json` and `run-state.json` explain the
   owning failed phase and whether it is resumable.
 - The run's `.runtime/` directory is private recovery state, not a published
-  artifact. It retains allowlisted Codex and Claude session data so a
+  artifact. It retains allowlisted Codex, Claude, and Cursor session data so a
   replacement container can resume, but must never retain credentials or CLI
   settings. Guard every session-state path and its immediate parent against
   symlinks before creating it; this prevents state escaping the evaluation.

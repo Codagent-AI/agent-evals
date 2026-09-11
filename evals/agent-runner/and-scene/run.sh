@@ -53,6 +53,7 @@ ENV_FILE_ARGS=()
 AUTH_ARGS=()
 MOUNT_CODEX_AUTH=0
 MOUNT_CLAUDE_AUTH=0
+MOUNT_CURSOR_AUTH=0
 
 usage() {
   cat <<'USAGE'
@@ -131,6 +132,8 @@ Options:
                           sandbox via sandbox-run.sh.
   --mount-claude-auth    Forward subscription-based Claude Code auth files into
                           the sandbox via sandbox-run.sh.
+  --mount-cursor-auth    Forward subscription-based Cursor auth files into the
+                          sandbox via sandbox-run.sh.
   -h, --help             Show this help.
 USAGE
 }
@@ -268,6 +271,11 @@ while (($#)); do
       AUTH_ARGS+=(--mount-claude-auth)
       shift
       ;;
+    --mount-cursor-auth)
+      MOUNT_CURSOR_AUTH=1
+      AUTH_ARGS+=(--mount-cursor-auth)
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -403,8 +411,14 @@ if [[ "$RUN_AGENT" == 1 ]]; then
             MOUNT_CODEX_AUTH=1
           fi
           ;;
+        cursor)
+          if [[ "$MOUNT_CURSOR_AUTH" != 1 ]]; then
+            AUTH_ARGS+=(--mount-cursor-auth)
+            MOUNT_CURSOR_AUTH=1
+          fi
+          ;;
         *)
-          echo "Unsupported CLI adapter for auth forwarding: $cli; expected claude or codex." >&2
+          echo "Unsupported CLI adapter for auth forwarding: $cli; expected claude, codex, or cursor." >&2
           exit 2
           ;;
       esac

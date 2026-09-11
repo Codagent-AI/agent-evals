@@ -24,9 +24,13 @@ forwarding, and devcontainer. This suite calls its `scripts/sandbox-run.sh`
 adapter and mounts only this suite at `/eval-input`.
 
 Each lead, implementor, and acceptance-reviewer profile selects its own CLI
-adapter, and eval-owned judging always runs through Codex. The adapter mounts
-the host authentication matching the selected adapters plus Codex. Before
-starting Agent Runner, the suite verifies the workflow's named Codagent skills
+adapter (`claude`, `codex`, or `cursor`), and eval-owned judging always runs
+through Codex. The adapter mounts the host authentication matching the selected
+adapters plus Codex. Model identifiers are passed through unchanged: Cursor
+accepts a versioned id such as `grok-4.6` or a full Cursor id such as
+`cursor-grok-4.6-high`. A bare family such as `grok` is passed through, but the
+Cursor CLI rejects it. Before starting Agent Runner, the suite verifies the
+workflow's named Codagent skills
 against the pinned Agent Skills checkout and installs that local plugin for
 each selected CLI.
 
@@ -100,6 +104,19 @@ evals/agent-runner/and-scene/run.sh \
   --reviewer-cli claude --reviewer-model opus --reviewer-effort high
 ```
 
+Cursor profiles take a versioned id or a full Cursor model id. The suite does
+not rewrite either form. `grok-4.6` works; a bare family such as `grok` does
+not:
+
+```bash
+evals/agent-runner/and-scene/run.sh \
+  --run-agent \
+  --skip-validator \
+  --lead-cli cursor --lead-model grok-4.6 --lead-effort high \
+  --implementor-cli cursor --implementor-model cursor-grok-4.6-high --implementor-effort medium \
+  --reviewer-cli claude --reviewer-model opus --reviewer-effort high
+```
+
 `--skip-validator` passes `skip_validator=true` to skip all workflow-owned
 Agent Validator execution: task-level compliance, the final Validator, and
 acceptance-remediation Validator calls. Without it, all of those Validator
@@ -129,10 +146,11 @@ inactive unfinished run, and rejects a changed fixture, role profile, Runner
 revision, workflow hash, Agent Skills revision or manifest, branch, draft PR,
 final SHA, rubric hash, evidence identity, or other score-affecting input.
 The run's private `.runtime/agent-session-state/` also retains the Codex rollout
-directories and Claude project transcripts addressed by those recorded session
-IDs. Replacement containers link those allowlisted directories into their
-otherwise disposable home, so genuine CLI continuation survives without
-retaining auth files, CLI settings, or the rest of either home directory.
+directories, Claude project transcripts, and Cursor chat store addressed by
+those recorded session IDs. Replacement containers link those allowlisted
+directories into their otherwise disposable home, so genuine CLI continuation
+survives without retaining auth files, CLI settings, or the rest of either home
+directory.
 
 If a Claude lead, implementor, or acceptance tester exhausts its session allowance,
 the controller recognizes the Claude/Anthropic identity and limit message in
@@ -415,8 +433,10 @@ artifacts/evals/and-scene/<run-id>/
         │   ├── memories/
         │   ├── sessions/
         │   └── shell_snapshots/
-        └── claude/
-            └── projects/
+        ├── claude/
+        │   └── projects/
+        └── cursor/
+            └── chats/
 ```
 
 `.runtime/` persists across disposable containers. Agent Runner layers built-in

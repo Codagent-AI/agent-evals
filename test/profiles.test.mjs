@@ -17,6 +17,10 @@ const capabilities = {
       roles: ['lead', 'implementor', 'tester'],
     },
     codex: { efforts: ['medium', 'high'], roles: ['implementor'] },
+    cursor: {
+      efforts: ['low', 'medium', 'high'],
+      roles: ['lead', 'implementor', 'tester'],
+    },
   },
 }
 
@@ -111,6 +115,42 @@ test('new model identifiers are accepted without a harness capability update', (
 
   assert.equal(result.ok, true, JSON.stringify(result.errors))
   assert.equal(result.profiles.implementor.model, 'gpt-6-astra')
+})
+
+test('Cursor accepts family model identifiers as well as versioned ones', () => {
+  const family = validateRoleProfiles({
+    lead: { cli: 'cursor', model: 'grok', effort: 'high' },
+    implementor: { cli: 'cursor', model: 'grok-4.6', effort: 'medium' },
+    reviewer: { cli: 'cursor', model: 'composer', effort: 'high' },
+    capabilities,
+  })
+  const versioned = validateRoleProfiles({
+    lead: { cli: 'cursor', model: 'cursor-grok-4.6-high', effort: 'high' },
+    implementor: { cli: 'cursor', model: 'composer-2.5', effort: 'medium' },
+    reviewer: { cli: 'cursor', model: 'gpt-5.6-sol-high', effort: 'high' },
+    capabilities,
+  })
+
+  assert.equal(family.ok, true, JSON.stringify(family.errors))
+  assert.equal(family.profiles.lead.model, 'grok')
+  assert.equal(family.profiles.implementor.model, 'grok-4.6')
+  assert.equal(family.profiles.reviewer.model, 'composer')
+  assert.equal(versioned.ok, true, JSON.stringify(versioned.errors))
+  assert.equal(versioned.profiles.lead.model, 'cursor-grok-4.6-high')
+})
+
+test('renderEvalConfig passes Cursor family models through unchanged', () => {
+  const { profiles } = validateRoleProfiles({
+    lead: { cli: 'cursor', model: 'grok', effort: 'high' },
+    implementor: { cli: 'cursor', model: 'grok-4.6', effort: 'medium' },
+    reviewer: { cli: 'claude', model: 'opus', effort: 'high' },
+    capabilities,
+  })
+
+  const config = renderEvalConfig(profiles)
+
+  assert.match(config, /lead:\n {8}default_mode: autonomous\n {8}cli: cursor\n {8}model: grok\n {8}effort: high/)
+  assert.match(config, /implementor:\n {8}default_mode: autonomous\n {8}cli: cursor\n {8}model: grok-4\.6\n {8}effort: medium/)
 })
 
 test('an invalid implementor effort names the failing role and field', () => {

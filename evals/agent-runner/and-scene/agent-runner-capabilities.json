@@ -9,6 +9,10 @@
     "codex": {
       "efforts": ["low", "medium", "high"],
       "roles": ["lead", "implementor", "tester"]
+    },
+    "cursor": {
+      "efforts": ["low", "medium", "high"],
+      "roles": ["lead", "implementor", "tester"]
     }
   }
 }

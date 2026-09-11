@@ -37,8 +37,11 @@ test('Codex rollouts and Claude transcripts survive a replacement home without p
   const replacementHome = join(dir, 'home-b')
   await mkdir(join(firstHome, '.codex'), { recursive: true })
   await mkdir(join(firstHome, '.claude'), { recursive: true })
+  await mkdir(join(firstHome, '.cursor'), { recursive: true })
   await writeFile(join(firstHome, '.codex/auth.json'), 'codex-credential')
   await writeFile(join(firstHome, '.claude/.credentials.json'), 'claude-credential')
+  await writeFile(join(firstHome, '.cursor/auth.json'), 'cursor-credential')
+  await writeFile(join(firstHome, '.cursor/cli-config.json'), 'cursor-settings')
 
   prepare(firstHome, stateRoot)
 
@@ -48,6 +51,7 @@ test('Codex rollouts and Claude transcripts survive a replacement home without p
     '.codex/memories',
     '.codex/shell_snapshots',
     '.claude/projects',
+    '.cursor/chats',
   ]) {
     assert.equal((await lstat(join(firstHome, path))).isSymbolicLink(), true, path)
   }
@@ -55,6 +59,8 @@ test('Codex rollouts and Claude transcripts survive a replacement home without p
   await writeFile(join(firstHome, '.codex/sessions/2026/09/10/rollout.jsonl'), 'codex rollout')
   await mkdir(join(firstHome, '.claude/projects/-workspace-candidate'), { recursive: true })
   await writeFile(join(firstHome, '.claude/projects/-workspace-candidate/session.jsonl'), 'claude transcript')
+  await mkdir(join(firstHome, '.cursor/chats/workspace/chat-1'), { recursive: true })
+  await writeFile(join(firstHome, '.cursor/chats/workspace/chat-1/store.db'), 'cursor chat')
 
   prepare(replacementHome, stateRoot)
 
@@ -66,9 +72,16 @@ test('Codex rollouts and Claude transcripts survive a replacement home without p
     await readFile(join(replacementHome, '.claude/projects/-workspace-candidate/session.jsonl'), 'utf8'),
     'claude transcript',
   )
+  assert.equal(
+    await readFile(join(replacementHome, '.cursor/chats/workspace/chat-1/store.db'), 'utf8'),
+    'cursor chat',
+  )
   assert.equal(await exists(join(stateRoot, 'codex/auth.json')), false)
   assert.equal(await exists(join(stateRoot, 'claude/.credentials.json')), false)
+  assert.equal(await exists(join(stateRoot, 'cursor/auth.json')), false)
+  assert.equal(await exists(join(stateRoot, 'cursor/cli-config.json')), false)
   assert.equal(await readlink(join(replacementHome, '.codex/sessions')), join(stateRoot, 'codex/sessions'))
+  assert.equal(await readlink(join(replacementHome, '.cursor/chats')), join(stateRoot, 'cursor/chats'))
 })
 
 test('a different evaluation receives an isolated empty session store', async () => {
