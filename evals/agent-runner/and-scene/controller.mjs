@@ -138,9 +138,9 @@ const VALUES = new Map([
   ['--implementor-cli', 'implementorCli'],
   ['--implementor-model', 'implementorModel'],
   ['--implementor-effort', 'implementorEffort'],
-  ['--reviewer-cli', 'reviewerCli'],
-  ['--reviewer-model', 'reviewerModel'],
-  ['--reviewer-effort', 'reviewerEffort'],
+  ['--tester-cli', 'testerCli'],
+  ['--tester-model', 'testerModel'],
+  ['--tester-effort', 'testerEffort'],
 ])
 
 export function parseArgs(argv) {
@@ -333,7 +333,7 @@ export async function runEvaluation({
   const validation = validateRoleProfiles({
     lead: importedRun?.role_profiles?.lead ?? roleProfileFrom(options, 'lead'),
     implementor: importedRun?.role_profiles?.implementor ?? roleProfileFrom(options, 'implementor'),
-    reviewer: importedRun?.role_profiles?.reviewer ?? roleProfileFrom(options, 'reviewer'),
+    tester: importedRun?.role_profiles?.tester ?? roleProfileFrom(options, 'tester'),
     capabilities,
     mode,
   })

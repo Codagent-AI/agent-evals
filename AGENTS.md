@@ -24,7 +24,7 @@ consult `run.sh --help` before constructing an unfamiliar invocation.
   or reporting. Calibration is a maintainer diagnostic, not a prerequisite or
   runtime gate for a candidate evaluation.
 - A paid candidate run needs `--run-agent`, all three role profiles
-  (`--lead-*`, `--implementor-*`, and `--reviewer-*`), a clean Agent Runner
+  (`--lead-*`, `--implementor-*`, and `--tester-*`), a clean Agent Runner
   checkout, a clean pinned Agent Skills checkout, Docker, valid CLI auth, and
   GitHub credentials permitted to push a candidate branch and create a draft
   PR. Use `--dry-run` to inspect the planned sandbox invocation without Docker

@@ -101,7 +101,7 @@ evals/agent-runner/and-scene/run.sh \
   --skip-validator \
   --lead-cli claude --lead-model opus --lead-effort high \
   --implementor-cli claude --implementor-model sonnet --implementor-effort medium \
-  --reviewer-cli claude --reviewer-model opus --reviewer-effort high
+  --tester-cli claude --tester-model opus --tester-effort high
 ```
 
 Cursor profiles take a versioned id or a full Cursor model id. The suite does
@@ -114,7 +114,7 @@ evals/agent-runner/and-scene/run.sh \
   --skip-validator \
   --lead-cli cursor --lead-model grok-4.6 --lead-effort high \
   --implementor-cli cursor --implementor-model cursor-grok-4.6-high --implementor-effort medium \
-  --reviewer-cli claude --reviewer-model opus --reviewer-effort high
+  --tester-cli claude --tester-model opus --tester-effort high
 ```
 
 `--skip-validator` passes `skip_validator=true` to skip all workflow-owned
@@ -137,7 +137,7 @@ evals/agent-runner/and-scene/run.sh \
   --skip-validator \
   --lead-cli claude --lead-model opus --lead-effort high \
   --implementor-cli claude --implementor-model sonnet --implementor-effort medium \
-  --reviewer-cli claude --reviewer-model opus --reviewer-effort high
+  --tester-cli claude --tester-model opus --tester-effort high
 ```
 
 Resume reuses the recorded Agent Runner run rather than starting a second one.
@@ -265,7 +265,7 @@ evals/agent-runner/and-scene/run.sh \
   --artifact-dir artifacts/evals/and-scene/candidate-1 \
   --lead-cli claude --lead-model opus --lead-effort high \
   --implementor-cli claude --implementor-model sonnet --implementor-effort medium \
-  --reviewer-cli claude --reviewer-model opus --reviewer-effort high
+  --tester-cli claude --tester-model opus --tester-effort high
 ```
 
 Both stop at `pending-human-review`. The paired review that turns them into

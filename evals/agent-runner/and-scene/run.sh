@@ -35,7 +35,7 @@ RESCORE_FROM="${RESCORE_FROM:-}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-}"
 LEAD_CLI="" LEAD_MODEL="" LEAD_EFFORT=""
 IMPLEMENTOR_CLI="" IMPLEMENTOR_MODEL="" IMPLEMENTOR_EFFORT=""
-REVIEWER_CLI="" REVIEWER_MODEL="" REVIEWER_EFFORT=""
+TESTER_CLI="" TESTER_MODEL="" TESTER_EFFORT=""
 SKIP_VALIDATOR=0
 RESUME=0
 REFERENCE_BASELINE=0
@@ -118,10 +118,9 @@ Options:
                           Task-implementor model.
   --implementor-effort EFFORT
                           Task-implementor effort.
-  --reviewer-cli CLI     Acceptance-reviewer CLI adapter.
-  --reviewer-model MODEL Acceptance-reviewer model.
-  --reviewer-effort EFFORT
-                          Acceptance-reviewer effort.
+  --tester-cli CLI       Tester CLI adapter.
+  --tester-model MODEL   Tester model.
+  --tester-effort EFFORT Tester effort.
   --judge-model MODEL    Eval-owned judge model. Default: the Codex CLI default.
   --env NAME             Pass through one named environment variable.
                           Repeatable.
@@ -237,16 +236,16 @@ while (($#)); do
       IMPLEMENTOR_EFFORT="${2:?missing value for --implementor-effort}"
       shift 2
       ;;
-    --reviewer-cli)
-      REVIEWER_CLI="${2:?missing value for --reviewer-cli}"
+    --tester-cli)
+      TESTER_CLI="${2:?missing value for --tester-cli}"
       shift 2
       ;;
-    --reviewer-model)
-      REVIEWER_MODEL="${2:?missing value for --reviewer-model}"
+    --tester-model)
+      TESTER_MODEL="${2:?missing value for --tester-model}"
       shift 2
       ;;
-    --reviewer-effort)
-      REVIEWER_EFFORT="${2:?missing value for --reviewer-effort}"
+    --tester-effort)
+      TESTER_EFFORT="${2:?missing value for --tester-effort}"
       shift 2
       ;;
     --judge-model)
@@ -394,10 +393,10 @@ if [[ "$RUN_AGENT" == 1 ]]; then
 
     require_role_profile "lead-agent" "$LEAD_CLI" "$LEAD_MODEL" "$LEAD_EFFORT"
     require_role_profile "task-implementor" "$IMPLEMENTOR_CLI" "$IMPLEMENTOR_MODEL" "$IMPLEMENTOR_EFFORT"
-    require_role_profile "acceptance-reviewer" "$REVIEWER_CLI" "$REVIEWER_MODEL" "$REVIEWER_EFFORT"
+    require_role_profile "tester" "$TESTER_CLI" "$TESTER_MODEL" "$TESTER_EFFORT"
 
     # Forward only the auth the selected role profiles and the judge need.
-    for cli in "$LEAD_CLI" "$IMPLEMENTOR_CLI" "$REVIEWER_CLI"; do
+    for cli in "$LEAD_CLI" "$IMPLEMENTOR_CLI" "$TESTER_CLI"; do
       case "$cli" in
         claude)
           if [[ "$MOUNT_CLAUDE_AUTH" != 1 ]]; then
@@ -476,7 +475,7 @@ CHANGE_NAME_Q="$(shell_quote "$CHANGE_NAME")"
 JUDGE_MODEL_Q="$(shell_quote "$JUDGE_MODEL")"
 CONTAINER_AGENT_RUNNER_DIR_Q="$(shell_quote "$CONTAINER_AGENT_RUNNER_DIR")"
 CONTAINER_AGENT_SKILLS_DIR_Q="$(shell_quote "$CONTAINER_AGENT_SKILLS_DIR")"
-SELECTED_ADAPTERS_Q="$(shell_quote "$LEAD_CLI") $(shell_quote "$IMPLEMENTOR_CLI") $(shell_quote "$REVIEWER_CLI")"
+SELECTED_ADAPTERS_Q="$(shell_quote "$LEAD_CLI") $(shell_quote "$IMPLEMENTOR_CLI") $(shell_quote "$TESTER_CLI")"
 
 # Assemble the controller argument list on the host so the container script
 # stays a fixed, quoted invocation rather than string-built shell.
@@ -506,8 +505,8 @@ else
   CONTROLLER_ARGS+=(--lead-cli "$LEAD_CLI" --lead-model "$LEAD_MODEL" --lead-effort "$LEAD_EFFORT")
   CONTROLLER_ARGS+=(--implementor-cli "$IMPLEMENTOR_CLI" --implementor-model "$IMPLEMENTOR_MODEL")
   CONTROLLER_ARGS+=(--implementor-effort "$IMPLEMENTOR_EFFORT")
-  CONTROLLER_ARGS+=(--reviewer-cli "$REVIEWER_CLI" --reviewer-model "$REVIEWER_MODEL")
-  CONTROLLER_ARGS+=(--reviewer-effort "$REVIEWER_EFFORT")
+  CONTROLLER_ARGS+=(--tester-cli "$TESTER_CLI" --tester-model "$TESTER_MODEL")
+  CONTROLLER_ARGS+=(--tester-effort "$TESTER_EFFORT")
 fi
 CONTROLLER_ARGS_Q=""
 for controller_arg in "${CONTROLLER_ARGS[@]}"; do

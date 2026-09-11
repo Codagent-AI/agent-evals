@@ -17,7 +17,7 @@ const referenceSha = '171c7def1e12aca2a5f605a5e5feafb20d4e4d19'
 const profileArgs = [
   '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
   '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
-  '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+  '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
 ]
 
 function git(cwd, ...args) {
@@ -119,7 +119,7 @@ test('scored mode delegates the lifecycle to the suite controller', async () => 
     '--skip-validator', '--change-name', 'create-and-scene',
     '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
     '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
-    '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+    '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
     'bootstrap-agent-skills.sh', '/agent-skills-source',
   ]) assert.ok(result.output.includes(expected), `missing ${expected}\n${result.output}`)
 })
@@ -249,9 +249,9 @@ test('all role profiles are required before the sandbox is invoked', async () =>
   ])
   const noImplementor = await scored(context, [
     '--skip-validator', '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
-    '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+    '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
   ])
-  const noReviewer = await scored(context, [
+  const noTester = await scored(context, [
     '--skip-validator',
     '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
     '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
@@ -261,8 +261,8 @@ test('all role profiles are required before the sandbox is invoked', async () =>
   assert.match(noLead.output, /lead-agent profile/)
   assert.notEqual(noImplementor.status, 0)
   assert.match(noImplementor.output, /task-implementor profile/)
-  assert.notEqual(noReviewer.status, 0)
-  assert.match(noReviewer.output, /acceptance-reviewer profile/)
+  assert.notEqual(noTester.status, 0)
+  assert.match(noTester.output, /tester profile/)
 })
 
 test('the pinned capabilities do not enumerate volatile model names', async () => {
@@ -276,7 +276,7 @@ test('the pinned capabilities do not enumerate volatile model names', async () =
   const result = validateRoleProfiles({
     lead: { cli: 'codex', model: 'gpt-6-astra', effort: 'high' },
     implementor: { cli: 'codex', model: 'future-codex-model', effort: 'high' },
-    reviewer: { cli: 'claude', model: 'sonnet', effort: 'high' },
+    tester: { cli: 'claude', model: 'sonnet', effort: 'high' },
     capabilities,
   })
 
@@ -288,7 +288,7 @@ test('Cursor is a first-class role CLI and forwards family model names', async (
   const cursorArgs = [
     '--lead-cli', 'cursor', '--lead-model', 'grok', '--lead-effort', 'high',
     '--implementor-cli', 'cursor', '--implementor-model', 'grok-4.6', '--implementor-effort', 'medium',
-    '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+    '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
   ]
 
   const result = await scored(context, ['--skip-validator', ...cursorArgs])
@@ -309,7 +309,7 @@ test('a partially specified role profile is rejected', async () => {
   const result = await scored(context, [
     '--skip-validator', '--lead-cli', 'claude', '--lead-model', 'opus',
     '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
-    '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+    '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
   ])
 
   assert.notEqual(result.status, 0)
