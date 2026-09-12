@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chmod, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, mkdir, readFile, readlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { test } from 'node:test'
@@ -11,6 +11,8 @@ async function fixture({
   missingSkill = null,
   pluginSource = './',
   codexSkills = './skills/',
+  cursorPluginName = 'codagent',
+  includeCursorPlugin = true,
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'agent-skills-bootstrap-'))
   const source = join(root, 'agent-skills')
@@ -36,6 +38,13 @@ async function fixture({
     join(source, '.codex-plugin', 'plugin.json'),
     JSON.stringify({ name: 'codagent', skills: codexSkills }),
   )
+  if (includeCursorPlugin) {
+    await mkdir(join(source, '.cursor-plugin'), { recursive: true })
+    await writeFile(
+      join(source, '.cursor-plugin', 'plugin.json'),
+      JSON.stringify({ name: cursorPluginName }),
+    )
+  }
   await writeFile(workflow, [
     'prompt: |',
     '  Use codagent:call-agent and codagent:prepare-acceptance.',
@@ -56,6 +65,7 @@ function run(context, adapters) {
       ...process.env,
       PATH: `${context.bin}:${process.env.PATH}`,
       CALLS_LOG: context.calls,
+      HOME: context.root,
     },
   })
 }
@@ -101,10 +111,35 @@ test('validates every skill when one workflow line names more than one', async (
 test('rejects unsupported adapters instead of silently leaving them without skills', async () => {
   const context = await fixture()
 
-  const result = run(context, ['cursor'])
+  const result = run(context, ['gemini'])
 
   assert.notEqual(result.status, 0)
-  assert.match(result.stderr, /unsupported agent adapter for Codagent skills: cursor/)
+  assert.match(result.stderr, /unsupported agent adapter for Codagent skills: gemini/)
+})
+
+test('installs the pinned Cursor plugin from the local checkout', async () => {
+  const context = await fixture()
+
+  const result = run(context, ['cursor'])
+
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(
+    await readlink(join(context.root, '.cursor/plugins/codagent')),
+    context.source,
+  )
+})
+
+test('fails before Cursor installation when its plugin manifest is missing or misnamed', async () => {
+  const missing = await fixture({ includeCursorPlugin: false })
+  const misnamed = await fixture({ cursorPluginName: 'other' })
+
+  const missingResult = run(missing, ['cursor'])
+  const misnamedResult = run(misnamed, ['cursor'])
+
+  assert.notEqual(missingResult.status, 0)
+  assert.match(missingResult.stderr, /Cannot read Cursor Codagent plugin manifest/)
+  assert.notEqual(misnamedResult.status, 0)
+  assert.match(misnamedResult.stderr, /Cursor Codagent plugin must declare name "codagent"/)
 })
 
 test('fails before installation when the marketplace does not export the local Codagent plugin', async () => {

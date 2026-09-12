@@ -35,6 +35,7 @@ function createDemo(knobs = {}) {
     focusedControlConsumesArrows = false,
     titleProminentInPresent = true,
     activeTitleVisibleInBrowse = true,
+    presentShowsDeckTitle = false,
     captionVisibleInBrowse = true,
     tocVisibleInBrowse = true,
     previousVisibleInBrowse = true,
@@ -48,6 +49,8 @@ function createDemo(knobs = {}) {
     controlCount = stepCount,
     controlsOnlyInBrowse = false,
     viewport = { width: 1280, height: 720 },
+    canvasFitsNarrow = true,
+    canvasUniform = true,
     throwOn = null,
   } = knobs
 
@@ -55,6 +58,7 @@ function createDemo(knobs = {}) {
   let mode = initialMode
   let focused = null
   let keysLive = true
+  let currentViewport = { ...viewport }
   const observed = []
 
   const clamp = (next) => {
@@ -83,6 +87,7 @@ function createDemo(knobs = {}) {
       mode = initialMode
       focused = null
       keysLive = true
+      currentViewport = { ...viewport }
       observed.length = 0
       observed.push(...failures)
       actions.push({ action: 'open', mode, position: index })
@@ -93,7 +98,7 @@ function createDemo(knobs = {}) {
         stepIndex: index,
         stepCount,
         mode,
-        title: mode === 'browse' && !activeTitleVisibleInBrowse
+        title: (mode === 'browse' && !activeTitleVisibleInBrowse) || (mode === 'present' && presentShowsDeckTitle)
           ? 'Overall presentation title'
           : titles[index % titles.length],
         caption: captionHiddenInPresent && mode === 'present'
@@ -120,7 +125,33 @@ function createDemo(knobs = {}) {
               focusable,
             })),
         focused,
-        viewport,
+        viewport: currentViewport,
+      }
+    },
+    async resize(width, height) {
+      guard('resize')
+      currentViewport = { width, height }
+      actions.push({ action: 'resize', width, height })
+    },
+    async canvasGeometry() {
+      guard('canvasGeometry')
+      const scaleX = currentViewport.width < 100 ? (canvasFitsNarrow ? 0.05 : 0.1) : 1
+      const scaleY = canvasUniform ? scaleX : scaleX * 0.8
+      const width = 880 * scaleX
+      const height = 495 * scaleY
+      return {
+        viewport: { ...currentViewport },
+        authored: { width: 880, height: 495 },
+        rendered: { left: 0, top: 0, right: width, bottom: height, width, height },
+        available: {
+          left: 0,
+          top: 0,
+          right: currentViewport.width,
+          bottom: currentViewport.height,
+          width: currentViewport.width,
+          height: currentViewport.height,
+        },
+        scale: { x: scaleX, y: scaleY },
       }
     },
     async press(key) {
@@ -202,7 +233,7 @@ test('the deterministic browser evaluator owns exactly the rubric-assigned demo 
     [...DETERMINISTIC_BROWSER_CRITERIA].sort(),
     [...deterministicCriteria(automated.rubric)].sort(),
   )
-  assert.equal(DETERMINISTIC_BROWSER_CRITERIA.length, 14)
+  assert.equal(DETERMINISTIC_BROWSER_CRITERIA.length, 15)
 })
 
 test('a conforming built demo passes every deterministic criterion and hard gate', async () => {
@@ -264,6 +295,17 @@ test('the canonical outline is read from active step titles without confusing th
   assert.ok(actions.some((entry) => entry.action === 'set-mode' && entry.mode === 'present'))
 })
 
+test('the canonical outline accepts step titles in browse mode when present mode shows only the deck title', async () => {
+  const result = await evaluate({
+    initialMode: 'present',
+    presentShowsDeckTitle: true,
+    activeTitleVisibleInBrowse: true,
+  })
+
+  assert.equal(verdictOf(result, 'demo-nine-step-content-and-order'), 'pass')
+  assert.equal(verdictOf(result, 'verification-sample-outline'), 'pass')
+})
+
 test('mode-specific and navigation probes establish their declared state from either initial mode', async () => {
   const actions = []
   const result = await evaluate({ initialMode: 'browse', actions })
@@ -286,6 +328,22 @@ test('browse-mode evidence records the viewport used for responsive chrome asser
   const probe = result.probes.find(({ id }) => id === 'demo-browse-mode-behavior')
 
   assert.match(probe.result.rationale, /viewport 1280×720/)
+})
+
+test('uniform canvas fitting is proven at a boundary below the legacy minimum clamp', async () => {
+  const passing = await evaluate()
+  const overflowing = await evaluate({ canvasFitsNarrow: false })
+  const distorted = await evaluate({ canvasUniform: false })
+
+  assert.equal(verdictOf(passing, 'canvas-uniform-scaling'), 'pass')
+  assert.equal(verdictOf(overflowing, 'canvas-uniform-scaling'), 'fail')
+  assert.equal(verdictOf(distorted, 'canvas-uniform-scaling'), 'fail')
+  const probe = passing.probes.find(({ id }) => id === 'canvas-uniform-scaling')
+  assert.deepEqual(probe.outputs.narrow.viewport, { width: 64, height: 64 })
+  assert.equal(probe.outputs.narrow.scale.x, probe.outputs.narrow.scale.y)
+  assert.ok(probe.result.evidence.includes(
+    'evidence/evaluator/browser-probes/canvas-uniform-scaling.json',
+  ))
 })
 
 test('direct-jump navigation enters browse mode when present mode intentionally hides its controls', async () => {
@@ -482,6 +540,7 @@ test('each broken demo behaviour fails its own criterion', async () => {
     ['demo-mode-interaction-reliability', { failures: ['TypeError: cannot read mode of undefined'] }],
     ['demo-control-semantics', { ariaCurrent: false }],
     ['demo-focus-and-keyboard-accessibility', { focusable: false }],
+    ['canvas-uniform-scaling', { canvasFitsNarrow: false }],
   ]
 
   for (const [criterion, knobs] of mutations) {

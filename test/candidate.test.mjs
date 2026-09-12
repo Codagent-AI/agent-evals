@@ -696,6 +696,27 @@ test('freezing rejects uncommitted candidate changes', async () => {
   )
 })
 
+test('freezing ignores only untracked screenshots in the inspection evidence directory', async () => {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
+  const runDir = join(repo.root, 'run')
+  await mkdir(runDir)
+  await prepareCandidateWorktree({ repo: repo.source, worktree, ref: repo.fixture, resume: false, exec })
+  await mkdir(join(worktree, 'artifacts/presentation-inspection'), { recursive: true })
+  await writeFile(join(worktree, 'artifacts/presentation-inspection/step-01.png'), 'png bytes')
+
+  const frozen = await freezeCandidate({
+    repo: repo.source,
+    worktree,
+    runDir,
+    fixtureRevision: repo.fixture,
+    exec,
+  })
+
+  assert.equal(frozen.produced_commit, git(worktree, 'rev-parse', 'HEAD'))
+  assert.deepEqual(frozen.untracked_evidence, ['artifacts/presentation-inspection/step-01.png'])
+})
+
 test('freezing preserves tracked filenames containing newlines', async () => {
   const repo = await repository()
   const worktree = join(repo.root, 'candidate')
@@ -974,6 +995,123 @@ test('delivery verification proves branch, remote head, draft PR identity, and f
     }),
     /base.*evaluation-fixture.*expected.*main|expected.*base.*main/i,
   )
+})
+
+test('delivery verification freezes an identifiable candidate when acceptance evidence is incomplete', async () => {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
+  const sessionDir = join(repo.root, 'session')
+  await prepareCandidateWorktree({
+    repo: repo.source,
+    worktree,
+    ref: repo.fixture,
+    resume: false,
+    runId: 'run-123',
+    kind: 'candidate',
+    exec,
+  })
+  await mkdir(join(worktree, 'openspec/changes/create-and-scene'), { recursive: true })
+  await mkdir(join(sessionDir, 'output'), { recursive: true })
+  await writeFile(join(sessionDir, 'output', 'acceptance-preparation-status.txt'), 'ACCEPTANCE_FAILED\n')
+  await writeFile(join(sessionDir, 'output', 'acceptance-handoff.md'), '# Acceptance did not converge\n')
+
+  const head = git(worktree, 'rev-parse', 'HEAD')
+  const delivery = await verifyCandidateDelivery({
+    worktree,
+    fixtureCommit: repo.fixture,
+    branch: 'eval/and-scene/run-123',
+    expectedBase: 'main',
+    changeName: 'create-and-scene',
+    sessionDir,
+    workflowHistory: [
+      { step: 'run-validator', outcome: 'success' },
+      { step: 'open-draft-pr', outcome: 'success' },
+      { step: 'verify-draft-pr', outcome: 'success' },
+      { step: 'prepare-acceptance', outcome: 'success' },
+      { step: 'verify-acceptance-handoff', outcome: 'success' },
+    ],
+    exec: (command, args, options) => {
+      if (command === 'git' && args.includes('ls-remote')) {
+        return { status: 0, stdout: `${head}\trefs/heads/eval/and-scene/run-123\n` }
+      }
+      return exec(command, args, options)
+    },
+    inspectPullRequest: async () => ({
+      number: 53,
+      url: 'https://github.com/Codagent-AI/and-scene/pull/53',
+      state: 'OPEN',
+      draft: true,
+      base: 'main',
+      head_branch: 'eval/and-scene/run-123',
+      head_sha: head,
+    }),
+  })
+
+  assert.equal(delivery.final_sha, head)
+  assert.deepEqual(delivery.acceptance_artifacts.map(({ role }) => role), ['final-handoff'])
+  assert.ok(delivery.acceptance_findings.some(({ code, role }) => (
+    code === 'missing-evidence-role' && role === 'screenshot-metadata'
+  )))
+})
+
+test('delivery accepts untracked inspection screenshots but still identifies them explicitly', async () => {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
+  const sessionDir = join(repo.root, 'session')
+  await prepareCandidateWorktree({
+    repo: repo.source,
+    worktree,
+    ref: repo.fixture,
+    resume: false,
+    runId: 'run-123',
+    kind: 'candidate',
+    exec,
+  })
+  await mkdir(join(worktree, 'openspec/changes/create-and-scene'), { recursive: true })
+  await mkdir(join(worktree, 'artifacts/presentation-inspection'), { recursive: true })
+  await writeFile(join(worktree, 'artifacts/presentation-inspection/step-01.png'), 'png bytes')
+  await mkdir(join(sessionDir, 'output'), { recursive: true })
+  await writeFile(join(sessionDir, 'output', 'acceptance-handoff.md'), [
+    '# Acceptance handoff',
+    'Screenshot: artifacts/presentation-inspection/step-01.png',
+  ].join('\n'))
+
+  const head = git(worktree, 'rev-parse', 'HEAD')
+  const delivery = await verifyCandidateDelivery({
+    worktree,
+    fixtureCommit: repo.fixture,
+    branch: 'eval/and-scene/run-123',
+    expectedBase: 'main',
+    changeName: 'create-and-scene',
+    sessionDir,
+    workflowHistory: [
+      { step: 'run-validator', outcome: 'success' },
+      { step: 'open-draft-pr', outcome: 'success' },
+      { step: 'verify-draft-pr', outcome: 'success' },
+      { step: 'prepare-acceptance', outcome: 'success' },
+      { step: 'verify-acceptance-handoff', outcome: 'success' },
+    ],
+    exec: (command, args, options) => {
+      if (command === 'git' && args.includes('ls-remote')) {
+        return { status: 0, stdout: `${head}\trefs/heads/eval/and-scene/run-123\n` }
+      }
+      return exec(command, args, options)
+    },
+    inspectPullRequest: async () => ({
+      number: 53,
+      url: 'https://github.com/Codagent-AI/and-scene/pull/53',
+      state: 'OPEN',
+      draft: true,
+      base: 'main',
+      head_branch: 'eval/and-scene/run-123',
+      head_sha: head,
+    }),
+  })
+
+  assert.deepEqual(delivery.untracked_evidence, ['artifacts/presentation-inspection/step-01.png'])
+  assert.ok(delivery.acceptance_artifacts.some(({ role, path }) => (
+    role === 'acceptance-screenshot' && path.endsWith('step-01.png')
+  )))
 })
 
 test('an observed prohibited delivery effect has typed workflow-side-effect ownership', async () => {

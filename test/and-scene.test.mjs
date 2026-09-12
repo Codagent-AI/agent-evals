@@ -17,7 +17,7 @@ const referenceSha = '171c7def1e12aca2a5f605a5e5feafb20d4e4d19'
 const profileArgs = [
   '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
   '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
-  '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+  '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
 ]
 
 function git(cwd, ...args) {
@@ -38,8 +38,10 @@ async function setup({ workflow = 'name: implement-change\n', dirty = false } = 
   await mkdir(dirname(sandbox), { recursive: true })
   await mkdir(join(home, '.codex'), { recursive: true })
   await mkdir(join(home, '.claude'), { recursive: true })
+  await mkdir(join(home, '.cursor'), { recursive: true })
   await writeFile(join(home, '.codex/auth.json'), '{}\n')
   await writeFile(join(home, '.claude/.credentials.json'), '{}\n')
+  await writeFile(join(home, '.cursor/auth.json'), '{}\n')
   await writeFile(sandbox, '#!/usr/bin/env bash\nprintf \'%q \' "$@"\nprintf \'\\n\'\n')
   await chmod(sandbox, 0o755)
   if (workflow !== null) {
@@ -117,9 +119,33 @@ test('scored mode delegates the lifecycle to the suite controller', async () => 
     '--skip-validator', '--change-name', 'create-and-scene',
     '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
     '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
-    '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+    '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
     'bootstrap-agent-skills.sh', '/agent-skills-source',
   ]) assert.ok(result.output.includes(expected), `missing ${expected}\n${result.output}`)
+})
+
+test('scored mode prepares private per-evaluation agent session state before the controller starts', async () => {
+  const context = await setup()
+
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
+
+  assert.equal(result.status, 0, result.output)
+  const prepareMatch = result.output.match(
+    /\/eval-input\/prepare-agent-session-state\.sh\s+\/artifacts\/\.runtime\/agent-session-state/,
+  )
+  const prepare = prepareMatch?.index ?? -1
+  const controller = result.output.indexOf('exec node /eval-input/controller.mjs')
+  assert.ok(prepare >= 0, result.output)
+  assert.ok(controller > prepare, result.output)
+})
+
+test('scored mode permits the nested Codex judge sandbox to create user namespaces', async () => {
+  const context = await setup()
+
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
+
+  assert.equal(result.status, 0, result.output)
+  assert.match(result.output, /--docker-run-arg --security-opt --docker-run-arg seccomp=unconfined/)
 })
 
 test('scored mode always attaches AXI to the sandbox Playwright Chromium', async () => {
@@ -144,6 +170,21 @@ test('scored mode mounts one clean pinned Agent Skills checkout for every select
   assert.ok(result.output.includes('agent-skills\\,target=/agent-skills-source\\,readonly'), result.output)
   assert.match(result.output, /bootstrap-agent-skills\.sh/)
   assert.match(result.output, /claude claude claude/)
+})
+
+test('scored mode exposes linked-worktree Git metadata read-only to the sandbox', async () => {
+  const context = await setup()
+
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
+
+  assert.equal(result.status, 0, result.output)
+  const command = result.output.replaceAll('\\', '')
+  for (const checkout of ['agent-runner', 'agent-skills']) {
+    assert.match(
+      command,
+      new RegExp(`source=[^ ]*${checkout}/\\.git,target=[^ ]*${checkout}/\\.git,readonly`),
+    )
+  }
 })
 
 test('scored mode lets the sandbox expand the Agent Runner workflow path', async () => {
@@ -208,9 +249,9 @@ test('all role profiles are required before the sandbox is invoked', async () =>
   ])
   const noImplementor = await scored(context, [
     '--skip-validator', '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
-    '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+    '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
   ])
-  const noReviewer = await scored(context, [
+  const noTester = await scored(context, [
     '--skip-validator',
     '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
     '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
@@ -220,8 +261,8 @@ test('all role profiles are required before the sandbox is invoked', async () =>
   assert.match(noLead.output, /lead-agent profile/)
   assert.notEqual(noImplementor.status, 0)
   assert.match(noImplementor.output, /task-implementor profile/)
-  assert.notEqual(noReviewer.status, 0)
-  assert.match(noReviewer.output, /acceptance-reviewer profile/)
+  assert.notEqual(noTester.status, 0)
+  assert.match(noTester.output, /tester profile/)
 })
 
 test('the pinned capabilities do not enumerate volatile model names', async () => {
@@ -231,14 +272,35 @@ test('the pinned capabilities do not enumerate volatile model names', async () =
   ))
   assert.equal(Object.hasOwn(capabilities.clis.codex, 'models'), false)
   assert.equal(Object.hasOwn(capabilities.clis.claude, 'models'), false)
+  assert.equal(Object.hasOwn(capabilities.clis.cursor, 'models'), false)
   const result = validateRoleProfiles({
     lead: { cli: 'codex', model: 'gpt-6-astra', effort: 'high' },
     implementor: { cli: 'codex', model: 'future-codex-model', effort: 'high' },
-    reviewer: { cli: 'claude', model: 'sonnet', effort: 'high' },
+    tester: { cli: 'claude', model: 'sonnet', effort: 'high' },
     capabilities,
   })
 
   assert.equal(result.ok, true, JSON.stringify(result.errors))
+})
+
+test('Cursor is a first-class role CLI and forwards family model names', async () => {
+  const context = await setup()
+  const cursorArgs = [
+    '--lead-cli', 'cursor', '--lead-model', 'grok', '--lead-effort', 'high',
+    '--implementor-cli', 'cursor', '--implementor-model', 'grok-4.6', '--implementor-effort', 'medium',
+    '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
+  ]
+
+  const result = await scored(context, ['--skip-validator', ...cursorArgs])
+
+  assert.equal(result.status, 0, result.output)
+  assert.ok(result.output.includes('--mount-cursor-auth'), result.output)
+  assert.ok(result.output.includes('--mount-claude-auth'), result.output)
+  assert.ok(result.output.includes('--lead-cli cursor'), result.output)
+  assert.ok(result.output.includes('--lead-model grok'), result.output)
+  assert.ok(result.output.includes('--implementor-cli cursor'), result.output)
+  assert.ok(result.output.includes('--implementor-model grok-4.6'), result.output)
+  assert.match(result.output, /cursor cursor claude/)
 })
 
 test('a partially specified role profile is rejected', async () => {
@@ -247,7 +309,7 @@ test('a partially specified role profile is rejected', async () => {
   const result = await scored(context, [
     '--skip-validator', '--lead-cli', 'claude', '--lead-model', 'opus',
     '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
-    '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+    '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
   ])
 
   assert.notEqual(result.status, 0)
@@ -272,6 +334,7 @@ test('a reference baseline requires no role profiles', async () => {
   assert.equal(result.status, 0, result.output)
   assert.ok(result.output.includes('--reference-baseline'), result.output)
   assert.ok(result.output.includes('--candidate-ref'), result.output)
+  assert.ok(!result.output.includes('prepare-agent-session-state.sh'), result.output)
 })
 
 test('a reference baseline defaults to the pinned known-good candidate', async () => {
@@ -309,6 +372,7 @@ test('an evaluator-only rescore mounts a completed run read-only and invokes no 
   assert.equal(result.status, 0, result.output)
   assert.match(result.output, /type=bind\\,source=.*completed-candidate\\,target=\/rescore-source\\,readonly/)
   assert.match(result.output, /--rescore-from \/rescore-source/)
+  assert.ok(!result.output.includes('prepare-agent-session-state.sh'), result.output)
   assert.ok(!result.output.includes('bootstrap-agent-skills.sh'), result.output)
   assert.ok(!result.output.includes('--lead-cli'), result.output)
   assert.ok(!result.output.includes('--change-name'), result.output)
@@ -521,6 +585,7 @@ test('help documents the exact fixture pin, role profiles, and validator option'
   assert.ok(result.stdout.includes('--lead-cli'))
   assert.ok(result.stdout.includes('--implementor-cli'))
   assert.ok(result.stdout.includes('--calibrate'))
+  assert.ok(result.stdout.includes('--mount-cursor-auth'))
   assert.ok(!result.stdout.includes('--calibration-record'))
 })
 

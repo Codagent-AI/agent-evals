@@ -64,6 +64,23 @@ if (adapters.has('codex')) {
     process.exit(2)
   }
 }
+// Cursor marketplace add requires a git URL. The evaluation has a pinned
+// local checkout, so only verify the host-specific plugin identity here;
+// the install step below links that exact tree into ~/.cursor/plugins.
+if (adapters.has('cursor')) {
+  const cursorManifestPath = resolve(sourceDir, '.cursor-plugin/plugin.json')
+  let cursorManifest
+  try {
+    cursorManifest = JSON.parse(readFileSync(cursorManifestPath, 'utf8'))
+  } catch (error) {
+    console.error(`Cannot read Cursor Codagent plugin manifest: ${cursorManifestPath}: ${error.message}`)
+    process.exit(2)
+  }
+  if (cursorManifest.name !== 'codagent') {
+    console.error('Cursor Codagent plugin must declare name "codagent".')
+    process.exit(2)
+  }
+}
 const text = readFileSync(workflowPath, 'utf8')
 const skills = [...text.matchAll(/codagent:([a-z0-9][a-z0-9-]*)/g)]
   .map((match) => match[1])
@@ -97,6 +114,19 @@ for adapter in "$@"; do
       codex plugin marketplace add "$SOURCE_DIR" --json
       codex plugin add codagent@codagent --json
       codex plugin list
+      ;;
+    cursor)
+      mkdir -p "$HOME/.cursor/plugins"
+      # ln -sfn descends into an existing real directory and links inside it,
+      # leaving the pinned source uninstalled at the expected path. Replace an
+      # existing symlink, and refuse anything else rather than load stale plugins.
+      cursor_plugin="$HOME/.cursor/plugins/codagent"
+      if [[ -e "$cursor_plugin" && ! -L "$cursor_plugin" ]]; then
+        echo "refusing to replace existing Cursor plugin path: $cursor_plugin" >&2
+        exit 2
+      fi
+      rm -f "$cursor_plugin"
+      ln -s "$SOURCE_DIR" "$cursor_plugin"
       ;;
     *)
       echo "unsupported agent adapter for Codagent skills: $adapter" >&2

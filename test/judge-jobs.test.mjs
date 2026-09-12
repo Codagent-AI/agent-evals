@@ -98,6 +98,31 @@ test('product judge requests are rooted in neutral inputs and disclose exact per
   assert.doesNotMatch(request.prompt, /CANDIDATE EVIDENCE/)
 })
 
+test('source judges discover files from the complete neutral manifest rather than the deterministic scan subset', () => {
+  const request = buildJudgeRequest({
+    rubrics,
+    job: 'verification-tooling',
+    authority,
+    evidence: [],
+    sources: ['scripts/verify.mjs'],
+    neutral: {
+      root: '/run/neutral',
+      source_root: '/run/neutral/source',
+      requirements_root: '/run/neutral/requirements',
+      manifest: {
+        entries: [
+          { namespace: 'neutral-source', path: 'source/scripts/verify.mjs' },
+          { namespace: 'neutral-source', path: 'source/tests/verification-scripts.test.ts' },
+          { namespace: 'neutral-requirements', path: 'requirements/requirement-001.md' },
+        ],
+      },
+    },
+  })
+
+  assert.match(request.prompt, /- tests\/verification-scripts\.test\.ts/)
+  assert.doesNotMatch(request.prompt, /- requirements\/requirement-001\.md/)
+})
+
 test('testing-evidence receives only verified candidate evidence plus evaluator contradictions', () => {
   const request = buildJudgeRequest({
     rubrics,
@@ -196,7 +221,7 @@ test('source judges must verify behavior and resolve deterministic-fact contradi
     assert.match(request.prompt, /missing mechanism.*plausible behavior/i, job)
     assert.match(request.prompt, /citations MUST contain exact relative paths[\s\S]*neutral\s+source file list/i, job)
     assert.equal(request.source_audit, true, job)
-    assert.equal(request.source_audit_version, 'closed-world-v6-cumulative-three-cycle', job)
+    assert.equal(request.source_audit_version, 'closed-world-v8-absence-confirmed-fail', job)
   }
 })
 
@@ -314,9 +339,27 @@ test('source audit receives only the exact cited files and primary claims', asyn
     assert.match(request.prompt, /closed-world/i)
     assert.match(request.prompt, /insufficient/i)
     assert.match(request.prompt, /contradicted/i)
+    assert.match(request.prompt, /missing focused test.*does not.*insufficient/i)
+    assert.match(request.prompt, /absence of that evidence confirms the fail/i)
+    assert.match(request.prompt, /do not classify a fail as insufficient merely/i)
+    assert.match(request.prompt, /only.*supplied.*evidence/i)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+test('source judges may cite only durable source and never ephemeral tool output', () => {
+  const request = buildJudgeRequest({
+    rubrics,
+    job: 'scene-kit',
+    authority,
+    evidence: [],
+    sources: ['src/scene.ts'],
+  })
+
+  assert.match(request.prompt, /ad-hoc commands.*not durable/i)
+  assert.match(request.prompt, /do not cite.*tool output/i)
+  assert.match(request.prompt, /explicit source counterexample/i)
 })
 
 test('source audit rejects citation paths outside the neutral source root', async () => {
@@ -748,13 +791,14 @@ test('an insufficient primary fail is re-judged instead of charged to the candid
   }
 })
 
-test('a second insufficient audit receives one final focused source retry', async () => {
+test('progressive insufficient audits may use more than three focused source cycles', async () => {
   const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
   await mkdir(join(sourceRoot, 'src'), { recursive: true })
   await writeFile(join(sourceRoot, 'src/scene.ts'), 'export const stableIdentity = true\n')
   await writeFile(join(sourceRoot, 'src/node.ts'), 'export const layoutMotion = true\n')
   await writeFile(join(sourceRoot, 'src/node.test.ts'), 'export const morphTest = true\n')
+  await writeFile(join(sourceRoot, 'src/integration.test.ts'), 'export const integrationTest = true\n')
   const ids = ['entity-persisting-morph']
   const primary = (citations, rationale) => JSON.stringify({
     results: [{
@@ -773,6 +817,11 @@ test('a second insufficient audit receives one final focused source retry', asyn
     primary(
       ['src/node.test.ts'],
       'stable identity uses tested layout motion',
+    ),
+    auditOutput(ids, { [ids[0]]: 'insufficient' }),
+    primary(
+      ['src/integration.test.ts'],
+      'integration proves stable identity and layout motion',
     ),
     auditOutput(ids),
   ]
@@ -799,8 +848,8 @@ test('a second insufficient audit receives one final focused source retry', asyn
 
     assert.equal(result.ok, true)
     assert.equal(result.results[0].verdict, 'pass')
-    assert.equal(result.attempts.length, 3)
-    assert.equal(result.audit_attempts.length, 3)
+    assert.equal(result.attempts.length, 4)
+    assert.equal(result.audit_attempts.length, 4)
     assert.match(requests[4].prompt, /previous source audit found insufficient citations/i)
     assert.match(requests[3].prompt, /stableIdentity/)
     assert.match(requests[3].prompt, /layoutMotion/)
@@ -875,7 +924,7 @@ test('a focused citation retry preserves already contradicted criteria', async (
   }
 })
 
-test('unresolved insufficient citations leave the judge job unobserved', async () => {
+test('unchanged insufficient citations stop early as a no-progress protocol failure', async () => {
   const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
   await mkdir(join(sourceRoot, 'src'), { recursive: true })
@@ -891,8 +940,6 @@ test('unresolved insufficient citations leave the judge job unobserved', async (
     }],
   })
   const responses = [
-    primary,
-    auditOutput(ids, { [ids[0]]: 'insufficient' }),
     primary,
     auditOutput(ids, { [ids[0]]: 'insufficient' }),
     primary,
@@ -917,9 +964,9 @@ test('unresolved insufficient citations leave the judge job unobserved', async (
 
     assert.equal(result.ok, false)
     assert.equal(result.results, null)
-    assert.equal(result.attempts.length, 3)
-    assert.equal(result.audit_attempts.length, 3)
-    assert.match(result.audit_attempts.at(-1).error, /insufficient source citations/i)
+    assert.equal(result.attempts.length, 2)
+    assert.equal(result.audit_attempts.length, 2)
+    assert.match(result.audit_attempts.at(-1).error, /no source-evidence progress/i)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -933,7 +980,7 @@ test('an exhausted judge job leaves its component unobserved rather than failed'
 
   assert.equal(result.ok, false)
   assert.equal(result.results, null)
-  assert.equal(result.attempts.length, 2)
+  assert.equal(result.attempts.length, 3)
   assert.ok(result.attempts.every(({ error }) => typeof error === 'string' && error.length > 0))
 })
 
@@ -951,7 +998,7 @@ test('one failed job does not discard the other five complete outputs', async ()
     assert.equal(outcome.judges[job].length, criteriaForJob(automated, job).length, job)
   }
   assert.deepEqual(outcome.failed_jobs, ['scene-kit'])
-  assert.equal(outcome.retries['scene-kit'], 1)
+  assert.equal(outcome.retries['scene-kit'], 2)
 })
 
 test('six jobs checkpoint independently and reuse a valid completed output', async () => {

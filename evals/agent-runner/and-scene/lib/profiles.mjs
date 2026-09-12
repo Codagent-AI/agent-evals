@@ -1,4 +1,4 @@
-// Independent lead-agent, task-implementor, and acceptance-reviewer profiles.
+// Independent lead-agent, task-implementor, and tester profiles.
 //
 // Each role independently selects a CLI adapter, model, and effort. The two
 // implementation roles and the independent acceptance role map onto the
@@ -8,7 +8,7 @@
 export const ROLE_AGENTS = {
   lead: 'lead',
   implementor: 'implementor',
-  reviewer: 'tester',
+  tester: 'tester',
 }
 
 const ROLES = Object.keys(ROLE_AGENTS)
@@ -70,7 +70,7 @@ function validateOne(role, profile, capabilities) {
 export function validateRoleProfiles({
   lead,
   implementor,
-  reviewer,
+  tester,
   capabilities,
   mode = 'agent-runner',
 }) {
@@ -85,7 +85,7 @@ export function validateRoleProfiles({
     }
   }
 
-  const supplied = { lead, implementor, reviewer }
+  const supplied = { lead, implementor, tester }
   const results = Object.fromEntries(
     ROLES.map((role) => [role, validateOne(role, supplied[role], capabilities)]),
   )
@@ -125,6 +125,13 @@ export function renderEvalSettings() {
   return 'autonomous_permission_mode: yolo\n'
 }
 
+export function normalizeRoleProfiles(profiles) {
+  if (!profiles || typeof profiles !== 'object') return profiles
+  if (profiles.tester != null || profiles.reviewer == null) return profiles
+  const { reviewer, ...rest } = profiles
+  return { ...rest, tester: reviewer }
+}
+
 export function compareRoleSelections(recorded, requested) {
   return ROLES.flatMap((role) => {
     const before = recorded?.[role]
@@ -145,10 +152,11 @@ const AGENT_ROLES = Object.fromEntries(Object.entries(ROLE_AGENTS).map(([role, a
 const REPORTED_ROLES = {
   lead: 'lead',
   implementor: 'implementor',
-  tester: 'reviewer',
+  tester: 'tester',
   'lead-agent': 'lead',
   'task-implementor': 'implementor',
-  'acceptance-reviewer': 'reviewer',
+  'acceptance-tester': 'tester',
+  'acceptance-reviewer': 'tester',
 }
 
 // Configured settings are never presented as observed ones. An attempt without

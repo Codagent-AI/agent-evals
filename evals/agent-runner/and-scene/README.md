@@ -23,16 +23,21 @@ Agent Runner owns the sandbox image, local-source build, authentication
 forwarding, and devcontainer. This suite calls its `scripts/sandbox-run.sh`
 adapter and mounts only this suite at `/eval-input`.
 
-Each lead, implementor, and acceptance-reviewer profile selects its own CLI
-adapter, and eval-owned judging always runs through Codex. The adapter mounts
-the host authentication matching the selected adapters plus Codex. Before
-starting Agent Runner, the suite verifies the workflow's named Codagent skills
+Each lead, implementor, and tester profile selects its own CLI
+adapter (`claude`, `codex`, or `cursor`), and eval-owned judging always runs
+through Codex. The adapter mounts the host authentication matching the selected
+adapters plus Codex. Model identifiers are passed through unchanged: Cursor
+accepts a versioned id such as `grok-4.6` or a full Cursor id such as
+`cursor-grok-4.6-high`. A bare family such as `grok` is passed through, but the
+Cursor CLI rejects it. Before starting Agent Runner, the suite verifies the
+workflow's named Codagent skills
 against the pinned Agent Skills checkout and installs that local plugin for
 each selected CLI.
 
-The profile names remain stable at the CLI boundary, but map to the workflow's
-`lead`, `implementor`, and `tester` agents respectively; acceptance work runs
-through the `acceptance-tester` named session.
+The profile names match the workflow's `lead`, `implementor`, and `tester`
+agents; acceptance work runs through the `acceptance-tester` named session,
+and recorded attribution for those attempts uses the `acceptance-reviewer`
+role name.
 
 The implementation agents use unrestricted permissions inside the container.
 The container is the isolation boundary. Run trusted fixtures and pass only the
@@ -97,7 +102,20 @@ evals/agent-runner/and-scene/run.sh \
   --skip-validator \
   --lead-cli claude --lead-model opus --lead-effort high \
   --implementor-cli claude --implementor-model sonnet --implementor-effort medium \
-  --reviewer-cli claude --reviewer-model opus --reviewer-effort high
+  --tester-cli claude --tester-model opus --tester-effort high
+```
+
+Cursor profiles take a versioned id or a full Cursor model id. The suite does
+not rewrite either form. `grok-4.6` works; a bare family such as `grok` does
+not:
+
+```bash
+evals/agent-runner/and-scene/run.sh \
+  --run-agent \
+  --skip-validator \
+  --lead-cli cursor --lead-model grok-4.6 --lead-effort high \
+  --implementor-cli cursor --implementor-model cursor-grok-4.6-high --implementor-effort medium \
+  --tester-cli claude --tester-model opus --tester-effort high
 ```
 
 `--skip-validator` passes `skip_validator=true` to skip all workflow-owned
@@ -120,7 +138,7 @@ evals/agent-runner/and-scene/run.sh \
   --skip-validator \
   --lead-cli claude --lead-model opus --lead-effort high \
   --implementor-cli claude --implementor-model sonnet --implementor-effort medium \
-  --reviewer-cli claude --reviewer-model opus --reviewer-effort high
+  --tester-cli claude --tester-model opus --tester-effort high
 ```
 
 Resume reuses the recorded Agent Runner run rather than starting a second one.
@@ -128,6 +146,12 @@ It verifies live process ownership before waiting, resumes only the exact
 inactive unfinished run, and rejects a changed fixture, role profile, Runner
 revision, workflow hash, Agent Skills revision or manifest, branch, draft PR,
 final SHA, rubric hash, evidence identity, or other score-affecting input.
+The run's private `.runtime/agent-session-state/` also retains the Codex rollout
+directories, Claude project transcripts, and Cursor chat store addressed by
+those recorded session IDs. Replacement containers link those allowlisted
+directories into their otherwise disposable home, so genuine CLI continuation
+survives without retaining auth files, CLI settings, or the rest of either home
+directory.
 
 If a Claude lead, implementor, or acceptance tester exhausts its session allowance,
 the controller recognizes the Claude/Anthropic identity and limit message in
@@ -242,7 +266,7 @@ evals/agent-runner/and-scene/run.sh \
   --artifact-dir artifacts/evals/and-scene/candidate-1 \
   --lead-cli claude --lead-model opus --lead-effort high \
   --implementor-cli claude --implementor-model sonnet --implementor-effort medium \
-  --reviewer-cli claude --reviewer-model opus --reviewer-effort high
+  --tester-cli claude --tester-model opus --tester-effort high
 ```
 
 Both stop at `pending-human-review`. The paired review that turns them into
@@ -334,7 +358,10 @@ in the sandbox: the reviewer needs the candidate URL in their own browser, and a
 review that spans hours must outlive the container that produced the run.
 
 Agent Runner owns the sandbox, workflow execution, run locks, sessions, its own
-internal resume point, and `run-metrics.json`. None of that is copied here.
+internal resume point, and `run-metrics.json`. The suite does not interpret or
+publish its private session contents; it only gives Runner's CLI session stores
+a per-run persistent location so Runner can honor its recorded resume point in
+a replacement container.
 
 ## Evidence ownership and aliases
 
@@ -347,7 +374,8 @@ claims but never count as candidate testing proof. The harness preserves
 candidate-reported CI text and its claimed revision verbatim and does not query
 CI.
 
-The required semantic roles and accepted filenames are:
+The semantic roles expected for complete candidate evidence and their accepted
+filenames are:
 
 | Role | Accepted aliases |
 |---|---|
@@ -359,9 +387,11 @@ The required semantic roles and accepted filenames are:
 | Assumptions ledger | `acceptance-assumptions.md`, `assumptions-ledger.md`, `acceptance-assumption-ledger.md`, `assumptions.md` |
 
 Referenced session reports and assumption/context-gap audits are retained when
-present. Missing required roles stop scored judging as an implementation
-workflow failure. Present but stale, malformed, weakly traceable, or
-wrong-revision content remains judgeable and is recorded as an evidence defect.
+present. Missing expected roles make candidate-evidence coverage incomplete but
+do not stop independent scored judging. Screenshots without capture metadata are
+retained as defective, unverified candidate evidence. Present but stale,
+malformed, weakly traceable, or wrong-revision content likewise remains
+judgeable and is recorded as an evidence defect.
 
 Product-source judges run from `neutral/judge/`, which contains only a
 byte-exact final-commit source snapshot under neutralized paths and
@@ -397,7 +427,17 @@ artifacts/evals/and-scene/<run-id>/
 └── .runtime/
     ├── candidate-worktree/
     │   └── .agent-runner/config.yaml
-    └── agent-runner-projects/
+    ├── agent-runner-projects/
+    └── agent-session-state/
+        ├── codex/
+        │   ├── archived_sessions/
+        │   ├── memories/
+        │   ├── sessions/
+        │   └── shell_snapshots/
+        ├── claude/
+        │   └── projects/
+        └── cursor/
+            └── chats/
 ```
 
 `.runtime/` persists across disposable containers. Agent Runner layers built-in
@@ -408,7 +448,9 @@ creates `eval/and-scene/<run-id>` exactly at the pinned fixture before Runner
 starts; any local or remote branch collision is refused. Resumes require that
 exact repository, worktree, branch, Runner run, workflow revision, draft PR,
 final SHA, and evidence identity. Credentials stay in the ephemeral container
-home and are never written into the run directory.
+home and are never written into the run directory. The retained CLI session
+directories are private recovery state, excluded from the curated publication
+along with every other `.runtime/` entry.
 
 Candidate runs require GitHub credentials capable of pushing the recorded
 branch and creating or updating its draft pull request. The branch and draft PR
@@ -424,10 +466,13 @@ The automated command runs these phases in order:
    Agent Skills checkout and required skills, publishing credentials, profiles,
    evaluator inputs, and run directory.
 2. Start, wait for, resume, or continue the one recorded complete Runner run.
-3. Verify the clean delivered branch, remote head, and open draft PR whose base
+3. Verify the delivered branch, remote head, and open draft PR whose base
    exactly matches the recorded `origin/HEAD`, plus its head, the final
    Validator's required successful or intentional skipped outcome, unarchived
-   change, and acceptance handoff.
+   change, and acceptance handoff. Tracked changes and arbitrary untracked files
+   still fail delivery; untracked raster screenshots under
+   `artifacts/presentation-inspection/` are retained as explicitly identified
+   candidate evidence and do not make the committed product revision dirty.
 4. Freeze the verified final source revision.
 5. Install dependencies, build, and run non-browser verification.
 6. Start the evaluated candidate server.
@@ -621,7 +666,8 @@ and intermediate values are never rounded.
 Deterministic browser checks exercise the built, running demo: routing, the
 canonical nine steps, evolving-scene structure, present/browse modes,
 navigation, end boundaries, transition reliability, control semantics, focus,
-and keyboard operability. Each probe is stored in
+keyboard operability, and uniform fixed-canvas fitting at both wide and 64×64
+viewport boundaries. Each probe is stored in
 `evidence/evaluator/browser-probes/` as an evaluator-owned, revision-bound
 work unit with input/output hashes, required mode and position, initial and
 settled state, runtime failures, and its pass or fail result. Matching negative
@@ -630,7 +676,13 @@ screenshots carry the same ownership, revision, mode, position, settle, and
 hash metadata. Focused component judge jobs review delivered source and
 candidate-produced evidence.
 Judges receive only their own rubric slice, get no screenshots, and do not judge
-visual taste, which belongs to human review.
+visual taste, which belongs to human review. Source judges may cite only durable
+files from the neutral source snapshot; ad-hoc command output is never evidence
+because the independent closed-world auditor cannot inspect it. Malformed judge
+output receives up to three local attempts. Source-audit convergence receives
+up to five progress-making citation cycles, while an unchanged insufficient
+claim stops immediately as a harness protocol failure instead of spending more
+model calls on identical evidence.
 
 Four hard gates sit outside the point total: `verification-build-whole-app`,
 `verification-sample-outline`, `verification-every-produced-step-renders`, and

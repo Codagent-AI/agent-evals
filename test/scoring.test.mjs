@@ -294,11 +294,11 @@ test('unobserved evaluator output leaves its component incomplete instead of fai
   assert.equal(component(result, 'scene-kit-correctness').points_awarded, null)
   // Components with complete evidence keep their scores.
   assert.equal(component(result, 'demo-technical-quality').points_awarded, 24)
-  assert.equal(result.automated_subtotal.points, 46)
+  assert.equal(result.automated_subtotal.points, 47)
   assert.equal(result.automated_subtotal.possible, 70)
   assert.equal(result.automated_subtotal.complete, false)
   // The observed subtotal is never rescaled to hide the missing evidence.
-  assert.equal(result.automated_subtotal.observed_possible, 46)
+  assert.equal(result.automated_subtotal.observed_possible, 47)
   assert.equal(result.official_score, null)
   assert.equal(result.official_pass, null)
   assert.equal(result.automated_pass, null)

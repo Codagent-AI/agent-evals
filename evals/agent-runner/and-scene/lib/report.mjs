@@ -286,6 +286,8 @@ function evidenceSection(title, summary) {
         final_sha: summary.final_sha,
         manifest_sha256: summary.manifest_sha256,
         candidate_reported_ci: summary.ci_claims,
+        missing_roles: summary.missing_roles,
+        evidence_findings: summary.findings,
       }
     : null))
   const artifacts = table(

@@ -4,9 +4,9 @@
 Define independent configuration and recorded provenance for the Agent Runner lead and task-implementor roles used by evaluations.
 ## Requirements
 ### Requirement: Independent role profile selection
-The evaluation harness SHALL require an explicit lead-agent profile, an explicit task-implementor profile, and an explicit acceptance-reviewer profile for each new Agent Runner evaluation run. Each profile SHALL independently specify the Agent Runner CLI adapter, model, and effort setting used for that role. No role SHALL be permitted to fall back to an Agent Runner default.
+The evaluation harness SHALL require an explicit lead-agent profile, an explicit task-implementor profile, and an explicit tester profile for each new Agent Runner evaluation run. Each profile SHALL independently specify the Agent Runner CLI adapter, model, and effort setting used for that role. No role SHALL be permitted to fall back to an Agent Runner default.
 
-The harness SHALL map each selected role profile to the Agent Runner agent that the implementation workflow actually invokes for that role: the lead-agent profile to the `lead` agent used by the workflow's named `lead-agent` session, the task-implementor profile to the `implementor` agent used by its task workflows, and the acceptance-reviewer profile to the `tester` agent used by its named `acceptance-tester` session. All roles SHALL execute within the same end-to-end `core:implement-change` run.
+The harness SHALL map each selected role profile to the Agent Runner agent that the implementation workflow actually invokes for that role: the lead-agent profile to the `lead` agent used by the workflow's named `lead-agent` session, the task-implementor profile to the `implementor` agent used by its task workflows, and the tester profile to the `tester` agent used by its named `acceptance-tester` session. All roles SHALL execute within the same end-to-end `core:implement-change` run.
 
 The harness SHALL NOT configure a role through a deprecated agent alias, and SHALL NOT configure an agent that the implementation workflow does not invoke.
 
@@ -20,18 +20,18 @@ The harness SHALL NOT configure a role through a deprecated agent alias, and SHA
 - **THEN** the harness accepts them as two independently declared role profiles
 
 #### Scenario: A required role profile is missing
-- **WHEN** the lead-agent, task-implementor, or acceptance-reviewer profile is absent for a new run
+- **WHEN** the lead-agent, task-implementor, or tester profile is absent for a new run
 - **THEN** the harness rejects the configuration before starting Agent Runner
 - **AND** it identifies the absent role
 
 #### Scenario: Acceptance profile reaches the acceptance agent
-- **WHEN** a run selects an acceptance-reviewer profile
+- **WHEN** a run selects a tester profile
 - **THEN** the harness configures the `tester` agent that the workflow's `acceptance-tester` session resolves to
 - **AND** the selected settings govern the acceptance work rather than an agent the workflow never invokes
 
 #### Scenario: Reference baseline bypasses implementation
 - **WHEN** a reference-baseline run evaluates an existing candidate without invoking Agent Runner
-- **THEN** the lead-agent, task-implementor, and acceptance-reviewer profiles are not required and are all reported not applicable
+- **THEN** the lead-agent, task-implementor, and tester profiles are not required and are all reported not applicable
 
 ### Requirement: Profile validation
 Before starting Agent Runner, the harness SHALL validate every role profile against the stable capabilities of the recorded Agent Runner revision. Validation SHALL reject unsupported CLI adapters, missing or syntactically invalid model identifiers, invalid effort values, and configurations that cannot run the applicable workflow role autonomously. The harness SHALL NOT maintain or enforce a static allowlist of model names; Agent Runner and the selected CLI SHALL determine model availability at execution time. A validation failure SHALL identify the affected role and invalid field without launching an implementation workflow.
@@ -54,8 +54,8 @@ Before starting Agent Runner, the harness SHALL validate every role profile agai
 - **THEN** the harness rejects the run and identifies the task-implementor setting that failed validation
 
 #### Scenario: Acceptance profile is invalid
-- **WHEN** the selected acceptance-reviewer profile contains a setting Agent Runner cannot use for the `tester` role
-- **THEN** the harness rejects the run and identifies the acceptance-reviewer setting that failed validation
+- **WHEN** the selected tester profile contains a setting Agent Runner cannot use for the `tester` role
+- **THEN** the harness rejects the run and identifies the tester setting that failed validation
 
 ### Requirement: Evaluation-scoped Agent Runner configuration
 The harness SHALL materialize the selected profiles only within the disposable evaluation environment. It SHALL NOT modify or depend upon the user's global or project Agent Runner configuration outside that environment. The generated configuration SHALL retain the autonomous execution modes required by the noninteractive evaluation workflow.

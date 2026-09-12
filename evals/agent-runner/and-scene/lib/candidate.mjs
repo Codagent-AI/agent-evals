@@ -2,23 +2,21 @@
 //
 // Runtime-only eval configuration is excluded through .git/info/exclude before
 // Agent Runner starts. The scored diff therefore contains only product changes,
-// while cleanliness still covers every other tracked and untracked candidate
-// file.
+// while cleanliness still covers tracked changes and every untracked file
+// except screenshot evidence in the suite's bounded inspection directory.
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, posix, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 import { hashFile, hashJson, hashString, writeJsonAtomic } from './persistence.mjs'
-import {
-  EvidenceReadinessError,
-  inspectCandidateEvidenceReadiness,
-} from './evidence.mjs'
+import { inspectCandidateEvidenceReadiness } from './evidence.mjs'
 import { checkWorkflowHistory } from './workflow.mjs'
 
 export const CANDIDATE_SOURCE_MANIFEST_SCHEMA_VERSION = 1
 export const EVAL_GIT_EXCLUDES = ['/.agent-runner/config.yaml']
 const MAX_CANDIDATE_DIFF_BYTES = 64 * 1024 * 1024
+const INSPECTION_SCREENSHOT = /^artifacts\/presentation-inspection\/.+\.(?:png|jpe?g|webp)$/i
 
 function defaultExec(command, args, options = {}) {
   return spawnSync(command, args, { encoding: 'utf8', ...options })
@@ -59,6 +57,24 @@ function normalizeRepository(repository) {
 function assertSame(label, current, recorded) {
   if (current !== recorded) {
     throw new Error(`${label} ${current} does not match recorded ${label} ${recorded}`)
+  }
+}
+
+function classifyCandidateStatus(status) {
+  const dirty = []
+  const untrackedEvidence = []
+  for (const line of String(status ?? '').split('\n').filter(Boolean)) {
+    const code = line.slice(0, 2)
+    const path = line.slice(3).trim()
+    if (code === '??' && INSPECTION_SCREENSHOT.test(path)) {
+      untrackedEvidence.push(path)
+    } else {
+      dirty.push(line)
+    }
+  }
+  return {
+    dirty,
+    untracked_evidence: [...new Set(untrackedEvidence)].sort(),
   }
 }
 
@@ -563,14 +579,16 @@ export async function freezeCandidate({
   fixtureRevision,
   exec = defaultExec,
 }) {
-  const status = run(
+  const status = classifyCandidateStatus(run(
     exec,
     'git',
     ['-C', worktree, 'status', '--porcelain=v1', '--untracked-files=all'],
     {},
     'candidate cleanliness check',
-  )
-  if (status) throw new Error(`candidate has uncommitted changes:\n${status}`)
+  ))
+  if (status.dirty.length > 0) {
+    throw new Error(`candidate has uncommitted changes:\n${status.dirty.join('\n')}`)
+  }
 
   const fixtureCommit = run(
     exec,
@@ -625,6 +643,7 @@ export async function freezeCandidate({
     produced_commit: producedCommit,
     implementation_diff_sha256: diffSha256,
     source_manifest: 'candidate-source-manifest.json',
+    untracked_evidence: status.untracked_evidence,
   }
 }
 
@@ -771,15 +790,18 @@ export async function verifyCandidateDelivery({
     )
   }
 
-  const status = run(
+  const status = classifyCandidateStatus(run(
     exec,
     'git',
     ['-C', worktree, 'status', '--porcelain=v1', '--untracked-files=all'],
     {},
     'candidate delivery cleanliness check',
-  )
-  if (status) {
-    throw deliveryError('dirty-candidate', `candidate delivery has uncommitted changes:\n${status}`)
+  ))
+  if (status.dirty.length > 0) {
+    throw deliveryError(
+      'dirty-candidate',
+      `candidate delivery has uncommitted changes:\n${status.dirty.join('\n')}`,
+    )
   }
   const currentBranch = run(
     exec,
@@ -859,13 +881,6 @@ export async function verifyCandidateDelivery({
   try {
     acceptance = await inspectCandidateEvidenceReadiness({ worktree, sessionDir })
   } catch (error) {
-    if (error instanceof EvidenceReadinessError || error.code === 'missing-evidence-role') {
-      throw deliveryError(
-        'missing-delivery-output',
-        error.message,
-        { missing_delivery_output: error.missing_roles ?? error.missing_delivery_output },
-      )
-    }
     error.owner ??= 'evaluation-harness'
     throw error
   }
@@ -884,5 +899,7 @@ export async function verifyCandidateDelivery({
     workflow_history: workflowHistory,
     acceptance_artifacts: acceptance.artifacts,
     acceptance_findings: acceptance.findings,
+    acceptance_missing_roles: acceptance.missing_roles,
+    untracked_evidence: status.untracked_evidence,
   }
 }

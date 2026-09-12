@@ -21,6 +21,10 @@ import { hashJson } from './persistence.mjs'
 // both are bounded before they reach a rationale, an artifact, or a report.
 export const MAX_EVIDENCE_CHARS = 200
 export const MAX_STEP_COUNT = 50
+const WIDE_VIEWPORT = { width: 1280, height: 720 }
+const NARROW_CANVAS_VIEWPORT = { width: 64, height: 64 }
+const GEOMETRY_TOLERANCE_PX = 1
+const SCALE_TOLERANCE = 0.001
 
 export const DETERMINISTIC_BROWSER_CRITERIA = [
   'demo-route-and-registration',
@@ -37,6 +41,7 @@ export const DETERMINISTIC_BROWSER_CRITERIA = [
   'demo-mode-interaction-reliability',
   'demo-control-semantics',
   'demo-focus-and-keyboard-accessibility',
+  'canvas-uniform-scaling',
 ]
 
 const PROBE_REQUIREMENTS = {
@@ -54,6 +59,7 @@ const PROBE_REQUIREMENTS = {
   'demo-mode-interaction-reliability': { mode: 'present', position: 0 },
   'demo-control-semantics': { mode: 'browse', position: 0 },
   'demo-focus-and-keyboard-accessibility': { mode: 'browse', position: 0 },
+  'canvas-uniform-scaling': { mode: 'present', position: 0 },
 }
 
 const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
@@ -125,6 +131,37 @@ function unobserved(id, rationale, evidence = []) {
 
 function overlaps(a, b) {
   return a.some((entry) => b.includes(entry))
+}
+
+function validCanvasGeometry(geometry) {
+  return ['authored', 'rendered', 'available', 'scale'].every((key) => geometry?.[key])
+    && [
+      geometry.authored.width,
+      geometry.authored.height,
+      geometry.rendered.left,
+      geometry.rendered.top,
+      geometry.rendered.right,
+      geometry.rendered.bottom,
+      geometry.available.left,
+      geometry.available.top,
+      geometry.available.right,
+      geometry.available.bottom,
+      geometry.scale.x,
+      geometry.scale.y,
+    ].every(Number.isFinite)
+    && geometry.authored.width > 0
+    && geometry.authored.height > 0
+    && geometry.scale.x > 0
+    && geometry.scale.y > 0
+}
+
+function canvasFitsUniformly(geometry) {
+  if (!validCanvasGeometry(geometry)) return false
+  return Math.abs(geometry.scale.x - geometry.scale.y) <= SCALE_TOLERANCE
+    && geometry.rendered.left >= geometry.available.left - GEOMETRY_TOLERANCE_PX
+    && geometry.rendered.top >= geometry.available.top - GEOMETRY_TOLERANCE_PX
+    && geometry.rendered.right <= geometry.available.right + GEOMETRY_TOLERANCE_PX
+    && geometry.rendered.bottom <= geometry.available.bottom + GEOMETRY_TOLERANCE_PX
 }
 
 export async function runBrowserEvaluation({
@@ -249,18 +286,25 @@ export async function runBrowserEvaluation({
       if (first.stepCount !== contract.step_count) {
         return [false, `the demo reports ${bounded(first.stepCount)} steps, expected ${contract.step_count}`, []]
       }
-      // The browse header may also contain an overall deck title. Read the
-      // canonical per-step titles in present mode so that a generic deck-title
-      // hook cannot be mistaken for the active step title. Browse-mode title
-      // visibility is checked independently below.
+      // A presentation may expose its active step title in either mode while
+      // using the other mode's title hook for the overall deck title. Observe
+      // both modes and accept a step only when one reports the canonical title;
+      // browse-mode title visibility is still checked independently below.
+      const browseStates = await walk()
       await session({ mode: 'present', position: 0 })
-      const states = await walk()
-      const mismatch = contract.step_titles.findIndex((title, position) => states[position]?.title !== title)
+      const presentStates = await walk()
+      const mismatch = contract.step_titles.findIndex((title, position) => (
+        browseStates[position]?.title !== title && presentStates[position]?.title !== title
+      ))
       if (mismatch !== -1) {
         return [
           false,
           `step ${mismatch + 1} title does not match the required outline`,
-          [`expected: ${contract.step_titles[mismatch]}`, `observed: ${states[mismatch]?.title ?? '(none)'}`],
+          [
+            `expected: ${contract.step_titles[mismatch]}`,
+            `observed in browse: ${browseStates[mismatch]?.title ?? '(none)'}`,
+            `observed in present: ${presentStates[mismatch]?.title ?? '(none)'}`,
+          ],
         ]
       }
       return [true, 'all nine required step titles appear in the specified order', contract.step_titles]
@@ -485,6 +529,37 @@ export async function runBrowserEvaluation({
       const after = (await keyboardPage.state()).stepIndex
       return [after === before + 1, `focus succeeded and keyboard navigation moved ${before} → ${after}`, []]
     },
+
+    'canvas-uniform-scaling': async () => {
+      if (typeof driver.resize !== 'function' || typeof driver.canvasGeometry !== 'function') {
+        throw browserInfrastructureFailure('browser adapter cannot measure canvas geometry')
+      }
+      await session(PROBE_REQUIREMENTS['canvas-uniform-scaling'])
+      const wide = await driver.canvasGeometry()
+      let narrow
+      try {
+        await driver.resize(NARROW_CANVAS_VIEWPORT.width, NARROW_CANVAS_VIEWPORT.height)
+        await driver.settle?.()
+        narrow = await driver.canvasGeometry()
+      } finally {
+        await driver.resize(WIDE_VIEWPORT.width, WIDE_VIEWPORT.height)
+      }
+      const pass = canvasFitsUniformly(wide) && canvasFitsUniformly(narrow)
+      const observed = (geometry) => validCanvasGeometry(geometry)
+        ? `${geometry.viewport?.width ?? '?'}×${geometry.viewport?.height ?? '?'} viewport: `
+          + `scale ${geometry.scale.x}×${geometry.scale.y}, rendered `
+          + `${geometry.rendered.width}×${geometry.rendered.height}, available `
+          + `${geometry.available.width}×${geometry.available.height}`
+        : 'canvas geometry unavailable'
+      return [
+        pass,
+        pass
+          ? 'the authored canvas uses one uniform scale and remains inside the wide and 64×64 available bounds'
+          : 'the authored canvas is distorted or overflows its available bounds at a measured viewport',
+        [observed(wide), observed(narrow)],
+        { wide, narrow },
+      ]
+    },
   }
 
   const criteria = []
@@ -519,8 +594,9 @@ export async function runBrowserEvaluation({
     currentProbeSessions = []
     let criterion
     try {
-      const [pass, rationale, evidence] = await probes[id]()
+      const [pass, rationale, evidence, observations = {}] = await probes[id]()
       criterion = verdict(id, pass, rationale, [...evidence, probeCitation(id)])
+      criterion.observations = observations
     } catch (error) {
       if (error?.owner === 'evaluation-harness') throw error
       // A driver or page error is a real observation about the demo, so it
@@ -567,6 +643,7 @@ export async function runBrowserEvaluation({
       result: criterion,
       failures: probeFailures,
       failure_reporting_available: probeFailureReportingAvailable,
+      ...(criterion.observations ?? {}),
     }
     const record = {
       id,
