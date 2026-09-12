@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile } from 'node:fs/promises'
+import { mkdtemp, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -55,8 +55,9 @@ test('replacement containers reuse only their own mounted agent sessions', {
   ].join(' && '))
   assert.equal(isolated.status, 0, isolated.stdout + isolated.stderr)
 
-  assert.equal(
-    await readFile(join(firstArtifacts, '.runtime/agent-session-state/codex/sessions/2026/09/10/rollout.jsonl'), 'utf8'),
-    'codex',
-  )
+  // Verify from inside a container: the persisted state is deliberately
+  // owner-only, and the host test user does not share the container's uid.
+  const persisted = container(firstArtifacts,
+    'test "$(cat /artifacts/.runtime/agent-session-state/codex/sessions/2026/09/10/rollout.jsonl)" = codex')
+  assert.equal(persisted.status, 0, persisted.stdout + persisted.stderr)
 })
