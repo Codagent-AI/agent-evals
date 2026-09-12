@@ -10,8 +10,9 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const suiteDir = join(root, 'evals/agent-runner/and-scene')
 const image = process.env.AGENT_EVALS_DOCKER_TEST_IMAGE
   ?? 'mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm'
+// Gate on the daemon only. Requiring a cached image silently skipped this
+// regression on any machine that had not already pulled it; docker run pulls.
 const dockerAvailable = spawnSync('docker', ['info'], { stdio: 'ignore' }).status === 0
-  && spawnSync('docker', ['image', 'inspect', image], { stdio: 'ignore' }).status === 0
 
 function container(artifacts, command) {
   return spawnSync('docker', [

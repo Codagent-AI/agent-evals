@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Stable role capabilities the and-scene suite validates for lead-agent, task-implementor, and acceptance-reviewer profiles. Model availability is resolved by Agent Runner and the selected CLI at execution time, not enumerated here.",
+  "description": "Stable role capabilities the and-scene suite validates for lead-agent, task-implementor, and tester profiles. Model availability is resolved by Agent Runner and the selected CLI at execution time, not enumerated here.",
   "clis": {
     "claude": {
       "efforts": ["low", "medium", "high"],

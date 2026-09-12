@@ -785,3 +785,22 @@ test('testing and assumption judges receive bounded, distinct evidence views', a
   assert.match(views['assumption-handling'].packet, /assumption/i)
   assert.ok(views['assumption-handling'].packet.length <= 220_000)
 })
+
+test('malformed screenshot metadata invalidates the screenshots it should describe', async () => {
+  const context = await fixture()
+  await writeRequiredArtifacts(context, {
+    'capture-metadata.json': '{"revision": "not closed',
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  const screenshot = manifest.artifacts.find(({ role }) => role === 'screenshot')
+  assert.equal(screenshot.verification_state, 'defective')
+  assert.ok(screenshot.limitations.includes('missing-capture-metadata'))
+  assert.ok(manifest.findings.some(({ code }) => code === 'malformed-metadata'))
+})

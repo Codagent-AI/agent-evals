@@ -135,3 +135,34 @@ test('recovery refuses a symlinked ancestor of the session-state directory', asy
   assert.match(result.stderr, /not a private directory/i)
   assert.equal(await exists(join(foreign, 'agent-session-state')), false)
 })
+
+test('recovery refuses a session-state grandparent redirected outside the evaluation', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-session-grandparent-'))
+  const foreign = join(dir, 'foreign')
+  const stateRoot = join(dir, 'redirected', 'runtime', 'agent-session-state')
+  const home = join(dir, 'home')
+  await mkdir(foreign)
+  await symlink(foreign, join(dir, 'redirected'))
+
+  const result = invokePrepare(home, stateRoot)
+
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /not a private directory/i)
+  assert.equal(await exists(join(foreign, 'runtime')), false)
+})
+
+test('recovery refuses a CLI home redirected outside the evaluation', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-session-cli-home-'))
+  const stateRoot = join(dir, 'evaluation-a')
+  const foreign = join(dir, 'foreign')
+  const home = join(dir, 'home')
+  await mkdir(foreign)
+  await mkdir(home, { recursive: true })
+  await symlink(foreign, join(home, '.codex'))
+
+  const result = invokePrepare(home, stateRoot)
+
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /not a private directory/i)
+  assert.equal(await exists(join(foreign, 'sessions')), false)
+})

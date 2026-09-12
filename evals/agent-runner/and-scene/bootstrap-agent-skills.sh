@@ -117,7 +117,16 @@ for adapter in "$@"; do
       ;;
     cursor)
       mkdir -p "$HOME/.cursor/plugins"
-      ln -sfn "$SOURCE_DIR" "$HOME/.cursor/plugins/codagent"
+      # ln -sfn descends into an existing real directory and links inside it,
+      # leaving the pinned source uninstalled at the expected path. Replace an
+      # existing symlink, and refuse anything else rather than load stale plugins.
+      cursor_plugin="$HOME/.cursor/plugins/codagent"
+      if [[ -e "$cursor_plugin" && ! -L "$cursor_plugin" ]]; then
+        echo "refusing to replace existing Cursor plugin path: $cursor_plugin" >&2
+        exit 2
+      fi
+      rm -f "$cursor_plugin"
+      ln -s "$SOURCE_DIR" "$cursor_plugin"
       ;;
     *)
       echo "unsupported agent adapter for Codagent skills: $adapter" >&2

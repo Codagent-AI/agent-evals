@@ -16,34 +16,60 @@ if [[ "$HOME_DIR" != /* || "$HOME_DIR" == / ]]; then
   exit 2
 fi
 
-STATE_PARENT="$(dirname -- "$STATE_ROOT")"
-if [[ -L "$STATE_PARENT" || (-e "$STATE_PARENT" && ! -d "$STATE_PARENT") ]]; then
-  echo "Agent session state parent is not a private directory: $STATE_PARENT" >&2
-  exit 2
-fi
-if [[ -L "$STATE_ROOT" || (-e "$STATE_ROOT" && ! -d "$STATE_ROOT") ]]; then
-  echo "Agent session state root is not a private directory: $STATE_ROOT" >&2
-  exit 2
-fi
-mkdir -p "$STATE_ROOT" "$HOME_DIR/.codex" "$HOME_DIR/.claude" "$HOME_DIR/.cursor"
-chmod 700 "$STATE_ROOT" "$HOME_DIR/.codex" "$HOME_DIR/.claude" "$HOME_DIR/.cursor" 2>/dev/null || true
+# Checking only the immediate parent is not enough: mkdir -p follows a symlink
+# at any existing ancestor, so a redirected grandparent would place state
+# outside the evaluation. Walk up to the first component that already exists,
+# which is the only one mkdir -p can traverse, and require it to be a real
+# directory. Components above it are the caller's chosen location, not ours.
+reject_redirected_path() {
+  local label="$1" probe="$2" parent
+  # An existing directory can still sit beneath a redirected immediate parent,
+  # which the walk below would never examine, so check the parent explicitly.
+  parent="$(dirname -- "$probe")"
+  if [[ -L "$parent" || (-e "$parent" && ! -d "$parent") ]]; then
+    echo "$label parent is not a private directory: $parent" >&2
+    exit 2
+  fi
+  while [[ ! -e "$probe" && ! -L "$probe" ]]; do
+    probe="$(dirname -- "$probe")"
+    [[ "$probe" == "/" ]] && break
+  done
+  if [[ -L "$probe" || (-e "$probe" && ! -d "$probe") ]]; then
+    echo "$label is not a private directory: $probe" >&2
+    exit 2
+  fi
+}
+
+restrict_private_dir() {
+  local path
+  for path in "$@"; do
+    # A permissive mode leaves transcripts and memories readable beyond the
+    # owner. Surface that rather than discard the failure silently.
+    chmod 700 "$path" 2>/dev/null \
+      || echo "warning: could not restrict agent session state to its owner: $path" >&2
+  done
+}
+
+reject_redirected_path "Agent session state root" "$STATE_ROOT"
+mkdir -p "$STATE_ROOT"
+for cli_home in .codex .claude .cursor; do
+  # A pre-existing ~/.codex -> /foreign would place every link below it outside
+  # this evaluation, so validate each CLI home before creating it.
+  reject_redirected_path "Agent CLI home" "$HOME_DIR/$cli_home"
+  mkdir -p "$HOME_DIR/$cli_home"
+done
+restrict_private_dir "$STATE_ROOT" "$HOME_DIR/.codex" "$HOME_DIR/.claude" "$HOME_DIR/.cursor"
 
 link_private_state_dir() {
   local relative="$1" target="$2" persistent parent existing_target
   persistent="$STATE_ROOT/$relative"
   parent="$(dirname -- "$persistent")"
 
-  if [[ -L "$parent" || (-e "$parent" && ! -d "$parent") ]]; then
-    echo "Persistent agent session parent is not a private directory: $parent" >&2
-    exit 2
-  fi
+  reject_redirected_path "Persistent agent session parent" "$parent"
   mkdir -p "$parent"
-  if [[ -L "$persistent" || (-e "$persistent" && ! -d "$persistent") ]]; then
-    echo "Persistent agent session path is not a private directory: $persistent" >&2
-    exit 2
-  fi
+  reject_redirected_path "Persistent agent session path" "$persistent"
   mkdir -p "$persistent"
-  chmod 700 "$parent" "$persistent" 2>/dev/null || true
+  restrict_private_dir "$parent" "$persistent"
 
   if [[ -L "$target" ]]; then
     existing_target="$(readlink "$target" 2>/dev/null || true)"

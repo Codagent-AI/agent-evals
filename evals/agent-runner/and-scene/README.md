@@ -23,7 +23,7 @@ Agent Runner owns the sandbox image, local-source build, authentication
 forwarding, and devcontainer. This suite calls its `scripts/sandbox-run.sh`
 adapter and mounts only this suite at `/eval-input`.
 
-Each lead, implementor, and acceptance-reviewer profile selects its own CLI
+Each lead, implementor, and tester profile selects its own CLI
 adapter (`claude`, `codex`, or `cursor`), and eval-owned judging always runs
 through Codex. The adapter mounts the host authentication matching the selected
 adapters plus Codex. Model identifiers are passed through unchanged: Cursor
@@ -34,9 +34,10 @@ workflow's named Codagent skills
 against the pinned Agent Skills checkout and installs that local plugin for
 each selected CLI.
 
-The profile names remain stable at the CLI boundary, but map to the workflow's
-`lead`, `implementor`, and `tester` agents respectively; acceptance work runs
-through the `acceptance-tester` named session.
+The profile names match the workflow's `lead`, `implementor`, and `tester`
+agents; acceptance work runs through the `acceptance-tester` named session,
+and recorded attribution for those attempts uses the `acceptance-reviewer`
+role name.
 
 The implementation agents use unrestricted permissions inside the container.
 The container is the isolation boundary. Run trusted fixtures and pass only the
