@@ -1,8 +1,7 @@
 // Autonomous known-good / degraded calibration.
 //
-// Calibration answers one question before the first full Agent Runner
-// evaluation is allowed to cost anything: does this harness attribute quality to
-// the right place? It runs the known-good reference and a suite-owned set of
+// Calibration answers whether this harness attributes quality to the right
+// place. It runs the known-good reference and a suite-owned set of
 // degraded mutations without invoking Agent Runner, a browser, or a human, and
 // asserts that
 //
@@ -21,8 +20,7 @@
 // `mode: 'calibration'`, which `lib/publication.mjs` refuses outright, so no
 // calibration artifact can ever become a published record.
 import { mkdir } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 
 import {
   firstUnanswered,
@@ -35,65 +33,13 @@ import {
 import { compareToBaseline } from './baseline.mjs'
 import { runProductJudging } from './judge-jobs.mjs'
 import { applyOutcomeEvent, createOutcome } from './outcomes.mjs'
-import { hashFile, hashJson, writeJsonAtomic } from './persistence.mjs'
+import { writeJsonAtomic } from './persistence.mjs'
 import { renderReport } from './report.mjs'
 import { assembleResult, writeResultArtifacts } from './result.mjs'
-import { loadRubrics, rubricCriteria, rubricProvenance } from './rubric.mjs'
+import { rubricCriteria, rubricProvenance } from './rubric.mjs'
 import { scoreProduct } from './scorer.mjs'
 
 export const CALIBRATION_SCHEMA_VERSION = 1
-
-const LIB_DIR = dirname(fileURLToPath(import.meta.url))
-const STREAMING_HARNESS_SOURCE = ['sub', 'process.mjs'].join('')
-
-// Everything outside the two rubrics that decides what a calibration case
-// scores, gates, or reports. Rubric bytes are already covered by rubric
-// provenance; this covers the code that acts on them, so a scorer or gate edit
-// invalidates a passing record instead of silently inheriting it.
-export const HARNESS_FINGERPRINT_SOURCES = [
-  'calibration.mjs',
-  'scorer.mjs',
-  'rubric.mjs',
-  'judge-jobs.mjs',
-  'judge-invoker.mjs',
-  'baseline.mjs',
-  'ambiguity.mjs',
-  'checkpoint.mjs',
-  'runner-state.mjs',
-  STREAMING_HARNESS_SOURCE,
-  'human-review.mjs',
-  'outcomes.mjs',
-  'result.mjs',
-  'report.mjs',
-  'browser-eval.mjs',
-  'axi-browser-driver.mjs',
-  'demo-contract.mjs',
-  'evidence.mjs',
-  'neutral-source.mjs',
-  'candidate-verification.mjs',
-  'candidate-server.mjs',
-  'candidate-server-host.mjs',
-  'workflow.mjs',
-]
-
-export async function harnessFingerprint() {
-  const entries = []
-  for (const name of HARNESS_FINGERPRINT_SOURCES) {
-    entries.push([name, await hashFile(join(LIB_DIR, name))])
-  }
-  return hashJson(Object.fromEntries(entries))
-}
-
-// What a calibration record must still match before it may unblock a full
-// evaluation. A record is a statement about one harness and one pair of
-// rubrics; it says nothing about any other.
-export async function calibrationIdentity(rubrics = null) {
-  return {
-    schema_version: CALIBRATION_SCHEMA_VERSION,
-    rubrics: rubricProvenance(rubrics ?? await loadRubrics()),
-    harness_fingerprint: await harnessFingerprint(),
-  }
-}
 
 // The mode every calibration artifact records, and the one `publicationEligibility`
 // refuses by name.
@@ -594,7 +540,6 @@ export async function runCalibration({
     candidate: candidateControl.result,
     baseline: reference.result,
   })
-  const fingerprinted = new Set(HARNESS_FINGERPRINT_SOURCES)
   const harnessChecks = [
     {
       id: 'missing-judge-output-is-harness-failure',
@@ -616,26 +561,6 @@ export async function runCalibration({
       ok: shared.comparable === true && shared.denominator === 92
         && shared.totals.baseline === 92 && shared.totals.candidate === 92,
       detail: shared.reason ?? 'candidate and reference compare on exactly 92 shared points',
-    },
-    {
-      id: 'runner-streaming-regression-retained',
-      ok: fingerprinted.has(STREAMING_HARNESS_SOURCE),
-      detail: 'streaming subprocess behavior is part of the calibration fingerprint and full test gate',
-    },
-    {
-      id: 'native-failure-detail-regression-retained',
-      ok: fingerprinted.has('runner-state.mjs'),
-      detail: 'native Runner failure detail handling is part of the calibration fingerprint and full test gate',
-    },
-    {
-      id: 'run-identity-regression-retained',
-      ok: fingerprinted.has('checkpoint.mjs'),
-      detail: 'run identity validation is part of the calibration fingerprint and full test gate',
-    },
-    {
-      id: 'process-identity-regression-retained',
-      ok: fingerprinted.has('runner-state.mjs'),
-      detail: 'process identity validation is part of the calibration fingerprint and full test gate',
     },
   ]
   const failures = [

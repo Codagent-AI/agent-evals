@@ -55,12 +55,12 @@ function result(overrides = {}) {
     },
     human_review: {
       complete: true,
-      responses: [{ number: 1, question_text: 'Rate step 1', rating: 4, rationale: 'clear' }],
-      score: { total: 24, possible: 30, gate_passed: true, subtotals: [{ id: 'per-step', title: 'Per step', points: 8, points_possible: 10 }] },
+      responses: [{ number: 1, question_text: 'Rate text appearance', rating: 4, rationale: 'clear' }],
+      score: { total: 24, possible: 30, gate_passed: true, subtotals: [{ id: 'text-appearance', title: 'Text appearance, hierarchy, and wording', points: 3, points_possible: 4 }] },
     },
     workflow: {
       workflow: 'implement-change',
-      workflow_path: 'workflows/openspec/implement-change-v2.0.yaml',
+      workflow_path: 'workflows/core/implement-change-v1.0.yaml',
       configured_stop_step: null,
       observed_steps: ['plan'],
       events: [],
@@ -178,6 +178,33 @@ test('technical adjudication audit text is escaped rather than rendered as marku
   assert.match(html, /&lt;svg onload=alert\(&quot;finding&quot;\)&gt;/)
 })
 
+test('a replacement human review shows its score and superseded-review audit trail', () => {
+  const html = renderReport(result({
+    human_review_history: [{
+      rubric: { version: '1.0.0', sha256: 'old-hash' },
+      score: { total: 20.36, possible: 30 },
+    }],
+    human_review_supersession: {
+      approved_by: 'Paul (user)',
+      approved_at: '2026-08-29T12:00:00.000Z',
+      rationale: 'Confirmed replacement visual review.',
+      prior_rubric: { version: '1.0.0', sha256: 'old-hash' },
+      reviewed_rubric: { version: '2.1.0', sha256: 'new-hash' },
+      prior_human_score: 20.36,
+      revised_human_score: 17,
+      prior_official_score: 76.4,
+      revised_official_score: 73.04,
+    },
+  }))
+
+  assert.match(html, /Human-review supersession/)
+  assert.match(html, /20\.36/)
+  assert.match(html, /17/)
+  assert.match(html, /1\.0\.0/)
+  assert.match(html, /2\.1\.0/)
+  assert.match(html, /Confirmed replacement visual review/)
+})
+
 test('a failing verdict leads with FAIL and the official score', () => {
   const html = renderReport(result({ product_verdict: 'fail', label: 'FAIL', official_score: 51 }))
   assert.match(html, /<h1[^>]*>\s*FAIL\s*<\/h1>/)
@@ -270,6 +297,31 @@ test('a conclusive unscored product failure explains build or serve failure with
   assert.match(html, /verification-build-whole-app/)
   assert.doesNotMatch(html, /Official score:\s*\d/)
   assert.doesNotMatch(html, /product verdict is unavailable/i)
+})
+
+test('a below-minimum automated failure preserves its subtotal and explains why review was skipped', () => {
+  const failed = result({
+    evaluation_status: 'complete',
+    product_verdict: 'fail',
+    label: 'FAIL',
+    human_review: undefined,
+    automated_subtotal: { points: 37, possible: 70, observed_possible: 70, complete: true },
+    product_failure: {
+      phase: 'automated-scoring',
+      reason: 'Automated score below minimum: 37/70; required 40/70',
+      failures: [{ rule: 'automated-total', id: null, value: 37, required: 40 }],
+    },
+  })
+  delete failed.official_score
+
+  const html = renderReport(failed)
+
+  assert.match(html, /<h1[^>]*>\s*FAIL\s*<\/h1>/)
+  assert.match(html, /37\s*\/\s*70/)
+  assert.match(html, /Automated score below minimum: 37\/70; required 40\/70/)
+  assert.match(html, /human review was not required/i)
+  assert.doesNotMatch(html, /could not build or serve/i)
+  assert.doesNotMatch(html, /Official score:\s*\d/)
 })
 
 test('a harness failure after a durable verdict displays both facts', () => {
@@ -428,6 +480,71 @@ test('details for every reported dimension are expandable', () => {
   }
   // Plain language, never the word "provenance", in human-facing output.
   assert.doesNotMatch(html, /provenance/i)
+})
+
+test('implementation metrics render as a readable per-role and model table', () => {
+  const html = renderReport(result({
+    cost: {
+      rows: [{
+        agent_role: 'implementor',
+        tool: 'agent-runner',
+        provider: 'openai',
+        model: 'gpt-5.6-terra',
+        allocation: 'attributed',
+        attempt_count: 2,
+        participating_attempt_count: 2,
+        tokens: {
+          input: 1500,
+          cached_input: 500,
+          cache_write: 100,
+          output: 300,
+          reasoning: 75,
+        },
+        token_totals: { input: 1500, output: 300, total: 1800 },
+        usage_complete: true,
+        cost: { state: 'available', amount_usd: 0.42, sources: ['models.dev'] },
+        verification: 'verified',
+      }],
+      usage: {
+        state: 'available', complete: true,
+        tokens: { input: 1500, cached_input: 500, cache_write: 100, output: 300, reasoning: 75 },
+        token_totals: { input: 1500, output: 300, total: 1800 },
+      },
+      total: {
+        state: 'available', complete: true, estimated_api_cost_usd: 0.42,
+        known_cost_subtotal_usd: 0.42,
+      },
+      eval_owned: {
+        state: 'available', complete: true, priced: false,
+        included_in_implementation_total: false,
+        tokens: { input: 100, output: 20 },
+        by_phase: [{
+          phase: 'product-judging', provider: 'openai', model: 'gpt-5.6-sol',
+          tokens: { input: 100, output: 20 },
+        }],
+      },
+    },
+  }))
+
+  assert.match(html, /<th>Role<\/th>/)
+  assert.match(html, /<th>Model<\/th>/)
+  assert.match(html, /<th>Allocation<\/th>/)
+  assert.match(html, /<th>Participating attempts<\/th>/)
+  assert.match(html, /<th>Canonical input<\/th>/)
+  assert.match(html, /<th>Cached input<\/th>/)
+  assert.match(html, /<th>Reasoning detail<\/th>/)
+  assert.match(html, /<th>Cost source<\/th>/)
+  assert.match(html, /<th>Verification<\/th>/)
+  assert.match(html, /gpt-5\.6-terra/)
+  assert.match(html, />attributed<\/td>/)
+  assert.match(html, /models\.dev/)
+  assert.match(html, />1,500<\/td>/)
+  assert.match(html, />1,800<\/td>/)
+  assert.match(html, /Implementation token total/)
+  assert.match(html, /Implementation dispatches/)
+  assert.match(html, /Eval-owned model usage/)
+  assert.match(html, /product-judging/)
+  assert.doesNotMatch(html, /&quot;agent_role&quot;/)
 })
 
 test('a comparable baseline renders totals, components, gates, and deltas', () => {

@@ -49,7 +49,8 @@ test('the automated rubric allocates the approved 24/24/7/7/4/4 automated compon
       ['scene-step-model', 4],
       ['scene-entity-transitions', 7],
       ['scene-modes-and-navigation', 6],
-      ['scene-fixed-canvas', 2],
+      ['scene-fixed-canvas-uniform-fit', 1],
+      ['scene-fixed-canvas', 1],
       ['scene-style-and-attribution', 5],
       ['skill-requirement-gathering', 1],
       ['skill-scaffolding', 3],
@@ -113,9 +114,10 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 3.10 distinguishes implemented policy from criteria requiring executable proof', async () => {
+test('rubric 3.12 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '3.10.0')
+  assert.equal(rubric.version, '3.12.0')
+  assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(
     rubric.components
@@ -136,7 +138,7 @@ test('rubric 3.10 distinguishes implemented policy from criteria requiring execu
   assert.match(guidance('demo-code-boundaries'), /title.*consum/i)
   assert.match(guidance('scene-entity-transitions'), /plain conditional|opt-in wrapper/i)
   assert.match(guidance('scene-modes-and-navigation'), /both.*horizontal.*vertical/i)
-  assert.match(guidance('scene-fixed-canvas'), /minimum.*clamp.*overflow/i)
+  assert.match(guidance('scene-fixed-canvas-uniform-fit'), /64×64.*equal.*scale/i)
   assert.match(guidance('skill-scaffolding'), /test name|filename/i)
   assert.match(guidance('verification-addressing-and-errors'), /strictPort.*insufficient/i)
   assert.match(guidance('verification-capture'), /fixed.*delay.*insufficient/i)
@@ -166,6 +168,33 @@ test('rubric 3.10 distinguishes implemented policy from criteria requiring execu
   assert.match(guidance('verification-missing-sample'), /does not require.*dedicated.*test/i)
   assert.match(guidance('verification-capture'), /project-local screenshot helper.*separate inspection command/i)
   assert.match(guidance('verification-capture'), /does not require.*build.*render verifier.*invoke/i)
+})
+
+test('uniform canvas fitting is deterministic while default authored dimensions remain source-reviewed', async () => {
+  const rubric = await automatedRubric()
+  const fixedCanvas = rubric.components
+    .flatMap(({ subcomponents }) => subcomponents)
+    .filter(({ id }) => id.startsWith('scene-fixed-canvas'))
+
+  assert.deepEqual(fixedCanvas.map(({ evaluator, job, criteria, points }) => ({
+    evaluator,
+    job: job ?? null,
+    criteria,
+    points,
+  })), [
+    {
+      evaluator: 'deterministic-browser',
+      job: null,
+      criteria: ['canvas-uniform-scaling'],
+      points: 1,
+    },
+    {
+      evaluator: 'llm-source-review',
+      job: 'scene-kit',
+      criteria: ['canvas-default-dimensions'],
+      points: 1,
+    },
+  ])
 })
 
 test('each of the six scored judge jobs maps to exactly one component', async () => {
@@ -264,6 +293,10 @@ test('rubric validation rejects mis-summed points, duplicate ids, and unknown ev
   misSummed.components[0].subcomponents[0].points += 1
   assert.match(validateAutomatedRubric(misSummed).join('\n'), /points/)
 
+  const wrongAutomatedThreshold = clone()
+  wrongAutomatedThreshold.automated_pass_threshold = 39
+  assert.match(validateAutomatedRubric(wrongAutomatedThreshold).join('\n'), /minimum score.*maximum human points/)
+
   const duplicated = clone()
   duplicated.components[1].subcomponents[0].criteria.push(
     duplicated.components[1].subcomponents[1].criteria[0],
@@ -308,10 +341,10 @@ test('the human rubric requires one question per counted question and a covered 
   const { human } = await loadRubrics()
 
   assert.deepEqual(
-    validateHumanRubric({ ...human.rubric, questions: human.rubric.questions.slice(0, 12) }),
+    validateHumanRubric({ ...human.rubric, questions: human.rubric.questions.slice(0, 6) }),
     [
-      'human rubric declares question_count 13 but defines 12 questions',
-      'human rubric dimension cohesion has no questions',
+      'human rubric declares question_count 7 but defines 6 questions',
+      'human rubric dimension responsive has no questions',
     ],
   )
   assert.ok(
@@ -327,7 +360,7 @@ test('the human rubric requires one question per counted question and a covered 
 test('the human rubric dimension points must sum to its total points', async () => {
   const { human } = await loadRubrics()
   const dimensions = human.rubric.dimensions.map((dimension, index) => (
-    index === 0 ? { ...dimension, points: 11 } : dimension
+    index === 0 ? { ...dimension, points: 5 } : dimension
   ))
 
   assert.deepEqual(
@@ -345,6 +378,20 @@ test('the human rubric requires one anchor for every rating on its scale', async
   )
 })
 
+test('every human-review question requires ordered question-specific rating options', async () => {
+  const { human } = await loadRubrics()
+  const questions = human.rubric.questions.map((question, index) => (
+    index === 0
+      ? { ...question, rating_options: question.rating_options.slice(0, 4) }
+      : question
+  ))
+
+  assert.deepEqual(
+    validateHumanRubric({ ...human.rubric, questions }),
+    ['human rubric question text-appearance requires one rating option for each rating 1 through 5'],
+  )
+})
+
 test('the human rubric requires unique, ordered question numbers', async () => {
   const { human } = await loadRubrics()
   const questions = human.rubric.questions.map((question, index) => (
@@ -353,6 +400,6 @@ test('the human rubric requires unique, ordered question numbers', async () => {
 
   assert.ok(
     validateHumanRubric({ ...human.rubric, questions })
-      .some((error) => error.includes('numbered 1 through 13 in order')),
+      .some((error) => error.includes('numbered 1 through 7 in order')),
   )
 })

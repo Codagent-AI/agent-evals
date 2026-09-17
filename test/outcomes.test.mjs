@@ -9,7 +9,13 @@ import {
   outcomeLabel,
 } from '../evals/agent-runner/and-scene/lib/outcomes.mjs'
 
-const automatedComplete = { type: 'automated-scoring-complete', automated_subtotal: 58 }
+const automatedComplete = {
+  type: 'automated-scoring-complete',
+  automated_subtotal: 58,
+  automated_possible: 70,
+  automated_pass: true,
+  automated_failures: [],
+}
 
 function passing(outcome) {
   return applyOutcomeEvent(outcome, {
@@ -84,6 +90,42 @@ test('completed automated scoring records the subtotal without an official score
   assert.equal(outcome.product_verdict, 'unavailable')
   assert.equal(outcome.automated_subtotal, 58)
   assert.equal(outcome.official_score, null)
+})
+
+test('a below-minimum automated score is a final product failure without an official score', () => {
+  const outcome = applyOutcomeEvent(createOutcome(), {
+    type: 'automated-scoring-complete',
+    automated_subtotal: 37,
+    automated_possible: 70,
+    automated_pass: false,
+    automated_failures: [{ rule: 'automated-total', id: null, value: 37, required: 40 }],
+  })
+
+  assert.equal(outcome.evaluation_status, 'complete')
+  assert.equal(outcome.product_verdict, 'fail')
+  assert.equal(outcome.verdict_durable, true)
+  assert.equal(outcome.automated_subtotal, 37)
+  assert.equal(outcome.official_score, null)
+  assert.deepEqual(outcome.product_failure, {
+    phase: 'automated-scoring',
+    reason: 'Automated score below minimum: 37/70; required 40/70',
+    gate: null,
+    failures: [{ rule: 'automated-total', id: null, value: 37, required: 40 }],
+  })
+})
+
+test('an automated score of exactly 40 remains pending human review', () => {
+  const outcome = applyOutcomeEvent(createOutcome(), {
+    type: 'automated-scoring-complete',
+    automated_subtotal: 40,
+    automated_possible: 70,
+    automated_pass: true,
+    automated_failures: [],
+  })
+
+  assert.equal(outcome.evaluation_status, 'pending-human-review')
+  assert.equal(outcome.product_verdict, 'unavailable')
+  assert.equal(outcome.verdict_durable, false)
 })
 
 test('a complete pass records the official score and a pass verdict', () => {

@@ -236,6 +236,10 @@ function claimedRevision(text) {
     const sha = value?.match(/\b([a-f0-9]{7,40})\b/i)?.[1]
     if (sha) return sha
   }
+  const qualified = text.match(
+    /^\s*(?:[-*+]\s*)?(?:\*\*)?(?:tested revision|current head sha|final revision|head sha)(?:\s*\([^\n)]*\))?\s*:(?:\*\*)?\s*[`*]*([a-f0-9]{7,40})\b/im,
+  )
+  if (qualified) return qualified[1]
   const scoped = text.match(
     /(?:revision|commit|head|sha)(?:\s+(?:is|at))?\s*[:=`-]\s*([a-f0-9]{7,40}|absent|pending|unavailable)/i,
   )
@@ -249,6 +253,8 @@ function coverageFrom(value) {
     for (const match of value.matchAll(/^\s*(?:coverage|covered flows|requirements?)\s*:\s*([^\n]+)/gim)) {
       rows.push(...match[1].split(/[,;]/))
     }
+    for (const match of value.matchAll(/^\s*\|\s*(AT-\d+)\s*\|/gim)) rows.push(match[1])
+    for (const match of value.matchAll(/^\s*#{2,}\s+(AT-\d+)\b/gim)) rows.push(match[1])
   } else if (value && typeof value === 'object') {
     for (const field of ['coverage', 'covered_flows', 'flow', 'flows', 'requirements']) {
       if (Array.isArray(value[field])) rows.push(...value[field])
@@ -267,7 +273,11 @@ function ciClaims(text) {
 function textField(text, label) {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const value = text.match(
-    new RegExp(`^\\s*(?:\\*\\*)?${escaped}\\s*:(?:\\*\\*)?\\s*(.+?)\\s*$`, 'im'),
+    new RegExp(
+      `^\\s*(?:[-*+]\\s*)?(?:\\*\\*)?${escaped}`
+      + `(?:\\s*\\([^\\n)]*\\))?\\s*:(?:\\*\\*)?\\s*(.+?)\\s*$`,
+      'im',
+    ),
   )?.[1]
   return value?.replace(/^\s*[`*]+|[`*]+\s*$/g, '').trim() ?? null
 }
@@ -395,7 +405,11 @@ function lineageClaims({
     }
   }
   const declared = textField(text, 'Verification kind') ?? textField(text, 'Evidence kind')
+  const scope = textField(text, 'Verification scope')
+    ?? textField(text, 'Current verification scope')
   let kind = declared
+  if (!kind && /^full\b/i.test(scope ?? '')) kind = 'full-flow'
+  if (!kind && /^targeted\b/i.test(scope ?? '')) kind = 'targeted'
   if (!kind && role === 'acceptance-flow-record' && /\bfull[- ]flow\b/i.test(text)) kind = 'full-flow'
   if (!kind && role === 'acceptance-flow-record' && /\btargeted (?:verification|retest)\b|\btargeted\b/i.test(text)) {
     kind = 'targeted'
@@ -559,17 +573,6 @@ export async function buildCandidateEvidenceManifest({
   }
 
   const discovery = await discoverCandidateFiles({ worktree, sessionDir })
-  const presentRoles = new Set(discovery.selected.map(({ role }) => role))
-  const missingRoles = EVIDENCE_ROLE_REGISTRY
-    .filter(({ required, role }) => required && !presentRoles.has(role))
-    .map(({ role }) => role)
-  if (missingRoles.length > 0) {
-    throw new EvidenceReadinessError(
-      `required candidate evidence roles are missing or unreadable: ${missingRoles.join(', ')}`,
-      missingRoles,
-    )
-  }
-
   const root = join(resolve(runDir), 'evidence', 'candidate')
   const artifactRoot = join(root, 'artifacts')
   await mkdir(artifactRoot, { recursive: true })
@@ -577,6 +580,7 @@ export async function buildCandidateEvidenceManifest({
   const artifacts = []
   let totalBytes = 0
   let screenshotMetadata = null
+  let screenshotMetadataMalformed = false
   const impactText = discovery.selected
     .find(({ origin }) => basename(origin.relative_path).toLowerCase() === 'acceptance-impact-scope.md')
     ?.bytes.toString('utf8') ?? ''
@@ -609,6 +613,7 @@ export async function buildCandidateEvidenceManifest({
         screenshotMetadata = parsed
       } catch (error) {
         metadataError = error.message
+        screenshotMetadataMalformed = true
         findings.push(finding(
           'malformed-metadata',
           `screenshot metadata is not valid JSON: ${error.message}`,
@@ -671,14 +676,16 @@ export async function buildCandidateEvidenceManifest({
   }
 
   const materializedRoles = new Set(artifacts.map(({ role }) => role))
-  const omittedRequiredRoles = EVIDENCE_ROLE_REGISTRY
+  const missingRoles = EVIDENCE_ROLE_REGISTRY
     .filter(({ required, role }) => required && !materializedRoles.has(role))
     .map(({ role }) => role)
-  if (omittedRequiredRoles.length > 0) {
-    throw new EvidenceReadinessError(
-      `required candidate evidence roles exceed materialization bounds: ${omittedRequiredRoles.join(', ')}`,
-      omittedRequiredRoles,
-    )
+  for (const role of missingRoles) {
+    findings.push(finding(
+      'missing-evidence-role',
+      `candidate evidence does not include the expected ${role} role`,
+      null,
+      { role },
+    ))
   }
 
   if (screenshotMetadata) {
@@ -733,12 +740,29 @@ export async function buildCandidateEvidenceManifest({
         }
       }
     }
+  } else if (screenshotMetadataMalformed || !materializedRoles.has('screenshot-metadata')) {
+    // Metadata that is absent and JSON metadata that failed to parse are both
+    // unusable: role presence alone must not leave screenshots unvalidated.
+    // Non-JSON metadata is a supported form and is covered by text extraction.
+    const reason = screenshotMetadataMalformed
+      ? 'has unusable candidate-provided capture metadata'
+      : 'has no candidate-provided capture metadata'
+    for (const artifact of artifacts.filter(({ role }) => role === 'screenshot')) {
+      artifact.verification_state = 'defective'
+      artifact.limitations.push('missing-capture-metadata')
+      findings.push(finding(
+        'screenshot-metadata-inconsistent',
+        `screenshot ${reason}: ${artifact.origin.relative_path}`,
+        artifact.id,
+      ))
+    }
   }
 
   const manifest = {
     schema_version: CANDIDATE_EVIDENCE_SCHEMA_VERSION,
     ownership: 'candidate-produced',
-    readiness: 'ready',
+    readiness: missingRoles.length === 0 ? 'ready' : 'incomplete',
+    missing_roles: missingRoles,
     delivery: {
       final_sha: delivery.final_sha,
       pr_head_sha: delivery.pull_request.head_sha,
@@ -765,19 +789,22 @@ export async function inspectCandidateEvidenceReadiness({ worktree, sessionDir }
   const missingRoles = EVIDENCE_ROLE_REGISTRY
     .filter(({ required, role }) => required && !presentRoles.has(role))
     .map(({ role }) => role)
-  if (missingRoles.length > 0) {
-    throw new EvidenceReadinessError(
-      `required candidate evidence roles are missing or unreadable: ${missingRoles.join(', ')}`,
-      missingRoles,
-    )
-  }
   return {
     artifacts: discovery.selected.map(({ role, origin, bytes }) => ({
       role: role === 'screenshot' ? 'acceptance-screenshot' : role,
       path: origin.absolute_path,
       sha256: hashString(bytes),
     })),
-    findings: discovery.findings,
+    missing_roles: missingRoles,
+    findings: [
+      ...discovery.findings,
+      ...missingRoles.map((role) => finding(
+        'missing-evidence-role',
+        `candidate evidence does not include the expected ${role} role`,
+        null,
+        { role },
+      )),
+    ],
   }
 }
 
@@ -1233,6 +1260,8 @@ export function summarizeEvidenceManifest(manifest) {
     final_sha: manifest.delivery?.final_sha ?? manifest.final_sha ?? null,
     manifest_sha256: manifest.manifest_sha256 ?? null,
     ci_claims: manifest.ci_claims ?? [],
+    missing_roles: manifest.missing_roles ?? [],
+    findings: manifest.findings ?? [],
     artifacts: (manifest.artifacts ?? []).map((artifact) => ({
       id: artifact.id,
       kind: artifact.kind,

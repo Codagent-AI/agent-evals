@@ -2,23 +2,21 @@
 //
 // Runtime-only eval configuration is excluded through .git/info/exclude before
 // Agent Runner starts. The scored diff therefore contains only product changes,
-// while cleanliness still covers every other tracked and untracked candidate
-// file.
+// while cleanliness still covers tracked changes and every untracked file
+// except screenshot evidence in the suite's bounded inspection directory.
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, posix, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 import { hashFile, hashJson, hashString, writeJsonAtomic } from './persistence.mjs'
-import {
-  EvidenceReadinessError,
-  inspectCandidateEvidenceReadiness,
-} from './evidence.mjs'
+import { inspectCandidateEvidenceReadiness } from './evidence.mjs'
 import { checkWorkflowHistory } from './workflow.mjs'
 
 export const CANDIDATE_SOURCE_MANIFEST_SCHEMA_VERSION = 1
 export const EVAL_GIT_EXCLUDES = ['/.agent-runner/config.yaml']
 const MAX_CANDIDATE_DIFF_BYTES = 64 * 1024 * 1024
+const INSPECTION_SCREENSHOT = /^artifacts\/presentation-inspection\/.+\.(?:png|jpe?g|webp)$/i
 
 function defaultExec(command, args, options = {}) {
   return spawnSync(command, args, { encoding: 'utf8', ...options })
@@ -59,6 +57,24 @@ function normalizeRepository(repository) {
 function assertSame(label, current, recorded) {
   if (current !== recorded) {
     throw new Error(`${label} ${current} does not match recorded ${label} ${recorded}`)
+  }
+}
+
+function classifyCandidateStatus(status) {
+  const dirty = []
+  const untrackedEvidence = []
+  for (const line of String(status ?? '').split('\n').filter(Boolean)) {
+    const code = line.slice(0, 2)
+    const path = line.slice(3).trim()
+    if (code === '??' && INSPECTION_SCREENSHOT.test(path)) {
+      untrackedEvidence.push(path)
+    } else {
+      dirty.push(line)
+    }
+  }
+  return {
+    dirty,
+    untracked_evidence: [...new Set(untrackedEvidence)].sort(),
   }
 }
 
@@ -113,6 +129,210 @@ function assertValidatorReadyFixture(exec, worktree, fixtureCommit, defaultBaseB
   assertSharedHistory(exec, worktree, draftPrBase, fixtureCommit, 'draft PR base')
 }
 
+function fixtureFile(exec, worktree, fixtureCommit, path) {
+  const result = exec(
+    'git',
+    ['-C', worktree, 'show', `${fixtureCommit}:${path}`],
+    { encoding: 'utf8' },
+  )
+  if (result.status === 0 && !result.error) return result.stdout ?? ''
+
+  const existence = exec(
+    'git',
+    ['-C', worktree, 'ls-tree', '--full-tree', '--name-only', fixtureCommit, '--', path],
+    { encoding: 'utf8' },
+  )
+  if (existence.status !== 0 || existence.error) {
+    throw gitInspectionError(`candidate fixture path lookup for ${path}`, existence)
+  }
+  const exists = (existence.stdout ?? '').split('\n').includes(path)
+  if (!exists) return null
+  throw gitInspectionError(`candidate fixture file read for ${path}`, result)
+}
+
+function fixtureFiles(exec, worktree, fixtureCommit, path) {
+  const result = exec(
+    'git',
+    ['-C', worktree, 'ls-tree', '-r', '--name-only', fixtureCommit, '--', path],
+    { encoding: 'utf8' },
+  )
+  if (result.status !== 0 || result.error) {
+    throw gitInspectionError(`candidate fixture tree listing for ${path}`, result)
+  }
+  return (result.stdout ?? '').split('\n').filter(Boolean)
+}
+
+function gitInspectionError(label, result) {
+  const detail = (result.stderr || result.stdout || result.error?.message || '').trim()
+  const status = result.status == null ? '' : ` with status ${result.status}`
+  const cause = result.error ?? new Error(detail || `${label} failed${status}`)
+  return new Error(`${label} failed${status}${detail ? `: ${detail.slice(0, 1000)}` : ''}`, {
+    cause,
+  })
+}
+
+function planningContractError(message) {
+  const error = new Error(message)
+  error.code = 'fixture-planning-contract'
+  return error
+}
+
+function assertPlanningReadyFixture(exec, worktree, fixtureCommit, changeName) {
+  const changeDir = `openspec/changes/${changeName}`
+  const testPlanPath = `${changeDir}/test-plan.md`
+  const requiredFiles = [
+    `${changeDir}/proposal.md`,
+    `${changeDir}/design.md`,
+    testPlanPath,
+    `${changeDir}/tasks.md`,
+  ]
+  const failures = requiredFiles
+    .filter((path) => !fixtureFile(exec, worktree, fixtureCommit, path)?.trim())
+    .map((path) => `missing or empty ${path}`)
+
+  const specificationFiles = fixtureFiles(
+    exec,
+    worktree,
+    fixtureCommit,
+    `${changeDir}/specs`,
+  ).filter((path) => /^openspec\/changes\/[^/]+\/specs\/[^/]+\/spec\.md$/.test(path))
+  const specifications = specificationFiles.filter(
+    (path) => fixtureFile(exec, worktree, fixtureCommit, path)?.trim(),
+  )
+  if (specifications.length === 0) {
+    failures.push(`no non-empty specification under ${changeDir}/specs/`)
+  }
+
+  const taskFiles = fixtureFiles(
+    exec,
+    worktree,
+    fixtureCommit,
+    `${changeDir}/tasks`,
+  ).filter((path) => /^openspec\/changes\/[^/]+\/tasks\/[^/]+\.md$/.test(path))
+  const tasks = taskFiles.filter(
+    (path) => fixtureFile(exec, worktree, fixtureCommit, path)?.trim(),
+  )
+  if (tasks.length === 0) {
+    failures.push(`no non-empty task file under ${changeDir}/tasks/`)
+  }
+
+  const taskIndex = fixtureFile(exec, worktree, fixtureCommit, `${changeDir}/tasks.md`) ?? ''
+  const linkedTasks = new Set([...taskIndex.matchAll(/(?<!!)\[[^\]]+\]\(([^)]+)\)/g)].map((match) => {
+    const raw = match[1].trim().replace(/^<|>$/g, '').split(/[?#]/, 1)[0]
+    try {
+      return posix.normalize(decodeURIComponent(raw))
+    } catch {
+      return posix.normalize(raw)
+    }
+  }))
+  for (const task of tasks) {
+    const relative = task.slice(changeDir.length + 1)
+    if (!linkedTasks.has(relative)) {
+      failures.push(`${changeDir}/tasks.md does not link to ${relative}`)
+    }
+  }
+
+  if (failures.length > 0) {
+    throw planningContractError(
+      `candidate fixture ${fixtureCommit} has an incomplete planning contract: ${failures.join('; ')}`,
+    )
+  }
+
+  const testPlan = fixtureFile(exec, worktree, fixtureCommit, testPlanPath)
+  const requiredSections = [
+    'Coverage Strategy',
+    'Integration Tests',
+    'End-to-End Tests',
+    'Agent Acceptance Tests',
+    'Human-Only Testing',
+    'Coverage Map',
+  ]
+  const sectionMatches = [...testPlan.matchAll(/^##\s+(.+?)\s*$/gm)]
+  const sectionHeadings = new Set(sectionMatches.map((match) => match[1]))
+  const missingSections = requiredSections.filter((section) => !sectionHeadings.has(section))
+  if (missingSections.length > 0) {
+    throw planningContractError(
+      `candidate fixture ${fixtureCommit} has an incomplete planning contract: ${testPlanPath} is missing ${missingSections.map((section) => `'## ${section}'`).join(', ')}`,
+    )
+  }
+  const orderedSections = sectionMatches
+    .map((match) => match[1])
+    .filter((heading) => requiredSections.includes(heading))
+  if (orderedSections.join('\n') !== requiredSections.join('\n')) {
+    throw planningContractError(
+      `candidate fixture ${fixtureCommit} has an incomplete planning contract: ${testPlanPath} test-plan sections are out of order`,
+    )
+  }
+
+  const sections = new Map()
+  for (const [index, match] of sectionMatches.entries()) {
+    const end = sectionMatches[index + 1]?.index ?? testPlan.length
+    sections.set(match[1], { start: match.index + match[0].length, end })
+  }
+  const acceptanceMatches = [
+    ...testPlan.matchAll(/^###\s+(AT-[A-Za-z0-9][A-Za-z0-9._-]*):\s+\S.*$/gm),
+  ]
+  if (acceptanceMatches.length === 0) {
+    throw planningContractError(
+      `candidate fixture ${fixtureCommit} has an incomplete acceptance obligation inventory: ${testPlanPath} must define at least one AT-* obligation`,
+    )
+  }
+
+  const requiredAcceptanceFields = [
+    'Classification',
+    'Covers',
+    'Actor and surface',
+    'Setup',
+    'Steps',
+    'Expected',
+    'Evidence',
+    'Effects and cleanup',
+    'Permitted substitutes',
+  ]
+  for (const match of acceptanceMatches) {
+    const nextHeading = testPlan.slice(match.index + match[0].length).search(/^#{2,3}\s+/m)
+    const end = nextHeading === -1
+      ? testPlan.length
+      : match.index + match[0].length + nextHeading
+    const body = testPlan.slice(match.index + match[0].length, end)
+    for (const field of requiredAcceptanceFields) {
+      const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      if (!new RegExp(`^-\\s+${escaped}:\\s+\\S`, 'm').test(body)) {
+        throw planningContractError(
+          `candidate fixture ${fixtureCommit} has an incomplete acceptance obligation inventory: ${testPlanPath} obligation ${match[1]} is missing non-empty '${field}'`,
+        )
+      }
+    }
+    const classification = body.match(/^-\s+Classification:\s*(.+?)\s*$/m)?.[1] ?? ''
+    if (classification !== 'Required' && !/^Conditional:\s+\S/.test(classification)) {
+      throw planningContractError(
+        `candidate fixture ${fixtureCommit} has an incomplete acceptance obligation inventory: ${testPlanPath} obligation ${match[1]} classification must be 'Required' or 'Conditional: <condition>'`,
+      )
+    }
+    const acceptanceSection = sections.get('Agent Acceptance Tests')
+    if (!(acceptanceSection.start <= match.index && match.index < acceptanceSection.end)) {
+      throw planningContractError(
+        `candidate fixture ${fixtureCommit} has an incomplete acceptance obligation inventory: ${testPlanPath} places ${match[1]} outside '## Agent Acceptance Tests'`,
+      )
+    }
+  }
+
+  const coverageSection = sections.get('Coverage Map')
+  const coverageMap = testPlan.slice(coverageSection.start, coverageSection.end)
+  const referencedAcceptanceIds = new Set(
+    [...coverageMap.matchAll(
+      /(?<![A-Za-z0-9._-])(AT-[A-Za-z0-9][A-Za-z0-9._-]*)(?![A-Za-z0-9._-])/g,
+    )].map((match) => match[1]),
+  )
+  for (const match of acceptanceMatches) {
+    if (!referencedAcceptanceIds.has(match[1])) {
+      throw planningContractError(
+        `candidate fixture ${fixtureCommit} has an incomplete acceptance obligation inventory: ${testPlanPath} coverage map does not reference ${match[1]}`,
+      )
+    }
+  }
+}
+
 async function installEvalExcludes(worktree) {
   const path = join(worktree, '.git/info/exclude')
   await mkdir(dirname(path), { recursive: true })
@@ -135,6 +355,7 @@ export async function prepareCandidateWorktree({
   expectedSource = null,
   runId = null,
   kind = runId ? 'candidate' : 'reference',
+  changeName = 'create-and-scene',
   exec = defaultExec,
 }) {
   if (!repo) throw new Error('candidate repository is required')
@@ -187,6 +408,7 @@ export async function prepareCandidateWorktree({
   }
   if (kind === 'candidate') {
     assertValidatorReadyFixture(exec, worktree, fixtureCommit, baseBranch)
+    assertPlanningReadyFixture(exec, worktree, fixtureCommit, changeName)
   }
   if (!resume) {
     if (branch) {
@@ -357,14 +579,16 @@ export async function freezeCandidate({
   fixtureRevision,
   exec = defaultExec,
 }) {
-  const status = run(
+  const status = classifyCandidateStatus(run(
     exec,
     'git',
     ['-C', worktree, 'status', '--porcelain=v1', '--untracked-files=all'],
     {},
     'candidate cleanliness check',
-  )
-  if (status) throw new Error(`candidate has uncommitted changes:\n${status}`)
+  ))
+  if (status.dirty.length > 0) {
+    throw new Error(`candidate has uncommitted changes:\n${status.dirty.join('\n')}`)
+  }
 
   const fixtureCommit = run(
     exec,
@@ -419,6 +643,7 @@ export async function freezeCandidate({
     produced_commit: producedCommit,
     implementation_diff_sha256: diffSha256,
     source_manifest: 'candidate-source-manifest.json',
+    untracked_evidence: status.untracked_evidence,
   }
 }
 
@@ -529,6 +754,7 @@ export async function verifyCandidateDelivery({
   changeName,
   sessionDir,
   workflowHistory,
+  skipValidator = false,
   exec = defaultExec,
   inspectPullRequest = (options) => inspectDraftPullRequest({ ...options, exec }),
 }) {
@@ -539,7 +765,7 @@ export async function verifyCandidateDelivery({
       { missing_delivery_output: 'candidate-base-branch' },
     )
   }
-  const history = checkWorkflowHistory(workflowHistory)
+  const history = checkWorkflowHistory(workflowHistory, { skipValidator })
   if (history.prohibited_effects.length > 0) {
     const unexpected = history.prohibited_effects[0]
     throw deliveryError(
@@ -555,16 +781,27 @@ export async function verifyCandidateDelivery({
       { missing_delivery_output: history.missing_steps },
     )
   }
+  if (history.invalid_outcomes.length > 0) {
+    const invalid = history.invalid_outcomes[0]
+    throw deliveryError(
+      'invalid-workflow-step-outcome',
+      `${invalid.step} expected ${invalid.expected}, observed ${invalid.observed}`,
+      { invalid_workflow_outcome: invalid },
+    )
+  }
 
-  const status = run(
+  const status = classifyCandidateStatus(run(
     exec,
     'git',
     ['-C', worktree, 'status', '--porcelain=v1', '--untracked-files=all'],
     {},
     'candidate delivery cleanliness check',
-  )
-  if (status) {
-    throw deliveryError('dirty-candidate', `candidate delivery has uncommitted changes:\n${status}`)
+  ))
+  if (status.dirty.length > 0) {
+    throw deliveryError(
+      'dirty-candidate',
+      `candidate delivery has uncommitted changes:\n${status.dirty.join('\n')}`,
+    )
   }
   const currentBranch = run(
     exec,
@@ -644,13 +881,6 @@ export async function verifyCandidateDelivery({
   try {
     acceptance = await inspectCandidateEvidenceReadiness({ worktree, sessionDir })
   } catch (error) {
-    if (error instanceof EvidenceReadinessError || error.code === 'missing-evidence-role') {
-      throw deliveryError(
-        'missing-delivery-output',
-        error.message,
-        { missing_delivery_output: error.missing_roles ?? error.missing_delivery_output },
-      )
-    }
     error.owner ??= 'evaluation-harness'
     throw error
   }
@@ -669,5 +899,7 @@ export async function verifyCandidateDelivery({
     workflow_history: workflowHistory,
     acceptance_artifacts: acceptance.artifacts,
     acceptance_findings: acceptance.findings,
+    acceptance_missing_roles: acceptance.missing_roles,
+    untracked_evidence: status.untracked_evidence,
   }
 }

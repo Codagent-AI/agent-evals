@@ -1,9 +1,9 @@
 {
   "rubric_id": "and-scene-human-review",
-  "version": "1.0.0",
+  "version": "2.1.0",
   "points": 30,
   "floor": 15,
-  "question_count": 13,
+  "question_count": 7,
   "rating_scale": { "min": 1, "max": 5 },
   "min_individual_rating": 2,
   "rationale_required_at_or_below": 3,
@@ -15,90 +15,105 @@
     { "rating": 5, "anchor": "Excellent — highly intentional and cohesive, with no meaningful problems" }
   ],
   "dimensions": [
-    { "id": "per-step", "title": "Average of the nine per-step ratings", "points": 10, "aggregate": "average" },
-    { "id": "readability", "title": "Readability and visual hierarchy", "points": 5, "aggregate": "single" },
-    { "id": "navigation", "title": "Navigation and interaction usability", "points": 4, "aggregate": "single" },
-    { "id": "responsive", "title": "Responsive visual quality", "points": 4, "aggregate": "single" },
-    { "id": "cohesion", "title": "Overall cohesion and polish", "points": 7, "aggregate": "single" }
+    { "id": "text-appearance", "title": "Text appearance, hierarchy, and wording", "points": 4, "aggregate": "single" },
+    { "id": "element-appearance", "title": "Visual design of elements", "points": 4, "aggregate": "single" },
+    { "id": "composition", "title": "Composition and placement", "points": 5, "aggregate": "single" },
+    { "id": "motion", "title": "Motion and scene evolution", "points": 6, "aggregate": "single" },
+    { "id": "visual-identity", "title": "Overall visual identity", "points": 5, "aggregate": "single" },
+    { "id": "navigation-chrome", "title": "Navigation and presentation chrome", "points": 3, "aggregate": "single" },
+    { "id": "responsive", "title": "Responsive visual quality", "points": 3, "aggregate": "single" }
   ],
   "questions": [
     {
-      "id": "step-1",
+      "id": "text-appearance",
       "number": 1,
-      "dimension": "per-step",
-      "text": "Rate step 1, \"You have a topic.\" Considering its initial composition and entrance, how clearly and intentionally does it present the required content?"
+      "dimension": "text-appearance",
+      "text": "Across the full presentation, how good do the titles, captions, labels, and other content text look and read? Judge whether important content text is visibly present, typography, sizing, weight, spacing, line breaks, contrast, legibility, visual hierarchy, and whether the wording is clear, intentional, and audience-ready rather than sounding like an internal annotation. Do not judge navigation controls or presentation chrome here, and do not judge the placement or styling of non-text elements.",
+      "rating_options": [
+        { "rating": 1, "label": "Missing or unusable", "description": "Important titles or other text are missing or unreadable, or internal-looking wording seriously undermines the presentation." },
+        { "rating": 2, "label": "Weak and confusing", "description": "Major typography, hierarchy, legibility, or wording problems recur." },
+        { "rating": 3, "label": "Serviceable but flawed", "description": "Text is generally readable, with noticeable missing hierarchy, awkward wording, or inconsistent typography." },
+        { "rating": 4, "label": "Clear and polished", "description": "Text is clear, polished, and audience-ready, with only minor issues." },
+        { "rating": 5, "label": "Exceptional text system", "description": "Typography, hierarchy, and wording are exceptionally intentional, with no meaningful issues." }
+      ]
     },
     {
-      "id": "step-2",
+      "id": "element-appearance",
       "number": 2,
-      "dimension": "per-step",
-      "text": "Rate step 2, \"The skill interviews you.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?"
+      "dimension": "element-appearance",
+      "text": "How well designed are the individual scene elements, such as boxes, arrows, icons, illustrations, and diagram nodes? Judge their shapes, proportions, fills, borders, detail, consistency, and overall craft. Do not judge their text, placement, movement, or navigation chrome here.",
+      "rating_options": [
+        { "rating": 1, "label": "Broken or crude", "description": "Scene elements are malformed, illegible, or visibly unfinished." },
+        { "rating": 2, "label": "Weak and inconsistent", "description": "Shapes, proportions, borders, fills, or visual consistency have major recurring problems." },
+        { "rating": 3, "label": "Serviceable but basic", "description": "Elements communicate their purpose but feel generic, rough, or inconsistently crafted." },
+        { "rating": 4, "label": "Polished and coherent", "description": "Elements are thoughtfully crafted and visually consistent, with only minor issues." },
+        { "rating": 5, "label": "Exceptional visual craft", "description": "Elements are distinctive, refined, cohesive, and exceptionally well executed." }
+      ]
     },
     {
-      "id": "step-3",
+      "id": "composition",
       "number": 3,
-      "dimension": "per-step",
-      "text": "Rate step 3, \"Answers become steps.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?"
+      "dimension": "composition",
+      "text": "At a normal wide viewport, how well are the text and visual elements arranged relative to one another? Judge alignment, spacing, grouping, balance, focal points, use of space, and whether anything feels crowded, disconnected, clipped, or unintentionally overlapping. Judge viewport adaptation separately under responsive visual quality.",
+      "rating_options": [
+        { "rating": 1, "label": "Broken composition", "description": "Severe clipping, overlap, or disorganization makes the scene difficult to understand." },
+        { "rating": 2, "label": "Poorly arranged", "description": "Frequent crowding, misalignment, imbalance, or disconnected elements materially harms the composition." },
+        { "rating": 3, "label": "Workable but uneven", "description": "The arrangement is understandable but has noticeable crowding, dead space, weak grouping, or awkward balance." },
+        { "rating": 4, "label": "Strong composition", "description": "Placement is clear, balanced, and intentional, with only minor spatial issues." },
+        { "rating": 5, "label": "Masterful composition", "description": "Hierarchy, balance, grouping, and use of space are exceptional throughout." }
+      ]
     },
     {
-      "id": "step-4",
+      "id": "motion",
       "number": 4,
-      "dimension": "per-step",
-      "text": "Rate step 4, \"The deck grows.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?"
+      "dimension": "motion",
+      "text": "As you advance through the presentation, how well do the animations and scene changes work? Judge smoothness, pacing, meaningful entrances and exits, continuity of persistent elements, and whether each step visibly evolves the existing scene instead of feeling like an unrelated replacement.",
+      "rating_options": [
+        { "rating": 1, "label": "Broken or disorienting", "description": "Motion fails, obscures content, or makes progression difficult to follow." },
+        { "rating": 2, "label": "Choppy or disconnected", "description": "Transitions are frequently abrupt, poorly paced, or feel like unrelated scene replacements." },
+        { "rating": 3, "label": "Functional but uneven", "description": "The scene evolves understandably, but motion is basic, inconsistent, or occasionally awkward." },
+        { "rating": 4, "label": "Smooth and meaningful", "description": "Transitions clearly support the story and preserve continuity, with only minor issues." },
+        { "rating": 5, "label": "Exceptional choreography", "description": "Motion is seamless, expressive, and integral to an exceptionally coherent scene evolution." }
+      ]
     },
     {
-      "id": "step-5",
+      "id": "visual-identity",
       "number": 5,
-      "dimension": "per-step",
-      "text": "Rate step 5, \"You set the depth.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?"
+      "dimension": "visual-identity",
+      "text": "Taken as a whole, how strong is the presentation’s visual identity? Judge its color palette, background treatment, stylistic consistency, brand character, polish, memorability, and whether it feels intentionally designed and finished. Judge the craft of individual scene elements separately.",
+      "rating_options": [
+        { "rating": 1, "label": "Incoherent or unfinished", "description": "The overall style feels broken, conflicting, or substantially incomplete." },
+        { "rating": 2, "label": "Weak or unappealing", "description": "The visual identity is inconsistent, generic, or materially under-polished." },
+        { "rating": 3, "label": "Coherent but ordinary", "description": "The style works and is reasonably consistent, but lacks distinction or refinement." },
+        { "rating": 4, "label": "Distinctive and polished", "description": "The presentation has a strong, cohesive visual identity with only minor imperfections." },
+        { "rating": 5, "label": "Exceptional and memorable", "description": "The identity is highly distinctive, beautifully resolved, complete, and unmistakably intentional." }
+      ]
     },
     {
-      "id": "step-6",
+      "id": "navigation-chrome",
       "number": 6,
-      "dimension": "per-step",
-      "text": "Rate step 6, \"It assembles the scene.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?"
-    },
-    {
-      "id": "step-7",
-      "number": 7,
-      "dimension": "per-step",
-      "text": "Rate step 7, \"It checks its own work.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?"
-    },
-    {
-      "id": "step-8",
-      "number": 8,
-      "dimension": "per-step",
-      "text": "Rate step 8, \"Changed your mind? Loop it.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?"
-    },
-    {
-      "id": "step-9",
-      "number": 9,
-      "dimension": "per-step",
-      "text": "Rate step 9, \"You're looking at one.\" Considering its composition and the transition into it from the previous step, how clearly, intentionally, and coherently does it present the required content and continuity?"
-    },
-    {
-      "id": "readability",
-      "number": 10,
-      "dimension": "readability",
-      "text": "Rate the presentation's readability and visual hierarchy, including typography, contrast, legibility, scanning order, emphasis, labels, and captions across the presentation."
-    },
-    {
-      "id": "navigation",
-      "number": 11,
-      "dimension": "navigation",
-      "text": "Rate the presentation's navigation and interaction usability, including discoverability, current-step feedback, controls, present/browse switching, and supported navigation methods."
+      "dimension": "navigation-chrome",
+      "text": "How clear, discoverable, and visually integrated are the presentation controls and chrome? Judge progress indicators, previous/next controls, table of contents, mode switching, and attribution. Focus on their appearance and ease of understanding, not whether every input method technically works or how content captions are styled.",
+      "rating_options": [
+        { "rating": 1, "label": "Unusable or visually broken", "description": "Essential controls are missing, illegible, or impossible to understand." },
+        { "rating": 2, "label": "Confusing and disconnected", "description": "Controls are difficult to discover, poorly differentiated, or clash badly with the presentation." },
+        { "rating": 3, "label": "Understandable but awkward", "description": "Navigation is usable and recognizable, with noticeable visual, labeling, or integration problems." },
+        { "rating": 4, "label": "Clear and integrated", "description": "Controls are easy to understand and fit the presentation well, with only minor issues." },
+        { "rating": 5, "label": "Effortless and elegant", "description": "Navigation is exceptionally clear, polished, discoverable, and seamlessly integrated." }
+      ]
     },
     {
       "id": "responsive",
-      "number": 12,
+      "number": 7,
       "dimension": "responsive",
-      "text": "Rate the presentation's responsive visual quality: whether it remains readable, composed, and usable across desktop and narrow viewports without problematic clipping, overlap, or chrome interference."
-    },
-    {
-      "id": "cohesion",
-      "number": 13,
-      "dimension": "cohesion",
-      "text": "Rate the presentation's overall cohesion and polish, including consistency, visual rhythm, intentionality, detail quality, and whether it feels finished as a whole."
+      "text": "Compare the presentation at wide and narrow viewport sizes. How well does its hierarchy and composition adapt? Judge scaling, density, readability, control accessibility, clipping, overlap, and whether the narrow version still feels intentionally composed. Judge baseline wide-screen composition separately.",
+      "rating_options": [
+        { "rating": 1, "label": "Broken at a supported size", "description": "Important content or controls become unreadable, inaccessible, clipped, or unusable." },
+        { "rating": 2, "label": "Adapts poorly", "description": "Narrow or wide layouts have major crowding, scaling, overlap, or accessibility problems." },
+        { "rating": 3, "label": "Usable but compromised", "description": "Both layouts function, but the narrower presentation feels noticeably cramped, reduced, or insufficiently recomposed." },
+        { "rating": 4, "label": "Strong across sizes", "description": "The presentation remains clear and intentional across viewports, with only minor compromises." },
+        { "rating": 5, "label": "Exceptionally responsive", "description": "Every tested size feels deliberately composed, polished, readable, and equally successful." }
+      ]
     }
   ]
 }

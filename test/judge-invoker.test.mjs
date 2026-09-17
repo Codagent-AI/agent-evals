@@ -15,7 +15,23 @@ test('Codex judge invoker enforces the schema and scopes web access per job', as
     calls.push({ command, args, options })
     const outputPath = args[args.indexOf('--output-last-message') + 1]
     writeFileSync(outputPath, '{"results":[]}')
-    return { status: 0, stdout: '', stderr: '' }
+    return {
+      status: 0,
+      stdout: [
+        JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' }),
+        JSON.stringify({
+          type: 'turn.completed',
+          usage: {
+            input_tokens: 1200,
+            cached_input_tokens: 800,
+            cache_write_input_tokens: 50,
+            output_tokens: 300,
+            reasoning_output_tokens: 75,
+          },
+        }),
+      ].join('\n'),
+      stderr: '',
+    }
   }
   const invoke = createCodexJudgeInvoker({
     runDir,
@@ -53,6 +69,7 @@ test('Codex judge invoker enforces the schema and scopes web access per job', as
   assert.ok(calls[0].args.includes('web_search="disabled"'))
   assert.ok(calls[0].args.includes('shell_environment_policy.inherit="none"'))
   assert.ok(calls[0].args.includes('gpt-5.2'))
+  assert.ok(calls[0].args.includes('--json'))
   const schemaPath = calls[0].args[calls[0].args.indexOf('--output-schema') + 1]
   assert.deepEqual(JSON.parse(await readFile(schemaPath, 'utf8')), { type: 'object' })
 
@@ -65,6 +82,50 @@ test('Codex judge invoker enforces the schema and scopes web access per job', as
   })
   assert.ok(calls[1].args.includes('web_search="live"'))
   assert.equal(calls[1].args.includes('--model'), false)
+
+  const usage = await invoke.readUsageEntries()
+  assert.equal(usage.length, 2)
+  assert.equal(usage[0].phase, 'scene-kit')
+  assert.equal(usage[0].provider, 'openai')
+  assert.equal(usage[0].model, 'gpt-5.2')
+  assert.equal(usage[0].usage.state, 'available')
+  assert.deepEqual(usage[0].tokens, {
+    input: 1200,
+    cached_input: 800,
+    cache_write: 50,
+    output: 300,
+    reasoning: 75,
+  })
+  assert.deepEqual(usage[0].token_totals, { input: 1200, output: 300, total: 1500 })
+})
+
+test('eval-owned usage survives a new invoker process for the same run directory', async () => {
+  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const candidateWorktree = join(runDir, 'candidate')
+  const first = createCodexJudgeInvoker({
+    runDir,
+    candidateWorktree,
+    spawnImpl: (command, args) => {
+      const outputPath = args[args.indexOf('--output-last-message') + 1]
+      writeFileSync(outputPath, '{}')
+      return {
+        status: 0,
+        stdout: JSON.stringify({
+          type: 'turn.completed',
+          usage: { input_tokens: 10, cached_input_tokens: 4, output_tokens: 2 },
+        }),
+        stderr: '',
+      }
+    },
+  })
+  await first({ job: 'scene-kit', authority: { model: 'gpt-5.2' }, schema: {}, prompt: 'x' })
+
+  const resumed = createCodexJudgeInvoker({ runDir, candidateWorktree })
+  const usage = await resumed.readUsageEntries()
+
+  assert.equal(usage.length, 1)
+  assert.equal(usage[0].phase, 'scene-kit')
+  assert.equal(usage[0].tokens.input, 10)
 })
 
 test('Codex judge invoker reports a failed CLI without accepting stale output', async () => {

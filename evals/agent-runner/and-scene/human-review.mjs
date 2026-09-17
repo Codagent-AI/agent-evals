@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 // The separate literal human-review command.
 //
-// The automated command stops at `pending-human-review`; this command is what
-// turns that into an official score. It is deliberately a *separate* entry
-// point, because a human review happens on human time: it can be interrupted,
-// resumed hours later, and revised, and none of that may cost the completed
-// automated work.
+// An automated candidate that remains eligible stops at
+// `pending-human-review`; this command is what turns that into an official
+// score. It is deliberately a *separate* entry point, because a human review
+// happens on human time: it can be interrupted, resumed hours later, and
+// revised, and none of that may cost the completed automated work.
 //
 // It never recomputes automated evidence. Everything it scores comes from the
 // durable phase artifacts the automated run already validated, and the only new
-// input is the reviewer's 13 answers.
+// input is the reviewer's seven answers.
 //
 // Paired mode reviews a pending reference baseline first and then the Agent
 // Runner candidate, keeping independent candidate, rubric, response, score, and

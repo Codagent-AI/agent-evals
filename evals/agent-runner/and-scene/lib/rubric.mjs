@@ -202,6 +202,12 @@ export function validateAutomatedRubric(rubric) {
   if (rubric.automated_points + rubric.human_points !== rubric.total_points) {
     errors.push('automated_points plus human_points must equal total_points')
   }
+  const minimumViableAutomatedScore = rubric.pass_threshold - rubric.human_points
+  if (rubric.automated_pass_threshold !== minimumViableAutomatedScore) {
+    errors.push(
+      `automated_pass_threshold must be ${minimumViableAutomatedScore}, the minimum score that can reach pass_threshold with maximum human points`,
+    )
+  }
   const componentPolicy = rubric.components.map(({ id, points, floor = null }) => [id, points, floor])
   if (JSON.stringify(componentPolicy) !== JSON.stringify(COMPONENT_POLICY)) {
     errors.push('components must use the approved 24/24/7/7/4/4 allocation and floors')
@@ -298,6 +304,9 @@ export function validateHumanRubric(rubric) {
   const ids = new Set()
   const known = new Set(dimensions.map(({ id }) => id))
   const covered = new Set()
+  const scaleRatings = scale && Number.isInteger(scale.min) && Number.isInteger(scale.max)
+    ? Array.from({ length: scale.max - scale.min + 1 }, (_, index) => scale.min + index)
+    : []
   for (const question of questions) {
     if (typeof question.id !== 'string' || question.id.length === 0) {
       errors.push('every human rubric question requires an id')
@@ -311,6 +320,25 @@ export function validateHumanRubric(rubric) {
     if (!known.has(question.dimension)) {
       errors.push(`human rubric question ${question.id} has unknown dimension ${question.dimension}`)
     }
+    const ratingOptions = Array.isArray(question.rating_options) ? question.rating_options : []
+    const optionRatings = ratingOptions.map(({ rating }) => rating)
+    if (
+      optionRatings.length !== scaleRatings.length
+      || scaleRatings.some((rating, index) => optionRatings[index] !== rating)
+    ) {
+      errors.push(
+        `human rubric question ${question.id} requires one rating option for each rating ${scale?.min} through ${scale?.max}`,
+      )
+    } else {
+      for (const { rating, label, description } of ratingOptions) {
+        if (typeof label !== 'string' || label.trim().length === 0) {
+          errors.push(`human rubric question ${question.id} rating option ${rating} requires a label`)
+        }
+        if (typeof description !== 'string' || description.trim().length === 0) {
+          errors.push(`human rubric question ${question.id} rating option ${rating} requires a description`)
+        }
+      }
+    }
     covered.add(question.dimension)
   }
   // An uncovered dimension would silently withhold its points from every
@@ -320,7 +348,7 @@ export function validateHumanRubric(rubric) {
   }
 
   if (scale && Number.isInteger(scale.min) && Number.isInteger(scale.max)) {
-    const ratings = Array.from({ length: scale.max - scale.min + 1 }, (_, index) => scale.min + index)
+    const ratings = scaleRatings
     const anchored = (rubric.anchors ?? []).map(({ rating }) => rating)
     if (anchored.length !== ratings.length || ratings.some((rating, index) => anchored[index] !== rating)) {
       errors.push(`human rubric requires one anchor for each of the ratings ${scale.min} through ${scale.max}`)

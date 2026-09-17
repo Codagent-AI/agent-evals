@@ -1,0 +1,42 @@
+{
+  "schema_version": 2,
+  "run_id": "astra-lead-20260909T142250Z-rescore-20260909T211038Z",
+  "projection": {
+    "evaluation_status": "complete",
+    "product_verdict": "pass",
+    "score_denominator": 100,
+    "official_score": 81.98333333333333,
+    "failed_phase": null,
+    "failure": null
+  },
+  "excluded": [
+    ".runtime"
+  ],
+  "artifacts": [
+    {
+      "path": "ambiguity-ledger.json",
+      "bytes": 2328,
+      "sha256": "2d1944cccc907d2c36df012055520ab297747c4a1f11002319987d99a17a6917"
+    },
+    {
+      "path": "human-review.json",
+      "bytes": 5528,
+      "sha256": "1e2272630d7c9c0c72a407cc02a6f1d75f2be07b90cb5164b259fd965e407cd9"
+    },
+    {
+      "path": "implementation.diff",
+      "bytes": 284722,
+      "sha256": "1282cfd096b221c03819a7ae8bd6de4a19648f9058fcc1be0ca03d5baf9f93f0"
+    },
+    {
+      "path": "report.html",
+      "bytes": 440383,
+      "sha256": "32ad139063bff38ad6775b72e7dda82ffe3c927da672f752923b53d76ee8b2b1"
+    },
+    {
+      "path": "result.json",
+      "bytes": 1690773,
+      "sha256": "3d9a791bba18c36449277dea0e43806cb952c468180a466bd2d259075b8bf115"
+    }
+  ]
+}

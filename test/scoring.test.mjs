@@ -41,10 +41,17 @@ function inputs({ failures = [], gateFailures = [], omit = [], humanReview = nul
   }
 }
 
-const fullHumanReview = { total: 30, ratings: Array.from({ length: 13 }, () => 5) }
+const fullHumanReview = { total: 30, ratings: Array.from({ length: 7 }, () => 5) }
 
 function component(result, id) {
   return result.components.find((entry) => entry.id === id)
+}
+
+function subcomponentCriteria(componentId, subcomponentId) {
+  return automated.components
+    .find(({ id }) => id === componentId)
+    .subcomponents.find(({ id }) => id === subcomponentId)
+    .criteria
 }
 
 test('an all-pass automated evaluation scores the full 70-point subtotal', () => {
@@ -73,10 +80,73 @@ test('an all-pass automated evaluation scores the full 70-point subtotal', () =>
 test('a pending human review reports the subtotal but no official total or verdict', () => {
   const result = scoreProduct(inputs())
 
+  assert.equal(result.automated_pass_threshold, 40)
+  assert.equal(result.automated_pass, true)
+  assert.deepEqual(result.automated_failures, [])
   assert.equal(result.human_review, null)
   assert.equal(result.official_score, null)
   assert.equal(result.official_pass, null)
   assert.deepEqual(result.incomplete, ['human-review'])
+})
+
+test('an automated subtotal of exactly 40 remains eligible for human review', () => {
+  const failures = [
+    ...criteriaForJob(automated, 'presentation-skill'),
+    ...criteriaForJob(automated, 'verification-tooling'),
+    ...criteriaForJob(automated, 'testing-evidence'),
+    ...criteriaForJob(automated, 'assumption-handling'),
+    ...subcomponentCriteria('demo-technical-quality', 'demo-canonical-content'),
+    ...subcomponentCriteria('demo-technical-quality', 'demo-code-boundaries'),
+  ]
+
+  const result = scoreProduct(inputs({ failures }))
+
+  assert.equal(result.automated_subtotal.points, 40)
+  assert.equal(component(result, 'demo-technical-quality').points_awarded, 16)
+  assert.equal(result.automated_pass, true)
+  assert.deepEqual(result.automated_failures, [])
+})
+
+test('a complete automated subtotal below 40 fails before human review', () => {
+  const failures = [
+    ...criteriaForJob(automated, 'presentation-skill'),
+    ...criteriaForJob(automated, 'verification-tooling'),
+    ...criteriaForJob(automated, 'testing-evidence'),
+    ...criteriaForJob(automated, 'assumption-handling'),
+    ...subcomponentCriteria('demo-technical-quality', 'demo-canonical-content'),
+    ...subcomponentCriteria('demo-technical-quality', 'demo-code-boundaries'),
+    subcomponentCriteria('scene-kit-correctness', 'scene-step-model')[0],
+  ]
+
+  const result = scoreProduct(inputs({ failures }))
+
+  assert.ok(result.automated_subtotal.points < 40)
+  assert.ok(component(result, 'demo-technical-quality').points_awarded >= 15)
+  assert.ok(component(result, 'scene-kit-correctness').points_awarded >= 15)
+  assert.equal(result.automated_pass, false)
+  assert.deepEqual(result.automated_failures, [{
+    rule: 'automated-total',
+    id: null,
+    value: result.automated_subtotal.points,
+    required: 40,
+  }])
+})
+
+test('component floors and hard gates fail automated eligibility before human review', () => {
+  const floorFailure = scoreProduct(inputs({ failures: deterministicCriteria(automated) }))
+  assert.equal(floorFailure.human_review, null)
+  assert.equal(floorFailure.automated_pass, false)
+  assert.ok(floorFailure.automated_failures.some(
+    ({ rule, id }) => rule === 'component-floor' && id === 'demo-technical-quality',
+  ))
+
+  const gate = GATE_IDS[0]
+  const gateFailure = scoreProduct(inputs({ gateFailures: [gate] }))
+  assert.equal(gateFailure.human_review, null)
+  assert.equal(gateFailure.automated_pass, false)
+  assert.ok(gateFailure.automated_failures.some(
+    ({ rule, id }) => rule === 'hard-gate' && id === gate,
+  ))
 })
 
 test('a completed human review produces the official 100-point score and pass verdict', () => {
@@ -146,7 +216,7 @@ test('missing a component floor fails the official verdict even above the total 
   assert.equal(kitFloor.official_pass, false)
 
   const humanFloor = scoreProduct(inputs({
-    humanReview: { total: 14, ratings: Array.from({ length: 13 }, () => 3) },
+    humanReview: { total: 14, ratings: Array.from({ length: 7 }, () => 3) },
   }))
   assert.equal(humanFloor.official_score, 84)
   assert.equal(humanFloor.official_pass, false)
@@ -154,7 +224,7 @@ test('missing a component floor fails the official verdict even above the total 
 })
 
 test('any individual human rating of one fails the official verdict', () => {
-  const ratings = Array.from({ length: 13 }, () => 5)
+  const ratings = Array.from({ length: 7 }, () => 5)
   ratings[6] = 1
   const result = scoreProduct(inputs({ humanReview: { total: 28, ratings } }))
 
@@ -224,13 +294,15 @@ test('unobserved evaluator output leaves its component incomplete instead of fai
   assert.equal(component(result, 'scene-kit-correctness').points_awarded, null)
   // Components with complete evidence keep their scores.
   assert.equal(component(result, 'demo-technical-quality').points_awarded, 24)
-  assert.equal(result.automated_subtotal.points, 46)
+  assert.equal(result.automated_subtotal.points, 47)
   assert.equal(result.automated_subtotal.possible, 70)
   assert.equal(result.automated_subtotal.complete, false)
   // The observed subtotal is never rescaled to hide the missing evidence.
-  assert.equal(result.automated_subtotal.observed_possible, 46)
+  assert.equal(result.automated_subtotal.observed_possible, 47)
   assert.equal(result.official_score, null)
   assert.equal(result.official_pass, null)
+  assert.equal(result.automated_pass, null)
+  assert.deepEqual(result.automated_failures, [])
   assert.ok(result.incomplete.includes('scene-kit-correctness'))
 })
 
@@ -289,15 +361,15 @@ test('the result records both rubric versions and hashes', () => {
 
 test('a malformed human review is rejected rather than scored', () => {
   assert.throws(
-    () => scoreProduct(inputs({ humanReview: { total: 31, ratings: Array.from({ length: 13 }, () => 5) } })),
+    () => scoreProduct(inputs({ humanReview: { total: 31, ratings: Array.from({ length: 7 }, () => 5) } })),
     /human review total/,
   )
   assert.throws(
-    () => scoreProduct(inputs({ humanReview: { total: 20, ratings: Array.from({ length: 12 }, () => 4) } })),
-    /human review requires 13 ratings/,
+    () => scoreProduct(inputs({ humanReview: { total: 20, ratings: Array.from({ length: 6 }, () => 4) } })),
+    /human review requires 7 ratings/,
   )
   assert.throws(
-    () => scoreProduct(inputs({ humanReview: { total: 20, ratings: Array.from({ length: 13 }, () => 9) } })),
+    () => scoreProduct(inputs({ humanReview: { total: 20, ratings: Array.from({ length: 7 }, () => 9) } })),
     /human review rating/,
   )
 })

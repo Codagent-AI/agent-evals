@@ -14,7 +14,10 @@ function attempt(overrides = {}) {
     invoked_cli: true,
     provider: 'openai',
     model: 'gpt-5-codex',
-    usage: { state: 'available', reason: null, tokens: { input: 1000, output: 200 } },
+    usage: {
+      state: 'available', reason: null, tokens: { input: 1000, output: 200 },
+      token_totals: { input: 1000, output: 200, total: 1200 },
+    },
     cost: { state: 'available', reason: null, estimated_api_cost_usd: 0.01 },
     ...overrides,
   }
@@ -34,17 +37,41 @@ function resolved(attemptId, amount, overrides = {}) {
 
 test('retries of one role and model collapse into a single aggregate row', () => {
   const attempts = [
-    attempt({ attempt_id: 'a1' }),
-    attempt({ attempt_id: 'a2', usage: { state: 'available', reason: null, tokens: { input: 500, output: 100 } } }),
+    attempt({
+      attempt_id: 'a1',
+      usage: {
+        state: 'available',
+        reason: null,
+        tokens: { input: 1000, cached_input: 400, output: 200, reasoning: 50 },
+        token_totals: { input: 1000, output: 200, total: 1200 },
+      },
+    }),
+    attempt({
+      attempt_id: 'a2',
+      usage: {
+        state: 'available',
+        reason: null,
+        tokens: { input: 500, cached_input: 100, output: 100, reasoning: 25 },
+        token_totals: { input: 500, output: 100, total: 600 },
+      },
+    }),
   ]
   const costs = [resolved('a1', 0.01), resolved('a2', 0.02)]
 
-  const { rows, total } = aggregateImplementationCost({ attempts, costs })
+  const { rows, total, usage } = aggregateImplementationCost({ attempts, costs })
 
   assert.equal(rows.length, 1)
   assert.equal(rows[0].agent_role, 'task-implementor')
   assert.equal(rows[0].attempt_count, 2)
-  assert.deepEqual(rows[0].tokens, { input: 1500, output: 300 })
+  assert.deepEqual(rows[0].tokens, {
+    input: 1500, cached_input: 500, output: 300, reasoning: 75,
+  })
+  assert.deepEqual(rows[0].token_totals, { input: 1500, output: 300, total: 1800 })
+  assert.deepEqual(usage.tokens, {
+    input: 1500, cached_input: 500, output: 300, reasoning: 75,
+  })
+  assert.deepEqual(usage.token_totals, { input: 1500, output: 300, total: 1800 })
+  assert.equal(usage.complete, true)
   assert.equal(rows[0].cost.amount_usd, 0.03)
   assert.equal(total.estimated_api_cost_usd, 0.03)
 })
@@ -61,6 +88,137 @@ test('one role using different models yields one row per provider and model', ()
   assert.equal(rows.length, 2)
   assert.deepEqual(rows.map((row) => row.model).sort(), ['gpt-5-codex', 'gpt-5-codex-mini'])
   assert.ok(rows.every((row) => row.attempt_count === 1))
+})
+
+test('one multi-model dispatch renders attributed and unallocated rows without inflating dispatch count', () => {
+  const attempts = [attempt({
+    attempt_id: 'validator-attempt-1',
+    agent_role: 'implementation-validator',
+    provider: null,
+    model: null,
+    usage: {
+      state: 'available',
+      tokens: { input: 100, output: 50 },
+      token_totals: { input: 100, output: 50, total: 150 },
+    },
+    allocations: [{
+      allocation_id: 'allocation-a',
+      provider: 'fixture-provider',
+      model: 'model-a',
+      effort: null,
+      usage: { tokens: null, token_totals: { input: null, output: null, total: 100 } },
+    }],
+    unallocated_usage: {
+      allocation_id: 'allocation-unallocated',
+      reason: 'aggregate_only',
+      usage: { tokens: null, token_totals: { input: null, output: null, total: 50 } },
+    },
+  })]
+  const costs = [{
+    attempt_id: 'validator-attempt-1',
+    state: 'incomplete',
+    amount_usd: null,
+    known_subtotal_usd: 0.01,
+    source: 'provider-reported',
+    verification: 'reported',
+    reason: 'unallocated remainder has no reported cost',
+    allocation_costs: [{ allocation_id: 'allocation-a', amount_usd: 0.01, state: 'resolved' }],
+  }]
+
+  const { rows, total, usage, dispatch_count: dispatchCount } = aggregateImplementationCost({ attempts, costs })
+
+  assert.equal(dispatchCount, 1)
+  assert.equal(rows.length, 2)
+  assert.equal(rows[0].model, 'model-a')
+  assert.equal(rows[0].allocation, 'attributed')
+  assert.equal(rows[1].model, null)
+  assert.equal(rows[1].allocation, 'unallocated')
+  assert.equal(rows[0].participating_attempt_count, 1)
+  assert.equal(rows[1].participating_attempt_count, 1)
+  assert.deepEqual(rows[0].token_totals, { total: 100 })
+  assert.deepEqual(rows[1].token_totals, { total: 50 })
+  assert.equal(rows[0].token_totals_complete, false)
+  assert.equal(rows[1].token_totals_complete, false)
+  assert.equal(usage.attempt_count, 1)
+  assert.deepEqual(usage.token_totals, { input: 100, output: 50, total: 150 })
+  assert.equal(total.estimated_api_cost_usd, null)
+  assert.equal(total.known_cost_subtotal_usd, 0.01)
+})
+
+test('several allocations from one dispatch count as one participating attempt per model row', () => {
+  const attempts = [attempt({
+    attempt_id: 'multi-allocation',
+    provider: null,
+    model: null,
+    allocations: [
+      {
+        allocation_id: 'allocation-a', provider: 'fixture', model: 'A',
+        usage: { state: 'partial', token_totals: { total: 40 } },
+      },
+      {
+        allocation_id: 'allocation-b', provider: 'fixture', model: 'A',
+        usage: { state: 'partial', token_totals: { total: 60 } },
+      },
+    ],
+    unallocated_usage: null,
+  })]
+
+  const { rows } = aggregateImplementationCost({ attempts, costs: [] })
+
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].participating_attempt_count, 1)
+  assert.deepEqual(rows[0].attempt_ids, ['multi-allocation'])
+  assert.deepEqual(rows[0].allocation_ids, ['allocation-a', 'allocation-b'])
+  assert.deepEqual(rows[0].token_totals, { total: 100 })
+})
+
+test('a partial allocation charge remains an incomplete row cost with a known amount', () => {
+  const attempts = [attempt({
+    attempt_id: 'partial-cost',
+    provider: null,
+    model: null,
+    allocations: [{
+      allocation_id: 'allocation-a', provider: 'fixture', model: 'A',
+      usage: { state: 'partial', token_totals: { total: 100 } },
+    }],
+    unallocated_usage: null,
+  })]
+  const costs = [{
+    attempt_id: 'partial-cost', state: 'incomplete', amount_usd: null,
+    known_subtotal_usd: 0.01, source: 'provider-reported',
+    allocation_costs: [{
+      allocation_id: 'allocation-a', amount_usd: 0.01, state: 'incomplete', coverage: 'partial',
+    }],
+  }]
+
+  const { rows } = aggregateImplementationCost({ attempts, costs })
+
+  assert.equal(rows[0].cost.state, 'incomplete')
+  assert.equal(rows[0].cost.amount_usd, 0.01)
+  assert.deepEqual(rows[0].cost.unresolved_attempts, ['partial-cost'])
+})
+
+test('partial token envelopes contribute known subtotals without claiming complete usage', () => {
+  const attempts = [attempt({
+    attempt_id: 'partial-attempt',
+    usage: {
+      state: 'partial',
+      tokens: { input: 100, output: 50 },
+      token_totals: null,
+      token_envelopes: {
+        input_total: { availability: 'available', value: 100 },
+        output: { availability: 'available', value: 50 },
+        normalized_total: { availability: 'partial', value: 150, reason: 'stream truncated' },
+      },
+    },
+  })]
+
+  const { rows, usage } = aggregateImplementationCost({ attempts, costs: [] })
+
+  assert.deepEqual(rows[0].tokens, { input: 100, output: 50 })
+  assert.equal(rows[0].usage_complete, false)
+  assert.equal(usage.state, 'partial')
+  assert.deepEqual(usage.tokens, { input: 100, output: 50 })
 })
 
 test('the same model under different roles stays in separate rows', () => {
@@ -229,6 +387,28 @@ test('eval-owned usage is reported diagnostically and never priced', () => {
   assert.equal(summary.included_in_implementation_total, false)
   assert.deepEqual(summary.tokens, { input: 1000, output: 150 })
   assert.deepEqual(summary.by_phase.map((entry) => entry.phase), ['product-judging', 'ambiguity-diagnostics'])
+  assert.equal(summary.complete, true)
+  assert.equal(summary.attempt_count, 2)
+  assert.equal(summary.attempts_missing_usage, 0)
+})
+
+test('missing eval-owned telemetry keeps the known subtotal explicitly partial', () => {
+  const summary = summarizeEvalOwnedUsage([
+    {
+      phase: 'product-judging', provider: 'openai', model: 'gpt-5',
+      usage: { state: 'available' }, tokens: { input: 900, output: 120 },
+    },
+    {
+      phase: 'pricing-lookup', provider: 'openai', model: 'gpt-5',
+      usage: { state: 'unavailable', reason: 'no turn.completed usage' }, tokens: null,
+    },
+  ])
+
+  assert.equal(summary.state, 'partial')
+  assert.equal(summary.complete, false)
+  assert.equal(summary.attempt_count, 2)
+  assert.equal(summary.attempts_missing_usage, 1)
+  assert.deepEqual(summary.tokens, { input: 900, output: 120 })
 })
 
 test('absent eval-owned usage is unavailable rather than zero', () => {

@@ -191,20 +191,104 @@ test('a complete reference result records the 92-point denominator and N/A compo
 
 test('completeness dimensions are reported independently of each other', () => {
   const result = assemble({
-    cost: { implementation: { total_usd: 4.5, complete: true, usage_complete: false } },
-    pricing: { verified: false },
-    metrics: { complete: true, history_complete: false, attempts: [] },
+    cost: {
+      rows: [{ usage_complete: false }],
+      total: { state: 'available', complete: true, estimated_api_cost_usd: 4.5 },
+    },
+    pricing: { complete: true, verified: false },
+    metrics: {
+      state: 'ingested', complete: true, history_complete: true, attempts: [],
+      coverage: { usage_available: 1, usage_unavailable: 1 },
+    },
     judging: completeJudging(),
     delivery: { candidate_reported_ci: { status: 'pending', revision: 'f'.repeat(40) } },
   })
 
   assert.equal(result.completeness.implementation_cost, 'complete')
-  assert.equal(result.completeness.implementation_usage, 'unavailable')
+  assert.equal(result.completeness.implementation_usage, 'incomplete')
   assert.equal(result.completeness.pricing, 'unverified')
-  assert.equal(result.completeness.metric_history, 'incomplete')
+  assert.equal(result.completeness.metric_history, 'complete')
   assert.equal(result.completeness.judge_coverage, 'complete')
   assert.equal(result.completeness.candidate_reported_ci, 'complete')
   assert.equal(result.completeness.score, 'complete')
+})
+
+test('implementation usage is unavailable when no invoked attempt has measurable usage', () => {
+  const result = assemble({
+    cost: {
+      rows: [{ usage_complete: false }],
+      total: { state: 'unavailable', complete: false },
+    },
+    metrics: {
+      state: 'ingested', complete: true, history_complete: true,
+      coverage: { usage_available: 0, usage_unavailable: 2 },
+    },
+  })
+
+  assert.equal(result.completeness.implementation_usage, 'unavailable')
+  assert.equal(result.completeness.implementation_cost, 'incomplete')
+})
+
+test('implementation usage is incomplete when canonical run token totals are partial', () => {
+  const result = assemble({
+    cost: {
+      usage: { state: 'partial', complete: false },
+      rows: [{ usage_complete: true, token_totals_complete: false }],
+      total: { state: 'available', complete: true, estimated_api_cost_usd: 4.5 },
+    },
+    metrics: {
+      state: 'ingested', complete: true, history_complete: true,
+      coverage: { usage_available: 1, usage_unavailable: 0 },
+    },
+  })
+
+  assert.equal(result.completeness.implementation_usage, 'incomplete')
+  assert.equal(result.completeness.implementation_cost, 'complete')
+})
+
+test('Validator delivery and per-model attribution remain separate completeness dimensions', () => {
+  const result = assemble({
+    cost: {
+      usage: { state: 'available', complete: true },
+      rows: [{ usage_complete: false, token_totals_complete: false, allocation: 'unallocated' }],
+      total: { state: 'unavailable', complete: false },
+    },
+    metrics: {
+      state: 'ingested',
+      complete: false,
+      history_complete: true,
+      measurement_history_complete: true,
+      delivery_complete: false,
+      attempts: [{
+        identity: {
+          requested: { adapter: 'codex', model: 'configured-model' },
+          resolved: { adapter: 'codex', model: 'configured-model' },
+          observed: [{ provider: null, model: 'observed-model' }],
+          per_model_attribution: 'partial',
+        },
+      }],
+      coverage: { usage_available: 1, usage_partial: 0, usage_unavailable: 0 },
+    },
+  })
+
+  assert.equal(result.completeness.metric_history, 'complete')
+  assert.equal(result.completeness.metric_delivery, 'incomplete')
+  assert.equal(result.completeness.implementation_usage, 'incomplete')
+  assert.equal(result.completeness.implementation_identity, 'partial')
+  assert.equal(result.completeness.per_model_attribution, 'partial')
+})
+
+test('producer measurement history can be incomplete while delivery remains complete', () => {
+  const result = assemble({
+    metrics: {
+      state: 'ingested', complete: false, history_complete: true,
+      measurement_history_complete: false, delivery_complete: true,
+      attempts: [], coverage: { usage_available: 0, usage_unavailable: 0 },
+    },
+  })
+
+  assert.equal(result.completeness.metric_history, 'incomplete')
+  assert.equal(result.completeness.metric_delivery, 'complete')
 })
 
 test('judge coverage is incomplete when a required judge is absent without a recorded failure', () => {
@@ -289,6 +373,13 @@ test('candidate and evaluator evidence defects remain independently incomplete',
       candidate: {
         ownership: 'candidate-produced',
         readiness: 'incomplete',
+        missing_roles: ['screenshot-metadata'],
+        findings: [{
+          id: 'finding-missing-metadata',
+          code: 'missing-evidence-role',
+          role: 'screenshot-metadata',
+          message: 'candidate evidence does not include screenshot metadata',
+        }],
         artifacts: [{ id: 'candidate-flow', ownership: 'candidate-produced' }],
       },
       evaluator: {
@@ -307,6 +398,8 @@ test('candidate and evaluator evidence defects remain independently incomplete',
   assert.equal(result.completeness.judge_coverage, 'incomplete')
   assert.equal(result.completeness.candidate_reported_ci, 'unavailable')
   assert.equal(result.completeness.workflow_provenance, 'incomplete')
+  assert.deepEqual(result.evidence.candidate.missing_roles, ['screenshot-metadata'])
+  assert.equal(result.evidence.candidate.findings[0].code, 'missing-evidence-role')
 })
 
 test('a conclusive product failure omits score and human-review fields while preserving its failed gate', () => {

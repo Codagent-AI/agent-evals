@@ -13,6 +13,14 @@ const workflowYaml = `name: implement-change
 params:
   - name: change_name
     required: true
+  - name: change_dir
+    required: true
+  - name: change_label
+    required: true
+  - name: change_kind
+    required: true
+  - name: artifact_validation_instruction
+    required: true
   - name: skip_validator
     default: false
 steps:
@@ -30,14 +38,38 @@ steps:
 const profileArgs = [
   '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
   '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
-  '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+  '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
 ]
+
+const planningTestPlan = `# Test plan
+## Coverage Strategy
+Browser coverage.
+## Integration Tests
+None.
+## End-to-End Tests
+None.
+## Agent Acceptance Tests
+### AT-001: Exercise the demo
+- Classification: Required
+- Covers: Demo behavior
+- Actor and surface: User in a browser
+- Setup: Start the built application
+- Steps: Open the demo
+- Expected: The demo renders
+- Evidence: Browser snapshot
+- Effects and cleanup: Stop the application
+- Permitted substitutes: None
+## Human-Only Testing
+None.
+## Coverage Map
+AT-001
+`
 
 async function environment() {
   const root = await mkdtemp(join(tmpdir(), 'agent-evals-handoff-'))
   const agentRunnerDir = join(root, 'agent-runner')
   const agentSkillsDir = join(root, 'agent-skills')
-  await mkdir(join(agentRunnerDir, 'workflows/openspec'), { recursive: true })
+  await mkdir(join(agentRunnerDir, 'workflows/core'), { recursive: true })
   await writeFile(join(agentRunnerDir, WORKFLOW_RELATIVE_PATH), workflowYaml)
   await mkdir(join(agentSkillsDir, '.claude-plugin'), { recursive: true })
   await writeFile(join(agentSkillsDir, '.claude-plugin/marketplace.json'), '{"name":"codagent"}\n')
@@ -49,6 +81,31 @@ async function environment() {
       const verb = args.join(' ')
       if (verb.includes('show') && verb.includes('.validator/config.yml')) {
         return { status: 0, stdout: 'entry_points: []\n' }
+      }
+      if (verb.includes('show') && verb.includes('/test-plan.md')) {
+        return { status: 0, stdout: planningTestPlan }
+      }
+      if (verb.includes('show') && verb.includes('/tasks.md')) {
+        return { status: 0, stdout: '- [Demo task](tasks/01-demo.md)\n' }
+      }
+      if (verb.includes('show') && /\/(?:proposal|design)\.md/.test(verb)) {
+        return { status: 0, stdout: '# Planning artifact\n' }
+      }
+      if (verb.includes('show') && /\/specs\/[^/]+\/spec\.md/.test(verb)) {
+        return { status: 0, stdout: '# Specification\n' }
+      }
+      if (verb.includes('show') && /\/tasks\/[^/]+\.md/.test(verb)) {
+        return { status: 0, stdout: '# Task\n' }
+      }
+      if (verb.includes('ls-tree')) {
+        const planningPath = args.at(-1)
+        if (planningPath.endsWith('/specs')) {
+          return { status: 0, stdout: `${planningPath}/demo/spec.md\n` }
+        }
+        if (planningPath.endsWith('/tasks')) {
+          return { status: 0, stdout: `${planningPath}/01-demo.md\n` }
+        }
+        return { status: 0, stdout: '' }
       }
       if (verb.includes('show-ref --verify --quiet')) return { status: 1, stdout: '' }
       if (verb.includes('--is-inside-work-tree')) return { status: 0, stdout: 'true\n' }

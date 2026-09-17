@@ -17,7 +17,7 @@
 // through diagnostically and never touches a point.
 import { componentApplicable, rubricCriteria } from './rubric.mjs'
 
-export const SCORE_SCHEMA_VERSION = 2
+export const SCORE_SCHEMA_VERSION = 3
 
 const VERDICTS = ['pass', 'fail']
 
@@ -294,6 +294,34 @@ export function scoreProduct({
     complete: automatedComplete,
   }
 
+  const automatedFailures = []
+  const automatedInputsComplete = automatedComplete && gateScore.passed !== null
+  const isCandidate = mode !== 'reference-baseline'
+  if (automatedInputsComplete && isCandidate) {
+    if (automatedSubtotal.points < automated.automated_pass_threshold) {
+      automatedFailures.push({
+        rule: 'automated-total', id: null,
+        value: automatedSubtotal.points, required: automated.automated_pass_threshold,
+      })
+    }
+    for (const component of components) {
+      if (component.applicable && component.floor !== null && component.points_awarded < component.floor) {
+        automatedFailures.push({
+          rule: 'component-floor', id: component.id,
+          value: component.points_awarded, required: component.floor,
+        })
+      }
+    }
+    for (const gate of gateScore.gates) {
+      if (gate.verdict !== 'pass') {
+        automatedFailures.push({ rule: 'hard-gate', id: gate.id, value: gate.verdict, required: 'pass' })
+      }
+    }
+  }
+  const automatedPass = !isCandidate || !automatedInputsComplete
+    ? null
+    : automatedFailures.length === 0
+
   const incomplete = [
     ...components.filter(({ applicable, complete }) => applicable && !complete).map(({ id }) => id),
     ...(gateScore.passed === null ? ['hard-gates'] : []),
@@ -302,7 +330,6 @@ export function scoreProduct({
 
   const evaluable = incomplete.length === 0
   const officialScore = evaluable ? automatedSubtotal.points + human.points_awarded : null
-  const isCandidate = mode !== 'reference-baseline'
 
   const passFailures = []
   if (evaluable && isCandidate) {
@@ -353,6 +380,9 @@ export function scoreProduct({
     gates: gateScore.gates,
     gates_passed: gateScore.passed,
     automated_subtotal: automatedSubtotal,
+    automated_pass_threshold: automated.automated_pass_threshold,
+    automated_pass: automatedPass,
+    automated_failures: automatedFailures,
     human_review: human,
     official_score: officialScore,
     // An unevaluable pass contract yields no verdict at all rather than a

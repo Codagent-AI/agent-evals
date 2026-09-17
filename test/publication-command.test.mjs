@@ -94,7 +94,7 @@ function scriptedIo(inputs) {
 }
 
 function answers({ rating = 5, tail = ['confirm'] } = {}) {
-  return ['yes', ...Array(13).fill(0).flatMap(() => [String(rating), rating <= 3 ? 'noted' : '']), ...tail]
+  return ['yes', ...Array(7).fill(0).flatMap(() => [String(rating), rating <= 3 ? 'noted' : '']), ...tail]
 }
 
 function servers() {

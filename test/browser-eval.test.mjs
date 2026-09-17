@@ -34,7 +34,13 @@ function createDemo(knobs = {}) {
     controlsKeepKeys = true,
     focusedControlConsumesArrows = false,
     titleProminentInPresent = true,
+    activeTitleVisibleInBrowse = true,
+    presentShowsDeckTitle = false,
     captionVisibleInBrowse = true,
+    tocVisibleInBrowse = true,
+    previousVisibleInBrowse = true,
+    nextVisibleInBrowse = true,
+    progressVisibleInBrowse = true,
     initialMode = 'present',
     captionHiddenInPresent = false,
     actions = [],
@@ -42,6 +48,9 @@ function createDemo(knobs = {}) {
     failures = [],
     controlCount = stepCount,
     controlsOnlyInBrowse = false,
+    viewport = { width: 1280, height: 720 },
+    canvasFitsNarrow = true,
+    canvasUniform = true,
     throwOn = null,
   } = knobs
 
@@ -49,6 +58,7 @@ function createDemo(knobs = {}) {
   let mode = initialMode
   let focused = null
   let keysLive = true
+  let currentViewport = { ...viewport }
   const observed = []
 
   const clamp = (next) => {
@@ -77,6 +87,7 @@ function createDemo(knobs = {}) {
       mode = initialMode
       focused = null
       keysLive = true
+      currentViewport = { ...viewport }
       observed.length = 0
       observed.push(...failures)
       actions.push({ action: 'open', mode, position: index })
@@ -87,7 +98,9 @@ function createDemo(knobs = {}) {
         stepIndex: index,
         stepCount,
         mode,
-        title: titles[index % titles.length],
+        title: (mode === 'browse' && !activeTitleVisibleInBrowse) || (mode === 'present' && presentShowsDeckTitle)
+          ? 'Overall presentation title'
+          : titles[index % titles.length],
         caption: captionHiddenInPresent && mode === 'present'
           ? ''
           : captions[index % captions.length] ?? '',
@@ -95,8 +108,14 @@ function createDemo(knobs = {}) {
         entityIds: replaceEntities
           ? [`only-${index}`]
           : ['stage', `beat-${index}`, `beat-${index + 1}`],
-        titleProminent: mode === 'present' ? titleProminentInPresent : false,
+        titleProminent: mode === 'present'
+          ? titleProminentInPresent
+          : activeTitleVisibleInBrowse,
         captionVisible: mode === 'browse' ? captionVisibleInBrowse : false,
+        tocVisible: mode === 'browse' ? tocVisibleInBrowse : false,
+        previousVisible: mode === 'browse' ? previousVisibleInBrowse : false,
+        nextVisible: mode === 'browse' ? nextVisibleInBrowse : false,
+        progressVisible: mode === 'browse' ? progressVisibleInBrowse : false,
         controls: controlsOnlyInBrowse && mode !== 'browse'
           ? []
           : Array.from({ length: controlCount }, (_, position) => ({
@@ -106,6 +125,33 @@ function createDemo(knobs = {}) {
               focusable,
             })),
         focused,
+        viewport: currentViewport,
+      }
+    },
+    async resize(width, height) {
+      guard('resize')
+      currentViewport = { width, height }
+      actions.push({ action: 'resize', width, height })
+    },
+    async canvasGeometry() {
+      guard('canvasGeometry')
+      const scaleX = currentViewport.width < 100 ? (canvasFitsNarrow ? 0.05 : 0.1) : 1
+      const scaleY = canvasUniform ? scaleX : scaleX * 0.8
+      const width = 880 * scaleX
+      const height = 495 * scaleY
+      return {
+        viewport: { ...currentViewport },
+        authored: { width: 880, height: 495 },
+        rendered: { left: 0, top: 0, right: width, bottom: height, width, height },
+        available: {
+          left: 0,
+          top: 0,
+          right: currentViewport.width,
+          bottom: currentViewport.height,
+          width: currentViewport.width,
+          height: currentViewport.height,
+        },
+        scale: { x: scaleX, y: scaleY },
       }
     },
     async press(key) {
@@ -187,7 +233,7 @@ test('the deterministic browser evaluator owns exactly the rubric-assigned demo 
     [...DETERMINISTIC_BROWSER_CRITERIA].sort(),
     [...deterministicCriteria(automated.rubric)].sort(),
   )
-  assert.equal(DETERMINISTIC_BROWSER_CRITERIA.length, 14)
+  assert.equal(DETERMINISTIC_BROWSER_CRITERIA.length, 15)
 })
 
 test('a conforming built demo passes every deterministic criterion and hard gate', async () => {
@@ -209,7 +255,7 @@ test('opening records and preserves the presentation initial mode', async () => 
   }
 })
 
-test('caption and canonical-content probes enter browse mode before traversal', async () => {
+test('caption and scene-content probes enter browse mode before traversal', async () => {
   const actions = []
   const result = await evaluate({
     initialMode: 'present',
@@ -218,7 +264,6 @@ test('caption and canonical-content probes enter browse mode before traversal', 
   })
 
   for (const id of [
-    'demo-nine-step-content-and-order',
     'demo-required-scene-content',
     'demo-evolving-scene-structure',
     'quality-captions-and-navigation',
@@ -236,6 +281,31 @@ test('caption and canonical-content probes enter browse mode before traversal', 
   assert.ok(actions.some((entry) => entry.action === 'set-mode' && entry.mode === 'browse'))
 })
 
+test('the canonical outline is read from active step titles without confusing the deck title', async () => {
+  const actions = []
+  const result = await evaluate({
+    initialMode: 'browse',
+    activeTitleVisibleInBrowse: false,
+    actions,
+  })
+
+  assert.equal(verdictOf(result, 'demo-nine-step-content-and-order'), 'pass')
+  assert.equal(verdictOf(result, 'verification-sample-outline'), 'pass')
+  assert.equal(verdictOf(result, 'demo-browse-mode-behavior'), 'fail')
+  assert.ok(actions.some((entry) => entry.action === 'set-mode' && entry.mode === 'present'))
+})
+
+test('the canonical outline accepts step titles in browse mode when present mode shows only the deck title', async () => {
+  const result = await evaluate({
+    initialMode: 'present',
+    presentShowsDeckTitle: true,
+    activeTitleVisibleInBrowse: true,
+  })
+
+  assert.equal(verdictOf(result, 'demo-nine-step-content-and-order'), 'pass')
+  assert.equal(verdictOf(result, 'verification-sample-outline'), 'pass')
+})
+
 test('mode-specific and navigation probes establish their declared state from either initial mode', async () => {
   const actions = []
   const result = await evaluate({ initialMode: 'browse', actions })
@@ -251,6 +321,29 @@ test('mode-specific and navigation probes establish their declared state from ei
     0,
   )
   assert.ok(actions.some((entry) => entry.action === 'set-mode' && entry.mode === 'present'))
+})
+
+test('browse-mode evidence records the viewport used for responsive chrome assertions', async () => {
+  const result = await evaluate({ viewport: { width: 1280, height: 720 } })
+  const probe = result.probes.find(({ id }) => id === 'demo-browse-mode-behavior')
+
+  assert.match(probe.result.rationale, /viewport 1280×720/)
+})
+
+test('uniform canvas fitting is proven at a boundary below the legacy minimum clamp', async () => {
+  const passing = await evaluate()
+  const overflowing = await evaluate({ canvasFitsNarrow: false })
+  const distorted = await evaluate({ canvasUniform: false })
+
+  assert.equal(verdictOf(passing, 'canvas-uniform-scaling'), 'pass')
+  assert.equal(verdictOf(overflowing, 'canvas-uniform-scaling'), 'fail')
+  assert.equal(verdictOf(distorted, 'canvas-uniform-scaling'), 'fail')
+  const probe = passing.probes.find(({ id }) => id === 'canvas-uniform-scaling')
+  assert.deepEqual(probe.outputs.narrow.viewport, { width: 64, height: 64 })
+  assert.equal(probe.outputs.narrow.scale.x, probe.outputs.narrow.scale.y)
+  assert.ok(probe.result.evidence.includes(
+    'evidence/evaluator/browser-probes/canvas-uniform-scaling.json',
+  ))
 })
 
 test('direct-jump navigation enters browse mode when present mode intentionally hides its controls', async () => {
@@ -290,6 +383,49 @@ test('matching pass and fail probe records can be reused without operating the b
   assert.equal(verdictOf(second, 'demo-nine-step-content-and-order'), 'fail')
   assert.ok(second.probes.every(({ reused }) => reused === true))
   assert.deepEqual(actions, [])
+})
+
+test('a cached probe containing a browser infrastructure failure is rerun instead of failing the candidate', async () => {
+  const staleRouteProbe = {
+    id: 'demo-route-and-registration',
+    initial_state: { mode: null, position: null },
+    established_state: { mode: 'browse', position: 0 },
+    settled_state: { settled: false, strategy: 'probe-failed-before-settle' },
+    sessions: [],
+    result: {
+      id: 'demo-route-and-registration',
+      verdict: 'fail',
+      rationale: `the demo route ${DEMO_CONTRACT.route} is not registered`,
+      evidence: ['evidence/evaluator/browser-probes/demo-route-and-registration.json'],
+      observed: true,
+    },
+    failures: [
+      'Could not find Google Chrome executable for channel &#39;stable&#39; at:',
+      '- /opt/google/chrome/chrome.',
+      'Run `chrome-devtools-axi console-get &lt;id&gt;` to see a specific message',
+      'Run `chrome-devtools-axi console --type error` to filter by type',
+    ],
+    failure_reporting_available: true,
+  }
+  const actions = []
+  const saved = []
+
+  const result = await runBrowserEvaluation({
+    driver: createDemo({ actions }),
+    build: passingBuild,
+    verification: passingVerification,
+    evidenceArtifacts: fixtureEvidenceArtifacts,
+    loadProbe: async ({ id }) => id === staleRouteProbe.id ? staleRouteProbe : null,
+    saveProbe: async ({ id }) => { saved.push(id) },
+  })
+
+  assert.equal(verdictOf(result, 'demo-route-and-registration'), 'pass')
+  assert.equal(verdictOf(result, 'verification-sample-outline'), 'pass')
+  assert.equal(verdictOf(result, 'verification-every-produced-step-renders'), 'pass')
+  assert.deepEqual(result.failures, [])
+  assert.equal(result.probes.find(({ id }) => id === staleRouteProbe.id).reused, false)
+  assert.ok(saved.includes(staleRouteProbe.id))
+  assert.ok(actions.some(({ action }) => action === 'open'))
 })
 
 test('probe checkpoint inputs include the evaluator implementation fingerprint', async () => {
@@ -389,6 +525,11 @@ test('each broken demo behaviour fails its own criterion', async () => {
     ['quality-captions-and-navigation', { controlCount: 0 }],
     ['demo-present-mode-behavior', { titleProminentInPresent: false }],
     ['demo-browse-mode-behavior', { captionVisibleInBrowse: false }],
+    ['demo-browse-mode-behavior', { activeTitleVisibleInBrowse: false }],
+    ['demo-browse-mode-behavior', { tocVisibleInBrowse: false }],
+    ['demo-browse-mode-behavior', { previousVisibleInBrowse: false }],
+    ['demo-browse-mode-behavior', { nextVisibleInBrowse: false }],
+    ['demo-browse-mode-behavior', { progressVisibleInBrowse: false }],
     ['demo-mode-position-preservation', { preservePositionAcrossModes: false }],
     ['demo-supported-navigation', { swipeWorks: false }],
     ['demo-supported-navigation', { directJumpWorks: false }],
@@ -399,6 +540,7 @@ test('each broken demo behaviour fails its own criterion', async () => {
     ['demo-mode-interaction-reliability', { failures: ['TypeError: cannot read mode of undefined'] }],
     ['demo-control-semantics', { ariaCurrent: false }],
     ['demo-focus-and-keyboard-accessibility', { focusable: false }],
+    ['canvas-uniform-scaling', { canvasFitsNarrow: false }],
   ]
 
   for (const [criterion, knobs] of mutations) {

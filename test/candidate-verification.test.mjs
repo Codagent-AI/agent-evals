@@ -74,6 +74,42 @@ test('a verifier exit status is retained as its machine-readable product result'
   assert.equal(result.commands.verification.state, 'complete')
 })
 
+test('a missing candidate Playwright browser is installed as harness setup and verification is retried', async () => {
+  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-verification-'))
+  const calls = []
+  let verificationAttempts = 0
+  const exec = (command, args, options) => {
+    calls.push({ command, args, options })
+    if (args.join(' ') === 'run verify') {
+      verificationAttempts += 1
+      if (verificationAttempts === 1) {
+        return {
+          status: 1,
+          stdout: '',
+          stderr: 'browserType.launch: Executable doesn\'t exist at /ms-playwright/chromium_headless_shell-1243/chrome-headless-shell',
+        }
+      }
+    }
+    return { status: 0, stdout: `${args.join(' ')} passed`, stderr: '' }
+  }
+
+  const result = await runCandidateVerification({
+    worktree: join(runDir, '.runtime/candidate-worktree'),
+    exec,
+  })
+
+  assert.equal(result.verification.passed, true)
+  assert.deepEqual(calls.map(({ args }) => args), [
+    ['ci'],
+    ['run', 'build'],
+    ['run', 'verify'],
+    ['exec', '--', 'playwright', 'install', 'chromium'],
+    ['run', 'verify'],
+  ])
+  assert.equal(result.commands.playwright_browser.ok, true)
+  assert.deepEqual(result.commands.verification.attempts.map(({ status }) => status), [1, 0])
+})
+
 test('install and build failures identify the reproducible product-owned stage', async () => {
   const runDir = await mkdtemp(join(tmpdir(), 'and-scene-verification-'))
 

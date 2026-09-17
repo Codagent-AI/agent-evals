@@ -6,18 +6,18 @@ import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import { spawnSync } from 'node:child_process'
 
-import { calibrationIdentity } from '../evals/agent-runner/and-scene/lib/calibration.mjs'
+import { validateRoleProfiles } from '../evals/agent-runner/and-scene/lib/profiles.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const runScript = join(root, 'evals/agent-runner/and-scene/run.sh')
 const shotsScript = join(root, 'evals/agent-runner/and-scene/scene-shots.mjs')
-const fixtureSha = '729592e921413dea20bd77ccab0284222ef4ad8f'
+const fixtureSha = '892dfbcf3762bc95cdbae6f05b18cc2b168a5fab'
 const referenceSha = '171c7def1e12aca2a5f605a5e5feafb20d4e4d19'
 
 const profileArgs = [
   '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
   '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
-  '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+  '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
 ]
 
 function git(cwd, ...args) {
@@ -28,7 +28,7 @@ function git(cwd, ...args) {
 }
 
 // The scored path now requires a clean Agent Runner worktree containing
-// implement-change-v2.0, so the fixture runner directory is a real Git checkout.
+// core implement-change-v1.0, so the fixture runner directory is a real Git checkout.
 async function setup({ workflow = 'name: implement-change\n', dirty = false } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'agent-evals-'))
   const runner = join(dir, 'agent-runner')
@@ -38,13 +38,15 @@ async function setup({ workflow = 'name: implement-change\n', dirty = false } = 
   await mkdir(dirname(sandbox), { recursive: true })
   await mkdir(join(home, '.codex'), { recursive: true })
   await mkdir(join(home, '.claude'), { recursive: true })
+  await mkdir(join(home, '.cursor'), { recursive: true })
   await writeFile(join(home, '.codex/auth.json'), '{}\n')
   await writeFile(join(home, '.claude/.credentials.json'), '{}\n')
+  await writeFile(join(home, '.cursor/auth.json'), '{}\n')
   await writeFile(sandbox, '#!/usr/bin/env bash\nprintf \'%q \' "$@"\nprintf \'\\n\'\n')
   await chmod(sandbox, 0o755)
   if (workflow !== null) {
-    await mkdir(join(runner, 'workflows/openspec'), { recursive: true })
-    await writeFile(join(runner, 'workflows/openspec/implement-change-v2.0.yaml'), workflow)
+    await mkdir(join(runner, 'workflows/core'), { recursive: true })
+    await writeFile(join(runner, 'workflows/core/implement-change-v1.0.yaml'), workflow)
   }
   git(runner, 'init', '-q')
   git(runner, 'add', '-A')
@@ -55,14 +57,7 @@ async function setup({ workflow = 'name: implement-change\n', dirty = false } = 
   git(agentSkills, 'init', '-q')
   git(agentSkills, 'add', '-A')
   git(agentSkills, 'commit', '-qm', 'skills')
-  // A full Agent Runner evaluation is gated on a passing calibration record for
-  // *this* harness and *these* rubrics, so the scored launcher tests supply one
-  // carrying the current identity, exactly as a calibrated host would.
-  const record = join(dir, 'calibration-record.json')
-  await writeFile(record, JSON.stringify({
-    ...await calibrationIdentity(), passed: true, failures: [],
-  }))
-  return { dir, runner, agentSkills, home, record }
+  return { dir, runner, agentSkills, home }
 }
 
 async function run(args, options = {}) {
@@ -70,7 +65,6 @@ async function run(args, options = {}) {
     ...process.env,
     HOME: options.home,
     SANDBOX_SECRETS_FILE: join(options.dir, 'missing.env'),
-    CALIBRATION_RECORD: options.record,
   }
   const result = spawnSync('bash', [runScript, ...args], { cwd: root, env, encoding: 'utf8' })
   return { ...result, output: result.stdout + result.stderr }
@@ -125,9 +119,46 @@ test('scored mode delegates the lifecycle to the suite controller', async () => 
     '--skip-validator', '--change-name', 'create-and-scene',
     '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
     '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
-    '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+    '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
     'bootstrap-agent-skills.sh', '/agent-skills-source',
   ]) assert.ok(result.output.includes(expected), `missing ${expected}\n${result.output}`)
+})
+
+test('scored mode prepares private per-evaluation agent session state before the controller starts', async () => {
+  const context = await setup()
+
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
+
+  assert.equal(result.status, 0, result.output)
+  const prepareMatch = result.output.match(
+    /\/eval-input\/prepare-agent-session-state\.sh\s+\/artifacts\/\.runtime\/agent-session-state/,
+  )
+  const prepare = prepareMatch?.index ?? -1
+  const controller = result.output.indexOf('exec node /eval-input/controller.mjs')
+  assert.ok(prepare >= 0, result.output)
+  assert.ok(controller > prepare, result.output)
+})
+
+test('scored mode permits the nested Codex judge sandbox to create user namespaces', async () => {
+  const context = await setup()
+
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
+
+  assert.equal(result.status, 0, result.output)
+  assert.match(result.output, /--docker-run-arg --security-opt --docker-run-arg seccomp=unconfined/)
+})
+
+test('scored mode always attaches AXI to the sandbox Playwright Chromium', async () => {
+  const context = await setup()
+
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
+
+  assert.equal(result.status, 0, result.output)
+  assert.match(result.output, /find \/ms-playwright/)
+  assert.match(result.output, /--remote-debugging-port=9333/)
+  assert.match(result.output, /CHROME_DEVTOOLS_AXI_BROWSER_URL=http:\/\/127\.0\.0\.1:9333/)
+  assert.match(result.output, /Could not find a runnable Chromium for chrome-devtools-axi/)
+  assert.doesNotMatch(result.output, /\/opt\/google\/chrome\/chrome.*--version/)
 })
 
 test('scored mode mounts one clean pinned Agent Skills checkout for every selected role', async () => {
@@ -139,6 +170,37 @@ test('scored mode mounts one clean pinned Agent Skills checkout for every select
   assert.ok(result.output.includes('agent-skills\\,target=/agent-skills-source\\,readonly'), result.output)
   assert.match(result.output, /bootstrap-agent-skills\.sh/)
   assert.match(result.output, /claude claude claude/)
+})
+
+test('scored mode exposes linked-worktree Git metadata read-only to the sandbox', async () => {
+  const context = await setup()
+
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
+
+  assert.equal(result.status, 0, result.output)
+  const command = result.output.replaceAll('\\', '')
+  for (const checkout of ['agent-runner', 'agent-skills']) {
+    assert.match(
+      command,
+      new RegExp(`source=[^ ]*${checkout}/\\.git,target=[^ ]*${checkout}/\\.git,readonly`),
+    )
+  }
+})
+
+test('scored mode lets the sandbox expand the Agent Runner workflow path', async () => {
+  const context = await setup()
+
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
+
+  assert.equal(result.status, 0, result.output)
+  assert.ok(
+    result.output.includes('"$AGENT_RUNNER_DIR/$IMPLEMENTATION_WORKFLOW_PATH"'),
+    result.output,
+  )
+  assert.ok(
+    !result.output.includes('"\\$AGENT_RUNNER_DIR/\\$IMPLEMENTATION_WORKFLOW_PATH"'),
+    result.output,
+  )
 })
 
 test('scored mode validates provenance from the mounted Agent Runner checkout', async () => {
@@ -157,13 +219,13 @@ test('scored mode validates provenance from the mounted Agent Runner checkout', 
   )
 })
 
-test('scored mode hard-codes implement-change-v2.0 and no longer accepts workflow overrides', async () => {
+test('scored mode hard-codes core implement-change-v1.0 and no longer accepts workflow overrides', async () => {
   const context = await setup()
 
   const result = await scored(context, ['--skip-validator', ...profileArgs])
   const overridden = await scored(context, ['--workflow', '/tmp/custom.yaml', ...profileArgs])
 
-  assert.ok(result.output.includes('implement-change-v2.0'), result.output)
+  assert.ok(result.output.includes('implement-change-v1.0'), result.output)
   assert.ok(!result.output.includes('implement-change.yaml'), result.output)
   assert.notEqual(overridden.status, 0)
   assert.match(overridden.output, /Unknown option: --workflow/)
@@ -187,9 +249,9 @@ test('all role profiles are required before the sandbox is invoked', async () =>
   ])
   const noImplementor = await scored(context, [
     '--skip-validator', '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
-    '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+    '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
   ])
-  const noReviewer = await scored(context, [
+  const noTester = await scored(context, [
     '--skip-validator',
     '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
     '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
@@ -199,8 +261,46 @@ test('all role profiles are required before the sandbox is invoked', async () =>
   assert.match(noLead.output, /lead-agent profile/)
   assert.notEqual(noImplementor.status, 0)
   assert.match(noImplementor.output, /task-implementor profile/)
-  assert.notEqual(noReviewer.status, 0)
-  assert.match(noReviewer.output, /acceptance-reviewer profile/)
+  assert.notEqual(noTester.status, 0)
+  assert.match(noTester.output, /tester profile/)
+})
+
+test('the pinned capabilities do not enumerate volatile model names', async () => {
+  const capabilities = JSON.parse(await readFile(
+    join(root, 'evals/agent-runner/and-scene/agent-runner-capabilities.json'),
+    'utf8',
+  ))
+  assert.equal(Object.hasOwn(capabilities.clis.codex, 'models'), false)
+  assert.equal(Object.hasOwn(capabilities.clis.claude, 'models'), false)
+  assert.equal(Object.hasOwn(capabilities.clis.cursor, 'models'), false)
+  const result = validateRoleProfiles({
+    lead: { cli: 'codex', model: 'gpt-6-astra', effort: 'high' },
+    implementor: { cli: 'codex', model: 'future-codex-model', effort: 'high' },
+    tester: { cli: 'claude', model: 'sonnet', effort: 'high' },
+    capabilities,
+  })
+
+  assert.equal(result.ok, true, JSON.stringify(result.errors))
+})
+
+test('Cursor is a first-class role CLI and forwards family model names', async () => {
+  const context = await setup()
+  const cursorArgs = [
+    '--lead-cli', 'cursor', '--lead-model', 'grok', '--lead-effort', 'high',
+    '--implementor-cli', 'cursor', '--implementor-model', 'grok-4.6', '--implementor-effort', 'medium',
+    '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
+  ]
+
+  const result = await scored(context, ['--skip-validator', ...cursorArgs])
+
+  assert.equal(result.status, 0, result.output)
+  assert.ok(result.output.includes('--mount-cursor-auth'), result.output)
+  assert.ok(result.output.includes('--mount-claude-auth'), result.output)
+  assert.ok(result.output.includes('--lead-cli cursor'), result.output)
+  assert.ok(result.output.includes('--lead-model grok'), result.output)
+  assert.ok(result.output.includes('--implementor-cli cursor'), result.output)
+  assert.ok(result.output.includes('--implementor-model grok-4.6'), result.output)
+  assert.match(result.output, /cursor cursor claude/)
 })
 
 test('a partially specified role profile is rejected', async () => {
@@ -209,7 +309,7 @@ test('a partially specified role profile is rejected', async () => {
   const result = await scored(context, [
     '--skip-validator', '--lead-cli', 'claude', '--lead-model', 'opus',
     '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
-    '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+    '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
   ])
 
   assert.notEqual(result.status, 0)
@@ -234,6 +334,7 @@ test('a reference baseline requires no role profiles', async () => {
   assert.equal(result.status, 0, result.output)
   assert.ok(result.output.includes('--reference-baseline'), result.output)
   assert.ok(result.output.includes('--candidate-ref'), result.output)
+  assert.ok(!result.output.includes('prepare-agent-session-state.sh'), result.output)
 })
 
 test('a reference baseline defaults to the pinned known-good candidate', async () => {
@@ -271,6 +372,7 @@ test('an evaluator-only rescore mounts a completed run read-only and invokes no 
   assert.equal(result.status, 0, result.output)
   assert.match(result.output, /type=bind\\,source=.*completed-candidate\\,target=\/rescore-source\\,readonly/)
   assert.match(result.output, /--rescore-from \/rescore-source/)
+  assert.ok(!result.output.includes('prepare-agent-session-state.sh'), result.output)
   assert.ok(!result.output.includes('bootstrap-agent-skills.sh'), result.output)
   assert.ok(!result.output.includes('--lead-cli'), result.output)
   assert.ok(!result.output.includes('--change-name'), result.output)
@@ -318,13 +420,13 @@ test('a dirty Agent Runner checkout is rejected on the host before the sandbox r
   assert.ok(!result.output.includes('/eval-input/controller.mjs'), result.output)
 })
 
-test('an Agent Runner checkout without implement-change-v2.0 is rejected on the host', async () => {
+test('an Agent Runner checkout without core implement-change-v1.0 is rejected on the host', async () => {
   const context = await setup({ workflow: null })
 
   const result = await scored(context, ['--skip-validator', ...profileArgs])
 
   assert.notEqual(result.status, 0)
-  assert.match(result.output, /implement-change-v2\.0\.yaml/)
+  assert.match(result.output, /implement-change-v1\.0\.yaml/)
 })
 
 test('the run receives a stable container identity that resume reuses', async () => {
@@ -479,17 +581,19 @@ test('help documents the exact fixture pin, role profiles, and validator option'
   assert.ok(result.stdout.includes(referenceSha))
   assert.ok(result.stdout.includes('--agent-runner-dir PATH'))
   assert.ok(result.stdout.includes('--skip-validator'))
+  assert.match(result.stdout, /skip all Agent Validator\s+execution/i)
   assert.ok(result.stdout.includes('--lead-cli'))
   assert.ok(result.stdout.includes('--implementor-cli'))
   assert.ok(result.stdout.includes('--calibrate'))
+  assert.ok(result.stdout.includes('--mount-cursor-auth'))
+  assert.ok(!result.stdout.includes('--calibration-record'))
 })
 
 test('calibration runs the reference and degraded mutations without Docker or Agent Runner', async () => {
   const context = await setup()
   const artifacts = join(context.dir, 'calibration')
-  const record = join(context.dir, 'calibration-record.json')
 
-  const result = await run(['--calibrate', '--artifact-dir', artifacts], { ...context, record })
+  const result = await run(['--calibrate', '--artifact-dir', artifacts], context)
 
   assert.equal(result.status, 0, result.output)
   // The sandbox adapter echoes whatever it is handed; calibration must not hand
@@ -498,45 +602,13 @@ test('calibration runs the reference and degraded mutations without Docker or Ag
   const ledger = JSON.parse(await readFile(join(artifacts, 'calibration.json'), 'utf8'))
   assert.equal(ledger.passed, true, JSON.stringify(ledger.failures))
   assert.ok(ledger.cases.length >= 9)
-  assert.equal(JSON.parse(await readFile(record, 'utf8')).passed, true)
 })
 
-test('a full Agent Runner evaluation is blocked until calibration passes', async () => {
+test('a full Agent Runner evaluation does not require a calibration receipt', async () => {
   const context = await setup()
-  const record = join(context.dir, 'missing-calibration.json')
-
-  const missing = await scored({ ...context, record }, ['--skip-validator', ...profileArgs])
-  assert.equal(missing.status, 2, missing.output)
-  assert.match(missing.output, /calibration/i)
-  assert.match(missing.output, /--calibrate/)
-
-  await writeFile(record, JSON.stringify({
-    ...await calibrationIdentity(),
-    passed: false,
-    failures: [{ case: 'reference', problem: 'the reference did not reach an official pass' }],
-  }))
-  const failed = await scored({ ...context, record }, ['--skip-validator', ...profileArgs])
-  assert.equal(failed.status, 2, failed.output)
-  assert.match(failed.output, /the reference did not reach an official pass/)
-
-  // A record from a different harness or rubric set is no better than none.
-  await writeFile(record, JSON.stringify({
-    ...await calibrationIdentity(), harness_fingerprint: 'stale', passed: true, failures: [],
-  }))
-  const stale = await scored({ ...context, record }, ['--skip-validator', ...profileArgs])
-  assert.equal(stale.status, 2, stale.output)
-  assert.match(stale.output, /recalibrate/)
-})
-
-test('a reference baseline is exempt from the calibration gate', async () => {
-  const context = await setup()
-  const record = join(context.dir, 'missing-calibration.json')
-
-  const result = await scored(
-    { ...context, record },
-    ['--skip-validator', '--reference-baseline', '--candidate-ref', referenceSha],
-  )
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
 
   assert.equal(result.status, 0, result.output)
-  assert.match(result.output, /--reference-baseline/)
+  assert.match(result.output, /controller\.mjs/)
+  assert.doesNotMatch(result.output, /calibration record/i)
 })

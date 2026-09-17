@@ -5,8 +5,8 @@
 // and schema under the run's excluded `.runtime` directory, and runs without
 // project instructions or user configuration influencing the evaluator.
 import { spawnSync } from 'node:child_process'
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 const JUDGE_ENV_ALLOWLIST = [
   'HOME',
@@ -37,6 +37,51 @@ function detail(result) {
   return (result.stderr || result.stdout || result.error?.message || 'no diagnostic output').trim()
 }
 
+function extractCodexUsage(stdout, { request, invocationId }) {
+  let usage = null
+  for (const line of String(stdout ?? '').split('\n')) {
+    if (!line.trim()) continue
+    try {
+      const event = JSON.parse(line)
+      if (event?.type === 'turn.completed' && event.usage && typeof event.usage === 'object') {
+        usage = event.usage
+      }
+    } catch {
+      // Non-JSON diagnostics are not usage evidence.
+    }
+  }
+
+  const categoryMap = {
+    input_tokens: 'input',
+    cached_input_tokens: 'cached_input',
+    cache_write_input_tokens: 'cache_write',
+    output_tokens: 'output',
+    reasoning_output_tokens: 'reasoning',
+  }
+  const tokens = usage
+    ? Object.fromEntries(Object.entries(categoryMap).flatMap(([source, target]) => (
+        Number.isFinite(usage[source]) ? [[target, usage[source]]] : []
+      )))
+    : null
+  const input = usage?.input_tokens
+  const output = usage?.output_tokens
+  const tokenTotals = Number.isFinite(input) && Number.isFinite(output)
+    ? { input, output, total: input + output }
+    : null
+
+  return {
+    invocation_id: invocationId,
+    phase: request.job ?? null,
+    provider: 'openai',
+    model: request.authority?.model ?? null,
+    usage: usage
+      ? { state: 'available', reason: null, source: 'codex:turn.completed' }
+      : { state: 'unavailable', reason: 'Codex emitted no turn.completed usage', source: 'codex:turn.completed' },
+    tokens,
+    token_totals: tokenTotals,
+  }
+}
+
 export function createCodexJudgeInvoker({
   runDir,
   candidateWorktree,
@@ -49,11 +94,14 @@ export function createCodexJudgeInvoker({
   env = process.env,
 } = {}) {
   const runtimeDir = join(resolve(runDir), '.runtime', 'judge')
+  const usagePath = join(resolve(runDir), 'phases', 'eval-owned-usage.jsonl')
   const fallbackCwd = resolve(defaultCwd)
   const approvedRoots = (allowedRoots ?? [fallbackCwd]).map((root) => resolve(root))
   let sequence = 0
 
-  return async function invoke(request) {
+  const inMemoryUsage = []
+
+  const invoke = async function invoke(request) {
     const cwd = resolve(request.cwd ?? fallbackCwd)
     const approved = approvedRoots.some((root) => {
       const offset = relative(root, cwd)
@@ -73,6 +121,7 @@ export function createCodexJudgeInvoker({
 
     const args = [
       'exec',
+      '--json',
       '--cd', cwd,
       '--sandbox', 'read-only',
       '--skip-git-repo-check',
@@ -101,6 +150,17 @@ export function createCodexJudgeInvoker({
       input: request.prompt,
       maxBuffer: 16 * 1024 * 1024,
     })
+    const usageEntry = extractCodexUsage(result.stdout, {
+      request,
+      invocationId: `${stem}-${Date.now()}`,
+    })
+    inMemoryUsage.push(usageEntry)
+    try {
+      await mkdir(dirname(usagePath), { recursive: true })
+      await appendFile(usagePath, `${JSON.stringify(usageEntry)}\n`)
+    } catch {
+      // Usage diagnostics must not replace an otherwise valid judge result.
+    }
     if (result.error || result.status !== 0) {
       throw new Error(
         `Codex judge ${request.job ?? 'job'} exited ${result.status ?? -1}: ${detail(result)}`,
@@ -112,4 +172,26 @@ export function createCodexJudgeInvoker({
       throw new Error(`Codex judge ${request.job ?? 'job'} produced no final response: ${error.message}`)
     }
   }
+
+  invoke.readUsageEntries = async () => {
+    let text
+    try {
+      text = await readFile(usagePath, 'utf8')
+    } catch {
+      return [...inMemoryUsage]
+    }
+    return text.split('\n').flatMap((line) => {
+      if (!line.trim()) return []
+      try {
+        return [JSON.parse(line)]
+      } catch {
+        return [{
+          phase: 'usage-ledger', provider: null, model: null, tokens: null,
+          usage: { state: 'unavailable', reason: 'eval-owned usage ledger contains malformed JSON' },
+        }]
+      }
+    })
+  }
+
+  return invoke
 }

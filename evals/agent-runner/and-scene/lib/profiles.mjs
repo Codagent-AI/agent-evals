@@ -1,14 +1,14 @@
-// Independent lead-agent, task-implementor, and acceptance-reviewer profiles.
+// Independent lead-agent, task-implementor, and tester profiles.
 //
 // Each role independently selects a CLI adapter, model, and effort. The two
 // implementation roles and the independent acceptance role map onto the
-// `planner`, `implementor`, and `reviewer` agents of a single end-to-end
-// `implement-change-v2.0` run; they are never scored separately.
+// `lead`, `implementor`, and `tester` agents of a single end-to-end core
+// `implement-change` run; they are never scored separately.
 
 export const ROLE_AGENTS = {
-  lead: 'planner',
+  lead: 'lead',
   implementor: 'implementor',
-  reviewer: 'reviewer',
+  tester: 'tester',
 }
 
 const ROLES = Object.keys(ROLE_AGENTS)
@@ -16,6 +16,7 @@ const ROLES = Object.keys(ROLE_AGENTS)
 export const PROFILE_FIELDS = ['cli', 'model', 'effort']
 
 const NOT_APPLICABLE = 'not-applicable'
+const MODEL_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$/
 
 function validateOne(role, profile, capabilities) {
   const agent = ROLE_AGENTS[role]
@@ -39,12 +40,15 @@ function validateOne(role, profile, capabilities) {
       message: `${profile.cli} cannot run the ${agent} role autonomously`,
     })
   }
-  if (!adapter.models.includes(profile.model)) {
+  // Model availability belongs to Agent Runner and the selected CLI. The eval
+  // harness only enforces a safe, explicit identifier so newly released or
+  // locally configured models do not require a harness update.
+  if (typeof profile.model !== 'string' || !MODEL_IDENTIFIER.test(profile.model)) {
     errors.push({
       role,
       field: 'model',
       value: profile.model ?? null,
-      message: `unavailable model for ${profile.cli}: ${profile.model}`,
+      message: `invalid model identifier for ${profile.cli}: ${profile.model ?? ''}`,
     })
   }
   if (!adapter.efforts.includes(profile.effort)) {
@@ -66,7 +70,7 @@ function validateOne(role, profile, capabilities) {
 export function validateRoleProfiles({
   lead,
   implementor,
-  reviewer,
+  tester,
   capabilities,
   mode = 'agent-runner',
 }) {
@@ -81,7 +85,7 @@ export function validateRoleProfiles({
     }
   }
 
-  const supplied = { lead, implementor, reviewer }
+  const supplied = { lead, implementor, tester }
   const results = Object.fromEntries(
     ROLES.map((role) => [role, validateOne(role, supplied[role], capabilities)]),
   )
@@ -121,6 +125,13 @@ export function renderEvalSettings() {
   return 'autonomous_permission_mode: yolo\n'
 }
 
+export function normalizeRoleProfiles(profiles) {
+  if (!profiles || typeof profiles !== 'object') return profiles
+  if (profiles.tester != null || profiles.reviewer == null) return profiles
+  const { reviewer, ...rest } = profiles
+  return { ...rest, tester: reviewer }
+}
+
 export function compareRoleSelections(recorded, requested) {
   return ROLES.flatMap((role) => {
     const before = recorded?.[role]
@@ -139,9 +150,13 @@ export function compareRoleSelections(recorded, requested) {
 
 const AGENT_ROLES = Object.fromEntries(Object.entries(ROLE_AGENTS).map(([role, agent]) => [agent, role]))
 const REPORTED_ROLES = {
+  lead: 'lead',
+  implementor: 'implementor',
+  tester: 'tester',
   'lead-agent': 'lead',
   'task-implementor': 'implementor',
-  'acceptance-reviewer': 'reviewer',
+  'acceptance-tester': 'tester',
+  'acceptance-reviewer': 'tester',
 }
 
 // Configured settings are never presented as observed ones. An attempt without

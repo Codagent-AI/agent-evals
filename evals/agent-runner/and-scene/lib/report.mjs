@@ -68,6 +68,111 @@ function describe(value) {
   return String(value)
 }
 
+function tokenCount(value) {
+  return Number.isFinite(value) ? value.toLocaleString('en-US') : 'not available'
+}
+
+function usd(value) {
+  return Number.isFinite(value) ? `$${value.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')}` : 'not available'
+}
+
+function implementationUsageSection(result) {
+  const cost = result.cost && typeof result.cost === 'object' ? result.cost : null
+  const rows = Array.isArray(cost?.rows) ? cost.rows : []
+  const implementation = table(
+    [
+      'Role', 'Tool', 'Provider', 'Model', 'Allocation', 'Participating attempts', 'Canonical input', 'Cached input',
+      'Cache write', 'Canonical output', 'Reasoning detail', 'Canonical total',
+      'Usage', 'Cost', 'Cost state', 'Cost source', 'Verification',
+    ],
+    rows.map((row) => [
+      row.agent_role ?? 'unknown',
+      row.tool ?? 'unknown',
+      row.provider ?? 'unknown',
+      row.model ?? 'unknown',
+      row.allocation ?? 'attempt',
+      tokenCount(row.participating_attempt_count ?? row.attempt_count),
+      tokenCount(row.token_totals?.input),
+      tokenCount(row.tokens?.cached_input),
+      tokenCount(row.tokens?.cache_write),
+      tokenCount(row.token_totals?.output),
+      tokenCount(row.tokens?.reasoning ?? row.tokens?.reasoning_output),
+      tokenCount(row.token_totals?.total),
+      row.usage_complete ? 'complete' : 'incomplete',
+      usd(row.cost?.amount_usd),
+      row.cost?.state ?? 'unavailable',
+      row.cost?.sources?.join(', ') || 'not available',
+      row.verification ?? 'not available',
+    ]),
+  )
+  const usage = cost?.usage
+  const usageTotal = [
+    '<h3>Implementation token total</h3>',
+    table(
+      ['Metric', 'Value'],
+      [
+        ['State', usage?.state ?? 'unavailable'],
+        ['Implementation dispatches', tokenCount(cost?.dispatch_count ?? usage?.attempt_count)],
+        ['Canonical input', tokenCount(usage?.token_totals?.input)],
+        ['Cached input detail', tokenCount(usage?.tokens?.cached_input)],
+        ['Cache write detail', tokenCount(usage?.tokens?.cache_write)],
+        ['Canonical output', tokenCount(usage?.token_totals?.output)],
+        ['Reasoning detail', tokenCount(usage?.tokens?.reasoning ?? usage?.tokens?.reasoning_output)],
+        ['Canonical total', tokenCount(usage?.token_totals?.total)],
+      ],
+    ),
+  ].join('\n')
+  const total = table(
+    ['Implementation total', 'Value'],
+    keyValueRows(cost?.total ?? cost?.implementation ?? {}),
+  )
+  const evalOwned = cost?.eval_owned
+  const evalRows = Array.isArray(evalOwned?.by_phase) ? evalOwned.by_phase : []
+  const evaluator = [
+    '<h3>Eval-owned model usage</h3>',
+    '<p>Reported separately from implementation usage and never included in implementation cost.</p>',
+    table(
+      [
+        'Phase', 'Provider', 'Model', 'Attempts', 'Canonical input', 'Cached input',
+        'Cache write', 'Canonical output', 'Reasoning detail', 'Canonical total', 'Usage',
+      ],
+      evalRows.map((row) => [
+        row.phase ?? 'unknown',
+        row.provider ?? 'unknown',
+        row.model ?? 'unknown',
+        tokenCount(row.attempt_count ?? 1),
+        tokenCount(row.token_totals?.input),
+        tokenCount(row.tokens?.cached_input),
+        tokenCount(row.tokens?.cache_write),
+        tokenCount(row.token_totals?.output),
+        tokenCount(row.tokens?.reasoning ?? row.tokens?.reasoning_output),
+        tokenCount(row.token_totals?.total),
+        row.usage_complete === false ? 'incomplete' : 'complete',
+      ]),
+    ),
+  ].join('\n')
+  const metrics = result.implementation_metrics
+  const metricSummary = metrics && typeof metrics === 'object'
+    ? {
+        state: metrics.state ?? null,
+        reason: metrics.reason ?? null,
+        history_complete: metrics.history_complete ?? null,
+        delivery_complete: metrics.delivery_complete ?? null,
+        attempt_count: metrics.attempt_count ?? null,
+        dispatch_count: metrics.dispatch_count ?? null,
+        measurement_aggregate_version: metrics.measurement_aggregate_version ?? null,
+        active_duration_ms: metrics.active_duration_ms ?? null,
+        coverage: metrics.coverage ?? null,
+      }
+    : metrics
+  return section(
+    'Implementation usage and cost',
+    '<p>Canonical input/output totals are non-overlapping billing totals; cache and reasoning columns are detail categories within those totals.</p>'
+      + implementation + usageTotal + total + evaluator
+      + table(['Metric', 'Value'], keyValueRows(metricSummary)),
+  )
+}
+
 // Machine field names that would otherwise put "provenance" in front of a
 // reader. Human-facing output says source and version details instead.
 const FIELD_LABELS = {
@@ -109,12 +214,12 @@ function summaryBlock(result) {
       + `${escapeHtml(String(result.score_denominator ?? 100))}</p>`,
     )
   } else if (result.product_failure) {
+    const automatedFailure = result.product_failure.phase === 'automated-scoring'
+    lines.push(automatedFailure
+      ? '<p><strong>No official score:</strong> automated requirements failed, so human review was not required.</p>'
+      : '<p><strong>No official score:</strong> the official score and human review are unavailable because the delivered product could not build or serve.</p>')
     lines.push(
-      '<p><strong>No official score:</strong> the official score and human review are unavailable '
-      + 'because the delivered product could not build or serve.</p>',
-    )
-    lines.push(
-      `<div class="banner"><strong>Conclusive product failure`
+      `<div class="banner"><strong>${automatedFailure ? 'Automated product failure' : 'Conclusive product failure'}`
       + `${result.product_failure.gate ? ` (${escapeHtml(result.product_failure.gate)})` : ''}:</strong> `
       + `${escapeHtml(result.product_failure.reason ?? 'the delivered product could not build or serve')}</div>`,
     )
@@ -181,6 +286,8 @@ function evidenceSection(title, summary) {
         final_sha: summary.final_sha,
         manifest_sha256: summary.manifest_sha256,
         candidate_reported_ci: summary.ci_claims,
+        missing_roles: summary.missing_roles,
+        evidence_findings: summary.findings,
       }
     : null))
   const artifacts = table(
@@ -258,6 +365,12 @@ function adjudicationSection(result) {
             ['Revised workflow-quality score', points(review.revised_workflow_quality_score)],
           ]
         : []),
+      ...(review.revised_gate_verdicts
+        ? [
+            ['Prior hard gates', JSON.stringify(review.prior_gate_verdicts)],
+            ['Revised hard gates', JSON.stringify(review.revised_gate_verdicts)],
+          ]
+        : []),
       ['Prior official score', points(review.prior_official_score)],
       ['Revised official score', points(review.revised_official_score)],
       ...(review.reviewed_rubric
@@ -324,6 +437,55 @@ function humanSection(result) {
       + `${escapeHtml(review.score.gate_passed ? 'pass' : 'fail')}</p>`
     : ''
   return section('Human review', `${responses}${subtotals}${total}`)
+}
+
+function humanReviewSupersessionSection(result) {
+  const review = result.human_review_supersession
+  if (!review) return ''
+  const history = result.human_review_history ?? []
+  const supersessionHistory = result.human_review_supersession_history ?? []
+  const rubric = (value) => [value?.rubric_id, value?.version].filter(Boolean).join(' ') || 'not available'
+  return section(
+    'Human-review supersession',
+    table(['Field', 'Value'], [
+      ['Approved by', review.approved_by],
+      ['Approved at', review.approved_at],
+      ['Prior rubric', rubric(review.prior_rubric)],
+      ['Prior rubric SHA-256', review.prior_rubric?.sha256 ?? 'not available'],
+      ['Reviewed rubric', rubric(review.reviewed_rubric)],
+      ['Reviewed rubric SHA-256', review.reviewed_rubric?.sha256 ?? 'not available'],
+      ['Prior human-review score', points(review.prior_human_score)],
+      ['Revised human-review score', points(review.revised_human_score)],
+      ['Prior official score', points(review.prior_official_score)],
+      ['Revised official score', points(review.revised_official_score)],
+      ['Rationale', review.rationale],
+    ])
+    + (history.length === 0
+      ? ''
+      : '<h3>Superseded human reviews</h3>'
+        + table(
+          ['Rubric', 'SHA-256', 'Score', 'Possible', 'Completed at'],
+          history.map((prior) => [
+            rubric(prior.rubric),
+            prior.rubric?.sha256 ?? 'not available',
+            points(prior.score?.total),
+            points(prior.score?.possible),
+            prior.completed_at ?? 'not available',
+          ]),
+        ))
+    + (supersessionHistory.length === 0
+      ? ''
+      : '<h3>Earlier human-review supersessions</h3>'
+        + table(
+          ['Approved at', 'Prior human score', 'Revised human score', 'Rationale'],
+          supersessionHistory.map((prior) => [
+            prior.approved_at,
+            points(prior.prior_human_score),
+            points(prior.revised_human_score),
+            prior.rationale,
+          ]),
+        )),
+  )
 }
 
 function baselineSection(result) {
@@ -451,6 +613,7 @@ export function renderReport(result, { current = null } = {}) {
     ),
     criteriaSection(result),
     humanSection(result),
+    humanReviewSupersessionSection(result),
     deliverySection(result),
     evidenceSection('Candidate-produced evidence', result.evidence?.candidate),
     evidenceSection('Evaluator-produced evidence', result.evidence?.evaluator),
@@ -462,11 +625,7 @@ export function renderReport(result, { current = null } = {}) {
       + table(['Judge detail', 'Value'], keyValueRows(result.judging)),
     ),
     section('Agent roles and models', table(['Role', 'Selection'], keyValueRows(result.role_configuration))),
-    section(
-      'Implementation usage and cost',
-      table(['Field', 'Value'], keyValueRows(result.cost))
-      + table(['Metric', 'Value'], keyValueRows(result.implementation_metrics)),
-    ),
+    implementationUsageSection(result),
     section('Pricing sources', table(['Field', 'Value'], keyValueRows(result.pricing))),
     section('Machine timing', table(['Field', 'Value'], keyValueRows(result.timing))),
     section('Completeness', table(['Dimension', 'State'], keyValueRows(result.completeness))),

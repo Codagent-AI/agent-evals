@@ -9,9 +9,10 @@ set -euo pipefail
 
 REPO="${REPO:-https://github.com/Codagent-AI/and-scene.git}"
 # Pin the fixture to an exact commit, not a moving branch head, so scored runs
-# are reproducible. This is the head of eval/create-and-scene-spec-only as of
-# 2026-07-17; bump it deliberately when the fixture snapshot changes.
-FIXTURE_REF="${FIXTURE_REF:-729592e921413dea20bd77ccab0284222ef4ad8f}"
+# are reproducible. This is the reviewed planning-only fixture merged into
+# eval/create-and-scene-spec-only on 2026-08-28; bump it deliberately when the
+# fixture snapshot changes.
+FIXTURE_REF="${FIXTURE_REF:-892dfbcf3762bc95cdbae6f05b18cc2b168a5fab}"
 # Pin the known-good reference used for calibration and judge tiebreaks.
 REFERENCE_REF="${REFERENCE_REF:-171c7def1e12aca2a5f605a5e5feafb20d4e4d19}"
 if [[ -n "${CHANGE_NAME+x}" ]]; then
@@ -22,7 +23,7 @@ fi
 CHANGE_NAME="${CHANGE_NAME:-create-and-scene}"
 # The implementation workflow is hard-coded for this change. The suite records
 # whichever clean Agent Runner revision supplies it rather than pinning a commit.
-WORKFLOW_RELATIVE_PATH="workflows/openspec/implement-change-v2.0.yaml"
+WORKFLOW_RELATIVE_PATH="workflows/core/implement-change-v1.0.yaml"
 # sandbox-run.sh mounts the validated host checkout here with its Git metadata.
 # Its separate /tmp/agent-runner-local copy is only the build source and cannot
 # satisfy the controller's clean-worktree provenance check.
@@ -34,7 +35,7 @@ RESCORE_FROM="${RESCORE_FROM:-}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-}"
 LEAD_CLI="" LEAD_MODEL="" LEAD_EFFORT=""
 IMPLEMENTOR_CLI="" IMPLEMENTOR_MODEL="" IMPLEMENTOR_EFFORT=""
-REVIEWER_CLI="" REVIEWER_MODEL="" REVIEWER_EFFORT=""
+TESTER_CLI="" TESTER_MODEL="" TESTER_EFFORT=""
 SKIP_VALIDATOR=0
 RESUME=0
 REFERENCE_BASELINE=0
@@ -44,9 +45,6 @@ RUN_AGENT=0
 CALIBRATE=0
 SUITE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 EVALS_ROOT="$(cd -- "$SUITE_DIR/../../.." && pwd)"
-# The durable record of the last calibration. A full Agent Runner evaluation is
-# blocked until it says calibration passed.
-CALIBRATION_RECORD="${CALIBRATION_RECORD:-$EVALS_ROOT/artifacts/evals/and-scene-calibration/latest.json}"
 AGENT_RUNNER_DIR="${AGENT_RUNNER_DIR:-$EVALS_ROOT/../agent-runner}"
 AGENT_SKILLS_DIR="${AGENT_SKILLS_DIR:-$EVALS_ROOT/../agent-skills}"
 SANDBOX_RUNNER="${SANDBOX_RUNNER:-}"
@@ -55,6 +53,7 @@ ENV_FILE_ARGS=()
 AUTH_ARGS=()
 MOUNT_CODEX_AUTH=0
 MOUNT_CLAUDE_AUTH=0
+MOUNT_CURSOR_AUTH=0
 
 usage() {
   cat <<'USAGE'
@@ -75,15 +74,14 @@ Modes:
   --run-agent            Run the Agent Runner evaluation harness.
   --calibrate            Run autonomous known-good/degraded calibration on the
                           host. It invokes no sandbox, no Agent Runner, no
-                          browser, and no human, and its artifacts are ignored
-                          diagnostics that are never published. A full
-                          --run-agent evaluation is blocked until it passes.
+                          browser, and no human. Its artifacts are optional,
+                          ignored diagnostics that are never published.
 
 Options:
   --dry-run              Print the sandbox command instead of running it.
   --agent-runner-dir PATH
                           Agent Runner checkout. Must be a clean Git worktree
-                          containing workflows/openspec/implement-change-v2.0.yaml.
+                          containing workflows/core/implement-change-v1.0.yaml.
                           Default: sibling ../agent-runner.
   --agent-skills-dir PATH
                           Agent Skills checkout. Must be a clean Git worktree
@@ -94,7 +92,7 @@ Options:
                           run:   artifacts/evals/and-scene/<timestamp>
   --repo URL             and-scene repository URL.
   --fixture-ref REF      Implementation-ready fixture ref.
-                          Default: 729592e921413dea20bd77ccab0284222ef4ad8f
+                          Default: 892dfbcf3762bc95cdbae6f05b18cc2b168a5fab
   --reference-ref REF    Implemented/reference ref.
                           Default: 171c7def1e12aca2a5f605a5e5feafb20d4e4d19
   --candidate-ref REF    Grade an existing candidate ref.
@@ -104,13 +102,15 @@ Options:
   --reference-baseline   Evaluate an existing candidate without invoking Agent
                           Runner. Role profiles are not required or applicable.
   --change-name NAME     OpenSpec change name. Default: create-and-scene
-  --skip-validator       Pass skip_validator=true to skip task-level compliance
-                          only. The final Validator, draft PR, acceptance
-                          preparation, and handoff verification still run.
+  --skip-validator       Pass skip_validator=true to skip all Agent Validator
+                          execution: task-level, final, and acceptance-remediation.
+                          Draft PR, acceptance preparation, and handoff verification
+                          still run.
   --resume               Reopen run-state.json, revalidate the recorded fixture,
                           Runner, branch, draft PR, final SHA, and evidence, then
-                          wait for/resume the exact Runner run as needed.
-  --lead-cli CLI         Lead-agent CLI adapter (implement-change planner).
+                          wait for/resume the exact Runner run as needed. Explicit
+                          Claude quota resets up to six hours are waited out.
+  --lead-cli CLI         Lead-agent CLI adapter (core implement-change lead).
   --lead-model MODEL     Lead-agent model.
   --lead-effort EFFORT   Lead-agent effort.
   --implementor-cli CLI  Task-implementor CLI adapter.
@@ -118,15 +118,10 @@ Options:
                           Task-implementor model.
   --implementor-effort EFFORT
                           Task-implementor effort.
-  --reviewer-cli CLI     Acceptance-reviewer CLI adapter.
-  --reviewer-model MODEL Acceptance-reviewer model.
-  --reviewer-effort EFFORT
-                          Acceptance-reviewer effort.
+  --tester-cli CLI       Tester CLI adapter.
+  --tester-model MODEL   Tester model.
+  --tester-effort EFFORT Tester effort.
   --judge-model MODEL    Eval-owned judge model. Default: the Codex CLI default.
-  --calibration-record PATH
-                          Durable calibration pass/fail record. Written by
-                          --calibrate and required by --run-agent. Default:
-                          artifacts/evals/and-scene-calibration/latest.json
   --env NAME             Pass through one named environment variable.
                           Repeatable.
   --env-file PATH        Read simple NAME=value or export NAME=value entries
@@ -136,6 +131,8 @@ Options:
                           sandbox via sandbox-run.sh.
   --mount-claude-auth    Forward subscription-based Claude Code auth files into
                           the sandbox via sandbox-run.sh.
+  --mount-cursor-auth    Forward subscription-based Cursor auth files into the
+                          sandbox via sandbox-run.sh.
   -h, --help             Show this help.
 USAGE
 }
@@ -161,10 +158,6 @@ while (($#)); do
     --calibrate)
       CALIBRATE=1
       shift
-      ;;
-    --calibration-record)
-      CALIBRATION_RECORD="${2:?missing value for --calibration-record}"
-      shift 2
       ;;
     --dry-run)
       DRY_RUN=1
@@ -243,16 +236,16 @@ while (($#)); do
       IMPLEMENTOR_EFFORT="${2:?missing value for --implementor-effort}"
       shift 2
       ;;
-    --reviewer-cli)
-      REVIEWER_CLI="${2:?missing value for --reviewer-cli}"
+    --tester-cli)
+      TESTER_CLI="${2:?missing value for --tester-cli}"
       shift 2
       ;;
-    --reviewer-model)
-      REVIEWER_MODEL="${2:?missing value for --reviewer-model}"
+    --tester-model)
+      TESTER_MODEL="${2:?missing value for --tester-model}"
       shift 2
       ;;
-    --reviewer-effort)
-      REVIEWER_EFFORT="${2:?missing value for --reviewer-effort}"
+    --tester-effort)
+      TESTER_EFFORT="${2:?missing value for --tester-effort}"
       shift 2
       ;;
     --judge-model)
@@ -275,6 +268,11 @@ while (($#)); do
     --mount-claude-auth)
       MOUNT_CLAUDE_AUTH=1
       AUTH_ARGS+=(--mount-claude-auth)
+      shift
+      ;;
+    --mount-cursor-auth)
+      MOUNT_CURSOR_AUTH=1
+      AUTH_ARGS+=(--mount-cursor-auth)
       shift
       ;;
     -h|--help)
@@ -310,7 +308,7 @@ if [[ "$CALIBRATE" == 1 ]]; then
   elif [[ "$ARTIFACT_DIR" != /* ]]; then
     ARTIFACT_DIR="$EVALS_ROOT/$ARTIFACT_DIR"
   fi
-  calibrate_command=(node "$SUITE_DIR/calibrate.mjs" --out "$ARTIFACT_DIR" --record "$CALIBRATION_RECORD")
+  calibrate_command=(node "$SUITE_DIR/calibrate.mjs" --out "$ARTIFACT_DIR")
   if [[ "$DRY_RUN" == 1 ]]; then
     printf '%q ' "${calibrate_command[@]}"
     printf '\n'
@@ -356,16 +354,6 @@ require_role_profile() {
 }
 
 if [[ "$RUN_AGENT" == 1 ]]; then
-  # Both fresh candidate runs and evaluator-only rescoring use the calibrated
-  # candidate rubric. Reference baselines are the calibration input and are
-  # therefore exempt.
-  if [[ "$REFERENCE_BASELINE" != 1 ]]; then
-    if ! node "$SUITE_DIR/calibrate.mjs" --check-record "$CALIBRATION_RECORD"; then
-      echo "Run calibration first: evals/agent-runner/and-scene/run.sh --calibrate" >&2
-      exit 2
-    fi
-  fi
-
   # A reference baseline evaluates an existing candidate without invoking Agent
   # Runner, so its workflow contract and worktree cleanliness do not apply. Only
   # the sandbox adapter, checked above, is required to launch it.
@@ -405,10 +393,10 @@ if [[ "$RUN_AGENT" == 1 ]]; then
 
     require_role_profile "lead-agent" "$LEAD_CLI" "$LEAD_MODEL" "$LEAD_EFFORT"
     require_role_profile "task-implementor" "$IMPLEMENTOR_CLI" "$IMPLEMENTOR_MODEL" "$IMPLEMENTOR_EFFORT"
-    require_role_profile "acceptance-reviewer" "$REVIEWER_CLI" "$REVIEWER_MODEL" "$REVIEWER_EFFORT"
+    require_role_profile "tester" "$TESTER_CLI" "$TESTER_MODEL" "$TESTER_EFFORT"
 
     # Forward only the auth the selected role profiles and the judge need.
-    for cli in "$LEAD_CLI" "$IMPLEMENTOR_CLI" "$REVIEWER_CLI"; do
+    for cli in "$LEAD_CLI" "$IMPLEMENTOR_CLI" "$TESTER_CLI"; do
       case "$cli" in
         claude)
           if [[ "$MOUNT_CLAUDE_AUTH" != 1 ]]; then
@@ -422,8 +410,14 @@ if [[ "$RUN_AGENT" == 1 ]]; then
             MOUNT_CODEX_AUTH=1
           fi
           ;;
+        cursor)
+          if [[ "$MOUNT_CURSOR_AUTH" != 1 ]]; then
+            AUTH_ARGS+=(--mount-cursor-auth)
+            MOUNT_CURSOR_AUTH=1
+          fi
+          ;;
         *)
-          echo "Unsupported CLI adapter for auth forwarding: $cli; expected claude or codex." >&2
+          echo "Unsupported CLI adapter for auth forwarding: $cli; expected claude, codex, or cursor." >&2
           exit 2
           ;;
       esac
@@ -481,13 +475,13 @@ CHANGE_NAME_Q="$(shell_quote "$CHANGE_NAME")"
 JUDGE_MODEL_Q="$(shell_quote "$JUDGE_MODEL")"
 CONTAINER_AGENT_RUNNER_DIR_Q="$(shell_quote "$CONTAINER_AGENT_RUNNER_DIR")"
 CONTAINER_AGENT_SKILLS_DIR_Q="$(shell_quote "$CONTAINER_AGENT_SKILLS_DIR")"
-SELECTED_ADAPTERS_Q="$(shell_quote "$LEAD_CLI") $(shell_quote "$IMPLEMENTOR_CLI") $(shell_quote "$REVIEWER_CLI")"
+SELECTED_ADAPTERS_Q="$(shell_quote "$LEAD_CLI") $(shell_quote "$IMPLEMENTOR_CLI") $(shell_quote "$TESTER_CLI")"
 
 # Assemble the controller argument list on the host so the container script
 # stays a fixed, quoted invocation rather than string-built shell.
 CONTROLLER_ARGS=(--run-dir /artifacts --run-id "$AND_SCENE_RUN_ID")
 CONTROLLER_ARGS+=(--agent-runner-dir "$CONTAINER_AGENT_RUNNER_DIR" --repo "$REPO")
-if [[ "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
+if [[ "$RUN_AGENT" == 1 && "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
   CONTROLLER_ARGS+=(--agent-skills-dir "$CONTAINER_AGENT_SKILLS_DIR")
 fi
 if [[ -z "$RESCORE_FROM" || "$CHANGE_NAME_PROVIDED" == 1 ]]; then
@@ -511,8 +505,8 @@ else
   CONTROLLER_ARGS+=(--lead-cli "$LEAD_CLI" --lead-model "$LEAD_MODEL" --lead-effort "$LEAD_EFFORT")
   CONTROLLER_ARGS+=(--implementor-cli "$IMPLEMENTOR_CLI" --implementor-model "$IMPLEMENTOR_MODEL")
   CONTROLLER_ARGS+=(--implementor-effort "$IMPLEMENTOR_EFFORT")
-  CONTROLLER_ARGS+=(--reviewer-cli "$REVIEWER_CLI" --reviewer-model "$REVIEWER_MODEL")
-  CONTROLLER_ARGS+=(--reviewer-effort "$REVIEWER_EFFORT")
+  CONTROLLER_ARGS+=(--tester-cli "$TESTER_CLI" --tester-model "$TESTER_MODEL")
+  CONTROLLER_ARGS+=(--tester-effort "$TESTER_EFFORT")
 fi
 CONTROLLER_ARGS_Q=""
 for controller_arg in "${CONTROLLER_ARGS[@]}"; do
@@ -630,12 +624,19 @@ PROOF
 )
 
 AGENT_SKILLS_BOOTSTRAP=""
+AGENT_SESSION_STATE_BOOTSTRAP=""
 if [[ "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
   AGENT_SKILLS_BOOTSTRAP="/eval-input/bootstrap-agent-skills.sh \\
     $CONTAINER_AGENT_SKILLS_DIR_Q \\
-    \"\\\$AGENT_RUNNER_DIR/\\\$IMPLEMENTATION_WORKFLOW_PATH\" \\
+    \"\$AGENT_RUNNER_DIR/\$IMPLEMENTATION_WORKFLOW_PATH\" \\
     $SELECTED_ADAPTERS_Q \\
     2>&1 | tee /artifacts/logs/agent-skills-bootstrap.log"
+  # Agent Runner checkpoints live under /artifacts already, but their recorded
+  # CLI session IDs refer to rollout/transcript files normally written under
+  # the disposable HOME. Persist only those private state directories for real
+  # implementation workflows; reference and rescore modes start no such roles.
+  AGENT_SESSION_STATE_BOOTSTRAP="/eval-input/prepare-agent-session-state.sh \
+    /artifacts/.runtime/agent-session-state"
 fi
 
 agent_script=$(cat <<AGENT
@@ -646,9 +647,36 @@ if [[ " \${NODE_OPTIONS:-} " != *" --dns-result-order="* ]]; then
   export NODE_OPTIONS="\${NODE_OPTIONS:-} --dns-result-order=ipv4first"
 fi
 
+# AXI's stable-channel discovery can reject the image's Chrome symlink even
+# when invoking that symlink directly succeeds. Use the known Playwright
+# Chromium for every deterministic browser probe and attach AXI explicitly.
+AXI_CHROMIUM="\$(find /ms-playwright -type f -path '*/chrome-linux*/chrome' -perm -111 -print -quit 2>/dev/null || true)"
+if [[ -z "\$AXI_CHROMIUM" ]]; then
+  echo "Could not find a runnable Chromium for chrome-devtools-axi." >&2
+  exit 1
+fi
+AXI_PROFILE_DIR="\$(mktemp -d /tmp/and-scene-axi-profile.XXXXXX)"
+"\$AXI_CHROMIUM" \
+  --headless=new \
+  --no-sandbox \
+  --disable-gpu \
+  --remote-debugging-address=127.0.0.1 \
+  --remote-debugging-port=9333 \
+  --user-data-dir="\$AXI_PROFILE_DIR" \
+  >/tmp/and-scene-axi-chromium.log 2>&1 &
+export CHROME_DEVTOOLS_AXI_BROWSER_URL=http://127.0.0.1:9333
+for _ in {1..100}; do
+  if curl -fsS "\$CHROME_DEVTOOLS_AXI_BROWSER_URL/json/version" >/dev/null; then break; fi
+  sleep 0.1
+done
+if ! curl -fsS "\$CHROME_DEVTOOLS_AXI_BROWSER_URL/json/version" >/dev/null; then
+  echo "Sandbox Chromium did not expose its DevTools endpoint." >&2
+  exit 1
+fi
+
 # The implementation workflow is fixed for this change; the controller records
 # the clean Agent Runner revision that supplies it.
-IMPLEMENTATION_WORKFLOW=implement-change
+IMPLEMENTATION_WORKFLOW=core:implement-change
 IMPLEMENTATION_WORKFLOW_PATH=$WORKFLOW_RELATIVE_PATH
 REPO=$REPO_Q
 FIXTURE_REF=$FIXTURE_REF_Q
@@ -674,6 +702,8 @@ if [ -n "\$token" ]; then
   export GIT_TERMINAL_PROMPT=0
 fi
 
+$AGENT_SESSION_STATE_BOOTSTRAP
+
 $AGENT_SKILLS_BOOTSTRAP
 
 exec node /eval-input/controller.mjs $CONTROLLER_ARGS_Q
@@ -681,7 +711,41 @@ AGENT
 )
 
 sandbox_args=(--artifact-dir "$ARTIFACT_DIR" --input-dir "$SUITE_DIR")
-if [[ "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
+# Codex's read-only sandbox uses Linux user namespaces. Docker's default
+# seccomp profile blocks their creation, which prevents source judges from
+# inspecting even the neutral read-only checkout. The outer Agent Runner
+# container remains the evaluator's isolation boundary.
+if [[ "$PROOF_BROWSER" != 1 ]]; then
+  sandbox_args+=(
+    --docker-run-arg --security-opt
+    --docker-run-arg seccomp=unconfined
+  )
+fi
+if [[ "$RUN_AGENT" == 1 && "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
+  # A linked worktree's .git file points at host-absolute backing directories.
+  # The source mount alone therefore is not enough for Git inside the sandbox
+  # to verify the pinned revision. Mount both resolved directories at their
+  # original paths read-only; do not rewrite Git metadata or the checkout.
+  append_git_metadata_mounts() {
+    local checkout="$1" git_dir common_dir directory
+    local -a directories=()
+    git_dir="$(git -C "$checkout" rev-parse --path-format=absolute --git-dir)"
+    common_dir="$(git -C "$checkout" rev-parse --path-format=absolute --git-common-dir)"
+    directories=("$git_dir" "$common_dir")
+    for directory in "${directories[@]}"; do
+      directory="$(cd -- "$directory" && pwd -P)"
+      if [[ " ${MOUNTED_GIT_METADATA:-} " == *" $directory "* ]]; then
+        continue
+      fi
+      MOUNTED_GIT_METADATA="${MOUNTED_GIT_METADATA:-} $directory"
+      sandbox_args+=(
+        --docker-run-arg --mount
+        --docker-run-arg "type=bind,source=$directory,target=$directory,readonly"
+      )
+    done
+  }
+  append_git_metadata_mounts "$AGENT_RUNNER_DIR"
+  append_git_metadata_mounts "$AGENT_SKILLS_DIR"
   sandbox_args+=(
     --docker-run-arg --mount
     --docker-run-arg "type=bind,source=$AGENT_SKILLS_DIR,target=$CONTAINER_AGENT_SKILLS_DIR,readonly"

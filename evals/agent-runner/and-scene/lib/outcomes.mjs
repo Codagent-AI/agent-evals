@@ -13,7 +13,27 @@ export const EVALUATION_STATUSES = [
 
 export const PRODUCT_VERDICTS = ['pass', 'fail', 'unavailable', 'not-applicable']
 
-export const OUTCOME_SCHEMA_VERSION = 2
+export const OUTCOME_SCHEMA_VERSION = 3
+
+function displayPoints(value) {
+  return Number.isFinite(value) ? String(Number(value.toFixed(12))) : String(value)
+}
+
+function automatedFailureReason(event) {
+  const failures = event.automated_failures ?? []
+  const subtotalFailure = failures.find(({ rule }) => rule === 'automated-total')
+  if (subtotalFailure) {
+    const possible = event.automated_possible ?? 70
+    return `Automated score below minimum: ${displayPoints(subtotalFailure.value)}/${possible}; required ${displayPoints(subtotalFailure.required)}/${possible}`
+  }
+  const componentFailure = failures.find(({ rule }) => rule === 'component-floor')
+  if (componentFailure) {
+    return `Automated component below minimum: ${componentFailure.id} scored ${displayPoints(componentFailure.value)}; required ${displayPoints(componentFailure.required)}`
+  }
+  const gateFailure = failures.find(({ rule }) => rule === 'hard-gate')
+  if (gateFailure) return `Required automated gate failed: ${gateFailure.id}`
+  return 'Automated requirements failed before human review'
+}
 
 export function createOutcome({ kind = 'candidate' } = {}) {
   const reference = kind === 'reference'
@@ -118,8 +138,16 @@ export function applyOutcomeEvent(outcome, event) {
         outcome,
         {
           ...outcome,
-          evaluation_status: settledStatus(outcome),
+          evaluation_status: event.automated_pass === false ? 'complete' : settledStatus(outcome),
+          product_verdict: event.automated_pass === false ? 'fail' : outcome.product_verdict,
           automated_subtotal: event.automated_subtotal ?? null,
+          verdict_durable: event.automated_pass === false ? true : outcome.verdict_durable,
+          product_failure: event.automated_pass === false ? {
+            phase: 'automated-scoring',
+            reason: automatedFailureReason(event),
+            gate: null,
+            failures: event.automated_failures ?? [],
+          } : outcome.product_failure,
         },
         event.type,
       )

@@ -1,10 +1,11 @@
 // The literal human review: question set, anchored responses, and the 30-point
 // calculation.
 //
-// The rubric owns the questions, anchors, and point allocation; this module owns
+// The rubric owns the questions, question-specific rating options, shared
+// anchors, and point allocation; this module owns
 // the review *state* — what has been answered, whether the saved answers still
 // belong to the candidate and rubric being reviewed, and what they score. The
-// interview itself talks to an injected `io`, so the whole 13-question flow,
+// interview itself talks to an injected `io`, so the whole seven-question flow,
 // including rejection, resume, and revision, runs noninteractively in a test.
 //
 // Nothing here rounds an intermediate value and nothing here scores a partial
@@ -221,8 +222,10 @@ export function renderSummary(rubric, score, responses) {
   return lines.join('\n')
 }
 
-function anchorBlock(rubric) {
-  return rubric.anchors.map(({ rating, anchor }) => `  ${rating} — ${anchor}`).join('\n')
+function ratingOptionBlock(question) {
+  return question.rating_options
+    .map(({ rating, label, description }) => `  ${rating} — ${label}: ${description}`)
+    .join('\n')
 }
 
 // A closed input stream is an interruption, not an answer. It ends the review
@@ -232,7 +235,7 @@ const INTERRUPTED = Symbol('interrupted')
 async function askQuestion({ rubric, question, io }) {
   for (;;) {
     io.write(`\nQuestion ${question.number} of ${rubric.question_count}\n${question.text}`)
-    io.write(anchorBlock(rubric))
+    io.write(ratingOptionBlock(question))
     const raw = await io.ask(`Rating (${rubric.rating_scale.min}-${rubric.rating_scale.max}): `)
     if (raw === null || raw === undefined) return INTERRUPTED
     const rationale = await io.ask('Rationale (required for 3 or lower): ')

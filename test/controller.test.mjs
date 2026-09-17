@@ -14,6 +14,14 @@ const workflowYaml = `name: implement-change
 params:
   - name: change_name
     required: true
+  - name: change_dir
+    required: true
+  - name: change_label
+    required: true
+  - name: change_kind
+    required: true
+  - name: artifact_validation_instruction
+    required: true
   - name: skip_validator
     default: "false"
 steps:
@@ -33,10 +41,35 @@ const history = [
   { step: 'verify-acceptance-handoff', outcome: 'success' },
 ]
 
+const planningTestPlan = `# Test plan
+
+## Coverage Strategy
+Browser coverage.
+## Integration Tests
+None.
+## End-to-End Tests
+None.
+## Agent Acceptance Tests
+### AT-001: Exercise the demo
+- Classification: Required
+- Covers: Demo behavior
+- Actor and surface: User in a browser
+- Setup: Start the built application
+- Steps: Open the demo
+- Expected: The demo renders
+- Evidence: Browser snapshot
+- Effects and cleanup: Stop the application
+- Permitted substitutes: None
+## Human-Only Testing
+None.
+## Coverage Map
+AT-001
+`
+
 const profiles = [
   '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
   '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
-  '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+  '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
 ]
 
 async function environment({
@@ -46,12 +79,14 @@ async function environment({
   commit = 'a'.repeat(40),
   ghAuthenticated = true,
   ghPermission = 'WRITE',
+  planningReady = true,
   runnerResult = { status: 0, stdout: '' },
+  runnerResults = null,
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'agent-evals-controller-'))
   const agentRunnerDir = join(root, 'agent-runner')
   const agentSkillsDir = join(root, 'agent-skills')
-  await mkdir(join(agentRunnerDir, 'workflows/openspec'), { recursive: true })
+  await mkdir(join(agentRunnerDir, 'workflows/core'), { recursive: true })
   if (workflow !== null) await writeFile(join(agentRunnerDir, WORKFLOW_RELATIVE_PATH), workflow)
   await mkdir(join(agentSkillsDir, '.claude-plugin'), { recursive: true })
   await writeFile(join(agentSkillsDir, '.claude-plugin/marketplace.json'), '{"name":"codagent"}\n')
@@ -72,6 +107,23 @@ async function environment({
       if (joined.includes('show') && joined.includes('.validator/config.yml')) {
         return { status: 0, stdout: 'entry_points: []\n' }
       }
+      if (joined.includes('show') && joined.includes('/test-plan.md')) {
+        return planningReady
+          ? { status: 0, stdout: planningTestPlan }
+          : { status: 1, stderr: 'missing test plan' }
+      }
+      if (joined.includes('show') && joined.includes('/tasks.md')) {
+        return { status: 0, stdout: '- [Demo task](tasks/01-demo.md)\n' }
+      }
+      if (joined.includes('show') && /\/(?:proposal|design|tasks)\.md/.test(joined)) {
+        return { status: 0, stdout: '# Planning artifact\n' }
+      }
+      if (joined.includes('show') && /\/specs\/[^/]+\/spec\.md/.test(joined)) {
+        return { status: 0, stdout: '# Specification\n' }
+      }
+      if (joined.includes('show') && /\/tasks\/[^/]+\.md/.test(joined)) {
+        return { status: 0, stdout: '# Task\n' }
+      }
       if (joined.includes('show-ref --verify --quiet')) return { status: 1, stdout: '' }
       if (joined.includes('--is-inside-work-tree')) return { status: 0, stdout: 'true\n' }
       if (joined.includes('remote get-url origin')) {
@@ -86,7 +138,16 @@ async function environment({
       if (joined.includes('status --porcelain')) return { status: 0, stdout: dirty }
       if (joined.includes('merge-base --is-ancestor')) return { status: 0, stdout: '' }
       if (joined.includes('diff --binary')) return { status: 0, stdout: '' }
-      if (joined.includes('ls-tree')) return { status: 0, stdout: '' }
+      if (joined.includes('ls-tree')) {
+        const planningPath = args.at(-1)
+        if (planningPath.endsWith('/specs')) {
+          return { status: 0, stdout: `${planningPath}/demo/spec.md\n` }
+        }
+        if (planningPath.endsWith('/tasks')) {
+          return { status: 0, stdout: `${planningPath}/01-demo.md\n` }
+        }
+        return { status: 0, stdout: '' }
+      }
       if (joined.includes('rev-parse')) return { status: 0, stdout: `${commit}\n` }
       return { status: 0, stdout: '' }
     }
@@ -102,7 +163,12 @@ async function environment({
     if (command === 'agent-runner' && args[0] === 'debug') {
       return { status: 0, stdout: resolvedWorkflow }
     }
-    if (command === 'agent-runner') return runnerResult
+    if (command === 'agent-runner') {
+      const runnerIndex = invocations.filter(({ command: invoked, args: invokedArgs }) => (
+        invoked === 'agent-runner' && (invokedArgs[0] === 'run' || invokedArgs[0] === '--resume')
+      )).length - 1
+      return runnerResults?.[runnerIndex] ?? runnerResult
+    }
     return { status: 0, stdout: '' }
   }
   return { root, runDir, home, agentRunnerDir, agentSkillsDir, exec, invocations, commit }
@@ -166,9 +232,9 @@ function importedRescore(context, { changeName = 'create-and-scene' } = {}) {
     delivery: importedDelivery,
     runner: { run_id: 'runner-complete', session_dir: context.root },
     role_profiles: {
-      lead: { cli: 'claude', model: 'opus', effort: 'high', agent: 'planner' },
+      lead: { cli: 'claude', model: 'opus', effort: 'high', agent: 'lead' },
       implementor: { cli: 'claude', model: 'sonnet', effort: 'medium', agent: 'implementor' },
-      reviewer: { cli: 'claude', model: 'opus', effort: 'high', agent: 'reviewer' },
+      tester: { cli: 'claude', model: 'opus', effort: 'high', agent: 'tester' },
     },
     agent_runner_provenance: {
       commit: '3'.repeat(40),
@@ -234,9 +300,26 @@ async function evaluate(context, extra = [], overrides = {}) {
 function browserDemo({ captions = DEMO_CONTRACT.step_captions } = {}) {
   let index = 0
   let mode = 'present'
+  let viewport = { width: 1280, height: 720 }
   return {
     async routes() { return [DEMO_CONTRACT.route] },
-    async open() { index = 0; mode = 'present' },
+    async open() { index = 0; mode = 'present'; viewport = { width: 1280, height: 720 } },
+    async resize(width, height) { viewport = { width, height } },
+    async canvasGeometry() {
+      const scale = viewport.width < 100 ? 0.05 : 1
+      const width = 880 * scale
+      const height = 495 * scale
+      return {
+        viewport,
+        authored: { width: 880, height: 495 },
+        rendered: { left: 0, top: 0, right: width, bottom: height, width, height },
+        available: {
+          left: 0, top: 0, right: viewport.width, bottom: viewport.height,
+          width: viewport.width, height: viewport.height,
+        },
+        scale: { x: scale, y: scale },
+      }
+    },
     async setMode(required) { mode = required },
     async setPosition(required) { index = required },
     async settle() { return { settled: true, strategy: 'mock-idle' } },
@@ -274,20 +357,130 @@ function browserDemo({ captions = DEMO_CONTRACT.step_captions } = {}) {
   }
 }
 
+test('a complete below-minimum automated score finishes without human review', async () => {
+  const context = await environment()
+  let servedIdentity = null
+  const candidateServer = {
+    probe: async () => ({ ok: true, candidate_identity: servedIdentity }),
+    start: async ({ candidate }) => {
+      servedIdentity = candidate
+      return { pid: 9876, url: 'http://127.0.0.1:4319/' }
+    },
+    stop: async () => {},
+  }
+
+  const result = await evaluate(context, profiles, {
+    isProcessAlive: () => true,
+    verifyCandidate: async () => ({
+      build: { ok: true, log: 'built' },
+      verification: { machine_readable: true, passed: true },
+      timings: [],
+    }),
+    candidateServer,
+    browserDriver: browserDemo(),
+    judgeInvoke: async (request) => {
+      if (Array.isArray(request.criteria)) {
+        return JSON.stringify({
+          results: request.criteria.map((id) => ({
+            id,
+            verdict: 'fail',
+            rationale: 'the delivered implementation does not satisfy this criterion',
+            evidence: ['controller-fixture:verified'],
+          })),
+        })
+      }
+      if (request.job === 'ambiguity-diagnostics') {
+        return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
+      }
+      return JSON.stringify({ results: [] })
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(written.evaluation_status, 'complete')
+  assert.equal(written.product_verdict, 'fail')
+  assert.ok(written.automated_subtotal.points < 40)
+  assert.equal('official_score' in written, false)
+  assert.equal('human_review' in written, false)
+  assert.equal(written.product_failure.phase, 'automated-scoring')
+  assert.match(written.product_failure.reason, /Automated score below minimum: .*\/70; required 40\/70/)
+})
+
 test('--skip-validator launches the verified workflow by logical name without --until', async () => {
   const context = await environment()
+  const skippedHistory = [
+    { step: 'run-validator', outcome: 'skipped' },
+    ...history.slice(1),
+  ]
 
-  const result = await evaluate(context, ['--skip-validator', ...profiles])
+  const result = await evaluate(context, ['--skip-validator', ...profiles], {
+    readRunnerState: () => runnerInvocations(context).length === 0
+      ? null
+      : {
+          run_id: 'runner-7',
+          session_dir: '/sessions/runner-7',
+          workflow_name: 'implement-change',
+          workflow_completed: true,
+          history: skippedHistory,
+        },
+    observedSteps: (state) => state.history,
+    verifyDelivery: async () => ({
+      ...delivery(context),
+      final_validator: skippedHistory[0],
+      workflow_history: skippedHistory,
+    }),
+  })
 
   assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
   const [invocation] = runnerInvocations(context)
   assert.deepEqual(invocation.args, [
     'run',
-    'openspec:implement-change',
+    'core:implement-change',
     'change_name=create-and-scene',
+    'change_dir=openspec/changes/create-and-scene',
+    'change_label=OpenSpec change',
+    'change_kind=openspec',
+    'artifact_validation_instruction=When an approved artifact changed, run `openspec validate --type change "create-and-scene"`.',
     'skip_validator=true',
   ])
   assert.ok(!invocation.args.includes('--until'))
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(written.workflow.task_level_compliance, 'skipped')
+  assert.equal(written.workflow.final_validator, 'skipped')
+  assert.equal(written.workflow.history_complete, true)
+  assert.deepEqual(written.workflow.invalid_outcomes, [])
+  assert.equal(written.delivery.final_validator.outcome, 'skipped')
+})
+
+test('fixture planning preflight validates the selected change directory', async () => {
+  const context = await environment()
+
+  const result = await evaluate(context, ['--skip-validator', ...profiles], {
+    controllerChangeName: 'custom-scene-change',
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const inspectedPaths = context.invocations
+    .filter(({ command, args }) => command === 'git' && args.includes('show'))
+    .flatMap(({ args }) => args)
+  assert.ok(
+    inspectedPaths.some((argument) => argument.includes(
+      ':openspec/changes/custom-scene-change/test-plan.md',
+    )),
+    JSON.stringify(inspectedPaths),
+  )
+})
+
+test('an incompatible fixture is a typed harness preflight failure and launches no Runner', async () => {
+  const context = await environment({ planningReady: false })
+
+  const result = await evaluate(context, ['--skip-validator', ...profiles])
+
+  assert.equal(result.exitCode, 2)
+  assert.equal(result.errors[0].code, 'fixture-planning-contract')
+  assert.match(result.errors[0].message, /test-plan\.md/)
+  assert.equal(runnerInvocations(context).length, 0)
 })
 
 test('logical workflow resolution must match the verified pinned workflow before Runner starts', async () => {
@@ -302,7 +495,7 @@ test('logical workflow resolution must match the verified pinned workflow before
   assert.match(JSON.stringify(result.errors), /workflow-resolution/)
 })
 
-test('task-level validation is included by default while the final Validator remains required', async () => {
+test('task-level and final validation are included by default', async () => {
   const context = await environment()
 
   const result = await evaluate(context, profiles)
@@ -366,7 +559,7 @@ test('the candidate branch identity exists in run-state before Runner starts', a
   assert.equal(state.agent_skills_provenance.commit, context.commit)
   assert.match(state.agent_skills_provenance.manifest_sha256, /^[a-f0-9]{64}$/)
   assert.match(state.identity.agent_skills_provenance, /^[a-f0-9]{64}$/)
-  assert.equal(state.role_profiles.reviewer.agent, 'reviewer')
+  assert.equal(state.role_profiles.tester.agent, 'tester')
 })
 
 test('an explicit host run identity survives the fixed container artifact mount', async () => {
@@ -507,6 +700,92 @@ test('an active recorded Runner process is waited for rather than duplicated', a
   assert.equal(runnerInvocations(context).length, before)
 })
 
+test('a fresh Runner execution waits for its linked audit before delivery verification', async () => {
+  const context = await environment()
+  let auditFinished = false
+  const waited = []
+
+  const result = await evaluate(context, profiles, {
+    readRunnerState: () => runnerInvocations(context).length === 0
+      ? null
+      : {
+          run_id: 'runner-7',
+          session_dir: '/sessions/runner-7',
+          workflow_name: 'implement-change',
+          workflow_completed: true,
+          history,
+          audit: {
+            links: [{ auditRunId: 'audit-child', state: auditFinished ? 'completed' : 'started' }],
+          },
+        },
+    waitForRun: async (runId) => {
+      waited.push(runId)
+      auditFinished = true
+      return {
+        run_id: runId,
+        session_dir: '/sessions/runner-7',
+        workflow_name: 'implement-change',
+        workflow_completed: true,
+        history,
+        audit: { links: [{ auditRunId: 'audit-child', state: 'completed' }] },
+      }
+    },
+    verifyDelivery: async () => {
+      assert.equal(auditFinished, true)
+      return delivery(context)
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.deepEqual(waited, ['runner-7'])
+  const execution = await readJson(join(context.runDir, 'phases/workflow-execution.json'))
+  assert.deepEqual(execution.linked_audits, [{
+    run_id: 'audit-child',
+    execution_session_id: null,
+    trigger: null,
+    state: 'completed',
+    warning: null,
+  }])
+  const report = await readJson(join(context.runDir, 'result.json'))
+  assert.deepEqual(report.workflow.linked_audits, execution.linked_audits)
+})
+
+test('an already-terminal linked audit warning is recorded without changing source success', async () => {
+  const context = await environment()
+
+  const result = await evaluate(context, profiles, {
+    readRunnerState: () => runnerInvocations(context).length === 0
+      ? null
+      : {
+          run_id: 'runner-7',
+          session_dir: '/sessions/runner-7',
+          workflow_name: 'implement-change',
+          workflow_completed: true,
+          history,
+          audit: {
+            links: [{
+              auditRunId: 'audit-child',
+              executionSessionId: 'execution-1',
+              trigger: 'automatic',
+              state: 'failed',
+              warning: 'crosscheck profile unavailable',
+            }],
+          },
+        },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.equal(result.outcome.evaluation_status, 'pending-human-review')
+  const report = await readJson(join(context.runDir, 'result.json'))
+  assert.deepEqual(report.workflow.linked_audits, [{
+    run_id: 'audit-child',
+    execution_session_id: 'execution-1',
+    trigger: 'automatic',
+    state: 'failed',
+    warning: 'crosscheck profile unavailable',
+  }])
+})
+
 test('an inactive unfinished Runner resumes only its exact recorded run', async () => {
   const context = await environment()
   await evaluate(context, profiles)
@@ -533,6 +812,78 @@ test('an inactive unfinished Runner resumes only its exact recorded run', async 
 
   assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
   assert.deepEqual(runnerInvocations(context).slice(before).map(({ args }) => args), [
+    ['--resume', 'runner-7'],
+  ])
+})
+
+test('a Claude quota exit waits for reset and resumes the exact Runner run', async () => {
+  const context = await environment({
+    runnerResults: [
+      { status: 1, stdout: '' },
+      { status: 0, stdout: '' },
+    ],
+  })
+  const waits = []
+  const result = await evaluate(context, profiles, {
+    readRunnerState: () => {
+      const runnerCalls = runnerInvocations(context).length
+      if (runnerCalls === 0) return null
+      return {
+        run_id: 'runner-7',
+        session_dir: '/sessions/runner-7',
+        workflow_name: 'implement-change',
+        workflow_completed: runnerCalls >= 2,
+        history: runnerCalls >= 2 ? history : [],
+      }
+    },
+    waitForClaudeQuotaReset: async ({ sessionDir }) => {
+      waits.push(sessionDir)
+      return { waited: true, reset_at: '2026-08-30T22:00:00.000Z' }
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.deepEqual(waits, ['/sessions/runner-7'])
+  assert.deepEqual(runnerInvocations(context).map(({ args }) => args[0]), ['run', '--resume'])
+})
+
+test('a Claude tester quota during an outer resume waits and retries that same run', async () => {
+  const context = await environment({
+    runnerResults: [
+      { status: 0, stdout: '' },
+      { status: 1, stdout: '' },
+      { status: 0, stdout: '' },
+    ],
+  })
+  await evaluate(context, profiles)
+  const before = runnerInvocations(context).length
+  const waits = []
+
+  const result = await evaluate(context, ['--resume', ...profiles], {
+    readRunnerState: () => {
+      const calls = runnerInvocations(context).length
+      return {
+        run_id: 'runner-7',
+        session_dir: '/sessions/runner-7',
+        workflow_name: 'implement-change',
+        workflow_completed: calls >= 3,
+        history: calls >= 3 ? history : [],
+      }
+    },
+    waitForClaudeQuotaReset: async ({ sessionDir }) => {
+      waits.push(sessionDir)
+      return {
+        waited: true,
+        role: 'tester',
+        reset_at: '2026-08-30T04:30:00.000Z',
+      }
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.deepEqual(waits, ['/sessions/runner-7'])
+  assert.deepEqual(runnerInvocations(context).slice(before).map(({ args }) => args), [
+    ['--resume', 'runner-7'],
     ['--resume', 'runner-7'],
   ])
 })
@@ -606,10 +957,9 @@ test('exhausted required judge output is a harness failure that preserves other 
     score.components.find(({ id }) => id === 'testing-evidence-quality').points_awarded,
     null,
   )
-  assert.equal(
-    score.components.find(({ id }) => id === 'scene-kit-correctness').points_awarded,
-    24,
-  )
+  const sceneKit = score.components.find(({ id }) => id === 'scene-kit-correctness')
+  assert.equal(sceneKit.points_awarded, null)
+  assert.equal(sceneKit.points_observed, 23)
 })
 
 test('fresh collisions and legacy checkpoint-only runs are not silently resumed', async () => {
@@ -683,6 +1033,45 @@ test('an evaluator-only rescore imports a completed candidate and never starts A
   assert.equal(written.workflow.events[0].event, 'imported-completed-run')
 })
 
+test('an evaluator-only rescore accepts a historical reviewer profile as tester', async () => {
+  const context = await environment()
+
+  const result = await evaluate(context, [
+    '--rescore-from', '/rescore-source',
+    '--tester-cli', 'cursor',
+    '--tester-model', 'composer',
+    '--tester-effort', 'high',
+  ], {
+    controllerChangeName: null,
+    verifyDelivery: async () => {
+      throw new Error('rescore must not rediscover historical artifact paths')
+    },
+    verifyResumeDelivery: async ({ recorded }) => ({
+      verified: recorded.final_sha === context.commit,
+    }),
+    loadRescoreSource: async () => {
+      const imported = importedRescore(context, { changeName: 'custom-scene-change' })
+      const { tester: _tester, ...profiles } = imported.role_profiles
+      return {
+        ...imported,
+        role_profiles: {
+          ...profiles,
+          reviewer: { cli: 'claude', model: 'opus', effort: 'high', agent: 'reviewer' },
+        },
+      }
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
+  assert.deepEqual(state.role_profiles.tester, {
+    cli: 'claude',
+    model: 'opus',
+    effort: 'high',
+    agent: 'tester',
+  })
+})
+
 test('an evaluator-only rescore rejects an explicit change name that conflicts with its source', async () => {
   const context = await environment()
 
@@ -726,7 +1115,7 @@ test('browser probes are durable hashed evaluator-owned work units even when a p
   assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
   const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
   const units = state.phases['browser-evaluation'].units
-  assert.equal(Object.keys(units).length, 14)
+  assert.equal(Object.keys(units).length, 15)
   assert.ok(Object.values(units).every(({ state: unitState }) => unitState === 'complete'))
   for (const [id, unit] of Object.entries(units)) {
     assert.equal(unit.outputs.length, 1, id)

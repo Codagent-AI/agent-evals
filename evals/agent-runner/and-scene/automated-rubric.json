@@ -1,10 +1,11 @@
 {
   "rubric_id": "and-scene-automated-product",
-  "version": "3.10.0",
+  "version": "3.12.0",
   "total_points": 100,
   "automated_points": 70,
   "human_points": 30,
   "pass_threshold": 70,
+  "automated_pass_threshold": 40,
   "components": [
     {
       "id": "demo-technical-quality",
@@ -166,15 +167,24 @@
           ]
         },
         {
+          "id": "scene-fixed-canvas-uniform-fit",
+          "title": "Fixed-canvas uniform viewport fitting",
+          "points": 1,
+          "evaluator": "deterministic-browser",
+          "criteria": ["canvas-uniform-scaling"],
+          "review_guidance": [
+            "Measure the rendered canvas against its untransformed authored dimensions at wide and 64×64 viewports. Require equal horizontal and vertical scale and require its bounds to remain inside every clipping ancestor and the viewport."
+          ]
+        },
+        {
           "id": "scene-fixed-canvas",
-          "title": "Fixed-canvas behavior",
-          "points": 2,
+          "title": "Fixed-canvas authored dimensions",
+          "points": 1,
           "evaluator": "llm-source-review",
           "job": "scene-kit",
-          "criteria": ["canvas-uniform-scaling", "canvas-default-dimensions"],
+          "criteria": ["canvas-default-dimensions"],
           "review_guidance": [
-            "For canvas-uniform-scaling, require one uniform fit scale that actually fits the available viewport. A minimum-scale clamp that can force the authored canvas to overflow a smaller viewport fails even when both axes use the same numeric scale.",
-            "Inspect narrow-boundary tests below the minimum clamp rather than crediting a formula or constant name."
+            "Require the scene kit's authored canvas to default to the approved 880×495 dimensions; inspect the actual default values consumed by the rendered stage."
           ]
         },
         {

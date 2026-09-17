@@ -10,6 +10,7 @@ import {
   fetchPricingCatalog,
   lookupCatalogEntry,
   parsePricingFinding,
+  needsPricingLookup,
   resolveAttemptCost,
   resolveImplementationPricing,
 } from '../evals/agent-runner/and-scene/lib/pricing.mjs'
@@ -170,6 +171,193 @@ test('reported cost is used without any pricing lookup', async () => {
   assert.equal(resolution.amount_usd, 0.42)
   assert.equal(resolution.source, 'agent-runner-reported')
   assert.equal(resolution.verification, 'reported')
+})
+
+test('allocation-scoped reported cost remains a known subtotal without resolving the whole attempt', async () => {
+  const resolution = await resolveAttemptCost({
+    attempt: attempt({
+      provider: null,
+      model: null,
+      usage: { state: 'available', billing_tokens: null },
+      provider_reported_costs: [{
+        cost_evidence_id: 'cost-a',
+        scope: 'allocation',
+        allocation_id: 'allocation-a',
+        amount: { availability: 'available', value: 0.01 },
+        currency: { availability: 'available', value: 'USD' },
+        coverage: 'full',
+        overlap: 'unknown',
+        source: 'provider_usage',
+      }],
+    }),
+    catalog: null,
+    invoke: null,
+  })
+
+  assert.equal(resolution.state, 'incomplete')
+  assert.equal(resolution.amount_usd, null)
+  assert.equal(resolution.known_subtotal_usd, 0.01)
+  assert.deepEqual(resolution.allocation_costs, [{
+    allocation_id: 'allocation-a',
+    amount_usd: 0.01,
+    cost_evidence_id: 'cost-a',
+    state: 'resolved',
+    coverage: 'full',
+    overlap: 'unknown',
+    source: 'agent-runner-reported',
+  }])
+})
+
+test('exhaustive non-overlapping allocation costs resolve a multi-model dispatch', async () => {
+  const resolution = await resolveAttemptCost({
+    attempt: attempt({
+      provider: null,
+      model: null,
+      usage: { state: 'available', billing_tokens: null },
+      allocations: [
+        { allocation_id: 'allocation-a', provider: 'fixture', model: 'A', usage: {} },
+        { allocation_id: 'allocation-b', provider: 'fixture', model: 'B', usage: {} },
+      ],
+      unallocated_usage: null,
+      provider_reported_costs: [
+        {
+          cost_evidence_id: 'cost-a', scope: 'allocation', allocation_id: 'allocation-a',
+          amount: { availability: 'available', value: 0.01 },
+          currency: { availability: 'available', value: 'USD' },
+          coverage: 'full', overlap: 'established', source: 'provider_usage',
+        },
+        {
+          cost_evidence_id: 'cost-b', scope: 'allocation', allocation_id: 'allocation-b',
+          amount: { availability: 'available', value: 0.02 },
+          currency: { availability: 'available', value: 'USD' },
+          coverage: 'full', overlap: 'established', source: 'provider_usage',
+        },
+      ],
+    }),
+    catalog: null,
+    invoke: null,
+  })
+
+  assert.equal(resolution.state, 'resolved')
+  assert.equal(resolution.amount_usd, 0.03)
+  assert.equal(resolution.known_subtotal_usd, 0.03)
+  assert.equal(resolution.allocation_costs.length, 2)
+})
+
+test('catalog pricing resolves fully attributed multi-model usage per allocation', async () => {
+  const catalog = await fetchPricingCatalog({
+    fetchImpl: catalogFetch(JSON.stringify({
+      fixture: {
+        models: {
+          A: { cost: { input: 1, output: 2 } },
+          B: { cost: { input: 3, output: 4 } },
+        },
+      },
+    })),
+  })
+  const multiModel = attempt({
+    provider: null,
+    model: null,
+    usage: { state: 'available', billing_tokens: null },
+    allocations: [
+      {
+        allocation_id: 'allocation-a', provider: 'fixture', model: 'A',
+        usage: { billing_tokens: { input: 1_000_000, output: 100_000 } },
+      },
+      {
+        allocation_id: 'allocation-b', provider: 'fixture', model: 'B',
+        usage: { billing_tokens: { input: 500_000, output: 200_000 } },
+      },
+    ],
+    unallocated_usage: null,
+  })
+
+  assert.equal(needsPricingLookup([multiModel]), true)
+  const resolution = await resolveAttemptCost({ attempt: multiModel, catalog, invoke: null })
+
+  assert.equal(resolution.state, 'resolved')
+  assert.equal(resolution.amount_usd, 1.2 + 2.3)
+  assert.deepEqual(
+    resolution.allocation_costs.map(({ allocation_id: id, amount_usd: amount }) => [id, amount]),
+    [['allocation-a', 1.2], ['allocation-b', 2.3]],
+  )
+})
+
+test('unknown cost scope or currency is retained as evidence but not converted to USD', async () => {
+  const resolution = await resolveAttemptCost({
+    attempt: attempt({
+      provider: null,
+      model: null,
+      usage: { state: 'available', billing_tokens: null },
+      provider_reported_costs: [{
+        cost_evidence_id: 'cost-unknown',
+        scope: 'unavailable',
+        amount: { availability: 'available', value: 4.2 },
+        currency: { availability: 'unavailable', value: null, reason: 'not_reported' },
+        coverage: 'unknown',
+        overlap: 'unknown',
+        source: 'provider_usage',
+      }],
+    }),
+    catalog: null,
+    invoke: null,
+  })
+
+  assert.equal(resolution.state, 'unavailable')
+  assert.equal(resolution.known_subtotal_usd, 0)
+  assert.equal(resolution.provider_reported_costs[0].amount.value, 4.2)
+})
+
+test('overlapping whole-attempt and allocation costs are not added together', async () => {
+  const resolution = await resolveAttemptCost({
+    attempt: attempt({
+      provider: null,
+      model: null,
+      usage: { state: 'available', billing_tokens: null },
+      provider_reported_costs: [
+        {
+          cost_evidence_id: 'cost-a', scope: 'allocation', allocation_id: 'allocation-a',
+          amount: { availability: 'available', value: 0.01 },
+          currency: { availability: 'available', value: 'USD' },
+          coverage: 'full', overlap: 'established', source: 'provider_usage',
+        },
+        {
+          cost_evidence_id: 'cost-attempt', scope: 'attempt',
+          amount: { availability: 'available', value: 0.5 },
+          currency: { availability: 'available', value: 'USD' },
+          coverage: 'partial', overlap: 'established', source: 'provider_usage',
+        },
+      ],
+    }),
+    catalog: null,
+    invoke: null,
+  })
+
+  assert.equal(resolution.known_subtotal_usd, 0.01)
+  assert.notEqual(resolution.known_subtotal_usd, 0.51)
+})
+
+test('several allocation costs with unknown overlap are not summed into a subtotal', async () => {
+  const resolution = await resolveAttemptCost({
+    attempt: attempt({
+      provider: null,
+      model: null,
+      usage: { state: 'available', billing_tokens: null },
+      provider_reported_costs: ['a', 'b'].map((id, index) => ({
+        cost_evidence_id: `cost-${id}`,
+        scope: 'allocation',
+        allocation_id: `allocation-${id}`,
+        amount: { availability: 'available', value: 0.01 + index * 0.01 },
+        currency: { availability: 'available', value: 'USD' },
+        coverage: 'full', overlap: 'unknown', source: 'provider_usage',
+      })),
+    }),
+    catalog: null,
+    invoke: null,
+  })
+
+  assert.equal(resolution.known_subtotal_usd, 0)
+  assert.equal(resolution.provider_reported_costs.length, 2)
 })
 
 test('a negative reported cost is refused rather than subtracted from the total', async () => {
@@ -384,6 +572,12 @@ test('an attempt with no usable usage is never priced', async () => {
 
 test('the pricing finding schema is enforced on the judge response', () => {
   assert.equal(PRICING_FINDING_SCHEMA.type, 'object')
+  assert.equal(PRICING_FINDING_SCHEMA.additionalProperties, false)
+  assert.deepEqual(
+    [...PRICING_FINDING_SCHEMA.required].sort(),
+    Object.keys(PRICING_FINDING_SCHEMA.properties).sort(),
+  )
+  assert.equal(PRICING_FINDING_SCHEMA.properties.rates.additionalProperties, false)
   assert.throws(
     () => parsePricingFinding('not json', attempt()),
     /valid JSON/,
@@ -392,6 +586,22 @@ test('the pricing finding schema is enforced on the judge response', () => {
     () => parsePricingFinding(JSON.stringify({ found: true, matched_model: 'gpt-5-codex' }), attempt()),
     /source_url/,
   )
+})
+
+test('missing provider or model identity never triggers catalog or judge lookup', async () => {
+  let judgeCalls = 0
+  const unidentified = attempt({ model: null })
+
+  assert.equal(needsPricingLookup([unidentified]), false)
+  const resolution = await resolveAttemptCost({
+    attempt: unidentified,
+    catalog: await loadedCatalog(),
+    invoke: async () => { judgeCalls += 1; return '{}' },
+  })
+
+  assert.equal(judgeCalls, 0)
+  assert.equal(resolution.state, 'unavailable')
+  assert.match(resolution.reason, /provider.*model identity|model identity/)
 })
 
 test('a pricing request names the attempt model and its needed categories', () => {
@@ -421,6 +631,9 @@ test('pricing resolution covers every CLI attempt and records the catalog once',
   assert.equal(resolution.catalog.sha256, hashString(CATALOG_BODY))
   assert.equal(resolution.costs[0].source, 'models.dev')
   assert.equal(resolution.costs[1].source, 'agent-runner-reported')
+  assert.equal(resolution.complete, true)
+  assert.equal(resolution.verified, true)
+  assert.deepEqual(resolution.sources.sort(), ['agent-runner-reported', 'models.dev'])
 })
 
 test('pricing lookup never carries a scoring effect', async () => {

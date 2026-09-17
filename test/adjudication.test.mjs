@@ -44,6 +44,13 @@ function candidateResult() {
     },
     score: {
       components,
+      gates: [
+        'verification-build-whole-app',
+        'verification-sample-outline',
+        'verification-every-produced-step-renders',
+        'verification-clear-outcome',
+      ].map((id) => ({ id, verdict: 'pass', observed: true })),
+      gates_passed: true,
       automated_subtotal: { points: 67.9, possible: 70, observed_possible: 70, complete: true },
       human_review: {
         applicable: true,
@@ -96,6 +103,101 @@ function approvedReview() {
     ],
   }
 }
+
+function replacementHumanReview() {
+  const rubric = {
+    rubric_id: 'and-scene-human-review',
+    version: '2.1.0',
+    sha256: 'c'.repeat(64),
+  }
+  const ratings = [3, 4, 2, 3, 3, 5, 4]
+  const points = [2, 3, 1.25, 3, 2.5, 3, 2.25]
+  return {
+    audit: {
+      approved_by: 'Paul (user)',
+      approved_at: '2026-08-29T12:00:00.000Z',
+      rationale: 'The reviewer confirmed the replacement seven-question visual review.',
+    },
+    humanReview: {
+      schema_version: 1,
+      candidate: { candidate_identity: 'candidate-abc', run_id: 'candidate-1' },
+      rubric,
+      readiness_confirmed: true,
+      responses: ratings.map((rating, index) => ({
+        id: `question-${index + 1}`,
+        number: index + 1,
+        dimension: `dimension-${index + 1}`,
+        question_text: `Question ${index + 1}`,
+        rating,
+        rationale: rating <= 3 ? 'confirmed rationale' : '',
+      })),
+      score: {
+        complete: true,
+        subtotals: points.map((value, index) => ({
+          id: `dimension-${index + 1}`,
+          title: `Dimension ${index + 1}`,
+          points: value,
+          points_possible: [4, 4, 5, 6, 5, 3, 3][index],
+          ratings: [ratings[index]],
+        })),
+        total: 17,
+        possible: 30,
+        floor: 15,
+        lowest_rating: 2,
+        gate_passed: true,
+        gate_failures: [],
+      },
+      complete: true,
+      completed_at: '2026-08-29T11:59:00.000Z',
+    },
+    rubric,
+  }
+}
+
+test('a confirmed replacement human review updates the official score with supersession history', async () => {
+  const module = await adjudicationModule()
+  const original = candidateResult()
+  const replacement = replacementHumanReview()
+  const revised = module.applyHumanReviewSupersession(original, replacement)
+
+  assert.equal(revised.human_review.score.total, 17)
+  assert.equal(revised.score.human_review.points_awarded, 17)
+  assert.deepEqual(revised.score.human_review.ratings, [3, 4, 2, 3, 3, 5, 4])
+  assert.equal(revised.official_score, 84.9)
+  assert.equal(revised.score.official_score, 84.9)
+  assert.equal(revised.product_verdict, 'pass')
+  assert.deepEqual(revised.human_review_history, [original.human_review])
+  assert.equal(revised.rubrics.human.version, '2.1.0')
+  assert.equal(revised.human_review_supersession.prior_human_score, 20.5)
+  assert.equal(revised.human_review_supersession.revised_human_score, 17)
+  assert.equal(revised.human_review_supersession.prior_official_score, 88.4)
+  assert.equal(revised.human_review_supersession.revised_official_score, 84.9)
+  assert.equal(revised.baseline.human_review.candidate, 17)
+  assert.equal(revised.baseline.totals.candidate, 76.9)
+  assert.equal(module.validateHumanReviewSupersession(original, revised).valid, true)
+})
+
+test('human-review supersession rejects an unconfirmed or arithmetically inconsistent review', async () => {
+  const module = await adjudicationModule()
+  const replacement = replacementHumanReview()
+  assert.throws(
+    () => module.applyHumanReviewSupersession(candidateResult(), {
+      ...replacement,
+      humanReview: { ...replacement.humanReview, complete: false },
+    }),
+    /complete replacement human review/,
+  )
+  assert.throws(
+    () => module.applyHumanReviewSupersession(candidateResult(), {
+      ...replacement,
+      humanReview: {
+        ...replacement.humanReview,
+        score: { ...replacement.humanReview.score, total: 18 },
+      },
+    }),
+    /subtotal sum/,
+  )
+})
 
 test('an approved technical adjudication revises the shared score to 58 with an audit trail', async () => {
   const module = await adjudicationModule()
@@ -204,4 +306,84 @@ test('technical adjudication rejects incomplete or out-of-range component scores
       /reviewed_rubric must be an object/,
     )
   }
+})
+
+test('technical adjudication recomputes the pass contract after lowering a passing score', async () => {
+  const module = await adjudicationModule()
+  const result = candidateResult()
+  const revised = module.applyTechnicalAdjudication(result, {
+    ...approvedReview(),
+    component_scores: {
+      'demo-technical-quality': 15,
+      'scene-kit-correctness': 15,
+      'presentation-skill-correctness': 0,
+      'verification-tool-correctness': 0,
+    },
+  })
+
+  assert.equal(revised.official_score, 58.5)
+  assert.equal(revised.score.official_pass, false)
+  assert.deepEqual(revised.score.pass_failures, [{
+    rule: 'total', id: null, value: 58.5, required: 70,
+  }])
+  assert.equal(revised.product_verdict, 'fail')
+  assert.equal(revised.label, 'FAIL')
+})
+
+test('technical adjudication can correct an observed hard gate without replacing its raw verdict', async () => {
+  const module = await adjudicationModule()
+  const result = candidateResult()
+  const outline = result.score.gates.find(({ id }) => id === 'verification-sample-outline')
+  outline.verdict = 'fail'
+  result.score.gates_passed = false
+  result.score.official_pass = false
+  result.score.pass_failures = [{
+    rule: 'hard-gate', id: outline.id, value: 'fail', required: 'pass',
+  }]
+  result.product_verdict = 'fail'
+  result.label = 'FAIL'
+  const gateVerdicts = Object.fromEntries(result.score.gates.map(({ id }) => [id, 'pass']))
+
+  const revised = module.applyTechnicalAdjudication(result, {
+    ...approvedReview(),
+    gate_verdicts: gateVerdicts,
+  })
+
+  const revisedOutline = revised.score.gates.find(({ id }) => id === outline.id)
+  assert.equal(revisedOutline.raw_verdict, 'fail')
+  assert.equal(revisedOutline.verdict, 'pass')
+  assert.equal(revisedOutline.adjudication_changed, true)
+  assert.deepEqual(revised.technical_adjudication.prior_gate_verdicts, {
+    'verification-build-whole-app': 'pass',
+    'verification-sample-outline': 'fail',
+    'verification-every-produced-step-renders': 'pass',
+    'verification-clear-outcome': 'pass',
+  })
+  assert.deepEqual(revised.technical_adjudication.revised_gate_verdicts, gateVerdicts)
+  assert.deepEqual(revised.score.pass_failures, [])
+  assert.equal(revised.score.gates_passed, true)
+  assert.equal(revised.score.official_pass, true)
+  assert.equal(revised.product_verdict, 'pass')
+  assert.equal(revised.label, 'PASS')
+  assert.equal(module.validateTechnicalAdjudicationSupersession(result, revised).valid, true)
+})
+
+test('technical adjudication rejects partial or unknown gate verdict sets', async () => {
+  const module = await adjudicationModule()
+  const result = candidateResult()
+
+  assert.throws(
+    () => module.applyTechnicalAdjudication(result, {
+      ...approvedReview(),
+      gate_verdicts: { 'verification-sample-outline': 'pass' },
+    }),
+    /exactly the four recorded hard gates/,
+  )
+  assert.throws(
+    () => module.applyTechnicalAdjudication(result, {
+      ...approvedReview(),
+      gate_verdicts: Object.fromEntries(result.score.gates.map(({ id }) => [id, 'maybe'])),
+    }),
+    /must be pass or fail/,
+  )
 })

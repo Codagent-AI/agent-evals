@@ -138,6 +138,7 @@ function normalizeState(state, { runId, sessionDir, lock, history, modifiedAtMs 
     run_id: runId,
     session_dir: sessionDir,
     workflow_name: state.workflowName ?? null,
+    run_kind: state.runKind ?? null,
     last_step: step.id,
     step_completed: step.completed,
     workflow_completed: state.completed === true,
@@ -198,6 +199,10 @@ export async function readRunnerState(projectsDir, runId) {
   let newest = null
   let newestAt = null
   for await (const state of sessions(projectsDir)) {
+    // Development builds persist detached audits as sibling runs. They are
+    // inspectable by exact id, but must never be adopted as the implementation
+    // workflow during recovery from the pre-checkpoint crash window.
+    if (state.run_kind === 'audit') continue
     const at = state.modified_at_ms
     if (at === null) continue
     if (newestAt === null || at > newestAt) {
@@ -208,9 +213,22 @@ export async function readRunnerState(projectsDir, runId) {
   return newest
 }
 
-// Production waiting is a real poll of Agent Runner's separate lock file. The
-// default has no deadline because an active implementation workflow may take
-// hours; the outer eval resumes only after Agent Runner releases its lock.
+const TERMINAL_AUDIT_STATES = new Set(['completed', 'failed'])
+
+export function pendingLinkedAudits(state) {
+  const links = state?.audit?.links
+  if (!Array.isArray(links)) return []
+  return links.filter((link) => !TERMINAL_AUDIT_STATES.has(link?.state))
+}
+
+export function hasPendingLinkedAudits(state) {
+  return pendingLinkedAudits(state).length > 0
+}
+
+// Production waiting is a real poll of Agent Runner's separate lock file and
+// its source-side linked-audit lifecycle. The default has no deadline because
+// either workflow may make long-running model calls; the outer eval resumes
+// only after the source releases its lock and every linked audit is terminal.
 export async function waitForRunnerRun({
   readState,
   runId,
@@ -222,7 +240,8 @@ export async function waitForRunnerRun({
     const state = await readState(runId)
     if (!state) throw new Error(`cannot verify the status of Agent Runner run ${runId} while waiting`)
     const pid = state.lock?.pid
-    if (!Number.isInteger(pid) || !isProcessAlive(pid)) return state
+    const sourceActive = Number.isInteger(pid) && isProcessAlive(pid)
+    if (!sourceActive && !hasPendingLinkedAudits(state)) return state
     await sleep(intervalMs)
   }
 }

@@ -12,6 +12,7 @@ import {
   compareProvenance,
   readAgentSkillsProvenance,
   readWorkflowProvenance,
+  resolveAgentRunnerDir,
 } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
 
 const workflowYaml = 'name: implement-change\nsteps:\n  - id: verify-acceptance-handoff\n'
@@ -39,14 +40,14 @@ function execStub(overrides = {}) {
 async function checkout({ workflow = workflowYaml } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'agent-evals-provenance-'))
   if (workflow !== null) {
-    await mkdir(join(dir, 'workflows/openspec'), { recursive: true })
+    await mkdir(join(dir, 'workflows/core'), { recursive: true })
     await writeFile(join(dir, WORKFLOW_RELATIVE_PATH), workflow)
   }
   return dir
 }
 
 test('the pinned workflow path is the versioned implement-change contract', () => {
-  assert.equal(WORKFLOW_RELATIVE_PATH, 'workflows/openspec/implement-change-v2.0.yaml')
+  assert.equal(WORKFLOW_RELATIVE_PATH, 'workflows/core/implement-change-v1.0.yaml')
 })
 
 test('a clean Agent Skills checkout records its commit and plugin manifest hash', async () => {
@@ -128,11 +129,11 @@ test('an unstaged change stops the evaluation before Agent Runner', async () => 
   await assert.rejects(
     () => readWorkflowProvenance({
       agentRunnerDir: dir,
-      exec: execStub({ 'git status --porcelain': { status: 0, stdout: ' M workflows/openspec/implement-change-v2.0.yaml\n' } }),
+      exec: execStub({ 'git status --porcelain': { status: 0, stdout: ' M workflows/core/implement-change-v1.0.yaml\n' } }),
     }),
     (error) => {
       assert.equal(error.code, 'dirty-agent-runner-checkout')
-      assert.match(error.message, /implement-change-v2\.0\.yaml/)
+      assert.match(error.message, /implement-change-v1\.0\.yaml/)
       return true
     },
   )
@@ -217,4 +218,29 @@ test('compareProvenance reports a changed commit, workflow hash, and CLI version
     { field: 'commit', recorded: 'a', current: 'z' },
     { field: 'cli_version', recorded: 'c', current: 'c2' },
   ])
+})
+
+// run.sh resolves the Agent Runner checkout as AGENT_RUNNER_DIR, falling back to
+// the sibling `../agent-runner`. The suite's own checks resolve it the same way,
+// so a workstation with the conventional layout exercises the live contract
+// check without extra configuration.
+test('an explicit AGENT_RUNNER_DIR selects the Agent Runner checkout', () => {
+  assert.equal(
+    resolveAgentRunnerDir({ env: { AGENT_RUNNER_DIR: '/somewhere/agent-runner' }, evalsRoot: '/repos/agent-evals' }),
+    '/somewhere/agent-runner',
+  )
+})
+
+test('an unset AGENT_RUNNER_DIR falls back to the sibling checkout run.sh defaults to', () => {
+  assert.equal(
+    resolveAgentRunnerDir({ env: {}, evalsRoot: '/repos/agent-evals' }),
+    '/repos/agent-runner',
+  )
+})
+
+test('a blank AGENT_RUNNER_DIR falls back rather than selecting an empty path', () => {
+  assert.equal(
+    resolveAgentRunnerDir({ env: { AGENT_RUNNER_DIR: '   ' }, evalsRoot: '/repos/agent-evals' }),
+    '/repos/agent-runner',
+  )
 })

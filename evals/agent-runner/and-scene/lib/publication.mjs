@@ -25,7 +25,10 @@ import { join } from 'node:path'
 import { hashJson, readJson, writeJsonAtomic } from './persistence.mjs'
 import { runTimed } from './subprocess.mjs'
 import { writeResultArtifacts } from './result.mjs'
-import { validateTechnicalAdjudicationSupersession } from './adjudication.mjs'
+import {
+  validateHumanReviewSupersession,
+  validateTechnicalAdjudicationSupersession,
+} from './adjudication.mjs'
 
 export const PUBLICATION_SCHEMA_VERSION = 1
 
@@ -275,10 +278,16 @@ export async function publishRun({
     const approvedBaselineAttachment = !coreChanged
       && publishedBaseline?.comparable !== true
       && nextBaseline?.comparable === true
-    const adjudication = validateTechnicalAdjudicationSupersession(publishedResult, result)
-    if (!approvedBaselineAttachment && !adjudication.valid) {
+    const technicalAdjudication = validateTechnicalAdjudicationSupersession(publishedResult, result)
+    const humanReviewSupersession = validateHumanReviewSupersession(publishedResult, result)
+    if (
+      !approvedBaselineAttachment
+      && !technicalAdjudication.valid
+      && !humanReviewSupersession.valid
+    ) {
       const message = `cannot supersede completed publication ${runId} with a non-baseline result change`
-        + ` or invalid adjudication: ${adjudication.reason}`
+        + ` or invalid adjudication: technical: ${technicalAdjudication.reason}; `
+        + `human review: ${humanReviewSupersession.reason}`
       await writeJsonAtomic(checkpointPath, { ...checkpoint, error: message })
       throw new PublicationError(
         message,

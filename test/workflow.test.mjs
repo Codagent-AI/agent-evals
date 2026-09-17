@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict'
+import { access, readFile } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 
+import {
+  WORKFLOW_RELATIVE_PATH,
+  resolveAgentRunnerDir,
+} from '../evals/agent-runner/and-scene/lib/provenance.mjs'
 import {
   checkWorkflowHistory,
   classifyRunnerRun,
@@ -12,6 +20,14 @@ import {
 const workflowYaml = `name: implement-change
 params:
   - name: change_name
+    required: true
+  - name: change_dir
+    required: true
+  - name: change_label
+    required: true
+  - name: change_kind
+    required: true
+  - name: artifact_validation_instruction
     required: true
   - name: skip_validator
     default: false
@@ -34,22 +50,39 @@ const requiredHistory = [
   { step: 'verify-acceptance-handoff', outcome: 'success' },
 ]
 
-test('the exact full workflow has no early stop boundary', () => {
+test('the exact full workflow has no early stop boundary and supplies resolved OpenSpec parameters', () => {
   const workflow = resolveBoundary({ skipValidator: true, changeName: 'create-and-scene' })
 
   assert.equal(workflow.workflow, 'implement-change')
-  assert.equal(workflow.workflow_path, 'workflows/openspec/implement-change-v2.0.yaml')
+  assert.equal(workflow.workflow_path, 'workflows/core/implement-change-v1.0.yaml')
   assert.equal(workflow.stop_step, null)
-  assert.deepEqual(workflow.workflow_arguments, ['change_name=create-and-scene', 'skip_validator=true'])
+  assert.deepEqual(workflow.workflow_arguments, [
+    'change_name=create-and-scene',
+    'change_dir=openspec/changes/create-and-scene',
+    'change_label=OpenSpec change',
+    'change_kind=openspec',
+    'artifact_validation_instruction=When an approved artifact changed, run `openspec validate --type change "create-and-scene"`.',
+    'skip_validator=true',
+  ])
+  assert.ok(workflow.workflow_arguments.every((argument) => !argument.includes('{{')))
 })
 
-test('skip-validator only changes the task-level compliance workflow argument', () => {
+test('workflow arguments reject an unresolved change-name placeholder', () => {
+  assert.throws(
+    () => resolveBoundary({ changeName: '{{change_name}}' }),
+    /unresolved placeholder/i,
+  )
+})
+
+test('skip-validator marks task-level and final Validator execution as skipped', () => {
   const skipped = resolveBoundary({ skipValidator: true, changeName: 'create-and-scene' })
   const included = resolveBoundary({ skipValidator: false, changeName: 'create-and-scene' })
 
   assert.equal(skipped.skip_validator, 'true')
   assert.equal(included.skip_validator, 'false')
-  assert.equal(skipped.final_validator, 'required')
+  assert.equal(skipped.task_level_compliance, 'skipped')
+  assert.equal(skipped.final_validator, 'skipped')
+  assert.equal(included.task_level_compliance, 'required')
   assert.equal(included.final_validator, 'required')
   assert.equal(skipped.stop_step, null)
   assert.equal(included.stop_step, null)
@@ -59,13 +92,19 @@ test('the validator option defaults to false', () => {
   assert.equal(resolveBoundary({ changeName: 'create-and-scene' }).skip_validator, 'false')
 })
 
-test('the workflow contract exposes list and mapping parameters plus ordered steps', () => {
-  assert.deepEqual(parseWorkflowContract(workflowYaml).parameters, ['change_name', 'skip_validator'])
+test('the workflow contract exposes direct top-level list and mapping parameters plus ordered steps', () => {
+  assert.deepEqual(parseWorkflowContract(workflowYaml).parameters, [
+    'change_name', 'change_dir', 'change_label', 'change_kind', 'artifact_validation_instruction', 'skip_validator',
+  ])
   assert.deepEqual(
     parseWorkflowContract('parameters:\n  change_name:\n  skip_validator:\nsteps:\n  - id: run-validator\n').parameters,
     ['change_name', 'skip_validator'],
   )
   assert.equal(parseWorkflowContract(workflowYaml).steps.at(-1), 'verify-acceptance-handoff')
+  assert.deepEqual(
+    parseWorkflowContract(`${workflowYaml}  - id: nested-group\n    steps:\n      - id: release-product\n`).steps,
+    [...parseWorkflowContract(workflowYaml).steps, 'nested-group'],
+  )
 })
 
 test('full-workflow preflight requires the parameter and every final delivery step', () => {
@@ -86,8 +125,10 @@ test('full-workflow preflight requires the parameter and every final delivery st
     assert.match(result.errors.join(' '), new RegExp(missing), missing)
   }
 
-  const noParameter = verifyWorkflowContract(workflowYaml.replace('  - name: skip_validator\n', ''))
-  assert.match(noParameter.errors.join(' '), /skip_validator/)
+  for (const parameter of ['change_name', 'change_dir', 'change_label', 'change_kind', 'artifact_validation_instruction', 'skip_validator']) {
+    const noParameter = verifyWorkflowContract(workflowYaml.replace(`  - name: ${parameter}\n`, ''))
+    assert.match(noParameter.errors.join(' '), new RegExp(parameter))
+  }
 })
 
 test('full-workflow preflight rejects declared prohibited publication steps', () => {
@@ -109,6 +150,7 @@ test('completed workflow history requires every final delivery step and rejects 
   assert.deepEqual(checkWorkflowHistory(requiredHistory), {
     ok: true,
     missing_steps: [],
+    invalid_outcomes: [],
     prohibited_effects: [],
     observed_steps: requiredHistory.map(({ step }) => step),
   })
@@ -127,6 +169,69 @@ test('completed workflow history requires every final delivery step and rejects 
   ])
   assert.equal(nested.ok, false)
   assert.equal(nested.prohibited_effects[0].step, 'release-product')
+
+  const subworkflow = checkWorkflowHistory([
+    ...requiredHistory,
+    { step: 'run-validator', step_path: ['run-validator', 'sub:archive-change-v1.0'], outcome: 'success' },
+  ])
+  assert.equal(subworkflow.ok, false)
+  assert.equal(subworkflow.prohibited_effects[0].step, 'archive-change-v1.0')
+})
+
+test('skipped validation requires an explicit skipped final Validator outcome', () => {
+  const skippedHistory = [
+    { step: 'run-validator', outcome: 'skipped' },
+    ...requiredHistory.slice(1),
+  ]
+
+  assert.deepEqual(checkWorkflowHistory(skippedHistory, { skipValidator: true }), {
+    ok: true,
+    missing_steps: [],
+    invalid_outcomes: [],
+    prohibited_effects: [],
+    observed_steps: skippedHistory.map(({ step }) => step),
+  })
+
+  const absent = checkWorkflowHistory(skippedHistory.slice(1), { skipValidator: true })
+  assert.equal(absent.ok, false)
+  assert.deepEqual(absent.missing_steps, ['run-validator'])
+
+  const unexpectedlyRan = checkWorkflowHistory(requiredHistory, { skipValidator: true })
+  assert.equal(unexpectedlyRan.ok, false)
+  assert.deepEqual(unexpectedlyRan.invalid_outcomes, [{
+    step: 'run-validator',
+    expected: 'skipped',
+    observed: 'success',
+  }])
+})
+
+test('enabled validation requires a successful final Validator outcome', () => {
+  const skippedHistory = [
+    { step: 'run-validator', outcome: 'skipped' },
+    ...requiredHistory.slice(1),
+  ]
+
+  const checked = checkWorkflowHistory(skippedHistory, { skipValidator: false })
+  assert.equal(checked.ok, false)
+  assert.deepEqual(checked.invalid_outcomes, [{
+    step: 'run-validator',
+    expected: 'success',
+    observed: 'skipped',
+  }])
+})
+
+test('available Agent Runner checkout satisfies the pinned core workflow contract', async (t) => {
+  const evalsRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
+  const agentRunnerDir = resolveAgentRunnerDir({ env: process.env, evalsRoot })
+  const workflowPath = join(agentRunnerDir, WORKFLOW_RELATIVE_PATH)
+  try {
+    await access(workflowPath, constants.R_OK)
+  } catch {
+    t.skip(`Agent Runner checkout is unavailable at ${workflowPath}; skipping live contract check`)
+    return
+  }
+  const contract = verifyWorkflowContract(await readFile(workflowPath, 'utf8'))
+  assert.equal(contract.ok, true, contract.errors.join('\n'))
 })
 
 test('no persisted run starts a fresh complete workflow', () => {

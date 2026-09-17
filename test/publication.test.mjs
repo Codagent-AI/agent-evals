@@ -12,7 +12,10 @@ import {
   publicationEligibility,
   publishRun,
 } from '../evals/agent-runner/and-scene/lib/publication.mjs'
-import { applyTechnicalAdjudication } from '../evals/agent-runner/and-scene/lib/adjudication.mjs'
+import {
+  applyHumanReviewSupersession,
+  applyTechnicalAdjudication,
+} from '../evals/agent-runner/and-scene/lib/adjudication.mjs'
 import { readJson } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
 
 function git(cwd, ...args) {
@@ -564,6 +567,98 @@ test('a completed publication can be superseded only by a validated technical ad
   )
   assert.equal(finalPublished.technical_adjudication.revised_shared_technical_score, 53.691666666667)
   assert.equal(finalPublished.official_score, 80.191666666667)
+})
+
+test('a completed publication can be superseded by a confirmed replacement human review', async () => {
+  const { repo, remote, dir } = await disposableRepo()
+  const { runDir, runId, result } = await finalizedRun(dir)
+  const rubric = {
+    rubric_id: 'and-scene-human-review', version: '1.0.0', sha256: 'b'.repeat(64),
+  }
+  const scored = {
+    ...result,
+    official_score: 84,
+    automated_subtotal: { points: 63.5, possible: 70, observed_possible: 70, complete: true },
+    rubrics: { human: rubric },
+    human_review: {
+      complete: true,
+      completed_at: '2026-08-20T12:00:00.000Z',
+      rubric,
+      responses: [{ id: 'old-question', rating: 3 }],
+      score: { complete: true, subtotals: [{ points: 20.5 }], total: 20.5, possible: 30 },
+    },
+    score: {
+      components: [],
+      gates: [],
+      automated_subtotal: { points: 63.5, possible: 70, observed_possible: 70, complete: true },
+      human_review: {
+        applicable: true, points_awarded: 20.5, points_possible: 30,
+        points: 20.5, possible: 30, floor: 15, lowest_rating: 3, complete: true,
+      },
+      official_score: 84,
+      official_pass: true,
+      pass_failures: [],
+    },
+  }
+  await writeFile(join(runDir, 'result.json'), JSON.stringify(scored))
+  await publishRun({ runDir, runId, result: scored, repoDir: repo })
+  const firstCommit = git(repo, 'rev-parse', 'HEAD')
+
+  const reviewedRubric = {
+    rubric_id: 'and-scene-human-review', version: '2.1.0', sha256: 'c'.repeat(64),
+  }
+  const ratings = [3, 4, 2, 3, 3, 5, 4]
+  const points = [2, 3, 1.25, 3, 2.5, 3, 2.25]
+  const replacement = {
+    schema_version: 1,
+    candidate: { run_id: runId },
+    rubric: reviewedRubric,
+    readiness_confirmed: true,
+    responses: ratings.map((rating, index) => ({
+      id: `question-${index + 1}`,
+      number: index + 1,
+      dimension: `dimension-${index + 1}`,
+      question_text: `Question ${index + 1}`,
+      rating,
+      rationale: rating <= 3 ? 'confirmed rationale' : '',
+    })),
+    score: {
+      complete: true,
+      subtotals: points.map((value, index) => ({
+        id: `dimension-${index + 1}`,
+        points: value,
+        points_possible: [4, 4, 5, 6, 5, 3, 3][index],
+      })),
+      total: 17,
+      possible: 30,
+      floor: 15,
+      lowest_rating: 2,
+      gate_passed: true,
+      gate_failures: [],
+    },
+    complete: true,
+    completed_at: '2026-08-29T12:00:00.000Z',
+  }
+  const revised = applyHumanReviewSupersession(scored, {
+    audit: {
+      approved_by: 'Paul (user)',
+      approved_at: '2026-08-29T12:01:00.000Z',
+      rationale: 'Confirmed replacement seven-question visual review.',
+    },
+    humanReview: replacement,
+    rubric: reviewedRubric,
+  })
+  await writeFile(join(runDir, 'result.json'), JSON.stringify(revised))
+
+  const outcome = await publishRun({ runDir, runId, result: revised, repoDir: repo })
+
+  assert.equal(outcome.published, true)
+  assert.notEqual(outcome.commit, firstCommit)
+  assert.equal(git(remote, 'rev-parse', 'HEAD'), outcome.commit)
+  const published = await readJson(join(repo, RESULTS_RELATIVE_DIR, runId, 'result.json'))
+  assert.equal(published.human_review.score.total, 17)
+  assert.equal(published.human_review_history[0].score.total, 20.5)
+  assert.equal(published.human_review_supersession.revised_official_score, 80.5)
 })
 
 test('an invalid adjudication leaves the published snapshot unchanged and records the failure', async () => {

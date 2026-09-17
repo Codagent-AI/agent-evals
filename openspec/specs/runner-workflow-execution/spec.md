@@ -4,12 +4,12 @@
 Define clean, configurable, resumable execution of the Agent Runner implementation workflow and the ordered evaluation lifecycle.
 ## Requirements
 ### Requirement: Clean recorded Agent Runner revision
-The evaluation harness SHALL use `workflows/openspec/implement-change2.yaml` from the configured Agent Runner checkout. Before starting or resuming an Agent Runner workflow, the harness SHALL require that checkout to be a Git worktree with no staged, unstaged, or untracked changes. It SHALL record the checkout's commit SHA, the SHA-256 hash of the workflow file, and the Agent Runner CLI version, but SHALL NOT require the commit SHA to match a predetermined value.
+The evaluation harness SHALL use `workflows/core/implement-change-v1.0.yaml` from the configured Agent Runner checkout. Before starting or resuming an Agent Runner workflow, the harness SHALL require that checkout to be a Git worktree with no staged, unstaged, or untracked changes. It SHALL record the checkout's commit SHA, the SHA-256 hash of the workflow file, and the Agent Runner CLI version, but SHALL NOT require the commit SHA to match a predetermined value.
 
 On resume, the recorded Agent Runner commit, workflow hash, and CLI version SHALL match the checkout being used. A missing workflow, dirty checkout, or provenance mismatch SHALL stop the evaluation before Agent Runner execution.
 
 #### Scenario: Clean Agent Runner checkout starts
-- **WHEN** the configured Agent Runner checkout is clean and contains `workflows/openspec/implement-change2.yaml`
+- **WHEN** the configured Agent Runner checkout is clean and contains `workflows/core/implement-change-v1.0.yaml`
 - **THEN** the harness records its commit, workflow hash, and CLI version and may start the workflow
 
 #### Scenario: Agent Runner checkout has uncommitted changes
@@ -24,30 +24,67 @@ On resume, the recorded Agent Runner commit, workflow hash, and CLI version SHAL
 - **WHEN** resume finds a different Agent Runner commit, workflow hash, or CLI version from the recorded run
 - **THEN** the harness refuses to reuse the Agent Runner checkpoint and reports a resume-provenance error
 
+#### Scenario: Resolved workflow does not match the pinned workflow
+- **WHEN** the workflow Agent Runner resolves for the logical reference `core:implement-change` does not match the hash recorded from the pinned workflow file
+- **THEN** the harness stops before Agent Runner execution and reports a workflow-resolution error
+
 ### Requirement: Validator control and stop boundary
-The evaluation harness SHALL expose a `--skip-validator` option and SHALL hard-code the exact versioned workflow at `workflows/openspec/implement-change-v2.0.yaml` as the implementation workflow for this change. It SHALL record the workflow's Agent Runner commit and content hash and SHALL pass the fixture change name and an explicit `skip_validator` workflow argument. The option SHALL control only task-level compliance validation inside the implementation loop; it SHALL NOT select an early workflow stop boundary or skip the final Validator.
+The evaluation harness SHALL expose a `--skip-validator` option and SHALL hard-code the exact versioned workflow at `workflows/core/implement-change-v1.0.yaml` as the implementation workflow for this change, invoking it by the logical reference `core:implement-change`. It SHALL record the workflow's Agent Runner commit and content hash and SHALL pass the fixture change name, the OpenSpec artifact directory, change label, and artifact-validation instruction, together with an explicit `skip_validator` workflow argument. The option SHALL skip every workflow-owned Agent Validator execution: task-level compliance inside the implementation loop, the final Validator, and Validator calls requested after acceptance remediation. It SHALL NOT select an early workflow stop boundary or skip draft-PR creation, acceptance preparation, or handoff verification.
+
+Because the shared workflow accepts the backend-specific values that Agent Runner's OpenSpec namespace would otherwise supply, the harness SHALL pass `change_dir` as `openspec/changes/<change-name>`, `change_label` as `OpenSpec change`, and an `artifact_validation_instruction` directing `openspec validate --type change` against the evaluated change name.
+
+Each supplied parameter value SHALL be fully substituted before it is passed. Agent Runner interpolates a step template once against its parameters and does not re-interpolate a substituted value, so a parameter value containing an unresolved placeholder SHALL NOT be passed; it would reach the agent verbatim without raising an error.
 
 | Eval invocation | Workflow argument | Task-level compliance | Final Validator | Workflow boundary |
 |---|---|---|---|---|
-| With `--skip-validator` | `skip_validator=true` | Skipped | Required | Full workflow completion |
+| With `--skip-validator` | `skip_validator=true` | Skipped | Skipped | Full workflow completion |
 | Without `--skip-validator` | `skip_validator=false` | Required | Required | Full workflow completion |
 
-The option SHALL default to false. Before starting the workflow, the harness SHALL verify that the `skip_validator` parameter and the required final Validator, draft-PR, acceptance-preparation, and handoff-verification steps exist. It SHALL also verify a clean pinned Agent Skills checkout containing every `codagent:*` skill named by the workflow and install that exact checkout for every selected workflow CLI before invoking an agent. The first complete evaluation required by this change SHALL explicitly use `--skip-validator`.
+The option SHALL default to false. Before starting the workflow, the harness SHALL verify that the `change_name`, `change_dir`, `change_label`, `artifact_validation_instruction`, and `skip_validator` parameters exist, and that the final Validator, draft-PR, draft-PR verification, acceptance-preparation, and handoff-verification steps exist as direct top-level steps of the invoked workflow. A required step declared only inside a loop, group, or nested step definition SHALL NOT satisfy the contract, because completed-step verification identifies a step by the first segment of its recorded step path. It SHALL also verify a clean pinned Agent Skills checkout containing every `codagent:*` skill named by the workflow and install that exact checkout for every selected workflow CLI before invoking an agent. The first complete evaluation required by this change SHALL explicitly use `--skip-validator`.
+
+After execution, the harness SHALL require the direct top-level `run-validator` step to have outcome `skipped` when `skip_validator=true` and `success` when `skip_validator=false`. A missing step, an interrupted step without a terminal outcome, or an outcome that contradicts the selected mode SHALL make workflow delivery incomplete. Resume and evaluator-only rescore SHALL enforce the same recorded argument-to-outcome relationship.
 
 #### Scenario: Validator is skipped
 - **WHEN** the eval is invoked with `--skip-validator`
 - **THEN** the harness passes `skip_validator=true`
-- **AND** Agent Runner continues through the final Validator, draft-PR, and acceptance workflow
+- **AND** Agent Runner records task-level and final Validator execution as skipped
+- **AND** Agent Runner continues through the draft-PR and acceptance workflow without requesting Validator after acceptance remediation
 
 #### Scenario: Validator is included by default
 - **WHEN** the eval is invoked without `--skip-validator`
 - **THEN** the harness passes `skip_validator=false`
 - **AND** Agent Runner runs both task-level compliance and the final Validator before completing the workflow
 
+#### Scenario: Skipped final Validator is explicitly recorded
+- **WHEN** `skip_validator=true` and the complete workflow records the direct top-level `run-validator` outcome as `skipped`
+- **THEN** the harness accepts the Validator disposition and continues delivery verification
+
+#### Scenario: Skipped final Validator evidence is missing or contradictory
+- **WHEN** `skip_validator=true` but the direct top-level `run-validator` event is absent, nonterminal, or reports an outcome other than `skipped`
+- **THEN** the harness reports incomplete implementation-workflow delivery and does not begin scored judging
+
+#### Scenario: Enabled final Validator did not pass
+- **WHEN** `skip_validator=false` but the direct top-level `run-validator` event is absent, nonterminal, or reports an outcome other than `success`
+- **THEN** the harness reports incomplete implementation-workflow delivery and does not begin scored judging
+
+#### Scenario: OpenSpec artifact parameters are supplied
+- **WHEN** the harness starts the shared implementation workflow for the evaluated change
+- **THEN** it passes `change_dir` as `openspec/changes/<change-name>`, `change_label` as `OpenSpec change`, and an artifact-validation instruction naming `openspec validate --type change` for that change
+
+#### Scenario: Parameter values are supplied fully resolved
+- **WHEN** the harness builds the workflow arguments for the evaluated change
+- **THEN** every supplied value is fully substituted
+- **AND** no value containing an unresolved placeholder is passed
+
 #### Scenario: Expected workflow contract is unavailable
-- **WHEN** `implement-change-v2.0.yaml` is unavailable or lacks the `skip_validator` parameter or any required final-workflow step
+- **WHEN** `implement-change-v1.0.yaml` is unavailable or lacks any required parameter or any required final-workflow step
 - **THEN** the harness fails before starting Agent Runner
 - **AND** it identifies the missing workflow contract
+
+#### Scenario: Required step is not a top-level step
+- **WHEN** a required final-workflow step is declared only inside a loop, group, or nested step definition rather than as a direct top-level step
+- **THEN** the harness fails before starting Agent Runner
+- **AND** it identifies the step that does not satisfy the contract
 
 #### Scenario: Required workflow skill is unavailable
 - **WHEN** the pinned Agent Skills checkout is dirty, cannot be identified, or lacks a `codagent:*` skill named by the workflow
@@ -55,14 +92,19 @@ The option SHALL default to false. Before starting the workflow, the harness SHA
 - **AND** it identifies the unavailable skill or provenance
 
 ### Requirement: Ordered evaluation lifecycle
-For an Agent Runner candidate, the main evaluation command SHALL execute phases in this order: preflight the pinned fixture, unique candidate branch, Agent Runner checkout, Agent Skills checkout, workflow contract, credentials, lead, implementor, and reviewer profiles, evaluator, and run directory; install the pinned workflow skills for the selected CLIs; run or resume the complete Agent Runner workflow; verify candidate delivery and acceptance-handoff completeness; install dependencies, build, and run non-browser verification; start the evaluated final candidate server; run deterministic browser checks and capture evaluator evidence; run the six focused product judge jobs; run the separate non-scoring ambiguity diagnostic; ingest metrics and resolve pricing; write the pending-human-review result and HTML report; attempt candidate-server cleanup; update the pending artifacts with the cleanup outcome; and exit successfully.
+For an Agent Runner candidate, the main evaluation command SHALL execute phases in this order: preflight the pinned fixture, unique candidate branch, Agent Runner checkout, Agent Skills checkout, workflow contract, credentials, lead, implementor, and reviewer profiles, evaluator, and run directory; install the pinned workflow skills for the selected CLIs; run or resume the complete Agent Runner workflow; verify candidate delivery and acceptance-handoff completeness; install dependencies, build, and run non-browser verification; start the evaluated final candidate server; run deterministic browser checks and capture evaluator evidence; run the six focused product judge jobs; run the separate non-scoring ambiguity diagnostic; ingest metrics and resolve pricing; write either an eligible `pending-human-review` result or a conclusive automated product-fail result and HTML report; attempt candidate-server cleanup; update the artifacts with the cleanup outcome; and exit successfully.
 
-The separate human-review command SHALL later restore or start the same evaluated final candidate server; collect or resume human review; calculate the official candidate result; generate the final HTML report; attempt candidate-server cleanup; update the final artifacts; and publish a curated permanent result for a completed scored candidate pass or product-fail run. The candidate server SHALL be running before every browser-dependent phase and SHALL NOT be required to remain running between the automated and human-review commands. If verified product behavior makes the final candidate unable to install, build, or serve, dependent browser and human-review phases SHALL NOT run, and the conclusive product-failure outcome rules SHALL apply instead.
+For an eligible pending run, the separate human-review command SHALL later restore or start the same evaluated final candidate server; collect or resume human review; calculate the official candidate result; generate the final HTML report; attempt candidate-server cleanup; update the final artifacts; and publish a curated permanent result for a completed scored candidate pass or product-fail run. The candidate server SHALL be running before every browser-dependent phase and SHALL NOT be required to remain running between the automated and human-review commands. If complete automated scoring proves that the candidate cannot pass, or verified product behavior makes the final candidate unable to install, build, or serve, human review SHALL NOT run and the applicable conclusive product-failure outcome rules SHALL apply instead.
 
 #### Scenario: Automated evaluation follows the phase order
 - **WHEN** every automated candidate-evaluation phase completes successfully
 - **THEN** each phase begins only after its required predecessor has completed
 - **AND** scored product judging begins only after complete candidate delivery and acceptance-handoff evidence are verified
+
+#### Scenario: Automated result determines the next action
+- **WHEN** automated scoring completes
+- **THEN** an eligible candidate is handed off for human review
+- **AND** a candidate that fails a complete automated threshold, floor, or hard gate finishes without invoking human review
 
 #### Scenario: Human review finalizes later
 - **WHEN** the separate human-review command completes a pending candidate review
@@ -88,6 +130,8 @@ The evaluation harness SHALL generate and durably record its evaluation run iden
 
 If the recorded Agent Runner run is active, the harness SHALL verify that the active process owns that run and wait for the same run rather than launching or resuming another. If the run completed the full workflow and its delivery identity still matches, the harness SHALL continue to the next eval phase. If the run is inactive and unfinished, the harness SHALL invoke `agent-runner --resume <run-id>` and allow Agent Runner to choose its internal resume point. If the run, process, branch, pull request, or revision identity cannot be verified, the harness SHALL stop with an explicit workflow or resume-provenance error. It SHALL never start a duplicate implementation run, candidate branch, or draft pull request merely because the outer eval process restarted.
 
+Agent Runner development builds MAY launch linked audit runs asynchronously after the source workflow finalizes. When the source state reports linked audits, the harness SHALL wait until every link is `completed` or `failed` before delivery verification, artifact ingestion, or scoring, so the disposable evaluation container cannot exit underneath a live audit. An audit launch or execution warning SHALL remain diagnostic and SHALL NOT replace the source workflow outcome. During recovery without a checkpointed source-run identifier, the harness SHALL exclude `runKind: audit` siblings from source-run discovery; an audit run remains inspectable by its exact identifier but SHALL NOT be adopted as the implementation workflow.
+
 #### Scenario: Recorded Agent Runner run is still active
 - **WHEN** eval resume verifies that the recorded Agent Runner run is owned by a live process
 - **THEN** the harness waits for that same run
@@ -96,6 +140,16 @@ If the recorded Agent Runner run is active, the harness SHALL verify that the ac
 #### Scenario: Recorded Agent Runner run completed
 - **WHEN** eval resume verifies that the recorded run completed the full workflow and its branch, PR, and final-head identity still match
 - **THEN** the harness preserves its outputs and continues to the next incomplete eval phase
+
+#### Scenario: Source completes with a linked audit still active
+- **WHEN** the source implementation workflow is complete but its durable audit link is reserved, launching, or started
+- **THEN** the harness waits for the linked audit to become completed or failed before delivery verification
+- **AND** it does not let the disposable container exit while the linked audit remains active
+
+#### Scenario: Recovery sees a newer audit child
+- **WHEN** the harness restarts after source finalization but before recording the source run identifier and the newest persisted sibling has `runKind: audit`
+- **THEN** source-run discovery ignores that child and adopts the newest ordinary workflow run
+- **AND** exact-id audit inspection remains possible
 
 #### Scenario: Recorded Agent Runner run terminated unfinished
 - **WHEN** eval resume verifies that the recorded run is inactive and unfinished
@@ -139,7 +193,7 @@ When a defect is confined to evaluator-owned phases after a candidate has comple
 - **AND** it does not invoke Agent Runner, modify the candidate, create or push a branch, or repeat acceptance testing
 
 ### Requirement: Workflow execution provenance
-The evaluation result SHALL record the evaluation run identifier; the distinct Agent Runner run identifier; the Agent Runner commit and clean-worktree result, CLI version, workflow path and SHA-256 hash; the Agent Skills commit, clean-worktree result, and plugin-manifest hash; the configured lead, implementor, and reviewer profiles; workflow arguments; task-level Validator choice; session directory; candidate repository and branch; draft-PR URL and base; final local and PR head SHA; every observed workflow step and outcome; final Validator result; candidate-reported CI status when present; acceptance attempt history; and hashes of required acceptance artifacts. It SHALL also record start, wait, resume, completion, and retry events without treating those events as product points.
+The evaluation result SHALL record the evaluation run identifier; the distinct Agent Runner run identifier; the Agent Runner commit and clean-worktree result, CLI version, workflow path and SHA-256 hash; the Agent Skills commit, clean-worktree result, and plugin-manifest hash; the configured lead, implementor, and reviewer profiles; workflow arguments; task-level and final Validator disposition; session directory; candidate repository and branch; draft-PR URL and base; final local and PR head SHA; every observed workflow step and outcome; the final Validator's successful or skipped result; candidate-reported CI status when present; acceptance attempt history; and hashes of required acceptance artifacts. It SHALL also record start, wait, resume, completion, and retry events without treating those events as product points.
 
 #### Scenario: Fresh Agent Runner run is recorded
 - **WHEN** the harness starts a new Agent Runner run
@@ -152,12 +206,12 @@ The evaluation result SHALL record the evaluation run identifier; the distinct A
 - **AND** it preserves the original run, branch, PR, and start provenance
 
 #### Scenario: Workflow provenance is incomplete
-- **WHEN** the harness cannot determine the Agent Runner revision, workflow hash, Agent Skills revision and manifest hash, configured workflow profiles, arguments, candidate identity, executed-step history, final Validator result, or acceptance-artifact identity
+- **WHEN** the harness cannot determine the Agent Runner revision, workflow hash, Agent Skills revision and manifest hash, configured workflow profiles, arguments, candidate identity, executed-step history, mode-consistent final Validator result, or acceptance-artifact identity
 - **THEN** it marks workflow provenance incomplete
 - **AND** it does not present the run as reproducible or ready for scored judging
 
 ### Requirement: Candidate delivery and acceptance handoff
-Before scored product judging begins, the completed workflow SHALL leave a clean committed candidate on the recorded `eval/and-scene/<run-id>` branch, a draft pull request with a non-empty base, identical local and pull-request head SHAs, final Validator results, acceptance flow evidence and screenshots, findings history, a final acceptance handoff, and an assumptions ledger.
+Before scored product judging begins, the completed workflow SHALL leave a clean committed candidate on the recorded `eval/and-scene/<run-id>` branch, a draft pull request with a non-empty base, identical local and pull-request head SHAs, an explicit mode-consistent final Validator outcome (`success` when enabled or `skipped` when disabled), acceptance flow evidence and screenshots, findings history, a final acceptance handoff, and an assumptions ledger.
 
 Product defects, failed acceptance flows, limitations, unresolved assumptions, and any candidate-reported CI state recorded honestly in an otherwise complete handoff SHALL remain judgeable evidence and SHALL NOT by themselves convert the run to an implementation-workflow failure. The harness SHALL NOT independently query CI, wait for CI, or require CI to be passing, terminal, configured, or available before scored product judging.
 
@@ -182,7 +236,7 @@ Product defects, failed acceptance flows, limitations, unresolved assumptions, a
 - **AND** scored product judging proceeds without an independent CI query
 
 #### Scenario: Required delivery output is absent
-- **WHEN** the completed workflow lacks a required candidate identity, Validator result, acceptance artifact, handoff, or assumptions ledger
+- **WHEN** the completed workflow lacks a required candidate identity, mode-consistent Validator outcome, acceptance artifact, handoff, or assumptions ledger
 - **THEN** the evaluation reports `implementation-workflow-failed`
 - **AND** it preserves available diagnostics without beginning scored product judging
 
@@ -192,6 +246,8 @@ Before starting Agent Runner, the evaluation harness SHALL generate a durable un
 The workflow SHALL NOT mark the pull request ready, merge it, archive the evaluated OpenSpec change, release the product, close the pull request, or delete the candidate branch. Candidate branches and draft pull requests SHALL be preserved for diagnosis and documented manual cleanup. The harness SHALL require credentials capable of pushing the candidate branch and managing its draft pull request before reporting workflow completion.
 
 The harness SHALL reject a workflow contract that declares a merge, ready-for-review, close, archive, release, or branch-deletion step. After workflow completion, it SHALL verify the observable delivery boundary from recorded workflow history, an existing remote candidate branch, the unarchived change location, and pull-request metadata limited to URL or number, state, draft state, base branch, head branch, and head SHA. It SHALL NOT query CI while performing this verification. An observable prohibited effect SHALL produce `evaluation_status=implementation-workflow-failed` with reason `workflow-side-effect-violation`.
+
+Agent Runner records each executed step as a path whose segments identify the enclosing steps and the sub-workflows they entered, where an entered sub-workflow appears as its workflow name behind a `sub:` prefix. The harness SHALL evaluate every segment of a recorded step path for a prohibited effect, and SHALL remove the `sub:` prefix before matching so that an entered sub-workflow whose name declares a prohibited effect is detected rather than excluded by its prefix.
 
 #### Scenario: Unique candidate branch is prepared
 - **WHEN** a fresh candidate evaluation starts
@@ -217,3 +273,38 @@ The harness SHALL reject a workflow contract that declares a merge, ready-for-re
 - **WHEN** the workflow contract, recorded step or output history, or observable delivery state establishes that the evaluated workflow marked the pull request ready, merged it, archived the change, released the product, closed the pull request, or deleted the candidate branch
 - **THEN** the harness reports `evaluation_status=implementation-workflow-failed` with reason `workflow-side-effect-violation`
 - **AND** it records the unexpected action without treating the workflow as successfully complete
+
+#### Scenario: Prohibited effect occurs inside a nested step
+- **WHEN** a recorded step path contains a prohibited step in a segment other than its first
+- **THEN** the harness reports `workflow-side-effect-violation` for that step
+
+#### Scenario: Prohibited effect is declared by an entered sub-workflow
+- **WHEN** a recorded step path contains a `sub:` segment whose workflow name declares a prohibited effect
+- **THEN** the harness matches that segment with its `sub:` prefix removed and reports `workflow-side-effect-violation`
+
+### Requirement: Workflow contract regression detection
+The suite's automated checks SHALL verify the pinned workflow contract against a real Agent Runner checkout when one is available, and SHALL skip that verification with an explicit message naming the resolved path when no checkout is available. The check SHALL NOT require network access, a built Agent Runner binary, or a running workflow.
+
+The checks SHALL resolve the Agent Runner checkout the same way the host entry point does: an explicitly configured directory when one is set, and otherwise the sibling checkout beside the repository. Verification SHALL NOT depend on explicit configuration when the conventional layout is present, so that the check runs by default on a workstation holding both repositories.
+
+#### Scenario: Real checkout satisfies the contract
+- **WHEN** the automated checks run with an available Agent Runner checkout whose pinned workflow declares every required parameter and required final-workflow step
+- **THEN** the contract verification passes
+
+#### Scenario: Real checkout no longer satisfies the contract
+- **WHEN** the pinned workflow in an available Agent Runner checkout no longer declares a required parameter or required final-workflow step
+- **THEN** the automated checks fail and identify each missing parameter or step
+
+#### Scenario: Required step moved below the top level
+- **WHEN** the pinned workflow in an available Agent Runner checkout declares a required final-workflow step only inside a loop, group, or nested step definition
+- **THEN** the automated checks fail and identify that step
+
+#### Scenario: Sibling checkout is used without explicit configuration
+- **WHEN** the automated checks run with no Agent Runner directory configured and the sibling checkout present
+- **THEN** the contract verification runs against that sibling checkout
+- **AND** it is not skipped
+
+#### Scenario: No Agent Runner checkout is available
+- **WHEN** the automated checks run and neither a configured nor a sibling Agent Runner checkout is readable
+- **THEN** the contract verification is skipped with an explicit message naming the resolved path
+- **AND** the remaining automated checks still run

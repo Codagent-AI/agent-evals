@@ -23,7 +23,75 @@ function git(cwd, ...args) {
   return result.stdout.trim()
 }
 
-async function repository({ validatorConfig = true } = {}) {
+const validPlanningTestPlan = `# Test plan
+
+## Coverage Strategy
+
+Exercise the implementation through its public browser surface.
+
+## Integration Tests
+
+None.
+
+## End-to-End Tests
+
+None.
+
+## Agent Acceptance Tests
+
+### AT-001: Exercise the demo
+
+- Classification: Required
+- Covers: Demo behavior
+- Actor and surface: User in a browser
+- Setup: Start the built application
+- Steps: Open the demo
+- Expected: The demo renders
+- Evidence: Browser snapshot
+- Effects and cleanup: Stop the application
+- Permitted substitutes: None
+
+## Human-Only Testing
+
+None.
+
+## Coverage Map
+
+| Requirement | Acceptance |
+| --- | --- |
+| Demo behavior | AT-001 |
+`
+
+async function writePlanningArtifacts(source, {
+  omit = [],
+  taskIndex = '- [Demo task](tasks/01-demo.md)\n',
+  testPlan = null,
+} = {}) {
+  const changeDir = join(source, 'openspec/changes/create-and-scene')
+  const omitted = new Set(omit)
+  await mkdir(join(changeDir, 'specs/demo'), { recursive: true })
+  await mkdir(join(changeDir, 'tasks'), { recursive: true })
+  if (!omitted.has('proposal.md')) await writeFile(join(changeDir, 'proposal.md'), '# Proposal\n')
+  if (!omitted.has('design.md')) await writeFile(join(changeDir, 'design.md'), '# Design\n')
+  if (!omitted.has('specs/demo/spec.md')) {
+    await writeFile(join(changeDir, 'specs/demo/spec.md'), '# Demo specification\n')
+  }
+  if (!omitted.has('tasks.md')) await writeFile(join(changeDir, 'tasks.md'), taskIndex)
+  if (!omitted.has('tasks/01-demo.md')) {
+    await writeFile(join(changeDir, 'tasks/01-demo.md'), '# Demo task\n')
+  }
+  if (!omitted.has('test-plan.md')) {
+    await writeFile(join(changeDir, 'test-plan.md'), testPlan ?? validPlanningTestPlan)
+  }
+}
+
+async function repository({
+  validatorConfig = true,
+  planningArtifacts = true,
+  omitPlanning = [],
+  taskIndex = '- [Demo task](tasks/01-demo.md)\n',
+  testPlan = null,
+} = {}) {
   const root = await mkdtemp(join(tmpdir(), 'and-scene-candidate-'))
   const source = join(root, 'source')
   await mkdir(source)
@@ -33,6 +101,11 @@ async function repository({ validatorConfig = true } = {}) {
     await mkdir(join(source, '.validator'))
     await writeFile(join(source, '.validator/config.yml'), 'entry_points: []\n')
   }
+  if (planningArtifacts) await writePlanningArtifacts(source, {
+    omit: omitPlanning,
+    taskIndex,
+    testPlan,
+  })
   git(source, 'add', '.')
   git(source, 'commit', '-qm', 'fixture')
   const fixture = git(source, 'rev-parse', 'HEAD')
@@ -42,6 +115,324 @@ async function repository({ validatorConfig = true } = {}) {
   const reference = git(source, 'rev-parse', 'HEAD')
   return { root, source, fixture, reference }
 }
+
+test('a scored candidate rejects a fixture without a complete acceptance plan before creating its branch', async () => {
+  const repo = await repository({ planningArtifacts: false })
+  const worktree = join(repo.root, 'candidate')
+
+  await assert.rejects(
+    prepareCandidateWorktree({
+      repo: repo.source,
+      worktree,
+      ref: repo.fixture,
+      resume: false,
+      runId: 'run-without-test-plan',
+      kind: 'candidate',
+      exec,
+    }),
+    /planning.*test-plan|test-plan.*planning/i,
+  )
+  assert.equal(git(worktree, 'branch', '--show-current'), git(repo.source, 'branch', '--show-current'))
+})
+
+test('a scored candidate rejects a test plan without an acceptance obligation inventory', async () => {
+  const repo = await repository({
+    testPlan: `# Test plan
+
+## Coverage Strategy
+
+Browser coverage.
+
+## Integration Tests
+
+None.
+
+## End-to-End Tests
+
+None.
+
+## Agent Acceptance Tests
+
+None.
+
+## Human-Only Testing
+
+None.
+
+## Coverage Map
+
+No acceptance obligations.
+`,
+  })
+
+  await assert.rejects(
+    prepareCandidateWorktree({
+      repo: repo.source,
+      worktree: join(repo.root, 'candidate'),
+      ref: repo.fixture,
+      resume: false,
+      runId: 'run-without-acceptance-inventory',
+      kind: 'candidate',
+      exec,
+    }),
+    /acceptance obligation.*AT-|AT-.*acceptance obligation/i,
+  )
+})
+
+test('a scored candidate rejects a test plan without the structured planning sections', async () => {
+  const repo = await repository({
+    testPlan: `# Test plan
+
+### AT-001: Exercise the demo
+
+This heading alone is not a reviewed structured test plan.
+`,
+  })
+
+  await assert.rejects(
+    prepareCandidateWorktree({
+      repo: repo.source,
+      worktree: join(repo.root, 'candidate'),
+      ref: repo.fixture,
+      resume: false,
+      runId: 'run-with-unstructured-test-plan',
+      kind: 'candidate',
+      exec,
+    }),
+    /test-plan\.md.*missing.*Coverage Strategy/i,
+  )
+})
+
+test('a scored candidate rejects test-plan sections in the wrong order', async () => {
+  const repo = await repository({
+    testPlan: validPlanningTestPlan.replace(
+      '## Coverage Strategy\n\nExercise the implementation through its public browser surface.\n\n## Integration Tests',
+      '## Integration Tests\n\nNone.\n\n## Coverage Strategy',
+    ),
+  })
+
+  await assert.rejects(
+    prepareCandidateWorktree({
+      repo: repo.source,
+      worktree: join(repo.root, 'candidate'),
+      ref: repo.fixture,
+      resume: false,
+      runId: 'run-with-misordered-test-plan',
+      kind: 'candidate',
+      exec,
+    }),
+    /test-plan sections are out of order/i,
+  )
+})
+
+for (const field of [
+  'Classification',
+  'Covers',
+  'Actor and surface',
+  'Setup',
+  'Steps',
+  'Expected',
+  'Evidence',
+  'Effects and cleanup',
+  'Permitted substitutes',
+]) {
+  test(`a scored candidate rejects an AT obligation without ${field}`, async () => {
+    const repo = await repository({
+      testPlan: validPlanningTestPlan.replace(new RegExp(`^- ${field}:.*\\n`, 'm'), ''),
+    })
+
+    await assert.rejects(
+      prepareCandidateWorktree({
+        repo: repo.source,
+        worktree: join(repo.root, 'candidate'),
+        ref: repo.fixture,
+        resume: false,
+        runId: `run-with-incomplete-${field.toLowerCase().replaceAll(' ', '-')}`,
+        kind: 'candidate',
+        exec,
+      }),
+      new RegExp(`AT-001.*${field}`, 'i'),
+    )
+  })
+}
+
+test('a scored candidate rejects an unsupported AT classification', async () => {
+  const repo = await repository({
+    testPlan: validPlanningTestPlan.replace(
+      '- Classification: Required',
+      '- Classification: Optional',
+    ),
+  })
+
+  await assert.rejects(
+    prepareCandidateWorktree({
+      repo: repo.source,
+      worktree: join(repo.root, 'candidate'),
+      ref: repo.fixture,
+      resume: false,
+      runId: 'run-with-optional-at',
+      kind: 'candidate',
+      exec,
+    }),
+    /AT-001.*classification.*Required.*Conditional/i,
+  )
+})
+
+test('a scored candidate rejects an acceptance obligation absent from the coverage map', async () => {
+  const repo = await repository({
+    testPlan: validPlanningTestPlan.replace('| Demo behavior | AT-001 |', '| Demo behavior | — |'),
+  })
+
+  await assert.rejects(
+    prepareCandidateWorktree({
+      repo: repo.source,
+      worktree: join(repo.root, 'candidate'),
+      ref: repo.fixture,
+      resume: false,
+      runId: 'run-with-unmapped-at',
+      kind: 'candidate',
+      exec,
+    }),
+    /coverage map.*AT-001/i,
+  )
+})
+
+test('coverage-map matching does not treat acceptance identifier punctuation as regex syntax', async () => {
+  const repo = await repository({
+    testPlan: validPlanningTestPlan
+      .replace('### AT-001:', '### AT-a.b:')
+      .replace('| Demo behavior | AT-001 |', '| Demo behavior | AT-aXb |'),
+  })
+
+  await assert.rejects(
+    prepareCandidateWorktree({
+      repo: repo.source,
+      worktree: join(repo.root, 'candidate'),
+      ref: repo.fixture,
+      resume: false,
+      runId: 'run-with-regex-like-acceptance-id',
+      kind: 'candidate',
+      exec,
+    }),
+    /coverage map.*AT-a\.b/i,
+  )
+})
+
+test('coverage-map matching accepts an exact acceptance identifier ending in punctuation', async () => {
+  const repo = await repository({
+    testPlan: validPlanningTestPlan.replaceAll('AT-001', 'AT-a-'),
+  })
+
+  const prepared = await prepareCandidateWorktree({
+    repo: repo.source,
+    worktree: join(repo.root, 'candidate'),
+    ref: repo.fixture,
+    resume: false,
+    runId: 'run-with-trailing-punctuation-acceptance-id',
+    kind: 'candidate',
+    exec,
+  })
+
+  assert.equal(prepared.fixture_commit, repo.fixture)
+})
+
+test('a fixture file read failure remains an operational error', async () => {
+  const repo = await repository()
+  const failingExec = (command, args, options = {}) => {
+    if (command === 'git' && args.includes('show') && args.some((arg) => arg.endsWith('/proposal.md'))) {
+      return { status: 128, stderr: 'fatal: object database unavailable' }
+    }
+    return exec(command, args, options)
+  }
+
+  await assert.rejects(
+    prepareCandidateWorktree({
+      repo: repo.source,
+      worktree: join(repo.root, 'candidate'),
+      ref: repo.fixture,
+      resume: false,
+      runId: 'run-with-fixture-read-failure',
+      kind: 'candidate',
+      exec: failingExec,
+    }),
+    (error) => {
+      assert.notEqual(error.code, 'fixture-planning-contract')
+      assert.match(error.message, /object database unavailable/i)
+      assert.ok(error.cause instanceof Error)
+      return true
+    },
+  )
+})
+
+test('a fixture tree listing failure remains an operational error', async () => {
+  const repo = await repository()
+  const failingExec = (command, args, options = {}) => {
+    if (command === 'git' && args.includes('ls-tree') && args.at(-1).endsWith('/specs')) {
+      return { status: 128, stderr: 'fatal: corrupt tree object' }
+    }
+    return exec(command, args, options)
+  }
+
+  await assert.rejects(
+    prepareCandidateWorktree({
+      repo: repo.source,
+      worktree: join(repo.root, 'candidate'),
+      ref: repo.fixture,
+      resume: false,
+      runId: 'run-with-fixture-tree-failure',
+      kind: 'candidate',
+      exec: failingExec,
+    }),
+    (error) => {
+      assert.notEqual(error.code, 'fixture-planning-contract')
+      assert.match(error.message, /corrupt tree object/i)
+      assert.ok(error.cause instanceof Error)
+      return true
+    },
+  )
+})
+
+for (const [requiredArtifact, expected] of [
+  ['proposal.md', /planning contract.*proposal\.md/i],
+  ['design.md', /planning contract.*design\.md/i],
+  ['specs/demo/spec.md', /planning contract.*specs\//i],
+  ['tasks.md', /planning contract.*tasks\.md/i],
+  ['tasks/01-demo.md', /planning contract.*tasks\//i],
+]) {
+  test(`a scored candidate rejects a planning contract without ${requiredArtifact}`, async () => {
+    const repo = await repository({ omitPlanning: [requiredArtifact] })
+
+    await assert.rejects(
+      prepareCandidateWorktree({
+        repo: repo.source,
+        worktree: join(repo.root, 'candidate'),
+        ref: repo.fixture,
+        resume: false,
+        runId: `run-without-${requiredArtifact.replaceAll('/', '-')}`,
+        kind: 'candidate',
+        exec,
+      }),
+      expected,
+    )
+  })
+}
+
+test('a scored candidate rejects a task index that does not inventory every task file', async () => {
+  const repo = await repository({ taskIndex: '# Tasks\n\nNo linked task files.\n' })
+
+  await assert.rejects(
+    prepareCandidateWorktree({
+      repo: repo.source,
+      worktree: join(repo.root, 'candidate'),
+      ref: repo.fixture,
+      resume: false,
+      runId: 'run-with-unlinked-task',
+      kind: 'candidate',
+      exec,
+    }),
+    /tasks\.md.*tasks\/01-demo\.md|tasks\/01-demo\.md.*tasks\.md/i,
+  )
+})
 
 test('a scored candidate rejects a fixture without final Validator configuration before creating its branch', async () => {
   const repo = await repository({ validatorConfig: false })
@@ -305,6 +696,27 @@ test('freezing rejects uncommitted candidate changes', async () => {
   )
 })
 
+test('freezing ignores only untracked screenshots in the inspection evidence directory', async () => {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
+  const runDir = join(repo.root, 'run')
+  await mkdir(runDir)
+  await prepareCandidateWorktree({ repo: repo.source, worktree, ref: repo.fixture, resume: false, exec })
+  await mkdir(join(worktree, 'artifacts/presentation-inspection'), { recursive: true })
+  await writeFile(join(worktree, 'artifacts/presentation-inspection/step-01.png'), 'png bytes')
+
+  const frozen = await freezeCandidate({
+    repo: repo.source,
+    worktree,
+    runDir,
+    fixtureRevision: repo.fixture,
+    exec,
+  })
+
+  assert.equal(frozen.produced_commit, git(worktree, 'rev-parse', 'HEAD'))
+  assert.deepEqual(frozen.untracked_evidence, ['artifacts/presentation-inspection/step-01.png'])
+})
+
 test('freezing preserves tracked filenames containing newlines', async () => {
   const repo = await repository()
   const worktree = join(repo.root, 'candidate')
@@ -515,6 +927,52 @@ test('delivery verification proves branch, remote head, draft PR identity, and f
     command === 'gh' && /check|status|ci/i.test(args.join(' '))
   )), JSON.stringify(calls))
 
+  const skippedDelivery = await verifyCandidateDelivery({
+    worktree,
+    fixtureCommit: repo.fixture,
+    branch: 'eval/and-scene/run-123',
+    expectedBase: 'main',
+    changeName: 'create-and-scene',
+    sessionDir,
+    skipValidator: true,
+    workflowHistory: [
+      { step: 'run-validator', outcome: 'skipped' },
+      { step: 'open-draft-pr', outcome: 'success' },
+      { step: 'verify-draft-pr', outcome: 'success' },
+      { step: 'prepare-acceptance', outcome: 'success' },
+      { step: 'verify-acceptance-handoff', outcome: 'success' },
+    ],
+    exec: (command, args, options) => {
+      if (command === 'git' && args.includes('ls-remote')) {
+        return { status: 0, stdout: `${head}\trefs/heads/eval/and-scene/run-123\n` }
+      }
+      return exec(command, args, options)
+    },
+    inspectPullRequest: async () => delivery.pull_request,
+  })
+  assert.equal(skippedDelivery.final_validator.outcome, 'skipped')
+
+  await assert.rejects(
+    verifyCandidateDelivery({
+      worktree,
+      fixtureCommit: repo.fixture,
+      branch: 'eval/and-scene/run-123',
+      expectedBase: 'main',
+      changeName: 'create-and-scene',
+      sessionDir,
+      skipValidator: true,
+      workflowHistory: delivery.workflow_history,
+      exec: (command, args, options) => {
+        if (command === 'git' && args.includes('ls-remote')) {
+          return { status: 0, stdout: `${head}\trefs/heads/eval/and-scene/run-123\n` }
+        }
+        return exec(command, args, options)
+      },
+      inspectPullRequest: async () => delivery.pull_request,
+    }),
+    /run-validator.*expected skipped.*observed success/i,
+  )
+
   await assert.rejects(
     verifyCandidateDelivery({
       worktree,
@@ -537,6 +995,123 @@ test('delivery verification proves branch, remote head, draft PR identity, and f
     }),
     /base.*evaluation-fixture.*expected.*main|expected.*base.*main/i,
   )
+})
+
+test('delivery verification freezes an identifiable candidate when acceptance evidence is incomplete', async () => {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
+  const sessionDir = join(repo.root, 'session')
+  await prepareCandidateWorktree({
+    repo: repo.source,
+    worktree,
+    ref: repo.fixture,
+    resume: false,
+    runId: 'run-123',
+    kind: 'candidate',
+    exec,
+  })
+  await mkdir(join(worktree, 'openspec/changes/create-and-scene'), { recursive: true })
+  await mkdir(join(sessionDir, 'output'), { recursive: true })
+  await writeFile(join(sessionDir, 'output', 'acceptance-preparation-status.txt'), 'ACCEPTANCE_FAILED\n')
+  await writeFile(join(sessionDir, 'output', 'acceptance-handoff.md'), '# Acceptance did not converge\n')
+
+  const head = git(worktree, 'rev-parse', 'HEAD')
+  const delivery = await verifyCandidateDelivery({
+    worktree,
+    fixtureCommit: repo.fixture,
+    branch: 'eval/and-scene/run-123',
+    expectedBase: 'main',
+    changeName: 'create-and-scene',
+    sessionDir,
+    workflowHistory: [
+      { step: 'run-validator', outcome: 'success' },
+      { step: 'open-draft-pr', outcome: 'success' },
+      { step: 'verify-draft-pr', outcome: 'success' },
+      { step: 'prepare-acceptance', outcome: 'success' },
+      { step: 'verify-acceptance-handoff', outcome: 'success' },
+    ],
+    exec: (command, args, options) => {
+      if (command === 'git' && args.includes('ls-remote')) {
+        return { status: 0, stdout: `${head}\trefs/heads/eval/and-scene/run-123\n` }
+      }
+      return exec(command, args, options)
+    },
+    inspectPullRequest: async () => ({
+      number: 53,
+      url: 'https://github.com/Codagent-AI/and-scene/pull/53',
+      state: 'OPEN',
+      draft: true,
+      base: 'main',
+      head_branch: 'eval/and-scene/run-123',
+      head_sha: head,
+    }),
+  })
+
+  assert.equal(delivery.final_sha, head)
+  assert.deepEqual(delivery.acceptance_artifacts.map(({ role }) => role), ['final-handoff'])
+  assert.ok(delivery.acceptance_findings.some(({ code, role }) => (
+    code === 'missing-evidence-role' && role === 'screenshot-metadata'
+  )))
+})
+
+test('delivery accepts untracked inspection screenshots but still identifies them explicitly', async () => {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
+  const sessionDir = join(repo.root, 'session')
+  await prepareCandidateWorktree({
+    repo: repo.source,
+    worktree,
+    ref: repo.fixture,
+    resume: false,
+    runId: 'run-123',
+    kind: 'candidate',
+    exec,
+  })
+  await mkdir(join(worktree, 'openspec/changes/create-and-scene'), { recursive: true })
+  await mkdir(join(worktree, 'artifacts/presentation-inspection'), { recursive: true })
+  await writeFile(join(worktree, 'artifacts/presentation-inspection/step-01.png'), 'png bytes')
+  await mkdir(join(sessionDir, 'output'), { recursive: true })
+  await writeFile(join(sessionDir, 'output', 'acceptance-handoff.md'), [
+    '# Acceptance handoff',
+    'Screenshot: artifacts/presentation-inspection/step-01.png',
+  ].join('\n'))
+
+  const head = git(worktree, 'rev-parse', 'HEAD')
+  const delivery = await verifyCandidateDelivery({
+    worktree,
+    fixtureCommit: repo.fixture,
+    branch: 'eval/and-scene/run-123',
+    expectedBase: 'main',
+    changeName: 'create-and-scene',
+    sessionDir,
+    workflowHistory: [
+      { step: 'run-validator', outcome: 'success' },
+      { step: 'open-draft-pr', outcome: 'success' },
+      { step: 'verify-draft-pr', outcome: 'success' },
+      { step: 'prepare-acceptance', outcome: 'success' },
+      { step: 'verify-acceptance-handoff', outcome: 'success' },
+    ],
+    exec: (command, args, options) => {
+      if (command === 'git' && args.includes('ls-remote')) {
+        return { status: 0, stdout: `${head}\trefs/heads/eval/and-scene/run-123\n` }
+      }
+      return exec(command, args, options)
+    },
+    inspectPullRequest: async () => ({
+      number: 53,
+      url: 'https://github.com/Codagent-AI/and-scene/pull/53',
+      state: 'OPEN',
+      draft: true,
+      base: 'main',
+      head_branch: 'eval/and-scene/run-123',
+      head_sha: head,
+    }),
+  })
+
+  assert.deepEqual(delivery.untracked_evidence, ['artifacts/presentation-inspection/step-01.png'])
+  assert.ok(delivery.acceptance_artifacts.some(({ role, path }) => (
+    role === 'acceptance-screenshot' && path.endsWith('step-01.png')
+  )))
 })
 
 test('an observed prohibited delivery effect has typed workflow-side-effect ownership', async () => {

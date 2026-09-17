@@ -5,6 +5,8 @@
 // browser-eval.mjs, keeping browser mechanics out of scoring logic.
 import { spawnSync } from 'node:child_process'
 
+import { isBrowserInfrastructureDiagnostic } from './browser-diagnostics.mjs'
+
 const MAX_OUTPUT_BYTES = 1024 * 1024
 const PRESENTATION_SELECTOR = '[data-presentation], [data-presentation-root]'
 const MODE_SELECTOR = '[data-presentation-mode]'
@@ -12,24 +14,132 @@ const STAGE_SELECTOR = [
   '[data-presentation-stage]',
   '[data-presentation-chrome="stage"]',
 ].join(', ')
-const TITLE_SELECTOR = [
-  '[data-presentation-title]',
+const CANVAS_SELECTOR = [
+  '[data-presentation-canvas]',
+  '[data-presentation-node="canvas"]',
+  '[data-testid="presentation-canvas"]',
+].join(', ')
+const TITLE_SELECTORS = [
+  '[data-presentation-present-title]',
+  '[data-presentation-step-title]',
   '[data-presentation-header-title]',
   '[data-presentation-footer-title]',
   '[data-presentation-node="step-title"]',
-].join(', ')
-const CAPTION_SELECTOR = [
+  '[data-presentation-footer] h1, [data-presentation-footer] h2, [data-presentation-footer] h3',
+  '[data-presentation-stage] h1, [data-presentation-stage] h2, [data-presentation-stage] h3',
+  '[data-presentation-header] h1, [data-presentation-header] h2, [data-presentation-header] h3',
+  '[data-presentation-title]',
+]
+const TITLE_SELECTOR = TITLE_SELECTORS.join(', ')
+const CAPTION_SELECTORS = [
   '[data-presentation-caption]',
   '[data-presentation-node="caption"]',
-].join(', ')
-const TOC_SELECTOR = [
+  'figcaption',
+  "[aria-label*='caption' i]",
+  '[data-presentation-footer] p',
+]
+const CAPTION_SELECTOR = CAPTION_SELECTORS.join(', ')
+const TOC_SELECTORS = [
   '[data-presentation-toc]',
   '[data-presentation-chrome="toc"]',
-].join(', ')
-const CONTROL_SELECTOR = [
+  "nav[aria-label*='contents' i]",
+  "nav[aria-label*='sections' i]",
+  "[role='navigation'][aria-label*='contents' i]",
+  "[role='navigation'][aria-label*='sections' i]",
+]
+const TOC_SELECTOR = TOC_SELECTORS.join(', ')
+const EXPLICIT_CONTROL_SELECTOR = [
   '[data-presentation-progress-dot]',
+  '[data-presentation-progress-item]',
   '[data-presentation-node="progress-dot"]',
 ].join(', ')
+const PROGRESS_SELECTORS = [
+  '[data-presentation-progress]',
+  '[data-presentation-chrome="progress"]',
+  "nav[aria-label*='progress' i]",
+  "[role='navigation'][aria-label*='progress' i]",
+]
+const PROGRESS_SELECTOR = PROGRESS_SELECTORS.join(', ')
+const STEP_CONTROL_REGION_SELECTORS = [
+  '[data-presentation-step-controls]',
+  '[data-presentation-controls]',
+  '[data-presentation-chrome="controls"]',
+  "nav[aria-label*='navigation' i]",
+  "[role='navigation'][aria-label*='navigation' i]",
+]
+const INTERACTIVE_SELECTOR = 'button, [role="button"], a[href]'
+const PREVIOUS_SELECTORS = [
+  '[data-presentation-prev]',
+  '[data-presentation-button="previous"]',
+  '[data-presentation-node="previous"]',
+]
+const NEXT_SELECTORS = [
+  '[data-presentation-next]',
+  '[data-presentation-button="next"]',
+  '[data-presentation-node="next"]',
+]
+
+function navigationDiscoverySource() {
+  return `
+  const visible = (element) => Boolean(element && element.getClientRects().length > 0
+    && getComputedStyle(element).display !== 'none'
+    && getComputedStyle(element).visibility !== 'hidden');
+  const accessibleName = (element) => {
+    if (!element) return '';
+    const labelledBy = (element.getAttribute('aria-labelledby') || '')
+      .split(/\\s+/)
+      .filter(Boolean)
+      .map((id) => document.getElementById(id)?.textContent?.trim() || '')
+      .filter(Boolean)
+      .join(' ');
+    return element.getAttribute('aria-label')?.trim()
+      || labelledBy
+      || element.getAttribute('title')?.trim()
+      || element.textContent?.trim()
+      || '';
+  };
+  const scope = presentation || document;
+  const firstVisibleMatch = (selectors) => {
+    for (const selector of selectors) {
+      const match = [...scope.querySelectorAll(selector)].find(visible);
+      if (match) return match;
+    }
+    return null;
+  };
+  const allInteractive = [...scope.querySelectorAll('${INTERACTIVE_SELECTOR}')];
+  const inDomOrder = (elements) => [...new Set(elements)]
+    .filter(visible)
+    .sort((left, right) => (
+      left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1
+    ));
+  const explicitControls = inDomOrder([
+    ...scope.querySelectorAll(${JSON.stringify(EXPLICIT_CONTROL_SELECTOR)}),
+  ]);
+  const progressRegion = firstVisibleMatch(${JSON.stringify(PROGRESS_SELECTORS)});
+  const semanticControls = progressRegion
+    ? inDomOrder([...progressRegion.querySelectorAll('${INTERACTIVE_SELECTOR}')])
+    : [];
+  const namedStepControls = inDomOrder(allInteractive.filter((element) => (
+    /^(?:(?:go to|jump to)\\s+)?step\\s+\\d+(?::|$)/i.test(accessibleName(element))
+  )));
+  const controls = semanticControls.length > 0
+    ? semanticControls
+    : (explicitControls.length > 0 ? explicitControls : namedStepControls);
+  const directionalRegion = firstVisibleMatch(${JSON.stringify(STEP_CONTROL_REGION_SELECTORS)});
+  const directionalCandidates = directionalRegion
+    ? [...directionalRegion.querySelectorAll('${INTERACTIVE_SELECTOR}')]
+    : allInteractive;
+  const findDirectionalControls = (selectors, namePattern) => {
+    for (const selector of selectors) {
+      const explicit = [...scope.querySelectorAll(selector)].filter(visible);
+      if (explicit.length > 0) return inDomOrder(explicit);
+    }
+    return inDomOrder(directionalCandidates.filter(
+      (element) => namePattern.test(accessibleName(element)),
+    ));
+  };
+`
+}
 
 export class BrowserDriverError extends Error {
   constructor(message) {
@@ -83,6 +193,14 @@ export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {
   }
 
   return {
+    async resize(width, height) {
+      if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) {
+        throw new BrowserDriverError(`invalid viewport size: ${width}×${height}`)
+      }
+      await invoke(['resize', String(width), String(height)])
+      return { width, height }
+    },
+
     async routes() {
       const routes = await run(`
 await page.open(${JSON.stringify(base.href)});
@@ -101,6 +219,7 @@ console.log(JSON.stringify([...new Set(routes)]));
     },
 
     async open(route) {
+      await invoke(['resize', '1280', '720'])
       return run(`
 const opened = await page.open(${JSON.stringify(routeUrl(route))});
 await page.wait('[data-step-count]', 30000);
@@ -158,7 +277,8 @@ const readPosition = () => page.eval(() => Number(
   document.querySelector('[data-step-count]')?.getAttribute('data-step-index'),
 ));
 const positionedByControl = await page.eval(() => {
-  const controls = [...document.querySelectorAll(${JSON.stringify(CONTROL_SELECTOR)})];
+  const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
+${navigationDiscoverySource()}
   const target = controls[requiredPosition];
   if (!target) return false;
   target.click();
@@ -249,22 +369,87 @@ for (let attempt = 0; attempt < 50; attempt += 1) {
 `)
     },
 
-    async state() {
+    async canvasGeometry() {
       return run(`
+const geometry = await page.eval(() => {
+  const canvas = document.querySelector(${JSON.stringify(CANVAS_SELECTOR)})
+    || document.querySelector(${JSON.stringify(STAGE_SELECTOR)});
+  if (!canvas) throw new Error('presentation canvas or stage was not found');
+  const rendered = canvas.getBoundingClientRect();
+  const authored = { width: canvas.offsetWidth, height: canvas.offsetHeight };
+  let available = {
+    left: 0,
+    top: 0,
+    right: window.innerWidth,
+    bottom: window.innerHeight,
+  };
+  for (let ancestor = canvas.parentElement; ancestor; ancestor = ancestor.parentElement) {
+    const style = getComputedStyle(ancestor);
+    const rect = ancestor.getBoundingClientRect();
+    if (/^(?:auto|scroll|hidden|clip)$/.test(style.overflowX)) {
+      available.left = Math.max(available.left, rect.left);
+      available.right = Math.min(available.right, rect.right);
+    }
+    if (/^(?:auto|scroll|hidden|clip)$/.test(style.overflowY)) {
+      available.top = Math.max(available.top, rect.top);
+      available.bottom = Math.min(available.bottom, rect.bottom);
+    }
+  }
+  const value = (number) => Math.round(number * 1000) / 1000;
+  return {
+    viewport: { width: window.innerWidth, height: window.innerHeight },
+    authored,
+    rendered: {
+      left: value(rendered.left),
+      top: value(rendered.top),
+      right: value(rendered.right),
+      bottom: value(rendered.bottom),
+      width: value(rendered.width),
+      height: value(rendered.height),
+    },
+    available: {
+      left: value(available.left),
+      top: value(available.top),
+      right: value(available.right),
+      bottom: value(available.bottom),
+      width: value(Math.max(0, available.right - available.left)),
+      height: value(Math.max(0, available.bottom - available.top)),
+    },
+    // Raw ratios: rounding here to 0.001 lets a pair whose raw difference
+    // exceeds the absolute SCALE_TOLERANCE round into agreement.
+    scale: {
+      x: authored.width > 0 ? rendered.width / authored.width : null,
+      y: authored.height > 0 ? rendered.height / authored.height : null,
+    },
+  };
+});
+console.log(JSON.stringify(geometry));
+`)
+    },
+
+    async state() {
+      const captured = await run(`
 const captured = await page.eval(() => {
   const progress = document.querySelector('[data-step-count]');
   const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
-  const title = document.querySelector(${JSON.stringify(TITLE_SELECTOR)});
-  const caption = document.querySelector(${JSON.stringify(CAPTION_SELECTOR)});
-  const toc = document.querySelector(${JSON.stringify(TOC_SELECTOR)});
   const explicitMode = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
     ?.getAttribute('data-presentation-mode');
-  const visible = (element) => Boolean(element && element.getClientRects().length > 0
-    && getComputedStyle(element).display !== 'none'
-    && getComputedStyle(element).visibility !== 'hidden');
+${navigationDiscoverySource()}
+  const title = firstVisibleMatch(${JSON.stringify(TITLE_SELECTORS)});
+  const caption = firstVisibleMatch(${JSON.stringify(CAPTION_SELECTORS)});
+  const toc = firstVisibleMatch(${JSON.stringify(TOC_SELECTORS)});
+  const progressChrome = firstVisibleMatch(${JSON.stringify(PROGRESS_SELECTORS)});
+  const previousMatches = findDirectionalControls(${JSON.stringify(PREVIOUS_SELECTORS)}, /^(previous|prev|back)\\b/i);
+  const nextMatches = findDirectionalControls(${JSON.stringify(NEXT_SELECTORS)}, /^next\\b/i);
+  const previous = previousMatches[0] || null;
+  const next = nextMatches[0] || null;
+  const navigationAmbiguities = [
+    ...(previousMatches.length > 1 ? ['multiple visible previous controls'] : []),
+    ...(nextMatches.length > 1 ? ['multiple visible next controls'] : []),
+  ];
   const browsing = visible(caption) || visible(toc);
-  const controls = [...document.querySelectorAll(${JSON.stringify(CONTROL_SELECTOR)})].map((control, index) => ({
-    name: control.getAttribute('aria-label') || ('Step ' + (index + 1)),
+  const controlStates = controls.map((control) => ({
+    name: accessibleName(control),
     role: control.getAttribute('role') || control.tagName.toLowerCase(),
     ariaCurrent: control.getAttribute('aria-current') === 'step',
     focusable: !control.disabled && control.tabIndex >= 0,
@@ -308,9 +493,7 @@ const captured = await page.eval(() => {
       return base + ':' + occurrence;
     })
     .filter(Boolean);
-  const focused = document.activeElement?.getAttribute?.('aria-label')
-    || document.activeElement?.textContent?.trim()
-    || null;
+  const focused = accessibleName(document.activeElement) || null;
   return {
     stepIndex: Number(progress?.getAttribute('data-step-index')),
     stepCount: Number(progress?.getAttribute('data-step-count')),
@@ -323,12 +506,24 @@ const captured = await page.eval(() => {
       ? explicitMode
       : (browsing ? 'browse' : 'present'),
     captionVisible: visible(caption) && Boolean(caption?.textContent?.trim()),
-    controls,
+    tocVisible: visible(toc),
+    progressVisible: visible(progressChrome),
+    previousVisible: visible(previous),
+    nextVisible: visible(next),
+    controls: controlStates,
     focused,
+    viewport: { width: window.innerWidth, height: window.innerHeight },
+    navigationAmbiguities,
   };
 });
 console.log(JSON.stringify(captured));
 `)
+      if (captured?.navigationAmbiguities?.length > 0) {
+        throw new BrowserDriverError(
+          `ambiguous semantic navigation: ${captured.navigationAmbiguities.join('; ')}`,
+        )
+      }
+      return captured
     },
 
     async press(key) {
@@ -338,8 +533,9 @@ console.log(JSON.stringify(captured));
     async activate(name) {
       await run(`
 const activated = await page.eval(() => {
-  const target = [...document.querySelectorAll(${JSON.stringify(CONTROL_SELECTOR)})]
-    .find((element) => element.getAttribute('aria-label') === ${JSON.stringify(name)});
+  const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
+${navigationDiscoverySource()}
+  const target = controls.find((element) => accessibleName(element) === ${JSON.stringify(name)});
   if (!target) return false;
   target.click();
   return true;
@@ -353,8 +549,9 @@ console.log(JSON.stringify(true));
     async focus(name) {
       await run(`
 const focused = await page.eval(() => {
-  const target = [...document.querySelectorAll(${JSON.stringify(CONTROL_SELECTOR)})]
-    .find((element) => element.getAttribute('aria-label') === ${JSON.stringify(name)});
+  const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
+${navigationDiscoverySource()}
+  const target = controls.find((element) => accessibleName(element) === ${JSON.stringify(name)});
   if (!target) return false;
   target.focus();
   return document.activeElement === target;
@@ -372,7 +569,11 @@ const dispatched = await page.eval(() => {
   const startX = ${left ? 200 : 20};
   const endX = ${left ? 20 : 200};
   const touch = (x) => new Touch({ identifier: 1, target, clientX: x, clientY: 100 });
-  target.dispatchEvent(new TouchEvent('touchstart', { touches: [touch(startX)], bubbles: true }));
+  target.dispatchEvent(new TouchEvent('touchstart', {
+    touches: [touch(startX)],
+    changedTouches: [touch(startX)],
+    bubbles: true,
+  }));
   target.dispatchEvent(new TouchEvent('touchend', { changedTouches: [touch(endX)], bubbles: true }));
   return true;
 });
@@ -387,6 +588,9 @@ console.log(JSON.stringify(dispatched));
 
     async failures() {
       const output = await invoke(['console', '--type', 'error'])
+      if (isBrowserInfrastructureDiagnostic(output)) {
+        throw new BrowserDriverError(`browser adapter failed: ${output.trim()}`)
+      }
       if (output.includes('<no console messages found>')) return []
       return output.split('\n')
         .map((line) => line.trim())

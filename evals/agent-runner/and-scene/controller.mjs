@@ -5,11 +5,11 @@
 // state machine: preflight, role configuration, Agent Runner run identity and
 // resumption, durable checkpoints, and the ordered phase lifecycle.
 //
-// The command deliberately stops at `pending-human-review`: it writes the
-// automated result, its report, and the artifact manifest, attempts
-// candidate-server cleanup, and exits successfully. The literal human review
-// that turns that into an official score lives in `human-review.mjs`, because it
-// runs on human time and must never cost the completed automated work.
+// The command writes the automated result, its report, and the artifact
+// manifest, then attempts candidate-server cleanup. Eligible candidates stop at
+// `pending-human-review`; candidates that cannot reach the official threshold
+// or fail an automated floor or gate finish as product failures without an
+// invented official score. Literal human review lives in `human-review.mjs`.
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { basename, dirname, join, resolve } from 'node:path'
@@ -76,6 +76,7 @@ import { AUTOMATED_PHASES, runPhases } from './lib/phases.mjs'
 import { hashFile, hashJson, hashString, readJson, writeJsonAtomic } from './lib/persistence.mjs'
 import {
   compareRoleSelections,
+  normalizeRoleProfiles,
   reconcileRoleAttempts,
   renderEvalConfig,
   renderEvalSettings,
@@ -88,12 +89,14 @@ import {
   readWorkflowProvenance,
 } from './lib/provenance.mjs'
 import {
+  hasPendingLinkedAudits,
   isAgentRunnerProcessAlive,
   readRunnerState as readPersistedRunnerState,
   resolveProjectsDir,
   waitForRunnerRun,
 } from './lib/runner-state.mjs'
 import { runTimed, summarizeTimings } from './lib/subprocess.mjs'
+import { waitForClaudeQuotaReset as waitForDetectedClaudeQuota } from './lib/claude-quota.mjs'
 import {
   checkWorkflowHistory,
   classifyRunnerRun,
@@ -108,6 +111,7 @@ const DEFAULT_CAPABILITIES = join(SUITE_DIR, 'agent-runner-capabilities.json')
 const BROWSER_EVALUATOR_FILES = [
   'lib/browser-eval.mjs',
   'lib/axi-browser-driver.mjs',
+  'lib/browser-diagnostics.mjs',
   'lib/demo-contract.mjs',
 ]
 const GITHUB_WRITE_PERMISSIONS = new Set(['WRITE', 'MAINTAIN', 'ADMIN'])
@@ -135,9 +139,9 @@ const VALUES = new Map([
   ['--implementor-cli', 'implementorCli'],
   ['--implementor-model', 'implementorModel'],
   ['--implementor-effort', 'implementorEffort'],
-  ['--reviewer-cli', 'reviewerCli'],
-  ['--reviewer-model', 'reviewerModel'],
-  ['--reviewer-effort', 'reviewerEffort'],
+  ['--tester-cli', 'testerCli'],
+  ['--tester-model', 'testerModel'],
+  ['--tester-effort', 'testerEffort'],
 ])
 
 export function parseArgs(argv) {
@@ -149,7 +153,7 @@ export function parseArgs(argv) {
     changeNameProvided: false,
     judgeModel: 'codex-default',
     repo: 'https://github.com/Codagent-AI/and-scene.git',
-    fixtureRef: '729592e921413dea20bd77ccab0284222ef4ad8f',
+    fixtureRef: '892dfbcf3762bc95cdbae6f05b18cc2b168a5fab',
     capabilitiesPath: DEFAULT_CAPABILITIES,
   }
   for (let index = 0; index < argv.length; index += 1) {
@@ -215,6 +219,17 @@ function runnerFailure(timing) {
   return `${timing.label} failed (${diagnostic})${output}`
 }
 
+function linkedAuditsOf(state) {
+  if (!Array.isArray(state?.audit?.links)) return []
+  return state.audit.links.map((link) => ({
+    run_id: link.auditRunId ?? null,
+    execution_session_id: link.executionSessionId ?? null,
+    trigger: link.trigger ?? null,
+    state: link.state ?? null,
+    warning: link.warning ?? null,
+  }))
+}
+
 async function fingerprintFiles(paths) {
   const hashes = await Promise.all(paths.map(async (path) => [
     path,
@@ -241,6 +256,7 @@ export async function runEvaluation({
   readRunnerState,
   observedSteps,
   waitForRun = null,
+  waitForClaudeQuotaReset = waitForDetectedClaudeQuota,
   handlers: handlerOverrides = {},
   // Product evidence sources. Each is injected so the whole scored lifecycle is
   // exercisable without a browser or a model call, and so a source that is
@@ -315,10 +331,11 @@ export async function runEvaluation({
     }])
   }
 
+  const importedProfiles = normalizeRoleProfiles(importedRun?.role_profiles)
   const validation = validateRoleProfiles({
-    lead: importedRun?.role_profiles?.lead ?? roleProfileFrom(options, 'lead'),
-    implementor: importedRun?.role_profiles?.implementor ?? roleProfileFrom(options, 'implementor'),
-    reviewer: importedRun?.role_profiles?.reviewer ?? roleProfileFrom(options, 'reviewer'),
+    lead: importedProfiles?.lead ?? roleProfileFrom(options, 'lead'),
+    implementor: importedProfiles?.implementor ?? roleProfileFrom(options, 'implementor'),
+    tester: importedProfiles?.tester ?? roleProfileFrom(options, 'tester'),
     capabilities,
     mode,
   })
@@ -449,10 +466,11 @@ export async function runEvaluation({
           expectedSource: checkpoint?.candidate_source ?? null,
           runId,
           kind: runKind,
+          changeName,
           exec,
         })
   } catch (error) {
-    return failure([{ code: 'candidate-worktree', message: error.message }])
+    return failure([{ code: error.code ?? 'candidate-worktree', message: error.message }])
   }
   if (mode === 'agent-runner' && !rescore) {
     const resolvedWorkflow = exec(
@@ -529,7 +547,10 @@ export async function runEvaluation({
   }
 
   if (checkpoint) {
-    const roleMismatches = compareRoleSelections(checkpoint.role_profiles, validation.profiles)
+    const roleMismatches = compareRoleSelections(
+      normalizeRoleProfiles(checkpoint.role_profiles),
+      validation.profiles,
+    )
     if (roleMismatches.length > 0) {
       return failure(roleMismatches.map((mismatch) => ({ code: 'role-profile-mismatch', ...mismatch })))
     }
@@ -626,10 +647,13 @@ export async function runEvaluation({
 
   const record = {
     workflowHistory: rescore
-      ? checkWorkflowHistory(importedRun.workflow.observed_steps)
+      ? checkWorkflowHistory(importedRun.workflow.observed_steps, {
+          skipValidator: importedSkipValidator,
+        })
       : {
           ok: mode === 'reference-baseline',
           missing_steps: [],
+          invalid_outcomes: [],
           prohibited_effects: [],
           observed_steps: [],
         },
@@ -642,6 +666,7 @@ export async function runEvaluation({
         }]
       : [],
     run: checkpoint.agent_runner,
+    linkedAudits: importedRun?.workflow.linked_audits ?? [],
     timings: [],
     browser: null,
     sourceEvidence: null,
@@ -741,6 +766,22 @@ export async function runEvaluation({
         return
       }
 
+      async function waitAfterClaudeQuota(timing, runId) {
+        const failedState = await readState(runId ?? null)
+        if (failedState?.run_id) await persistRunnerState(failedState)
+        const quota = await waitForClaudeQuotaReset({
+          sessionDir: failedState?.session_dir ?? null,
+          log,
+        })
+        if (!quota.waited) throw new Error(runnerFailure(timing))
+        record.events.push({
+          event: 'claude-quota-wait',
+          role: quota.role ?? null,
+          reset_at: quota.reset_at ?? null,
+        })
+        return failedState
+      }
+
       let state = await readState(checkpoint.agent_runner?.run_id ?? null)
       let runnerStateSnapshot = state
       let decision = classifyRunnerRun({
@@ -754,6 +795,7 @@ export async function runEvaluation({
       })
       while (decision.action !== 'continue') {
         const action = decision.action
+        let quotaWaited = false
         record.events.push({
           event: action,
           status: decision.status,
@@ -785,9 +827,8 @@ export async function runEvaluation({
           })
           record.timings.push(timing)
           if (!timing.ok) {
-            const failedState = await readState(record.run?.run_id ?? null)
-            if (failedState?.run_id) await persistRunnerState(failedState)
-            throw new Error(runnerFailure(timing))
+            waitedState = await waitAfterClaudeQuota(timing, record.run?.run_id)
+            quotaWaited = true
           }
         } else if (action === 'resume') {
           const [command, ...args] = decision.command
@@ -799,9 +840,11 @@ export async function runEvaluation({
           })
           record.timings.push(timing)
           if (!timing.ok) {
-            const failedState = await readState(record.run?.run_id ?? decision.run_id ?? null)
-            if (failedState?.run_id) await persistRunnerState(failedState)
-            throw new Error(runnerFailure(timing))
+            waitedState = await waitAfterClaudeQuota(
+              timing,
+              record.run?.run_id ?? decision.run_id,
+            )
+            quotaWaited = true
           }
         } else if (action === 'wait') {
           waitedState = waitForRun
@@ -825,7 +868,7 @@ export async function runEvaluation({
           state,
           isProcessAlive: isRunnerProcessAlive,
         })
-        if (decision.action === 'resume' && action !== 'wait') {
+        if (decision.action === 'resume' && action !== 'wait' && !quotaWaited) {
           throw new Error(
             `Agent Runner ${action} exited before completing the full ${boundary.workflow} workflow`,
           )
@@ -837,15 +880,50 @@ export async function runEvaluation({
       if (state?.run_id && record.run?.run_id !== state.run_id) {
         await persistRunnerState(state)
       }
+
+      // Development Agent Runner builds may return after launching a linked
+      // audit in a detached process. Delivery inspection and scoring must not
+      // race that process or let the container exit underneath it.
+      if (hasPendingLinkedAudits(runnerStateSnapshot)) {
+        record.events.push({
+          event: 'wait-linked-audits',
+          status: 'active',
+          audit_run_ids: linkedAuditsOf(runnerStateSnapshot).map((audit) => audit.run_id),
+        })
+        log('agent-runner: wait-linked-audits')
+        runnerStateSnapshot = waitForRun
+          ? await waitForRun(runnerStateSnapshot.run_id)
+          : await waitForRunnerRun({
+              readState,
+              runId: runnerStateSnapshot.run_id,
+              isProcessAlive: isRunnerProcessAlive,
+            })
+        state = runnerStateSnapshot
+        if (!state?.run_id) {
+          throw new Error('Agent Runner linked-audit wait lost the recorded source run')
+        }
+        if (hasPendingLinkedAudits(state)) {
+          throw new Error(`Agent Runner linked audits for ${state.run_id} did not reach a terminal state`)
+        }
+        record.events.push({
+          event: 'linked-audits-terminal',
+          status: 'completed',
+          audits: linkedAuditsOf(state),
+        })
+      }
+      record.linkedAudits = linkedAuditsOf(runnerStateSnapshot)
       record.events.push({ event: 'continue', status: decision.status, reason: null, adopted: false })
 
       record.observed_steps = await readSteps(runnerStateSnapshot)
-      record.workflowHistory = checkWorkflowHistory(record.observed_steps)
+      record.workflowHistory = checkWorkflowHistory(record.observed_steps, {
+        skipValidator: boundary.skip_validator === 'true',
+      })
       await writeJsonAtomic(join(runDir, 'phases/workflow-execution.json'), {
         run: record.run,
         workflow: boundary,
         provenance,
         events: record.events,
+        linked_audits: record.linkedAudits,
         history: record.observed_steps,
         history_verification: record.workflowHistory,
       })
@@ -872,6 +950,7 @@ export async function runEvaluation({
             changeName,
             sessionDir: record.run?.session_dir,
             workflowHistory: record.observed_steps,
+            skipValidator: boundary.skip_validator === 'true',
             exec,
           })
         }
@@ -1203,6 +1282,7 @@ export async function runEvaluation({
             source_root: join(runDir, record.neutral.source.root),
             requirements_root: join(runDir, record.neutral.requirements.root),
             audit_root: join(runDir, '.runtime/judge-workspace'),
+            manifest: record.neutral.manifest,
           } : null,
           evidenceViews,
           mode,
@@ -1277,6 +1357,9 @@ export async function runEvaluation({
       return [{
         type: 'automated-scoring-complete',
         automated_subtotal: record.score.automated_subtotal.points,
+        automated_possible: record.score.automated_subtotal.possible,
+        automated_pass: record.score.automated_pass,
+        automated_failures: record.score.automated_failures,
       }]
     },
 
@@ -1345,7 +1428,11 @@ export async function runEvaluation({
           attemptsComplete: record.metrics.complete,
         }),
         // Reported beside implementation cost and never inside it.
-        eval_owned: summarizeEvalOwnedUsage([]),
+        eval_owned: summarizeEvalOwnedUsage(
+          typeof judgeInvoke?.readUsageEntries === 'function'
+            ? await judgeInvoke.readUsageEntries()
+            : [],
+        ),
       }
 
       await writeJsonAtomic(join(runDir, 'phases/metrics-pricing.json'), {
@@ -1410,12 +1497,14 @@ export async function runEvaluation({
           observed_steps: record.observed_steps,
           history_complete: record.workflowHistory.ok,
           missing_steps: record.workflowHistory.missing_steps,
+          invalid_outcomes: record.workflowHistory.invalid_outcomes,
           prohibited_effects: record.workflowHistory.prohibited_effects,
           run_id: record.run?.run_id ?? null,
           session_dir: record.run?.session_dir ?? null,
           provenance,
           agent_skills_provenance: agentSkillsProvenance,
           events: record.events,
+          linked_audits: record.linkedAudits,
         },
         // A reference baseline invoked no implementation workflow, so its usage,
         // cost, and duration are absent rather than zero.

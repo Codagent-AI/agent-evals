@@ -17,6 +17,14 @@ const workflowYaml = `name: implement-change
 params:
   - name: change_name
     required: true
+  - name: change_dir
+    required: true
+  - name: change_label
+    required: true
+  - name: change_kind
+    required: true
+  - name: artifact_validation_instruction
+    required: true
   - name: skip_validator
     default: false
 steps:
@@ -33,8 +41,32 @@ steps:
 const profileArgs = [
   '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
   '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
-  '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+  '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
 ]
+
+const planningTestPlan = `# Test plan
+## Coverage Strategy
+Browser coverage.
+## Integration Tests
+None.
+## End-to-End Tests
+None.
+## Agent Acceptance Tests
+### AT-001: Exercise the demo
+- Classification: Required
+- Covers: Demo behavior
+- Actor and surface: User in a browser
+- Setup: Start the built application
+- Steps: Open the demo
+- Expected: The demo renders
+- Evidence: Browser snapshot
+- Effects and cleanup: Stop the application
+- Permitted substitutes: None
+## Human-Only Testing
+None.
+## Coverage Map
+AT-001
+`
 
 const CATALOG_BODY = JSON.stringify({
   anthropic: {
@@ -49,7 +81,7 @@ const CATALOG_BODY = JSON.stringify({
 function attempt(overrides = {}) {
   return {
     record_id: 'implement-tasks#1',
-    prefix: 'implement-tasks[0]/implement-single-task',
+    prefix: 'implement-tasks:0/implement-single-task/sub:implement-task',
     id: 'generate-code',
     kind: 'step',
     type: 'agent',
@@ -95,7 +127,7 @@ async function environment({ metrics = runMetrics(), sessionFiles = {} } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'agent-evals-diagnostics-'))
   const agentRunnerDir = join(root, 'agent-runner')
   const agentSkillsDir = join(root, 'agent-skills')
-  await mkdir(join(agentRunnerDir, 'workflows/openspec'), { recursive: true })
+  await mkdir(join(agentRunnerDir, 'workflows/core'), { recursive: true })
   await writeFile(join(agentRunnerDir, WORKFLOW_RELATIVE_PATH), workflowYaml)
   await mkdir(join(agentSkillsDir, '.claude-plugin'), { recursive: true })
   await writeFile(join(agentSkillsDir, '.claude-plugin/marketplace.json'), '{"name":"codagent"}\n')
@@ -117,6 +149,31 @@ async function environment({ metrics = runMetrics(), sessionFiles = {} } = {}) {
       const verb = args.join(' ')
       if (verb.includes('show') && verb.includes('.validator/config.yml')) {
         return { status: 0, stdout: 'entry_points: []\n' }
+      }
+      if (verb.includes('show') && verb.includes('/test-plan.md')) {
+        return { status: 0, stdout: planningTestPlan }
+      }
+      if (verb.includes('show') && verb.includes('/tasks.md')) {
+        return { status: 0, stdout: '- [Demo task](tasks/01-demo.md)\n' }
+      }
+      if (verb.includes('show') && /\/(?:proposal|design)\.md/.test(verb)) {
+        return { status: 0, stdout: '# Planning artifact\n' }
+      }
+      if (verb.includes('show') && /\/specs\/[^/]+\/spec\.md/.test(verb)) {
+        return { status: 0, stdout: '# Specification\n' }
+      }
+      if (verb.includes('show') && /\/tasks\/[^/]+\.md/.test(verb)) {
+        return { status: 0, stdout: '# Task\n' }
+      }
+      if (verb.includes('ls-tree')) {
+        const planningPath = args.at(-1)
+        if (planningPath.endsWith('/specs')) {
+          return { status: 0, stdout: `${planningPath}/demo/spec.md\n` }
+        }
+        if (planningPath.endsWith('/tasks')) {
+          return { status: 0, stdout: `${planningPath}/01-demo.md\n` }
+        }
+        return { status: 0, stdout: '' }
       }
       if (verb.includes('show-ref --verify --quiet')) return { status: 1, stdout: '' }
       if (verb.includes('--is-inside-work-tree')) return { status: 0, stdout: 'true\n' }
@@ -170,16 +227,18 @@ function scoredJudgeOutput(request) {
   })
 }
 
-function fixtureJudge(custom) {
-  return async (request) => {
+function fixtureJudge(custom, usageEntries = []) {
+  const invoke = async (request) => {
     if (Array.isArray(request.criteria)) return scoredJudgeOutput(request)
     if (custom) return custom(request)
     return JSON.stringify({ found: false })
   }
+  invoke.readUsageEntries = async () => usageEntries
+  return invoke
 }
 
 async function evaluate(context, overrides = {}) {
-  const { resume = false, judgeInvoke, ...injected } = overrides
+  const { resume = false, judgeInvoke, evalOwnedUsage = [], ...injected } = overrides
   return runEvaluation({
     argv: [
       '--run-dir', context.runDir,
@@ -223,7 +282,7 @@ async function evaluate(context, overrides = {}) {
     }),
     verifyResumeDelivery: async () => ({ verified: true }),
     pricingFetch: catalogFetch(),
-    judgeInvoke: fixtureJudge(judgeInvoke),
+    judgeInvoke: fixtureJudge(judgeInvoke, evalOwnedUsage),
     ...injected,
   })
 }
@@ -247,6 +306,49 @@ test('matching Runner metrics are ingested with their source hash preserved', as
   assert.equal(
     record.role_configuration.roles.implementor.attempts[0].observed.model,
     'sonnet',
+  )
+})
+
+test('Runner schema-v2 effective identity and role flow through pricing and profile reconciliation', async () => {
+  const v2Attempt = attempt({
+    role: 'implementor',
+    tool: 'agent-runner',
+    usage: {
+      ...attempt().usage,
+      cli: null,
+      provider: null,
+      model: null,
+      effort: null,
+      identity: {
+        requested_cli: 'claude',
+        requested_model: 'sonnet',
+        requested_effort: 'medium',
+        effective_cli: 'claude',
+        effective_provider: 'anthropic',
+        effective_model: 'sonnet',
+        effective_effort: 'medium',
+        provider_source: 'adapter',
+        model_source: 'invocation',
+        effort_source: 'invocation',
+      },
+    },
+  })
+  const context = await environment({
+    metrics: runMetrics({ schema_version: 2, steps: [v2Attempt] }),
+  })
+
+  const result = await evaluate(context)
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const record = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(record.implementation_metrics.source.schema_version, 2)
+  assert.equal(record.cost.rows[0].agent_role, 'implementor')
+  assert.equal(record.cost.rows[0].tool, 'agent-runner')
+  assert.equal(record.cost.rows[0].model, 'sonnet')
+  assert.equal(record.role_configuration.roles.implementor.attempts.length, 1)
+  assert.equal(
+    record.role_configuration.roles.implementor.attempts[0].matches_configuration,
+    true,
   )
 })
 
@@ -405,12 +507,26 @@ test('a resume that reuses every phase keeps the recorded diagnostics in the res
 test('the eval-owned judge usage is reported but never priced', async () => {
   const context = await environment()
 
-  const result = await evaluate(context)
+  const result = await evaluate(context, {
+    evalOwnedUsage: [{
+      phase: 'product-judging',
+      provider: 'openai',
+      model: 'gpt-5.6-sol',
+      usage: { state: 'available', source: 'codex:turn.completed' },
+      tokens: { input: 1200, cached_input: 800, output: 300, reasoning: 75 },
+      token_totals: { input: 1200, output: 300, total: 1500 },
+    }],
+  })
 
   assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
   const record = await readJson(join(context.runDir, 'result.json'))
   assert.equal(record.cost.eval_owned.priced, false)
   assert.equal(record.cost.eval_owned.included_in_implementation_total, false)
+  assert.equal(record.cost.eval_owned.state, 'available')
+  assert.deepEqual(record.cost.eval_owned.tokens, {
+    input: 1200, cached_input: 800, output: 300, reasoning: 75,
+  })
+  assert.deepEqual(record.cost.eval_owned.token_totals, { input: 1200, output: 300, total: 1500 })
 })
 
 test('an ambiguity ledger is written durably and referenced from the result', async () => {

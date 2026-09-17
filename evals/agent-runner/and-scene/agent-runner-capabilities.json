@@ -1,16 +1,18 @@
 {
   "schema_version": 1,
-  "description": "Role capabilities the and-scene suite validates lead-agent, task-implementor, and acceptance-reviewer profiles against. Update this pin deliberately when the recorded Agent Runner revision gains or drops an adapter, model, or effort.",
+  "description": "Stable role capabilities the and-scene suite validates for lead-agent, task-implementor, and tester profiles. Model availability is resolved by Agent Runner and the selected CLI at execution time, not enumerated here.",
   "clis": {
     "claude": {
-      "models": ["opus", "sonnet", "haiku"],
       "efforts": ["low", "medium", "high"],
-      "roles": ["planner", "implementor", "reviewer"]
+      "roles": ["lead", "implementor", "tester"]
     },
     "codex": {
-      "models": ["gpt-5", "gpt-5-codex"],
       "efforts": ["low", "medium", "high"],
-      "roles": ["planner", "implementor", "reviewer"]
+      "roles": ["lead", "implementor", "tester"]
+    },
+    "cursor": {
+      "efforts": ["low", "medium", "high"],
+      "roles": ["lead", "implementor", "tester"]
     }
   }
 }
