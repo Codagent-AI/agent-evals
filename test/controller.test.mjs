@@ -171,7 +171,19 @@ async function environment({
     }
     return { status: 0, stdout: '' }
   }
-  return { root, runDir, home, agentRunnerDir, agentSkillsDir, exec, invocations, commit }
+  const sessionDir = join(root, 'sessions/runner-7')
+  await mkdir(sessionDir, { recursive: true })
+  await writeFile(join(sessionDir, 'run-metrics.json'), JSON.stringify({
+    sessions: [{
+      execution_session_id: 'execution-1',
+      started_at: '2026-09-09T14:24:36.000Z',
+      last_observed_at: '2026-09-09T18:00:00.000Z',
+      ended_at: '2026-09-09T18:00:00.000Z',
+      duration_ms: 1,
+      status: 'closed',
+    }],
+  }))
+  return { root, runDir, home, agentRunnerDir, agentSkillsDir, exec, invocations, commit, sessionDir }
 }
 
 function runnerInvocations(context) {
@@ -180,16 +192,41 @@ function runnerInvocations(context) {
   ))
 }
 
+function auditReplayInvocations(context) {
+  return context.invocations.filter(({ command, args }) => (
+    command === 'agent-runner' && args[0] === 'audit' && args[1] === 'replay'
+  ))
+}
+
 function completedReader(context) {
   return () => runnerInvocations(context).length === 0
     ? null
     : {
         run_id: 'runner-7',
-        session_dir: '/sessions/runner-7',
+        session_dir: context.sessionDir,
         workflow_name: 'implement-change',
         workflow_completed: true,
         history,
       }
+}
+
+function withReplayableSource(context, state) {
+  if (!state) return state
+  const next = { ...state, session_dir: context.sessionDir }
+  if (next.audit?.links?.length > 0 || auditReplayInvocations(context).length === 0) {
+    return next
+  }
+  return {
+    ...next,
+    audit: {
+      links: [{
+        auditRunId: 'audit-replay',
+        executionSessionId: 'execution-1',
+        trigger: 'replay',
+        state: 'completed',
+      }],
+    },
+  }
 }
 
 function delivery(context) {
@@ -259,8 +296,11 @@ function importedRescore(context, { changeName = 'create-and-scene' } = {}) {
 async function evaluate(context, extra = [], overrides = {}) {
   const {
     controllerChangeName = 'create-and-scene',
+    readRunnerState,
+    waitForRun,
     ...dependencies
   } = overrides
+  const readState = readRunnerState ?? completedReader(context)
   return runEvaluation({
     argv: [
       '--run-dir', context.runDir,
@@ -273,7 +313,10 @@ async function evaluate(context, extra = [], overrides = {}) {
     home: context.home,
     isProcessAlive: () => false,
     isRunnerProcessAlive: () => false,
-    readRunnerState: completedReader(context),
+    readRunnerState: (runId) => withReplayableSource(context, readState(runId)),
+    ...(waitForRun ? {
+      waitForRun: async (runId) => withReplayableSource(context, await waitForRun(runId)),
+    } : {}),
     observedSteps: (state) => state.history,
     verifyDelivery: async () => delivery(context),
     verifyResumeDelivery: async () => ({ verified: true }),
@@ -750,6 +793,180 @@ test('a fresh Runner execution waits for its linked audit before delivery verifi
   assert.deepEqual(report.workflow.linked_audits, execution.linked_audits)
 })
 
+test('a completed core implement-change run without a linked audit starts replay and waits', async () => {
+  const context = await environment()
+  const waited = []
+
+  const result = await evaluate(context, profiles, {
+    readRunnerState: () => runnerInvocations(context).length === 0
+      ? null
+      : {
+          run_id: 'runner-7',
+          session_dir: context.sessionDir,
+          workflow_name: 'implement-change',
+          workflow_completed: true,
+          history,
+          audit: auditReplayInvocations(context).length === 0
+            ? { links: [] }
+            : {
+                links: [{
+                  auditRunId: 'audit-replay',
+                  executionSessionId: 'execution-1',
+                  trigger: 'replay',
+                  state: waited.length > 0 ? 'completed' : 'started',
+                }],
+              },
+        },
+    waitForRun: async (runId) => {
+      waited.push(runId)
+      return {
+        run_id: runId,
+        session_dir: context.sessionDir,
+        workflow_name: 'implement-change',
+        workflow_completed: true,
+        history,
+        audit: {
+          links: [{
+            auditRunId: 'audit-replay',
+            executionSessionId: 'execution-1',
+            trigger: 'replay',
+            state: 'completed',
+          }],
+        },
+      }
+    },
+    verifyDelivery: async () => delivery(context),
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const replays = auditReplayInvocations(context)
+  assert.equal(replays.length, 1)
+  assert.deepEqual(replays[0].args, ['audit', 'replay', 'runner-7', '--session', 'execution-1'])
+  const source = runnerInvocations(context)[0]
+  assert.equal(replays[0].options.cwd, source.options.cwd)
+  assert.equal(replays[0].options.env.HOME, source.options.env.HOME)
+  assert.equal(replays[0].options.env.AGENT_RUNNER_NO_TUI, '1')
+  assert.deepEqual(waited, ['runner-7'])
+  const execution = await readJson(join(context.runDir, 'phases/workflow-execution.json'))
+  assert.deepEqual(
+    execution.events.map(({ event }) => event).filter((event) => (
+      event === 'wait-linked-audits' || event === 'linked-audits-terminal'
+    )),
+    ['wait-linked-audits', 'linked-audits-terminal'],
+  )
+  assert.deepEqual(execution.linked_audits, [{
+    run_id: 'audit-replay',
+    execution_session_id: 'execution-1',
+    trigger: 'replay',
+    state: 'completed',
+    warning: null,
+  }])
+  const report = await readJson(join(context.runDir, 'result.json'))
+  assert.deepEqual(report.workflow.linked_audits, execution.linked_audits)
+})
+
+test('a completed run with multiple execution sessions replays the last closed session', async () => {
+  const context = await environment()
+  await writeFile(join(context.sessionDir, 'run-metrics.json'), JSON.stringify({
+    sessions: [
+      { execution_session_id: 'execution-1', status: 'closed' },
+      { execution_session_id: 'execution-2', status: 'closed' },
+    ],
+  }))
+
+  const result = await evaluate(context, profiles, {
+    readRunnerState: () => runnerInvocations(context).length === 0
+      ? null
+      : {
+          run_id: 'runner-7',
+          session_dir: context.sessionDir,
+          workflow_name: 'implement-change',
+          workflow_completed: true,
+          history,
+          audit: {
+            links: auditReplayInvocations(context).length === 0
+              ? []
+              : [{
+                  auditRunId: 'audit-replay',
+                  executionSessionId: 'execution-2',
+                  trigger: 'replay',
+                  state: 'completed',
+                }],
+          },
+        },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.deepEqual(auditReplayInvocations(context).map(({ args }) => args), [
+    ['audit', 'replay', 'runner-7', '--session', 'execution-2'],
+  ])
+})
+
+test('a completed Runner run with an existing audit link does not start a second replay', async () => {
+  const context = await environment()
+  const waited = []
+
+  const result = await evaluate(context, profiles, {
+    readRunnerState: () => runnerInvocations(context).length === 0
+      ? null
+      : {
+          run_id: 'runner-7',
+          session_dir: context.sessionDir,
+          workflow_name: 'implement-change',
+          workflow_completed: true,
+          history,
+          audit: {
+            links: [{ auditRunId: 'audit-child', state: 'completed' }],
+          },
+        },
+    waitForRun: async (runId) => {
+      waited.push(runId)
+      return {
+        run_id: runId,
+        session_dir: context.sessionDir,
+        workflow_name: 'implement-change',
+        workflow_completed: true,
+        history,
+        audit: { links: [{ auditRunId: 'audit-child', state: 'completed' }] },
+      }
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.deepEqual(auditReplayInvocations(context), [])
+  assert.deepEqual(waited, [])
+  const execution = await readJson(join(context.runDir, 'phases/workflow-execution.json'))
+  assert.equal(execution.linked_audits[0].run_id, 'audit-child')
+})
+
+test('a failed explicit audit replay is a harness error', async () => {
+  const context = await environment()
+  const inner = context.exec
+  context.exec = (command, args, options = {}) => {
+    const result = inner(command, args, options)
+    if (command === 'agent-runner' && args[0] === 'audit') {
+      return { status: 1, stdout: '', stderr: 'replay failed' }
+    }
+    return result
+  }
+
+  const result = await evaluate(context, profiles, {
+    readRunnerState: () => runnerInvocations(context).length === 0
+      ? null
+      : {
+          run_id: 'runner-7',
+          session_dir: context.sessionDir,
+          workflow_name: 'implement-change',
+          workflow_completed: true,
+          history,
+        },
+  })
+
+  assert.equal(result.outcome.evaluation_status, 'evaluation-harness-failed')
+  assert.equal(result.outcome.product_verdict, 'unavailable')
+  assert.equal(auditReplayInvocations(context).length, 1)
+})
+
 test('an already-terminal linked audit warning is recorded without changing source success', async () => {
   const context = await environment()
 
@@ -843,7 +1060,7 @@ test('a Claude quota exit waits for reset and resumes the exact Runner run', asy
   })
 
   assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
-  assert.deepEqual(waits, ['/sessions/runner-7'])
+  assert.deepEqual(waits, [context.sessionDir])
   assert.deepEqual(runnerInvocations(context).map(({ args }) => args[0]), ['run', '--resume'])
 })
 
@@ -881,7 +1098,7 @@ test('a Claude tester quota during an outer resume waits and retries that same r
   })
 
   assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
-  assert.deepEqual(waits, ['/sessions/runner-7'])
+  assert.deepEqual(waits, [context.sessionDir])
   assert.deepEqual(runnerInvocations(context).slice(before).map(({ args }) => args), [
     ['--resume', 'runner-7'],
     ['--resume', 'runner-7'],

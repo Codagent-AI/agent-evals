@@ -130,7 +130,7 @@ The evaluation harness SHALL generate and durably record its evaluation run iden
 
 If the recorded Agent Runner run is active, the harness SHALL verify that the active process owns that run and wait for the same run rather than launching or resuming another. If the run completed the full workflow and its delivery identity still matches, the harness SHALL continue to the next eval phase. If the run is inactive and unfinished, the harness SHALL invoke `agent-runner --resume <run-id>` and allow Agent Runner to choose its internal resume point. If the run, process, branch, pull request, or revision identity cannot be verified, the harness SHALL stop with an explicit workflow or resume-provenance error. It SHALL never start a duplicate implementation run, candidate branch, or draft pull request merely because the outer eval process restarted.
 
-Agent Runner development builds MAY launch linked audit runs asynchronously after the source workflow finalizes. When the source state reports linked audits, the harness SHALL wait until every link is `completed` or `failed` before delivery verification, artifact ingestion, or scoring, so the disposable evaluation container cannot exit underneath a live audit. An audit launch or execution warning SHALL remain diagnostic and SHALL NOT replace the source workflow outcome. During recovery without a checkpointed source-run identifier, the harness SHALL exclude `runKind: audit` siblings from source-run discovery; an audit run remains inspectable by its exact identifier but SHALL NOT be adopted as the implementation workflow.
+Agent Runner development builds MAY launch linked audit runs asynchronously after the source workflow finalizes. When a completed `core:implement-change` source run has no `state.audit.links`, the harness SHALL start an explicit `agent-runner audit replay <run-id> --session <execution-session-id>` against the finalized top-level execution session recorded in that run's `run-metrics.json` (the only `sessions[]` entry, or the last closed session after resume), using the same spawn options as the source run. It SHALL NOT start a second replay when a link already exists. A replay launch failure SHALL be a harness error. When the source state reports linked audits, the harness SHALL wait until every link is `completed` or `failed` before delivery verification, artifact ingestion, or scoring, so the disposable evaluation container cannot exit underneath a live audit. An audit launch or later failed audit state SHALL remain diagnostic and SHALL NOT replace the source workflow outcome. During recovery without a checkpointed source-run identifier, the harness SHALL exclude `runKind: audit` siblings from source-run discovery; an audit run remains inspectable by its exact identifier but SHALL NOT be adopted as the implementation workflow.
 
 #### Scenario: Recorded Agent Runner run is still active
 - **WHEN** eval resume verifies that the recorded Agent Runner run is owned by a live process
@@ -140,6 +140,16 @@ Agent Runner development builds MAY launch linked audit runs asynchronously afte
 #### Scenario: Recorded Agent Runner run completed
 - **WHEN** eval resume verifies that the recorded run completed the full workflow and its branch, PR, and final-head identity still match
 - **THEN** the harness preserves its outputs and continues to the next incomplete eval phase
+
+#### Scenario: Source completes with no linked audit
+- **WHEN** the source implementation workflow is complete and its durable state has no audit link
+- **THEN** the harness starts an explicit audit replay for the finalized top-level execution session
+- **AND** it waits for that linked audit to become completed or failed before delivery verification
+
+#### Scenario: Source already has a linked audit
+- **WHEN** the source implementation workflow is complete and already has an audit link
+- **THEN** the harness does not start another replay
+- **AND** it waits for any nonterminal link before delivery verification
 
 #### Scenario: Source completes with a linked audit still active
 - **WHEN** the source implementation workflow is complete but its durable audit link is reserved, launching, or started

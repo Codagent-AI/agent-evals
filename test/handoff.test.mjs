@@ -194,6 +194,7 @@ async function evaluate(context, extra = {}) {
       session_dir: '/sessions/run-7',
       workflow_name: 'implement-change',
       workflow_completed: true,
+      audit: { links: [{ auditRunId: 'audit-fixture', state: 'completed' }] },
     }),
     observedSteps: () => [
       { step: 'run-validator', outcome: 'success' },

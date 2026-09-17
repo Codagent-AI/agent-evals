@@ -89,8 +89,10 @@ import {
   readWorkflowProvenance,
 } from './lib/provenance.mjs'
 import {
+  hasLinkedAudits,
   hasPendingLinkedAudits,
   isAgentRunnerProcessAlive,
+  readFinalizedExecutionSessionId,
   readRunnerState as readPersistedRunnerState,
   resolveProjectsDir,
   waitForRunnerRun,
@@ -879,6 +881,50 @@ export async function runEvaluation({
       }
       if (state?.run_id && record.run?.run_id !== state.run_id) {
         await persistRunnerState(state)
+      }
+
+      // core:implement-change never auto-launches an audit. When the completed
+      // source has no link, start the explicit replay for its finalized
+      // top-level execution, then reuse the wait path below.
+      if (runnerStateSnapshot?.run_id && !hasLinkedAudits(runnerStateSnapshot)) {
+        let sessionId
+        try {
+          sessionId = await readFinalizedExecutionSessionId(runnerStateSnapshot.session_dir)
+        } catch (error) {
+          throw Object.assign(
+            new Error(`Agent Runner source metrics are unavailable for audit replay: ${error.message}`),
+            { owner: 'evaluation-harness', code: 'linked-audit-replay-failed' },
+          )
+        }
+        if (!sessionId) {
+          throw Object.assign(
+            new Error('Agent Runner source run has no finalized execution session for audit replay'),
+            { owner: 'evaluation-harness', code: 'linked-audit-replay-failed' },
+          )
+        }
+        const timing = runTimed('agent-runner', [
+          'audit', 'replay', runnerStateSnapshot.run_id, '--session', sessionId,
+        ], {
+          label: 'agent-runner-audit-replay',
+          exec,
+          outputPath: join(runDir, 'logs/agent-runner.log'),
+          ...runnerSpawnOptions,
+        })
+        record.timings.push(timing)
+        if (!timing.ok) {
+          throw Object.assign(new Error(runnerFailure(timing)), {
+            owner: 'evaluation-harness',
+            code: 'linked-audit-replay-failed',
+          })
+        }
+        runnerStateSnapshot = await readState(runnerStateSnapshot.run_id)
+        state = runnerStateSnapshot
+        if (!hasLinkedAudits(state)) {
+          throw Object.assign(
+            new Error(`Agent Runner audit replay for ${runnerStateSnapshot?.run_id ?? 'unknown'} produced no linked audit`),
+            { owner: 'evaluation-harness', code: 'linked-audit-replay-failed' },
+          )
+        }
       }
 
       // Development Agent Runner builds may return after launching a linked
