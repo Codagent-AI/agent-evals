@@ -69,7 +69,7 @@ AT-001
 const profiles = [
   '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
   '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
-  '--reviewer-cli', 'claude', '--reviewer-model', 'opus', '--reviewer-effort', 'high',
+  '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
 ]
 
 async function environment({
@@ -234,7 +234,7 @@ function importedRescore(context, { changeName = 'create-and-scene' } = {}) {
     role_profiles: {
       lead: { cli: 'claude', model: 'opus', effort: 'high', agent: 'lead' },
       implementor: { cli: 'claude', model: 'sonnet', effort: 'medium', agent: 'implementor' },
-      reviewer: { cli: 'claude', model: 'opus', effort: 'high', agent: 'tester' },
+      tester: { cli: 'claude', model: 'opus', effort: 'high', agent: 'tester' },
     },
     agent_runner_provenance: {
       commit: '3'.repeat(40),
@@ -559,7 +559,7 @@ test('the candidate branch identity exists in run-state before Runner starts', a
   assert.equal(state.agent_skills_provenance.commit, context.commit)
   assert.match(state.agent_skills_provenance.manifest_sha256, /^[a-f0-9]{64}$/)
   assert.match(state.identity.agent_skills_provenance, /^[a-f0-9]{64}$/)
-  assert.equal(state.role_profiles.reviewer.agent, 'tester')
+  assert.equal(state.role_profiles.tester.agent, 'tester')
 })
 
 test('an explicit host run identity survives the fixed container artifact mount', async () => {
@@ -1031,6 +1031,45 @@ test('an evaluator-only rescore imports a completed candidate and never starts A
   assert.equal(written.delivery.final_sha, context.commit)
   assert.equal(written.workflow.run_id, 'runner-complete')
   assert.equal(written.workflow.events[0].event, 'imported-completed-run')
+})
+
+test('an evaluator-only rescore accepts a historical reviewer profile as tester', async () => {
+  const context = await environment()
+
+  const result = await evaluate(context, [
+    '--rescore-from', '/rescore-source',
+    '--tester-cli', 'cursor',
+    '--tester-model', 'composer',
+    '--tester-effort', 'high',
+  ], {
+    controllerChangeName: null,
+    verifyDelivery: async () => {
+      throw new Error('rescore must not rediscover historical artifact paths')
+    },
+    verifyResumeDelivery: async ({ recorded }) => ({
+      verified: recorded.final_sha === context.commit,
+    }),
+    loadRescoreSource: async () => {
+      const imported = importedRescore(context, { changeName: 'custom-scene-change' })
+      const { tester: _tester, ...profiles } = imported.role_profiles
+      return {
+        ...imported,
+        role_profiles: {
+          ...profiles,
+          reviewer: { cli: 'claude', model: 'opus', effort: 'high', agent: 'reviewer' },
+        },
+      }
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
+  assert.deepEqual(state.role_profiles.tester, {
+    cli: 'claude',
+    model: 'opus',
+    effort: 'high',
+    agent: 'tester',
+  })
 })
 
 test('an evaluator-only rescore rejects an explicit change name that conflicts with its source', async () => {

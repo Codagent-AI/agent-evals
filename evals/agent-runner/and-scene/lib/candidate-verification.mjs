@@ -108,7 +108,12 @@ export async function runCandidateVerification({
       verification = invoke('verification', ['run', 'verify'], { worktree, exec })
       timings.push(verification)
       verificationAttempts.push(verification)
-      if (!verification.ok && MISSING_PLAYWRIGHT_BROWSER.test(outputOf(verification))) {
+      // Classify on the complete streams; outputOf truncates and can drop the
+      // stderr diagnostic behind a long stdout.
+      const verificationOutput = [verification.stdout, verification.stderr]
+        .filter(Boolean)
+        .join('\n')
+      if (!verification.ok && MISSING_PLAYWRIGHT_BROWSER.test(verificationOutput)) {
         playwrightBrowser = invoke(
           'playwright-browser-install',
           ['exec', '--', 'playwright', 'install', 'chromium'],

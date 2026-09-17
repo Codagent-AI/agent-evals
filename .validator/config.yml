@@ -19,7 +19,7 @@ entry_points:
           working_directory: "."
   - path: evals/*
     exclude:
-      - "**/results"
+      - "**/results/**"
     checks:
       - test
       - syntax

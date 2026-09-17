@@ -415,9 +415,11 @@ const geometry = await page.eval(() => {
       width: value(Math.max(0, available.right - available.left)),
       height: value(Math.max(0, available.bottom - available.top)),
     },
+    // Raw ratios: rounding here to 0.001 lets a pair whose raw difference
+    // exceeds the absolute SCALE_TOLERANCE round into agreement.
     scale: {
-      x: authored.width > 0 ? value(rendered.width / authored.width) : null,
-      y: authored.height > 0 ? value(rendered.height / authored.height) : null,
+      x: authored.width > 0 ? rendered.width / authored.width : null,
+      y: authored.height > 0 ? rendered.height / authored.height : null,
     },
   };
 });

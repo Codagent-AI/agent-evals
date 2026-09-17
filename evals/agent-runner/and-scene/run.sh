@@ -35,7 +35,7 @@ RESCORE_FROM="${RESCORE_FROM:-}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-}"
 LEAD_CLI="" LEAD_MODEL="" LEAD_EFFORT=""
 IMPLEMENTOR_CLI="" IMPLEMENTOR_MODEL="" IMPLEMENTOR_EFFORT=""
-REVIEWER_CLI="" REVIEWER_MODEL="" REVIEWER_EFFORT=""
+TESTER_CLI="" TESTER_MODEL="" TESTER_EFFORT=""
 SKIP_VALIDATOR=0
 RESUME=0
 REFERENCE_BASELINE=0
@@ -53,6 +53,7 @@ ENV_FILE_ARGS=()
 AUTH_ARGS=()
 MOUNT_CODEX_AUTH=0
 MOUNT_CLAUDE_AUTH=0
+MOUNT_CURSOR_AUTH=0
 
 usage() {
   cat <<'USAGE'
@@ -117,10 +118,9 @@ Options:
                           Task-implementor model.
   --implementor-effort EFFORT
                           Task-implementor effort.
-  --reviewer-cli CLI     Acceptance-reviewer CLI adapter.
-  --reviewer-model MODEL Acceptance-reviewer model.
-  --reviewer-effort EFFORT
-                          Acceptance-reviewer effort.
+  --tester-cli CLI       Tester CLI adapter.
+  --tester-model MODEL   Tester model.
+  --tester-effort EFFORT Tester effort.
   --judge-model MODEL    Eval-owned judge model. Default: the Codex CLI default.
   --env NAME             Pass through one named environment variable.
                           Repeatable.
@@ -131,6 +131,8 @@ Options:
                           sandbox via sandbox-run.sh.
   --mount-claude-auth    Forward subscription-based Claude Code auth files into
                           the sandbox via sandbox-run.sh.
+  --mount-cursor-auth    Forward subscription-based Cursor auth files into the
+                          sandbox via sandbox-run.sh.
   -h, --help             Show this help.
 USAGE
 }
@@ -234,16 +236,16 @@ while (($#)); do
       IMPLEMENTOR_EFFORT="${2:?missing value for --implementor-effort}"
       shift 2
       ;;
-    --reviewer-cli)
-      REVIEWER_CLI="${2:?missing value for --reviewer-cli}"
+    --tester-cli)
+      TESTER_CLI="${2:?missing value for --tester-cli}"
       shift 2
       ;;
-    --reviewer-model)
-      REVIEWER_MODEL="${2:?missing value for --reviewer-model}"
+    --tester-model)
+      TESTER_MODEL="${2:?missing value for --tester-model}"
       shift 2
       ;;
-    --reviewer-effort)
-      REVIEWER_EFFORT="${2:?missing value for --reviewer-effort}"
+    --tester-effort)
+      TESTER_EFFORT="${2:?missing value for --tester-effort}"
       shift 2
       ;;
     --judge-model)
@@ -266,6 +268,11 @@ while (($#)); do
     --mount-claude-auth)
       MOUNT_CLAUDE_AUTH=1
       AUTH_ARGS+=(--mount-claude-auth)
+      shift
+      ;;
+    --mount-cursor-auth)
+      MOUNT_CURSOR_AUTH=1
+      AUTH_ARGS+=(--mount-cursor-auth)
       shift
       ;;
     -h|--help)
@@ -386,10 +393,10 @@ if [[ "$RUN_AGENT" == 1 ]]; then
 
     require_role_profile "lead-agent" "$LEAD_CLI" "$LEAD_MODEL" "$LEAD_EFFORT"
     require_role_profile "task-implementor" "$IMPLEMENTOR_CLI" "$IMPLEMENTOR_MODEL" "$IMPLEMENTOR_EFFORT"
-    require_role_profile "acceptance-reviewer" "$REVIEWER_CLI" "$REVIEWER_MODEL" "$REVIEWER_EFFORT"
+    require_role_profile "tester" "$TESTER_CLI" "$TESTER_MODEL" "$TESTER_EFFORT"
 
     # Forward only the auth the selected role profiles and the judge need.
-    for cli in "$LEAD_CLI" "$IMPLEMENTOR_CLI" "$REVIEWER_CLI"; do
+    for cli in "$LEAD_CLI" "$IMPLEMENTOR_CLI" "$TESTER_CLI"; do
       case "$cli" in
         claude)
           if [[ "$MOUNT_CLAUDE_AUTH" != 1 ]]; then
@@ -403,8 +410,14 @@ if [[ "$RUN_AGENT" == 1 ]]; then
             MOUNT_CODEX_AUTH=1
           fi
           ;;
+        cursor)
+          if [[ "$MOUNT_CURSOR_AUTH" != 1 ]]; then
+            AUTH_ARGS+=(--mount-cursor-auth)
+            MOUNT_CURSOR_AUTH=1
+          fi
+          ;;
         *)
-          echo "Unsupported CLI adapter for auth forwarding: $cli; expected claude or codex." >&2
+          echo "Unsupported CLI adapter for auth forwarding: $cli; expected claude, codex, or cursor." >&2
           exit 2
           ;;
       esac
@@ -462,13 +475,13 @@ CHANGE_NAME_Q="$(shell_quote "$CHANGE_NAME")"
 JUDGE_MODEL_Q="$(shell_quote "$JUDGE_MODEL")"
 CONTAINER_AGENT_RUNNER_DIR_Q="$(shell_quote "$CONTAINER_AGENT_RUNNER_DIR")"
 CONTAINER_AGENT_SKILLS_DIR_Q="$(shell_quote "$CONTAINER_AGENT_SKILLS_DIR")"
-SELECTED_ADAPTERS_Q="$(shell_quote "$LEAD_CLI") $(shell_quote "$IMPLEMENTOR_CLI") $(shell_quote "$REVIEWER_CLI")"
+SELECTED_ADAPTERS_Q="$(shell_quote "$LEAD_CLI") $(shell_quote "$IMPLEMENTOR_CLI") $(shell_quote "$TESTER_CLI")"
 
 # Assemble the controller argument list on the host so the container script
 # stays a fixed, quoted invocation rather than string-built shell.
 CONTROLLER_ARGS=(--run-dir /artifacts --run-id "$AND_SCENE_RUN_ID")
 CONTROLLER_ARGS+=(--agent-runner-dir "$CONTAINER_AGENT_RUNNER_DIR" --repo "$REPO")
-if [[ "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
+if [[ "$RUN_AGENT" == 1 && "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
   CONTROLLER_ARGS+=(--agent-skills-dir "$CONTAINER_AGENT_SKILLS_DIR")
 fi
 if [[ -z "$RESCORE_FROM" || "$CHANGE_NAME_PROVIDED" == 1 ]]; then
@@ -492,8 +505,8 @@ else
   CONTROLLER_ARGS+=(--lead-cli "$LEAD_CLI" --lead-model "$LEAD_MODEL" --lead-effort "$LEAD_EFFORT")
   CONTROLLER_ARGS+=(--implementor-cli "$IMPLEMENTOR_CLI" --implementor-model "$IMPLEMENTOR_MODEL")
   CONTROLLER_ARGS+=(--implementor-effort "$IMPLEMENTOR_EFFORT")
-  CONTROLLER_ARGS+=(--reviewer-cli "$REVIEWER_CLI" --reviewer-model "$REVIEWER_MODEL")
-  CONTROLLER_ARGS+=(--reviewer-effort "$REVIEWER_EFFORT")
+  CONTROLLER_ARGS+=(--tester-cli "$TESTER_CLI" --tester-model "$TESTER_MODEL")
+  CONTROLLER_ARGS+=(--tester-effort "$TESTER_EFFORT")
 fi
 CONTROLLER_ARGS_Q=""
 for controller_arg in "${CONTROLLER_ARGS[@]}"; do
@@ -611,12 +624,19 @@ PROOF
 )
 
 AGENT_SKILLS_BOOTSTRAP=""
+AGENT_SESSION_STATE_BOOTSTRAP=""
 if [[ "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
   AGENT_SKILLS_BOOTSTRAP="/eval-input/bootstrap-agent-skills.sh \\
     $CONTAINER_AGENT_SKILLS_DIR_Q \\
     \"\$AGENT_RUNNER_DIR/\$IMPLEMENTATION_WORKFLOW_PATH\" \\
     $SELECTED_ADAPTERS_Q \\
     2>&1 | tee /artifacts/logs/agent-skills-bootstrap.log"
+  # Agent Runner checkpoints live under /artifacts already, but their recorded
+  # CLI session IDs refer to rollout/transcript files normally written under
+  # the disposable HOME. Persist only those private state directories for real
+  # implementation workflows; reference and rescore modes start no such roles.
+  AGENT_SESSION_STATE_BOOTSTRAP="/eval-input/prepare-agent-session-state.sh \
+    /artifacts/.runtime/agent-session-state"
 fi
 
 agent_script=$(cat <<AGENT
@@ -682,6 +702,8 @@ if [ -n "\$token" ]; then
   export GIT_TERMINAL_PROMPT=0
 fi
 
+$AGENT_SESSION_STATE_BOOTSTRAP
+
 $AGENT_SKILLS_BOOTSTRAP
 
 exec node /eval-input/controller.mjs $CONTROLLER_ARGS_Q
@@ -699,7 +721,31 @@ if [[ "$PROOF_BROWSER" != 1 ]]; then
     --docker-run-arg seccomp=unconfined
   )
 fi
-if [[ "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
+if [[ "$RUN_AGENT" == 1 && "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
+  # A linked worktree's .git file points at host-absolute backing directories.
+  # The source mount alone therefore is not enough for Git inside the sandbox
+  # to verify the pinned revision. Mount both resolved directories at their
+  # original paths read-only; do not rewrite Git metadata or the checkout.
+  append_git_metadata_mounts() {
+    local checkout="$1" git_dir common_dir directory
+    local -a directories=()
+    git_dir="$(git -C "$checkout" rev-parse --path-format=absolute --git-dir)"
+    common_dir="$(git -C "$checkout" rev-parse --path-format=absolute --git-common-dir)"
+    directories=("$git_dir" "$common_dir")
+    for directory in "${directories[@]}"; do
+      directory="$(cd -- "$directory" && pwd -P)"
+      if [[ " ${MOUNTED_GIT_METADATA:-} " == *" $directory "* ]]; then
+        continue
+      fi
+      MOUNTED_GIT_METADATA="${MOUNTED_GIT_METADATA:-} $directory"
+      sandbox_args+=(
+        --docker-run-arg --mount
+        --docker-run-arg "type=bind,source=$directory,target=$directory,readonly"
+      )
+    done
+  }
+  append_git_metadata_mounts "$AGENT_RUNNER_DIR"
+  append_git_metadata_mounts "$AGENT_SKILLS_DIR"
   sandbox_args+=(
     --docker-run-arg --mount
     --docker-run-arg "type=bind,source=$AGENT_SKILLS_DIR,target=$CONTAINER_AGENT_SKILLS_DIR,readonly"

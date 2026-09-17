@@ -580,6 +580,7 @@ export async function buildCandidateEvidenceManifest({
   const artifacts = []
   let totalBytes = 0
   let screenshotMetadata = null
+  let screenshotMetadataMalformed = false
   const impactText = discovery.selected
     .find(({ origin }) => basename(origin.relative_path).toLowerCase() === 'acceptance-impact-scope.md')
     ?.bytes.toString('utf8') ?? ''
@@ -612,6 +613,7 @@ export async function buildCandidateEvidenceManifest({
         screenshotMetadata = parsed
       } catch (error) {
         metadataError = error.message
+        screenshotMetadataMalformed = true
         findings.push(finding(
           'malformed-metadata',
           `screenshot metadata is not valid JSON: ${error.message}`,
@@ -738,13 +740,19 @@ export async function buildCandidateEvidenceManifest({
         }
       }
     }
-  } else if (!materializedRoles.has('screenshot-metadata')) {
+  } else if (screenshotMetadataMalformed || !materializedRoles.has('screenshot-metadata')) {
+    // Metadata that is absent and JSON metadata that failed to parse are both
+    // unusable: role presence alone must not leave screenshots unvalidated.
+    // Non-JSON metadata is a supported form and is covered by text extraction.
+    const reason = screenshotMetadataMalformed
+      ? 'has unusable candidate-provided capture metadata'
+      : 'has no candidate-provided capture metadata'
     for (const artifact of artifacts.filter(({ role }) => role === 'screenshot')) {
       artifact.verification_state = 'defective'
       artifact.limitations.push('missing-capture-metadata')
       findings.push(finding(
         'screenshot-metadata-inconsistent',
-        `screenshot has no candidate-provided capture metadata: ${artifact.origin.relative_path}`,
+        `screenshot ${reason}: ${artifact.origin.relative_path}`,
         artifact.id,
       ))
     }

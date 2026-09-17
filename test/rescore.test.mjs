@@ -109,7 +109,7 @@ async function sourceRun({
     role_profiles: {
       lead: { cli: 'claude', model: 'opus', effort: 'high', agent: 'lead' },
       implementor: { cli: 'claude', model: 'sonnet', effort: 'medium', agent: 'implementor' },
-      reviewer: { cli: 'claude', model: 'opus', effort: 'high', agent: 'tester' },
+      tester: { cli: 'claude', model: 'opus', effort: 'high', agent: 'tester' },
     },
     agent_runner_provenance: {
       commit: '3'.repeat(40),
