@@ -153,6 +153,26 @@ test('production waiting continues after source unlock until linked audits are t
   assert.equal(state.audit.links[0].state, 'completed')
 })
 
+test('the only execution session is selected for explicit audit replay', () => {
+  assert.equal(
+    runnerState.selectFinalizedExecutionSession([
+      { execution_session_id: 'execution-1', status: 'closed' },
+    ]),
+    'execution-1',
+  )
+})
+
+test('resume selects the last closed execution session for explicit audit replay', () => {
+  assert.equal(
+    runnerState.selectFinalizedExecutionSession([
+      { execution_session_id: 'execution-1', status: 'closed' },
+      { execution_session_id: 'execution-2', status: 'closed' },
+      { execution_session_id: 'execution-3', status: 'open' },
+    ]),
+    'execution-2',
+  )
+})
+
 test('runner liveness rejects a reused PID owned by an unrelated process', () => {
   assert.equal(typeof runnerState.isAgentRunnerProcessAlive, 'function')
 

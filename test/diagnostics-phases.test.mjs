@@ -257,6 +257,7 @@ async function evaluate(context, overrides = {}) {
       session_dir: context.sessionDir,
       workflow_name: 'implement-change',
       workflow_completed: true,
+      audit: { links: [{ auditRunId: 'audit-fixture', state: 'completed' }] },
     }),
     observedSteps: () => [
       { step: 'run-validator', outcome: 'success' },

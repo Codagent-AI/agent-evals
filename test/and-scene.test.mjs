@@ -148,6 +148,16 @@ test('scored mode permits the nested Codex judge sandbox to create user namespac
   assert.match(result.output, /--docker-run-arg --security-opt --docker-run-arg seccomp=unconfined/)
 })
 
+test('scored mode forwards --dev-audit so the sandbox builds a tagged audit-capable Runner', async () => {
+  const context = await setup()
+
+  const result = await scored(context, ['--skip-validator', ...profileArgs])
+
+  assert.equal(result.status, 0, result.output)
+  assert.match(result.output, /(?:^|\s)--dev-audit(?:\s|$)/)
+  assert.match(result.output, /--docker-run-arg --security-opt --docker-run-arg seccomp=unconfined/)
+})
+
 test('scored mode always attaches AXI to the sandbox Playwright Chromium', async () => {
   const context = await setup()
 

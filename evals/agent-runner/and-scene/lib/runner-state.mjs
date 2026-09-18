@@ -10,6 +10,7 @@ import { lstat, mkdir, readdir, readFile, readlink, stat, symlink } from 'node:f
 import { basename, join } from 'node:path'
 
 import { readJson } from './persistence.mjs'
+import { RUNNER_METRICS_FILENAME } from './runner-metrics.mjs'
 
 // Agent Runner's lock records only a PID. Disposable containers can reuse that
 // number for an unrelated process, so existence alone is not proof that the
@@ -223,6 +224,35 @@ export function pendingLinkedAudits(state) {
 
 export function hasPendingLinkedAudits(state) {
   return pendingLinkedAudits(state).length > 0
+}
+
+export function hasLinkedAudits(state) {
+  return Array.isArray(state?.audit?.links) && state.audit.links.length > 0
+}
+
+// core:implement-change never auto-launches an audit. Replay needs the
+// finalized top-level execution: the only sessions[] entry, or the last
+// closed session after resume.
+export function selectFinalizedExecutionSession(sessions) {
+  if (!Array.isArray(sessions) || sessions.length === 0) return null
+  const pick = (session) => {
+    const id = session?.execution_session_id
+    return typeof id === 'string' && id.trim() !== '' ? id.trim() : null
+  }
+  if (sessions.length === 1) return pick(sessions[0])
+  for (let index = sessions.length - 1; index >= 0; index -= 1) {
+    if (sessions[index]?.status === 'closed') {
+      const id = pick(sessions[index])
+      if (id) return id
+    }
+  }
+  return null
+}
+
+export async function readFinalizedExecutionSessionId(sessionDir) {
+  if (typeof sessionDir !== 'string' || sessionDir.trim() === '') return null
+  const payload = JSON.parse(await readFile(join(sessionDir, RUNNER_METRICS_FILENAME), 'utf8'))
+  return selectFinalizedExecutionSession(payload?.sessions)
 }
 
 // Production waiting is a real poll of Agent Runner's separate lock file and
