@@ -4,6 +4,9 @@ import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { readJson } from './persistence.mjs'
+import { requirementSourceIds, sourceEntries, sourceError } from './rubric.mjs'
+
 const SUITE_DIR = dirname(dirname(fileURLToPath(import.meta.url)))
 export const SNAPSHOT_DIR = join(SUITE_DIR, 'fixture-snapshot')
 
@@ -43,86 +46,92 @@ function valuesIn(text) {
   return [...values]
 }
 
-function sourceEntries(source) {
-  return Array.isArray(source?.sources) ? source.sources : [source]
-}
-
-function sourceError(id, source) {
-  if (!source || typeof source !== 'object') return `criterion ${id} requires a source`
-  if (source.owner === 'eval') return typeof source.reason === 'string' && source.reason.trim()
-    ? null : `criterion ${id} eval-owned source requires a reason`
-  if (source.owner !== 'fixture') return `criterion ${id} source has unknown owner`
-  const citations = sourceEntries(source)
-  if (citations.length === 0 || citations.some((citation) => !citation || typeof citation.document !== 'string' || typeof citation.heading !== 'string' || typeof citation.quote !== 'string' || !citation.document.trim() || !citation.heading.trim() || !citation.quote.trim())) {
-    return `criterion ${id} fixture source requires document, heading, and quote`
-  }
-  return null
+// Whitespace is dropped as well, so `880 × 380` in the fixture accounts for
+// `880×380` in guidance.
+function compact(text) {
+  return normalizeTraceabilityText(text).replace(/\s+/g, '')
 }
 
 export function validateTraceability({ rubric, fixture, fixtureRef }) {
   const errors = []
-  if (fixture.fixture_ref !== fixtureRef) errors.push('fixture snapshot ref differs from FIXTURE_REF; refresh the snapshot')
+  if (fixture.fixture_ref !== fixtureRef) {
+    errors.push('fixture snapshot ref differs from FIXTURE_REF; refresh the snapshot')
+  }
   const files = new Map((fixture.files ?? []).map((file) => [file.path, file]))
   for (const file of files.values()) {
-    if (file.blob && file.content != null && gitBlobId(file.content) !== file.blob) errors.push(`fixture snapshot document ${file.path} does not match recorded blob`)
+    if (file.blob && file.content != null && gitBlobId(file.content) !== file.blob) {
+      errors.push(`fixture snapshot document ${file.path} does not match recorded blob`)
+    }
   }
-  const ids = [
-    ...(rubric.components ?? []).flatMap((component) => component.subcomponents ?? []).flatMap((subcomponent) => subcomponent.criteria ?? []),
-    ...(rubric.gates ?? []).map(({ id }) => id),
-  ]
+
   const sources = rubric.criterion_sources ?? {}
-  for (const id of ids) {
+  const sectionOf = (citation) => (
+    sectionForHeading(files.get(citation.document)?.content ?? '', citation.heading)
+  )
+  for (const id of requirementSourceIds(rubric)) {
     const source = sources[id]
     const structural = sourceError(id, source)
-    if (structural) { errors.push(structural); continue }
+    if (structural) {
+      errors.push(structural)
+      continue
+    }
     if (source.owner !== 'fixture') continue
     for (const citation of sourceEntries(source)) {
-      const file = files.get(citation.document)
-      if (!file) { errors.push(`criterion ${id} citation document ${citation.document} is not in the fixture snapshot`); continue }
-      const section = sectionForHeading(file.content ?? '', citation.heading)
-      if (section == null) { errors.push(`criterion ${id} citation heading ${citation.heading} does not exist`); continue }
-      if (!normalizeTraceabilityText(section).includes(normalizeTraceabilityText(citation.quote))) {
+      if (!files.has(citation.document)) {
+        errors.push(`criterion ${id} citation document ${citation.document} is not in the fixture snapshot`)
+        continue
+      }
+      const section = sectionOf(citation)
+      if (section == null) {
+        errors.push(`criterion ${id} citation heading ${citation.heading} does not exist`)
+      } else if (!normalizeTraceabilityText(section).includes(normalizeTraceabilityText(citation.quote))) {
         errors.push(`criterion ${id} citation quote does not match ${citation.heading}: ${citation.quote}`)
       }
     }
   }
+
+  // A concrete value is accounted for when the fixture text cited by one of the
+  // criteria it applies to contains it, or when the rubric declares it eval-owned.
   const evalOwned = new Set((rubric.eval_owned_values ?? [])
     .filter(({ value, reason }) => typeof value === 'string' && value && typeof reason === 'string' && reason.trim())
     .map(({ value }) => normalizeTraceabilityText(value)))
-  const isCited = (id, value) => {
-    const normalized = normalizeTraceabilityText(value).replace(/\s+/g, '')
-    return sourceEntries(sources[id])
-      .filter((citation) => sources[id]?.owner === 'fixture')
-      .map((citation) => sectionForHeading(files.get(citation.document)?.content ?? '', citation.heading) ?? '')
-      .map(normalizeTraceabilityText)
-      .some((section) => section.replace(/\s+/g, '').includes(normalized))
+  const citedSections = (ids) => ids
+    .map((id) => sources[id])
+    .filter((source) => source?.owner === 'fixture')
+    .flatMap(sourceEntries)
+    .map((citation) => compact(sectionOf(citation) ?? ''))
+  const uncitedValues = (text, ids) => {
+    const sections = citedSections(ids)
+    return valuesIn(text).filter((value) => (
+      !sections.some((section) => section.includes(compact(value)))
+      && !evalOwned.has(normalizeTraceabilityText(value))
+    ))
   }
-  for (const component of rubric.components ?? []) for (const subcomponent of component.subcomponents ?? []) {
-    const citedSections = (subcomponent.criteria ?? []).map((id) => sources[id])
-      .filter((source) => source?.owner === 'fixture')
-      .flatMap(sourceEntries)
-      .map((citation) => sectionForHeading(files.get(citation.document)?.content ?? '', citation.heading) ?? '')
-      .map(normalizeTraceabilityText)
-    const texts = subcomponent.review_guidance ?? []
-    for (const value of valuesIn(texts.join('\n'))) {
-      const normalized = normalizeTraceabilityText(value).replace(/\s+/g, '')
-      const found = citedSections.some((section) => section.replace(/\s+/g, '').includes(normalized))
-      if (!found && !evalOwned.has(normalizeTraceabilityText(value))) errors.push(`subcomponent ${subcomponent.id} has uncited concrete value ${value}`)
+
+  for (const component of rubric.components ?? []) {
+    for (const subcomponent of component.subcomponents ?? []) {
+      const guidance = (subcomponent.review_guidance ?? []).join('\n')
+      for (const value of uncitedValues(guidance, subcomponent.criteria ?? [])) {
+        errors.push(`subcomponent ${subcomponent.id} has uncited concrete value ${value}`)
+      }
     }
   }
   for (const [id, fallback] of Object.entries(rubric.fallbacks ?? {})) {
-    for (const value of valuesIn([fallback.requirement, ...(fallback.guidance ?? [])].join('\n'))) {
-      if (!isCited(id, value) && !evalOwned.has(normalizeTraceabilityText(value))) errors.push(`fallback ${id} has uncited concrete value ${value}`)
+    const text = [fallback.requirement, ...(fallback.guidance ?? [])].join('\n')
+    for (const value of uncitedValues(text, [id])) {
+      errors.push(`fallback ${id} has uncited concrete value ${value}`)
     }
   }
-  for (const gate of rubric.gates ?? []) for (const value of valuesIn(gate.requirement)) {
-    if (!isCited(gate.id, value) && !evalOwned.has(normalizeTraceabilityText(value))) errors.push(`gate ${gate.id} has uncited concrete value ${value}`)
+  for (const gate of rubric.gates ?? []) {
+    for (const value of uncitedValues(gate.requirement, [gate.id])) {
+      errors.push(`gate ${gate.id} has uncited concrete value ${value}`)
+    }
   }
   return errors
 }
 
 export async function loadFixtureSnapshot(snapshotDir = SNAPSHOT_DIR) {
-  const snapshot = JSON.parse(await readFile(join(snapshotDir, 'snapshot.json'), 'utf8'))
+  const snapshot = await readJson(join(snapshotDir, 'snapshot.json'))
   snapshot.files = await Promise.all(snapshot.files.map(async (file) => ({
     ...file, content: await readFile(join(snapshotDir, file.path), 'utf8'),
   })))

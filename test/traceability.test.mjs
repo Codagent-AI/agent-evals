@@ -5,10 +5,12 @@ import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { normalizeTraceabilityText, validateTraceability } from '../evals/agent-runner/and-scene/lib/traceability.mjs'
+import {
+  loadFixtureSnapshot,
+  normalizeTraceabilityText,
+  validateTraceability,
+} from '../evals/agent-runner/and-scene/lib/traceability.mjs'
 import { fixtureRef, refreshSnapshot } from '../evals/agent-runner/and-scene/fixture-snapshot.mjs'
-import { loadFixtureSnapshot } from '../evals/agent-runner/and-scene/lib/traceability.mjs'
-import { readFile as read } from 'node:fs/promises'
 
 const fixture = {
   fixture_ref: 'fixture-pin',
@@ -41,7 +43,7 @@ test('traceability accepts normalized citations and declared eval-owned values',
 })
 
 test('committed rubric citations verify against the pinned offline snapshot', async () => {
-  const committed = JSON.parse(await read('evals/agent-runner/and-scene/automated-rubric.json', 'utf8'))
+  const committed = JSON.parse(await readFile('evals/agent-runner/and-scene/automated-rubric.json', 'utf8'))
   const snapshot = await loadFixtureSnapshot()
   // The pin comes from run.sh, not from this file: moving FIXTURE_REF without
   // refreshing the snapshot has to fail here.
@@ -56,7 +58,7 @@ test('committed rubric citations verify against the pinned offline snapshot', as
 // short, named list: a criterion the fixture specifies has to cite it, or its
 // guidance escapes the check this file exists to run.
 test('only criteria the fixture does not describe are eval-owned', async () => {
-  const rubric = JSON.parse(await read(new URL('../evals/agent-runner/and-scene/automated-rubric.json', import.meta.url), 'utf8'))
+  const rubric = JSON.parse(await readFile(new URL('../evals/agent-runner/and-scene/automated-rubric.json', import.meta.url), 'utf8'))
   const evalOwned = Object.entries(rubric.criterion_sources)
     .filter(([, source]) => source.owner === 'eval')
     .map(([id]) => id)

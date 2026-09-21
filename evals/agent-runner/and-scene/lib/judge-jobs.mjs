@@ -57,6 +57,24 @@ export class JudgeOutputError extends Error {
   }
 }
 
+// The not-observed browser criteria a job answers for in this run: those whose
+// declared fallback names it.
+function fallbackEntriesFor(rubric, job, notObserved) {
+  return notObserved.filter(({ id }) => rubric.fallbacks?.[id]?.job === job)
+}
+
+function browserLeadSection(rubric, entry) {
+  const fallback = rubric.fallbacks[entry.id]
+  return [
+    `## ${entry.id}`,
+    fallback.requirement,
+    ...(fallback.guidance ?? []).map((item) => `- ${item}`),
+    `Looked for: ${(entry.looked_for ?? []).join(', ') || 'not recorded'}`,
+    `Browser rationale: ${entry.rationale}`,
+    `Browser evidence: ${(entry.evidence ?? []).join(' | ')}`,
+  ].join('\n')
+}
+
 export function productJudgeJobs(rubrics, { mode = 'agent-runner', notObserved = [] } = {}) {
   const applicable = new Set(
     rubrics.automated.rubric.components
@@ -66,9 +84,10 @@ export function productJudgeJobs(rubrics, { mode = 'agent-runner', notObserved =
   return PRODUCT_JUDGE_JOB_IDS.filter((id) => applicable.has(id)).map((id) => ({
     id,
     brief: JOB_BRIEFS[id],
-    criteria: [...criteriaForJob(rubrics.automated.rubric, id), ...notObserved
-      .filter(({ id: criterion }) => rubrics.automated.rubric.fallbacks?.[criterion]?.job === id)
-      .map(({ id: criterion }) => criterion)],
+    criteria: [
+      ...criteriaForJob(rubrics.automated.rubric, id),
+      ...fallbackEntriesFor(rubrics.automated.rubric, id, notObserved).map((entry) => entry.id),
+    ],
   }))
 }
 
@@ -289,18 +308,14 @@ export function buildJudgeRequest({
   const body = evidenceJob
     ? evidenceJudgePrompt({ job, definition, slice, view })
     : sourceJudgePrompt({ definition, slice, sources: discoverableSources, evidence })
+  const fallbackEntries = fallbackEntriesFor(rubric, job, notObserved)
   const prompt = [
     ...body,
     '',
-    ...(notObserved.filter(({ id }) => rubric.fallbacks?.[id]?.job === job).length ? [
+    ...(fallbackEntries.length ? [
       '# Browser check could not observe',
       'Treat this browser observation as a lead, not an authoritative verdict. A pass must cite delivered source.',
-      ...notObserved.filter(({ id }) => rubric.fallbacks?.[id]?.job === job).map((entry) => {
-        const fallback = rubric.fallbacks[entry.id]
-        return [`## ${entry.id}`, fallback.requirement, ...(fallback.guidance ?? []).map((item) => `- ${item}`),
-          `Looked for: ${(entry.looked_for ?? []).join(', ') || 'not recorded'}`,
-          `Browser rationale: ${entry.rationale}`, `Browser evidence: ${(entry.evidence ?? []).join(' | ')}`].join('\n')
-      }),
+      ...fallbackEntries.map((entry) => browserLeadSection(rubric, entry)),
     ] : []),
     '# Response',
     `Reply with JSON matching this schema: ${JSON.stringify(responseSchema)}`,
@@ -691,12 +706,15 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
         const output = await invoke(activeRequest)
-        const results = validateFallbackCitations(parseJudgeOutput(output, activeRequest.criteria, request.job, {
+        const fallbackIds = request.requireSourceCitationsFor ?? []
+        const parsed = parseJudgeOutput(output, activeRequest.criteria, request.job, {
           requireSourceCitations: request.source_audit === true,
-          requireSourceCitationsFor: request.requireSourceCitationsFor ?? [],
-        }), request.requireSourceCitationsFor ?? [], request.verified_source_paths ?? [])
-        const fallbackPass = results.some((result) => result.verdict === 'pass'
-          && (request.requireSourceCitationsFor ?? []).includes(result.id))
+          requireSourceCitationsFor: fallbackIds,
+        })
+        const results = validateFallbackCitations(parsed, fallbackIds, request.verified_source_paths ?? [])
+        const fallbackPass = results.some((result) => (
+          result.verdict === 'pass' && fallbackIds.includes(result.id)
+        ))
         if (request.source_audit || fallbackPass) {
           const currentCitations = results.flatMap((result) => result.citations ?? [])
           auditRequest = await buildSourceAuditRequest({
@@ -858,7 +876,8 @@ export async function runProductJudging({
     const request = buildJudgeRequest({
       rubrics, job: id, authority, evidence, sources, neutral, evidenceViews, notObserved,
     })
-    const requiredFallbackIds = notObserved.filter(({ id: criterion }) => request.criteria.includes(criterion)).map(({ id: criterion }) => criterion)
+    const requiredFallbackIds = fallbackEntriesFor(rubrics.automated.rubric, id, notObserved)
+      .map((entry) => entry.id)
     const inputHash = hashJson({
       job: request.job,
       criteria: request.criteria,
@@ -898,7 +917,7 @@ export async function runProductJudging({
     }
     await startJob?.({ id, inputHash, request })
     const outcome = await runJudgeJob({
-      request: { ...request, requireSourceCitationsFor: requiredFallbackIds, verified_source_paths: request.verified_source_paths },
+      request: { ...request, requireSourceCitationsFor: requiredFallbackIds },
       invoke,
     })
     judges[id] = outcome.results

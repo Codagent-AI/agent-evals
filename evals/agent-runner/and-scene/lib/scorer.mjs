@@ -149,8 +149,13 @@ function scoreSubcomponent(component, subcomponent, resultsBySource, resolutions
   const source = sourceOf(subcomponent)
   const indexed = resultsBySource.get(source)
   const criterionPoints = subcomponent.points / subcomponent.criteria.length
+  // Only a browser-owned criterion can have been resolved by a fallback judge.
+  const resolutionOf = (id) => (
+    subcomponent.evaluator === 'deterministic-browser' ? resolutions?.get(id) ?? null : null
+  )
+  const decided = (result) => result?.verdict != null
   const criteria = subcomponent.criteria.map((id) => {
-    const resolution = subcomponent.evaluator === 'deterministic-browser' ? resolutions?.get(id) : null
+    const resolution = resolutionOf(id)
     const result = resolution?.result ?? indexed?.get(id) ?? null
     return {
       id,
@@ -159,7 +164,7 @@ function scoreSubcomponent(component, subcomponent, resultsBySource, resolutions
       verdict: result?.verdict ?? null,
       rationale: result?.rationale ?? null,
       evidence: result?.evidence ?? [],
-      observed: result?.verdict !== null && result?.verdict !== undefined,
+      observed: decided(result),
       verdict_source: resolution?.source ?? (result ? 'owner' : null),
       source_citations: result?.citations ?? [],
       fallback_job: resolution?.fallback_job ?? null,
@@ -168,17 +173,19 @@ function scoreSubcomponent(component, subcomponent, resultsBySource, resolutions
   })
   const passed = criteria.filter(({ verdict }) => verdict === 'pass').length
   const share = { points: subcomponent.points, passed, count: subcomponent.criteria.length }
+  // An unresolved criterion leaves only this subcomponent incomplete.
   const complete = subcomponent.criteria.every((id) => {
-    const resolution = subcomponent.evaluator === 'deterministic-browser' ? resolutions?.get(id) : null
-    return resolution ? resolution.result?.verdict !== null && resolution.result?.verdict !== undefined : Boolean(indexed)
+    const resolution = resolutionOf(id)
+    return resolution ? decided(resolution.result) : Boolean(indexed)
   })
+  const scored = Boolean(indexed) && complete
   return {
-    share: indexed && complete ? share : null,
+    share: scored ? share : null,
     record: {
       id: subcomponent.id,
       title: subcomponent.title,
       points_possible: subcomponent.points,
-      points_awarded: indexed && complete ? sumShares([share]) : null,
+      points_awarded: scored ? sumShares([share]) : null,
       complete,
       evaluator: subcomponent.evaluator,
       job: subcomponent.job ?? null,
@@ -326,10 +333,12 @@ export function scoreProduct({
     observed_possible: components.reduce((sum, { points_observed_possible }) => sum + points_observed_possible, 0),
     complete: automatedComplete,
   }
-  const fallbackCriteria = [...resolutions.values()].filter(({ source }) => source === 'fallback')
-  const fallbackPoints = components.flatMap(({ subcomponents }) => subcomponents.flatMap(({ criteria }) => criteria))
+  // How much of the automated score rests on a fallback judge rather than on
+  // what the browser observed.
+  const fallbackCriteria = components
+    .flatMap(({ subcomponents }) => subcomponents.flatMap(({ criteria }) => criteria))
     .filter(({ verdict_source }) => verdict_source === 'fallback')
-    .reduce((sum, { points_awarded }) => sum + (points_awarded ?? 0), 0)
+  const fallbackPoints = fallbackCriteria.reduce((sum, { points_awarded }) => sum + (points_awarded ?? 0), 0)
 
   const automatedFailures = []
   const automatedInputsComplete = automatedComplete && gateScore.passed !== null

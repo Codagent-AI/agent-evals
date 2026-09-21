@@ -15,8 +15,12 @@ import {
 
 const suite = join(process.cwd(), 'evals/agent-runner/and-scene')
 
+async function loadCorpus() {
+  return JSON.parse(await readFile(join(suite, 'corpus/candidates.json'), 'utf8'))
+}
+
 test('the committed corpus is current and replayed, checked without a browser', async () => {
-  const corpus = JSON.parse(await readFile(join(suite, 'corpus/candidates.json')))
+  const corpus = await loadCorpus()
   const errors = validateCorpus(corpus)
   assert.deepEqual(errors, [])
   assert.equal(IN_SCOPE_IDS.length, 16)
@@ -28,7 +32,7 @@ test('the committed corpus is current and replayed, checked without a browser', 
 })
 
 test('a candidate with no replay record tells the maintainer to run the replay', async () => {
-  const corpus = JSON.parse(await readFile(join(suite, 'corpus/candidates.json')))
+  const corpus = await loadCorpus()
   const unreplayed = structuredClone(corpus)
   unreplayed.candidates[0].id = 'never-replayed'
   const errors = await validateReplayRecords({ suiteRoot: suite, corpus: unreplayed })
@@ -36,7 +40,7 @@ test('a candidate with no replay record tells the maintainer to run the replay',
 })
 
 test('corpus validation rejects incomplete, unexplained, and duplicate verdicts', async () => {
-  const corpus = JSON.parse(await readFile(join(suite, 'corpus/candidates.json')))
+  const corpus = await loadCorpus()
   const broken = structuredClone(corpus)
   delete broken.candidates[0].golden[IN_SCOPE_IDS[0]]
   broken.candidates[1].revision = broken.candidates[0].revision
@@ -48,7 +52,7 @@ test('corpus validation rejects incomplete, unexplained, and duplicate verdicts'
 })
 
 test('golden hashes exclude adjudication prose but bind outcomes', async () => {
-  const corpus = JSON.parse(await readFile(join(suite, 'corpus/candidates.json')))
+  const corpus = await loadCorpus()
   const candidate = structuredClone(corpus.candidates[0])
   const before = goldenHash(candidate.golden)
   candidate.golden[IN_SCOPE_IDS[0]].history[0].explanation += ' clarified'
@@ -73,7 +77,7 @@ async function appendTo(root, file, text = '\n// changed\n') {
 }
 
 test('editing anything the evaluator loads, or the rubric, makes every replay stale', async () => {
-  const corpus = JSON.parse(await readFile(join(suite, 'corpus/candidates.json')))
+  const corpus = await loadCorpus()
   for (const file of ['lib/browser-eval.mjs', 'lib/demo-contract.mjs', 'lib/axi-browser-driver.mjs']) {
     const root = await suiteCopy()
     await appendTo(root, file)
@@ -90,14 +94,14 @@ test('editing anything the evaluator loads, or the rubric, makes every replay st
 })
 
 test('editing a file the evaluator does not load leaves the replays current', async () => {
-  const corpus = JSON.parse(await readFile(join(suite, 'corpus/candidates.json')))
+  const corpus = await loadCorpus()
   const root = await suiteCopy()
   await appendTo(root, 'lib/pricing.mjs')
   assert.deepEqual(await validateReplayRecords({ suiteRoot: root, corpus }), [])
 })
 
 test('a golden verdict changed after its replay names only that candidate', async () => {
-  const corpus = JSON.parse(await readFile(join(suite, 'corpus/candidates.json')))
+  const corpus = await loadCorpus()
   const changed = structuredClone(corpus)
   const verdict = changed.candidates[1].golden[IN_SCOPE_IDS[0]]
   verdict.outcome = 'fail'
@@ -114,7 +118,7 @@ test('a golden verdict changed after its replay names only that candidate', asyn
 })
 
 test('the corpus covers every distinct candidate behind a published result', async () => {
-  const corpus = JSON.parse(await readFile(join(suite, 'corpus/candidates.json')))
+  const corpus = await loadCorpus()
   assert.deepEqual(await validatePublishedCoverage({ suiteRoot: suite, corpus }), [])
 
   const uncovered = structuredClone(corpus)
