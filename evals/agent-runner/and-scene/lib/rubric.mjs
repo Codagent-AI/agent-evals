@@ -231,6 +231,26 @@ export function validateAutomatedRubric(rubric) {
       errors.push(`fallback ${id} requires a requirement`)
     }
   }
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  for (const pair of rubric.contradiction_pairs ?? []) {
+    const deterministicCriterion = byId.get(pair?.deterministic)
+    const judgeCriterion = byId.get(pair?.judge)
+    if (deterministicCriterion?.evaluator !== 'deterministic-browser') {
+      errors.push(`contradiction pair deterministic ${pair?.deterministic} must be deterministic-browser owned`)
+    }
+    if (!judgeCriterion?.evaluator?.startsWith('llm-')) {
+      errors.push(`contradiction pair judge ${pair?.judge} must be LLM judge owned`)
+    }
+    if (typeof pair?.proposition !== 'string' || pair.proposition.trim().length === 0) {
+      errors.push('contradiction pair requires a proposition')
+    }
+    const deterministicComponent = rubric.components.find(({ id }) => id === deterministicCriterion?.component)
+    const judgeComponent = rubric.components.find(({ id }) => id === judgeCriterion?.component)
+    if (deterministicComponent && judgeComponent
+      && deterministicComponent.reference_applicable !== judgeComponent.reference_applicable) {
+      errors.push(`contradiction pair ${pair.deterministic}/${pair.judge} crosses reference_applicable boundaries`)
+    }
+  }
 
   // A gate must never also award points, or one baseline outcome would be
   // counted twice.

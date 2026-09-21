@@ -99,6 +99,9 @@ export function pathspecsFor(runId, files) {
 // says which rule excluded it.
 export function publicationEligibility(result) {
   if (!result) return { publishable: false, reason: 'no result to publish' }
+  if (result.review_hold?.active === true) {
+    return { publishable: false, reason: 'an evaluator contradiction holds this result for review', held: true }
+  }
   if (result.mode !== 'agent-runner') {
     return { publishable: false, reason: `run mode is ${result.mode ?? 'unknown'}, not agent-runner` }
   }

@@ -525,6 +525,27 @@ explicitly confirms the full summary; before that the run stays
 Once the reviewer confirms, the run is finalized and published; see
 [Publication](#publication).
 
+## Evaluator contradiction holds
+
+The browser evaluator and source judges are independent, but the automated
+rubric declares the one proposition they both answer about the delivered demo.
+If their owner verdicts disagree, the run proceeds through scoring and human
+review normally but is held from publication. `result.json` and `report.html`
+show the two verdicts, rationales, citations, and the active hold.
+
+A maintainer resolves the hold with an audited record:
+
+```sh
+evals/agent-runner/and-scene/review-hold.sh \
+  --run-dir artifacts/evals/and-scene/<run> \
+  --reviewer "name" --decision stand --rationale "why the verdicts stand"
+```
+
+Use `--decision verdict-wrong` when either evaluator is wrong. That decision is
+terminal for the run: it remains permanently unpublished and the candidate
+must be re-scored into a new artifact after correcting the evaluator, rubric,
+or judge guidance.
+
 Pass `--baseline-run-dir` to review a pending reference baseline first. Each run
 keeps its own candidate, rubric, response, score, and completion state, and the
 candidate's result records baseline totals, component, subcomponent, and gate

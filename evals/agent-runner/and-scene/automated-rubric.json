@@ -18,6 +18,13 @@
       "guidance": ["Cite the identity each persisting object carries across steps."]
     }
   },
+  "contradiction_pairs": [
+    {
+      "deterministic": "demo-evolving-scene-structure",
+      "judge": "demo-stable-identity-and-grouping",
+      "proposition": "The demo is one evolving scene whose objects keep a stable identity across steps."
+    }
+  ],
   "components": [
     {
       "id": "demo-technical-quality",
