@@ -89,9 +89,18 @@ export function validateTraceability({ rubric, fixture, fixtureRef }) {
   const evalOwned = new Set((rubric.eval_owned_values ?? [])
     .filter(({ value, reason }) => typeof value === 'string' && value && typeof reason === 'string' && reason.trim())
     .map(({ value }) => normalizeTraceabilityText(value)))
+  const isCited = (id, value) => {
+    const normalized = normalizeTraceabilityText(value).replace(/\s+/g, '')
+    return sourceEntries(sources[id])
+      .filter((citation) => sources[id]?.owner === 'fixture')
+      .map((citation) => sectionForHeading(files.get(citation.document)?.content ?? '', citation.heading) ?? '')
+      .map(normalizeTraceabilityText)
+      .some((section) => section.replace(/\s+/g, '').includes(normalized))
+  }
   for (const component of rubric.components ?? []) for (const subcomponent of component.subcomponents ?? []) {
-    const citedSections = (subcomponent.criteria ?? []).flatMap((id) => sourceEntries(sources[id]))
+    const citedSections = (subcomponent.criteria ?? []).map((id) => sources[id])
       .filter((source) => source?.owner === 'fixture')
+      .flatMap(sourceEntries)
       .map((citation) => sectionForHeading(files.get(citation.document)?.content ?? '', citation.heading) ?? '')
       .map(normalizeTraceabilityText)
     const texts = subcomponent.review_guidance ?? []
@@ -103,11 +112,11 @@ export function validateTraceability({ rubric, fixture, fixtureRef }) {
   }
   for (const [id, fallback] of Object.entries(rubric.fallbacks ?? {})) {
     for (const value of valuesIn([fallback.requirement, ...(fallback.guidance ?? [])].join('\n'))) {
-      if (!evalOwned.has(normalizeTraceabilityText(value))) errors.push(`fallback ${id} has uncited concrete value ${value}`)
+      if (!isCited(id, value) && !evalOwned.has(normalizeTraceabilityText(value))) errors.push(`fallback ${id} has uncited concrete value ${value}`)
     }
   }
   for (const gate of rubric.gates ?? []) for (const value of valuesIn(gate.requirement)) {
-    if (!evalOwned.has(normalizeTraceabilityText(value))) errors.push(`gate ${gate.id} has uncited concrete value ${value}`)
+    if (!isCited(gate.id, value) && !evalOwned.has(normalizeTraceabilityText(value))) errors.push(`gate ${gate.id} has uncited concrete value ${value}`)
   }
   return errors
 }

@@ -227,7 +227,7 @@ export function validateAutomatedRubric(rubric) {
   for (const id of sourceIds) {
     const source = rubric.criterion_sources?.[id]
     if (!source || typeof source !== 'object') errors.push(`criterion ${id} requires a source`)
-    else if (source.owner === 'fixture' && (!source.document || !source.heading || !source.quote)) {
+    else if (source.owner === 'fixture' && (!(source.sources ?? [source]).length || (source.sources ?? [source]).some((citation) => !citation?.document || !citation?.heading || !citation?.quote))) {
       errors.push(`criterion ${id} fixture source requires document, heading, and quote`)
     } else if (source.owner === 'eval' && (!source.reason || !source.reason.trim())) {
       errors.push(`criterion ${id} eval-owned source requires a reason`)

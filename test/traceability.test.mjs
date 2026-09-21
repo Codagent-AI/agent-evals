@@ -15,7 +15,7 @@ const fixture = {
   files: [{
     path: 'openspec/changes/create-and-scene/specs/example.md',
     blob: null,
-    content: '## Scenario: Controls keep their keys\n\nNavigation keys drive that control rather than also advancing the deck.\n',
+    content: '## Scenario: Controls keep their keys\n\nNavigation keys drive that control rather than also advancing the deck. The fixture uses 880 × 380.\n',
   }],
 }
 
@@ -57,6 +57,19 @@ test('traceability names missing source, missing quote, and uncited guidance val
   assert.match(errors.join('\n'), /navigation.*data-test-id/)
 })
 
+test('traceability accepts values backed by a multi-citation source on guidance, fallbacks, and gates', () => {
+  const multi = structuredClone(rubric)
+  multi.components[0].subcomponents[0].review_guidance = ['The fixture uses 880×380.']
+  multi.eval_owned_values = []
+  multi.criterion_sources.controls = {
+    owner: 'fixture',
+    sources: [{ ...rubric.criterion_sources.controls, quote: 'Navigation keys drive that control rather than also advancing the deck.' }],
+  }
+  multi.fallbacks = { controls: { requirement: 'The fixture uses 880×380.', guidance: [] } }
+  multi.gates = [{ id: 'controls', requirement: 'The fixture uses 880×380.' }]
+  assert.deepEqual(validateTraceability({ rubric: multi, fixture, fixtureRef: 'fixture-pin' }), [])
+})
+
 test('snapshot refresh copies fixture files with their git blob ids only at the fixture pin', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'fixture-snapshot-'))
   const checkout = join(directory, 'checkout')
@@ -74,9 +87,11 @@ test('snapshot refresh copies fixture files with their git blob ids only at the 
   execFileSync('git', ['-C', checkout, '-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'fixture'])
   // The implementation accepts a supplied expected ref so this test never depends on this repository's pin.
   const ref = execFileSync('git', ['-C', checkout, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  await writeFile(join(checkout, 'README.md'), 'uncommitted local edit\n')
   await refreshSnapshot(checkout, snapshot, ref)
   const written = JSON.parse(await readFile(join(snapshot, 'snapshot.json'), 'utf8'))
   assert.equal(written.fixture_ref, ref)
   assert.equal(written.files.find(({ path }) => path === 'fixture-root-README.md').blob,
     execFileSync('git', ['-C', checkout, 'ls-tree', 'HEAD', '--', 'README.md'], { encoding: 'utf8' }).trim().split(/\s+/)[2])
+  assert.equal(await readFile(join(snapshot, 'fixture-root-README.md'), 'utf8'), 'fixture root\n')
 })

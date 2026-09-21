@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Refresh the offline fixture corpus from a checkout at the reviewed pin.
 import { execFileSync } from 'node:child_process'
-import { cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -41,9 +41,9 @@ export async function refreshSnapshot(checkout, outputDir = SNAPSHOT_DIR, expect
   const temporary = `${outputDir}.tmp-${process.pid}`
   await rm(temporary, { recursive: true, force: true })
   await mkdir(temporary, { recursive: true })
-  for (const { path, source_path = path } of files) {
+  for (const { path, blob } of files) {
     await mkdir(dirname(join(temporary, path)), { recursive: true })
-    await cp(join(checkout, source_path), join(temporary, path))
+    await writeFile(join(temporary, path), execFileSync('git', ['-C', checkout, 'cat-file', 'blob', blob]))
   }
   await writeFile(join(temporary, 'snapshot.json'), `${JSON.stringify({ repository: 'Codagent-AI/and-scene', fixture_ref: ref, files }, null, 2)}\n`)
   await writeFile(join(temporary, 'README.md'), 'These documents are copied verbatim from Codagent-AI/and-scene at the pinned fixture revision for offline verification. Refresh with `node fixture-snapshot.mjs --checkout PATH` from the suite directory.\n')
