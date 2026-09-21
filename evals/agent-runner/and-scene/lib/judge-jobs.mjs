@@ -57,7 +57,7 @@ export class JudgeOutputError extends Error {
   }
 }
 
-export function productJudgeJobs(rubrics, { mode = 'agent-runner' } = {}) {
+export function productJudgeJobs(rubrics, { mode = 'agent-runner', notObserved = [] } = {}) {
   const applicable = new Set(
     rubrics.automated.rubric.components
       .filter((component) => componentApplicable(component, mode))
@@ -66,7 +66,9 @@ export function productJudgeJobs(rubrics, { mode = 'agent-runner' } = {}) {
   return PRODUCT_JUDGE_JOB_IDS.filter((id) => applicable.has(id)).map((id) => ({
     id,
     brief: JOB_BRIEFS[id],
-    criteria: criteriaForJob(rubrics.automated.rubric, id),
+    criteria: [...criteriaForJob(rubrics.automated.rubric, id), ...notObserved
+      .filter(({ id: criterion }) => rubrics.automated.rubric.fallbacks?.[criterion]?.job === id)
+      .map(({ id: criterion }) => criterion)],
   }))
 }
 
@@ -255,8 +257,9 @@ export function buildJudgeRequest({
   sources = [],
   neutral = null,
   evidenceViews = {},
+  notObserved = [],
 }) {
-  const definition = productJudgeJobs(rubrics).find(({ id }) => id === job)
+  const definition = productJudgeJobs(rubrics, { notObserved }).find(({ id }) => id === job)
   if (!definition) throw new Error(`unknown product judge job: ${job}`)
 
   const rubric = rubrics.automated.rubric
@@ -289,6 +292,16 @@ export function buildJudgeRequest({
   const prompt = [
     ...body,
     '',
+    ...(notObserved.filter(({ id }) => rubric.fallbacks?.[id]?.job === job).length ? [
+      '# Browser check could not observe',
+      'Treat this browser observation as a lead, not an authoritative verdict. A pass must cite delivered source.',
+      ...notObserved.filter(({ id }) => rubric.fallbacks?.[id]?.job === job).map((entry) => {
+        const fallback = rubric.fallbacks[entry.id]
+        return [`## ${entry.id}`, fallback.requirement, ...(fallback.guidance ?? []).map((item) => `- ${item}`),
+          `Looked for: ${(entry.looked_for ?? []).join(', ') || 'not recorded'}`,
+          `Browser rationale: ${entry.rationale}`, `Browser evidence: ${(entry.evidence ?? []).join(' | ')}`].join('\n')
+      }),
+    ] : []),
     '# Response',
     `Reply with JSON matching this schema: ${JSON.stringify(responseSchema)}`,
   ].join('\n')
@@ -323,7 +336,7 @@ export function parseJudgeOutput(
   text,
   expectedIds,
   job,
-  { requireSourceCitations = false } = {},
+  { requireSourceCitations = false, requireSourceCitationsFor = [] } = {},
 ) {
   let payload
   try {
@@ -357,7 +370,8 @@ export function parseJudgeOutput(
         `malformed criterion result from ${job}: ${result.id} cites no verified evidence`,
       )
     }
-    if (requireSourceCitations && (
+    const citationsRequired = requireSourceCitations || (result.verdict === 'pass' && requireSourceCitationsFor.includes(result.id))
+    if (citationsRequired && (
       !Array.isArray(result.citations)
       || result.citations.length === 0
       || result.citations.some((item) => typeof item !== 'string' || item.trim().length === 0)
@@ -366,12 +380,12 @@ export function parseJudgeOutput(
         `malformed criterion result from ${job}: ${result.id} has no neutral source citations`,
       )
     }
-    if (requireSourceCitations && result.citations.length > MAX_SOURCE_CITATIONS) {
+    if (citationsRequired && result.citations.length > MAX_SOURCE_CITATIONS) {
       throw new JudgeOutputError(
         `malformed criterion result from ${job}: ${result.id} has too many source citations`,
       )
     }
-    if (requireSourceCitations
+    if (citationsRequired
       && result.citations.some((item) => item.length > MAX_SOURCE_PATH_CHARS)) {
       throw new JudgeOutputError(
         `malformed criterion result from ${job}: ${result.id} source citation path is too long`,
@@ -386,7 +400,7 @@ export function parseJudgeOutput(
       verdict: result.verdict,
       rationale: bounded(result.rationale, MAX_RATIONALE_CHARS),
       evidence: result.evidence.map((item) => bounded(item)),
-      ...(requireSourceCitations
+      ...(citationsRequired
         ? { citations: [...new Set(result.citations.map((item) => item.trim()))] }
         : {}),
     })
@@ -659,6 +673,7 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
         const output = await invoke(activeRequest)
         const results = parseJudgeOutput(output, activeRequest.criteria, request.job, {
           requireSourceCitations: request.source_audit === true,
+          requireSourceCitationsFor: request.requireSourceCitationsFor ?? [],
         })
         if (request.source_audit) {
           const currentCitations = results.flatMap((result) => result.citations ?? [])
@@ -796,6 +811,7 @@ export async function runProductJudging({
   sources = [],
   neutral = null,
   evidenceViews = {},
+  notObserved = [],
   mode = 'agent-runner',
   loadJob = null,
   startJob = null,
@@ -803,7 +819,7 @@ export async function runProductJudging({
   failJob = null,
   invoke,
 }) {
-  const jobs = productJudgeJobs(rubrics, { mode })
+  const jobs = productJudgeJobs(rubrics, { mode, notObserved })
   const judges = {}
   const retries = {}
   const failedJobs = []
@@ -818,7 +834,7 @@ export async function runProductJudging({
   // budget, and a component-local failure must be attributable to its job.
   for (const { id } of jobs) {
     const request = buildJudgeRequest({
-      rubrics, job: id, authority, evidence, sources, neutral, evidenceViews,
+      rubrics, job: id, authority, evidence, sources, neutral, evidenceViews, notObserved,
     })
     const inputHash = hashJson({
       job: request.job,
@@ -838,6 +854,7 @@ export async function runProductJudging({
           JSON.stringify({ results: cached.results }),
           request.criteria,
           request.job,
+          { requireSourceCitationsFor: notObserved.filter(({ id }) => request.criteria.includes(id)).map(({ id }) => id) },
         )
         judges[id] = results
         attempts[id] = cached.attempts ?? []
@@ -853,7 +870,7 @@ export async function runProductJudging({
       }
     }
     await startJob?.({ id, inputHash, request })
-    const outcome = await runJudgeJob({ request, invoke })
+    const outcome = await runJudgeJob({ request: { ...request, requireSourceCitationsFor: notObserved.filter(({ id }) => request.criteria.includes(id)).map(({ id }) => id) }, invoke })
     judges[id] = outcome.results
     attempts[id] = outcome.attempts
     auditAttempts[id] = outcome.audit_attempts

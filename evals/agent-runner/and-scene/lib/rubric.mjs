@@ -223,6 +223,14 @@ export function validateAutomatedRubric(rubric) {
     if (seen.has(id)) errors.push(`duplicate criterion ${id}`)
     seen.add(id)
   }
+  const deterministic = new Set(rows.filter(({ evaluator }) => evaluator === 'deterministic-browser').map(({ id }) => id))
+  for (const [id, fallback] of Object.entries(rubric.fallbacks ?? {})) {
+    if (!deterministic.has(id)) errors.push(`fallback ${id} must name a deterministic-browser criterion`)
+    if (!JUDGE_JOBS.includes(fallback?.job)) errors.push(`fallback ${id} has unknown judge job ${fallback?.job}`)
+    if (typeof fallback?.requirement !== 'string' || fallback.requirement.trim().length === 0) {
+      errors.push(`fallback ${id} requires a requirement`)
+    }
+  }
 
   // A gate must never also award points, or one baseline outcome would be
   // counted twice.

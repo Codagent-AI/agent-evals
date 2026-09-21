@@ -24,6 +24,7 @@ function createDemo(knobs = {}) {
     perStepSceneId = false,
     declaresSceneId = true,
     replaceEntities = false,
+    entityIds = null,
     clampStart = true,
     clampEnd = true,
     preservePositionAcrossModes = true,
@@ -117,9 +118,9 @@ function createDemo(knobs = {}) {
         sceneId: declaresSceneId
           ? (perStepSceneId ? `scene-${index}` : 'how-to-make-a-presentation-scene')
           : null,
-        entityIds: replaceEntities
+        entityIds: entityIds?.[index] ?? (replaceEntities
           ? [`only-${index}`]
-          : ['stage', `beat-${index}`, `beat-${index + 1}`],
+          : ['stage', `beat-${index}`, `beat-${index + 1}`]),
         titleProminent: mode === 'present'
           ? titleProminentInPresent
           : activeTitleVisibleInBrowse,
@@ -286,6 +287,28 @@ test('a conforming built demo passes every deterministic criterion and hard gate
   assert.deepEqual([...new Set(result.criteria.map(({ verdict }) => verdict))], ['pass'])
   assert.deepEqual([...new Set(result.gates.map(({ verdict }) => verdict))], ['pass'])
   assert.equal(result.gates.length, 4)
+})
+
+test('scene criteria are not observed when captions are right but no recognised entity convention appears', async () => {
+  const result = await evaluate({ entityIds: TITLES.map(() => []) })
+
+  for (const id of ['demo-required-scene-content', 'demo-evolving-scene-structure']) {
+    const criterion = result.criteria.find((entry) => entry.id === id)
+    assert.equal(criterion.verdict, null, id)
+    assert.equal(criterion.outcome, 'not-observed', id)
+    assert.deepEqual(criterion.looked_for, [
+      'data-layout-id', 'data-scene-entity', 'data-node', 'data-entity-id', 'data-scene-node',
+    ])
+  }
+})
+
+test('a wrong caption remains a failure even when no scene convention is recognised', async () => {
+  const result = await evaluate({
+    captions: ['wrong caption', ...DEMO_CONTRACT.step_captions.slice(1)],
+    entityIds: TITLES.map(() => []),
+  })
+
+  assert.equal(verdictOf(result, 'demo-required-scene-content'), 'fail')
 })
 
 test('opening records and preserves the presentation initial mode', async () => {

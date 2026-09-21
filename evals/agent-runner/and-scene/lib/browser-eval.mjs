@@ -171,6 +171,12 @@ function unobserved(id, rationale, evidence = []) {
   }
 }
 
+const ENTITY_CONVENTIONS = ['data-layout-id', 'data-scene-entity', 'data-node', 'data-entity-id', 'data-scene-node']
+
+function notObserved(rationale, evidence = [], lookedFor = ENTITY_CONVENTIONS) {
+  return { not_observed: true, rationale, evidence, looked_for: lookedFor }
+}
+
 function overlaps(a, b) {
   return a.some((entry) => b.includes(entry))
 }
@@ -414,8 +420,7 @@ export async function runBrowserEvaluation({
       await session(PROBE_REQUIREMENTS['demo-required-scene-content'])
       const states = await walk()
       const mismatch = states.findIndex(
-        (state, position) => !sameText(state.caption, contract.step_captions[position])
-          || !(state.entityIds ?? []).length,
+        (state, position) => !sameText(state.caption, contract.step_captions[position]),
       )
       if (mismatch !== -1) {
         return [
@@ -427,6 +432,9 @@ export async function runBrowserEvaluation({
             states[mismatch]?.title ?? '',
           ],
         ]
+      }
+      if (states.some((state) => !(state.entityIds ?? []).length)) {
+        return notObserved('one or more steps exposed no recognised scene entity ids', [], ENTITY_CONVENTIONS)
       }
       return [true, 'every step renders its normative caption and scene content', contract.step_captions]
     },
@@ -455,10 +463,16 @@ export async function runBrowserEvaluation({
         ]
       }
       const replaced = states.findIndex(
-        (state, position) => position > 0 && !overlaps(state.entityIds ?? [], states[position - 1].entityIds ?? []),
+        (state, position) => position > 0
+          && (state.entityIds ?? []).length > 0
+          && (states[position - 1].entityIds ?? []).length > 0
+          && !overlaps(state.entityIds ?? [], states[position - 1].entityIds ?? []),
       )
       if (replaced !== -1) {
         return [false, `step ${replaced + 1} replaces every entity instead of evolving the scene`, [], observations]
+      }
+      if (states.some((state) => !(state.entityIds ?? []).length)) {
+        return notObserved('one or more steps exposed no recognised scene entity ids', [], ENTITY_CONVENTIONS)
       }
       return [
         true,
@@ -754,12 +768,25 @@ export async function runBrowserEvaluation({
     currentProbeObservationsDropped = 0
     let criterion
     try {
-      const [pass, rationale, evidence, observations = {}] = await probes[id]()
+      const outcome = await probes[id]()
+      if (outcome?.not_observed) {
+        criterion = {
+          id,
+          verdict: null,
+          outcome: 'not-observed',
+          looked_for: outcome.looked_for,
+          rationale: bounded(outcome.rationale),
+          evidence: [...outcome.evidence, probeCitation(id)],
+          observed: false,
+        }
+      } else {
+        const [pass, rationale, evidence, observations = {}] = outcome
       // A probe that cites a single string is citing one artifact, not a list
       // of characters.
       const citations = Array.isArray(evidence) ? evidence : [evidence]
-      criterion = verdict(id, pass, rationale, [...citations, probeCitation(id)])
-      criterion.observations = observations
+        criterion = verdict(id, pass, rationale, [...citations, probeCitation(id)])
+        criterion.observations = observations
+      }
     } catch (error) {
       if (error?.owner === 'evaluation-harness') throw error
       // A driver or page error is a real observation about the demo, so it

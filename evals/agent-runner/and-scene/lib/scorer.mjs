@@ -17,7 +17,7 @@
 // through diagnostically and never touches a point.
 import { componentApplicable, rubricCriteria } from './rubric.mjs'
 
-export const SCORE_SCHEMA_VERSION = 3
+export const SCORE_SCHEMA_VERSION = 4
 
 const VERDICTS = ['pass', 'fail']
 
@@ -32,7 +32,7 @@ export class RubricValidationError extends Error {
 // Validate one evaluator's output against the exact criterion set it owns.
 // Coverage must be exact in both directions: the scorer never changes the
 // denominator to accommodate what an evaluator happened to return.
-function indexResults(source, results, expectedIds, { allowUnobserved = false } = {}) {
+function indexResults(source, results, expectedIds, { allowUnobserved = false, allowNotObservedFor = new Set() } = {}) {
   const indexed = new Map()
   const duplicates = []
   const unknown = []
@@ -48,7 +48,7 @@ function indexResults(source, results, expectedIds, { allowUnobserved = false } 
     // only where the reader can act on it — the hard gates, which become
     // incomplete rather than failing. A scored criterion must still be decided,
     // and any other verdict value is malformed everywhere.
-    const isUnobserved = allowUnobserved && result.verdict === null
+    const isUnobserved = (allowUnobserved || allowNotObservedFor.has(result.id)) && result.verdict === null
     if (!isUnobserved) {
       if (!VERDICTS.includes(result.verdict)) {
         throw new RubricValidationError(
@@ -145,12 +145,13 @@ function sumShares(shares) {
   return numerator / denominator
 }
 
-function scoreSubcomponent(component, subcomponent, resultsBySource) {
+function scoreSubcomponent(component, subcomponent, resultsBySource, resolutions) {
   const source = sourceOf(subcomponent)
   const indexed = resultsBySource.get(source)
   const criterionPoints = subcomponent.points / subcomponent.criteria.length
   const criteria = subcomponent.criteria.map((id) => {
-    const result = indexed?.get(id) ?? null
+    const resolution = subcomponent.evaluator === 'deterministic-browser' ? resolutions?.get(id) : null
+    const result = resolution?.result ?? indexed?.get(id) ?? null
     return {
       id,
       points_possible: criterionPoints,
@@ -158,19 +159,27 @@ function scoreSubcomponent(component, subcomponent, resultsBySource) {
       verdict: result?.verdict ?? null,
       rationale: result?.rationale ?? null,
       evidence: result?.evidence ?? [],
-      observed: Boolean(result),
+      observed: result?.verdict !== null && result?.verdict !== undefined,
+      verdict_source: resolution?.source ?? (result ? 'owner' : null),
+      source_citations: result?.citations ?? [],
+      fallback_job: resolution?.fallback_job ?? null,
+      not_observed: resolution?.not_observed ?? null,
     }
   })
   const passed = criteria.filter(({ verdict }) => verdict === 'pass').length
   const share = { points: subcomponent.points, passed, count: subcomponent.criteria.length }
+  const complete = subcomponent.criteria.every((id) => {
+    const resolution = subcomponent.evaluator === 'deterministic-browser' ? resolutions?.get(id) : null
+    return resolution ? resolution.result?.verdict !== null && resolution.result?.verdict !== undefined : Boolean(indexed)
+  })
   return {
-    share: indexed ? share : null,
+    share: indexed && complete ? share : null,
     record: {
       id: subcomponent.id,
       title: subcomponent.title,
       points_possible: subcomponent.points,
-      points_awarded: indexed ? sumShares([share]) : null,
-      complete: Boolean(indexed),
+      points_awarded: indexed && complete ? sumShares([share]) : null,
+      complete,
       evaluator: subcomponent.evaluator,
       job: subcomponent.job ?? null,
       component: component.id,
@@ -179,7 +188,7 @@ function scoreSubcomponent(component, subcomponent, resultsBySource) {
   }
 }
 
-function scoreComponent(component, resultsBySource, applicable) {
+function scoreComponent(component, resultsBySource, applicable, resolutions) {
   if (!applicable) {
     return {
       id: component.id,
@@ -196,7 +205,7 @@ function scoreComponent(component, resultsBySource, applicable) {
     }
   }
   const scored = component.subcomponents.map(
-    (subcomponent) => scoreSubcomponent(component, subcomponent, resultsBySource),
+    (subcomponent) => scoreSubcomponent(component, subcomponent, resultsBySource, resolutions),
   )
   const observedShares = scored.map(({ share }) => share).filter(Boolean)
   const subcomponents = scored.map(({ record }) => record)
@@ -265,17 +274,41 @@ export function scoreProduct({
   const rows = rubricCriteria(automated).filter(({ component }) => applicableComponents.has(component))
   const deterministicIds = rows.filter(({ evaluator }) => evaluator === 'deterministic-browser').map(({ id }) => id)
   if (deterministic !== null && deterministic !== undefined) {
-    resultsBySource.set('deterministic-browser', indexResults('deterministic-browser', deterministic, deterministicIds))
+    // Be defensive if an older or faulty evaluator returns not-observed for a
+    // criterion without a declared fallback: it remains unresolved rather than
+    // being converted into a candidate failure.
+    resultsBySource.set('deterministic-browser', indexResults(
+      'deterministic-browser', deterministic, deterministicIds,
+      { allowNotObservedFor: new Set(deterministicIds) },
+    ))
   }
   const jobIds = [...new Set(rows.filter(({ job }) => job).map(({ job }) => job))]
   for (const job of jobIds) {
     const results = judges?.[job]
     if (results === null || results === undefined) continue
-    resultsBySource.set(job, indexResults(job, results, rows.filter((row) => row.job === job).map(({ id }) => id)))
+    const fallbackForJob = deterministicIds.filter((id) => {
+      const deterministicResult = resultsBySource.get('deterministic-browser')?.get(id)
+      return deterministicResult?.verdict === null && automated.fallbacks?.[id]?.job === job
+    })
+    resultsBySource.set(job, indexResults(job, results, [...rows.filter((row) => row.job === job).map(({ id }) => id), ...fallbackForJob]))
+  }
+
+  const resolutions = new Map()
+  const deterministicResults = resultsBySource.get('deterministic-browser')
+  for (const id of deterministicIds) {
+    const owner = deterministicResults?.get(id)
+    if (owner?.verdict !== null) resolutions.set(id, { result: owner, source: 'owner' })
+    else if (owner) {
+      const fallback = automated.fallbacks?.[id]
+      const judge = fallback ? resultsBySource.get(fallback.job)?.get(id) : null
+      resolutions.set(id, judge
+        ? { result: judge, source: 'fallback', fallback_job: fallback.job, not_observed: owner }
+        : { result: null, source: 'unresolved', fallback_job: fallback?.job ?? null, not_observed: owner })
+    }
   }
 
   const scoredComponents = automated.components.map((component) => (
-    scoreComponent(component, resultsBySource, applicableComponents.has(component.id))
+    scoreComponent(component, resultsBySource, applicableComponents.has(component.id), resolutions)
   ))
   const components = scoredComponents.map(({ observed_shares: _shares, ...component }) => component)
   const gateScore = scoreGates(automated.gates, gates)
@@ -293,6 +326,10 @@ export function scoreProduct({
     observed_possible: components.reduce((sum, { points_observed_possible }) => sum + points_observed_possible, 0),
     complete: automatedComplete,
   }
+  const fallbackCriteria = [...resolutions.values()].filter(({ source }) => source === 'fallback')
+  const fallbackPoints = components.flatMap(({ subcomponents }) => subcomponents.flatMap(({ criteria }) => criteria))
+    .filter(({ verdict_source }) => verdict_source === 'fallback')
+    .reduce((sum, { points_awarded }) => sum + (points_awarded ?? 0), 0)
 
   const automatedFailures = []
   const automatedInputsComplete = automatedComplete && gateScore.passed !== null
@@ -380,6 +417,7 @@ export function scoreProduct({
     gates: gateScore.gates,
     gates_passed: gateScore.passed,
     automated_subtotal: automatedSubtotal,
+    fallback: { criteria: fallbackCriteria.length, points: fallbackPoints },
     automated_pass_threshold: automated.automated_pass_threshold,
     automated_pass: automatedPass,
     automated_failures: automatedFailures,

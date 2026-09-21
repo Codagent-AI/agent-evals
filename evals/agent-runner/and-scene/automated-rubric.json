@@ -6,6 +6,18 @@
   "human_points": 30,
   "pass_threshold": 70,
   "automated_pass_threshold": 40,
+  "fallbacks": {
+    "demo-required-scene-content": {
+      "job": "demo-integration",
+      "requirement": "Every step renders the scene content the fixture requires for it.",
+      "guidance": ["Cite the step definitions that declare each step's scene objects." ]
+    },
+    "demo-evolving-scene-structure": {
+      "job": "demo-integration",
+      "requirement": "The nine steps are one evolving scene whose objects persist across steps.",
+      "guidance": ["Cite the identity each persisting object carries across steps."]
+    }
+  },
   "components": [
     {
       "id": "demo-technical-quality",

@@ -76,6 +76,28 @@ test('a judge request carries only its own rubric slice and records the judge au
   for (const id of request.criteria) assert.ok(request.prompt.includes(id), id)
 })
 
+test('a fallback request adds not-observed scene criteria and requires source citations only for fallback passes', () => {
+  const request = buildJudgeRequest({
+    rubrics, job: 'demo-integration', authority, sources: ['src/demo.tsx'],
+    notObserved: [{
+      id: 'demo-evolving-scene-structure', rationale: 'no known entity ids',
+      looked_for: ['data-layout-id'], evidence: ['browser-probe.json'],
+    }],
+  })
+  assert.ok(request.criteria.includes('demo-evolving-scene-structure'))
+  assert.match(request.prompt, /Browser check could not observe/i)
+  assert.match(request.prompt, /data-layout-id/)
+  assert.throws(
+    () => parseJudgeOutput(JSON.stringify({ results: request.criteria.map((id) => ({
+      id, verdict: 'pass', rationale: 'implemented', evidence: ['source'],
+      ...(id === 'demo-evolving-scene-structure' ? {} : { citations: ['src/demo.tsx'] }),
+    })) }), request.criteria, 'demo-integration', {
+      requireSourceCitationsFor: ['demo-evolving-scene-structure'],
+    }),
+    /source citations/i,
+  )
+})
+
 test('product judge requests are rooted in neutral inputs and disclose exact permissions', () => {
   const request = buildJudgeRequest({
     rubrics,
