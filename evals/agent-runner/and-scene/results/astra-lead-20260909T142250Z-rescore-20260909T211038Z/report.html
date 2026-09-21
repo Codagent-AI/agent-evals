@@ -18,17 +18,17 @@ summary { cursor: pointer; font-weight: 600; }
 </head>
 <body>
 <h1 class="pass">PASS</h1>
-<p><strong>Official score:</strong> 81.98 / 100</p>
-<p><strong>Automated subtotal:</strong> 55.48 / 70</p>
+<p><strong>Official score:</strong> 80.98 / 100</p>
+<p><strong>Automated subtotal:</strong> 54.48 / 70</p>
 <p><strong>Run:</strong> astra-lead-20260909T142250Z-rescore-20260909T211038Z (agent-runner)</p>
 <p><strong>Evaluation status:</strong> complete</p>
 <p><strong>Score denominator:</strong> 100</p>
 <details><summary>Component and subcomponent scores</summary>
 <table><thead><tr><th>Component</th><th>Title</th><th>Raw awarded</th><th>Adjudicated</th><th>Adjustment</th><th>Possible</th><th>Floor</th><th>State</th></tr></thead><tbody>
-<tr><td>demo-technical-quality</td><td>Demo presentation technical quality</td><td>24</td><td>24</td><td>none</td><td>24</td><td>15</td><td>complete</td></tr>
-<tr><td>scene-kit-correctness</td><td>Scene kit correctness</td><td>20.07</td><td>20.07</td><td>none</td><td>24</td><td>15</td><td>complete</td></tr>
-<tr><td>presentation-skill-correctness</td><td>Presentation skill correctness</td><td>4.75</td><td>4.75</td><td>none</td><td>7</td><td>none</td><td>complete</td></tr>
-<tr><td>verification-tool-correctness</td><td>Verification tool correctness</td><td>2.67</td><td>2.67</td><td>none</td><td>7</td><td>none</td><td>complete</td></tr>
+<tr><td>demo-technical-quality</td><td>Demo presentation technical quality</td><td>24</td><td>23</td><td>-1</td><td>24</td><td>15</td><td>complete</td></tr>
+<tr><td>scene-kit-correctness</td><td>Scene kit correctness</td><td>20.07</td><td>20.07</td><td>0</td><td>24</td><td>15</td><td>complete</td></tr>
+<tr><td>presentation-skill-correctness</td><td>Presentation skill correctness</td><td>4.75</td><td>4.75</td><td>0</td><td>7</td><td>none</td><td>complete</td></tr>
+<tr><td>verification-tool-correctness</td><td>Verification tool correctness</td><td>2.67</td><td>2.67</td><td>0</td><td>7</td><td>none</td><td>complete</td></tr>
 <tr><td>testing-evidence-quality</td><td>Testing-evidence quality</td><td>0</td><td>0</td><td>none</td><td>4</td><td>none</td><td>complete</td></tr>
 <tr><td>assumption-handling-quality</td><td>Assumption-handling quality</td><td>4</td><td>4</td><td>none</td><td>4</td><td>none</td><td>complete</td></tr>
 </tbody></table><table><thead><tr><th>Component</th><th>Subcomponent</th><th>Title</th><th>Awarded</th><th>Possible</th><th>State</th></tr></thead><tbody>
@@ -53,6 +53,24 @@ summary { cursor: pointer; font-weight: 600; }
 <tr><td>verification-tool-correctness</td><td>verification-warnings</td><td>Overlap, active-state, and attribution warnings</td><td>0</td><td>2</td><td>complete</td></tr>
 <tr><td>testing-evidence-quality</td><td>testing-evidence-quality-criteria</td><td>Verified candidate-produced testing evidence</td><td>0</td><td>4</td><td>complete</td></tr>
 <tr><td>assumption-handling-quality</td><td>assumption-handling-quality-criteria</td><td>Observable assumption handling</td><td>4</td><td>4</td><td>complete</td></tr>
+</tbody></table>
+</details>
+<details><summary>Technical score adjudication</summary>
+<table><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>
+<tr><td>Approved by</td><td>Paul (user)</td></tr>
+<tr><td>Approved at</td><td>2026-09-21T01:28:53.823Z</td></tr>
+<tr><td>Prior shared technical score</td><td>51.48</td></tr>
+<tr><td>Revised shared technical score</td><td>50.48</td></tr>
+<tr><td>Prior official score</td><td>81.98</td></tr>
+<tr><td>Revised official score</td><td>80.98</td></tr>
+<tr><td>Reviewed rubric</td><td>and-scene-automated-product 4.0.0</td></tr>
+<tr><td>Reviewed rubric SHA-256</td><td>bc6db3280931bf8753e3c5c3bcff17b980457053b4f5d2ee39cda28ad6c7ce37</td></tr>
+<tr><td>Rationale</td><td>User-approved deduction after the deterministic harness was corrected to activate a navigation control the way a pointer does. The candidate stops responding to deck keys once one of its own controls holds focus, which the previous probe could not observe because it activated controls without moving focus.</td></tr>
+</tbody></table><table><thead><tr><th>Finding</th></tr></thead><tbody>
+<tr><td>The previous probe activated a control with element.click(), which does not move focus, so a presentation that suppresses deck keys while a control is focused passed the control-key check. It also skipped the check entirely when present mode exposed no controls, which is where most candidates put their progress controls.</td></tr>
+<tr><td>A real-browser replay of the frozen candidate revision 6273deffee378982f5d79e5570c9afa162b434fa measured the defect directly: the arrow key advances the deck from a neutral focus, and does nothing once a navigation control is focused.</td></tr>
+<tr><td>demo-navigation-boundaries-and-control-keys is one of five criteria in demo-navigation-and-modes, which carries five points, so the deduction is one point of demo-technical-quality and one point of the official score.</td></tr>
+<tr><td>Every other deterministic browser criterion still passes, all four hard gates still pass, and the product verdict is unchanged.</td></tr>
 </tbody></table>
 </details>
 <details><summary>Hard gates</summary>

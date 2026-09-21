@@ -18,14 +18,14 @@ summary { cursor: pointer; font-weight: 600; }
 </head>
 <body>
 <h1 class="pass">PASS</h1>
-<p><strong>Official score:</strong> 74.04 / 100</p>
-<p><strong>Automated subtotal:</strong> 57.04 / 70</p>
+<p><strong>Official score:</strong> 73.04 / 100</p>
+<p><strong>Automated subtotal:</strong> 56.04 / 70</p>
 <p><strong>Run:</strong> config-20260828T201451Z (agent-runner)</p>
 <p><strong>Evaluation status:</strong> complete</p>
 <p><strong>Score denominator:</strong> 100</p>
 <details><summary>Component and subcomponent scores</summary>
 <table><thead><tr><th>Component</th><th>Title</th><th>Raw awarded</th><th>Adjudicated</th><th>Adjustment</th><th>Possible</th><th>Floor</th><th>State</th></tr></thead><tbody>
-<tr><td>demo-technical-quality</td><td>Demo presentation technical quality</td><td>18</td><td>24</td><td>+6</td><td>24</td><td>15</td><td>complete</td></tr>
+<tr><td>demo-technical-quality</td><td>Demo presentation technical quality</td><td>18</td><td>23</td><td>+5</td><td>24</td><td>15</td><td>complete</td></tr>
 <tr><td>scene-kit-correctness</td><td>Scene kit correctness</td><td>18.75</td><td>18.75</td><td>0</td><td>24</td><td>15</td><td>complete</td></tr>
 <tr><td>presentation-skill-correctness</td><td>Presentation skill correctness</td><td>5.13</td><td>5.13</td><td>0</td><td>7</td><td>none</td><td>complete</td></tr>
 <tr><td>verification-tool-correctness</td><td>Verification tool correctness</td><td>4.17</td><td>4.17</td><td>0</td><td>7</td><td>none</td><td>complete</td></tr>
@@ -58,23 +58,22 @@ summary { cursor: pointer; font-weight: 600; }
 <details><summary>Technical score adjudication</summary>
 <table><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>
 <tr><td>Approved by</td><td>Paul (user)</td></tr>
-<tr><td>Approved at</td><td>2026-09-21T00:13:13.734Z</td></tr>
-<tr><td>Prior shared technical score</td><td>51.04</td></tr>
-<tr><td>Revised shared technical score</td><td>52.04</td></tr>
-<tr><td>Prior workflow-quality score</td><td>5</td></tr>
-<tr><td>Revised workflow-quality score</td><td>5</td></tr>
-<tr><td>Prior official score</td><td>73.04</td></tr>
-<tr><td>Revised official score</td><td>74.04</td></tr>
+<tr><td>Approved at</td><td>2026-09-21T01:28:53.823Z</td></tr>
+<tr><td>Prior shared technical score</td><td>52.04</td></tr>
+<tr><td>Revised shared technical score</td><td>51.04</td></tr>
+<tr><td>Prior official score</td><td>74.04</td></tr>
+<tr><td>Revised official score</td><td>73.04</td></tr>
 <tr><td>Reviewed rubric</td><td>and-scene-automated-product 4.0.0</td></tr>
 <tr><td>Reviewed rubric SHA-256</td><td>bc6db3280931bf8753e3c5c3bcff17b980457053b4f5d2ee39cda28ad6c7ce37</td></tr>
-<tr><td>Rationale</td><td>User-approved completion of the 2026-08-28 technical adjudication. Six deterministic browser deductions were false negatives; that correction restored five and left one point unrestored on a requirement rubric 4.0.0 has since removed.</td></tr>
+<tr><td>Rationale</td><td>User-approved deduction after the deterministic harness was corrected to activate a navigation control the way a pointer does. The candidate stops responding to deck keys once one of its own controls holds focus, which the previous probe could not observe because it activated controls without moving focus.</td></tr>
 </tbody></table><table><thead><tr><th>Finding</th></tr></thead><tbody>
-<tr><td>The 2026-08-28 adjudication set demo-technical-quality to 23 of 24 and recorded the deduction it retained: &quot;Browse mode still lacks the active step title required by the rubric, so its independent browse-behavior deduction remains.&quot;</td></tr>
-<tr><td>Automated rubric 4.0.0 no longer requires browse mode to expose the active step title. Which element carries the deck title and which carries the step title is a presentation design choice, so the retained deduction has no basis under the current rubric.</td></tr>
-<tr><td>A real-browser replay of the frozen candidate revision 44c8e817ec94d436711cde0a3b00c9c90564cda5 under rubric 4.0.0 passed all 14 deterministic browser criteria with no recorded failures, making demo-technical-quality 24 of 24.</td></tr>
-<tr><td>This adjudication changes only demo-technical-quality. The 2026-08-28 corrections to testing-evidence-quality and assumption-handling-quality are restated unchanged, and the 2026-08-29 human review supersession is untouched.</td></tr>
+<tr><td>The previous probe activated a control with element.click(), which does not move focus, so a presentation that suppresses deck keys while a control is focused passed the control-key check. It also skipped the check entirely when present mode exposed no controls, which is where most candidates put their progress controls.</td></tr>
+<tr><td>A real-browser replay of the frozen candidate revision 44c8e817ec94d436711cde0a3b00c9c90564cda5 measured the defect directly: the arrow key advances the deck from a neutral focus, and does nothing once a navigation control is focused.</td></tr>
+<tr><td>demo-navigation-boundaries-and-control-keys is one of five criteria in demo-navigation-and-modes, which carries five points, so the deduction is one point of demo-technical-quality and one point of the official score.</td></tr>
+<tr><td>Every other deterministic browser criterion still passes, all four hard gates still pass, and the product verdict is unchanged.</td></tr>
 </tbody></table><h3>Superseded technical adjudications</h3><table><thead><tr><th>Approved at</th><th>Prior shared</th><th>Revised shared</th><th>Rationale</th></tr></thead><tbody>
 <tr><td>2026-08-28T21:24:38-04:00</td><td>46.04</td><td>51.04</td><td>A criterion-by-criterion harness audit corrected deterministic browser false negatives and final-revision evidence parsing while retaining independently supported deductions.</td></tr>
+<tr><td>2026-09-21T00:13:13.734Z</td><td>51.04</td><td>52.04</td><td>User-approved completion of the 2026-08-28 technical adjudication. Six deterministic browser deductions were false negatives; that correction restored five and left one point unrestored on a requirement rubric 4.0.0 has since removed.</td></tr>
 </tbody></table>
 </details>
 <details><summary>Hard gates</summary>

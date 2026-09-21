@@ -7,9 +7,9 @@
   "product_verdict": "pass",
   "label": "PASS",
   "score_denominator": 100,
-  "official_score": 74.044047619048,
+  "official_score": 73.044047619048,
   "automated_subtotal": {
-    "points": 57.044047619048,
+    "points": 56.044047619048,
     "possible": 70,
     "observed_possible": 70,
     "complete": true
@@ -93,8 +93,8 @@
         "title": "Demo presentation technical quality",
         "applicable": true,
         "points_possible": 24,
-        "points_awarded": 24,
-        "points_observed": 24,
+        "points_awarded": 23,
+        "points_observed": 23,
         "points_observed_possible": 24,
         "floor": 15,
         "complete": true,
@@ -405,9 +405,9 @@
           }
         ],
         "raw_points_awarded": 18,
-        "adjudication_adjustment": 6,
-        "prior_points_awarded": 23,
-        "prior_adjudication_adjustment": 5
+        "adjudication_adjustment": 5,
+        "prior_points_awarded": 24,
+        "prior_adjudication_adjustment": 6
       },
       {
         "id": "scene-kit-correctness",
@@ -1505,7 +1505,7 @@
     ],
     "gates_passed": true,
     "automated_subtotal": {
-      "points": 57.044047619048,
+      "points": 56.044047619048,
       "possible": 70,
       "observed_possible": 70,
       "complete": true
@@ -1529,7 +1529,7 @@
       "lowest_rating": 2,
       "complete": true
     },
-    "official_score": 74.044047619048,
+    "official_score": 73.044047619048,
     "official_pass": true,
     "pass_failures": [],
     "incomplete": [],
@@ -17759,13 +17759,13 @@
   "technical_adjudication": {
     "schema_version": 1,
     "approved_by": "Paul (user)",
-    "approved_at": "2026-09-21T00:13:13.734Z",
-    "rationale": "User-approved completion of the 2026-08-28 technical adjudication. Six deterministic browser deductions were false negatives; that correction restored five and left one point unrestored on a requirement rubric 4.0.0 has since removed.",
+    "approved_at": "2026-09-21T01:28:53.823Z",
+    "rationale": "User-approved deduction after the deterministic harness was corrected to activate a navigation control the way a pointer does. The candidate stops responding to deck keys once one of its own controls holds focus, which the previous probe could not observe because it activated controls without moving focus.",
     "findings": [
-      "The 2026-08-28 adjudication set demo-technical-quality to 23 of 24 and recorded the deduction it retained: \"Browse mode still lacks the active step title required by the rubric, so its independent browse-behavior deduction remains.\"",
-      "Automated rubric 4.0.0 no longer requires browse mode to expose the active step title. Which element carries the deck title and which carries the step title is a presentation design choice, so the retained deduction has no basis under the current rubric.",
-      "A real-browser replay of the frozen candidate revision 44c8e817ec94d436711cde0a3b00c9c90564cda5 under rubric 4.0.0 passed all 14 deterministic browser criteria with no recorded failures, making demo-technical-quality 24 of 24.",
-      "This adjudication changes only demo-technical-quality. The 2026-08-28 corrections to testing-evidence-quality and assumption-handling-quality are restated unchanged, and the 2026-08-29 human review supersession is untouched."
+      "The previous probe activated a control with element.click(), which does not move focus, so a presentation that suppresses deck keys while a control is focused passed the control-key check. It also skipped the check entirely when present mode exposed no controls, which is where most candidates put their progress controls.",
+      "A real-browser replay of the frozen candidate revision 44c8e817ec94d436711cde0a3b00c9c90564cda5 measured the defect directly: the arrow key advances the deck from a neutral focus, and does nothing once a navigation control is focused.",
+      "demo-navigation-boundaries-and-control-keys is one of five criteria in demo-navigation-and-modes, which carries five points, so the deduction is one point of demo-technical-quality and one point of the official score.",
+      "Every other deterministic browser criterion still passes, all four hard gates still pass, and the product verdict is unchanged."
     ],
     "reviewed_rubric": {
       "rubric_id": "and-scene-automated-product",
@@ -17773,24 +17773,18 @@
       "sha256": "bc6db3280931bf8753e3c5c3bcff17b980457053b4f5d2ee39cda28ad6c7ce37"
     },
     "component_scores": {
-      "demo-technical-quality": 24,
+      "demo-technical-quality": 23,
       "scene-kit-correctness": 18.752380952380953,
       "presentation-skill-correctness": 5.125,
       "verification-tool-correctness": 4.166666666666667
     },
-    "workflow_component_scores": {
-      "testing-evidence-quality": 3,
-      "assumption-handling-quality": 2
-    },
-    "prior_workflow_quality_score": 5,
-    "revised_workflow_quality_score": 5,
-    "prior_shared_technical_score": 51.044047619048,
-    "revised_shared_technical_score": 52.044047619048,
-    "prior_automated_subtotal": 56.044047619048,
-    "revised_automated_subtotal": 57.044047619048,
-    "prior_official_score": 73.044047619048,
-    "revised_official_score": 74.044047619048,
-    "prior_result_fingerprint": "66f6169284dea88228141a28d00d513f7b8967e8015854d85dfec70dd3ec1a63"
+    "prior_shared_technical_score": 52.044047619048,
+    "revised_shared_technical_score": 51.044047619048,
+    "prior_automated_subtotal": 57.044047619048,
+    "revised_automated_subtotal": 56.044047619048,
+    "prior_official_score": 74.044047619048,
+    "revised_official_score": 73.044047619048,
+    "prior_result_fingerprint": "553c4c1956c5eb140a1bb53df5546996aded459628e5f5b5606ba4fd449587c6"
   },
   "human_review_history": [
     {
@@ -18049,6 +18043,42 @@
       "prior_official_score": 69.40515873015873,
       "revised_official_score": 76.405158730159,
       "prior_result_fingerprint": "2a6a16e372e16927cea580e96cb6b9ba7942a0bb7214259d4774ee06c49a7c1a"
+    },
+    {
+      "schema_version": 1,
+      "approved_by": "Paul (user)",
+      "approved_at": "2026-09-21T00:13:13.734Z",
+      "rationale": "User-approved completion of the 2026-08-28 technical adjudication. Six deterministic browser deductions were false negatives; that correction restored five and left one point unrestored on a requirement rubric 4.0.0 has since removed.",
+      "findings": [
+        "The 2026-08-28 adjudication set demo-technical-quality to 23 of 24 and recorded the deduction it retained: \"Browse mode still lacks the active step title required by the rubric, so its independent browse-behavior deduction remains.\"",
+        "Automated rubric 4.0.0 no longer requires browse mode to expose the active step title. Which element carries the deck title and which carries the step title is a presentation design choice, so the retained deduction has no basis under the current rubric.",
+        "A real-browser replay of the frozen candidate revision 44c8e817ec94d436711cde0a3b00c9c90564cda5 under rubric 4.0.0 passed all 14 deterministic browser criteria with no recorded failures, making demo-technical-quality 24 of 24.",
+        "This adjudication changes only demo-technical-quality. The 2026-08-28 corrections to testing-evidence-quality and assumption-handling-quality are restated unchanged, and the 2026-08-29 human review supersession is untouched."
+      ],
+      "reviewed_rubric": {
+        "rubric_id": "and-scene-automated-product",
+        "version": "4.0.0",
+        "sha256": "bc6db3280931bf8753e3c5c3bcff17b980457053b4f5d2ee39cda28ad6c7ce37"
+      },
+      "component_scores": {
+        "demo-technical-quality": 24,
+        "scene-kit-correctness": 18.752380952380953,
+        "presentation-skill-correctness": 5.125,
+        "verification-tool-correctness": 4.166666666666667
+      },
+      "workflow_component_scores": {
+        "testing-evidence-quality": 3,
+        "assumption-handling-quality": 2
+      },
+      "prior_workflow_quality_score": 5,
+      "revised_workflow_quality_score": 5,
+      "prior_shared_technical_score": 51.044047619048,
+      "revised_shared_technical_score": 52.044047619048,
+      "prior_automated_subtotal": 56.044047619048,
+      "revised_automated_subtotal": 57.044047619048,
+      "prior_official_score": 73.044047619048,
+      "revised_official_score": 74.044047619048,
+      "prior_result_fingerprint": "66f6169284dea88228141a28d00d513f7b8967e8015854d85dfec70dd3ec1a63"
     }
   ]
 }
