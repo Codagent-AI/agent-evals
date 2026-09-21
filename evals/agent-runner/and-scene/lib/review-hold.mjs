@@ -18,6 +18,10 @@ export async function readReviewHold(runDir) {
 // silently releasing newly discovered disagreement.
 export async function synchronizeReviewHold({ runDir, contradictions, now = () => new Date().toISOString() }) {
   const current = await readReviewHold(runDir)
+  // A verdict-wrong finding is terminal for this artifact directory. A repair
+  // belongs in a re-score with a new run directory, never in a replacement
+  // hold that could erase the audit decision.
+  if (current?.resolution?.decision === 'verdict-wrong') return current
   if (!contradictions?.length) return current
   const contradictions_sha256 = hashJson(contradictions)
   if (current?.contradictions_sha256 === contradictions_sha256) return current
@@ -49,6 +53,13 @@ export async function resolveReviewHold({ runDir, reviewer, decision, rationale,
   if (!rationale?.trim()) throw new Error('--rationale is required')
   if (!['stand', 'verdict-wrong'].includes(decision)) throw new Error('--decision must be stand or verdict-wrong')
   const hold = await readReviewHold(runDir)
+  const previous = hold?.resolution ?? hold?.release
+  if (
+    previous
+    && previous.decision === decision
+    && previous.reviewer === reviewer.trim()
+    && previous.rationale === rationale.trim()
+  ) return hold
   if (!hold || hold.release !== null) throw new Error('run has no active review hold')
   if (hold.resolution?.decision === 'verdict-wrong') throw new Error('verdict-wrong review hold is terminal')
   const record = { reviewer: reviewer.trim(), time: now(), decision, rationale: rationale.trim() }

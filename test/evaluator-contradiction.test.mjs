@@ -67,6 +67,16 @@ test('a review hold is stable for the same contradiction and verdict-wrong is te
   assert.equal(await readFile(join(runDir, 'review-hold.json'), 'utf8'), bytes)
   const resolved = await resolveReviewHold({ runDir, reviewer: 'maintainer', decision: 'verdict-wrong', rationale: 'browser rule is flawed', now: () => '2026-01-03T00:00:00.000Z' })
   assert.equal(resolved.release, null)
+  assert.deepEqual(
+    await resolveReviewHold({ runDir, reviewer: 'maintainer', decision: 'verdict-wrong', rationale: 'browser rule is flawed' }),
+    resolved,
+    'retrying the recorded decision permits artifact recovery',
+  )
+  assert.deepEqual(
+    await synchronizeReviewHold({ runDir, contradictions: [{ ...contradictions[0], proposition: 'new evidence wording' }] }),
+    resolved,
+    'a terminal decision is never replaced by changed evaluator evidence',
+  )
   await assert.rejects(
     resolveReviewHold({ runDir, reviewer: 'maintainer', decision: 'stand', rationale: 'too late' }),
     /terminal/,

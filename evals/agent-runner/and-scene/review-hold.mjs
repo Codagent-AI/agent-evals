@@ -32,9 +32,12 @@ export async function runReviewHold({ argv, publication = null, log = () => {} }
   try { options = parseArgs(argv) } catch (error) { return { exitCode: 2, error: error.message } }
   const runDir = resolve(options.runDir)
   try {
-    const hold = await resolveReviewHold(options)
     const result = await readJson(join(runDir, 'result.json'), null)
     if (!result) throw new Error('run has no result.json')
+    // Validate the artifact target before recording an irreversible reviewer
+    // decision. Subsequent writes or publication can then be retried with the
+    // same decision through resolveReviewHold's idempotent path.
+    const hold = await resolveReviewHold({ ...options, runDir })
     const written = await writeResultArtifacts({
       runDir,
       result: {
