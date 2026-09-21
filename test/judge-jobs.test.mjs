@@ -98,6 +98,23 @@ test('a fallback request adds not-observed scene criteria and requires source ci
   )
 })
 
+test('fallback passes cannot cite paths outside the verified delivered-source inventory', async () => {
+  const outcome = await runProductJudging({
+    rubrics, authority, evidence: [], sources: ['src/real-demo.tsx'],
+    notObserved: [{ id: 'demo-evolving-scene-structure', rationale: 'no hooks', looked_for: [], evidence: ['probe.json'] }],
+    invoke: async ({ criteria }) => JSON.stringify({ results: criteria.map((id) => ({
+      id,
+      verdict: 'pass',
+      rationale: 'implemented',
+      evidence: ['source'],
+      citations: id === 'demo-evolving-scene-structure' ? ['src/nonexistent.ts'] : ['src/real-demo.tsx'],
+    })) }),
+  })
+
+  assert.equal(outcome.judges['demo-integration'], null)
+  assert.ok(outcome.failed_jobs.includes('demo-integration'))
+})
+
 test('product judge requests are rooted in neutral inputs and disclose exact permissions', () => {
   const request = buildJudgeRequest({
     rubrics,

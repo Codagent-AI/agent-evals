@@ -312,6 +312,7 @@ export function buildJudgeRequest({
     schema: responseSchema,
     authority,
     source_access: 'read-only',
+    verified_source_paths: discoverableSources,
     cwd: evidenceJob ? view?.root : neutral?.root,
     audit_cwd: evidenceJob ? null : neutral?.audit_root,
     input_permissions: { ...JUDGE_INPUT_POLICIES[job] },
@@ -416,6 +417,25 @@ export function parseJudgeOutput(
     throw new JudgeOutputError(`missing criterion results for ${job}: ${missing.join(', ')}`)
   }
   return expectedIds.map((id) => seen.get(id))
+}
+
+function validateFallbackCitations(results, requiredIds, verifiedSourcePaths) {
+  const required = new Set(requiredIds)
+  const inventory = new Set(verifiedSourcePaths)
+  for (const result of results) {
+    if (result.verdict === 'pass' && required.has(result.id) && result.citations.some((path) => !inventory.has(path))) {
+      throw new JudgeOutputError(`fallback ${result.id} cites source outside the verified delivery`)
+    }
+  }
+  return results
+}
+
+function fallbackAuditVerified(auditResults, results, requiredIds) {
+  const audits = new Map((auditResults ?? []).map((result) => [result.id, result]))
+  return results.every((result) => (
+    !requiredIds.includes(result.id) || result.verdict !== 'pass'
+      || audits.get(result.id)?.classification === 'confirmed'
+  ))
 }
 
 function containedBy(root, target) {
@@ -671,10 +691,10 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
         const output = await invoke(activeRequest)
-        const results = parseJudgeOutput(output, activeRequest.criteria, request.job, {
+        const results = validateFallbackCitations(parseJudgeOutput(output, activeRequest.criteria, request.job, {
           requireSourceCitations: request.source_audit === true,
           requireSourceCitationsFor: request.requireSourceCitationsFor ?? [],
-        })
+        }), request.requireSourceCitationsFor ?? [], request.verified_source_paths ?? [])
         if (request.source_audit) {
           const currentCitations = results.flatMap((result) => result.citations ?? [])
           auditRequest = await buildSourceAuditRequest({
@@ -836,6 +856,7 @@ export async function runProductJudging({
     const request = buildJudgeRequest({
       rubrics, job: id, authority, evidence, sources, neutral, evidenceViews, notObserved,
     })
+    const requiredFallbackIds = notObserved.filter(({ id: criterion }) => request.criteria.includes(criterion)).map(({ id: criterion }) => criterion)
     const inputHash = hashJson({
       job: request.job,
       criteria: request.criteria,
@@ -854,9 +875,13 @@ export async function runProductJudging({
           JSON.stringify({ results: cached.results }),
           request.criteria,
           request.job,
-          { requireSourceCitationsFor: notObserved.filter(({ id }) => request.criteria.includes(id)).map(({ id }) => id) },
+          { requireSourceCitationsFor: requiredFallbackIds },
         )
-        judges[id] = results
+        const verified = validateFallbackCitations(results, requiredFallbackIds, request.verified_source_paths)
+        if (requiredFallbackIds.length > 0 && request.source_audit && !fallbackAuditVerified(cached.audit_results, verified, requiredFallbackIds)) {
+          throw new JudgeOutputError(`cached fallback ${id} lacks a confirmed source audit`)
+        }
+        judges[id] = verified
         attempts[id] = cached.attempts ?? []
         auditAttempts[id] = cached.audit_attempts ?? []
         audits[id] = cached.audit_results ?? null
@@ -870,7 +895,10 @@ export async function runProductJudging({
       }
     }
     await startJob?.({ id, inputHash, request })
-    const outcome = await runJudgeJob({ request: { ...request, requireSourceCitationsFor: notObserved.filter(({ id }) => request.criteria.includes(id)).map(({ id }) => id) }, invoke })
+    const outcome = await runJudgeJob({
+      request: { ...request, requireSourceCitationsFor: requiredFallbackIds, verified_source_paths: request.verified_source_paths },
+      invoke,
+    })
     judges[id] = outcome.results
     attempts[id] = outcome.attempts
     auditAttempts[id] = outcome.audit_attempts
