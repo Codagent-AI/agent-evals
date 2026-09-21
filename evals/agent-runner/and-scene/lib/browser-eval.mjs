@@ -173,6 +173,13 @@ function unobserved(id, rationale, evidence = []) {
 
 const ENTITY_CONVENTIONS = ['data-layout-id', 'data-scene-entity', 'data-node', 'data-entity-id', 'data-scene-node']
 
+// What the driver reports it searched for is the truthful record; the constant
+// only covers a driver that predates the report.
+function conventionsSought(states) {
+  const reported = states.find((state) => (state?.entityConventions ?? []).length > 0)?.entityConventions
+  return reported ? [...reported] : ENTITY_CONVENTIONS
+}
+
 function notObserved(rationale, evidence = [], lookedFor = ENTITY_CONVENTIONS) {
   return { not_observed: true, rationale, evidence, looked_for: lookedFor }
 }
@@ -323,7 +330,23 @@ export async function runBrowserEvaluation({
       established_state: { mode: established.mode, position: established.stepIndex },
       settled_state: settled,
     })
-    return driver
+    // The same rule holds for every later read in the probe, not only the one
+    // that establishes it: a read that returns no mode or no step index did not
+    // answer, so it can never be compared with an expected step and deducted.
+    return new Proxy(driver, {
+      get(target, property, receiver) {
+        if (property !== 'state') return Reflect.get(target, property, receiver)
+        return async (...args) => {
+          const state = await target.state(...args)
+          if (typeof state?.mode !== 'string' || !Number.isInteger(state?.stepIndex)) {
+            throw browserInfrastructureFailure(
+              `probe state could not be read: observed ${bounded(state?.mode)} at ${bounded(state?.stepIndex)}`,
+            )
+          }
+          return state
+        }
+      },
+    })
   }
 
   async function stepCountOf(state) {
@@ -434,7 +457,7 @@ export async function runBrowserEvaluation({
         ]
       }
       if (states.some((state) => !(state.entityIds ?? []).length)) {
-        return notObserved('one or more steps exposed no recognised scene entity ids', [], ENTITY_CONVENTIONS)
+        return notObserved('one or more steps exposed no recognised scene entity ids', [], conventionsSought(states))
       }
       return [true, 'every step renders its normative caption and scene content', contract.step_captions]
     },
@@ -472,7 +495,7 @@ export async function runBrowserEvaluation({
         return [false, `step ${replaced + 1} replaces every entity instead of evolving the scene`, [], observations]
       }
       if (states.some((state) => !(state.entityIds ?? []).length)) {
-        return notObserved('one or more steps exposed no recognised scene entity ids', [], ENTITY_CONVENTIONS)
+        return notObserved('one or more steps exposed no recognised scene entity ids', [], conventionsSought(states))
       }
       return [
         true,
@@ -653,6 +676,12 @@ export async function runBrowserEvaluation({
           + `keys while control focused ${beforeFocusedKey}→${afterFocusedKey}, `
           + `keys after focus released ${beforeReleasedKey}→${afterReleasedKey}`,
         [],
+        {
+          // Observed, never scored: whether a focused control lets deck keys
+          // through is judged from source by `navigation-controls-keep-keys`.
+          keys_while_control_focused: { before: beforeFocusedKey, after: afterFocusedKey },
+          keys_after_focus_released: { key: deckKey, before: beforeReleasedKey, after: afterReleasedKey },
+        },
       ]
     },
 

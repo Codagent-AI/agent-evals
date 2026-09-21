@@ -25,6 +25,7 @@ function createDemo(knobs = {}) {
     declaresSceneId = true,
     replaceEntities = false,
     entityIds = null,
+    entityConventions = undefined,
     clampStart = true,
     clampEnd = true,
     preservePositionAcrossModes = true,
@@ -55,6 +56,7 @@ function createDemo(knobs = {}) {
     controlCount = stepCount,
     controlsOnlyInBrowse = false,
     stateUnreadable = false,
+    unreadableAtIndex = null,
     controlsReversed = false,
     viewport = { width: 1280, height: 720 },
     canvasFitsNarrow = true,
@@ -103,7 +105,7 @@ function createDemo(knobs = {}) {
     async state() {
       guard('state')
       return {
-        stepIndex: stateUnreadable ? null : index,
+        stepIndex: stateUnreadable || index === unreadableAtIndex ? null : index,
         stepCount,
         mode,
         title: (mode === 'browse' && !activeTitleVisibleInBrowse) || (mode === 'present' && presentShowsDeckTitle)
@@ -118,6 +120,7 @@ function createDemo(knobs = {}) {
         sceneId: declaresSceneId
           ? (perStepSceneId ? `scene-${index}` : 'how-to-make-a-presentation-scene')
           : null,
+        entityConventions,
         entityIds: entityIds?.[index] ?? (replaceEntities
           ? [`only-${index}`]
           : ['stage', `beat-${index}`, `beat-${index + 1}`]),
@@ -299,6 +302,15 @@ test('scene criteria are not observed when captions are right but no recognised 
     assert.deepEqual(criterion.looked_for, [
       'data-layout-id', 'data-scene-entity', 'data-node', 'data-entity-id', 'data-scene-node',
     ])
+  }
+})
+
+test('a not-observed record lists the conventions the driver actually looked for', async () => {
+  const entityConventions = ['[data-layout-id]', '[data-presentation-node]']
+  const result = await evaluate({ entityIds: TITLES.map(() => []), entityConventions })
+
+  for (const id of ['demo-required-scene-content', 'demo-evolving-scene-structure']) {
+    assert.deepEqual(result.criteria.find((entry) => entry.id === id).looked_for, entityConventions, id)
   }
 })
 
@@ -939,6 +951,10 @@ test('the control-key check follows controls into browse mode without deducting 
   assert.equal(verdictOf(result, 'demo-navigation-boundaries-and-control-keys'), 'pass')
   assert.match(criterion.rationale, /keys while control focused \d+→\d+/i)
   assert.match(criterion.rationale, /keys after focus released \d+→\d+/i)
+  // The same two facts are retained as structured observations, so a later audit
+  // does not have to parse prose to adjudicate this criterion.
+  assert.deepEqual(criterion.observations.keys_while_control_focused, { before: 0, after: 0 })
+  assert.deepEqual(criterion.observations.keys_after_focus_released, { key: 'ArrowRight', before: 0, after: 1 })
 })
 
 test('a deck key that remains dead after focus is released fails the control-key check', async () => {
@@ -969,6 +985,21 @@ test('an unreadable browser state is a harness failure, not a product deduction'
     (error) => {
       assert.equal(error.owner, 'evaluation-harness')
       assert.equal(error.code, 'browser-driver-failed')
+      assert.equal(error.resumable, true)
+      assert.match(error.message, /could not be read/i)
+      return true
+    },
+  )
+})
+
+test('a step index that goes unreadable mid-traversal is a harness failure, not a stalled transition', async () => {
+  // Seen on a real candidate replay: one state read during the forward walk
+  // returned no index and the criterion was recorded as a product failure. A
+  // read that did not answer says nothing about the transition.
+  await assert.rejects(
+    () => evaluate({ unreadableAtIndex: 5 }),
+    (error) => {
+      assert.equal(error.owner, 'evaluation-harness')
       assert.equal(error.resumable, true)
       assert.match(error.message, /could not be read/i)
       return true
