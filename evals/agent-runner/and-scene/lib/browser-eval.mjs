@@ -295,6 +295,15 @@ export async function runBrowserEvaluation({
       ? await driver.settle()
       : { settled: true, strategy: 'driver-state-read' }
     const established = await driver.state()
+    // A page that reports no mode or no step index has not answered. That says
+    // nothing about the demo, so it stops the evaluation for a resumable retry
+    // rather than deducting a point from the candidate.
+    if (typeof established.mode !== 'string' || !Number.isInteger(established.stepIndex)) {
+      throw browserInfrastructureFailure(
+        `probe state could not be read: observed ${bounded(established.mode)} `
+        + `at ${bounded(established.stepIndex)}`,
+      )
+    }
     if (established.mode !== mode || established.stepIndex !== position) {
       throw new Error(
         `probe state could not be established: required ${mode} at ${position}, `
@@ -562,12 +571,19 @@ export async function runBrowserEvaluation({
       await page.press('ArrowRight')
       const pastEnd = (await page.state()).stepIndex
 
-      const restarted = await session(PROBE_REQUIREMENTS['demo-navigation-boundaries-and-control-keys'])
-      const controls = (await restarted.state()).controls ?? []
-      if (controls[0]) await restarted.activate(controls[0].name)
-      const beforeKey = (await restarted.state()).stepIndex
-      await restarted.press('ArrowRight')
-      const afterKey = (await restarted.state()).stepIndex
+      // Controls a demo exposes only in browse mode are still controls a reader
+      // clicks, so the key half of this check follows them there rather than
+      // skipping itself when present mode has none.
+      let host = await session(PROBE_REQUIREMENTS['demo-navigation-boundaries-and-control-keys'])
+      let controls = (await host.state()).controls ?? []
+      if (controls.length === 0) {
+        host = await session({ mode: 'browse', position: 0 })
+        controls = (await host.state()).controls ?? []
+      }
+      if (controls[0]) await host.activate(controls[0].name)
+      const beforeKey = (await host.state()).stepIndex
+      await host.press('ArrowRight')
+      const afterKey = (await host.state()).stepIndex
 
       const ok = atStart === 0 && last === count - 1 && pastEnd === count - 1 && afterKey === beforeKey + 1
       return [

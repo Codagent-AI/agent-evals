@@ -50,6 +50,7 @@ function createDemo(knobs = {}) {
     failures = [],
     controlCount = stepCount,
     controlsOnlyInBrowse = false,
+    stateUnreadable = false,
     viewport = { width: 1280, height: 720 },
     canvasFitsNarrow = true,
     canvasUniform = true,
@@ -97,7 +98,7 @@ function createDemo(knobs = {}) {
     async state() {
       guard('state')
       return {
-        stepIndex: index,
+        stepIndex: stateUnreadable ? null : index,
         stepCount,
         mode,
         title: (mode === 'browse' && !activeTitleVisibleInBrowse) || (mode === 'present' && presentShowsDeckTitle)
@@ -176,6 +177,10 @@ function createDemo(knobs = {}) {
       focused = name
       if (!controlsKeepKeys) keysLive = false
       if (!directJumpWorks) return
+      // A pointer activation focuses the control it fires, so a demo that
+      // suppresses deck keys while a control holds focus stops responding.
+      focused = name
+      if (focusedControlConsumesArrows) keysLive = false
       const target = Number(name.replace('Step ', '')) - 1
       if (Number.isInteger(target)) index = clamp(target)
     },
@@ -852,4 +857,40 @@ test('a probe retains an observation for every state its verdict rests on', asyn
       record.id,
     )
   }
+})
+
+test('the control-key check follows controls into the mode that exposes them', async () => {
+  // A demo that shows its controls only in browse mode still has controls a
+  // reader uses. Skipping the check because present mode has none hides a
+  // presentation that stops responding to deck keys once a control is clicked.
+  const suppressed = await evaluate({
+    controlsOnlyInBrowse: true,
+    focusedControlConsumesArrows: true,
+  })
+  const healthy = await evaluate({ controlsOnlyInBrowse: true })
+
+  assert.equal(verdictOf(suppressed, 'demo-navigation-boundaries-and-control-keys'), 'fail')
+  assert.equal(verdictOf(healthy, 'demo-navigation-boundaries-and-control-keys'), 'pass')
+})
+
+test('a control that swallows deck keys fails the control-key check', async () => {
+  const result = await evaluate({ focusedControlConsumesArrows: true })
+
+  assert.equal(verdictOf(result, 'demo-navigation-boundaries-and-control-keys'), 'fail')
+})
+
+test('an unreadable browser state is a harness failure, not a product deduction', async () => {
+  // The page reporting no step index at all says nothing about the demo. It is
+  // the adapter or the page failing to answer, so it must stop the evaluation
+  // for a resumable retry instead of deducting a point from the candidate.
+  await assert.rejects(
+    () => evaluate({ stateUnreadable: true }),
+    (error) => {
+      assert.equal(error.owner, 'evaluation-harness')
+      assert.equal(error.code, 'browser-driver-failed')
+      assert.equal(error.resumable, true)
+      assert.match(error.message, /could not be read/i)
+      return true
+    },
+  )
 })
