@@ -824,6 +824,61 @@ rubric, scorer, gate, or reporting changes, then run targeted tests during
 development and `npm run check` before trusting a change. Candidate execution
 does not depend on retaining calibration artifacts.
 
+### Judging regression corpus
+
+`corpus/candidates.json` records the adjudicated correct outcome of every
+deterministic browser criterion, and of the two hard gates derived from browser
+observation, for eight real candidates: the five distinct candidates behind the
+published results and the three issue #26 repetitions. `corpus/replays/<id>.json`
+is the generated record of the production evaluator run against each one.
+
+`npm run check` fails, without a browser, when a file the deterministic
+evaluator loads, the automated rubric, or a candidate's golden outcomes changed
+after its replay was recorded. Any such change needs a replay of every corpus
+candidate before it can merge. Replays share one browser, so run them one at a
+time:
+
+```bash
+git clone https://github.com/Codagent-AI/and-scene.git /path/to/and-scene
+cd /path/to/and-scene
+# The issue #26 repetitions live on pull-request heads.
+git fetch origin 'refs/pull/21/head' 'refs/pull/22/head' 'refs/pull/23/head'
+
+git worktree add --detach /path/to/wt-<id> <revision from candidates.json>
+cd /path/to/wt-<id>
+npm ci && npm run build
+# The replay refuses a served build that does not state its revision. Historical
+# candidates do not emit one, so the operator states which revision was built.
+printf '{"revision":"%s"}\n' "<revision>" > dist/build-info.json
+npx vite preview --port 4791 --strictPort --host 127.0.0.1 &
+
+node evals/agent-runner/and-scene/corpus-replay.mjs \
+  --candidate <id> --base-url http://127.0.0.1:4791/
+```
+
+The command exits nonzero and prints the golden outcome, the replayed outcome,
+and the rationale for every criterion that differs. A harness failure or an
+unreachable candidate writes no record. When a replay disagrees with a golden
+verdict, adjudicate it against the pinned fixture text: either the evaluator is
+wrong and gets fixed, or the golden verdict is wrong and gets a new `history`
+entry explaining why. Never change a golden verdict to make a replay pass.
+Commit the regenerated records with the change that required them.
+
+### Adversarial real-browser pages
+
+`test/real-browser/adversarial.test.mjs` drives the production evaluator in real
+Chrome against six hand-made pages that no corpus candidate resembles: a deck
+that ignores deck keys while a button holds focus, one whose keys stay dead
+after any control use, a correct scene with no recognised hook, a hidden step
+title, a deck that listens for keys on its own root, and a control that will not
+release focus. It sits outside the `test/*.test.mjs` glob because CI has no
+browser. Run it before merging any change to the control-key, scene, or
+present-mode probes, and never while a corpus replay is running:
+
+```bash
+node --test test/real-browser/adversarial.test.mjs
+```
+
 Published result directories are immutable historical records. Correct an
 erroneous publication with a later revert commit rather than by rewriting
 history.

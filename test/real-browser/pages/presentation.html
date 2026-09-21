@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Adversarial presentation</title>
+<style>
+  body { margin: 0; font-family: sans-serif; }
+  [data-presentation] { min-height: 100vh; display: flex; flex-direction: column; outline: none; }
+  [data-presentation-stage] { position: relative; flex: 1; min-height: 300px; }
+  [data-presentation-stage] > div { position: absolute; width: 60px; height: 30px; border: 1px solid #333; }
+  [data-presentation-mode="present"] [data-presentation-caption] { display: none; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div id="root" data-presentation data-presentation-mode="present">
+  <header data-presentation-header><h1 data-presentation-header-title>How to Use This Skill to Make a Presentation</h1></header>
+  <h2 id="title" data-presentation-step-title></h2>
+  <div id="stage" data-presentation-stage></div>
+  <p id="caption" data-presentation-caption></p>
+  <nav id="progress" data-presentation-progress aria-label="Progress" data-step-index="0" data-step-count="9"></nav>
+  <nav data-presentation-step-controls aria-label="Step navigation">
+    <button id="prev" data-presentation-prev type="button">Previous</button>
+    <button id="next" data-presentation-next type="button">Next</button>
+  </nav>
+</div>
+<script>
+// One page, six behaviours. The server injects VARIANT and STEPS; nothing here
+// is a candidate. Each variant isolates one judgment the evaluator must make.
+const variant = window.VARIANT
+const steps = window.STEPS
+const root = document.getElementById('root')
+const progress = document.getElementById('progress')
+let index = 0
+let mode = 'present'
+let keysDead = false
+
+function render() {
+  root.setAttribute('data-presentation-mode', mode)
+  progress.setAttribute('data-step-index', String(index))
+  const title = document.getElementById('title')
+  title.textContent = steps[index].title
+  // (d) hides the one thing a reader must see in present mode.
+  title.classList.toggle('hidden', variant === 'd' && mode === 'present')
+  document.getElementById('caption').textContent = steps[index].caption
+  const stage = document.getElementById('stage')
+  stage.replaceChildren()
+  // (c) is a correct evolving scene whose hook no evaluator recognises.
+  const hook = variant === 'c' ? 'data-unrecognised-thing' : 'data-layout-id'
+  for (const id of ['stage-anchor', ...steps.slice(0, index + 1).map((_, n) => `card-${n}`)]) {
+    const entity = document.createElement('div')
+    entity.setAttribute(hook, id)
+    entity.style.left = `${(id === 'stage-anchor' ? 0 : Number(id.slice(5)) + 1) * 70}px`
+    stage.append(entity)
+  }
+  // Buttons are created once and updated in place, as a real app keeps its
+  // nodes: recreating them would silently drop focus from the activated control.
+  if (progress.children.length === 0) {
+    progress.append(...steps.map((step, n) => {
+      const dot = document.createElement('button')
+      dot.type = 'button'
+      dot.setAttribute('data-presentation-progress-dot', '')
+      dot.setAttribute('aria-label', `Step ${n + 1}: ${step.title}`)
+      dot.addEventListener('click', () => { keysDead ||= variant === 'b'; go(n) })
+      if (variant === 'f') dot.addEventListener('blur', () => dot.focus())
+      return dot
+    }))
+  }
+  ;[...progress.children].forEach((dot, n) => {
+    if (n === index) dot.setAttribute('aria-current', 'step')
+    else dot.removeAttribute('aria-current')
+  })
+}
+
+function go(next) {
+  index = Math.max(0, Math.min(steps.length - 1, next))
+  render()
+}
+
+function onKey(event) {
+  if (event.key === 'p') { mode = mode === 'present' ? 'browse' : 'present'; render(); return }
+  // "Controls keep their keys": a focused control drives itself, not the deck.
+  if (event.target.closest('button')) return
+  // (b) is the real defect: once a control was used, deck keys never come back.
+  if (keysDead) return
+  if (['ArrowRight', 'PageDown', ' '].includes(event.key)) go(index + 1)
+  if (['ArrowLeft', 'PageUp'].includes(event.key)) go(index - 1)
+}
+
+// (e) listens on its own root only, so it needs focus inside the presentation.
+if (variant === 'e') {
+  root.setAttribute('tabindex', '-1')
+  root.addEventListener('keydown', onKey)
+  root.focus()
+} else {
+  document.addEventListener('keydown', onKey)
+}
+for (const [id, delta] of [['prev', -1], ['next', 1]]) {
+  document.getElementById(id).addEventListener('click', () => { keysDead ||= variant === 'b'; go(index + delta) })
+}
+let touchStart = null
+root.addEventListener('touchstart', (event) => { touchStart = event.touches[0].clientX })
+root.addEventListener('touchend', (event) => {
+  if (touchStart === null) return
+  const delta = event.changedTouches[0].clientX - touchStart
+  if (Math.abs(delta) > 40) go(index + (delta < 0 ? 1 : -1))
+  touchStart = null
+})
+render()
+</script>
+</body>
+</html>
