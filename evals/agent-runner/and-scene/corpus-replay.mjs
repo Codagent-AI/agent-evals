@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { join } from 'node:path'
 
@@ -31,10 +31,11 @@ export async function replayCandidate({ candidateId, baseUrl, suiteRoot = fileUR
   let evaluation
   try { evaluation = await evaluate({ driver: driverFactory({ baseUrl }), revision: candidate.revision }) } catch (error) { return { ok: false, kind: 'harness failure', report: `${candidateId}: harness failure: ${error.message}` } }
   const entries = new Map([...evaluation.criteria ?? [], ...evaluation.gates ?? []].map((entry) => [entry.id, entry]))
-  const replayed = Object.fromEntries(IN_SCOPE_IDS.map((id) => [id, { outcome: outcome(entries.get(id)), observation: String(entries.get(id)?.rationale ?? '').slice(0, 200) }]))
+  const replayed = Object.fromEntries(IN_SCOPE_IDS.map((id) => [id, { outcome: outcome(entries.get(id)), observation: String(entries.get(id)?.rationale ?? '').slice(0, 200), observations: entries.get(id)?.observations ?? null }]))
   const differences = IN_SCOPE_IDS.filter((id) => replayed[id].outcome !== candidate.golden[id].outcome).map((id) => `${candidate.id} ${id}: golden=${candidate.golden[id].outcome} replayed=${replayed[id].outcome} rationale=${replayed[id].observation}`)
   const runSh = await readFile(join(suiteRoot, 'run.sh'), 'utf8').catch(() => '')
   const record = { schema_version: 1, candidate: candidate.id, revision: served.revision, outcomes: replayed, source_hashes: Object.fromEntries(await sourceHashes({ suiteRoot: sourceRoot })), golden_sha256: goldenHash(candidate.golden), pins: { FIXTURE_REF: pin(runSh, 'FIXTURE_REF'), REFERENCE_REF: pin(runSh, 'REFERENCE_REF') }, node: process.version, 'chrome-devtools-axi': version('chrome-devtools-axi'), browser: 'unknown', replayed_at: new Date().toISOString() }
+  await mkdir(join(suiteRoot, 'corpus/replays'), { recursive: true })
   await writeJsonAtomic(join(suiteRoot, 'corpus/replays', `${candidate.id}.json`), record)
   return { ok: differences.length === 0, differences, report: differences.join('\n'), record }
 }

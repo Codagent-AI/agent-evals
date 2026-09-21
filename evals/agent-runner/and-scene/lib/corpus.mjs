@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import { dirname, join, normalize, relative } from 'node:path'
 
 import { DETERMINISTIC_BROWSER_CRITERIA } from './browser-eval.mjs'
@@ -76,6 +76,25 @@ export async function validateReplayRecords({ suiteRoot, corpus }) {
       if (!record.outcomes?.[id]) errors.push(`${candidate.id}: ${id} missing replay outcome; run corpus-replay.mjs`)
       else if (record.outcomes[id].outcome !== candidate.golden[id].outcome) errors.push(`${candidate.id}: ${id} replay differs from golden; run corpus-replay.mjs`)
     }
+  }
+  return errors
+}
+
+// Published results are read, never written: they say which candidate revisions
+// the corpus owes a golden verdict to.
+export async function validatePublishedCoverage({ suiteRoot, corpus }) {
+  const errors = []
+  const byRevision = new Map((corpus?.candidates ?? []).map((candidate) => [candidate.revision, candidate]))
+  let runs = []
+  try { runs = (await readdir(join(suiteRoot, 'results'), { withFileTypes: true })).filter((entry) => entry.isDirectory()).map(({ name }) => name).sort() } catch { return errors }
+  for (const run of runs) {
+    let result
+    try { result = JSON.parse(await readFile(join(suiteRoot, 'results', run, 'result.json'), 'utf8')) } catch { continue }
+    const revision = result?.delivery?.pull_request?.head_sha
+    if (!SHA.test(revision ?? '')) { errors.push(`${run}: published result records no candidate revision`); continue }
+    const candidate = byRevision.get(revision)
+    if (!candidate) { errors.push(`${run}: revision ${revision} has no corpus candidate`); continue }
+    if (!(candidate.published_runs ?? []).includes(run)) errors.push(`${candidate.id}: published_runs omits ${run}`)
   }
   return errors
 }

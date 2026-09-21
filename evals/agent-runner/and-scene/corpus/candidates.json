@@ -5,7 +5,9 @@
     {
       "id": "astra",
       "revision": "6273deffee378982f5d79e5570c9afa162b434fa",
-      "published_runs": [],
+      "published_runs": [
+        "astra-lead-20260909T142250Z-rescore-20260909T211038Z"
+      ],
       "golden": {
         "demo-route-and-registration": {
           "outcome": "pass",
@@ -172,7 +174,9 @@
     {
       "id": "config",
       "revision": "44c8e817ec94d436711cde0a3b00c9c90564cda5",
-      "published_runs": [],
+      "published_runs": [
+        "config-20260828T201451Z"
+      ],
       "golden": {
         "demo-route-and-registration": {
           "outcome": "pass",
@@ -339,7 +343,10 @@
     {
       "id": "cutover",
       "revision": "785f48d2d750445dd1673da03c1ae793c6b129b5",
-      "published_runs": [],
+      "published_runs": [
+        "candidate-rescore-20260728-browser-fixed-4",
+        "candidate-rescore-20260729-rubric-3.10-cumulative-final-1"
+      ],
       "golden": {
         "demo-route-and-registration": {
           "outcome": "pass",
@@ -506,7 +513,9 @@
     {
       "id": "localcodex",
       "revision": "5d5adf577f44315f028f5d046002e47ea25d84d7",
-      "published_runs": [],
+      "published_runs": [
+        "local-codex-tester-20260901T030537Z"
+      ],
       "golden": {
         "demo-route-and-registration": {
           "outcome": "pass",
@@ -673,7 +682,9 @@
     {
       "id": "sameprofile",
       "revision": "9a2b54d46cac5cf3f65c4c6cea8b2a3b6b72d66f",
-      "published_runs": [],
+      "published_runs": [
+        "same-profile-claude-tester-20260831T023728Z"
+      ],
       "golden": {
         "demo-route-and-registration": {
           "outcome": "pass",
@@ -1187,14 +1198,24 @@
           ]
         },
         "demo-nine-step-content-and-order": {
-          "outcome": "pass",
+          "outcome": "fail",
           "history": [
             {
               "outcome": "pass",
               "date": "2026-09-21",
               "explanation": "evolving-scene-presentations spec, Controls keep their keys: real replay satisfies the fixture scenario."
+            },
+            {
+              "outcome": "fail",
+              "date": "2026-09-21",
+              "explanation": "The initial pass was entered without a replay. The first real replay failed this criterion (\"step 1 title does not match the required outline\"), which matches the original factory result for this candidate and the 2026-09-21 audit, which confirmed the hidden-title deductions as correct against the fixture: the step titles are normative and the candidate never shows them."
             }
-          ]
+          ],
+          "basis": {
+            "source": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+            "heading": "Requirement: Committed reference sample",
+            "fact": "The candidate hides every step title from readers (`.presentation-stage__step-label { display: none; }`, aria-hidden), so no normative step title is ever shown. The requirement makes the nine step titles normative."
+          }
         },
         "demo-required-scene-content": {
           "outcome": "pass",
@@ -1229,9 +1250,9 @@
         "demo-present-mode-behavior": {
           "outcome": "fail",
           "basis": {
-            "source": "evolving-scene-presentations/spec.md",
-            "heading": "Presentation modes",
-            "fact": "Active step titles must remain exposed in present mode."
+            "source": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+            "heading": "Scenario: Present mode is title-focused",
+            "fact": "The candidate hides every step title from readers (`.presentation-stage__step-label { display: none; }`, aria-hidden), so no normative step title is ever shown."
           },
           "history": [
             {
@@ -1324,9 +1345,9 @@
         "verification-sample-outline": {
           "outcome": "fail",
           "basis": {
-            "source": "evolving-scene-presentations/spec.md",
-            "heading": "Presentation modes",
-            "fact": "Active step titles must remain exposed in present mode."
+            "source": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+            "heading": "Scenario: Sample exists and matches the outline",
+            "fact": "The candidate hides every step title from readers (`.presentation-stage__step-label { display: none; }`, aria-hidden), so no normative step title is ever shown."
           },
           "history": [
             {

@@ -12,9 +12,10 @@ function evaluation(outcome = 'pass') {
   return { criteria: entries.slice(0, 14), gates: entries.slice(14).concat([{ id: 'verification-build-whole-app', verdict: 'pass' }, { id: 'verification-clear-outcome', verdict: 'pass' }]) }
 }
 
+// The first replay of a fresh corpus has no replays directory yet.
 test('replay writes a matching record from injected production evaluation', async () => {
   const root = await mkdtemp(join(tmpdir(), 'corpus-replay-'))
-  await mkdir(join(root, 'corpus/replays'), { recursive: true })
+  await mkdir(join(root, 'corpus'), { recursive: true })
   const golden = Object.fromEntries(IN_SCOPE_IDS.map((id) => [id, { outcome: 'pass', history: [{ outcome: 'pass', explanation: 'fixture spec heading' }] }]))
   await writeFile(join(root, 'corpus/candidates.json'), JSON.stringify({ schema_version: 1, repository: 'x', candidates: [{ id: 'one', revision: 'a'.repeat(40), published_runs: [], golden }] }))
   const result = await replayCandidate({ candidateId: 'one', baseUrl: 'http://served/', suiteRoot: root, sourceRoot: join(process.cwd(), 'evals/agent-runner/and-scene'), fetchFn: async () => ({ ok: true, json: async () => ({ revision: 'a'.repeat(40) }) }), driverFactory: () => ({}), evaluate: async () => evaluation() })

@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "candidate": "sameprofile",
+  "revision": "9a2b54d46cac5cf3f65c4c6cea8b2a3b6b72d66f",
+  "outcomes": {
+    "demo-route-and-registration": {
+      "outcome": "pass",
+      "observation": "the demo route how-to-make-a-presentation is registered and reachable and linked from the landing page",
+      "observations": {
+        "discovered_routes": [
+          "how-to-make-a-presentation"
+        ],
+        "route_linked_from_landing_page": true
+      }
+    },
+    "demo-nine-step-content-and-order": {
+      "outcome": "pass",
+      "observation": "all nine required step titles appear in the specified order",
+      "observations": {}
+    },
+    "demo-required-scene-content": {
+      "outcome": "pass",
+      "observation": "every step renders its normative caption and scene content",
+      "observations": {}
+    },
+    "demo-evolving-scene-structure": {
+      "outcome": "pass",
+      "observation": "the demo declares no scene identity and its entities persist across every step",
+      "observations": {
+        "scene_identity_declared": false,
+        "scene_ids": []
+      }
+    },
+    "quality-captions-and-navigation": {
+      "outcome": "pass",
+      "observation": "every step exposes a caption and a navigation control",
+      "observations": {}
+    },
+    "demo-present-mode-behavior": {
+      "outcome": "pass",
+      "observation": "present mode reports mode present with the active step title true",
+      "observations": {}
+    },
+    "demo-browse-mode-behavior": {
+      "outcome": "pass",
+      "observation": "browse mode browse at viewport 1280×720; caption true; controls 9/9; every step reached true; previous/next true/true; toc true; progress true",
+      "observations": {}
+    },
+    "demo-mode-position-preservation": {
+      "outcome": "pass",
+      "observation": "step index across a mode round trip: 4 → 4 → 4",
+      "observations": {}
+    },
+    "demo-supported-navigation": {
+      "outcome": "pass",
+      "observation": "keyboard 1/0, swipe 1/0, direct jump 4",
+      "observations": {}
+    },
+    "demo-navigation-boundaries-and-control-keys": {
+      "outcome": "pass",
+      "observation": "start clamp 0, end clamp 8→8, keys while control focused 0→1, keys after focus released 1→2",
+      "observations": {
+        "keys_while_control_focused": {
+          "before": 0,
+          "after": 1
+        },
+        "keys_after_focus_released": {
+          "key": "ArrowRight",
+          "before": 1,
+          "after": 2
+        }
+      }
+    },
+    "demo-step-and-transition-reliability": {
+      "outcome": "pass",
+      "observation": "all 9 steps advanced and reversed cleanly",
+      "observations": {}
+    },
+    "demo-mode-interaction-reliability": {
+      "outcome": "pass",
+      "observation": "repeated mode changes left the demo readable and error free",
+      "observations": {}
+    },
+    "demo-control-semantics": {
+      "outcome": "pass",
+      "observation": "controls expose a role, an accessible name, and the current step",
+      "observations": {}
+    },
+    "demo-focus-and-keyboard-accessibility": {
+      "outcome": "pass",
+      "observation": "focus succeeded and keyboard navigation moved 0 → 1",
+      "observations": {}
+    },
+    "verification-sample-outline": {
+      "outcome": "pass",
+      "observation": "the canonical nine-step sample must be registered, reachable, and match its outline",
+      "observations": null
+    },
+    "verification-every-produced-step-renders": {
+      "outcome": "pass",
+      "observation": "every produced step rendered without runtime or console errors",
+      "observations": null
+    }
+  },
+  "source_hashes": {
+    "lib/browser-eval.mjs": "32197c58f3fc8152fa3c698f9a942ecc53c8d09c0deb698a8623992ff75dda48",
+    "lib/demo-contract.mjs": "1397ae4fcc31f75885de0623ddeefbcf53e8ae44a3eac4e24390cd510a441142",
+    "lib/browser-diagnostics.mjs": "4f9611a92600e28860fbd1da17a37046fc2403d1669085a0928eb73a7fe9ef51",
+    "lib/persistence.mjs": "5b4552db38d13c161d3ccb1c691c6f1a6589b0618721f09d209508d240e4432a",
+    "lib/axi-browser-driver.mjs": "44ad87902e3e7dfa749a2a80609636958d0b73696f5a790cc01d924c6195a91d",
+    "lib/corpus.mjs": "7100ded05f64ac649d4d41e241dc0bbe6d1a4da95ed25acb740c640404fcf40f",
+    "corpus-replay.mjs": "1569d7ca093d2715b42dbe778d8d9315c74d0f300dcbe025ec49e5f67c40ed18",
+    "automated-rubric.json": "afba30edb872c44b3b14415237a7779b879793a1700fd4316e2b219b20bf9608"
+  },
+  "golden_sha256": "6a844cd6fea52968842e9fada57b25eff8d7a62b10bac48c39d3a14178dced4a",
+  "pins": {
+    "FIXTURE_REF": "892dfbcf3762bc95cdbae6f05b18cc2b168a5fab",
+    "REFERENCE_REF": "171c7def1e12aca2a5f605a5e5feafb20d4e4d19"
+  },
+  "node": "v22.22.3",
+  "chrome-devtools-axi": "0.1.34",
+  "browser": "unknown",
+  "replayed_at": "2026-09-21T18:45:45.830Z"
+}
