@@ -184,6 +184,40 @@ function notObserved(rationale, evidence = [], lookedFor = ENTITY_CONVENTIONS) {
   return { not_observed: true, rationale, evidence, looked_for: lookedFor }
 }
 
+// A convention seen on some steps is not proof that another step lacks content,
+// so any step without a recognised scene object leaves the fact unobserved.
+function entitiesUnobserved(states) {
+  if (states.every((state) => (state.entityIds ?? []).length > 0)) return null
+  return notObserved(
+    'one or more steps exposed no recognised scene entity ids',
+    [],
+    conventionsSought(states),
+  )
+}
+
+// The scored record of a not-observed probe: no verdict, and what was sought.
+function notObservedCriterion(id, outcome, citation) {
+  return {
+    id,
+    verdict: null,
+    outcome: 'not-observed',
+    looked_for: outcome.looked_for,
+    rationale: bounded(outcome.rationale),
+    evidence: [...outcome.evidence, citation],
+    observed: false,
+  }
+}
+
+// A page that reports no mode or no step index has not answered. That says
+// nothing about the demo, so it stops the evaluation for a resumable retry
+// rather than deducting a point from the candidate.
+function assertReadableState(state) {
+  if (typeof state?.mode === 'string' && Number.isInteger(state?.stepIndex)) return
+  throw browserInfrastructureFailure(
+    `probe state could not be read: observed ${bounded(state?.mode)} at ${bounded(state?.stepIndex)}`,
+  )
+}
+
 function overlaps(a, b) {
   return a.some((entry) => b.includes(entry))
 }
@@ -310,15 +344,7 @@ export async function runBrowserEvaluation({
       ? await driver.settle()
       : { settled: true, strategy: 'driver-state-read' }
     const established = await driver.state()
-    // A page that reports no mode or no step index has not answered. That says
-    // nothing about the demo, so it stops the evaluation for a resumable retry
-    // rather than deducting a point from the candidate.
-    if (typeof established.mode !== 'string' || !Number.isInteger(established.stepIndex)) {
-      throw browserInfrastructureFailure(
-        `probe state could not be read: observed ${bounded(established.mode)} `
-        + `at ${bounded(established.stepIndex)}`,
-      )
-    }
+    assertReadableState(established)
     if (established.mode !== mode || established.stepIndex !== position) {
       throw new Error(
         `probe state could not be established: required ${mode} at ${position}, `
@@ -338,11 +364,7 @@ export async function runBrowserEvaluation({
         if (property !== 'state') return Reflect.get(target, property, receiver)
         return async (...args) => {
           const state = await target.state(...args)
-          if (typeof state?.mode !== 'string' || !Number.isInteger(state?.stepIndex)) {
-            throw browserInfrastructureFailure(
-              `probe state could not be read: observed ${bounded(state?.mode)} at ${bounded(state?.stepIndex)}`,
-            )
-          }
+          assertReadableState(state)
           return state
         }
       },
@@ -456,9 +478,8 @@ export async function runBrowserEvaluation({
           ],
         ]
       }
-      if (states.some((state) => !(state.entityIds ?? []).length)) {
-        return notObserved('one or more steps exposed no recognised scene entity ids', [], conventionsSought(states))
-      }
+      const unobservedEntities = entitiesUnobserved(states)
+      if (unobservedEntities) return unobservedEntities
       return [true, 'every step renders its normative caption and scene content', contract.step_captions]
     },
 
@@ -494,9 +515,8 @@ export async function runBrowserEvaluation({
       if (replaced !== -1) {
         return [false, `step ${replaced + 1} replaces every entity instead of evolving the scene`, [], observations]
       }
-      if (states.some((state) => !(state.entityIds ?? []).length)) {
-        return notObserved('one or more steps exposed no recognised scene entity ids', [], conventionsSought(states))
-      }
+      const unobservedEntities = entitiesUnobserved(states)
+      if (unobservedEntities) return unobservedEntities
       return [
         true,
         identityDeclared
@@ -713,7 +733,9 @@ export async function runBrowserEvaluation({
       for (let round = 0; round < 4; round += 1) {
         await page.toggleMode()
         const state = await page.state()
-        if (!Number.isInteger(state.stepIndex) || !['present', 'browse'].includes(state.mode)) {
+        // A missing mode or step index never reaches here: that read is a
+        // harness failure. What remains is a mode the demo does not define.
+        if (!['present', 'browse'].includes(state.mode)) {
           return [false, `mode toggle ${round + 1} left an unreadable state`, [bounded(state.mode)]]
         }
       }
@@ -799,20 +821,12 @@ export async function runBrowserEvaluation({
     try {
       const outcome = await probes[id]()
       if (outcome?.not_observed) {
-        criterion = {
-          id,
-          verdict: null,
-          outcome: 'not-observed',
-          looked_for: outcome.looked_for,
-          rationale: bounded(outcome.rationale),
-          evidence: [...outcome.evidence, probeCitation(id)],
-          observed: false,
-        }
+        criterion = notObservedCriterion(id, outcome, probeCitation(id))
       } else {
         const [pass, rationale, evidence, observations = {}] = outcome
-      // A probe that cites a single string is citing one artifact, not a list
-      // of characters.
-      const citations = Array.isArray(evidence) ? evidence : [evidence]
+        // A probe that cites a single string is citing one artifact, not a list
+        // of characters.
+        const citations = Array.isArray(evidence) ? evidence : [evidence]
         criterion = verdict(id, pass, rationale, [...citations, probeCitation(id)])
         criterion.observations = observations
       }

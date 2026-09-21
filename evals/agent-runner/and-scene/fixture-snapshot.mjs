@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // Refresh the offline fixture corpus from a checkout at the reviewed pin.
 import { execFileSync } from 'node:child_process'
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { runShPin } from './lib/pins.mjs'
 
 const SUITE_DIR = dirname(fileURLToPath(import.meta.url))
 const SNAPSHOT_DIR = join(SUITE_DIR, 'fixture-snapshot')
@@ -18,11 +20,8 @@ const DOCUMENTS = [
   'openspec/changes/create-and-scene/test-plan.md',
 ]
 
-export async function fixtureRef() {
-  const text = await readFile(join(SUITE_DIR, 'run.sh'), 'utf8')
-  const ref = text.match(/^FIXTURE_REF="\$\{FIXTURE_REF:-([^}]+)\}"$/m)?.[1]
-  if (!ref) throw new Error('could not parse FIXTURE_REF from run.sh')
-  return ref
+export function fixtureRef() {
+  return runShPin('FIXTURE_REF')
 }
 
 function git(checkout, args) {
