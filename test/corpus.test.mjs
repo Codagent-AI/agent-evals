@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { cp, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -134,4 +134,14 @@ test('the corpus covers every distinct candidate behind a published result', asy
     (await validatePublishedCoverage({ suiteRoot: suite, corpus: unlisted })).join('\n'),
     /cutover: published_runs omits candidate-rescore-20260728-browser-fixed-4/,
   )
+})
+
+test('an unreadable or missing published result is reported, not skipped', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'published-coverage-'))
+  await mkdir(join(root, 'results', 'broken-run'), { recursive: true })
+  await writeFile(join(root, 'results', 'broken-run', 'result.json'), '{ not json')
+  await mkdir(join(root, 'results', 'empty-run'), { recursive: true })
+  const errors = (await validatePublishedCoverage({ suiteRoot: root, corpus: await loadCorpus() })).join('\n')
+  assert.match(errors, /broken-run: cannot read published result/)
+  assert.match(errors, /empty-run: missing published result/)
 })

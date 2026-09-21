@@ -108,7 +108,7 @@
     "lib/browser-diagnostics.mjs": "4f9611a92600e28860fbd1da17a37046fc2403d1669085a0928eb73a7fe9ef51",
     "lib/persistence.mjs": "5b4552db38d13c161d3ccb1c691c6f1a6589b0618721f09d209508d240e4432a",
     "lib/axi-browser-driver.mjs": "44ad87902e3e7dfa749a2a80609636958d0b73696f5a790cc01d924c6195a91d",
-    "lib/corpus.mjs": "4de10933be266132ade954d686b2bed58ec4fda30d30eed068f0d71d6331f9f9",
+    "lib/corpus.mjs": "1a429b98073f7354fb3c8bccc9357b66e95dcd3fa883a4bfc5ca6c4d03e77e3a",
     "corpus-replay.mjs": "d22e12efabed475f6034eb8cc0ce05266074753cc1ae72f695e92b0b5ad2c6ce",
     "lib/pins.mjs": "6f5589971524ee2a61174efa0334ebf2d9687b57022da936fdb1da2faae20fa7",
     "automated-rubric.json": "afba30edb872c44b3b14415237a7779b879793a1700fd4316e2b219b20bf9608"
@@ -121,5 +121,5 @@
   "node": "v22.22.3",
   "chrome-devtools-axi": "0.1.34",
   "browser": "unknown",
-  "replayed_at": "2026-09-21T19:38:04.388Z"
+  "replayed_at": "2026-09-21T21:01:34.094Z"
 }

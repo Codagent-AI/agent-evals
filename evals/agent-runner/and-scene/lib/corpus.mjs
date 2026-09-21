@@ -143,8 +143,17 @@ export async function validatePublishedCoverage({ suiteRoot, corpus }) {
   const errors = []
   const byRevision = new Map((corpus?.candidates ?? []).map((candidate) => [candidate.revision, candidate]))
   for (const run of await publishedRuns(suiteRoot)) {
-    const result = await readJson(join(suiteRoot, 'results', run, 'result.json'), null).catch(() => null)
-    if (!result) continue
+    let result
+    try {
+      result = await readJson(join(suiteRoot, 'results', run, 'result.json'), null)
+    } catch (error) {
+      errors.push(`${run}: cannot read published result: ${error.message}`)
+      continue
+    }
+    if (!result) {
+      errors.push(`${run}: missing published result`)
+      continue
+    }
     const revision = result.delivery?.pull_request?.head_sha
     if (!SHA.test(revision ?? '')) {
       errors.push(`${run}: published result records no candidate revision`)
