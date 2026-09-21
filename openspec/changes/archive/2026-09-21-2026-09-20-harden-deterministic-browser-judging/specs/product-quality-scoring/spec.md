@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Official product score
-The evaluation SHALL calculate a candidate implementation-quality score out of 100 from the following components. Automated criteria SHALL use binary pass/fail verdicts. For every table row that lists multiple criteria, the row's points SHALL be divided equally among those criteria; the scorer SHALL NOT round intermediate values.
+The evaluation SHALL calculate a candidate implementation-quality score out of 100 from the following components. Automated criteria SHALL award points only from binary pass/fail verdicts. A deterministic evaluator MAY report a criterion as not observed; that criterion is unresolved until a declared fallback judge supplies a pass/fail verdict. For every table row that lists multiple criteria, the row's points SHALL be divided equally among those criteria; the scorer SHALL NOT round intermediate values.
 
 | Candidate component | Points |
 |---|---:|
@@ -137,7 +137,7 @@ Deterministic source facts supplied to an LLM source judge SHALL be treated as l
 #### Scenario: Deterministic demo behavior is scored
 - **WHEN** the built demo is available to the evaluator
 - **THEN** deterministic browser checks exercise every demo criterion assigned to them
-- **AND** the scorer applies the listed point allocations to their pass/fail results
+- **AND** the scorer applies the listed point allocations to their resolved pass/fail results
 
 #### Scenario: Presentation opens in present mode
 - **WHEN** the presentation's initial mode is present
@@ -172,6 +172,25 @@ Deterministic source facts supplied to an LLM source judge SHALL be treated as l
 - **WHEN** the LLM judge reviews the demo implementation
 - **THEN** it returns a pass/fail verdict, rationale, and cited source evidence for every demo criterion assigned to it
 - **AND** the suite-owned scorer applies the listed weights
+
+#### Scenario: Subjective quality is not assigned to the LLM
+- **WHEN** the LLM judge evaluates demo technical quality
+- **THEN** it does not score visual composition, perceived transition quality, responsive visual quality, or overall polish
+
+#### Scenario: Live demo and reusable kit are assessed separately
+- **WHEN** the demo correctly calls a scene-kit behavior whose reusable implementation is defective
+- **THEN** the evaluator scores the demo criterion from the correctness of its integration
+- **AND** it independently scores the corresponding scene-kit criterion from the defective reusable implementation
+
+#### Scenario: Source contradicts a deterministic token scan
+- **WHEN** deterministic source evidence reports that a technical hook is missing but the delivered source implements the required semantics through an equivalent stable hook
+- **THEN** the LLM judge resolves the contradiction from source behavior
+- **AND** it does not inherit the token scan's verdict
+
+#### Scenario: Demo consumes a dead shared contract
+- **WHEN** the demo supplies a required public scene-kit input that the reusable implementation ignores
+- **THEN** `demo-clear-code-boundaries` fails
+- **AND** the same defect is not deducted again from a scene-kit criterion
 
 #### Scenario: Browse mode shows the deck title
 - **WHEN** browse mode reports browse, exposes the active step's caption, and makes every step reachable from a discovered navigation region
@@ -265,12 +284,12 @@ Deterministic source facts supplied to an LLM source judge SHALL be treated as l
 #### Scenario: A control is activated the way a pointer activates it
 - **WHEN** a check activates a navigation control to test whether deck keys still work
 - **THEN** the control is focused before it is fired, as a pointer activation would
-- **AND** a presentation that ignores deck keys while that control holds focus is observed rather than hidden
+- **AND** a presentation that ignores deck keys while that control holds focus is observed and is not deducted for it
 
 #### Scenario: Controls exist only in browse mode
 - **WHEN** a presentation exposes its navigation controls in browse mode and none in present mode
 - **THEN** the control-key check establishes browse mode and activates a control there
-- **AND** a presentation that ignores deck keys after that activation is deducted rather than skipped
+- **AND** the check moves focus off the control before requiring a deck key to advance
 
 #### Scenario: The page reports no step index
 - **WHEN** a state read returns no mode or no step index
