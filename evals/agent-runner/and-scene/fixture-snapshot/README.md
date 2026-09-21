@@ -1,0 +1,1 @@
+These documents are copied verbatim from Codagent-AI/and-scene at the pinned fixture revision for offline verification. Refresh with `node fixture-snapshot.mjs --checkout PATH` from the suite directory.

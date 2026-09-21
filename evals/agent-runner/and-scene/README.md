@@ -1,5 +1,17 @@
 # and-scene eval
 
+## Fixture traceability
+
+Every automated criterion and gate has a `criterion_sources` entry in
+`automated-rubric.json`. Fixture-owned entries cite a snapshot document,
+heading, and normative fragment; eval-owned entries give a reason. Concrete
+guidance values must appear in cited text or in `eval_owned_values` with a
+reason. Refresh the offline snapshot from the pinned fixture checkout with:
+
+```sh
+node evals/agent-runner/and-scene/fixture-snapshot.mjs --checkout /path/to/and-scene
+```
+
 This suite gives an implementation agent a reviewed OpenSpec change with no
 implementation, runs the real Agent Runner workflow in a browser-capable Docker
 sandbox, and grades the result.

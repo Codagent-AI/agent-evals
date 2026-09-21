@@ -1,4 +1,375 @@
 {
+
+  "criterion_sources": {
+    "demo-route-and-registration": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "demo-nine-step-content-and-order": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "demo-required-scene-content": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "demo-evolving-scene-structure": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "quality-captions-and-navigation": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "demo-present-mode-behavior": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "demo-browse-mode-behavior": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "demo-mode-position-preservation": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "demo-supported-navigation": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "demo-navigation-boundaries-and-control-keys": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Controls keep their keys",
+      "quote": "navigation keys drive that control rather than also advancing the deck"
+    },
+    "demo-step-and-transition-reliability": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "demo-mode-interaction-reliability": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "demo-control-semantics": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "demo-focus-and-keyboard-accessibility": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "demo-scene-kit-api-use": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "demo-stable-identity-and-grouping": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "demo-clear-code-boundaries": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "quality-active-chrome-and-attribution-local": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "demo-scope-discipline": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "scene-step-narration-and-identity": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "scene-order-derived-numbering": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "scene-typed-payload-boundary": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "entity-persisting-morph": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "entity-newcomer-after-settle": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "entity-departing-exit": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "grouped-scene-updates-in-place": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "grouped-continuing-entities-not-newcomers": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "grouped-intentional-composition": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "mode-present-title-focused": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "mode-browse-reading-focused": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "mode-toggle-preserves-position": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "navigation-keyboard": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "navigation-touch-swipe": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "navigation-direct-jump": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "navigation-active-state": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "navigation-controls-keep-keys": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "navigation-clamp-start": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "navigation-clamp-end": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "canvas-uniform-scaling": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "canvas-default-dimensions": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "style-kit-hooks": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "style-unstyled-kit-output": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "style-framework-optional": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "style-coordinate-heavy-diagrams": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "attribution-default-link": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "attribution-styling-hook": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "attribution-top-left-opt-in": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "skill-missing-details-one-at-a-time": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "skill-partial-detail-proceeds": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "skill-complete-prompt-proceeds": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "skill-empty-directory-scaffold": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "skill-already-scaffolded": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "skill-partial-scaffold": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "skill-scaffold-style-neutral": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "skill-template-path-resolution": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "skill-monorepo-target": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "skill-standalone-target": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "skill-nonempty-confirmation": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "skill-new-presentation-routed": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "skill-presentation-owns-style": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "skill-existing-presentations-preserved": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "skill-modify-ambiguous-target": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "skill-scoped-modification": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "skill-checks-run-before-done": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "skill-failures-fixed-before-success": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "verification-missing-sample-fails": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "verification-ipv4-loopback": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "verification-preview-process-ownership": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "verification-console-page-error-fails": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "verification-step-error-fails": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "quality-project-local-screenshot-helper": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "visual-helper-captures-steps": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "visual-helper-settled-screenshots": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "visual-helper-overlap-warning": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "visual-helper-allow-overlap": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "visual-helper-active-state-warning": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "visual-helper-attribution-warning": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "testing-evidence-traceable-coverage": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "testing-evidence-usable-proof": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "testing-evidence-final-revision-applicability": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "testing-evidence-complete-honest-record": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "assumption-consequential-ambiguities-surfaced": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "assumption-repository-facts-distinguished": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "assumption-decisions-and-escalations-proportionate": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "assumption-final-handoff-preserves-decisions": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "verification-build-whole-app": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "verification-sample-outline": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "verification-every-produced-step-renders": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    },
+    "verification-clear-outcome": {
+      "owner": "eval",
+      "reason": "Judges workflow evidence or integration behavior the fixture does not describe."
+    }
+  },
+  "eval_owned_values": [
+    {
+      "value": "880×380",
+      "reason": "The fixture-owned fixed canvas dimension is repeated in shared guidance."
+    },
+    {
+      "value": "aria-current",
+      "reason": "ARIA standard attribute accepted as an eval-owned implementation spelling."
+    }
+  ],
   "rubric_id": "and-scene-automated-product",
   "version": "5.0.0",
   "total_points": 100,

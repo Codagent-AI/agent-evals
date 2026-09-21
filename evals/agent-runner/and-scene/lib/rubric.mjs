@@ -223,6 +223,16 @@ export function validateAutomatedRubric(rubric) {
     if (seen.has(id)) errors.push(`duplicate criterion ${id}`)
     seen.add(id)
   }
+  const sourceIds = [...rows.map(({ id }) => id), ...(rubric.gates ?? []).map(({ id }) => id)]
+  for (const id of sourceIds) {
+    const source = rubric.criterion_sources?.[id]
+    if (!source || typeof source !== 'object') errors.push(`criterion ${id} requires a source`)
+    else if (source.owner === 'fixture' && (!source.document || !source.heading || !source.quote)) {
+      errors.push(`criterion ${id} fixture source requires document, heading, and quote`)
+    } else if (source.owner === 'eval' && (!source.reason || !source.reason.trim())) {
+      errors.push(`criterion ${id} eval-owned source requires a reason`)
+    } else if (!['fixture', 'eval'].includes(source.owner)) errors.push(`criterion ${id} source has unknown owner`)
+  }
   const deterministic = new Set(rows.filter(({ evaluator }) => evaluator === 'deterministic-browser').map(({ id }) => id))
   for (const [id, fallback] of Object.entries(rubric.fallbacks ?? {})) {
     if (!deterministic.has(id)) errors.push(`fallback ${id} must name a deterministic-browser criterion`)
