@@ -114,9 +114,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 4.0 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
+test('rubric 5.0 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '4.0.0')
+  assert.equal(rubric.version, '5.0.0')
   assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(
@@ -139,6 +139,7 @@ test('rubric 4.0 defines pre-human automated eligibility and distinguishes proof
   assert.match(guidance('scene-entity-transitions'), /plain conditional|opt-in wrapper/i)
   assert.match(guidance('scene-modes-and-navigation'), /both.*horizontal.*vertical/i)
   assert.match(guidance('scene-fixed-canvas-uniform-fit'), /one factor on both axes.*inside its available bounds/i)
+  assert.match(guidance('scene-fixed-canvas'), /880×380/)
   assert.match(guidance('skill-scaffolding'), /test name|filename/i)
   assert.match(guidance('verification-addressing-and-errors'), /strictPort.*insufficient/i)
   assert.match(guidance('verification-capture'), /fixed.*delay.*insufficient/i)

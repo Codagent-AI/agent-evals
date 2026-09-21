@@ -198,6 +198,8 @@ function summarizeState(state) {
     caption: normalizeEvidence(state?.caption ?? ''),
     scene_id: typeof state?.sceneId === 'string' ? normalizeEvidence(state.sceneId) : null,
     entity_ids: (state?.entityIds ?? []).slice(0, MAX_STEP_COUNT).map((id) => normalizeEvidence(id)),
+    entity_conventions: (state?.entityConventions ?? []).slice(0, MAX_STEP_COUNT)
+      .map((selector) => normalizeEvidence(selector)),
     title_prominent: state?.titleProminent ?? null,
     caption_visible: state?.captionVisible ?? null,
     toc_visible: state?.tocVisible ?? null,
@@ -609,14 +611,33 @@ export async function runBrowserEvaluation({
         controls = (await host.state()).controls ?? []
       }
       if (controls[0]) await host.activate(controls[0].name)
-      const beforeKey = (await host.state()).stepIndex
+      const beforeFocusedKey = (await host.state()).stepIndex
       await host.press('ArrowRight')
-      const afterKey = (await host.state()).stepIndex
-
-      const ok = atStart === 0 && last === count - 1 && pastEnd === count - 1 && afterKey === beforeKey + 1
+      const afterFocusedKey = (await host.state()).stepIndex
+      const released = await host.releaseFocus()
+      if (!released) {
+        await host.restoreFocusTarget()
+        throw browserInfrastructureFailure('could not release focus from the navigation control')
+      }
+      const beforeReleasedKey = (await host.state()).stepIndex
+      const deckKey = beforeReleasedKey === count - 1 ? 'ArrowLeft' : 'ArrowRight'
+      let afterReleasedKey
+      try {
+        await host.press(deckKey)
+        afterReleasedKey = (await host.state()).stepIndex
+      } finally {
+        await host.restoreFocusTarget()
+      }
+      const keysAfterFocusReleased = deckKey === 'ArrowRight'
+        ? afterReleasedKey === beforeReleasedKey + 1
+        : afterReleasedKey === beforeReleasedKey - 1
+      const clampsHold = atStart === 0 && last === count - 1 && pastEnd === count - 1
+      const ok = clampsHold && keysAfterFocusReleased
       return [
         ok,
-        `start clamp ${atStart}, end clamp ${last}→${pastEnd}, keys after control use ${beforeKey}→${afterKey}`,
+        `start clamp ${atStart}, end clamp ${last}→${pastEnd}, `
+          + `keys while control focused ${beforeFocusedKey}→${afterFocusedKey}, `
+          + `keys after focus released ${beforeReleasedKey}→${afterReleasedKey}`,
         [],
       ]
     },

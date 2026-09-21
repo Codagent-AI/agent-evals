@@ -582,6 +582,8 @@ ${navigationDiscoverySource()}
     '[data-layout-id]',
     '[data-scene-entity]',
     '[data-node]',
+    '[data-entity-id]',
+    '[data-scene-node]',
     '[data-presentation-node]',
     '[data-presentation-box]',
     '[data-presentation-label]',
@@ -599,7 +601,9 @@ ${navigationDiscoverySource()}
     .map((element) => {
       const explicit = element.getAttribute('data-layout-id')
         || element.getAttribute('data-scene-entity')
-        || element.getAttribute('data-node');
+        || element.getAttribute('data-node')
+        || element.getAttribute('data-entity-id')
+        || element.getAttribute('data-scene-node');
       if (explicit) return explicit;
       const hook = element.getAttributeNames()
         .find((name) => name.startsWith('data-presentation-'));
@@ -635,6 +639,7 @@ ${navigationDiscoverySource()}
     caption: caption?.textContent?.trim() || '',
     sceneId: declaredSceneId(),
     entityIds,
+    entityConventions: entitySelectors,
     titleProminent: visible(title),
     mode: explicitMode === 'present' || explicitMode === 'browse'
       ? explicitMode
@@ -663,6 +668,44 @@ console.log(JSON.stringify(captured));
 
     async press(key) {
       await run(`await page.press(${JSON.stringify(key)}); console.log(JSON.stringify(true));`)
+    },
+
+    async releaseFocus() {
+      return run(`
+const released = await page.eval(() => {
+  const root = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
+  if (!root) return false;
+  if (root.tabIndex < 0 && !root.hasAttribute('tabindex')) {
+    root.setAttribute('tabindex', '-1');
+    root.__andSceneTemporaryTabindex = true;
+  }
+  root.focus();
+  const active = document.activeElement;
+  const interactiveTags = new Set(['a', 'button', 'input', 'select', 'textarea', 'summary']);
+  const interactiveRoles = new Set([
+    'button', 'checkbox', 'combobox', 'gridcell', 'link', 'listbox', 'menuitem',
+    'menuitemcheckbox', 'menuitemradio', 'option', 'radio', 'searchbox', 'slider',
+    'spinbutton', 'switch', 'tab', 'textbox', 'treeitem',
+  ]);
+  return active === root
+    && !interactiveTags.has(active.tagName.toLowerCase())
+    && !interactiveRoles.has(active.getAttribute('role'));
+});
+console.log(JSON.stringify(released));
+`)
+    },
+
+    async restoreFocusTarget() {
+      await run(`
+await page.eval(() => {
+  const root = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
+  if (root?.__andSceneTemporaryTabindex) {
+    root.removeAttribute('tabindex');
+    delete root.__andSceneTemporaryTabindex;
+  }
+});
+console.log(JSON.stringify(true));
+`)
     },
 
     async activate(name) {

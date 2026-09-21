@@ -36,6 +36,7 @@ function createDemo(knobs = {}) {
     focusable = true,
     controlsKeepKeys = true,
     focusedControlConsumesArrows = false,
+    focusCannotBeReleased = false,
     titleProminentInPresent = true,
     activeTitleVisibleInBrowse = true,
     presentShowsDeckTitle = false,
@@ -175,6 +176,7 @@ function createDemo(knobs = {}) {
     },
     async press(key) {
       guard('press')
+      if (focusedControlConsumesArrows && focused?.startsWith('Step ')) return
       if (key === 'ArrowRight') step(1)
       else if (key === 'ArrowLeft') step(-1)
     },
@@ -186,7 +188,6 @@ function createDemo(knobs = {}) {
       // A pointer activation focuses the control it fires, so a demo that
       // suppresses deck keys while a control holds focus stops responding.
       focused = name
-      if (focusedControlConsumesArrows) keysLive = false
       const target = Number(name.replace('Step ', '')) - 1
       if (Number.isInteger(target)) index = clamp(target)
     },
@@ -205,7 +206,15 @@ function createDemo(knobs = {}) {
       guard('focus')
       if (!focusable) return
       focused = name
-      if (focusedControlConsumesArrows) keysLive = false
+    },
+    async releaseFocus() {
+      guard('releaseFocus')
+      if (focusCannotBeReleased) return false
+      focused = 'presentation root'
+      return true
+    },
+    async restoreFocusTarget() {
+      guard('restoreFocusTarget')
     },
     async swipe(direction) {
       guard('swipe')
@@ -897,24 +906,35 @@ test('a probe retains an observation for every state its verdict rests on', asyn
   }
 })
 
-test('the control-key check follows controls into the mode that exposes them', async () => {
-  // A demo that shows its controls only in browse mode still has controls a
-  // reader uses. Skipping the check because present mode has none hides a
-  // presentation that stops responding to deck keys once a control is clicked.
-  const suppressed = await evaluate({
+test('the control-key check follows controls into browse mode without deducting focused-key suppression', async () => {
+  const result = await evaluate({
     controlsOnlyInBrowse: true,
     focusedControlConsumesArrows: true,
   })
-  const healthy = await evaluate({ controlsOnlyInBrowse: true })
+  const criterion = result.criteria.find(({ id }) => id === 'demo-navigation-boundaries-and-control-keys')
 
-  assert.equal(verdictOf(suppressed, 'demo-navigation-boundaries-and-control-keys'), 'fail')
-  assert.equal(verdictOf(healthy, 'demo-navigation-boundaries-and-control-keys'), 'pass')
+  assert.equal(verdictOf(result, 'demo-navigation-boundaries-and-control-keys'), 'pass')
+  assert.match(criterion.rationale, /keys while control focused \d+→\d+/i)
+  assert.match(criterion.rationale, /keys after focus released \d+→\d+/i)
 })
 
-test('a control that swallows deck keys fails the control-key check', async () => {
-  const result = await evaluate({ focusedControlConsumesArrows: true })
+test('a deck key that remains dead after focus is released fails the control-key check', async () => {
+  const result = await evaluate({ controlsKeepKeys: false })
 
   assert.equal(verdictOf(result, 'demo-navigation-boundaries-and-control-keys'), 'fail')
+})
+
+test('a control that cannot release focus is a resumable harness failure', async () => {
+  await assert.rejects(
+    () => evaluate({ focusCannotBeReleased: true }),
+    (error) => {
+      assert.equal(error.owner, 'evaluation-harness')
+      assert.equal(error.code, 'browser-driver-failed')
+      assert.equal(error.resumable, true)
+      assert.match(error.message, /release.*focus/i)
+      return true
+    },
+  )
 })
 
 test('an unreadable browser state is a harness failure, not a product deduction', async () => {

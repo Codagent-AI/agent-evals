@@ -1,6 +1,6 @@
 {
   "rubric_id": "and-scene-automated-product",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "total_points": 100,
   "automated_points": 70,
   "human_points": 30,
@@ -185,7 +185,7 @@
           "job": "scene-kit",
           "criteria": ["canvas-default-dimensions"],
           "review_guidance": [
-            "Require the scene kit's authored canvas to default to the approved 880×495 dimensions; inspect the actual default values consumed by the rendered stage."
+            "Require the scene kit's authored canvas to default to the approved 880×380 dimensions; inspect the actual default values consumed by the rendered stage."
           ]
         },
         {
