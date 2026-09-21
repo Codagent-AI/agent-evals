@@ -22,6 +22,7 @@ function createDemo(knobs = {}) {
     stepCount = titles.length,
     captions = DEMO_CONTRACT.step_captions,
     perStepSceneId = false,
+    declaresSceneId = true,
     replaceEntities = false,
     clampStart = true,
     clampEnd = true,
@@ -36,6 +37,7 @@ function createDemo(knobs = {}) {
     titleProminentInPresent = true,
     activeTitleVisibleInBrowse = true,
     presentShowsDeckTitle = false,
+    presentAlsoShowsStepTitle = false,
     captionVisibleInBrowse = true,
     tocVisibleInBrowse = true,
     previousVisibleInBrowse = true,
@@ -101,10 +103,15 @@ function createDemo(knobs = {}) {
         title: (mode === 'browse' && !activeTitleVisibleInBrowse) || (mode === 'present' && presentShowsDeckTitle)
           ? 'Overall presentation title'
           : titles[index % titles.length],
+        titleTexts: mode === 'present' && presentShowsDeckTitle
+          ? ['Overall presentation title', ...(presentAlsoShowsStepTitle ? [titles[index % titles.length]] : [])]
+          : [titles[index % titles.length], 'Overall presentation title'],
         caption: captionHiddenInPresent && mode === 'present'
           ? ''
           : captions[index % captions.length] ?? '',
-        sceneId: perStepSceneId ? `scene-${index}` : 'how-to-make-a-presentation-scene',
+        sceneId: declaresSceneId
+          ? (perStepSceneId ? `scene-${index}` : 'how-to-make-a-presentation-scene')
+          : null,
         entityIds: replaceEntities
           ? [`only-${index}`]
           : ['stage', `beat-${index}`, `beat-${index + 1}`],
@@ -126,6 +133,11 @@ function createDemo(knobs = {}) {
             })),
         focused,
         viewport: currentViewport,
+        matchedSelectors: {
+          title: '[data-presentation-step-title]',
+          caption: '[data-presentation-caption]',
+          controls: 'semantic-progress-region',
+        },
       }
     },
     async resize(width, height) {
@@ -233,7 +245,7 @@ test('the deterministic browser evaluator owns exactly the rubric-assigned demo 
     [...DETERMINISTIC_BROWSER_CRITERIA].sort(),
     [...deterministicCriteria(automated.rubric)].sort(),
   )
-  assert.equal(DETERMINISTIC_BROWSER_CRITERIA.length, 15)
+  assert.equal(DETERMINISTIC_BROWSER_CRITERIA.length, 14)
 })
 
 test('a conforming built demo passes every deterministic criterion and hard gate', async () => {
@@ -291,7 +303,9 @@ test('the canonical outline is read from active step titles without confusing th
 
   assert.equal(verdictOf(result, 'demo-nine-step-content-and-order'), 'pass')
   assert.equal(verdictOf(result, 'verification-sample-outline'), 'pass')
-  assert.equal(verdictOf(result, 'demo-browse-mode-behavior'), 'fail')
+  // Showing the deck title in browse mode is a design choice the fixture does
+  // not rule out, so it is judged by `mode-browse-reading-focused`, not here.
+  assert.equal(verdictOf(result, 'demo-browse-mode-behavior'), 'pass')
   assert.ok(actions.some((entry) => entry.action === 'set-mode' && entry.mode === 'present'))
 })
 
@@ -330,20 +344,12 @@ test('browse-mode evidence records the viewport used for responsive chrome asser
   assert.match(probe.result.rationale, /viewport 1280×720/)
 })
 
-test('uniform canvas fitting is proven at a boundary below the legacy minimum clamp', async () => {
-  const passing = await evaluate()
-  const overflowing = await evaluate({ canvasFitsNarrow: false })
-  const distorted = await evaluate({ canvasUniform: false })
+test('fixed-canvas fitting is no longer measured deterministically at an extreme viewport', async () => {
+  const result = await evaluate({ canvasFitsNarrow: false, canvasUniform: false })
 
-  assert.equal(verdictOf(passing, 'canvas-uniform-scaling'), 'pass')
-  assert.equal(verdictOf(overflowing, 'canvas-uniform-scaling'), 'fail')
-  assert.equal(verdictOf(distorted, 'canvas-uniform-scaling'), 'fail')
-  const probe = passing.probes.find(({ id }) => id === 'canvas-uniform-scaling')
-  assert.deepEqual(probe.outputs.narrow.viewport, { width: 64, height: 64 })
-  assert.equal(probe.outputs.narrow.scale.x, probe.outputs.narrow.scale.y)
-  assert.ok(probe.result.evidence.includes(
-    'evidence/evaluator/browser-probes/canvas-uniform-scaling.json',
-  ))
+  assert.ok(!DETERMINISTIC_BROWSER_CRITERIA.includes('canvas-uniform-scaling'))
+  assert.equal(verdictOf(result, 'canvas-uniform-scaling'), undefined)
+  assert.deepEqual([...new Set(result.criteria.map(({ verdict }) => verdict))], ['pass'])
 })
 
 test('direct-jump navigation enters browse mode when present mode intentionally hides its controls', async () => {
@@ -479,9 +485,60 @@ test('candidate-controlled non-string observations cannot invalidate durable bro
   })
 
   const route = result.criteria.find(({ id }) => id === 'demo-route-and-registration')
-  assert.equal(route.verdict, 'fail')
-  assert.match(route.rationale, /not registered/)
-  assert.deepEqual(route.evidence, ['evidence/evaluator/browser-probes/demo-route-and-registration.json'])
+  assert.equal(route.verdict, 'pass')
+  assert.ok(route.evidence.includes('evidence/evaluator/browser-probes/demo-route-and-registration.json'))
+  assert.ok(route.evidence.every((cited) => typeof cited === 'string' && cited.length > 1))
+})
+
+test('a reachable route that the landing page never links is registered, not missing', async () => {
+  const driver = createDemo()
+  driver.routes = async () => ['some-other-presentation']
+
+  const result = await runBrowserEvaluation({
+    driver,
+    build: passingBuild,
+    verification: passingVerification,
+    evidenceArtifacts: fixtureEvidenceArtifacts,
+  })
+
+  assert.equal(verdictOf(result, 'demo-route-and-registration'), 'pass')
+  assert.equal(verdictOf(result, 'verification-sample-outline'), 'pass')
+  const probe = result.probes.find(({ id }) => id === 'demo-route-and-registration')
+  assert.equal(probe.outputs.route_linked_from_landing_page, false)
+  assert.deepEqual(probe.outputs.discovered_routes, ['some-other-presentation'])
+})
+
+test('an adapter diagnostic in the route list is a harness failure, never a product deduction', async () => {
+  const driver = createDemo()
+  driver.routes = async () => "Could not find Google Chrome executable for channel 'stable' at:"
+
+  await assert.rejects(
+    runBrowserEvaluation({
+      driver,
+      build: passingBuild,
+      verification: passingVerification,
+      evidenceArtifacts: fixtureEvidenceArtifacts,
+    }),
+    (error) => error.owner === 'evaluation-harness'
+      && error.code === 'browser-driver-failed'
+      && error.resumable === true,
+  )
+})
+
+test('a probe that cites one string cites one artifact rather than its characters', async () => {
+  const driver = createDemo()
+  driver.routes = async () => ['some-other-presentation']
+
+  const result = await runBrowserEvaluation({
+    driver,
+    build: passingBuild,
+    verification: passingVerification,
+    evidenceArtifacts: fixtureEvidenceArtifacts,
+  })
+
+  for (const entry of [...result.criteria, ...result.gates]) {
+    assert.ok(entry.evidence.every((cited) => cited.length > 1), entry.id)
+  }
 })
 
 test('deterministic verdicts refuse to fabricate citations when no durable artifacts are identified', async () => {
@@ -523,13 +580,13 @@ test('each broken demo behaviour fails its own criterion', async () => {
     ['demo-evolving-scene-structure', { perStepSceneId: true }],
     ['demo-evolving-scene-structure', { replaceEntities: true }],
     ['quality-captions-and-navigation', { controlCount: 0 }],
-    ['demo-present-mode-behavior', { titleProminentInPresent: false }],
+    ['demo-present-mode-behavior', { presentShowsDeckTitle: true }],
     ['demo-browse-mode-behavior', { captionVisibleInBrowse: false }],
-    ['demo-browse-mode-behavior', { activeTitleVisibleInBrowse: false }],
-    ['demo-browse-mode-behavior', { tocVisibleInBrowse: false }],
-    ['demo-browse-mode-behavior', { previousVisibleInBrowse: false }],
-    ['demo-browse-mode-behavior', { nextVisibleInBrowse: false }],
-    ['demo-browse-mode-behavior', { progressVisibleInBrowse: false }],
+    ['demo-browse-mode-behavior', {
+      controlCount: 0,
+      previousVisibleInBrowse: false,
+      nextVisibleInBrowse: false,
+    }],
     ['demo-mode-position-preservation', { preservePositionAcrossModes: false }],
     ['demo-supported-navigation', { swipeWorks: false }],
     ['demo-supported-navigation', { directJumpWorks: false }],
@@ -540,7 +597,6 @@ test('each broken demo behaviour fails its own criterion', async () => {
     ['demo-mode-interaction-reliability', { failures: ['TypeError: cannot read mode of undefined'] }],
     ['demo-control-semantics', { ariaCurrent: false }],
     ['demo-focus-and-keyboard-accessibility', { focusable: false }],
-    ['canvas-uniform-scaling', { canvasFitsNarrow: false }],
   ]
 
   for (const [criterion, knobs] of mutations) {
@@ -643,4 +699,157 @@ test('unavailable failure reporting leaves the renders gate unobserved rather th
   assert.equal(gate.observed, false)
   assert.match(gate.rationale, /could not be observed|unavailable/i)
   assert.equal(result.failure_reporting_available, false)
+})
+
+test('browse mode tolerates design choices the fixture never states', async () => {
+  for (const knobs of [
+    { activeTitleVisibleInBrowse: false },
+    { tocVisibleInBrowse: false },
+    { previousVisibleInBrowse: false, nextVisibleInBrowse: false },
+    { progressVisibleInBrowse: false },
+  ]) {
+    const result = await evaluate(knobs)
+    assert.equal(verdictOf(result, 'demo-browse-mode-behavior'), 'pass', JSON.stringify(knobs))
+  }
+})
+
+test('browse mode accepts directional navigation that hides a boundary control', async () => {
+  // The probe stands at step 0, where hiding Previous rather than disabling it
+  // is a legitimate design. Next still has to be there, because every later
+  // step is reached through it.
+  const hidesPrevious = await evaluate({
+    controlCount: 0,
+    previousVisibleInBrowse: false,
+    nextVisibleInBrowse: true,
+  })
+
+  assert.equal(verdictOf(hidesPrevious, 'demo-browse-mode-behavior'), 'pass')
+})
+
+test('browse mode still fails when a step is unreadable or unreachable', async () => {
+  const unreadable = await evaluate({ captionVisibleInBrowse: false })
+  const unreachable = await evaluate({
+    controlCount: 0,
+    previousVisibleInBrowse: false,
+    nextVisibleInBrowse: false,
+  })
+
+  assert.equal(verdictOf(unreadable, 'demo-browse-mode-behavior'), 'fail')
+  assert.equal(verdictOf(unreachable, 'demo-browse-mode-behavior'), 'fail')
+})
+
+test('present mode requires the active step title without judging its prominence', async () => {
+  const prominenceUnreported = await evaluate({ titleProminentInPresent: false })
+  const deckTitle = await evaluate({ presentShowsDeckTitle: true })
+
+  assert.equal(verdictOf(prominenceUnreported, 'demo-present-mode-behavior'), 'pass')
+  assert.equal(verdictOf(deckTitle, 'demo-present-mode-behavior'), 'fail')
+})
+
+test('normative titles and captions are compared without typographic noise', async () => {
+  const result = await evaluate({
+    titles: TITLES.map((title) => title.replace("'", '\u2019')),
+    captions: DEMO_CONTRACT.step_captions.map((caption) => `${caption.replace(/ /g, '\u00a0')}\n`),
+  })
+
+  assert.equal(verdictOf(result, 'demo-nine-step-content-and-order'), 'pass')
+  assert.equal(verdictOf(result, 'demo-required-scene-content'), 'pass')
+})
+
+test('an undeclared scene identity is recorded rather than compared with itself', async () => {
+  const persisting = await evaluate({ declaresSceneId: false })
+  const replacing = await evaluate({ declaresSceneId: false, replaceEntities: true })
+
+  assert.equal(verdictOf(persisting, 'demo-evolving-scene-structure'), 'pass')
+  assert.equal(verdictOf(replacing, 'demo-evolving-scene-structure'), 'fail')
+  const probe = persisting.probes.find(({ id }) => id === 'demo-evolving-scene-structure')
+  assert.equal(probe.outputs.scene_identity_declared, false)
+  assert.deepEqual(probe.outputs.scene_ids, [])
+})
+
+test('every probe retains the observation its verdict was derived from', async () => {
+  const result = await evaluate()
+
+  for (const probe of result.probes) {
+    assert.ok(Array.isArray(probe.probe_observations), probe.id)
+    const states = probe.probe_observations.filter(({ kind }) => kind === 'state')
+    assert.ok(states.length > 0, probe.id)
+    const [first] = states
+    assert.deepEqual(first.viewport, { width: 1280, height: 720 })
+    assert.ok(['present', 'browse'].includes(first.mode), probe.id)
+    assert.equal(typeof first.step_index, 'number')
+    assert.equal(typeof first.step_count, 'number')
+    assert.equal(first.matched_selectors.controls, 'semantic-progress-region')
+    assert.equal(probe.outputs.probe_observations, probe.probe_observations)
+  }
+  const browse = result.probes.find(({ id }) => id === 'demo-browse-mode-behavior')
+  // The first read is the as-opened state; the judged state is the last one.
+  const observed = browse.probe_observations.filter(({ kind }) => kind === 'state').at(-1)
+  assert.equal(observed.mode, 'browse')
+  assert.equal(observed.controls.length, 9)
+  assert.ok(observed.controls.some(({ aria_current }) => aria_current === true))
+  assert.equal(observed.caption_visible, true)
+})
+
+test('an observation is bounded so one candidate string cannot flood an artifact', async () => {
+  const result = await evaluate({ titles: TITLES.map(() => 'B'.repeat(50_000)) })
+
+  for (const probe of result.probes) {
+    for (const observation of probe.probe_observations) {
+      assert.ok(JSON.stringify(observation).length < 20_000, probe.id)
+    }
+  }
+})
+
+test('retained failure evidence is escaped once rather than on every hop', async () => {
+  const result = await evaluate({ failures: ["TypeError: cannot read 'mode' of <undefined>"] })
+  const gate = result.gates.find(({ id }) => id === 'verification-every-produced-step-renders')
+
+  assert.equal(verdictOf(result, 'verification-every-produced-step-renders'), 'fail')
+  assert.ok(result.failures.every((failure) => !failure.includes('&')), JSON.stringify(result.failures))
+  assert.ok(gate.evidence.some((cited) => cited.includes('&#39;mode&#39;')), JSON.stringify(gate.evidence))
+  assert.ok(gate.evidence.every((cited) => !cited.includes('&amp;#')), JSON.stringify(gate.evidence))
+})
+
+test('an adapter diagnostic observed while stepping never reaches candidate failure evidence', async () => {
+  await assert.rejects(
+    evaluate({ failures: ['Run `chrome-devtools-axi console --type error` to filter by type'] }),
+    (error) => error.owner === 'evaluation-harness' && error.code === 'browser-driver-failed',
+  )
+})
+
+test('present mode accepts the active step title wherever the presentation exposes it', async () => {
+  // The deck title is what the evaluator's first-ranked title hook happens to
+  // match; the step title is exposed through another element.
+  const result = await evaluate({ presentShowsDeckTitle: true, presentAlsoShowsStepTitle: true })
+
+  assert.equal(verdictOf(result, 'demo-present-mode-behavior'), 'pass')
+  const probe = result.probes.find(({ id }) => id === 'demo-present-mode-behavior')
+  const observed = probe.probe_observations.filter(({ kind }) => kind === 'state').at(-1)
+  assert.ok(observed.title_texts.includes(TITLES[0]))
+})
+
+test('present mode fails when no element exposes the active step title', async () => {
+  const result = await evaluate({ presentShowsDeckTitle: true })
+
+  assert.equal(verdictOf(result, 'demo-present-mode-behavior'), 'fail')
+})
+
+test('a probe retains an observation for every state its verdict rests on', async () => {
+  // The nine-step probe walks all nine steps in both modes, so the retention
+  // bound has to cover both traversals rather than truncating the later one.
+  const result = await evaluate()
+  const probe = result.probes.find(({ id }) => id === 'demo-nine-step-content-and-order')
+  const states = probe.probe_observations.filter(({ kind }) => kind === 'state')
+
+  assert.ok(states.length >= 18, `retained only ${states.length} states`)
+  assert.equal(probe.probe_observations_dropped, 0)
+  for (const record of result.probes) {
+    assert.equal(record.probe_observations_dropped, 0, record.id)
+    assert.equal(
+      record.outputs.probe_observations_dropped,
+      record.probe_observations_dropped,
+      record.id,
+    )
+  }
 })

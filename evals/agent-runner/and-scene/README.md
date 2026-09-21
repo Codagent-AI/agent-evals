@@ -666,11 +666,17 @@ and intermediate values are never rounded.
 Deterministic browser checks exercise the built, running demo: routing, the
 canonical nine steps, evolving-scene structure, present/browse modes,
 navigation, end boundaries, transition reliability, control semantics, focus,
-keyboard operability, and uniform fixed-canvas fitting at both wide and 64×64
-viewport boundaries. Each probe is stored in
-`evidence/evaluator/browser-probes/` as an evaluator-owned, revision-bound
-work unit with input/output hashes, required mode and position, initial and
-settled state, runtime failures, and its pass or fail result. Matching negative
+and keyboard operability. They assert only mechanically provable behavior at
+the suite-owned viewport; a design choice the fixture does not state — showing
+the deck title in browse mode, a responsive table of contents, a hidden rather
+than disabled boundary control, fixed-canvas behavior at an extreme viewport —
+is judged by the scene-kit source judge and human review instead. Each probe is
+stored in `evidence/evaluator/browser-probes/` as an evaluator-owned,
+revision-bound work unit with input/output hashes, required mode and position,
+initial and settled state, the bounded observation its verdict was derived from
+— viewport, mode, position, title, caption, chrome visibility, discovered
+controls, and the selector that matched each navigation role — runtime
+failures, and its pass or fail result. Matching negative
 findings are reusable after interruption just like matching passes. Evaluator
 screenshots carry the same ownership, revision, mode, position, settle, and
 hash metadata. Focused component judge jobs review delivered source and

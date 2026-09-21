@@ -31,6 +31,17 @@ const TITLE_SELECTORS = [
   '[data-presentation-title]',
 ]
 const TITLE_SELECTOR = TITLE_SELECTORS.join(', ')
+// Asking *which* element is the title requires a ranked list. Asking whether
+// the active step's title is exposed at all does not, so that question is
+// answered from every text-bearing element of the presentation's own chrome.
+const TITLE_TEXT_SELECTORS = [
+  ...TITLE_SELECTORS,
+  '[data-presentation-presenter-title]',
+  '[data-presentation-active-title]',
+  ...['header', 'footer', 'stage'].flatMap((region) => (
+    ['h1', 'h2', 'h3', 'h4', 'p', 'span'].map((tag) => `[data-presentation-${region}] ${tag}`)
+  )),
+]
 const CAPTION_SELECTORS = [
   '[data-presentation-caption]',
   '[data-presentation-node="caption"]',
@@ -78,6 +89,18 @@ const NEXT_SELECTORS = [
   '[data-presentation-button="next"]',
   '[data-presentation-node="next"]',
 ]
+const MODE_TOGGLE_SELECTORS = [
+  '[data-presentation-mode-toggle]',
+  '[data-presentation-button="mode"]',
+  '[data-presentation-node="mode-toggle"]',
+]
+// A scene identity has to identify something. A bare boolean marker names no
+// scene, so it is not a declared identity.
+const SCENE_ID_SELECTORS = [
+  '[data-presentation-scene-id]',
+  '[data-scene-id]',
+  '[data-presentation-scene]',
+]
 
 function navigationDiscoverySource() {
   return `
@@ -99,11 +122,16 @@ function navigationDiscoverySource() {
       || '';
   };
   const scope = presentation || document;
-  const firstVisibleMatch = (selectors) => {
+  const matchedSelectors = {};
+  const firstVisibleMatch = (selectors, role = null) => {
     for (const selector of selectors) {
       const match = [...scope.querySelectorAll(selector)].find(visible);
-      if (match) return match;
+      if (match) {
+        if (role) matchedSelectors[role] = selector;
+        return match;
+      }
     }
+    if (role) matchedSelectors[role] = null;
     return null;
   };
   const allInteractive = [...scope.querySelectorAll('${INTERACTIVE_SELECTOR}')];
@@ -115,7 +143,7 @@ function navigationDiscoverySource() {
   const explicitControls = inDomOrder([
     ...scope.querySelectorAll(${JSON.stringify(EXPLICIT_CONTROL_SELECTOR)}),
   ]);
-  const progressRegion = firstVisibleMatch(${JSON.stringify(PROGRESS_SELECTORS)});
+  const progressRegion = firstVisibleMatch(${JSON.stringify(PROGRESS_SELECTORS)}, 'progress');
   const semanticControls = progressRegion
     ? inDomOrder([...progressRegion.querySelectorAll('${INTERACTIVE_SELECTOR}')])
     : [];
@@ -125,18 +153,38 @@ function navigationDiscoverySource() {
   const controls = semanticControls.length > 0
     ? semanticControls
     : (explicitControls.length > 0 ? explicitControls : namedStepControls);
-  const directionalRegion = firstVisibleMatch(${JSON.stringify(STEP_CONTROL_REGION_SELECTORS)});
+  matchedSelectors.controls = semanticControls.length > 0
+    ? 'semantic-progress-region'
+    : (explicitControls.length > 0 ? 'presentation-owned-control-hook' : (
+      namedStepControls.length > 0 ? 'accessible-step-name' : null
+    ));
+  const directionalRegion = firstVisibleMatch(${JSON.stringify(STEP_CONTROL_REGION_SELECTORS)}, 'directional_region');
   const directionalCandidates = directionalRegion
     ? [...directionalRegion.querySelectorAll('${INTERACTIVE_SELECTOR}')]
     : allInteractive;
-  const findDirectionalControls = (selectors, namePattern) => {
+  const findDirectionalControls = (selectors, namePattern, role = null) => {
     for (const selector of selectors) {
       const explicit = [...scope.querySelectorAll(selector)].filter(visible);
-      if (explicit.length > 0) return inDomOrder(explicit);
+      if (explicit.length > 0) {
+        if (role) matchedSelectors[role] = selector;
+        return inDomOrder(explicit);
+      }
     }
-    return inDomOrder(directionalCandidates.filter(
+    const named = inDomOrder(directionalCandidates.filter(
       (element) => namePattern.test(accessibleName(element)),
     ));
+    if (role) matchedSelectors[role] = named.length > 0 ? 'accessible-directional-name' : null;
+    return named;
+  };
+  const modeToggle = () => {
+    const explicit = firstVisibleMatch(${JSON.stringify(MODE_TOGGLE_SELECTORS)}, 'mode_toggle');
+    if (explicit) return explicit;
+    const named = allInteractive.filter(visible).find(
+      (element) => /\\b(present|presenter|browse|reading)\\b.*\\bmode\\b|\\bmode\\b.*\\b(present|presenter|browse|reading)\\b/i
+        .test(accessibleName(element)),
+    );
+    if (named) matchedSelectors.mode_toggle = 'accessible-mode-name';
+    return named || null;
   };
 `
 }
@@ -260,7 +308,15 @@ const mode = await page.eval(() => {
   return browsing ? 'browse' : 'present';
 });
 if (mode !== requiredMode) {
-  await page.press('p');
+  const usedControl = await page.eval(() => {
+    const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
+${navigationDiscoverySource()}
+    const toggle = modeToggle();
+    if (!toggle) return false;
+    toggle.click();
+    return true;
+  });
+  if (!usedControl) await page.press('p');
   await page.wait(100);
 }
 console.log(JSON.stringify(true));
@@ -435,12 +491,21 @@ const captured = await page.eval(() => {
   const explicitMode = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
     ?.getAttribute('data-presentation-mode');
 ${navigationDiscoverySource()}
-  const title = firstVisibleMatch(${JSON.stringify(TITLE_SELECTORS)});
-  const caption = firstVisibleMatch(${JSON.stringify(CAPTION_SELECTORS)});
-  const toc = firstVisibleMatch(${JSON.stringify(TOC_SELECTORS)});
-  const progressChrome = firstVisibleMatch(${JSON.stringify(PROGRESS_SELECTORS)});
-  const previousMatches = findDirectionalControls(${JSON.stringify(PREVIOUS_SELECTORS)}, /^(previous|prev|back)\\b/i);
-  const nextMatches = findDirectionalControls(${JSON.stringify(NEXT_SELECTORS)}, /^next\\b/i);
+  const title = firstVisibleMatch(${JSON.stringify(TITLE_SELECTORS)}, 'title');
+  // Which element a presentation uses for the deck title and which for the
+  // active step title is its own choice, so report every visible title-bearing
+  // text and let the probe ask whether the step title is exposed at all.
+  const titleTexts = [...new Set(${JSON.stringify(TITLE_TEXT_SELECTORS)}
+    .flatMap((selector) => [...scope.querySelectorAll(selector)])
+    .filter(visible)
+    .map((element) => element.textContent?.trim() || '')
+    .filter(Boolean))].slice(0, 24);
+  const caption = firstVisibleMatch(${JSON.stringify(CAPTION_SELECTORS)}, 'caption');
+  const toc = firstVisibleMatch(${JSON.stringify(TOC_SELECTORS)}, 'toc');
+  const progressChrome = firstVisibleMatch(${JSON.stringify(PROGRESS_SELECTORS)}, 'progress_chrome');
+  const previousMatches = findDirectionalControls(${JSON.stringify(PREVIOUS_SELECTORS)}, /^(previous|prev|back)\\b/i, 'previous');
+  const nextMatches = findDirectionalControls(${JSON.stringify(NEXT_SELECTORS)}, /^next\\b/i, 'next');
+  modeToggle();
   const previous = previousMatches[0] || null;
   const next = nextMatches[0] || null;
   const navigationAmbiguities = [
@@ -451,7 +516,7 @@ ${navigationDiscoverySource()}
   const controlStates = controls.map((control) => ({
     name: accessibleName(control),
     role: control.getAttribute('role') || control.tagName.toLowerCase(),
-    ariaCurrent: control.getAttribute('aria-current') === 'step',
+    ariaCurrent: ['step', 'true'].includes(control.getAttribute('aria-current')),
     focusable: !control.disabled && control.tabIndex >= 0,
   }));
   const entityOccurrences = new Map();
@@ -493,13 +558,24 @@ ${navigationDiscoverySource()}
       return base + ':' + occurrence;
     })
     .filter(Boolean);
+  const declaredSceneId = () => {
+    for (const selector of ${JSON.stringify(SCENE_ID_SELECTORS)}) {
+      const attribute = selector.slice(1, -1);
+      for (const element of [presentation, ...scope.querySelectorAll(selector)]) {
+        const value = element?.getAttribute(attribute)?.trim();
+        if (value && !['true', 'false'].includes(value.toLowerCase())) return value;
+      }
+    }
+    return null;
+  };
   const focused = accessibleName(document.activeElement) || null;
   return {
     stepIndex: Number(progress?.getAttribute('data-step-index')),
     stepCount: Number(progress?.getAttribute('data-step-count')),
     title: title?.textContent?.trim() || '',
+    titleTexts,
     caption: caption?.textContent?.trim() || '',
-    sceneId: presentation?.getAttribute('data-presentation') || location.pathname,
+    sceneId: declaredSceneId(),
     entityIds,
     titleProminent: visible(title),
     mode: explicitMode === 'present' || explicitMode === 'browse'
@@ -513,6 +589,7 @@ ${navigationDiscoverySource()}
     controls: controlStates,
     focused,
     viewport: { width: window.innerWidth, height: window.innerHeight },
+    matchedSelectors,
     navigationAmbiguities,
   };
 });
@@ -582,8 +659,22 @@ console.log(JSON.stringify(dispatched));
 `)
     },
 
+    // A presentation owns its own mode affordance. Reach for the key only when
+    // no mode control is discoverable, rather than requiring one keybinding.
     async toggleMode() {
-      await run("await page.press('p'); await page.wait(50); console.log(JSON.stringify(true));")
+      await run(`
+const usedControl = await page.eval(() => {
+  const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
+${navigationDiscoverySource()}
+  const toggle = modeToggle();
+  if (!toggle) return false;
+  toggle.click();
+  return true;
+});
+if (!usedControl) await page.press('p');
+await page.wait(50);
+console.log(JSON.stringify(usedControl));
+`)
     },
 
     async failures() {

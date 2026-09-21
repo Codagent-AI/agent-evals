@@ -1,6 +1,6 @@
 {
   "rubric_id": "and-scene-automated-product",
-  "version": "3.12.0",
+  "version": "4.0.0",
   "total_points": 100,
   "automated_points": 70,
   "human_points": 30,
@@ -170,10 +170,11 @@
           "id": "scene-fixed-canvas-uniform-fit",
           "title": "Fixed-canvas uniform viewport fitting",
           "points": 1,
-          "evaluator": "deterministic-browser",
+          "evaluator": "llm-source-review",
+          "job": "scene-kit",
           "criteria": ["canvas-uniform-scaling"],
           "review_guidance": [
-            "Measure the rendered canvas against its untransformed authored dimensions at wide and 64×64 viewports. Require equal horizontal and vertical scale and require its bounds to remain inside every clipping ancestor and the viewport."
+            "Judge whether the delivered fit mechanism scales the authored canvas by one factor on both axes and keeps it inside its available bounds as the viewport shrinks. Cite the fit computation and its consumer. Do not require a particular rendering at an extreme viewport: an unreadably small viewport is not a presentation viewport, and how the kit degrades there is a design judgment for human review."
           ]
         },
         {

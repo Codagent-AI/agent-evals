@@ -21,10 +21,13 @@ import { hashJson } from './persistence.mjs'
 // both are bounded before they reach a rationale, an artifact, or a report.
 export const MAX_EVIDENCE_CHARS = 200
 export const MAX_STEP_COUNT = 50
-const WIDE_VIEWPORT = { width: 1280, height: 720 }
-const NARROW_CANVAS_VIEWPORT = { width: 64, height: 64 }
-const GEOMETRY_TOLERANCE_PX = 1
-const SCALE_TOLERANCE = 0.001
+// One bounded observation per driver read, so a deduction stays adjudicable
+// from the retained artifact without replaying the run.
+// A probe may walk every step in both modes, so the bound has to cover two
+// full traversals plus the observations that establish each session. Reaching
+// it drops evidence rather than changing a verdict, so the overflow is counted
+// and published instead of passing silently.
+const MAX_PROBE_OBSERVATIONS = 2 * MAX_STEP_COUNT + 16
 
 export const DETERMINISTIC_BROWSER_CRITERIA = [
   'demo-route-and-registration',
@@ -41,7 +44,6 @@ export const DETERMINISTIC_BROWSER_CRITERIA = [
   'demo-mode-interaction-reliability',
   'demo-control-semantics',
   'demo-focus-and-keyboard-accessibility',
-  'canvas-uniform-scaling',
 ]
 
 const PROBE_REQUIREMENTS = {
@@ -59,7 +61,6 @@ const PROBE_REQUIREMENTS = {
   'demo-mode-interaction-reliability': { mode: 'present', position: 0 },
   'demo-control-semantics': { mode: 'browse', position: 0 },
   'demo-focus-and-keyboard-accessibility': { mode: 'browse', position: 0 },
-  'canvas-uniform-scaling': { mode: 'present', position: 0 },
 }
 
 const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
@@ -68,14 +69,55 @@ const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&
 // candidate string cannot reflow a log line, an artifact, or a report cell.
 const NOISE = new RegExp('[\\u0000-\\u001f\\u007f\\s]+', 'g')
 
+function truncate(text, maxChars) {
+  return text.length > maxChars ? `${text.slice(0, maxChars - 1)}…` : text
+}
+
+// Collapsing and truncating candidate text is idempotent, so it is safe to
+// apply wherever text is collected or retained. Escaping is not, so it lives
+// in `bounded` and is applied exactly once, at the edge that emits a rationale
+// or a report cell.
+export function normalizeEvidence(value, maxChars = MAX_EVIDENCE_CHARS) {
+  const text = typeof value === 'string' ? value : JSON.stringify(value) ?? String(value)
+  return truncate(text.replace(NOISE, ' ').trim(), maxChars)
+}
+
 // Candidate text is evidence, never markup and never a prompt instruction.
 export function bounded(value, maxChars = MAX_EVIDENCE_CHARS) {
-  const text = typeof value === 'string' ? value : JSON.stringify(value) ?? String(value)
-  const escaped = text
-    .replace(NOISE, ' ')
+  const escaped = normalizeEvidence(value, maxChars)
     .replace(/[&<>"']/g, (character) => ESCAPES[character])
+  return truncate(escaped, maxChars)
+}
+
+// Normative titles and captions are compared for sameness of text, not of
+// typography. A curly apostrophe or a collapsed line break is not a defect.
+const PUNCTUATION = new Map([
+  ['\u2018', "'"], ['\u2019', "'"], ['\u201a', "'"], ['\u201b', "'"], ['\u2032', "'"],
+  ['\u201c', '"'], ['\u201d', '"'], ['\u201e', '"'], ['\u201f', '"'], ['\u2033', '"'],
+  ['\u2010', '-'], ['\u2011', '-'], ['\u2012', '-'], ['\u2013', '-'], ['\u2014', '-'],
+  ['\u2015', '-'], ['\u2212', '-'], ['\u00a0', ' '], ['\u2026', '...'],
+])
+
+export function normalizeText(value) {
+  return String(value ?? '')
+    .normalize('NFKC')
+    .replace(/[\u2010-\u2015\u2018-\u201f\u2026\u2032\u2033\u00a0\u2212]/g, (c) => PUNCTUATION.get(c) ?? c)
+    .replace(NOISE, ' ')
     .trim()
-  return escaped.length > maxChars ? `${escaped.slice(0, maxChars - 1)}…` : escaped
+}
+
+function sameText(left, right) {
+  return normalizeText(left) === normalizeText(right)
+}
+
+// Which element carries the deck title and which carries the active step title
+// is the presentation's choice. The question a deterministic check can answer
+// is whether the active step's title is exposed at all.
+function exposesTitle(state, expected) {
+  const candidates = Array.isArray(state?.titleTexts) && state.titleTexts.length > 0
+    ? state.titleTexts
+    : [state?.title]
+  return candidates.some((candidate) => sameText(candidate, expected))
 }
 
 function missingEvidence(message) {
@@ -133,39 +175,43 @@ function overlaps(a, b) {
   return a.some((entry) => b.includes(entry))
 }
 
-function validCanvasGeometry(geometry) {
-  return ['authored', 'rendered', 'available', 'scale'].every((key) => geometry?.[key])
-    && [
-      geometry.authored.width,
-      geometry.authored.height,
-      geometry.rendered.left,
-      geometry.rendered.top,
-      geometry.rendered.right,
-      geometry.rendered.bottom,
-      geometry.available.left,
-      geometry.available.top,
-      geometry.available.right,
-      geometry.available.bottom,
-      geometry.scale.x,
-      geometry.scale.y,
-    ].every(Number.isFinite)
-    && geometry.authored.width > 0
-    && geometry.authored.height > 0
-    && geometry.scale.x > 0
-    && geometry.scale.y > 0
+function summarizeControls(controls) {
+  return (controls ?? []).slice(0, MAX_STEP_COUNT).map((control) => ({
+    name: normalizeEvidence(control?.name ?? ''),
+    role: normalizeEvidence(control?.role ?? ''),
+    aria_current: control?.ariaCurrent === true,
+    focusable: control?.focusable === true,
+  }))
 }
 
-function canvasFitsUniformly(geometry) {
-  if (!validCanvasGeometry(geometry)) return false
-  return Math.abs(geometry.scale.x - geometry.scale.y) <= SCALE_TOLERANCE
-    && geometry.rendered.left >= geometry.available.left - GEOMETRY_TOLERANCE_PX
-    && geometry.rendered.top >= geometry.available.top - GEOMETRY_TOLERANCE_PX
-    && geometry.rendered.right <= geometry.available.right + GEOMETRY_TOLERANCE_PX
-    && geometry.rendered.bottom <= geometry.available.bottom + GEOMETRY_TOLERANCE_PX
+// What the evaluator actually saw. A reviewer auditing a deduction needs the
+// viewport it was measured at, the chrome it found, and which selector or
+// discovery strategy produced each navigation role.
+function summarizeState(state) {
+  return {
+    viewport: state?.viewport ?? null,
+    mode: state?.mode ?? null,
+    step_index: state?.stepIndex ?? null,
+    step_count: state?.stepCount ?? null,
+    title: normalizeEvidence(state?.title ?? ''),
+    title_texts: (state?.titleTexts ?? []).slice(0, 24).map((text) => normalizeEvidence(text)),
+    caption: normalizeEvidence(state?.caption ?? ''),
+    scene_id: typeof state?.sceneId === 'string' ? normalizeEvidence(state.sceneId) : null,
+    entity_ids: (state?.entityIds ?? []).slice(0, MAX_STEP_COUNT).map((id) => normalizeEvidence(id)),
+    title_prominent: state?.titleProminent ?? null,
+    caption_visible: state?.captionVisible ?? null,
+    toc_visible: state?.tocVisible ?? null,
+    progress_visible: state?.progressVisible ?? null,
+    previous_visible: state?.previousVisible ?? null,
+    next_visible: state?.nextVisible ?? null,
+    focused: state?.focused == null ? null : normalizeEvidence(state.focused),
+    controls: summarizeControls(state?.controls),
+    matched_selectors: state?.matchedSelectors ?? null,
+  }
 }
 
 export async function runBrowserEvaluation({
-  driver,
+  driver: baseDriver,
   contract = DEMO_CONTRACT,
   build = null,
   verification = null,
@@ -186,6 +232,30 @@ export async function runBrowserEvaluation({
     evidenceArtifacts.verification,
     'candidate verification',
   )
+  let currentProbeObservations = []
+  let currentProbeObservationsDropped = 0
+  const record = (kind, value) => {
+    if (currentProbeObservations.length >= MAX_PROBE_OBSERVATIONS) {
+      currentProbeObservationsDropped += 1
+      return value
+    }
+    currentProbeObservations.push({ kind, ...(kind === 'state' ? summarizeState(value) : { value }) })
+    return value
+  }
+  // The evaluator reads the page through this wrapper so that every probe's
+  // artifact carries the observations its verdict was derived from.
+  const driver = {
+    ...baseDriver,
+    async state() {
+      return record('state', await baseDriver.state())
+    },
+    async routes() {
+      const routes = await baseDriver.routes()
+      record('routes', Array.isArray(routes) ? routes.slice(0, 20).map((route) => normalizeEvidence(route)) : normalizeEvidence(routes))
+      return routes
+    },
+  }
+
   const boundsExceeded = []
   const failures = new Set()
   let failureReportingAvailable = true
@@ -266,17 +336,35 @@ export async function runBrowserEvaluation({
   }
 
   const probes = {
+    // Registration is judged by whether the declared route is reachable and
+    // operable. Landing-page links are recorded, not required: a route can be
+    // registered in a router without the index linking to it, and an adapter
+    // that answers with its own diagnostic is a harness failure, not a missing
+    // route.
     'demo-route-and-registration': async () => {
       const routes = await driver.routes()
-      if (!Array.isArray(routes) || !routes.includes(contract.route)) {
-        return [false, `the demo route ${contract.route} is not registered`, (routes ?? []).slice(0, 10)]
+      const diagnostic = typeof routes === 'string'
+        ? routes
+        : (Array.isArray(routes) ? routes : []).find(isBrowserInfrastructureDiagnostic)
+      if (typeof diagnostic === 'string') {
+        throw browserInfrastructureFailure(
+          `browser adapter returned adapter output in place of a route list: ${bounded(diagnostic)}`,
+        )
       }
+      const discovered = Array.isArray(routes)
+        ? routes.filter((route) => typeof route === 'string')
+        : []
+      const linked = discovered.includes(contract.route)
       const page = await session(PROBE_REQUIREMENTS['demo-route-and-registration'])
       const state = await page.state()
+      const reachable = Number.isInteger(state.stepIndex) && state.stepCount > 0
       return [
-        Number.isInteger(state.stepIndex),
-        `the demo route ${contract.route} is registered and reachable`,
+        reachable,
+        reachable
+          ? `the demo route ${contract.route} is registered and reachable${linked ? ' and linked from the landing page' : ' without a landing-page link'}`
+          : `the demo route ${contract.route} did not expose an operable step position`,
         [contract.route],
+        { discovered_routes: discovered.slice(0, 20), route_linked_from_landing_page: linked },
       ]
     },
 
@@ -294,7 +382,8 @@ export async function runBrowserEvaluation({
       await session({ mode: 'present', position: 0 })
       const presentStates = await walk()
       const mismatch = contract.step_titles.findIndex((title, position) => (
-        browseStates[position]?.title !== title && presentStates[position]?.title !== title
+        !sameText(browseStates[position]?.title, title)
+          && !sameText(presentStates[position]?.title, title)
       ))
       if (mismatch !== -1) {
         return [
@@ -314,7 +403,7 @@ export async function runBrowserEvaluation({
       await session(PROBE_REQUIREMENTS['demo-required-scene-content'])
       const states = await walk()
       const mismatch = states.findIndex(
-        (state, position) => state.caption?.trim() !== contract.step_captions[position]
+        (state, position) => !sameText(state.caption, contract.step_captions[position])
           || !(state.entityIds ?? []).length,
       )
       if (mismatch !== -1) {
@@ -334,17 +423,40 @@ export async function runBrowserEvaluation({
     'demo-evolving-scene-structure': async () => {
       await session(PROBE_REQUIREMENTS['demo-evolving-scene-structure'])
       const states = await walk()
-      const sceneIds = new Set(states.map(({ sceneId }) => sceneId))
-      if (sceneIds.size !== 1) {
-        return [false, `the demo uses ${sceneIds.size} scenes instead of one evolving scene`, [...sceneIds].slice(0, 5)]
+      // Only a scene identity the presentation actually declares can be
+      // compared. Substituting the document path made every candidate agree
+      // with itself, so the criterion rested on nothing.
+      const declared = states
+        .map(({ sceneId }) => sceneId)
+        .filter((sceneId) => typeof sceneId === 'string' && sceneId.trim().length > 0)
+      const sceneIds = new Set(declared)
+      const identityDeclared = declared.length === states.length && states.length > 0
+      const observations = {
+        scene_identity_declared: identityDeclared,
+        scene_ids: [...sceneIds].slice(0, 5).map((sceneId) => normalizeEvidence(sceneId)),
+      }
+      if (identityDeclared && sceneIds.size !== 1) {
+        return [
+          false,
+          `the demo uses ${sceneIds.size} scenes instead of one evolving scene`,
+          [...sceneIds].slice(0, 5),
+          observations,
+        ]
       }
       const replaced = states.findIndex(
         (state, position) => position > 0 && !overlaps(state.entityIds ?? [], states[position - 1].entityIds ?? []),
       )
       if (replaced !== -1) {
-        return [false, `step ${replaced + 1} replaces every entity instead of evolving the scene`, []]
+        return [false, `step ${replaced + 1} replaces every entity instead of evolving the scene`, [], observations]
       }
-      return [true, 'the demo is implemented as one scene whose entities persist across steps', [...sceneIds]]
+      return [
+        true,
+        identityDeclared
+          ? 'the demo is implemented as one scene whose entities persist across steps'
+          : 'the demo declares no scene identity and its entities persist across every step',
+        identityDeclared ? [...sceneIds] : [contract.route],
+        observations,
+      ]
     },
 
     'quality-captions-and-navigation': async () => {
@@ -359,33 +471,45 @@ export async function runBrowserEvaluation({
       return [true, 'every step exposes a caption and a navigation control', []]
     },
 
+    // Mechanical facts only: present mode is entered and it exposes the active
+    // step's title. Whether that title is visually prominent is a design
+    // judgment owned by `mode-present-title-focused` and human review.
     'demo-present-mode-behavior': async () => {
       const page = await session(PROBE_REQUIREMENTS['demo-present-mode-behavior'])
       const state = await page.state()
+      const activeTitle = exposesTitle(state, contract.step_titles[state.stepIndex])
       return [
-        state.mode === 'present' && state.titleProminent === true,
-        `present mode reports mode ${bounded(state.mode)} with title prominence ${state.titleProminent}`,
+        state.mode === 'present' && activeTitle,
+        `present mode reports mode ${bounded(state.mode)} with the active step title ${activeTitle}`,
         [],
       ]
     },
 
+    // Mechanical facts only: browse mode is entered, the active step's caption
+    // is readable, and every step can be reached from a discovered navigation
+    // region. Showing the deck title rather than the step title, making the
+    // table of contents responsive, and hiding rather than disabling a boundary
+    // control are all legitimate designs the fixture does not rule out, so they
+    // are judged by `mode-browse-reading-focused` and human review instead.
     'demo-browse-mode-behavior': async () => {
       const page = await session(PROBE_REQUIREMENTS['demo-browse-mode-behavior'])
       const state = await page.state()
-      const activeTitle = contract.step_titles[state.stepIndex]
       const controls = state.controls ?? []
+      // Directional navigation is judged where the probe actually stands: a
+      // design that hides rather than disables the control at a boundary is
+      // legitimate, so Previous is only required away from the first step and
+      // Next only away from the last.
+      const atFirstStep = state.stepIndex === 0
+      const atLastStep = state.stepIndex === state.stepCount - 1
+      const everyStepReachable = controls.length === state.stepCount
+        || ((atFirstStep || state.previousVisible === true)
+          && (atLastStep || state.nextVisible === true))
       const complete = state.mode === 'browse'
-        && state.titleProminent === true
-        && state.title === activeTitle
         && state.captionVisible === true
-        && state.tocVisible === true
-        && state.progressVisible === true
-        && state.previousVisible === true
-        && state.nextVisible === true
-        && controls.length === state.stepCount
+        && everyStepReachable
       return [
         complete,
-        `browse mode ${bounded(state.mode)} at viewport ${bounded(state.viewport?.width)}×${bounded(state.viewport?.height)}; active title ${state.title === activeTitle}; caption ${state.captionVisible}; toc ${state.tocVisible}; progress ${state.progressVisible}; previous/next ${state.previousVisible}/${state.nextVisible}; controls ${controls.length}/${state.stepCount}`,
+        `browse mode ${bounded(state.mode)} at viewport ${bounded(state.viewport?.width)}×${bounded(state.viewport?.height)}; caption ${state.captionVisible}; controls ${controls.length}/${state.stepCount}; previous/next ${state.previousVisible}/${state.nextVisible}; toc ${state.tocVisible}; progress ${state.progressVisible}`,
         [],
       ]
     },
@@ -529,37 +653,6 @@ export async function runBrowserEvaluation({
       const after = (await keyboardPage.state()).stepIndex
       return [after === before + 1, `focus succeeded and keyboard navigation moved ${before} → ${after}`, []]
     },
-
-    'canvas-uniform-scaling': async () => {
-      if (typeof driver.resize !== 'function' || typeof driver.canvasGeometry !== 'function') {
-        throw browserInfrastructureFailure('browser adapter cannot measure canvas geometry')
-      }
-      await session(PROBE_REQUIREMENTS['canvas-uniform-scaling'])
-      const wide = await driver.canvasGeometry()
-      let narrow
-      try {
-        await driver.resize(NARROW_CANVAS_VIEWPORT.width, NARROW_CANVAS_VIEWPORT.height)
-        await driver.settle?.()
-        narrow = await driver.canvasGeometry()
-      } finally {
-        await driver.resize(WIDE_VIEWPORT.width, WIDE_VIEWPORT.height)
-      }
-      const pass = canvasFitsUniformly(wide) && canvasFitsUniformly(narrow)
-      const observed = (geometry) => validCanvasGeometry(geometry)
-        ? `${geometry.viewport?.width ?? '?'}×${geometry.viewport?.height ?? '?'} viewport: `
-          + `scale ${geometry.scale.x}×${geometry.scale.y}, rendered `
-          + `${geometry.rendered.width}×${geometry.rendered.height}, available `
-          + `${geometry.available.width}×${geometry.available.height}`
-        : 'canvas geometry unavailable'
-      return [
-        pass,
-        pass
-          ? 'the authored canvas uses one uniform scale and remains inside the wide and 64×64 available bounds'
-          : 'the authored canvas is distorted or overflows its available bounds at a measured viewport',
-        [observed(wide), observed(narrow)],
-        { wide, narrow },
-      ]
-    },
   }
 
   const criteria = []
@@ -586,16 +679,21 @@ export async function runBrowserEvaluation({
       const record = { ...reused, reused: true }
       probeRecords.push(record)
       criteria.push(record.result)
-      for (const failure of record.failures ?? []) failures.add(bounded(failure))
+      for (const failure of record.failures ?? []) failures.add(normalizeEvidence(failure))
       if (record.failure_reporting_available === false) failureReportingAvailable = false
       continue
     }
 
     currentProbeSessions = []
+    currentProbeObservations = []
+    currentProbeObservationsDropped = 0
     let criterion
     try {
       const [pass, rationale, evidence, observations = {}] = await probes[id]()
-      criterion = verdict(id, pass, rationale, [...evidence, probeCitation(id)])
+      // A probe that cites a single string is citing one artifact, not a list
+      // of characters.
+      const citations = Array.isArray(evidence) ? evidence : [evidence]
+      criterion = verdict(id, pass, rationale, [...citations, probeCitation(id)])
       criterion.observations = observations
     } catch (error) {
       if (error?.owner === 'evaluation-harness') throw error
@@ -616,7 +714,7 @@ export async function runBrowserEvaluation({
         if (isBrowserInfrastructureDiagnostic(failure)) {
           throw browserInfrastructureFailure(failure)
         }
-        const safe = bounded(failure)
+        const safe = normalizeEvidence(failure)
         failures.add(safe)
         probeFailures.push(safe)
       }
@@ -640,6 +738,8 @@ export async function runBrowserEvaluation({
       established_state: firstSession.established_state,
       settled_state: firstSession.settled_state,
       sessions: currentProbeSessions,
+      probe_observations: currentProbeObservations,
+      probe_observations_dropped: currentProbeObservationsDropped,
       result: criterion,
       failures: probeFailures,
       failure_reporting_available: probeFailureReportingAvailable,
@@ -656,6 +756,8 @@ export async function runBrowserEvaluation({
       established_state: firstSession.established_state,
       settled_state: firstSession.settled_state,
       sessions: currentProbeSessions,
+      probe_observations: currentProbeObservations,
+      probe_observations_dropped: currentProbeObservationsDropped,
       input_sha256: inputSha256,
       result: criterion,
       failures: probeFailures,

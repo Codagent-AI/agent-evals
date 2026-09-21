@@ -337,3 +337,82 @@ test('the AXI driver reports a nonzero status when stderr and stdout are empty',
 
   await assert.rejects(driver.routes(), /exited with status 7/)
 })
+
+// The adapter's page scripts run in Chromium, so the suite inspects the source
+// it emits. These assertions pin the discovery contract the evaluator depends
+// on rather than one candidate's markup.
+async function emitted(call) {
+  const { createAxiBrowserDriver } = await import(
+    '../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs'
+  )
+  const calls = []
+  const driver = createAxiBrowserDriver({
+    baseUrl: 'http://127.0.0.1:4319/',
+    command: async (args, input) => {
+      calls.push({ args, input })
+      return { status: 0, stdout: `${JSON.stringify(true)}\n`, stderr: '' }
+    },
+  })
+  await call(driver)
+  return calls.filter(({ args }) => args[0] === 'run').map(({ input }) => input).join('\n')
+}
+
+test('the AXI driver accepts every ARIA-valid current-step value', async () => {
+  const source = await emitted((driver) => driver.state())
+
+  assert.match(source, /\['step', 'true'\]\.includes\(control\.getAttribute\('aria-current'\)\)/)
+})
+
+test('the AXI driver derives a scene identity only from a declared, non-boolean value', async () => {
+  const source = await emitted((driver) => driver.state())
+
+  assert.match(source, /sceneId: declaredSceneId\(\)/)
+  assert.doesNotMatch(source, /sceneId:[^\n]*location\.pathname/)
+  assert.match(source, /\['true', 'false'\]\.includes\(value\.toLowerCase\(\)\)/)
+  assert.match(source, /data-presentation-scene-id/)
+})
+
+test('the AXI driver reports which selector or strategy matched each navigation role', async () => {
+  const source = await emitted((driver) => driver.state())
+
+  assert.match(source, /matchedSelectors,/)
+  for (const role of ['title', 'caption', 'toc', 'progress_chrome', 'previous', 'next']) {
+    assert.ok(source.includes(`'${role}'`), role)
+  }
+  assert.match(source, /semantic-progress-region/)
+  assert.match(source, /titleTexts,/)
+  assert.match(source, /presentation-owned-control-hook/)
+  assert.match(source, /accessible-step-name/)
+})
+
+test('the AXI driver changes modes through the presentation control before any keybinding', async () => {
+  for (const call of [(driver) => driver.toggleMode(), (driver) => driver.setMode('browse')]) {
+    const source = await emitted(call)
+
+    assert.match(source, /const toggle = modeToggle\(\);/)
+    assert.match(source, /toggle\.click\(\);/)
+    assert.match(source, /if \(!usedControl\) await page\.press\('p'\);/)
+    assert.ok(
+      source.indexOf('modeToggle()') < source.indexOf("page.press('p')"),
+      'the mode control is tried before the keyboard fallback',
+    )
+  }
+})
+
+test('the AXI driver rejects an adapter diagnostic in place of a route list', async () => {
+  const { createAxiBrowserDriver } = await import(
+    '../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs'
+  )
+  const driver = createAxiBrowserDriver({
+    baseUrl: 'http://127.0.0.1:4319/',
+    command: async (args) => (args[0] === 'resize'
+      ? { status: 0, stdout: '', stderr: '' }
+      : {
+        status: 0,
+        stdout: `${JSON.stringify("Could not find Google Chrome executable for channel 'stable' at:")}\n`,
+        stderr: '',
+      }),
+  })
+
+  await assert.rejects(driver.routes(), (error) => error.code === 'browser-driver-failed')
+})
