@@ -214,6 +214,26 @@ function failureMessage(result) {
     || `chrome-devtools-axi exited with status ${result?.status ?? 'unknown'}`
 }
 
+// chrome-devtools-axi builds do not agree on `page.wait`: in some of them every
+// form of it fails and takes the rest of the script with it. Waiting through
+// primitives every build provides keeps the driver independent of the adapter
+// version, which the suite does not pin.
+function sleepSource(ms) {
+  return `await new Promise((resolve) => setTimeout(resolve, ${ms}));`
+}
+
+function waitForSelectorSource(selector, timeout) {
+  const probe = JSON.stringify(`!!document.querySelector(${JSON.stringify(selector)})`)
+  return `{
+  const deadline = Date.now() + ${timeout};
+  for (;;) {
+    if (await page.eval(${probe})) break;
+    if (Date.now() >= deadline) throw new Error(${JSON.stringify(`timed out waiting for ${selector}`)});
+    ${sleepSource(50)}
+  }
+}`
+}
+
 export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {}) {
   const base = new URL(baseUrl)
 
@@ -252,7 +272,7 @@ export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {
     async routes() {
       const routes = await run(`
 await page.open(${JSON.stringify(base.href)});
-await page.wait(50);
+${sleepSource(50)}
 const routes = await page.eval(() => [...document.querySelectorAll('a[href]')]
   .map((link) => new URL(link.href, location.href))
   .filter((url) => url.origin === location.origin)
@@ -270,7 +290,7 @@ console.log(JSON.stringify([...new Set(routes)]));
       await invoke(['resize', '1280', '720'])
       return run(`
 const opened = await page.open(${JSON.stringify(routeUrl(route))});
-await page.wait('[data-step-count]', 30000);
+${waitForSelectorSource('[data-step-count]', 30000)}
 const initialMode = await page.eval(() => {
   const explicit = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
     ?.getAttribute('data-presentation-mode');
@@ -317,7 +337,7 @@ ${navigationDiscoverySource()}
     return true;
   });
   if (!usedControl) await page.press('p');
-  await page.wait(100);
+  ${sleepSource(100)}
 }
 console.log(JSON.stringify(true));
 `)
@@ -328,21 +348,20 @@ console.log(JSON.stringify(true));
         throw new BrowserDriverError(`invalid presentation position: ${requiredPosition}`)
       }
       return run(`
-const requiredPosition = ${requiredPosition};
 const readPosition = () => page.eval(() => Number(
   document.querySelector('[data-step-count]')?.getAttribute('data-step-index'),
 ));
 const positionedByControl = await page.eval(() => {
   const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
 ${navigationDiscoverySource()}
-  const target = controls[requiredPosition];
+  const target = controls[${requiredPosition}];
   if (!target) return false;
   target.click();
   return true;
 });
-if (positionedByControl) await page.wait(100);
+if (positionedByControl) ${sleepSource(100)}
 let observedPosition = await readPosition();
-if (observedPosition !== requiredPosition) {
+if (observedPosition !== ${requiredPosition}) {
   const stepCount = await page.eval(() => Number(
     document.querySelector('[data-step-count]')?.getAttribute('data-step-count'),
   ));
@@ -351,18 +370,18 @@ if (observedPosition !== requiredPosition) {
   }
   for (let index = 0; index < stepCount; index += 1) {
     await page.press('ArrowLeft');
-    await page.wait(100);
+    ${sleepSource(100)}
   }
-  for (let index = 0; index < requiredPosition; index += 1) {
+  for (let index = 0; index < ${requiredPosition}; index += 1) {
     await page.press('ArrowRight');
-    await page.wait(100);
+    ${sleepSource(100)}
   }
   observedPosition = await readPosition();
 }
-if (observedPosition !== requiredPosition) {
+if (observedPosition !== ${requiredPosition}) {
   throw new Error(
     'required navigation position was not established: expected '
-      + requiredPosition + ', observed ' + observedPosition,
+      + ${requiredPosition} + ', observed ' + observedPosition,
   );
 }
 console.log(JSON.stringify(true));
@@ -419,7 +438,7 @@ for (let attempt = 0; attempt < 50; attempt += 1) {
     break;
   }
   previous = state.signature;
-  await page.wait(100);
+  ${sleepSource(100)}
   if (attempt === 49) throw new Error('timed out waiting for a settled browser state');
 }
 `)
@@ -614,11 +633,15 @@ const activated = await page.eval(() => {
 ${navigationDiscoverySource()}
   const target = controls.find((element) => accessibleName(element) === ${JSON.stringify(name)});
   if (!target) return false;
+  // A pointer activation focuses the control before it fires. Reproducing that
+  // is what lets a probe observe a presentation that suppresses deck keys
+  // while one of its own controls holds focus.
+  target.focus();
   target.click();
   return true;
 });
 if (!activated) throw new Error('navigation control was not found');
-await page.wait(100);
+${sleepSource(100)}
 console.log(JSON.stringify(true));
 `)
     },
@@ -654,7 +677,7 @@ const dispatched = await page.eval(() => {
   target.dispatchEvent(new TouchEvent('touchend', { changedTouches: [touch(endX)], bubbles: true }));
   return true;
 });
-await page.wait(100);
+${sleepSource(100)}
 console.log(JSON.stringify(dispatched));
 `)
     },
@@ -672,7 +695,7 @@ ${navigationDiscoverySource()}
   return true;
 });
 if (!usedControl) await page.press('p');
-await page.wait(50);
+${sleepSource(50)}
 console.log(JSON.stringify(usedControl));
 `)
     },

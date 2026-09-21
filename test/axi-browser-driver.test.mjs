@@ -85,7 +85,7 @@ test('the AXI driver establishes mode and position explicitly and waits for sett
   assert.match(calls[0].input, /requiredMode/)
   assert.match(calls[0].input, /page\.press\('p'\)/)
   assert.match(calls[1].input, /data-presentation-progress-dot/)
-  assert.match(calls[1].input, /requiredPosition/)
+  assert.match(calls[1].input, /controls\[4\]/)
   assert.match(calls[1].input, /page\.press\('ArrowRight'\)/)
   assert.match(calls[1].input, /observedPosition/)
   assert.match(calls[2].input, /stableReads/)
@@ -93,7 +93,7 @@ test('the AXI driver establishes mode and position explicitly and waits for sett
   assert.match(calls[2].input, /iterations !== Infinity/)
   assert.doesNotMatch(calls[2].input, /document\.getAnimations/)
   assert.match(calls[2].input, /timed out waiting for a settled browser state/)
-  assert.doesNotMatch(calls[2].input, /^await page\.wait\(100\);/m)
+  assert.doesNotMatch(calls[2].input, /^await new Promise\(\(resolve\) => setTimeout\(resolve, 100\)\);/m)
 })
 
 test('the AXI driver records durable canvas geometry after an explicit viewport resize', async () => {
@@ -156,8 +156,8 @@ test('the AXI driver observes compatible stable presentation hooks without requi
     calls[1].input,
     /TouchEvent\('touchstart',[\s\S]*touches: \[touch\(startX\)\],[\s\S]*changedTouches: \[touch\(startX\)\]/,
   )
-  assert.match(calls[1].input, /page\.wait\(100\)/)
-  assert.match(calls[2].input, /page\.wait\(100\)/)
+  assert.match(calls[1].input, /setTimeout\(resolve, 100\)/)
+  assert.match(calls[2].input, /setTimeout\(resolve, 100\)/)
 })
 
 test('the AXI driver recognizes the delivered candidate hook vocabulary for modes and controls', async () => {
@@ -415,4 +415,40 @@ test('the AXI driver rejects an adapter diagnostic in place of a route list', as
   })
 
   await assert.rejects(driver.routes(), (error) => error.code === 'browser-driver-failed')
+})
+
+test('the AXI driver activates a control the way a pointer does', async () => {
+  // A real pointer activation focuses the control first. A presentation that
+  // suppresses deck keys while a control holds focus is a product defect the
+  // probe can only observe if the driver reproduces that focus.
+  const source = await emitted((driver) => driver.activate('Next step'))
+
+  assert.match(source, /target\.focus\(\);\s*\n?\s*target\.click\(\);/)
+})
+
+test('the AXI driver waits without the adapter-specific wait helper', async () => {
+  // `page.wait` is not implemented the same way across chrome-devtools-axi
+  // builds, and a script that calls it can fail wholesale. Waiting through
+  // primitives every build provides keeps the driver independent of the
+  // adapter's version.
+  const source = await emitted(async (driver) => {
+    await driver.open('how-to-make-a-presentation').catch(() => {})
+    await driver.activate('Next step').catch(() => {})
+    await driver.swipe('left').catch(() => {})
+    await driver.setMode('browse').catch(() => {})
+    await driver.press('ArrowRight').catch(() => {})
+  })
+
+  assert.doesNotMatch(source, /page\.wait\(/)
+  assert.match(source, /setTimeout\(/)
+})
+
+test('the AXI driver never reads a script constant inside a page callback', async () => {
+  // The script runs in the adapter and the callback runs in the page. Builds
+  // differ on whether the callback closes over the script's scope, so an
+  // interpolated value is embedded at its use site instead.
+  const source = await emitted((driver) => driver.setPosition(4).catch(() => {}))
+
+  assert.doesNotMatch(source, /const requiredPosition = /)
+  assert.match(source, /controls\[4\]/)
 })
