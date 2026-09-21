@@ -695,7 +695,9 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
           requireSourceCitations: request.source_audit === true,
           requireSourceCitationsFor: request.requireSourceCitationsFor ?? [],
         }), request.requireSourceCitationsFor ?? [], request.verified_source_paths ?? [])
-        if (request.source_audit) {
+        const fallbackPass = results.some((result) => result.verdict === 'pass'
+          && (request.requireSourceCitationsFor ?? []).includes(result.id))
+        if (request.source_audit || fallbackPass) {
           const currentCitations = results.flatMap((result) => result.citations ?? [])
           auditRequest = await buildSourceAuditRequest({
             request: activeRequest,
@@ -878,7 +880,7 @@ export async function runProductJudging({
           { requireSourceCitationsFor: requiredFallbackIds },
         )
         const verified = validateFallbackCitations(results, requiredFallbackIds, request.verified_source_paths)
-        if (requiredFallbackIds.length > 0 && request.source_audit && !fallbackAuditVerified(cached.audit_results, verified, requiredFallbackIds)) {
+        if (requiredFallbackIds.length > 0 && !fallbackAuditVerified(cached.audit_results, verified, requiredFallbackIds)) {
           throw new JudgeOutputError(`cached fallback ${id} lacks a confirmed source audit`)
         }
         judges[id] = verified
