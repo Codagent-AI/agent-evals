@@ -18,7 +18,7 @@ const DOCUMENTS = [
   'openspec/changes/create-and-scene/test-plan.md',
 ]
 
-async function fixtureRef() {
+export async function fixtureRef() {
   const text = await readFile(join(SUITE_DIR, 'run.sh'), 'utf8')
   const ref = text.match(/^FIXTURE_REF="\$\{FIXTURE_REF:-([^}]+)\}"$/m)?.[1]
   if (!ref) throw new Error('could not parse FIXTURE_REF from run.sh')
