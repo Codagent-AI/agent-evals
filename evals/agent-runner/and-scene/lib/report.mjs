@@ -58,6 +58,15 @@ function table(headings, rows) {
   return `<table><thead><tr>${head}</tr></thead><tbody>\n${body}\n</tbody></table>`
 }
 
+// The harness output an adjudication overturned. It is shown as raw data next
+// to the current gate record, never as the current rationale.
+function rawGateRecord(gate) {
+  if (gate?.adjudication_changed !== true) return ''
+  const evidence = (gate.raw_evidence ?? []).join(' | ')
+  return `raw verdict ${verdictCell(gate.raw_verdict)}: ${gate.raw_rationale ?? 'not recorded'}`
+    + (evidence ? ` — ${evidence}` : '')
+}
+
 function section(title, body) {
   return `<details><summary>${escapeHtml(title)}</summary>\n${body}\n</details>`
 }
@@ -598,10 +607,11 @@ export function renderReport(result, { current = null } = {}) {
     section(
       'Hard gates',
       table(
-        ['Gate', 'Requirement', 'Verdict', 'Rationale', 'Evidence'],
+        ['Gate', 'Requirement', 'Verdict', 'Rationale', 'Evidence', 'Raw adjudication data'],
         (result.score?.gates ?? []).map((gate) => [
           gate.id, gate.requirement ?? '', verdictCell(gate.verdict), gate.rationale ?? 'not observed',
           (gate.evidence ?? []).join(' | '),
+          rawGateRecord(gate),
         ]),
       )
       + table(

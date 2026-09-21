@@ -368,6 +368,55 @@ test('technical adjudication can correct an observed hard gate without replacing
   assert.equal(module.validateTechnicalAdjudicationSupersession(result, revised).valid, true)
 })
 
+test('technical adjudication separates a changed gate raw record from its revised record', async () => {
+  // A revised pass shown beside the failure it replaced reads as a
+  // contradictory current gate. The harness output survives as raw data.
+  const module = await adjudicationModule()
+  const result = candidateResult()
+  const outline = result.score.gates.find(({ id }) => id === 'verification-sample-outline')
+  outline.verdict = 'fail'
+  outline.rationale = 'the canonical nine-step sample must be registered'
+  outline.evidence = ['evidence/evaluator/browser-probes/demo-route-and-registration.json']
+  const build = result.score.gates.find(({ id }) => id === 'verification-build-whole-app')
+  build.rationale = 'the complete application built successfully'
+  build.evidence = ['phases/verification.json']
+  result.score.gates_passed = false
+  const review = {
+    ...approvedReview(),
+    gate_verdicts: Object.fromEntries(result.score.gates.map(({ id }) => [id, 'pass'])),
+  }
+
+  const revised = module.applyTechnicalAdjudication(result, review)
+
+  const revisedOutline = revised.score.gates.find(({ id }) => id === outline.id)
+  assert.equal(revisedOutline.raw_rationale, 'the canonical nine-step sample must be registered')
+  assert.deepEqual(revisedOutline.raw_evidence, [
+    'evidence/evaluator/browser-probes/demo-route-and-registration.json',
+  ])
+  assert.equal(revisedOutline.rationale, review.rationale)
+  assert.deepEqual(revisedOutline.evidence, [
+    `technical adjudication approved by ${review.approved_by} at ${review.approved_at}`,
+  ])
+
+  const revisedBuild = revised.score.gates.find(({ id }) => id === build.id)
+  assert.equal(revisedBuild.rationale, 'the complete application built successfully')
+  assert.deepEqual(revisedBuild.evidence, ['phases/verification.json'])
+  assert.equal(Object.hasOwn(revisedBuild, 'raw_rationale'), false)
+  assert.equal(Object.hasOwn(revisedBuild, 'raw_evidence'), false)
+
+  // A second adjudication keeps the original harness record as the raw one.
+  const again = module.applyTechnicalAdjudication(revised, {
+    ...review,
+    approved_at: '2026-07-29T20:00:00.000Z',
+  })
+  const againOutline = again.score.gates.find(({ id }) => id === outline.id)
+  assert.equal(againOutline.raw_rationale, 'the canonical nine-step sample must be registered')
+  assert.deepEqual(againOutline.evidence, [
+    `technical adjudication approved by ${review.approved_by} at 2026-07-29T20:00:00.000Z`,
+  ])
+  assert.equal(module.validateTechnicalAdjudicationSupersession(result, revised).valid, true)
+})
+
 test('technical adjudication rejects partial or unknown gate verdict sets', async () => {
   const module = await adjudicationModule()
   const result = candidateResult()

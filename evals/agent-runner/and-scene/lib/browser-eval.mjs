@@ -495,30 +495,58 @@ export async function runBrowserEvaluation({
     },
 
     // Mechanical facts only: browse mode is entered, the active step's caption
-    // is readable, and every step can be reached from a discovered navigation
-    // region. Showing the deck title rather than the step title, making the
-    // table of contents responsive, and hiding rather than disabling a boundary
-    // control are all legitimate designs the fixture does not rule out, so they
-    // are judged by `mode-browse-reading-focused` and human review instead.
+    // is readable, and every step is actually reached by operating the
+    // navigation the demo exposes. Showing the deck title rather than the step
+    // title, making the table of contents responsive, and hiding rather than
+    // disabling a boundary control are all legitimate designs the fixture does
+    // not rule out, so they are judged by `mode-browse-reading-focused` and
+    // human review instead.
     'demo-browse-mode-behavior': async () => {
+      // Reachability is coverage: every step is arrived at. The order steps are
+      // reached in is judged by demo-control-semantics, not here.
+      const coversEveryStep = (visited, count) => {
+        const reached = new Set(visited)
+        return Array.from({ length: count }, (_, index) => index).every((index) => reached.has(index))
+      }
       const page = await session(PROBE_REQUIREMENTS['demo-browse-mode-behavior'])
       const state = await page.state()
       const controls = state.controls ?? []
-      // Directional navigation is judged where the probe actually stands: a
-      // design that hides rather than disables the control at a boundary is
-      // legitimate, so Previous is only required away from the first step and
-      // Next only away from the last.
-      const atFirstStep = state.stepIndex === 0
-      const atLastStep = state.stepIndex === state.stepCount - 1
-      const everyStepReachable = controls.length === state.stepCount
-        || ((atFirstStep || state.previousVisible === true)
-          && (atLastStep || state.nextVisible === true))
+      const count = await stepCountOf(state)
+      const attempts = []
+      // Counting controls proves nothing about navigation: an inert control is
+      // indistinguishable from a working one until it is used. Every step has
+      // to be arrived at, either by activating its own control or by walking
+      // forward through the directional control a reader would click.
+      let reachable = false
+      if (controls.length === count) {
+        const visited = []
+        for (const control of controls) {
+          await page.activate(control.name)
+          visited.push((await page.state()).stepIndex)
+        }
+        reachable = coversEveryStep(visited, count)
+        if (!reachable) attempts.push(`direct controls reached ${visited.join(',') || '(none)'}`)
+      }
+      // Reaching every step needs Next alone, so a demo that hides Previous at
+      // the first step, or Next at the last, is not penalised here.
+      if (!reachable && typeof page.activateDirection === 'function') {
+        const walker = await session(PROBE_REQUIREMENTS['demo-browse-mode-behavior'])
+        const visited = []
+        let advanced = true
+        for (let position = 1; position < count && advanced; position += 1) {
+          advanced = (await walker.activateDirection('next')) === true
+          if (!advanced) break
+          visited.push((await walker.state()).stepIndex)
+        }
+        reachable = advanced && coversEveryStep([0, ...visited], count)
+        if (!reachable) attempts.push(`forward traversal reached ${visited.join(',') || '(none)'}`)
+      }
       const complete = state.mode === 'browse'
         && state.captionVisible === true
-        && everyStepReachable
+        && reachable
       return [
         complete,
-        `browse mode ${bounded(state.mode)} at viewport ${bounded(state.viewport?.width)}×${bounded(state.viewport?.height)}; caption ${state.captionVisible}; controls ${controls.length}/${state.stepCount}; previous/next ${state.previousVisible}/${state.nextVisible}; toc ${state.tocVisible}; progress ${state.progressVisible}`,
+        `browse mode ${bounded(state.mode)} at viewport ${bounded(state.viewport?.width)}×${bounded(state.viewport?.height)}; caption ${state.captionVisible}; controls ${controls.length}/${count}; every step reached ${reachable}${attempts.length > 0 ? ` (${bounded(attempts.join('; '))})` : ''}; previous/next ${state.previousVisible}/${state.nextVisible}; toc ${state.tocVisible}; progress ${state.progressVisible}`,
         [],
       ]
     },

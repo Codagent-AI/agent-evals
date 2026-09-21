@@ -406,8 +406,8 @@
         ],
         "raw_points_awarded": 18,
         "adjudication_adjustment": 5,
-        "prior_points_awarded": 24,
-        "prior_adjudication_adjustment": 6
+        "prior_points_awarded": 23,
+        "prior_adjudication_adjustment": 5
       },
       {
         "id": "scene-kit-correctness",
@@ -1450,20 +1450,26 @@
         ],
         "observed": true,
         "raw_verdict": "pass",
-        "adjudication_changed": false
+        "adjudication_changed": false,
+        "prior_verdict": "pass"
       },
       {
         "id": "verification-sample-outline",
         "requirement": "The canonical nine-step sample exists, is registered and reachable, and matches its required outline",
         "verdict": "pass",
-        "rationale": "the canonical nine-step sample must be registered, reachable, and match its outline",
+        "rationale": "verification-sample-outline failed because the former probe compared the browse-mode deck title with the required step titles instead of reading the active step title. The canonical nine-step outline exists, is registered, and is reachable, and a real-browser replay under rubric 4.0.0 passes the gate.",
         "evidence": [
-          "evidence/evaluator/browser-probes/demo-route-and-registration.json",
-          "evidence/evaluator/browser-probes/demo-nine-step-content-and-order.json"
+          "technical adjudication approved by Paul (user) at 2026-09-21T03:22:04.599Z"
         ],
         "observed": true,
         "raw_verdict": "fail",
-        "adjudication_changed": true
+        "adjudication_changed": true,
+        "raw_rationale": "the canonical nine-step sample must be registered, reachable, and match its outline",
+        "raw_evidence": [
+          "evidence/evaluator/browser-probes/demo-route-and-registration.json",
+          "evidence/evaluator/browser-probes/demo-nine-step-content-and-order.json"
+        ],
+        "prior_verdict": "pass"
       },
       {
         "id": "verification-every-produced-step-renders",
@@ -1488,7 +1494,8 @@
         ],
         "observed": true,
         "raw_verdict": "pass",
-        "adjudication_changed": false
+        "adjudication_changed": false,
+        "prior_verdict": "pass"
       },
       {
         "id": "verification-clear-outcome",
@@ -1500,7 +1507,8 @@
         ],
         "observed": true,
         "raw_verdict": "pass",
-        "adjudication_changed": false
+        "adjudication_changed": false,
+        "prior_verdict": "pass"
       }
     ],
     "gates_passed": true,
@@ -17759,13 +17767,13 @@
   "technical_adjudication": {
     "schema_version": 1,
     "approved_by": "Paul (user)",
-    "approved_at": "2026-09-21T01:28:53.823Z",
-    "rationale": "User-approved deduction after the deterministic harness was corrected to activate a navigation control the way a pointer does. The candidate stops responding to deck keys once one of its own controls holds focus, which the previous probe could not observe because it activated controls without moving focus.",
+    "approved_at": "2026-09-21T03:22:04.599Z",
+    "rationale": "verification-sample-outline failed because the former probe compared the browse-mode deck title with the required step titles instead of reading the active step title. The canonical nine-step outline exists, is registered, and is reachable, and a real-browser replay under rubric 4.0.0 passes the gate.",
     "findings": [
-      "The previous probe activated a control with element.click(), which does not move focus, so a presentation that suppresses deck keys while a control is focused passed the control-key check. It also skipped the check entirely when present mode exposed no controls, which is where most candidates put their progress controls.",
-      "A real-browser replay of the frozen candidate revision 44c8e817ec94d436711cde0a3b00c9c90564cda5 measured the defect directly: the arrow key advances the deck from a neutral focus, and does nothing once a navigation control is focused.",
-      "demo-navigation-boundaries-and-control-keys is one of five criteria in demo-navigation-and-modes, which carries five points, so the deduction is one point of demo-technical-quality and one point of the official score.",
-      "Every other deterministic browser criterion still passes, all four hard gates still pass, and the product verdict is unchanged."
+      "This adjudication changes no score and no verdict. An earlier approved adjudication overturned verification-sample-outline, but each gate still carried the harness rationale and evidence for the failure it replaced, so the report showed a passing verdict beside a failure description.",
+      "The overturned gates are verification-sample-outline. Their verdicts were set to pass by an earlier approved adjudication, which is retained in this record's adjudication history.",
+      "The harness rationale and evidence for each overturned gate are preserved unchanged as raw_rationale and raw_evidence, next to raw_verdict.",
+      "Every component score, hard-gate verdict, the official score, and the product verdict are restated exactly as they were published."
     ],
     "reviewed_rubric": {
       "rubric_id": "and-scene-automated-product",
@@ -17778,13 +17786,31 @@
       "presentation-skill-correctness": 5.125,
       "verification-tool-correctness": 4.166666666666667
     },
-    "prior_shared_technical_score": 52.044047619048,
+    "workflow_component_scores": {
+      "testing-evidence-quality": 3,
+      "assumption-handling-quality": 2
+    },
+    "prior_workflow_quality_score": 5,
+    "revised_workflow_quality_score": 5,
+    "prior_gate_verdicts": {
+      "verification-build-whole-app": "pass",
+      "verification-sample-outline": "pass",
+      "verification-every-produced-step-renders": "pass",
+      "verification-clear-outcome": "pass"
+    },
+    "revised_gate_verdicts": {
+      "verification-build-whole-app": "pass",
+      "verification-sample-outline": "pass",
+      "verification-every-produced-step-renders": "pass",
+      "verification-clear-outcome": "pass"
+    },
+    "prior_shared_technical_score": 51.044047619048,
     "revised_shared_technical_score": 51.044047619048,
-    "prior_automated_subtotal": 57.044047619048,
+    "prior_automated_subtotal": 56.044047619048,
     "revised_automated_subtotal": 56.044047619048,
-    "prior_official_score": 74.044047619048,
+    "prior_official_score": 73.044047619048,
     "revised_official_score": 73.044047619048,
-    "prior_result_fingerprint": "553c4c1956c5eb140a1bb53df5546996aded459628e5f5b5606ba4fd449587c6"
+    "prior_result_fingerprint": "8cd5904ba56bae5f4f8494a78153bb99de147409ff47b92f723a720c63110d53"
   },
   "human_review_history": [
     {
@@ -18079,6 +18105,36 @@
       "prior_official_score": 73.044047619048,
       "revised_official_score": 74.044047619048,
       "prior_result_fingerprint": "66f6169284dea88228141a28d00d513f7b8967e8015854d85dfec70dd3ec1a63"
+    },
+    {
+      "schema_version": 1,
+      "approved_by": "Paul (user)",
+      "approved_at": "2026-09-21T01:28:53.823Z",
+      "rationale": "User-approved deduction after the deterministic harness was corrected to activate a navigation control the way a pointer does. The candidate stops responding to deck keys once one of its own controls holds focus, which the previous probe could not observe because it activated controls without moving focus.",
+      "findings": [
+        "The previous probe activated a control with element.click(), which does not move focus, so a presentation that suppresses deck keys while a control is focused passed the control-key check. It also skipped the check entirely when present mode exposed no controls, which is where most candidates put their progress controls.",
+        "A real-browser replay of the frozen candidate revision 44c8e817ec94d436711cde0a3b00c9c90564cda5 measured the defect directly: the arrow key advances the deck from a neutral focus, and does nothing once a navigation control is focused.",
+        "demo-navigation-boundaries-and-control-keys is one of five criteria in demo-navigation-and-modes, which carries five points, so the deduction is one point of demo-technical-quality and one point of the official score.",
+        "Every other deterministic browser criterion still passes, all four hard gates still pass, and the product verdict is unchanged."
+      ],
+      "reviewed_rubric": {
+        "rubric_id": "and-scene-automated-product",
+        "version": "4.0.0",
+        "sha256": "bc6db3280931bf8753e3c5c3bcff17b980457053b4f5d2ee39cda28ad6c7ce37"
+      },
+      "component_scores": {
+        "demo-technical-quality": 23,
+        "scene-kit-correctness": 18.752380952380953,
+        "presentation-skill-correctness": 5.125,
+        "verification-tool-correctness": 4.166666666666667
+      },
+      "prior_shared_technical_score": 52.044047619048,
+      "revised_shared_technical_score": 51.044047619048,
+      "prior_automated_subtotal": 57.044047619048,
+      "revised_automated_subtotal": 56.044047619048,
+      "prior_official_score": 74.044047619048,
+      "revised_official_score": 73.044047619048,
+      "prior_result_fingerprint": "553c4c1956c5eb140a1bb53df5546996aded459628e5f5b5606ba4fd449587c6"
     }
   ]
 }

@@ -389,14 +389,69 @@ test('the AXI driver changes modes through the presentation control before any k
   for (const call of [(driver) => driver.toggleMode(), (driver) => driver.setMode('browse')]) {
     const source = await emitted(call)
 
-    assert.match(source, /const toggle = modeToggle\(\);/)
+    assert.match(source, /const toggle = modeToggle\(/)
     assert.match(source, /toggle\.click\(\);/)
     assert.match(source, /if \(!usedControl\) await page\.press\('p'\);/)
     assert.ok(
-      source.indexOf('modeToggle()') < source.indexOf("page.press('p')"),
+      source.indexOf('modeToggle(') < source.indexOf("page.press('p')"),
       'the mode control is tried before the keyboard fallback',
     )
   }
+})
+
+test('the AXI driver selects the mode control for the mode it is establishing', async () => {
+  // "Present mode" and "Browse mode" can be separate controls. Clicking the
+  // first visible one would leave the mode unchanged and turn a harness
+  // ambiguity into a candidate deduction.
+  const setMode = await emitted((driver) => driver.setMode('browse'))
+  assert.match(setMode, /const toggle = modeToggle\("browse"\);/)
+
+  const toggle = await emitted((driver) => driver.toggleMode())
+  assert.match(toggle, /const toggle = modeToggle\(readMode\(\) === 'present' \? 'browse' : 'present'\);/)
+
+  for (const source of [setMode, toggle]) {
+    assert.match(source, /if \(toggle === 'ambiguous'\) return 'ambiguous';/)
+    assert.match(source, /ambiguous presentation mode control/)
+  }
+})
+
+test('the AXI driver disambiguates mode controls by the required mode before giving up', async () => {
+  const source = await emitted((driver) => driver.setMode('present'))
+
+  assert.match(source, /const modeToggle = \(requiredMode\) => \{/)
+  assert.match(source, /requiredMode === 'browse'/)
+  assert.match(source, /selected\.length === 1/)
+  assert.match(source, /return 'ambiguous';/)
+})
+
+test('the AXI driver activates the discovered directional control', async () => {
+  const next = await emitted((driver) => driver.activateDirection('next'))
+
+  assert.match(next, /findDirectionalControls\(\[/)
+  assert.match(next, /\/\^next\\b\/i/)
+  assert.match(next, /target\.focus\(\);\s*\n?\s*target\.click\(\);/)
+  assert.match(next, /if \(matches\.length > 1\) return 'ambiguous';/)
+  assert.match(next, /ambiguous semantic navigation/)
+
+  const previous = await emitted((driver) => driver.activateDirection('previous'))
+  assert.match(previous, /\/\^\(previous\|prev\|back\)\\b\/i/)
+})
+
+test('the AXI driver reports whether a directional control was available', async () => {
+  const { createAxiBrowserDriver } = await import(
+    '../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs'
+  )
+  const driver = (stdout) => createAxiBrowserDriver({
+    baseUrl: 'http://127.0.0.1:4319/',
+    command: async () => ({ status: 0, stdout, stderr: '' }),
+  })
+
+  assert.equal(await driver('true\n').activateDirection('next'), true)
+  assert.equal(await driver('false\n').activateDirection('next'), false)
+  await assert.rejects(
+    driver('true\n').activateDirection('sideways'),
+    (error) => error.name === 'BrowserDriverError',
+  )
 })
 
 test('the AXI driver rejects an adapter diagnostic in place of a route list', async () => {

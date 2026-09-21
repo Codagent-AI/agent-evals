@@ -29,6 +29,8 @@ function createDemo(knobs = {}) {
     preservePositionAcrossModes = true,
     swipeWorks = true,
     directJumpWorks = true,
+    directionalControlsWork = true,
+    nextStopsAfterFirstStep = false,
     keyboardWorks = true,
     ariaCurrent = true,
     focusable = true,
@@ -51,6 +53,7 @@ function createDemo(knobs = {}) {
     controlCount = stepCount,
     controlsOnlyInBrowse = false,
     stateUnreadable = false,
+    controlsReversed = false,
     viewport = { width: 1280, height: 720 },
     canvasFitsNarrow = true,
     canvasUniform = true,
@@ -126,12 +129,15 @@ function createDemo(knobs = {}) {
         progressVisible: mode === 'browse' ? progressVisibleInBrowse : false,
         controls: controlsOnlyInBrowse && mode !== 'browse'
           ? []
-          : Array.from({ length: controlCount }, (_, position) => ({
-              name: `Step ${position + 1}`,
-              role: 'button',
-              ariaCurrent: ariaCurrent && position === index,
-              focusable,
-            })),
+          : (() => {
+              const list = Array.from({ length: controlCount }, (_, position) => ({
+                name: `Step ${position + 1}`,
+                role: 'button',
+                ariaCurrent: ariaCurrent && position === index,
+                focusable,
+              }))
+              return controlsReversed ? list.reverse() : list
+            })(),
         focused,
         viewport: currentViewport,
         matchedSelectors: {
@@ -183,6 +189,17 @@ function createDemo(knobs = {}) {
       if (focusedControlConsumesArrows) keysLive = false
       const target = Number(name.replace('Step ', '')) - 1
       if (Number.isInteger(target)) index = clamp(target)
+    },
+    async activateDirection(direction) {
+      guard('activateDirection')
+      const available = mode === 'browse'
+        ? (direction === 'next' ? nextVisibleInBrowse : previousVisibleInBrowse)
+        : true
+      if (!available) return false
+      if (!directionalControlsWork) return true
+      if (direction === 'next' && nextStopsAfterFirstStep && index >= 1) return true
+      index = clamp(index + (direction === 'next' ? 1 : -1))
+      return true
     },
     async focus(name) {
       guard('focus')
@@ -731,6 +748,27 @@ test('browse mode accepts directional navigation that hides a boundary control',
   assert.equal(verdictOf(hidesPrevious, 'demo-browse-mode-behavior'), 'pass')
 })
 
+test('browse mode reachability is exercised rather than counted', async () => {
+  // Counting controls proves nothing about navigation: an inert control and a
+  // Next control that stops after one step both expose the right chrome.
+  const inertDirectControls = await evaluate({ directJumpWorks: false, directionalControlsWork: false })
+  const inertDirectionalControls = await evaluate({ controlCount: 0, directionalControlsWork: false })
+  const nextStops = await evaluate({
+    controlCount: 0,
+    nextStopsAfterFirstStep: true,
+  })
+
+  assert.equal(verdictOf(inertDirectControls, 'demo-browse-mode-behavior'), 'fail')
+  assert.equal(verdictOf(inertDirectionalControls, 'demo-browse-mode-behavior'), 'fail')
+  assert.equal(verdictOf(nextStops, 'demo-browse-mode-behavior'), 'fail')
+})
+
+test('browse mode accepts a deck whose direct controls are inert but whose next control works', async () => {
+  const result = await evaluate({ directJumpWorks: false })
+
+  assert.equal(verdictOf(result, 'demo-browse-mode-behavior'), 'pass')
+})
+
 test('browse mode still fails when a step is unreadable or unreachable', async () => {
   const unreadable = await evaluate({ captionVisibleInBrowse: false })
   const unreachable = await evaluate({
@@ -893,4 +931,13 @@ test('an unreadable browser state is a harness failure, not a product deduction'
       return true
     },
   )
+})
+
+test('browse reachability counts the steps reached, not the order controls were found in', async () => {
+  // Every step is reachable when each one is arrived at. The order in which the
+  // controls were discovered says nothing about reachability, and control
+  // order is judged separately by demo-control-semantics.
+  const result = await evaluate({ controlsReversed: true, nextVisibleInBrowse: false })
+
+  assert.equal(verdictOf(result, 'demo-browse-mode-behavior'), 'pass')
 })

@@ -176,15 +176,46 @@ function navigationDiscoverySource() {
     if (role) matchedSelectors[role] = named.length > 0 ? 'accessible-directional-name' : null;
     return named;
   };
-  const modeToggle = () => {
-    const explicit = firstVisibleMatch(${JSON.stringify(MODE_TOGGLE_SELECTORS)}, 'mode_toggle');
-    if (explicit) return explicit;
-    const named = allInteractive.filter(visible).find(
-      (element) => /\\b(present|presenter|browse|reading)\\b.*\\bmode\\b|\\bmode\\b.*\\b(present|presenter|browse|reading)\\b/i
-        .test(accessibleName(element)),
-    );
-    if (named) matchedSelectors.mode_toggle = 'accessible-mode-name';
-    return named || null;
+  const readMode = () => {
+    const declared = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
+      ?.getAttribute('data-presentation-mode');
+    if (declared === 'present' || declared === 'browse') return declared;
+    return [...document.querySelectorAll(${JSON.stringify(`${CAPTION_SELECTOR}, ${TOC_SELECTOR}`)})]
+      .some(visible) ? 'browse' : 'present';
+  };
+  // A presentation may expose one control that flips the mode, or a separate
+  // control per mode. Picking the first visible match would click "Present
+  // mode" when browse mode was required, so the mode being asked for takes
+  // part in discovery. When it still cannot pick one control, it says so and
+  // the caller raises a harness failure rather than judging the candidate on
+  // an observation the harness never made.
+  const modeToggle = (requiredMode) => {
+    let candidates = [];
+    for (const selector of ${JSON.stringify(MODE_TOGGLE_SELECTORS)}) {
+      const matches = [...scope.querySelectorAll(selector)].filter(visible);
+      if (matches.length > 0) {
+        matchedSelectors.mode_toggle = selector;
+        candidates = matches;
+        break;
+      }
+    }
+    if (candidates.length === 0) {
+      candidates = allInteractive.filter(visible).filter(
+        (element) => /\\b(present|presenter|browse|reading)\\b.*\\bmode\\b|\\bmode\\b.*\\b(present|presenter|browse|reading)\\b/i
+          .test(accessibleName(element)),
+      );
+      matchedSelectors.mode_toggle = candidates.length > 0 ? 'accessible-mode-name' : null;
+    }
+    if (candidates.length === 0) return null;
+    if (candidates.length === 1) return candidates[0];
+    const wanted = requiredMode === 'browse'
+      ? /\\b(browse|browsing|reading|read)\\b/i
+      : (requiredMode === 'present' ? /\\b(present|presenter|presenting|slideshow)\\b/i : null);
+    const selected = wanted
+      ? candidates.filter((element) => wanted.test(accessibleName(element)))
+      : [];
+    if (selected.length === 1) return selected[0];
+    return 'ambiguous';
   };
 `
 }
@@ -328,14 +359,22 @@ const mode = await page.eval(() => {
   return browsing ? 'browse' : 'present';
 });
 if (mode !== requiredMode) {
-  const usedControl = await page.eval(() => {
+  const outcome = await page.eval(() => {
     const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
 ${navigationDiscoverySource()}
-    const toggle = modeToggle();
-    if (!toggle) return false;
+    const toggle = modeToggle(${JSON.stringify(requiredMode)});
+    if (toggle === 'ambiguous') return 'ambiguous';
+    if (!toggle) return 'none';
     toggle.click();
-    return true;
+    return 'control';
   });
+  if (outcome === 'ambiguous') {
+    throw new Error(
+      'ambiguous presentation mode control: no single visible control selects '
+        + ${JSON.stringify(requiredMode)} + ' mode',
+    );
+  }
+  const usedControl = outcome === 'control';
   if (!usedControl) await page.press('p');
   ${sleepSource(100)}
 }
@@ -524,7 +563,7 @@ ${navigationDiscoverySource()}
   const progressChrome = firstVisibleMatch(${JSON.stringify(PROGRESS_SELECTORS)}, 'progress_chrome');
   const previousMatches = findDirectionalControls(${JSON.stringify(PREVIOUS_SELECTORS)}, /^(previous|prev|back)\\b/i, 'previous');
   const nextMatches = findDirectionalControls(${JSON.stringify(NEXT_SELECTORS)}, /^next\\b/i, 'next');
-  modeToggle();
+  modeToggle(null);
   const previous = previousMatches[0] || null;
   const next = nextMatches[0] || null;
   const navigationAmbiguities = [
@@ -646,6 +685,41 @@ console.log(JSON.stringify(true));
 `)
     },
 
+    // Activating the discovered Previous or Next control, so a probe can
+    // traverse a presentation the way a reader does instead of inferring
+    // reachability from a control merely being visible. Returns false when no
+    // control for that direction is discoverable, which a boundary design may
+    // legitimately produce.
+    async activateDirection(direction) {
+      if (!['previous', 'next'].includes(direction)) {
+        throw new BrowserDriverError(`unsupported navigation direction: ${direction}`)
+      }
+      const selectors = direction === 'next' ? NEXT_SELECTORS : PREVIOUS_SELECTORS
+      const pattern = direction === 'next' ? '/^next\\b/i' : '/^(previous|prev|back)\\b/i'
+      const outcome = await run(`
+const outcome = await page.eval(() => {
+  const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
+${navigationDiscoverySource()}
+  const matches = findDirectionalControls(${JSON.stringify(selectors)}, ${pattern});
+  if (matches.length > 1) return 'ambiguous';
+  const target = matches[0];
+  if (!target) return 'none';
+  // A pointer activation focuses the control before it fires.
+  target.focus();
+  target.click();
+  return 'activated';
+});
+if (outcome === 'ambiguous') {
+  throw new Error(
+    'ambiguous semantic navigation: multiple visible ' + ${JSON.stringify(direction)} + ' controls',
+  );
+}
+${sleepSource(100)}
+console.log(JSON.stringify(outcome === 'activated'));
+`)
+      return outcome === true
+    },
+
     async focus(name) {
       await run(`
 const focused = await page.eval(() => {
@@ -686,14 +760,19 @@ console.log(JSON.stringify(dispatched));
     // no mode control is discoverable, rather than requiring one keybinding.
     async toggleMode() {
       await run(`
-const usedControl = await page.eval(() => {
+const outcome = await page.eval(() => {
   const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
 ${navigationDiscoverySource()}
-  const toggle = modeToggle();
-  if (!toggle) return false;
+  const toggle = modeToggle(readMode() === 'present' ? 'browse' : 'present');
+  if (toggle === 'ambiguous') return 'ambiguous';
+  if (!toggle) return 'none';
   toggle.click();
-  return true;
+  return 'control';
 });
+if (outcome === 'ambiguous') {
+  throw new Error('ambiguous presentation mode control: no single visible control selects the opposite mode');
+}
+const usedControl = outcome === 'control';
 if (!usedControl) await page.press('p');
 ${sleepSource(50)}
 console.log(JSON.stringify(usedControl));

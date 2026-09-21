@@ -443,7 +443,9 @@
           }
         ],
         "raw_points_awarded": 22,
-        "adjudication_adjustment": 2
+        "adjudication_adjustment": 2,
+        "prior_points_awarded": 24,
+        "prior_adjudication_adjustment": 2
       },
       {
         "id": "scene-kit-correctness",
@@ -831,7 +833,9 @@
           }
         ],
         "raw_points_awarded": 20.919047619047618,
-        "adjudication_adjustment": 0
+        "adjudication_adjustment": 0,
+        "prior_points_awarded": 20.919047619047618,
+        "prior_adjudication_adjustment": 0
       },
       {
         "id": "presentation-skill-correctness",
@@ -1092,7 +1096,9 @@
           }
         ],
         "raw_points_awarded": 4,
-        "adjudication_adjustment": 0
+        "adjudication_adjustment": 0,
+        "prior_points_awarded": 4,
+        "prior_adjudication_adjustment": 0
       },
       {
         "id": "verification-tool-correctness",
@@ -1295,7 +1301,9 @@
           }
         ],
         "raw_points_awarded": 2.6666666666666665,
-        "adjudication_adjustment": 0
+        "adjudication_adjustment": 0,
+        "prior_points_awarded": 2.6666666666666665,
+        "prior_adjudication_adjustment": 0
       },
       {
         "id": "testing-evidence-quality",
@@ -1378,7 +1386,11 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 4,
+        "prior_points_awarded": 4,
+        "prior_adjudication_adjustment": 0,
+        "adjudication_adjustment": 0
       },
       {
         "id": "assumption-handling-quality",
@@ -1458,7 +1470,11 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 2,
+        "prior_points_awarded": 2,
+        "prior_adjudication_adjustment": 0,
+        "adjudication_adjustment": 0
       }
     ],
     "score_denominator": 100,
@@ -1474,27 +1490,40 @@
         ],
         "observed": true,
         "raw_verdict": "pass",
-        "adjudication_changed": false
+        "adjudication_changed": false,
+        "prior_verdict": "pass"
       },
       {
         "id": "verification-sample-outline",
         "requirement": "The canonical nine-step sample exists, is registered and reachable, and matches its required outline",
         "verdict": "pass",
-        "rationale": "the canonical nine-step sample must be registered, reachable, and match its outline",
+        "rationale": "Both overturned gates failed on harness output, not on the candidate. verification-sample-outline failed solely on a route verdict whose evidence was the chrome-devtools-axi launch string spread character by character; the route is registered and reachable, and the nine-step outline criterion passed. verification-every-produced-step-renders counted four chrome-devtools-axi launch lines as candidate console errors; the candidate page emits none. A real-browser replay under rubric 4.0.0 passes both gates.",
         "evidence": [
-          "evidence/evaluator/browser-probes/demo-route-and-registration.json",
-          "evidence/evaluator/browser-probes/demo-nine-step-content-and-order.json"
+          "technical adjudication approved by Paul (user) at 2026-09-21T03:22:04.599Z"
         ],
         "observed": true,
         "raw_verdict": "fail",
-        "adjudication_changed": true
+        "adjudication_changed": true,
+        "raw_rationale": "the canonical nine-step sample must be registered, reachable, and match its outline",
+        "raw_evidence": [
+          "evidence/evaluator/browser-probes/demo-route-and-registration.json",
+          "evidence/evaluator/browser-probes/demo-nine-step-content-and-order.json"
+        ],
+        "prior_verdict": "pass"
       },
       {
         "id": "verification-every-produced-step-renders",
         "requirement": "Every produced step renders without runtime or console errors",
         "verdict": "pass",
-        "rationale": "4 runtime or console failure(s) occurred while stepping the demo",
+        "rationale": "Both overturned gates failed on harness output, not on the candidate. verification-sample-outline failed solely on a route verdict whose evidence was the chrome-devtools-axi launch string spread character by character; the route is registered and reachable, and the nine-step outline criterion passed. verification-every-produced-step-renders counted four chrome-devtools-axi launch lines as candidate console errors; the candidate page emits none. A real-browser replay under rubric 4.0.0 passes both gates.",
         "evidence": [
+          "technical adjudication approved by Paul (user) at 2026-09-21T03:22:04.599Z"
+        ],
+        "observed": true,
+        "raw_verdict": "fail",
+        "adjudication_changed": true,
+        "raw_rationale": "4 runtime or console failure(s) occurred while stepping the demo",
+        "raw_evidence": [
           "evidence/evaluator/browser-probes/demo-route-and-registration.json",
           "evidence/evaluator/browser-probes/demo-nine-step-content-and-order.json",
           "evidence/evaluator/browser-probes/demo-required-scene-content.json",
@@ -1514,9 +1543,7 @@
           "Run `chrome-devtools-axi console-get &amp;amp;lt;id&amp;amp;gt;` to see a specific message",
           "Run `chrome-devtools-axi console --type error` to filter by type"
         ],
-        "observed": true,
-        "raw_verdict": "fail",
-        "adjudication_changed": true
+        "prior_verdict": "pass"
       },
       {
         "id": "verification-clear-outcome",
@@ -1528,7 +1555,8 @@
         ],
         "observed": true,
         "raw_verdict": "pass",
-        "adjudication_changed": false
+        "adjudication_changed": false,
+        "prior_verdict": "pass"
       }
     ],
     "gates_passed": true,
@@ -25214,14 +25242,13 @@
   "technical_adjudication": {
     "schema_version": 1,
     "approved_by": "Paul (user)",
-    "approved_at": "2026-09-21T00:13:13.734Z",
-    "rationale": "User-approved correction after a real-browser re-judgement of the frozen candidate under automated rubric 4.0.0. Both recorded deterministic browser failures were harness defects, and both failing hard gates derived from them.",
+    "approved_at": "2026-09-21T03:22:04.599Z",
+    "rationale": "Both overturned gates failed on harness output, not on the candidate. verification-sample-outline failed solely on a route verdict whose evidence was the chrome-devtools-axi launch string spread character by character; the route is registered and reachable, and the nine-step outline criterion passed. verification-every-produced-step-renders counted four chrome-devtools-axi launch lines as candidate console errors; the candidate page emits none. A real-browser replay under rubric 4.0.0 passes both gates.",
     "findings": [
-      "demo-route-and-registration was recorded fail with the rationale \"the demo route how-to-make-a-presentation is not registered\". Its evidence array is the chrome-devtools-axi launch string spread character by character, because a single evidence string was spread instead of wrapped. The route is registered and reachable in the candidate source.",
-      "demo-browse-mode-behavior was recorded fail reporting \"previous/next false/false\". The candidate renders buttons with the accessible names \"Previous step\" and \"Next step\" inside its controls region, which the current driver discovers. The rest of that rationale, \"active title false\", reflects the former requirement that browse mode expose the active step title, which rubric 4.0.0 no longer asserts.",
-      "browser_evaluation.failures contained only four chrome-devtools-axi launch lines beginning \"Could not find Google Chrome executable for channel 'stable' at:\". These are harness output, not candidate page console output, and they were counted as the \"4 runtime or console failure(s)\" that failed verification-every-produced-step-renders.",
-      "verification-sample-outline gates on demo-route-and-registration and demo-nine-step-content-and-order. The outline criterion passed, so the gate failed solely on the false route verdict.",
-      "A real-browser replay of the frozen candidate revision 9a2b54d46cac5cf3f65c4c6cea8b2a3b6b72d66f under rubric 4.0.0 passed all 14 deterministic browser criteria with no recorded failures."
+      "This adjudication changes no score and no verdict. An earlier approved adjudication overturned verification-sample-outline and verification-every-produced-step-renders, but each gate still carried the harness rationale and evidence for the failure it replaced, so the report showed a passing verdict beside a failure description.",
+      "The overturned gates are verification-sample-outline and verification-every-produced-step-renders. Their verdicts were set to pass by an earlier approved adjudication, which is retained in this record's adjudication history.",
+      "The harness rationale and evidence for each overturned gate are preserved unchanged as raw_rationale and raw_evidence, next to raw_verdict.",
+      "Every component score, hard-gate verdict, the official score, and the product verdict are restated exactly as they were published."
     ],
     "reviewed_rubric": {
       "rubric_id": "and-scene-automated-product",
@@ -25234,10 +25261,16 @@
       "presentation-skill-correctness": 4,
       "verification-tool-correctness": 2.6666666666666665
     },
+    "workflow_component_scores": {
+      "testing-evidence-quality": 4,
+      "assumption-handling-quality": 2
+    },
+    "prior_workflow_quality_score": 6,
+    "revised_workflow_quality_score": 6,
     "prior_gate_verdicts": {
       "verification-build-whole-app": "pass",
-      "verification-sample-outline": "fail",
-      "verification-every-produced-step-renders": "fail",
+      "verification-sample-outline": "pass",
+      "verification-every-produced-step-renders": "pass",
       "verification-clear-outcome": "pass"
     },
     "revised_gate_verdicts": {
@@ -25246,12 +25279,57 @@
       "verification-every-produced-step-renders": "pass",
       "verification-clear-outcome": "pass"
     },
-    "prior_shared_technical_score": 49.585714285714,
+    "prior_shared_technical_score": 51.585714285714,
     "revised_shared_technical_score": 51.585714285714,
-    "prior_automated_subtotal": 55.58571428571429,
+    "prior_automated_subtotal": 57.585714285714,
     "revised_automated_subtotal": 57.585714285714,
-    "prior_official_score": 76.33571428571429,
+    "prior_official_score": 78.335714285714,
     "revised_official_score": 78.335714285714,
-    "prior_result_fingerprint": "2ceaceca45af945fbf459342c63faef596e2dbbc492651e05512232aee0d1567"
-  }
+    "prior_result_fingerprint": "94e392304c67a162eb7e977cceb95715a25e9ed02b7a88890827afa6c4b10db7"
+  },
+  "technical_adjudication_history": [
+    {
+      "schema_version": 1,
+      "approved_by": "Paul (user)",
+      "approved_at": "2026-09-21T00:13:13.734Z",
+      "rationale": "User-approved correction after a real-browser re-judgement of the frozen candidate under automated rubric 4.0.0. Both recorded deterministic browser failures were harness defects, and both failing hard gates derived from them.",
+      "findings": [
+        "demo-route-and-registration was recorded fail with the rationale \"the demo route how-to-make-a-presentation is not registered\". Its evidence array is the chrome-devtools-axi launch string spread character by character, because a single evidence string was spread instead of wrapped. The route is registered and reachable in the candidate source.",
+        "demo-browse-mode-behavior was recorded fail reporting \"previous/next false/false\". The candidate renders buttons with the accessible names \"Previous step\" and \"Next step\" inside its controls region, which the current driver discovers. The rest of that rationale, \"active title false\", reflects the former requirement that browse mode expose the active step title, which rubric 4.0.0 no longer asserts.",
+        "browser_evaluation.failures contained only four chrome-devtools-axi launch lines beginning \"Could not find Google Chrome executable for channel 'stable' at:\". These are harness output, not candidate page console output, and they were counted as the \"4 runtime or console failure(s)\" that failed verification-every-produced-step-renders.",
+        "verification-sample-outline gates on demo-route-and-registration and demo-nine-step-content-and-order. The outline criterion passed, so the gate failed solely on the false route verdict.",
+        "A real-browser replay of the frozen candidate revision 9a2b54d46cac5cf3f65c4c6cea8b2a3b6b72d66f under rubric 4.0.0 passed all 14 deterministic browser criteria with no recorded failures."
+      ],
+      "reviewed_rubric": {
+        "rubric_id": "and-scene-automated-product",
+        "version": "4.0.0",
+        "sha256": "bc6db3280931bf8753e3c5c3bcff17b980457053b4f5d2ee39cda28ad6c7ce37"
+      },
+      "component_scores": {
+        "demo-technical-quality": 24,
+        "scene-kit-correctness": 20.919047619047618,
+        "presentation-skill-correctness": 4,
+        "verification-tool-correctness": 2.6666666666666665
+      },
+      "prior_gate_verdicts": {
+        "verification-build-whole-app": "pass",
+        "verification-sample-outline": "fail",
+        "verification-every-produced-step-renders": "fail",
+        "verification-clear-outcome": "pass"
+      },
+      "revised_gate_verdicts": {
+        "verification-build-whole-app": "pass",
+        "verification-sample-outline": "pass",
+        "verification-every-produced-step-renders": "pass",
+        "verification-clear-outcome": "pass"
+      },
+      "prior_shared_technical_score": 49.585714285714,
+      "revised_shared_technical_score": 51.585714285714,
+      "prior_automated_subtotal": 55.58571428571429,
+      "revised_automated_subtotal": 57.585714285714,
+      "prior_official_score": 76.33571428571429,
+      "revised_official_score": 78.335714285714,
+      "prior_result_fingerprint": "2ceaceca45af945fbf459342c63faef596e2dbbc492651e05512232aee0d1567"
+    }
+  ]
 }
