@@ -24,6 +24,8 @@ function createDemo(knobs = {}) {
     perStepSceneId = false,
     declaresSceneId = true,
     replaceEntities = false,
+    entityIds = null,
+    entityConventions = undefined,
     clampStart = true,
     clampEnd = true,
     preservePositionAcrossModes = true,
@@ -36,6 +38,7 @@ function createDemo(knobs = {}) {
     focusable = true,
     controlsKeepKeys = true,
     focusedControlConsumesArrows = false,
+    focusCannotBeReleased = false,
     titleProminentInPresent = true,
     activeTitleVisibleInBrowse = true,
     presentShowsDeckTitle = false,
@@ -53,6 +56,7 @@ function createDemo(knobs = {}) {
     controlCount = stepCount,
     controlsOnlyInBrowse = false,
     stateUnreadable = false,
+    unreadableAtIndex = null,
     controlsReversed = false,
     viewport = { width: 1280, height: 720 },
     canvasFitsNarrow = true,
@@ -101,7 +105,7 @@ function createDemo(knobs = {}) {
     async state() {
       guard('state')
       return {
-        stepIndex: stateUnreadable ? null : index,
+        stepIndex: stateUnreadable || index === unreadableAtIndex ? null : index,
         stepCount,
         mode,
         title: (mode === 'browse' && !activeTitleVisibleInBrowse) || (mode === 'present' && presentShowsDeckTitle)
@@ -116,9 +120,10 @@ function createDemo(knobs = {}) {
         sceneId: declaresSceneId
           ? (perStepSceneId ? `scene-${index}` : 'how-to-make-a-presentation-scene')
           : null,
-        entityIds: replaceEntities
+        entityConventions,
+        entityIds: entityIds?.[index] ?? (replaceEntities
           ? [`only-${index}`]
-          : ['stage', `beat-${index}`, `beat-${index + 1}`],
+          : ['stage', `beat-${index}`, `beat-${index + 1}`]),
         titleProminent: mode === 'present'
           ? titleProminentInPresent
           : activeTitleVisibleInBrowse,
@@ -175,6 +180,7 @@ function createDemo(knobs = {}) {
     },
     async press(key) {
       guard('press')
+      if (focusedControlConsumesArrows && focused?.startsWith('Step ')) return
       if (key === 'ArrowRight') step(1)
       else if (key === 'ArrowLeft') step(-1)
     },
@@ -186,7 +192,6 @@ function createDemo(knobs = {}) {
       // A pointer activation focuses the control it fires, so a demo that
       // suppresses deck keys while a control holds focus stops responding.
       focused = name
-      if (focusedControlConsumesArrows) keysLive = false
       const target = Number(name.replace('Step ', '')) - 1
       if (Number.isInteger(target)) index = clamp(target)
     },
@@ -205,7 +210,15 @@ function createDemo(knobs = {}) {
       guard('focus')
       if (!focusable) return
       focused = name
-      if (focusedControlConsumesArrows) keysLive = false
+    },
+    async releaseFocus() {
+      guard('releaseFocus')
+      if (focusCannotBeReleased) return false
+      focused = 'presentation root'
+      return true
+    },
+    async restoreFocusTarget() {
+      guard('restoreFocusTarget')
     },
     async swipe(direction) {
       guard('swipe')
@@ -277,6 +290,37 @@ test('a conforming built demo passes every deterministic criterion and hard gate
   assert.deepEqual([...new Set(result.criteria.map(({ verdict }) => verdict))], ['pass'])
   assert.deepEqual([...new Set(result.gates.map(({ verdict }) => verdict))], ['pass'])
   assert.equal(result.gates.length, 4)
+})
+
+test('scene criteria are not observed when captions are right but no recognised entity convention appears', async () => {
+  const result = await evaluate({ entityIds: TITLES.map(() => []) })
+
+  for (const id of ['demo-required-scene-content', 'demo-evolving-scene-structure']) {
+    const criterion = result.criteria.find((entry) => entry.id === id)
+    assert.equal(criterion.verdict, null, id)
+    assert.equal(criterion.outcome, 'not-observed', id)
+    assert.deepEqual(criterion.looked_for, [
+      'data-layout-id', 'data-scene-entity', 'data-node', 'data-entity-id', 'data-scene-node',
+    ])
+  }
+})
+
+test('a not-observed record lists the conventions the driver actually looked for', async () => {
+  const entityConventions = ['[data-layout-id]', '[data-presentation-node]']
+  const result = await evaluate({ entityIds: TITLES.map(() => []), entityConventions })
+
+  for (const id of ['demo-required-scene-content', 'demo-evolving-scene-structure']) {
+    assert.deepEqual(result.criteria.find((entry) => entry.id === id).looked_for, entityConventions, id)
+  }
+})
+
+test('a wrong caption remains a failure even when no scene convention is recognised', async () => {
+  const result = await evaluate({
+    captions: ['wrong caption', ...DEMO_CONTRACT.step_captions.slice(1)],
+    entityIds: TITLES.map(() => []),
+  })
+
+  assert.equal(verdictOf(result, 'demo-required-scene-content'), 'fail')
 })
 
 test('opening records and preserves the presentation initial mode', async () => {
@@ -897,24 +941,39 @@ test('a probe retains an observation for every state its verdict rests on', asyn
   }
 })
 
-test('the control-key check follows controls into the mode that exposes them', async () => {
-  // A demo that shows its controls only in browse mode still has controls a
-  // reader uses. Skipping the check because present mode has none hides a
-  // presentation that stops responding to deck keys once a control is clicked.
-  const suppressed = await evaluate({
+test('the control-key check follows controls into browse mode without deducting focused-key suppression', async () => {
+  const result = await evaluate({
     controlsOnlyInBrowse: true,
     focusedControlConsumesArrows: true,
   })
-  const healthy = await evaluate({ controlsOnlyInBrowse: true })
+  const criterion = result.criteria.find(({ id }) => id === 'demo-navigation-boundaries-and-control-keys')
 
-  assert.equal(verdictOf(suppressed, 'demo-navigation-boundaries-and-control-keys'), 'fail')
-  assert.equal(verdictOf(healthy, 'demo-navigation-boundaries-and-control-keys'), 'pass')
+  assert.equal(verdictOf(result, 'demo-navigation-boundaries-and-control-keys'), 'pass')
+  assert.match(criterion.rationale, /keys while control focused \d+→\d+/i)
+  assert.match(criterion.rationale, /keys after focus released \d+→\d+/i)
+  // The same two facts are retained as structured observations, so a later audit
+  // does not have to parse prose to adjudicate this criterion.
+  assert.deepEqual(criterion.observations.keys_while_control_focused, { before: 0, after: 0 })
+  assert.deepEqual(criterion.observations.keys_after_focus_released, { key: 'ArrowRight', before: 0, after: 1 })
 })
 
-test('a control that swallows deck keys fails the control-key check', async () => {
-  const result = await evaluate({ focusedControlConsumesArrows: true })
+test('a deck key that remains dead after focus is released fails the control-key check', async () => {
+  const result = await evaluate({ controlsKeepKeys: false })
 
   assert.equal(verdictOf(result, 'demo-navigation-boundaries-and-control-keys'), 'fail')
+})
+
+test('a control that cannot release focus is a resumable harness failure', async () => {
+  await assert.rejects(
+    () => evaluate({ focusCannotBeReleased: true }),
+    (error) => {
+      assert.equal(error.owner, 'evaluation-harness')
+      assert.equal(error.code, 'browser-driver-failed')
+      assert.equal(error.resumable, true)
+      assert.match(error.message, /release.*focus/i)
+      return true
+    },
+  )
 })
 
 test('an unreadable browser state is a harness failure, not a product deduction', async () => {
@@ -926,6 +985,21 @@ test('an unreadable browser state is a harness failure, not a product deduction'
     (error) => {
       assert.equal(error.owner, 'evaluation-harness')
       assert.equal(error.code, 'browser-driver-failed')
+      assert.equal(error.resumable, true)
+      assert.match(error.message, /could not be read/i)
+      return true
+    },
+  )
+})
+
+test('a step index that goes unreadable mid-traversal is a harness failure, not a stalled transition', async () => {
+  // Seen on a real candidate replay: one state read during the forward walk
+  // returned no index and the criterion was recorded as a product failure. A
+  // read that did not answer says nothing about the transition.
+  await assert.rejects(
+    () => evaluate({ unreadableAtIndex: 5 }),
+    (error) => {
+      assert.equal(error.owner, 'evaluation-harness')
       assert.equal(error.resumable, true)
       assert.match(error.message, /could not be read/i)
       return true

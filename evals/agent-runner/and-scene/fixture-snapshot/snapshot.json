@@ -1,0 +1,46 @@
+{
+  "repository": "Codagent-AI/and-scene",
+  "fixture_ref": "892dfbcf3762bc95cdbae6f05b18cc2b168a5fab",
+  "files": [
+    {
+      "path": "fixture-root-README.md",
+      "source_path": "README.md",
+      "blob": "578781a2c3632f98ba0c605537a894477b7bc84c"
+    },
+    {
+      "path": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "source_path": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "blob": "0bca7b2b0e293324e35d5aef7063c72c2fd413cf"
+    },
+    {
+      "path": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "source_path": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "blob": "bc4a16d4364cb1f729bce2b083afaf7f580ad244"
+    },
+    {
+      "path": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "source_path": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "blob": "ccd426b099d7fa2674ab5d45c10e589484571e02"
+    },
+    {
+      "path": "openspec/changes/create-and-scene/proposal.md",
+      "source_path": "openspec/changes/create-and-scene/proposal.md",
+      "blob": "36dca5b51ef64572d3bceff04e38124607de6e13"
+    },
+    {
+      "path": "openspec/changes/create-and-scene/design.md",
+      "source_path": "openspec/changes/create-and-scene/design.md",
+      "blob": "81272ae2d43904e94e0a14ba4c9ed7e35bd14f5e"
+    },
+    {
+      "path": "openspec/changes/create-and-scene/tasks.md",
+      "source_path": "openspec/changes/create-and-scene/tasks.md",
+      "blob": "3d9dd0e77403cc174d874c352e37ee9832d00aa8"
+    },
+    {
+      "path": "openspec/changes/create-and-scene/test-plan.md",
+      "source_path": "openspec/changes/create-and-scene/test-plan.md",
+      "blob": "ee522baa9ce809b78edbc22d87766d2622b4b15c"
+    }
+  ]
+}

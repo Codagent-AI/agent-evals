@@ -1,5 +1,17 @@
 # and-scene eval
 
+## Fixture traceability
+
+Every automated criterion and gate has a `criterion_sources` entry in
+`automated-rubric.json`. Fixture-owned entries cite a snapshot document,
+heading, and normative fragment; eval-owned entries give a reason. Concrete
+guidance values must appear in cited text or in `eval_owned_values` with a
+reason. Refresh the offline snapshot from the pinned fixture checkout with:
+
+```sh
+node evals/agent-runner/and-scene/fixture-snapshot.mjs --checkout /path/to/and-scene
+```
+
 This suite gives an implementation agent a reviewed OpenSpec change with no
 implementation, runs the real Agent Runner workflow in a browser-capable Docker
 sandbox, and grades the result.
@@ -790,6 +802,30 @@ its supported adapters, roles, or efforts. Run calibration while reviewing
 rubric, scorer, gate, or reporting changes, then run targeted tests during
 development and `npm run check` before trusting a change. Candidate execution
 does not depend on retaining calibration artifacts.
+
+### Real candidate end-to-end check
+
+`test/real-browser/candidate.test.mjs` runs the production browser evaluator in
+real Chrome against one real candidate, issue #26 repetition 3, and requires its
+known verdicts: it hides every step title, so the step content, present mode,
+and sample outline checks fail and every other check passes. Run it by hand
+after changing the browser evaluator; CI never requires it. The file header has
+the build and serve commands. It takes a few minutes.
+
+### Adversarial real-browser pages
+
+`test/real-browser/adversarial.test.mjs` drives the production evaluator in real
+Chrome against six hand-made pages that no real candidate resembles: a deck
+that ignores deck keys while a button holds focus, one whose keys stay dead
+after any control use, a correct scene with no recognised hook, a hidden step
+title, a deck that listens for keys on its own root, and a control that will not
+release focus. It sits outside the `test/*.test.mjs` glob because CI has no
+browser. Run it before merging any change to the control-key, scene, or
+present-mode probes, and never while the candidate check is running:
+
+```bash
+node --test test/real-browser/adversarial.test.mjs
+```
 
 Published result directories are immutable historical records. Correct an
 erroneous publication with a later revert commit rather than by rewriting

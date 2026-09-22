@@ -23,6 +23,12 @@ test('the AXI driver opens the candidate route and returns structured browser st
       caption: 'caption',
       sceneId: 'How to make a presentation',
       entityIds: ['box:person'],
+      entityConventions: [
+        '[data-layout-id]', '[data-scene-entity]', '[data-node]', '[data-entity-id]', '[data-scene-node]',
+        '[data-presentation-node]', '[data-presentation-box]', '[data-presentation-label]',
+        '[data-presentation-arrow]', '[data-presentation-frame]', '[data-presentation-emphasis]',
+        '[data-presentation-symbol-chip]',
+      ],
       titleProminent: true,
       captionVisible: false,
       controls: [],
@@ -41,17 +47,48 @@ test('the AXI driver opens the candidate route and returns structured browser st
 
   assert.deepEqual(await driver.routes(), ['/how-to-make-a-presentation'])
   await driver.open('how-to-make-a-presentation')
-  assert.equal((await driver.state()).stepCount, 9)
+  const state = await driver.state()
+  assert.equal(state.stepCount, 9)
+  assert.deepEqual(state.entityConventions, [
+    '[data-layout-id]', '[data-scene-entity]', '[data-node]', '[data-entity-id]', '[data-scene-node]',
+    '[data-presentation-node]', '[data-presentation-box]', '[data-presentation-label]',
+    '[data-presentation-arrow]', '[data-presentation-frame]', '[data-presentation-emphasis]',
+    '[data-presentation-symbol-chip]',
+  ])
   assert.deepEqual(calls[1].args, ['resize', '1280', '720'])
   assert.match(calls[2].input, /http:\/\/127\.0\.0\.1:4319\/how-to-make-a-presentation/)
   assert.match(calls[2].input, /initialMode/)
   assert.doesNotMatch(calls[2].input, /page\.press\(/)
   assert.match(calls[3].input, /data-step-count/)
+  assert.match(calls[3].input, /data-entity-id/)
+  assert.match(calls[3].input, /data-scene-node/)
   assert.doesNotMatch(calls[3].input, /page\.press\(/)
   assert.doesNotMatch(
     calls[3].input,
     /const wasBrowsing = await page\.eval\(\(\) => Boolean\(document\.querySelector/,
   )
+})
+
+test('the AXI driver releases focus to the presentation root without leaving a tabindex behind', async () => {
+  const { createAxiBrowserDriver } = await import(
+    '../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs'
+  )
+  const calls = []
+  const driver = createAxiBrowserDriver({
+    baseUrl: 'http://127.0.0.1:4319/',
+    command: async (args, input) => {
+      calls.push({ args, input })
+      return { status: 0, stdout: `${JSON.stringify(true)}\n`, stderr: '' }
+    },
+  })
+
+  assert.equal(await driver.releaseFocus(), true)
+  await driver.restoreFocusTarget()
+
+  assert.match(calls[0].input, /tabindex/, 'releaseFocus adds a temporary tabindex when needed')
+  assert.match(calls[0].input, /data-presentation.*data-presentation-root/, 'focus stays in the presentation')
+  assert.match(calls[0].input, /interactive/i)
+  assert.match(calls[1].input, /removeAttribute\('tabindex'\)/)
 })
 
 test('the AXI driver establishes mode and position explicitly and waits for settled state', async () => {

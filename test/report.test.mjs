@@ -488,6 +488,14 @@ test('delivery identity and evidence ownership render in separate auditable sect
   assert.match(html, /narrow viewport not claimed/)
 })
 
+test('evaluator contradictions and a review hold recorded by an earlier harness are not rendered', () => {
+  const html = renderReport(result({
+    evaluator_contradictions: [{ proposition: 'The demo is one evolving scene.' }],
+    review_hold: { active: true, release_command: 'review-hold.sh' },
+  }))
+  assert.doesNotMatch(html, /evolving scene|Held from publication|review-hold\.sh/)
+})
+
 test('details for every reported dimension are expandable', () => {
   const html = renderReport(result())
   for (const heading of [

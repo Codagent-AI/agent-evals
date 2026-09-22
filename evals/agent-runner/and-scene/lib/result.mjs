@@ -24,7 +24,7 @@ import { summarizeEvidenceManifest } from './evidence.mjs'
 import { hashFile, readJson, writeJsonAtomic, writeTextAtomic } from './persistence.mjs'
 import { renderReport } from './report.mjs'
 
-export const RESULT_SCHEMA_VERSION = 7
+export const RESULT_SCHEMA_VERSION = 8
 export const ARTIFACT_MANIFEST_SCHEMA_VERSION = 2
 
 // Runtime scratch: candidate worktrees, linked run stores, and anything else a
@@ -299,6 +299,7 @@ export function assembleResult({
     // automated phase reports none at all rather than a smaller number that
     // reads like a worse product.
     automated_subtotal: automatedComplete ? (score?.automated_subtotal ?? null) : null,
+    fallback: score?.fallback ?? { criteria: 0, points: 0 },
     // Preserved as evidence, deliberately never summed.
     available_component_scores: automatedComplete
       ? []

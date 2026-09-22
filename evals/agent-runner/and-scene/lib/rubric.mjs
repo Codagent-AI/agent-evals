@@ -148,6 +148,31 @@ export function rubricCriteria(rubric) {
   return rows
 }
 
+// Every criterion and gate must say where its requirement comes from. A
+// fixture-owned source may carry one citation inline or several under `sources`.
+export function requirementSourceIds(rubric) {
+  return [...rubricCriteria(rubric).map(({ id }) => id), ...(rubric.gates ?? []).map(({ id }) => id)]
+}
+
+export function sourceEntries(source) {
+  return Array.isArray(source?.sources) ? source.sources : [source]
+}
+
+const filled = (value) => typeof value === 'string' && value.trim().length > 0
+
+export function sourceError(id, source) {
+  if (!source || typeof source !== 'object') return `criterion ${id} requires a source`
+  if (source.owner === 'eval') {
+    return filled(source.reason) ? null : `criterion ${id} eval-owned source requires a reason`
+  }
+  if (source.owner !== 'fixture') return `criterion ${id} source has unknown owner`
+  const citations = sourceEntries(source)
+  const complete = citations.length > 0 && citations.every((citation) => (
+    filled(citation?.document) && filled(citation?.heading) && filled(citation?.quote)
+  ))
+  return complete ? null : `criterion ${id} fixture source requires document, heading, and quote`
+}
+
 export function criteriaForJob(rubric, job) {
   return rubricCriteria(rubric).filter((row) => row.job === job).map(({ id }) => id)
 }
@@ -223,7 +248,18 @@ export function validateAutomatedRubric(rubric) {
     if (seen.has(id)) errors.push(`duplicate criterion ${id}`)
     seen.add(id)
   }
-
+  for (const id of requirementSourceIds(rubric)) {
+    const error = sourceError(id, rubric.criterion_sources?.[id])
+    if (error) errors.push(error)
+  }
+  const deterministic = new Set(rows.filter(({ evaluator }) => evaluator === 'deterministic-browser').map(({ id }) => id))
+  for (const [id, fallback] of Object.entries(rubric.fallbacks ?? {})) {
+    if (!deterministic.has(id)) errors.push(`fallback ${id} must name a deterministic-browser criterion`)
+    if (!JUDGE_JOBS.includes(fallback?.job)) errors.push(`fallback ${id} has unknown judge job ${fallback?.job}`)
+    if (typeof fallback?.requirement !== 'string' || fallback.requirement.trim().length === 0) {
+      errors.push(`fallback ${id} requires a requirement`)
+    }
+  }
   // A gate must never also award points, or one baseline outcome would be
   // counted twice.
   for (const gate of rubric.gates ?? []) {

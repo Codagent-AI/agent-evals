@@ -171,6 +171,53 @@ function unobserved(id, rationale, evidence = []) {
   }
 }
 
+const ENTITY_CONVENTIONS = ['data-layout-id', 'data-scene-entity', 'data-node', 'data-entity-id', 'data-scene-node']
+
+// What the driver reports it searched for is the truthful record; the constant
+// only covers a driver that predates the report.
+function conventionsSought(states) {
+  const reported = states.find((state) => (state?.entityConventions ?? []).length > 0)?.entityConventions
+  return reported ? [...reported] : ENTITY_CONVENTIONS
+}
+
+function notObserved(rationale, evidence = [], lookedFor = ENTITY_CONVENTIONS) {
+  return { not_observed: true, rationale, evidence, looked_for: lookedFor }
+}
+
+// A convention seen on some steps is not proof that another step lacks content,
+// so any step without a recognised scene object leaves the fact unobserved.
+function entitiesUnobserved(states) {
+  if (states.every((state) => (state.entityIds ?? []).length > 0)) return null
+  return notObserved(
+    'one or more steps exposed no recognised scene entity ids',
+    [],
+    conventionsSought(states),
+  )
+}
+
+// The scored record of a not-observed probe: no verdict, and what was sought.
+function notObservedCriterion(id, outcome, citation) {
+  return {
+    id,
+    verdict: null,
+    outcome: 'not-observed',
+    looked_for: outcome.looked_for,
+    rationale: bounded(outcome.rationale),
+    evidence: [...outcome.evidence, citation],
+    observed: false,
+  }
+}
+
+// A page that reports no mode or no step index has not answered. That says
+// nothing about the demo, so it stops the evaluation for a resumable retry
+// rather than deducting a point from the candidate.
+function assertReadableState(state) {
+  if (typeof state?.mode === 'string' && Number.isInteger(state?.stepIndex)) return
+  throw browserInfrastructureFailure(
+    `probe state could not be read: observed ${bounded(state?.mode)} at ${bounded(state?.stepIndex)}`,
+  )
+}
+
 function overlaps(a, b) {
   return a.some((entry) => b.includes(entry))
 }
@@ -198,6 +245,8 @@ function summarizeState(state) {
     caption: normalizeEvidence(state?.caption ?? ''),
     scene_id: typeof state?.sceneId === 'string' ? normalizeEvidence(state.sceneId) : null,
     entity_ids: (state?.entityIds ?? []).slice(0, MAX_STEP_COUNT).map((id) => normalizeEvidence(id)),
+    entity_conventions: (state?.entityConventions ?? []).slice(0, MAX_STEP_COUNT)
+      .map((selector) => normalizeEvidence(selector)),
     title_prominent: state?.titleProminent ?? null,
     caption_visible: state?.captionVisible ?? null,
     toc_visible: state?.tocVisible ?? null,
@@ -295,15 +344,7 @@ export async function runBrowserEvaluation({
       ? await driver.settle()
       : { settled: true, strategy: 'driver-state-read' }
     const established = await driver.state()
-    // A page that reports no mode or no step index has not answered. That says
-    // nothing about the demo, so it stops the evaluation for a resumable retry
-    // rather than deducting a point from the candidate.
-    if (typeof established.mode !== 'string' || !Number.isInteger(established.stepIndex)) {
-      throw browserInfrastructureFailure(
-        `probe state could not be read: observed ${bounded(established.mode)} `
-        + `at ${bounded(established.stepIndex)}`,
-      )
-    }
+    assertReadableState(established)
     if (established.mode !== mode || established.stepIndex !== position) {
       throw new Error(
         `probe state could not be established: required ${mode} at ${position}, `
@@ -315,7 +356,19 @@ export async function runBrowserEvaluation({
       established_state: { mode: established.mode, position: established.stepIndex },
       settled_state: settled,
     })
-    return driver
+    // The same rule holds for every later read in the probe, not only the one
+    // that establishes it: a read that returns no mode or no step index did not
+    // answer, so it can never be compared with an expected step and deducted.
+    return new Proxy(driver, {
+      get(target, property, receiver) {
+        if (property !== 'state') return Reflect.get(target, property, receiver)
+        return async (...args) => {
+          const state = await target.state(...args)
+          assertReadableState(state)
+          return state
+        }
+      },
+    })
   }
 
   async function stepCountOf(state) {
@@ -412,8 +465,7 @@ export async function runBrowserEvaluation({
       await session(PROBE_REQUIREMENTS['demo-required-scene-content'])
       const states = await walk()
       const mismatch = states.findIndex(
-        (state, position) => !sameText(state.caption, contract.step_captions[position])
-          || !(state.entityIds ?? []).length,
+        (state, position) => !sameText(state.caption, contract.step_captions[position]),
       )
       if (mismatch !== -1) {
         return [
@@ -426,6 +478,8 @@ export async function runBrowserEvaluation({
           ],
         ]
       }
+      const unobservedEntities = entitiesUnobserved(states)
+      if (unobservedEntities) return unobservedEntities
       return [true, 'every step renders its normative caption and scene content', contract.step_captions]
     },
 
@@ -453,11 +507,16 @@ export async function runBrowserEvaluation({
         ]
       }
       const replaced = states.findIndex(
-        (state, position) => position > 0 && !overlaps(state.entityIds ?? [], states[position - 1].entityIds ?? []),
+        (state, position) => position > 0
+          && (state.entityIds ?? []).length > 0
+          && (states[position - 1].entityIds ?? []).length > 0
+          && !overlaps(state.entityIds ?? [], states[position - 1].entityIds ?? []),
       )
       if (replaced !== -1) {
         return [false, `step ${replaced + 1} replaces every entity instead of evolving the scene`, [], observations]
       }
+      const unobservedEntities = entitiesUnobserved(states)
+      if (unobservedEntities) return unobservedEntities
       return [
         true,
         identityDeclared
@@ -609,15 +668,40 @@ export async function runBrowserEvaluation({
         controls = (await host.state()).controls ?? []
       }
       if (controls[0]) await host.activate(controls[0].name)
-      const beforeKey = (await host.state()).stepIndex
+      const beforeFocusedKey = (await host.state()).stepIndex
       await host.press('ArrowRight')
-      const afterKey = (await host.state()).stepIndex
-
-      const ok = atStart === 0 && last === count - 1 && pastEnd === count - 1 && afterKey === beforeKey + 1
+      const afterFocusedKey = (await host.state()).stepIndex
+      const released = await host.releaseFocus()
+      if (!released) {
+        await host.restoreFocusTarget()
+        throw browserInfrastructureFailure('could not release focus from the navigation control')
+      }
+      const beforeReleasedKey = (await host.state()).stepIndex
+      const deckKey = beforeReleasedKey === count - 1 ? 'ArrowLeft' : 'ArrowRight'
+      let afterReleasedKey
+      try {
+        await host.press(deckKey)
+        afterReleasedKey = (await host.state()).stepIndex
+      } finally {
+        await host.restoreFocusTarget()
+      }
+      const keysAfterFocusReleased = deckKey === 'ArrowRight'
+        ? afterReleasedKey === beforeReleasedKey + 1
+        : afterReleasedKey === beforeReleasedKey - 1
+      const clampsHold = atStart === 0 && last === count - 1 && pastEnd === count - 1
+      const ok = clampsHold && keysAfterFocusReleased
       return [
         ok,
-        `start clamp ${atStart}, end clamp ${last}→${pastEnd}, keys after control use ${beforeKey}→${afterKey}`,
+        `start clamp ${atStart}, end clamp ${last}→${pastEnd}, `
+          + `keys while control focused ${beforeFocusedKey}→${afterFocusedKey}, `
+          + `keys after focus released ${beforeReleasedKey}→${afterReleasedKey}`,
         [],
+        {
+          // Observed, never scored: whether a focused control lets deck keys
+          // through is judged from source by `navigation-controls-keep-keys`.
+          keys_while_control_focused: { before: beforeFocusedKey, after: afterFocusedKey },
+          keys_after_focus_released: { key: deckKey, before: beforeReleasedKey, after: afterReleasedKey },
+        },
       ]
     },
 
@@ -649,7 +733,9 @@ export async function runBrowserEvaluation({
       for (let round = 0; round < 4; round += 1) {
         await page.toggleMode()
         const state = await page.state()
-        if (!Number.isInteger(state.stepIndex) || !['present', 'browse'].includes(state.mode)) {
+        // A missing mode or step index never reaches here: that read is a
+        // harness failure. What remains is a mode the demo does not define.
+        if (!['present', 'browse'].includes(state.mode)) {
           return [false, `mode toggle ${round + 1} left an unreadable state`, [bounded(state.mode)]]
         }
       }
@@ -733,12 +819,17 @@ export async function runBrowserEvaluation({
     currentProbeObservationsDropped = 0
     let criterion
     try {
-      const [pass, rationale, evidence, observations = {}] = await probes[id]()
-      // A probe that cites a single string is citing one artifact, not a list
-      // of characters.
-      const citations = Array.isArray(evidence) ? evidence : [evidence]
-      criterion = verdict(id, pass, rationale, [...citations, probeCitation(id)])
-      criterion.observations = observations
+      const outcome = await probes[id]()
+      if (outcome?.not_observed) {
+        criterion = notObservedCriterion(id, outcome, probeCitation(id))
+      } else {
+        const [pass, rationale, evidence, observations = {}] = outcome
+        // A probe that cites a single string is citing one artifact, not a list
+        // of characters.
+        const citations = Array.isArray(evidence) ? evidence : [evidence]
+        criterion = verdict(id, pass, rationale, [...citations, probeCitation(id)])
+        criterion.observations = observations
+      }
     } catch (error) {
       if (error?.owner === 'evaluation-harness') throw error
       // A driver or page error is a real observation about the demo, so it
