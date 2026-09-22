@@ -15,6 +15,7 @@ set -euo pipefail
 SUITE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 RUN_DIR=""
 BASELINE_RUN_DIR=""
+NO_PUBLISH=0
 
 usage() {
   cat <<'USAGE'
@@ -29,6 +30,9 @@ Options:
                            the candidate result can record baseline deltas. The
                            baseline is asked its own 13 questions and keeps its
                            own candidate, response, score, and completion state.
+  --no-publish             Finalize the review without committing or pushing the
+                           result from this checkout. For callers that save the
+                           finalized run directory themselves.
   -h, --help               Show this help.
 
 The review is resumable: every accepted answer is saved immediately, and a later
@@ -48,6 +52,10 @@ while (($#)); do
     --baseline-run-dir)
       BASELINE_RUN_DIR="${2:?missing value for --baseline-run-dir}"
       shift 2
+      ;;
+    --no-publish)
+      NO_PUBLISH=1
+      shift
       ;;
     -h|--help)
       usage
@@ -78,6 +86,9 @@ fi
 ARGS=(--run-dir "$RUN_DIR")
 if [[ -n "$BASELINE_RUN_DIR" ]]; then
   ARGS+=(--baseline-run-dir "$BASELINE_RUN_DIR")
+fi
+if ((NO_PUBLISH)); then
+  ARGS+=(--no-publish)
 fi
 
 exec node "$SUITE_DIR/human-review.mjs" "${ARGS[@]}"

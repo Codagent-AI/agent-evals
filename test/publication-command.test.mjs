@@ -242,3 +242,35 @@ test('without a configured publication target the review finalizes and publishes
   assert.equal((await readJson(join(run.runDir, 'result.json'))).evaluation_status, 'complete')
   assert.equal(await readJson(join(run.runDir, 'publication.json'), null), null)
 })
+
+// A caller that saves the finalized result itself, such as the agent factory,
+// passes --no-publish so the review never commits or pushes from its checkout.
+test('--no-publish finalizes the review and publishes nothing even with a configured target', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-publish-cmd-'))
+  const { repo, remote } = await disposableRepo(dir)
+  const run = await pendingRun(dir)
+  const before = git(remote, 'rev-parse', 'HEAD')
+  const failingGit = () => assert.fail('--no-publish must not run git')
+
+  const outcome = await runHumanReview({
+    argv: ['--run-dir', run.runDir, '--no-publish'],
+    io: scriptedIo(answers()),
+    ...servers(),
+    publication: { repoDir: repo, git: failingGit },
+  })
+
+  assert.equal(outcome.exitCode, 0, JSON.stringify(outcome.errors))
+  assert.equal((await readJson(join(run.runDir, 'result.json'))).evaluation_status, 'complete')
+  assert.equal(await readJson(join(run.runDir, 'publication.json'), null), null)
+  assert.equal(git(remote, 'rev-parse', 'HEAD'), before)
+
+  // A later invocation against the finalized run does not retry publication either.
+  const resumed = await runHumanReview({
+    argv: ['--no-publish', '--run-dir', run.runDir],
+    io: { write: () => {}, ask: () => assert.fail('a finalized run must not prompt again') },
+    ...servers(),
+    publication: { repoDir: repo, git: failingGit },
+  })
+  assert.equal(resumed.exitCode, 0, JSON.stringify(resumed.errors))
+  assert.equal(await readJson(join(run.runDir, 'publication.json'), null), null)
+})

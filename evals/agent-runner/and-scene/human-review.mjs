@@ -53,10 +53,18 @@ const VALUES = new Map([
   ['--run-dir', 'runDir'],
   ['--baseline-run-dir', 'baselineRunDir'],
 ])
+const FLAGS = new Map([
+  ['--no-publish', 'noPublish'],
+])
 
 export function parseArgs(argv) {
   const options = {}
   for (let index = 0; index < argv.length; index += 1) {
+    const flag = FLAGS.get(argv[index])
+    if (flag) {
+      options[flag] = true
+      continue
+    }
     const key = VALUES.get(argv[index])
     if (!key) throw new Error(`unknown human-review option: ${argv[index]}`)
     const value = argv[index + 1]
@@ -483,6 +491,9 @@ export async function runHumanReview({
   } catch (error) {
     return { exitCode: 2, errors: [{ code: 'invalid-arguments', message: error.message }], runs: [] }
   }
+  // A caller that saves the finalized result itself, such as the agent factory
+  // reviewing from a pinned detached checkout, opts out of publishing here.
+  if (options.noPublish) publication = null
 
   let rubrics
   try {
