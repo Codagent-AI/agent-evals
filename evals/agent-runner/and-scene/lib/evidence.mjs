@@ -1050,39 +1050,6 @@ export function detectEvidenceContradictions({ candidate, evaluator }) {
   return contradictions
 }
 
-// This is deliberately separate from evidence contradictions above.  Those
-// compare a candidate's assertions with evaluator evidence; these compare two
-// evaluators answering an explicitly declared proposition.
-export function detectEvaluatorContradictions(score, rubric) {
-  const criteria = new Map((score?.components ?? []).flatMap((component) => (
-    (component.subcomponents ?? []).flatMap((subcomponent) => subcomponent.criteria ?? [])
-  )).map((criterion) => [criterion.id, criterion]))
-  const contradictions = []
-  for (const pair of rubric?.contradiction_pairs ?? []) {
-    const deterministic = criteria.get(pair.deterministic)
-    const judge = criteria.get(pair.judge)
-    if (
-      deterministic?.verdict_source !== 'owner'
-      || judge?.verdict_source !== 'owner'
-      || !['pass', 'fail'].includes(deterministic.verdict)
-      || !['pass', 'fail'].includes(judge.verdict)
-      || deterministic.verdict === judge.verdict
-    ) continue
-    const project = (criterion) => ({
-      id: criterion.id,
-      verdict: criterion.verdict,
-      rationale: criterion.rationale ?? null,
-      source_citations: criterion.source_citations ?? criterion.evidence ?? [],
-    })
-    contradictions.push({
-      deterministic: project(deterministic),
-      judge: project(judge),
-      proposition: pair.proposition,
-    })
-  }
-  return contradictions
-}
-
 export async function recordEvidenceContradictions({
   runDir,
   candidate,

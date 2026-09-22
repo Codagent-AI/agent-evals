@@ -62,13 +62,11 @@ import { runProductJudging } from './lib/judge-jobs.mjs'
 import {
   buildCandidateEvidenceManifest,
   buildEvaluatorEvidenceManifest,
-  detectEvaluatorContradictions,
   detectEvidenceContradictions,
   materializeEvidenceJudgeViews,
   recordEvidenceContradictions,
   validateCandidateEvidenceLineage,
 } from './lib/evidence.mjs'
-import { synchronizeReviewHold } from './lib/review-hold.mjs'
 import { materializeNeutralInputs } from './lib/neutral-source.mjs'
 import { applyOutcomeEvent, createOutcome } from './lib/outcomes.mjs'
 import { applyRunStateEvent } from './lib/state-machine.mjs'
@@ -1520,11 +1518,6 @@ export async function runEvaluation({
   // states of the same run.
   async function writeResult(outcome) {
     const projectedState = { ...checkpoint, outcome }
-    const evaluatorContradictions = detectEvaluatorContradictions(record.score, rubrics.automated.rubric)
-    const reviewHold = await synchronizeReviewHold({
-      runDir,
-      contradictions: evaluatorContradictions,
-    })
     const result = assembleResult({
         runId,
         mode,
@@ -1602,8 +1595,6 @@ export async function runEvaluation({
         // so the human-review command starts one rather than trusting a stale
         // URL.
         candidateServer: record.candidateServer,
-        automatedRubric: rubrics.automated.rubric,
-        reviewHold,
       })
     await writeResultArtifacts({ runDir, result })
   }

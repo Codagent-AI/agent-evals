@@ -222,8 +222,6 @@ function buildResult({ run, outcome, rubrics, score, humanReview, baseline, cand
     },
     delivery: previous.delivery ?? run.checkpoint?.delivery ?? null,
     candidateServer: candidateServer ?? previous.candidate_server ?? null,
-    automatedRubric: rubrics.automated.rubric,
-    reviewHold: previous.review_hold ?? null,
   })
 }
 

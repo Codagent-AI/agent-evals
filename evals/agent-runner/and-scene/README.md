@@ -537,27 +537,6 @@ explicitly confirms the full summary; before that the run stays
 Once the reviewer confirms, the run is finalized and published; see
 [Publication](#publication).
 
-## Evaluator contradiction holds
-
-The browser evaluator and source judges are independent, but the automated
-rubric declares the one proposition they both answer about the delivered demo.
-If their owner verdicts disagree, the run proceeds through scoring and human
-review normally but is held from publication. `result.json` and `report.html`
-show the two verdicts, rationales, citations, and the active hold.
-
-A maintainer resolves the hold with an audited record:
-
-```sh
-evals/agent-runner/and-scene/review-hold.sh \
-  --run-dir artifacts/evals/and-scene/<run> \
-  --reviewer "name" --decision stand --rationale "why the verdicts stand"
-```
-
-Use `--decision verdict-wrong` when either evaluator is wrong. That decision is
-terminal for the run: it remains permanently unpublished and the candidate
-must be re-scored into a new artifact after correcting the evaluator, rubric,
-or judge guidance.
-
 Pass `--baseline-run-dir` to review a pending reference baseline first. Each run
 keeps its own candidate, rubric, response, score, and completion state, and the
 candidate's result records baseline totals, component, subcomponent, and gate
@@ -824,56 +803,25 @@ rubric, scorer, gate, or reporting changes, then run targeted tests during
 development and `npm run check` before trusting a change. Candidate execution
 does not depend on retaining calibration artifacts.
 
-### Judging regression corpus
+### Real candidate end-to-end check
 
-`corpus/candidates.json` records the adjudicated correct outcome of every
-deterministic browser criterion, and of the two hard gates derived from browser
-observation, for eight real candidates: the five distinct candidates behind the
-published results and the three issue #26 repetitions. `corpus/replays/<id>.json`
-is the generated record of the production evaluator run against each one.
-
-`npm run check` fails, without a browser, when a file the deterministic
-evaluator loads, the automated rubric, or a candidate's golden outcomes changed
-after its replay was recorded. Any such change needs a replay of every corpus
-candidate before it can merge. Replays share one browser, so run them one at a
-time:
-
-```bash
-git clone https://github.com/Codagent-AI/and-scene.git /path/to/and-scene
-cd /path/to/and-scene
-# The issue #26 repetitions live on pull-request heads.
-git fetch origin 'refs/pull/21/head' 'refs/pull/22/head' 'refs/pull/23/head'
-
-git worktree add --detach /path/to/wt-<id> <revision from candidates.json>
-cd /path/to/wt-<id>
-npm ci && npm run build
-# The replay refuses a served build that does not state its revision. Historical
-# candidates do not emit one, so the operator states which revision was built.
-printf '{"revision":"%s"}\n' "<revision>" > dist/build-info.json
-npx vite preview --port 4791 --strictPort --host 127.0.0.1 &
-
-node evals/agent-runner/and-scene/corpus-replay.mjs \
-  --candidate <id> --base-url http://127.0.0.1:4791/
-```
-
-The command exits nonzero and prints the golden outcome, the replayed outcome,
-and the rationale for every criterion that differs. A harness failure or an
-unreachable candidate writes no record. When a replay disagrees with a golden
-verdict, adjudicate it against the pinned fixture text: either the evaluator is
-wrong and gets fixed, or the golden verdict is wrong and gets a new `history`
-entry explaining why. Never change a golden verdict to make a replay pass.
-Commit the regenerated records with the change that required them.
+`test/real-browser/candidate.test.mjs` runs the production browser evaluator in
+real Chrome against one real candidate, issue #26 repetition 3, and requires its
+known verdicts: it hides every step title, so the step content, present mode,
+and sample outline checks fail and every other check passes. Run it by hand
+after changing the browser evaluator; CI never requires it. The file header has
+the build and serve commands. It takes a few minutes.
 
 ### Adversarial real-browser pages
 
 `test/real-browser/adversarial.test.mjs` drives the production evaluator in real
-Chrome against six hand-made pages that no corpus candidate resembles: a deck
+Chrome against six hand-made pages that no real candidate resembles: a deck
 that ignores deck keys while a button holds focus, one whose keys stay dead
 after any control use, a correct scene with no recognised hook, a hidden step
 title, a deck that listens for keys on its own root, and a control that will not
 release focus. It sits outside the `test/*.test.mjs` glob because CI has no
 browser. Run it before merging any change to the control-key, scene, or
-present-mode probes, and never while a corpus replay is running:
+present-mode probes, and never while the candidate check is running:
 
 ```bash
 node --test test/real-browser/adversarial.test.mjs

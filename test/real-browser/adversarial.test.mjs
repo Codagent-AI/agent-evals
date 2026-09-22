@@ -1,10 +1,10 @@
 // INT-007. Real Chrome over chrome-devtools-axi, against hand-made pages that no
-// corpus candidate resembles. Outside the `test/*.test.mjs` glob on purpose: CI
+// real candidate resembles. Outside the `test/*.test.mjs` glob on purpose: CI
 // has no browser. Run with:
 //
 //   node --test test/real-browser/adversarial.test.mjs
 //
-// One at a time, and never while a corpus replay is running: they share Chrome.
+// One at a time, and never while candidate.test.mjs is running: they share Chrome.
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import test from 'node:test'

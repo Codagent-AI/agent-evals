@@ -20,10 +20,9 @@ import { readdir, stat } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 
 import { outcomeLabel } from './outcomes.mjs'
-import { detectEvaluatorContradictions, summarizeEvidenceManifest } from './evidence.mjs'
+import { summarizeEvidenceManifest } from './evidence.mjs'
 import { hashFile, readJson, writeJsonAtomic, writeTextAtomic } from './persistence.mjs'
 import { renderReport } from './report.mjs'
-import { reviewHoldProjection } from './review-hold.mjs'
 
 export const RESULT_SCHEMA_VERSION = 8
 export const ARTIFACT_MANIFEST_SCHEMA_VERSION = 2
@@ -274,14 +273,11 @@ export function assembleResult({
   candidate = null,
   delivery = null,
   candidateServer = null,
-  automatedRubric = null,
-  reviewHold = null,
 }) {
   const baselineRun = mode === 'reference-baseline'
   const components = score?.components ?? []
   const automatedComplete = components.length > 0 && components.every(({ complete }) => complete)
   const evidenceSummary = summarizeEvidence(evidence)
-  const evaluatorContradictions = detectEvaluatorContradictions(score, automatedRubric)
   const officialScore = outcome.verdict_durable
     ? (outcome.official_score ?? score?.official_score ?? null)
     : null
@@ -322,8 +318,6 @@ export function assembleResult({
     history: outcome.history,
     rubrics,
     score,
-    evaluator_contradictions: evaluatorContradictions,
-    ...(reviewHold ? { review_hold: reviewHoldProjection(reviewHold) } : {}),
     ...(humanReview ? { human_review: humanReview } : {}),
     browser_evaluation: browser,
     source_evidence: sourceEvidence,

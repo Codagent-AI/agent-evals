@@ -427,25 +427,6 @@ function criteriaSection(result) {
   return section('Automated criteria', summary + table(['Criterion', 'Subcomponent', 'Verdict', 'Rationale', 'Evidence'], rows))
 }
 
-function reviewHoldSection(result) {
-  const hold = result.review_hold
-  const contradictions = result.evaluator_contradictions ?? hold?.contradictions
-  if (!hold && !contradictions?.length) return ''
-  const banner = hold?.active
-    ? `<div class="banner"><strong>Held from publication:</strong> ${escapeHtml(hold.release_command)}</div>`
-    : ''
-  const rows = (contradictions ?? []).map((item) => [
-    item.proposition ?? '',
-    `${item.deterministic?.id ?? ''}: ${item.deterministic?.verdict ?? ''} — ${item.deterministic?.rationale ?? ''} (${(item.deterministic?.source_citations ?? []).join(' | ')})`,
-    `${item.judge?.id ?? ''}: ${item.judge?.verdict ?? ''} — ${item.judge?.rationale ?? ''} (${(item.judge?.source_citations ?? []).join(' | ')})`,
-  ])
-  const decision = hold?.resolution ?? hold?.release
-  const disposition = decision
-    ? `<p><strong>${decision.decision === 'verdict-wrong' ? 'Permanently unpublished; superseded by re-scoring.' : 'Hold released.'}</strong> Reviewer: ${escapeHtml(decision.reviewer)}; time: ${escapeHtml(decision.time)}; decision: ${escapeHtml(decision.decision)}; rationale: ${escapeHtml(decision.rationale)}</p>`
-    : ''
-  return section('Evaluator contradictions and review hold', banner + table(['Proposition', 'Deterministic evaluator', 'LLM judge'], rows) + disposition)
-}
-
 function humanSection(result) {
   const review = result.human_review
   if (!review) return section('Human review', '<p class="empty">Human review has not been finalized.</p>')
@@ -643,7 +624,6 @@ export function renderReport(result, { current = null } = {}) {
       ),
     ),
     criteriaSection(result),
-    reviewHoldSection(result),
     humanSection(result),
     humanReviewSupersessionSection(result),
     deliverySection(result),
