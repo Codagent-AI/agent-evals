@@ -404,3 +404,16 @@ test('the human rubric requires unique, ordered question numbers', async () => {
       .some((error) => error.includes('numbered 1 through 7 in order')),
   )
 })
+
+test('the fit and attribution guidance settle the verdicts the judge split on', async () => {
+  const rubric = await automatedRubric()
+  const guidance = (id) => rubric.components
+    .flatMap(({ subcomponents }) => subcomponents)
+    .find((row) => row.id === id)
+    .review_guidance.join('\n')
+
+  // Repetitions 1 and 2 share a minimum-scale floor; the judge failed one and passed the other.
+  assert.match(guidance('scene-fixed-canvas-uniform-fit'), /minimum-scale floor[^.]*is not by itself a failure/)
+  // Repetitions 2 and 3 both position the link only through sample CSS; the judge split them.
+  assert.match(guidance('scene-style-and-attribution'), /For attribution-default-link, the scene kit itself must place/)
+})

@@ -749,7 +749,8 @@
           "job": "scene-kit",
           "criteria": ["canvas-uniform-scaling"],
           "review_guidance": [
-            "Judge whether the delivered fit mechanism scales the authored canvas by one factor on both axes and keeps it inside its available bounds as the viewport shrinks. Cite the fit computation and its consumer. Do not require a particular rendering at an extreme viewport: an unreadably small viewport is not a presentation viewport, and how the kit degrades there is a design judgment for human review."
+            "Judge whether the delivered fit mechanism scales the authored canvas by one factor on both axes and keeps it inside its available bounds as the viewport shrinks. Cite the fit computation and its consumer. Do not require a particular rendering at an extreme viewport: an unreadably small viewport is not a presentation viewport, and how the kit degrades there is a design judgment for human review.",
+            "A minimum-scale floor or other lower clamp on the fit factor is not by itself a failure, even when it could exceed the available bounds at an unreadably small viewport. Fail only when the canvas leaves its available bounds at an ordinary presentation viewport, for example because the fit is computed from the window instead of the area the stage actually occupies, or ignores chrome that shares the viewport; cite that computation."
           ]
         },
         {
@@ -779,6 +780,7 @@
             "attribution-top-left-opt-in"
           ],
           "review_guidance": [
+            "For attribution-default-link, the scene kit itself must place the default link in the bottom-right corner, through the kit's own markup, layout, or positioning styles. A link that sits bottom-right only because sample-, presentation-, or host-owned CSS positions it does not satisfy the default and fails; cite where its position comes from. Positioning is not one of the fallback visual treatments the unstyled-output rule forbids.",
             "For attribution-styling-hook, a stable class or data hook targetable by presentation-owned or host-owned CSS satisfies the contract. It does not require a caller-provided className or style prop.",
             "For attribution-top-left-opt-in, verify that no default top-left and-scene brand is rendered and that the host can explicitly supply branding. This is a top-left brand rule, not an attribution placement option; the default attribution remains bottom-right."
           ]
