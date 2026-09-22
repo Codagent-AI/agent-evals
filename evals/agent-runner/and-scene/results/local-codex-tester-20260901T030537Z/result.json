@@ -7,9 +7,9 @@
   "product_verdict": "pass",
   "label": "PASS",
   "score_denominator": 100,
-  "official_score": 76.621428571429,
+  "official_score": 75.621428571429,
   "automated_subtotal": {
-    "points": 56.121428571429,
+    "points": 55.121428571429,
     "possible": 70,
     "observed_possible": 70,
     "complete": true
@@ -114,8 +114,8 @@
         "title": "Demo presentation technical quality",
         "applicable": true,
         "points_possible": 24,
-        "points_awarded": 24,
-        "points_observed": 24,
+        "points_awarded": 23,
+        "points_observed": 23,
         "points_observed_possible": 24,
         "floor": 15,
         "complete": true,
@@ -433,7 +433,9 @@
           }
         ],
         "raw_points_awarded": 19,
-        "adjudication_adjustment": 5
+        "adjudication_adjustment": 4,
+        "prior_points_awarded": 24,
+        "prior_adjudication_adjustment": 5
       },
       {
         "id": "scene-kit-correctness",
@@ -819,7 +821,9 @@
           }
         ],
         "raw_points_awarded": 19.038095238095238,
-        "adjudication_adjustment": 0
+        "adjudication_adjustment": 0,
+        "prior_points_awarded": 19.038095238095238,
+        "prior_adjudication_adjustment": 0
       },
       {
         "id": "presentation-skill-correctness",
@@ -1083,7 +1087,9 @@
           }
         ],
         "raw_points_awarded": 4.75,
-        "adjudication_adjustment": 0
+        "adjudication_adjustment": 0,
+        "prior_points_awarded": 4.75,
+        "prior_adjudication_adjustment": 0
       },
       {
         "id": "verification-tool-correctness",
@@ -1293,7 +1299,9 @@
           }
         ],
         "raw_points_awarded": 5.333333333333333,
-        "adjudication_adjustment": 0
+        "adjudication_adjustment": 0,
+        "prior_points_awarded": 5.333333333333333,
+        "prior_adjudication_adjustment": 0
       },
       {
         "id": "testing-evidence-quality",
@@ -1517,7 +1525,7 @@
     ],
     "gates_passed": true,
     "automated_subtotal": {
-      "points": 56.121428571429,
+      "points": 55.121428571429,
       "possible": 70,
       "observed_possible": 70,
       "complete": true
@@ -1541,7 +1549,7 @@
       "lowest_rating": 3,
       "complete": true
     },
-    "official_score": 76.621428571429,
+    "official_score": 75.621428571429,
     "official_pass": true,
     "pass_failures": [],
     "incomplete": [],
@@ -24815,26 +24823,58 @@
   "technical_adjudication": {
     "schema_version": 1,
     "approved_by": "Paul (user)",
-    "approved_at": "2026-09-05T17:22:27.536Z",
-    "rationale": "User-approved correction after the deterministic browser harness was shown to miss accessible semantic navigation controls and responsive chrome because it required optional per-control selectors and did not establish a wide viewport. A post-fix real-browser replay of the frozen candidate passed all 14 deterministic browser criteria.",
+    "approved_at": "2026-09-21T01:28:53.823Z",
+    "rationale": "User-approved deduction after the deterministic harness was corrected to activate a navigation control the way a pointer does. The candidate stops responding to deck keys once one of its own controls holds focus, which the previous probe could not observe because it activated controls without moving focus.",
     "findings": [
-      "The candidate exposed nine accessible progress buttons inside a semantic presentation-progress region, but the original harness required optional per-control data attributes and observed zero controls.",
-      "The candidate exposed working Previous and Next buttons inside its presentation step-controls region, but the original harness required optional directional-control data attributes.",
-      "The table of contents is intentionally responsive at a minimum width of 900px, while the original harness did not establish or record a viewport before asserting its visibility.",
-      "At 1280×720 with semantic discovery, the frozen candidate passed direct jump, control semantics, focus, keyboard, browse chrome, and every other deterministic browser criterion."
+      "The previous probe activated a control with element.click(), which does not move focus, so a presentation that suppresses deck keys while a control is focused passed the control-key check. It also skipped the check entirely when present mode exposed no controls, which is where most candidates put their progress controls.",
+      "A real-browser replay of the frozen candidate revision 5d5adf577f44315f028f5d046002e47ea25d84d7 measured the defect directly: the arrow key advances the deck from a neutral focus, and does nothing once a navigation control is focused.",
+      "demo-navigation-boundaries-and-control-keys is one of five criteria in demo-navigation-and-modes, which carries five points, so the deduction is one point of demo-technical-quality and one point of the official score.",
+      "Every other deterministic browser criterion still passes, all four hard gates still pass, and the product verdict is unchanged."
     ],
+    "reviewed_rubric": {
+      "rubric_id": "and-scene-automated-product",
+      "version": "4.0.0",
+      "sha256": "bc6db3280931bf8753e3c5c3bcff17b980457053b4f5d2ee39cda28ad6c7ce37"
+    },
     "component_scores": {
-      "demo-technical-quality": 24,
+      "demo-technical-quality": 23,
       "scene-kit-correctness": 19.038095238095238,
       "presentation-skill-correctness": 4.75,
       "verification-tool-correctness": 5.333333333333333
     },
-    "prior_shared_technical_score": 48.121428571429,
-    "revised_shared_technical_score": 53.121428571429,
-    "prior_automated_subtotal": 51.121428571428574,
-    "revised_automated_subtotal": 56.121428571429,
-    "prior_official_score": 71.62142857142857,
-    "revised_official_score": 76.621428571429,
-    "prior_result_fingerprint": "a05b6a874529bd31b3fad9e34a7e27c09350d2190e8c8fe190023bb5bd86da56"
-  }
+    "prior_shared_technical_score": 53.121428571429,
+    "revised_shared_technical_score": 52.121428571429,
+    "prior_automated_subtotal": 56.121428571429,
+    "revised_automated_subtotal": 55.121428571429,
+    "prior_official_score": 76.621428571429,
+    "revised_official_score": 75.621428571429,
+    "prior_result_fingerprint": "6cb18da3b495680d56f55eea5d8c740f06b70809b7d02a4e8a97238a4060e2d1"
+  },
+  "technical_adjudication_history": [
+    {
+      "schema_version": 1,
+      "approved_by": "Paul (user)",
+      "approved_at": "2026-09-05T17:22:27.536Z",
+      "rationale": "User-approved correction after the deterministic browser harness was shown to miss accessible semantic navigation controls and responsive chrome because it required optional per-control selectors and did not establish a wide viewport. A post-fix real-browser replay of the frozen candidate passed all 14 deterministic browser criteria.",
+      "findings": [
+        "The candidate exposed nine accessible progress buttons inside a semantic presentation-progress region, but the original harness required optional per-control data attributes and observed zero controls.",
+        "The candidate exposed working Previous and Next buttons inside its presentation step-controls region, but the original harness required optional directional-control data attributes.",
+        "The table of contents is intentionally responsive at a minimum width of 900px, while the original harness did not establish or record a viewport before asserting its visibility.",
+        "At 1280×720 with semantic discovery, the frozen candidate passed direct jump, control semantics, focus, keyboard, browse chrome, and every other deterministic browser criterion."
+      ],
+      "component_scores": {
+        "demo-technical-quality": 24,
+        "scene-kit-correctness": 19.038095238095238,
+        "presentation-skill-correctness": 4.75,
+        "verification-tool-correctness": 5.333333333333333
+      },
+      "prior_shared_technical_score": 48.121428571429,
+      "revised_shared_technical_score": 53.121428571429,
+      "prior_automated_subtotal": 51.121428571428574,
+      "revised_automated_subtotal": 56.121428571429,
+      "prior_official_score": 71.62142857142857,
+      "revised_official_score": 76.621428571429,
+      "prior_result_fingerprint": "a05b6a874529bd31b3fad9e34a7e27c09350d2190e8c8fe190023bb5bd86da56"
+    }
+  ]
 }

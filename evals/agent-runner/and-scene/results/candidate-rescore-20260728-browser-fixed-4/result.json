@@ -7,9 +7,9 @@
   "product_verdict": "pass",
   "label": "PASS",
   "score_denominator": 100,
-  "official_score": 80.191666666667,
+  "official_score": 79.191666666667,
   "automated_subtotal": {
-    "points": 59.691666666667,
+    "points": 58.691666666667,
     "possible": 70,
     "observed_possible": 70,
     "complete": true
@@ -100,8 +100,8 @@
         "title": "Demo presentation technical quality",
         "applicable": true,
         "points_possible": 24,
-        "points_awarded": 23,
-        "points_observed": 23,
+        "points_awarded": 22,
+        "points_observed": 22,
         "points_observed_possible": 24,
         "floor": 15,
         "complete": true,
@@ -423,7 +423,7 @@
           }
         ],
         "raw_points_awarded": 23,
-        "adjudication_adjustment": 0,
+        "adjudication_adjustment": -1,
         "prior_points_awarded": 23,
         "prior_adjudication_adjustment": 0
       },
@@ -1578,7 +1578,7 @@
     ],
     "gates_passed": true,
     "automated_subtotal": {
-      "points": 59.691666666667,
+      "points": 58.691666666667,
       "possible": 70,
       "observed_possible": 70,
       "complete": true
@@ -1608,7 +1608,7 @@
       "lowest_rating": 3,
       "complete": true
     },
-    "official_score": 80.191666666667,
+    "official_score": 79.191666666667,
     "official_pass": true,
     "pass_failures": [],
     "incomplete": [],
@@ -9102,8 +9102,8 @@
     "denominator": 92,
     "totals": {
       "baseline": 92,
-      "candidate": 74.191666666667,
-      "delta": -17.808333333333
+      "candidate": 73.191666666667,
+      "delta": -18.808333333333
     },
     "components": [
       {
@@ -9111,8 +9111,8 @@
         "title": "Demo presentation technical quality",
         "points_possible": 24,
         "baseline": 24,
-        "candidate": 23,
-        "delta": -1
+        "candidate": 22,
+        "delta": -2
       },
       {
         "id": "scene-kit-correctness",
@@ -14573,38 +14573,33 @@
   },
   "technical_adjudication": {
     "schema_version": 1,
-    "approved_by": "Paul (workflow-quality review audit correction)",
-    "approved_at": "2026-07-29T02:10:51.253Z",
-    "rationale": "Preserve the confirmed 80.1917 score while correcting prior-adjustment audit semantics. The score remains based on rubric 3.2; rubric 3.3 governs future evaluations.",
+    "approved_by": "Paul (user)",
+    "approved_at": "2026-09-21T01:28:53.823Z",
+    "rationale": "User-approved deduction after the deterministic harness was corrected to activate a navigation control the way a pointer does. The candidate stops responding to deck keys once one of its own controls holds focus, which the previous probe could not observe because it activated controls without moving focus.",
     "findings": [
-      "Testing evidence remains 4/4 and assumption handling remains 2/4.",
-      "The prior-adjudication adjustment now records the superseded state rather than the new score delta.",
-      "Rubric 3.3 adds explicit future-judge guidance and calibration for requirement violations misclassified as environmental hardening."
+      "The previous probe activated a control with element.click(), which does not move focus, so a presentation that suppresses deck keys while a control is focused passed the control-key check. It also skipped the check entirely when present mode exposed no controls, which is where most candidates put their progress controls.",
+      "A real-browser replay of the frozen candidate revision 785f48d2d750445dd1673da03c1ae793c6b129b5 measured the defect directly: the arrow key advances the deck from a neutral focus, and does nothing once a navigation control is focused.",
+      "demo-navigation-boundaries-and-control-keys is one of five criteria in demo-navigation-and-modes, which carries five points, so the deduction is one point of demo-technical-quality and one point of the official score.",
+      "Every other deterministic browser criterion still passes, all four hard gates still pass, and the product verdict is unchanged."
     ],
     "reviewed_rubric": {
       "rubric_id": "and-scene-automated-product",
-      "version": "3.2.0",
-      "sha256": "e39ad48c48a94002c77201102ef790336cd8e5614f12b2c5202cdaef3b1d33d1"
+      "version": "4.0.0",
+      "sha256": "bc6db3280931bf8753e3c5c3bcff17b980457053b4f5d2ee39cda28ad6c7ce37"
     },
     "component_scores": {
-      "demo-technical-quality": 23,
+      "demo-technical-quality": 22,
       "scene-kit-correctness": 21.233333333333334,
       "presentation-skill-correctness": 5.125,
       "verification-tool-correctness": 4.333333333333333
     },
-    "workflow_component_scores": {
-      "testing-evidence-quality": 4,
-      "assumption-handling-quality": 2
-    },
-    "prior_workflow_quality_score": 6,
-    "revised_workflow_quality_score": 6,
     "prior_shared_technical_score": 53.691666666667,
-    "revised_shared_technical_score": 53.691666666667,
+    "revised_shared_technical_score": 52.691666666667,
     "prior_automated_subtotal": 59.691666666667,
-    "revised_automated_subtotal": 59.691666666667,
+    "revised_automated_subtotal": 58.691666666667,
     "prior_official_score": 80.191666666667,
-    "revised_official_score": 80.191666666667,
-    "prior_result_fingerprint": "cf34be0745b8991d61760ed4b4300cda1b27727ea99415b13ffd95f49ba11d9c"
+    "revised_official_score": 79.191666666667,
+    "prior_result_fingerprint": "81efd4a3b2fbc29ff66135f6d893fdf8f129186a87d8312f770e7de7dac6b5b0"
   },
   "technical_adjudication_history": [
     {
@@ -14707,6 +14702,41 @@
       "prior_official_score": 82.191666666667,
       "revised_official_score": 80.191666666667,
       "prior_result_fingerprint": "c75b73b8e5350cb024496bc45e222d712d06e5ed11a91994d22216f6910b8d60"
+    },
+    {
+      "schema_version": 1,
+      "approved_by": "Paul (workflow-quality review audit correction)",
+      "approved_at": "2026-07-29T02:10:51.253Z",
+      "rationale": "Preserve the confirmed 80.1917 score while correcting prior-adjustment audit semantics. The score remains based on rubric 3.2; rubric 3.3 governs future evaluations.",
+      "findings": [
+        "Testing evidence remains 4/4 and assumption handling remains 2/4.",
+        "The prior-adjudication adjustment now records the superseded state rather than the new score delta.",
+        "Rubric 3.3 adds explicit future-judge guidance and calibration for requirement violations misclassified as environmental hardening."
+      ],
+      "reviewed_rubric": {
+        "rubric_id": "and-scene-automated-product",
+        "version": "3.2.0",
+        "sha256": "e39ad48c48a94002c77201102ef790336cd8e5614f12b2c5202cdaef3b1d33d1"
+      },
+      "component_scores": {
+        "demo-technical-quality": 23,
+        "scene-kit-correctness": 21.233333333333334,
+        "presentation-skill-correctness": 5.125,
+        "verification-tool-correctness": 4.333333333333333
+      },
+      "workflow_component_scores": {
+        "testing-evidence-quality": 4,
+        "assumption-handling-quality": 2
+      },
+      "prior_workflow_quality_score": 6,
+      "revised_workflow_quality_score": 6,
+      "prior_shared_technical_score": 53.691666666667,
+      "revised_shared_technical_score": 53.691666666667,
+      "prior_automated_subtotal": 59.691666666667,
+      "revised_automated_subtotal": 59.691666666667,
+      "prior_official_score": 80.191666666667,
+      "revised_official_score": 80.191666666667,
+      "prior_result_fingerprint": "cf34be0745b8991d61760ed4b4300cda1b27727ea99415b13ffd95f49ba11d9c"
     }
   ]
 }

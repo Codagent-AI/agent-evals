@@ -58,6 +58,15 @@ function table(headings, rows) {
   return `<table><thead><tr>${head}</tr></thead><tbody>\n${body}\n</tbody></table>`
 }
 
+// The harness output an adjudication overturned. It is shown as raw data next
+// to the current gate record, never as the current rationale.
+function rawGateRecord(gate) {
+  if (gate?.adjudication_changed !== true) return ''
+  const evidence = (gate.raw_evidence ?? []).join(' | ')
+  return `raw verdict ${verdictCell(gate.raw_verdict)}: ${gate.raw_rationale ?? 'not recorded'}`
+    + (evidence ? ` — ${evidence}` : '')
+}
+
 function section(title, body) {
   return `<details><summary>${escapeHtml(title)}</summary>\n${body}\n</details>`
 }
@@ -408,12 +417,14 @@ function criteriaSection(result) {
     (component.subcomponents ?? []).flatMap((sub) => (sub.criteria ?? []).map((criterion) => [
       criterion.id,
       sub.id,
-      verdictCell(criterion.verdict),
-      criterion.rationale ?? 'not observed',
-      (criterion.evidence ?? []).join(' | '),
+      `${verdictCell(criterion.verdict)}${criterion.verdict_source === 'fallback' ? ' (decided by the LLM because the browser check could not observe it)' : ''}`,
+      `${criterion.rationale ?? 'not observed'}${criterion.not_observed ? ` | Browser: ${criterion.not_observed.rationale ?? 'not observed'}; looked for ${(criterion.not_observed.looked_for ?? []).join(', ')}` : ''}`,
+      [...(criterion.evidence ?? []), ...(criterion.source_citations ?? [])].join(' | '),
     ]))
   ))
-  return section('Automated criteria', table(['Criterion', 'Subcomponent', 'Verdict', 'Rationale', 'Evidence'], rows))
+  const fallback = result.fallback ?? result.score?.fallback
+  const summary = fallback?.criteria ? `<p>${escapeHtml(`${fallback.criteria} criteria (${points(fallback.points)} points) were decided by fallback LLM review.`)}</p>` : ''
+  return section('Automated criteria', summary + table(['Criterion', 'Subcomponent', 'Verdict', 'Rationale', 'Evidence'], rows))
 }
 
 function humanSection(result) {
@@ -598,10 +609,11 @@ export function renderReport(result, { current = null } = {}) {
     section(
       'Hard gates',
       table(
-        ['Gate', 'Requirement', 'Verdict', 'Rationale', 'Evidence'],
+        ['Gate', 'Requirement', 'Verdict', 'Rationale', 'Evidence', 'Raw adjudication data'],
         (result.score?.gates ?? []).map((gate) => [
           gate.id, gate.requirement ?? '', verdictCell(gate.verdict), gate.rationale ?? 'not observed',
           (gate.evidence ?? []).join(' | '),
+          rawGateRecord(gate),
         ]),
       )
       + table(

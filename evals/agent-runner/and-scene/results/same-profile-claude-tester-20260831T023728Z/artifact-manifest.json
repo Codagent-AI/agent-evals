@@ -3,9 +3,9 @@
   "run_id": "same-profile-claude-tester-20260831T023728Z",
   "projection": {
     "evaluation_status": "complete",
-    "product_verdict": "fail",
+    "product_verdict": "pass",
     "score_denominator": 100,
-    "official_score": 76.33571428571429,
+    "official_score": 78.335714285714,
     "failed_phase": null,
     "failure": null
   },
@@ -30,13 +30,13 @@
     },
     {
       "path": "report.html",
-      "bytes": 408418,
-      "sha256": "71c4e4d3d220744902b1bea4a63bf2497698495b539209ccca2cf7bb431b129c"
+      "bytes": 413328,
+      "sha256": "d61b606b53d781778585498e9b1a4c6ddc93b7c50197c2909152ff3c26286163"
     },
     {
       "path": "result.json",
-      "bytes": 1154622,
-      "sha256": "2738f2fb1d270fda10046d823b3a3b183969df7289292a98cf362c70aeee337e"
+      "bytes": 1163339,
+      "sha256": "527e4c7e83c0814dcb80f84a0d001d795b5fbc07fbfd76a1608e4c0f4d3faf3d"
     }
   ]
 }

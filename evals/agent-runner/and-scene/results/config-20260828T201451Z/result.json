@@ -405,7 +405,9 @@
           }
         ],
         "raw_points_awarded": 18,
-        "adjudication_adjustment": 5
+        "adjudication_adjustment": 5,
+        "prior_points_awarded": 23,
+        "prior_adjudication_adjustment": 5
       },
       {
         "id": "scene-kit-correctness",
@@ -793,7 +795,9 @@
           }
         ],
         "raw_points_awarded": 18.752380952380953,
-        "adjudication_adjustment": 0
+        "adjudication_adjustment": 0,
+        "prior_points_awarded": 18.752380952380953,
+        "prior_adjudication_adjustment": 0
       },
       {
         "id": "presentation-skill-correctness",
@@ -1054,7 +1058,9 @@
           }
         ],
         "raw_points_awarded": 5.125,
-        "adjudication_adjustment": 0
+        "adjudication_adjustment": 0,
+        "prior_points_awarded": 5.125,
+        "prior_adjudication_adjustment": 0
       },
       {
         "id": "verification-tool-correctness",
@@ -1253,7 +1259,9 @@
           }
         ],
         "raw_points_awarded": 4.166666666666667,
-        "adjudication_adjustment": 0
+        "adjudication_adjustment": 0,
+        "prior_points_awarded": 4.166666666666667,
+        "prior_adjudication_adjustment": 0
       },
       {
         "id": "testing-evidence-quality",
@@ -1338,7 +1346,9 @@
           }
         ],
         "raw_points_awarded": 2,
-        "adjudication_adjustment": 1
+        "adjudication_adjustment": 1,
+        "prior_points_awarded": 3,
+        "prior_adjudication_adjustment": 1
       },
       {
         "id": "assumption-handling-quality",
@@ -1422,7 +1432,9 @@
           }
         ],
         "raw_points_awarded": 1,
-        "adjudication_adjustment": 1
+        "adjudication_adjustment": 1,
+        "prior_points_awarded": 2,
+        "prior_adjudication_adjustment": 1
       }
     ],
     "score_denominator": 100,
@@ -1438,20 +1450,26 @@
         ],
         "observed": true,
         "raw_verdict": "pass",
-        "adjudication_changed": false
+        "adjudication_changed": false,
+        "prior_verdict": "pass"
       },
       {
         "id": "verification-sample-outline",
         "requirement": "The canonical nine-step sample exists, is registered and reachable, and matches its required outline",
         "verdict": "pass",
-        "rationale": "the canonical nine-step sample must be registered, reachable, and match its outline",
+        "rationale": "verification-sample-outline failed because the former probe compared the browse-mode deck title with the required step titles instead of reading the active step title. The canonical nine-step outline exists, is registered, and is reachable, and a real-browser replay under rubric 4.0.0 passes the gate.",
         "evidence": [
-          "evidence/evaluator/browser-probes/demo-route-and-registration.json",
-          "evidence/evaluator/browser-probes/demo-nine-step-content-and-order.json"
+          "technical adjudication approved by Paul (user) at 2026-09-21T03:22:04.599Z"
         ],
         "observed": true,
         "raw_verdict": "fail",
-        "adjudication_changed": true
+        "adjudication_changed": true,
+        "raw_rationale": "the canonical nine-step sample must be registered, reachable, and match its outline",
+        "raw_evidence": [
+          "evidence/evaluator/browser-probes/demo-route-and-registration.json",
+          "evidence/evaluator/browser-probes/demo-nine-step-content-and-order.json"
+        ],
+        "prior_verdict": "pass"
       },
       {
         "id": "verification-every-produced-step-renders",
@@ -1476,7 +1494,8 @@
         ],
         "observed": true,
         "raw_verdict": "pass",
-        "adjudication_changed": false
+        "adjudication_changed": false,
+        "prior_verdict": "pass"
       },
       {
         "id": "verification-clear-outcome",
@@ -1488,7 +1507,8 @@
         ],
         "observed": true,
         "raw_verdict": "pass",
-        "adjudication_changed": false
+        "adjudication_changed": false,
+        "prior_verdict": "pass"
       }
     ],
     "gates_passed": true,
@@ -17747,19 +17767,18 @@
   "technical_adjudication": {
     "schema_version": 1,
     "approved_by": "Paul (user)",
-    "approved_at": "2026-08-28T21:24:38-04:00",
-    "rationale": "A criterion-by-criterion harness audit corrected deterministic browser false negatives and final-revision evidence parsing while retaining independently supported deductions.",
+    "approved_at": "2026-09-21T03:22:04.599Z",
+    "rationale": "verification-sample-outline failed because the former probe compared the browse-mode deck title with the required step titles instead of reading the active step title. The canonical nine-step outline exists, is registered, and is reachable, and a real-browser replay under rubric 4.0.0 passes the gate.",
     "findings": [
-      "Five browser deductions were false negatives caused by omitted candidate-equivalent stable title/progress hooks and a synthetic touchstart event missing changedTouches.",
-      "The canonical nine-step outline exists, is registered, and is reachable; the old probe compared the overall browse deck title instead of active present-mode step titles, so the outline hard gate was a false failure.",
-      "Browse mode still lacks the active step title required by the rubric, so its independent browse-behavior deduction remains.",
-      "The acceptance record documents a full run at the final SHA; the old lineage parser ignored its qualified Tested revision and Verification scope fields.",
-      "Every other automated deduction was individually reviewed against the frozen candidate source, rubric guidance, and retained evidence and remains unchanged."
+      "This adjudication changes no score and no verdict. An earlier approved adjudication overturned verification-sample-outline, but each gate still carried the harness rationale and evidence for the failure it replaced, so the report showed a passing verdict beside a failure description.",
+      "The overturned gates are verification-sample-outline. Their verdicts were set to pass by an earlier approved adjudication, which is retained in this record's adjudication history.",
+      "The harness rationale and evidence for each overturned gate are preserved unchanged as raw_rationale and raw_evidence, next to raw_verdict.",
+      "Every component score, hard-gate verdict, the official score, and the product verdict are restated exactly as they were published."
     ],
     "reviewed_rubric": {
       "rubric_id": "and-scene-automated-product",
-      "version": "3.10.0",
-      "sha256": "a0bd5197cd6a79b14be4905d0f6041038b8fc48a0a0a032ed0263b3c566a1ce9"
+      "version": "4.0.0",
+      "sha256": "bc6db3280931bf8753e3c5c3bcff17b980457053b4f5d2ee39cda28ad6c7ce37"
     },
     "component_scores": {
       "demo-technical-quality": 23,
@@ -17771,11 +17790,11 @@
       "testing-evidence-quality": 3,
       "assumption-handling-quality": 2
     },
-    "prior_workflow_quality_score": 3,
+    "prior_workflow_quality_score": 5,
     "revised_workflow_quality_score": 5,
     "prior_gate_verdicts": {
       "verification-build-whole-app": "pass",
-      "verification-sample-outline": "fail",
+      "verification-sample-outline": "pass",
       "verification-every-produced-step-renders": "pass",
       "verification-clear-outcome": "pass"
     },
@@ -17785,13 +17804,13 @@
       "verification-every-produced-step-renders": "pass",
       "verification-clear-outcome": "pass"
     },
-    "prior_shared_technical_score": 46.044047619048,
+    "prior_shared_technical_score": 51.044047619048,
     "revised_shared_technical_score": 51.044047619048,
-    "prior_automated_subtotal": 49.04404761904762,
+    "prior_automated_subtotal": 56.044047619048,
     "revised_automated_subtotal": 56.044047619048,
-    "prior_official_score": 69.40515873015873,
-    "revised_official_score": 76.405158730159,
-    "prior_result_fingerprint": "2a6a16e372e16927cea580e96cb6b9ba7942a0bb7214259d4774ee06c49a7c1a"
+    "prior_official_score": 73.044047619048,
+    "revised_official_score": 73.044047619048,
+    "prior_result_fingerprint": "8cd5904ba56bae5f4f8494a78153bb99de147409ff47b92f723a720c63110d53"
   },
   "human_review_history": [
     {
@@ -18000,5 +18019,122 @@
     "prior_official_score": 76.405158730159,
     "revised_official_score": 73.044047619048,
     "prior_result_fingerprint": "5a580432eea8e39a265f3499b42e134dff6acd89d318a4ac7c9c0f13498eff5e"
-  }
+  },
+  "technical_adjudication_history": [
+    {
+      "schema_version": 1,
+      "approved_by": "Paul (user)",
+      "approved_at": "2026-08-28T21:24:38-04:00",
+      "rationale": "A criterion-by-criterion harness audit corrected deterministic browser false negatives and final-revision evidence parsing while retaining independently supported deductions.",
+      "findings": [
+        "Five browser deductions were false negatives caused by omitted candidate-equivalent stable title/progress hooks and a synthetic touchstart event missing changedTouches.",
+        "The canonical nine-step outline exists, is registered, and is reachable; the old probe compared the overall browse deck title instead of active present-mode step titles, so the outline hard gate was a false failure.",
+        "Browse mode still lacks the active step title required by the rubric, so its independent browse-behavior deduction remains.",
+        "The acceptance record documents a full run at the final SHA; the old lineage parser ignored its qualified Tested revision and Verification scope fields.",
+        "Every other automated deduction was individually reviewed against the frozen candidate source, rubric guidance, and retained evidence and remains unchanged."
+      ],
+      "reviewed_rubric": {
+        "rubric_id": "and-scene-automated-product",
+        "version": "3.10.0",
+        "sha256": "a0bd5197cd6a79b14be4905d0f6041038b8fc48a0a0a032ed0263b3c566a1ce9"
+      },
+      "component_scores": {
+        "demo-technical-quality": 23,
+        "scene-kit-correctness": 18.752380952380953,
+        "presentation-skill-correctness": 5.125,
+        "verification-tool-correctness": 4.166666666666667
+      },
+      "workflow_component_scores": {
+        "testing-evidence-quality": 3,
+        "assumption-handling-quality": 2
+      },
+      "prior_workflow_quality_score": 3,
+      "revised_workflow_quality_score": 5,
+      "prior_gate_verdicts": {
+        "verification-build-whole-app": "pass",
+        "verification-sample-outline": "fail",
+        "verification-every-produced-step-renders": "pass",
+        "verification-clear-outcome": "pass"
+      },
+      "revised_gate_verdicts": {
+        "verification-build-whole-app": "pass",
+        "verification-sample-outline": "pass",
+        "verification-every-produced-step-renders": "pass",
+        "verification-clear-outcome": "pass"
+      },
+      "prior_shared_technical_score": 46.044047619048,
+      "revised_shared_technical_score": 51.044047619048,
+      "prior_automated_subtotal": 49.04404761904762,
+      "revised_automated_subtotal": 56.044047619048,
+      "prior_official_score": 69.40515873015873,
+      "revised_official_score": 76.405158730159,
+      "prior_result_fingerprint": "2a6a16e372e16927cea580e96cb6b9ba7942a0bb7214259d4774ee06c49a7c1a"
+    },
+    {
+      "schema_version": 1,
+      "approved_by": "Paul (user)",
+      "approved_at": "2026-09-21T00:13:13.734Z",
+      "rationale": "User-approved completion of the 2026-08-28 technical adjudication. Six deterministic browser deductions were false negatives; that correction restored five and left one point unrestored on a requirement rubric 4.0.0 has since removed.",
+      "findings": [
+        "The 2026-08-28 adjudication set demo-technical-quality to 23 of 24 and recorded the deduction it retained: \"Browse mode still lacks the active step title required by the rubric, so its independent browse-behavior deduction remains.\"",
+        "Automated rubric 4.0.0 no longer requires browse mode to expose the active step title. Which element carries the deck title and which carries the step title is a presentation design choice, so the retained deduction has no basis under the current rubric.",
+        "A real-browser replay of the frozen candidate revision 44c8e817ec94d436711cde0a3b00c9c90564cda5 under rubric 4.0.0 passed all 14 deterministic browser criteria with no recorded failures, making demo-technical-quality 24 of 24.",
+        "This adjudication changes only demo-technical-quality. The 2026-08-28 corrections to testing-evidence-quality and assumption-handling-quality are restated unchanged, and the 2026-08-29 human review supersession is untouched."
+      ],
+      "reviewed_rubric": {
+        "rubric_id": "and-scene-automated-product",
+        "version": "4.0.0",
+        "sha256": "bc6db3280931bf8753e3c5c3bcff17b980457053b4f5d2ee39cda28ad6c7ce37"
+      },
+      "component_scores": {
+        "demo-technical-quality": 24,
+        "scene-kit-correctness": 18.752380952380953,
+        "presentation-skill-correctness": 5.125,
+        "verification-tool-correctness": 4.166666666666667
+      },
+      "workflow_component_scores": {
+        "testing-evidence-quality": 3,
+        "assumption-handling-quality": 2
+      },
+      "prior_workflow_quality_score": 5,
+      "revised_workflow_quality_score": 5,
+      "prior_shared_technical_score": 51.044047619048,
+      "revised_shared_technical_score": 52.044047619048,
+      "prior_automated_subtotal": 56.044047619048,
+      "revised_automated_subtotal": 57.044047619048,
+      "prior_official_score": 73.044047619048,
+      "revised_official_score": 74.044047619048,
+      "prior_result_fingerprint": "66f6169284dea88228141a28d00d513f7b8967e8015854d85dfec70dd3ec1a63"
+    },
+    {
+      "schema_version": 1,
+      "approved_by": "Paul (user)",
+      "approved_at": "2026-09-21T01:28:53.823Z",
+      "rationale": "User-approved deduction after the deterministic harness was corrected to activate a navigation control the way a pointer does. The candidate stops responding to deck keys once one of its own controls holds focus, which the previous probe could not observe because it activated controls without moving focus.",
+      "findings": [
+        "The previous probe activated a control with element.click(), which does not move focus, so a presentation that suppresses deck keys while a control is focused passed the control-key check. It also skipped the check entirely when present mode exposed no controls, which is where most candidates put their progress controls.",
+        "A real-browser replay of the frozen candidate revision 44c8e817ec94d436711cde0a3b00c9c90564cda5 measured the defect directly: the arrow key advances the deck from a neutral focus, and does nothing once a navigation control is focused.",
+        "demo-navigation-boundaries-and-control-keys is one of five criteria in demo-navigation-and-modes, which carries five points, so the deduction is one point of demo-technical-quality and one point of the official score.",
+        "Every other deterministic browser criterion still passes, all four hard gates still pass, and the product verdict is unchanged."
+      ],
+      "reviewed_rubric": {
+        "rubric_id": "and-scene-automated-product",
+        "version": "4.0.0",
+        "sha256": "bc6db3280931bf8753e3c5c3bcff17b980457053b4f5d2ee39cda28ad6c7ce37"
+      },
+      "component_scores": {
+        "demo-technical-quality": 23,
+        "scene-kit-correctness": 18.752380952380953,
+        "presentation-skill-correctness": 5.125,
+        "verification-tool-correctness": 4.166666666666667
+      },
+      "prior_shared_technical_score": 52.044047619048,
+      "revised_shared_technical_score": 51.044047619048,
+      "prior_automated_subtotal": 57.044047619048,
+      "revised_automated_subtotal": 56.044047619048,
+      "prior_official_score": 74.044047619048,
+      "revised_official_score": 73.044047619048,
+      "prior_result_fingerprint": "553c4c1956c5eb140a1bb53df5546996aded459628e5f5b5606ba4fd449587c6"
+    }
+  ]
 }

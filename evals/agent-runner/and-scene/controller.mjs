@@ -1331,6 +1331,7 @@ export async function runEvaluation({
             manifest: record.neutral.manifest,
           } : null,
           evidenceViews,
+          notObserved: (record.browser?.criteria ?? []).filter(({ outcome }) => outcome === 'not-observed'),
           mode,
           loadJob: async ({ id, inputHash }) => {
             const reusable = await verifyUnit(checkpoint, {

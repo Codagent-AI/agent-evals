@@ -277,17 +277,38 @@ export function applyTechnicalAdjudication(result, review) {
   const priorGateVerdicts = gateVerdicts
     ? Object.fromEntries((result.score?.gates ?? []).map(({ id, verdict }) => [id, verdict]))
     : null
+  // A gate the adjudication overturns keeps the harness's rationale and
+  // evidence as raw data. Its current fields describe the adjudicated record,
+  // so a revised verdict is never shown beside the failure it replaced.
+  const adjudicationCitation = `technical adjudication approved by ${review.approved_by.trim()} at ${review.approved_at}`
   const gates = (result.score?.gates ?? []).map((gate) => {
     if (!gateVerdicts) return gate
     const raw = gate.raw_verdict ?? gate.verdict
     const revised = gateVerdicts[gate.id]
+    const changed = revised !== raw
+    const {
+      raw_rationale: priorRawRationale,
+      raw_evidence: priorRawEvidence,
+      ...current
+    } = gate
+    const rawRationale = priorRawRationale !== undefined ? priorRawRationale : (gate.rationale ?? null)
+    const rawEvidence = priorRawEvidence !== undefined ? priorRawEvidence : (gate.evidence ?? [])
     return {
-      ...gate,
+      ...current,
       raw_verdict: raw,
+      ...(changed ? { raw_rationale: rawRationale, raw_evidence: rawEvidence } : {}),
       ...(result.technical_adjudication ? { prior_verdict: gate.verdict } : {}),
       verdict: revised,
+      // A later adjudication that restores the raw verdict restores the raw
+      // record with it.
+      ...(changed
+        ? { rationale: review.rationale.trim(), evidence: [adjudicationCitation] }
+        : {
+            ...(priorRawRationale !== undefined ? { rationale: priorRawRationale } : {}),
+            ...(priorRawEvidence !== undefined ? { evidence: priorRawEvidence } : {}),
+          }),
       observed: true,
-      adjudication_changed: revised !== raw,
+      adjudication_changed: changed,
     }
   })
   const passContract = recomputePassContract({ result, components, gates, official })

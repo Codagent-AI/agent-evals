@@ -114,9 +114,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 3.12 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
+test('rubric 5.0 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '3.12.0')
+  assert.equal(rubric.version, '5.0.0')
   assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(
@@ -138,7 +138,8 @@ test('rubric 3.12 defines pre-human automated eligibility and distinguishes proo
   assert.match(guidance('demo-code-boundaries'), /title.*consum/i)
   assert.match(guidance('scene-entity-transitions'), /plain conditional|opt-in wrapper/i)
   assert.match(guidance('scene-modes-and-navigation'), /both.*horizontal.*vertical/i)
-  assert.match(guidance('scene-fixed-canvas-uniform-fit'), /64×64.*equal.*scale/i)
+  assert.match(guidance('scene-fixed-canvas-uniform-fit'), /one factor on both axes.*inside its available bounds/i)
+  assert.match(guidance('scene-fixed-canvas'), /880×380/)
   assert.match(guidance('skill-scaffolding'), /test name|filename/i)
   assert.match(guidance('verification-addressing-and-errors'), /strictPort.*insufficient/i)
   assert.match(guidance('verification-capture'), /fixed.*delay.*insufficient/i)
@@ -170,7 +171,7 @@ test('rubric 3.12 defines pre-human automated eligibility and distinguishes proo
   assert.match(guidance('verification-capture'), /does not require.*build.*render verifier.*invoke/i)
 })
 
-test('uniform canvas fitting is deterministic while default authored dimensions remain source-reviewed', async () => {
+test('both fixed-canvas criteria are source-reviewed rather than measured at an extreme viewport', async () => {
   const rubric = await automatedRubric()
   const fixedCanvas = rubric.components
     .flatMap(({ subcomponents }) => subcomponents)
@@ -183,8 +184,8 @@ test('uniform canvas fitting is deterministic while default authored dimensions 
     points,
   })), [
     {
-      evaluator: 'deterministic-browser',
-      job: null,
+      evaluator: 'llm-source-review',
+      job: 'scene-kit',
       criteria: ['canvas-uniform-scaling'],
       points: 1,
     },
@@ -402,4 +403,17 @@ test('the human rubric requires unique, ordered question numbers', async () => {
     validateHumanRubric({ ...human.rubric, questions })
       .some((error) => error.includes('numbered 1 through 7 in order')),
   )
+})
+
+test('the fit and attribution guidance settle the verdicts the judge split on', async () => {
+  const rubric = await automatedRubric()
+  const guidance = (id) => rubric.components
+    .flatMap(({ subcomponents }) => subcomponents)
+    .find((row) => row.id === id)
+    .review_guidance.join('\n')
+
+  // Repetitions 1 and 2 share a minimum-scale floor; the judge failed one and passed the other.
+  assert.match(guidance('scene-fixed-canvas-uniform-fit'), /minimum-scale floor[^.]*is not by itself a failure/)
+  // Repetitions 2 and 3 both position the link only through sample CSS; the judge split them.
+  assert.match(guidance('scene-style-and-attribution'), /For attribution-default-link, the scene kit itself must place/)
 })

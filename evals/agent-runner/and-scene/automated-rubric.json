@@ -1,11 +1,586 @@
 {
+
+  "criterion_sources": {
+    "demo-route-and-registration": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "heading": "Requirement: Committed reference sample",
+      "quote": "registered and reachable like any other presentation"
+    },
+    "demo-nine-step-content-and-order": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "heading": "Scenario: Sample exists and matches the outline",
+      "quote": "it confirms the committed reference sample presentation exists, is registered/reachable, and implements the nine steps above in order"
+    },
+    "demo-required-scene-content": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "heading": "Requirement: Committed reference sample",
+      "quote": "titles, captions, and scene intent are normative"
+    },
+    "demo-evolving-scene-structure": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "heading": "Requirement: Committed reference sample",
+      "quote": "The sample is one continuously evolving scene"
+    },
+    "quality-captions-and-navigation": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: Captions and navigation present",
+      "quote": "each step shows a caption and the user can navigate to the next and previous steps"
+    },
+    "demo-present-mode-behavior": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Present mode is title-focused",
+      "quote": "the active step shows its marker and one-line title, with the caption, table of contents, and prev/next controls hidden"
+    },
+    "demo-browse-mode-behavior": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Browse mode is reading-focused",
+      "quote": "the active step shows its title, multi-line caption, a table of contents on wide viewports, prev/next controls, and step progress indicators"
+    },
+    "demo-mode-position-preservation": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Mode toggle preserves position",
+      "quote": "the presentation switches between present and browse while staying on the current step"
+    },
+    "demo-supported-navigation": {
+      "owner": "fixture",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Keyboard navigation",
+          "quote": "the presentation advances one step; and WHEN the user presses Left or PageUp THEN it goes back one step"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Touch swipe",
+          "quote": "swiping left advances and swiping right goes back"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Direct jump",
+          "quote": "the presentation jumps directly to that step, or to the first step of that section's era for a table-of-contents entry"
+        }
+      ]
+    },
+    "demo-navigation-boundaries-and-control-keys": {
+      "owner": "fixture",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Controls keep their keys",
+          "quote": "navigation keys drive that control rather than also advancing the deck"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Clamp at start",
+          "quote": "it stays on the first step"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Clamp at end",
+          "quote": "it stays on the last step"
+        }
+      ]
+    },
+    "demo-step-and-transition-reliability": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "heading": "Scenario: Every step renders cleanly",
+      "quote": "it steps through every step and asserts each renders without runtime or console errors"
+    },
+    "demo-mode-interaction-reliability": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: Renders without errors",
+      "quote": "it renders its first step with no runtime or console errors"
+    },
+    "demo-control-semantics": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Active navigation state is exposed",
+      "quote": "it exposes semantic current-step state and a stable active-state hook for presentation-owned styling"
+    },
+    "demo-focus-and-keyboard-accessibility": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Keyboard navigation",
+      "quote": "the presentation advances one step; and WHEN the user presses Left or PageUp THEN it goes back one step"
+    },
+    "demo-scene-kit-api-use": {
+      "owner": "eval",
+      "reason": "Judges how the delivered demo source consumes the kit; the fixture states kit behavior, not a demo source-integration rule."
+    },
+    "demo-stable-identity-and-grouping": {
+      "owner": "fixture",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Persisting entity morphs",
+          "quote": "navigating between them animates that entity from its old state (position, size, label, emphasis) to its new state in place"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Grouped steps update in place",
+          "quote": "navigating between those steps updates the existing scene instance with the new step state rather than remounting separate scenes"
+        }
+      ]
+    },
+    "demo-clear-code-boundaries": {
+      "owner": "eval",
+      "reason": "Judges source organization of the delivered demo, which the fixture does not specify."
+    },
+    "quality-active-chrome-and-attribution-local": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: Active chrome and attribution are styled locally",
+      "quote": "presentation-owned or host-owned CSS makes the active step visibly distinct and the attribution legible"
+    },
+    "demo-scope-discipline": {
+      "owner": "eval",
+      "reason": "Judges whether delivered work stayed within the requested scope, which the fixture does not specify."
+    },
+    "scene-step-narration-and-identity": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Step carries narration and identity",
+      "quote": "that step has a stable id, a section/era label, a presenter title, a browse caption, and the diagram state shown while it is active"
+    },
+    "scene-order-derived-numbering": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Order-derived numbering",
+      "quote": "each step's on-screen number is derived from its position so no manual renumbering is required"
+    },
+    "scene-typed-payload-boundary": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Typed payloads reach presentation boundary",
+      "quote": "the presentation host accepts that typed step array without requiring casts at the `<Presentation>` boundary"
+    },
+    "entity-persisting-morph": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Persisting entity morphs",
+      "quote": "navigating between them animates that entity from its old state (position, size, label, emphasis) to its new state in place"
+    },
+    "entity-newcomer-after-settle": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: New entity enters after others settle",
+      "quote": "it animates in after the persisting entities have moved to their new positions"
+    },
+    "entity-departing-exit": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Departing entity exits",
+      "quote": "it animates out on that transition"
+    },
+    "grouped-scene-updates-in-place": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Grouped steps update in place",
+      "quote": "navigating between those steps updates the existing scene instance with the new step state rather than remounting separate scenes"
+    },
+    "grouped-continuing-entities-not-newcomers": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Continuing entities are not faded as newcomers",
+      "quote": "it morphs through layout projection without being wrapped in newcomer fade-in behavior"
+    },
+    "grouped-intentional-composition": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Intentional composition is preserved",
+      "quote": "the implementation preserves that composition while maintaining clean morphs, rather than flattening or spreading entities only to satisfy an implementation pattern"
+    },
+    "mode-present-title-focused": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Present mode is title-focused",
+      "quote": "the active step shows its marker and one-line title, with the caption, table of contents, and prev/next controls hidden"
+    },
+    "mode-browse-reading-focused": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Browse mode is reading-focused",
+      "quote": "the active step shows its title, multi-line caption, a table of contents on wide viewports, prev/next controls, and step progress indicators"
+    },
+    "mode-toggle-preserves-position": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Mode toggle preserves position",
+      "quote": "the presentation switches between present and browse while staying on the current step"
+    },
+    "navigation-keyboard": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Keyboard navigation",
+      "quote": "the presentation advances one step; and WHEN the user presses Left or PageUp THEN it goes back one step"
+    },
+    "navigation-touch-swipe": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Touch swipe",
+      "quote": "swiping left advances and swiping right goes back"
+    },
+    "navigation-direct-jump": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Direct jump",
+      "quote": "the presentation jumps directly to that step, or to the first step of that section's era for a table-of-contents entry"
+    },
+    "navigation-active-state": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Active navigation state is exposed",
+      "quote": "it exposes semantic current-step state and a stable active-state hook for presentation-owned styling"
+    },
+    "navigation-controls-keep-keys": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Controls keep their keys",
+      "quote": "navigation keys drive that control rather than also advancing the deck"
+    },
+    "navigation-clamp-start": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Clamp at start",
+      "quote": "it stays on the first step"
+    },
+    "navigation-clamp-end": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Clamp at end",
+      "quote": "it stays on the last step"
+    },
+    "canvas-uniform-scaling": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Uniform scaling on resize",
+      "quote": "the diagram scales uniformly to fit without reflowing its internal composition"
+    },
+    "canvas-default-dimensions": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Default canvas dimensions",
+      "quote": "it uses the reference dimensions of 880 × 380"
+    },
+    "style-kit-hooks": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Kit primitives expose style hooks",
+      "quote": "the rendered markup exposes stable hooks that presentation-owned CSS can target"
+    },
+    "style-unstyled-kit-output": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Unstyled kit output",
+      "quote": "the kit does not supply fallback colors, fonts, borders, shadows, card treatments, or button treatments"
+    },
+    "style-framework-optional": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Optional styling frameworks remain optional",
+      "quote": "that framework is configured by the presentation or host app, not required by the reusable scene kit"
+    },
+    "style-coordinate-heavy-diagrams": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Coordinate-heavy diagrams are supported",
+      "quote": "kit primitives expose class/style hooks, and authors MAY use raw motion elements with stable `layoutId`s when a primitive is not the right shape"
+    },
+    "attribution-default-link": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Default attribution is shown",
+      "quote": "it shows a bottom-right link labeled \"made by and-scene\" pointing to the and-scene GitHub repository"
+    },
+    "attribution-styling-hook": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Attribution exposes a styling hook",
+      "quote": "it exposes a stable presentation hook that the presentation or host app can target for local styling"
+    },
+    "attribution-top-left-opt-in": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "heading": "Scenario: Top-left brand is opt-in",
+      "quote": "the top-left header slot does not contain a default and-scene brand link"
+    },
+    "skill-missing-details-one-at-a-time": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: Prompt is missing details",
+      "quote": "the skill asks for the missing information one question at a time rather than assuming it"
+    },
+    "skill-partial-detail-proceeds": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: User proceeds with partial detail",
+      "quote": "the skill generates a presentation from what was captured without blocking on a hard completeness gate"
+    },
+    "skill-complete-prompt-proceeds": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: Prompt already complete",
+      "quote": "the skill may proceed to build without further questions"
+    },
+    "skill-empty-directory-scaffold": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: Empty or fully unscaffolded directory",
+      "quote": "it performs a full scaffold (build setup, scene kit, and presentation index) and installs the required dependencies before creating the presentation"
+    },
+    "skill-already-scaffolded": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: Already scaffolded",
+      "quote": "the skill skips scaffolding and proceeds directly to creating or modifying the presentation"
+    },
+    "skill-partial-scaffold": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: Partial scaffold",
+      "quote": "the skill scaffolds only the missing anchors (and their dependencies) without disturbing the ones already present"
+    },
+    "skill-scaffold-style-neutral": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: Scaffold does not impose a style system",
+      "quote": "the generated app can build without Tailwind or another styling framework"
+    },
+    "skill-template-path-resolution": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: Templates resolve from skill directory",
+      "quote": "it resolves those paths relative to the skill's own `SKILL.md` directory"
+    },
+    "skill-monorepo-target": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: Monorepo target",
+      "quote": "it scaffolds the presentation app into a `presentations/` directory as its own self-contained app rather than at the repository root"
+    },
+    "skill-standalone-target": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: Standalone project target",
+      "quote": "it scaffolds the presentation app at the repository root"
+    },
+    "skill-nonempty-confirmation": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: Non-empty project missing scaffolding",
+      "quote": "the skill states the target location it will scaffold into and proceeds only after the user confirms"
+    },
+    "skill-new-presentation-routed": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: New presentation is self-contained and routed",
+      "quote": "it is written as its own folder, reachable at its own route, and registered in the presentation index"
+    },
+    "skill-presentation-owns-style": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: Presentation owns its visual style",
+      "quote": "the styling is added in files owned by that presentation or by the host app rather than in the reusable scene kit"
+    },
+    "skill-existing-presentations-preserved": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: Existing presentations are preserved",
+      "quote": "the existing presentations remain intact and reachable"
+    },
+    "skill-modify-ambiguous-target": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: Target unspecified or ambiguous",
+      "quote": "it lists the existing presentations and asks which to modify before changing anything"
+    },
+    "skill-scoped-modification": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: Scoped modification",
+      "quote": "the skill asks only about the requested changes (steps, entities, or style) and edits that presentation without re-walking the full create flow"
+    },
+    "skill-checks-run-before-done": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: Checks run before done",
+      "quote": "it runs the build, at least a first-step render check, and a browser visual composition check before reporting completion"
+    },
+    "skill-failures-fixed-before-success": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: Failures are fixed, not reported as success",
+      "quote": "the skill fixes the issues and re-checks rather than reporting success"
+    },
+    "verification-missing-sample-fails": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "heading": "Scenario: Missing sample fails",
+      "quote": "verification fails"
+    },
+    "verification-ipv4-loopback": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "heading": "Scenario: Preview uses IPv4 loopback",
+      "quote": "the preview host, readiness probe, and browser URLs use `127.0.0.1` consistently"
+    },
+    "verification-preview-process-ownership": {
+      "owner": "eval",
+      "reason": "Judges that verification owns the preview process it started; the fixture has no scenario for stale preview ownership."
+    },
+    "verification-console-page-error-fails": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "heading": "Scenario: Console or page error fails verification",
+      "quote": "verification fails and identifies the failing step"
+    },
+    "verification-step-error-fails": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "heading": "Scenario: Step error fails verification",
+      "quote": "verification fails and identifies the failing step"
+    },
+    "quality-project-local-screenshot-helper": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "heading": "Scenario: Screenshot helper is project-local",
+      "quote": "it uses the scaffolded project-local helper when available, or otherwise writes any temporary Playwright helper under the project root"
+    },
+    "visual-helper-captures-steps": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "heading": "Scenario: Capture step screenshots",
+      "quote": "it captures each step at a standard desktop viewport and writes the images under a predictable project-local artifact directory"
+    },
+    "visual-helper-settled-screenshots": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "heading": "Scenario: Screenshots are settled",
+      "quote": "it waits for the configured settle interval before capturing the next screenshot"
+    },
+    "visual-helper-overlap-warning": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "heading": "Scenario: Suspicious overlap is reported",
+      "quote": "the helper prints an advisory warning identifying the step and overlapping elements"
+    },
+    "visual-helper-allow-overlap": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "heading": "Scenario: Intentional overlap can be marked",
+      "quote": "the helper does not report overlap warnings for elements inside that subtree"
+    },
+    "visual-helper-active-state-warning": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "heading": "Scenario: Indistinct active chrome is reported",
+      "quote": "the helper prints an advisory warning identifying the affected chrome"
+    },
+    "visual-helper-attribution-warning": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "heading": "Scenario: Unpolished attribution is reported",
+      "quote": "the helper prints an advisory warning pointing authors to the attribution styling hook"
+    },
+    "testing-evidence-traceable-coverage": {
+      "owner": "eval",
+      "reason": "Judges implementation-workflow evidence, which the fixture does not describe."
+    },
+    "testing-evidence-usable-proof": {
+      "owner": "eval",
+      "reason": "Judges implementation-workflow evidence, which the fixture does not describe."
+    },
+    "testing-evidence-final-revision-applicability": {
+      "owner": "eval",
+      "reason": "Judges implementation-workflow evidence, which the fixture does not describe."
+    },
+    "testing-evidence-complete-honest-record": {
+      "owner": "eval",
+      "reason": "Judges implementation-workflow evidence, which the fixture does not describe."
+    },
+    "assumption-consequential-ambiguities-surfaced": {
+      "owner": "eval",
+      "reason": "Judges implementation-workflow evidence, which the fixture does not describe."
+    },
+    "assumption-repository-facts-distinguished": {
+      "owner": "eval",
+      "reason": "Judges implementation-workflow evidence, which the fixture does not describe."
+    },
+    "assumption-decisions-and-escalations-proportionate": {
+      "owner": "eval",
+      "reason": "Judges implementation-workflow evidence, which the fixture does not describe."
+    },
+    "assumption-final-handoff-preserves-decisions": {
+      "owner": "eval",
+      "reason": "Judges implementation-workflow evidence, which the fixture does not describe."
+    },
+    "verification-build-whole-app": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "heading": "Scenario: Build must succeed",
+      "quote": "it builds the whole app and fails if `npm run build` reports any type or build error"
+    },
+    "verification-sample-outline": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "heading": "Scenario: Sample exists and matches the outline",
+      "quote": "it confirms the committed reference sample presentation exists, is registered/reachable, and implements the nine steps above in order"
+    },
+    "verification-every-produced-step-renders": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "heading": "Scenario: Every step renders cleanly",
+      "quote": "it steps through every step and asserts each renders without runtime or console errors"
+    },
+    "verification-clear-outcome": {
+      "owner": "fixture",
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "heading": "Scenario: Clear outcome",
+      "quote": "it reports a clear pass or fail (non-zero exit on failure) identifying which check failed"
+    }
+  },
+  "eval_owned_values": [
+    {
+      "value": "aria-current",
+      "reason": "ARIA standard attribute accepted as an eval-owned implementation spelling."
+    }
+  ],
   "rubric_id": "and-scene-automated-product",
-  "version": "3.12.0",
+  "version": "5.0.0",
   "total_points": 100,
   "automated_points": 70,
   "human_points": 30,
   "pass_threshold": 70,
   "automated_pass_threshold": 40,
+  "fallbacks": {
+    "demo-required-scene-content": {
+      "job": "demo-integration",
+      "requirement": "Every step renders the scene content the fixture requires for it.",
+      "guidance": ["Cite the step definitions that declare each step's scene objects." ]
+    },
+    "demo-evolving-scene-structure": {
+      "job": "demo-integration",
+      "requirement": "The nine steps are one evolving scene whose objects persist across steps.",
+      "guidance": ["Cite the identity each persisting object carries across steps."]
+    }
+  },
+  "contradiction_pairs": [
+    {
+      "deterministic": "demo-evolving-scene-structure",
+      "judge": "demo-stable-identity-and-grouping",
+      "proposition": "The demo is one evolving scene whose objects keep a stable identity across steps."
+    }
+  ],
   "components": [
     {
       "id": "demo-technical-quality",
@@ -170,10 +745,12 @@
           "id": "scene-fixed-canvas-uniform-fit",
           "title": "Fixed-canvas uniform viewport fitting",
           "points": 1,
-          "evaluator": "deterministic-browser",
+          "evaluator": "llm-source-review",
+          "job": "scene-kit",
           "criteria": ["canvas-uniform-scaling"],
           "review_guidance": [
-            "Measure the rendered canvas against its untransformed authored dimensions at wide and 64×64 viewports. Require equal horizontal and vertical scale and require its bounds to remain inside every clipping ancestor and the viewport."
+            "Judge whether the delivered fit mechanism scales the authored canvas by one factor on both axes and keeps it inside its available bounds as the viewport shrinks. Cite the fit computation and its consumer. Do not require a particular rendering at an extreme viewport: an unreadably small viewport is not a presentation viewport, and how the kit degrades there is a design judgment for human review.",
+            "A minimum-scale floor or other lower clamp on the fit factor is not by itself a failure, even when it could exceed the available bounds at an unreadably small viewport. Fail only when the canvas leaves its available bounds at an ordinary presentation viewport, for example because the fit is computed from the window instead of the area the stage actually occupies, or ignores chrome that shares the viewport; cite that computation."
           ]
         },
         {
@@ -184,7 +761,7 @@
           "job": "scene-kit",
           "criteria": ["canvas-default-dimensions"],
           "review_guidance": [
-            "Require the scene kit's authored canvas to default to the approved 880×495 dimensions; inspect the actual default values consumed by the rendered stage."
+            "Require the scene kit's authored canvas to default to the approved 880×380 dimensions; inspect the actual default values consumed by the rendered stage."
           ]
         },
         {
@@ -203,6 +780,7 @@
             "attribution-top-left-opt-in"
           ],
           "review_guidance": [
+            "For attribution-default-link, the scene kit itself must place the default link in the bottom-right corner, through the kit's own markup, layout, or positioning styles. A link that sits bottom-right only because sample-, presentation-, or host-owned CSS positions it does not satisfy the default and fails; cite where its position comes from. Positioning is not one of the fallback visual treatments the unstyled-output rule forbids.",
             "For attribution-styling-hook, a stable class or data hook targetable by presentation-owned or host-owned CSS satisfies the contract. It does not require a caller-provided className or style prop.",
             "For attribution-top-left-opt-in, verify that no default top-left and-scene brand is rendered and that the host can explicitly supply branding. This is a top-left brand rule, not an attribution placement option; the default attribution remains bottom-right."
           ]

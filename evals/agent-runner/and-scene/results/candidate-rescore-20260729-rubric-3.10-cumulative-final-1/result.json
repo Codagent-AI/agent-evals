@@ -7,9 +7,9 @@
   "product_verdict": "pass",
   "label": "PASS",
   "score_denominator": 100,
-  "official_score": 74.10833333333333,
+  "official_score": 73.108333333333,
   "automated_subtotal": {
-    "points": 53.608333333333334,
+    "points": 52.608333333333,
     "possible": 70,
     "observed_possible": 70,
     "complete": true
@@ -93,8 +93,8 @@
         "title": "Demo presentation technical quality",
         "applicable": true,
         "points_possible": 24,
-        "points_awarded": 23,
-        "points_observed": 23,
+        "points_awarded": 22,
+        "points_observed": 22,
         "points_observed_possible": 24,
         "floor": 15,
         "complete": true,
@@ -411,7 +411,9 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 23,
+        "adjudication_adjustment": -1
       },
       {
         "id": "scene-kit-correctness",
@@ -800,7 +802,9 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 20.066666666666666,
+        "adjudication_adjustment": 0
       },
       {
         "id": "presentation-skill-correctness",
@@ -1059,7 +1063,9 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 4.375,
+        "adjudication_adjustment": 0
       },
       {
         "id": "verification-tool-correctness",
@@ -1262,7 +1268,9 @@
               }
             ]
           }
-        ]
+        ],
+        "raw_points_awarded": 2.1666666666666665,
+        "adjudication_adjustment": 0
       },
       {
         "id": "testing-evidence-quality",
@@ -1488,7 +1496,7 @@
     ],
     "gates_passed": true,
     "automated_subtotal": {
-      "points": 53.608333333333334,
+      "points": 52.608333333333,
       "possible": 70,
       "observed_possible": 70,
       "complete": true
@@ -1518,7 +1526,7 @@
       "lowest_rating": 3,
       "complete": true
     },
-    "official_score": 74.10833333333333,
+    "official_score": 73.108333333333,
     "official_pass": true,
     "pass_failures": [],
     "incomplete": [],
@@ -15167,5 +15175,35 @@
   "report": {
     "written": true,
     "error": null
+  },
+  "technical_adjudication": {
+    "schema_version": 1,
+    "approved_by": "Paul (user)",
+    "approved_at": "2026-09-21T01:28:53.823Z",
+    "rationale": "User-approved deduction after the deterministic harness was corrected to activate a navigation control the way a pointer does. The candidate stops responding to deck keys once one of its own controls holds focus, which the previous probe could not observe because it activated controls without moving focus.",
+    "findings": [
+      "The previous probe activated a control with element.click(), which does not move focus, so a presentation that suppresses deck keys while a control is focused passed the control-key check. It also skipped the check entirely when present mode exposed no controls, which is where most candidates put their progress controls.",
+      "A real-browser replay of the frozen candidate revision 785f48d2d750445dd1673da03c1ae793c6b129b5 measured the defect directly: the arrow key advances the deck from a neutral focus, and does nothing once a navigation control is focused.",
+      "demo-navigation-boundaries-and-control-keys is one of five criteria in demo-navigation-and-modes, which carries five points, so the deduction is one point of demo-technical-quality and one point of the official score.",
+      "Every other deterministic browser criterion still passes, all four hard gates still pass, and the product verdict is unchanged."
+    ],
+    "reviewed_rubric": {
+      "rubric_id": "and-scene-automated-product",
+      "version": "4.0.0",
+      "sha256": "bc6db3280931bf8753e3c5c3bcff17b980457053b4f5d2ee39cda28ad6c7ce37"
+    },
+    "component_scores": {
+      "demo-technical-quality": 22,
+      "scene-kit-correctness": 20.066666666666666,
+      "presentation-skill-correctness": 4.375,
+      "verification-tool-correctness": 2.1666666666666665
+    },
+    "prior_shared_technical_score": 49.608333333333,
+    "revised_shared_technical_score": 48.608333333333,
+    "prior_automated_subtotal": 53.608333333333334,
+    "revised_automated_subtotal": 52.608333333333,
+    "prior_official_score": 74.10833333333333,
+    "revised_official_score": 73.108333333333,
+    "prior_result_fingerprint": "62f92844ce384b351ee2ff0b9a0499be8b05f344166d63f19873814b420cff35"
   }
 }

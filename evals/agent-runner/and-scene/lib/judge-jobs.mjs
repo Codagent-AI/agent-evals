@@ -57,7 +57,25 @@ export class JudgeOutputError extends Error {
   }
 }
 
-export function productJudgeJobs(rubrics, { mode = 'agent-runner' } = {}) {
+// The not-observed browser criteria a job answers for in this run: those whose
+// declared fallback names it.
+function fallbackEntriesFor(rubric, job, notObserved) {
+  return notObserved.filter(({ id }) => rubric.fallbacks?.[id]?.job === job)
+}
+
+function browserLeadSection(rubric, entry) {
+  const fallback = rubric.fallbacks[entry.id]
+  return [
+    `## ${entry.id}`,
+    fallback.requirement,
+    ...(fallback.guidance ?? []).map((item) => `- ${item}`),
+    `Looked for: ${(entry.looked_for ?? []).join(', ') || 'not recorded'}`,
+    `Browser rationale: ${entry.rationale}`,
+    `Browser evidence: ${(entry.evidence ?? []).join(' | ')}`,
+  ].join('\n')
+}
+
+export function productJudgeJobs(rubrics, { mode = 'agent-runner', notObserved = [] } = {}) {
   const applicable = new Set(
     rubrics.automated.rubric.components
       .filter((component) => componentApplicable(component, mode))
@@ -66,7 +84,10 @@ export function productJudgeJobs(rubrics, { mode = 'agent-runner' } = {}) {
   return PRODUCT_JUDGE_JOB_IDS.filter((id) => applicable.has(id)).map((id) => ({
     id,
     brief: JOB_BRIEFS[id],
-    criteria: criteriaForJob(rubrics.automated.rubric, id),
+    criteria: [
+      ...criteriaForJob(rubrics.automated.rubric, id),
+      ...fallbackEntriesFor(rubrics.automated.rubric, id, notObserved).map((entry) => entry.id),
+    ],
   }))
 }
 
@@ -255,8 +276,9 @@ export function buildJudgeRequest({
   sources = [],
   neutral = null,
   evidenceViews = {},
+  notObserved = [],
 }) {
-  const definition = productJudgeJobs(rubrics).find(({ id }) => id === job)
+  const definition = productJudgeJobs(rubrics, { notObserved }).find(({ id }) => id === job)
   if (!definition) throw new Error(`unknown product judge job: ${job}`)
 
   const rubric = rubrics.automated.rubric
@@ -286,9 +308,15 @@ export function buildJudgeRequest({
   const body = evidenceJob
     ? evidenceJudgePrompt({ job, definition, slice, view })
     : sourceJudgePrompt({ definition, slice, sources: discoverableSources, evidence })
+  const fallbackEntries = fallbackEntriesFor(rubric, job, notObserved)
   const prompt = [
     ...body,
     '',
+    ...(fallbackEntries.length ? [
+      '# Browser check could not observe',
+      'Treat this browser observation as a lead, not an authoritative verdict. A pass must cite delivered source.',
+      ...fallbackEntries.map((entry) => browserLeadSection(rubric, entry)),
+    ] : []),
     '# Response',
     `Reply with JSON matching this schema: ${JSON.stringify(responseSchema)}`,
   ].join('\n')
@@ -299,6 +327,7 @@ export function buildJudgeRequest({
     schema: responseSchema,
     authority,
     source_access: 'read-only',
+    verified_source_paths: discoverableSources,
     cwd: evidenceJob ? view?.root : neutral?.root,
     audit_cwd: evidenceJob ? null : neutral?.audit_root,
     input_permissions: { ...JUDGE_INPUT_POLICIES[job] },
@@ -323,7 +352,7 @@ export function parseJudgeOutput(
   text,
   expectedIds,
   job,
-  { requireSourceCitations = false } = {},
+  { requireSourceCitations = false, requireSourceCitationsFor = [] } = {},
 ) {
   let payload
   try {
@@ -357,7 +386,8 @@ export function parseJudgeOutput(
         `malformed criterion result from ${job}: ${result.id} cites no verified evidence`,
       )
     }
-    if (requireSourceCitations && (
+    const citationsRequired = requireSourceCitations || (result.verdict === 'pass' && requireSourceCitationsFor.includes(result.id))
+    if (citationsRequired && (
       !Array.isArray(result.citations)
       || result.citations.length === 0
       || result.citations.some((item) => typeof item !== 'string' || item.trim().length === 0)
@@ -366,12 +396,12 @@ export function parseJudgeOutput(
         `malformed criterion result from ${job}: ${result.id} has no neutral source citations`,
       )
     }
-    if (requireSourceCitations && result.citations.length > MAX_SOURCE_CITATIONS) {
+    if (citationsRequired && result.citations.length > MAX_SOURCE_CITATIONS) {
       throw new JudgeOutputError(
         `malformed criterion result from ${job}: ${result.id} has too many source citations`,
       )
     }
-    if (requireSourceCitations
+    if (citationsRequired
       && result.citations.some((item) => item.length > MAX_SOURCE_PATH_CHARS)) {
       throw new JudgeOutputError(
         `malformed criterion result from ${job}: ${result.id} source citation path is too long`,
@@ -386,7 +416,7 @@ export function parseJudgeOutput(
       verdict: result.verdict,
       rationale: bounded(result.rationale, MAX_RATIONALE_CHARS),
       evidence: result.evidence.map((item) => bounded(item)),
-      ...(requireSourceCitations
+      ...(citationsRequired
         ? { citations: [...new Set(result.citations.map((item) => item.trim()))] }
         : {}),
     })
@@ -402,6 +432,25 @@ export function parseJudgeOutput(
     throw new JudgeOutputError(`missing criterion results for ${job}: ${missing.join(', ')}`)
   }
   return expectedIds.map((id) => seen.get(id))
+}
+
+function validateFallbackCitations(results, requiredIds, verifiedSourcePaths) {
+  const required = new Set(requiredIds)
+  const inventory = new Set(verifiedSourcePaths)
+  for (const result of results) {
+    if (result.verdict === 'pass' && required.has(result.id) && result.citations.some((path) => !inventory.has(path))) {
+      throw new JudgeOutputError(`fallback ${result.id} cites source outside the verified delivery`)
+    }
+  }
+  return results
+}
+
+function fallbackAuditVerified(auditResults, results, requiredIds) {
+  const audits = new Map((auditResults ?? []).map((result) => [result.id, result]))
+  return results.every((result) => (
+    !requiredIds.includes(result.id) || result.verdict !== 'pass'
+      || audits.get(result.id)?.classification === 'confirmed'
+  ))
 }
 
 function containedBy(root, target) {
@@ -657,10 +706,16 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
         const output = await invoke(activeRequest)
-        const results = parseJudgeOutput(output, activeRequest.criteria, request.job, {
+        const fallbackIds = request.requireSourceCitationsFor ?? []
+        const parsed = parseJudgeOutput(output, activeRequest.criteria, request.job, {
           requireSourceCitations: request.source_audit === true,
+          requireSourceCitationsFor: fallbackIds,
         })
-        if (request.source_audit) {
+        const results = validateFallbackCitations(parsed, fallbackIds, request.verified_source_paths ?? [])
+        const fallbackPass = results.some((result) => (
+          result.verdict === 'pass' && fallbackIds.includes(result.id)
+        ))
+        if (request.source_audit || fallbackPass) {
           const currentCitations = results.flatMap((result) => result.citations ?? [])
           auditRequest = await buildSourceAuditRequest({
             request: activeRequest,
@@ -796,6 +851,7 @@ export async function runProductJudging({
   sources = [],
   neutral = null,
   evidenceViews = {},
+  notObserved = [],
   mode = 'agent-runner',
   loadJob = null,
   startJob = null,
@@ -803,7 +859,7 @@ export async function runProductJudging({
   failJob = null,
   invoke,
 }) {
-  const jobs = productJudgeJobs(rubrics, { mode })
+  const jobs = productJudgeJobs(rubrics, { mode, notObserved })
   const judges = {}
   const retries = {}
   const failedJobs = []
@@ -818,8 +874,10 @@ export async function runProductJudging({
   // budget, and a component-local failure must be attributable to its job.
   for (const { id } of jobs) {
     const request = buildJudgeRequest({
-      rubrics, job: id, authority, evidence, sources, neutral, evidenceViews,
+      rubrics, job: id, authority, evidence, sources, neutral, evidenceViews, notObserved,
     })
+    const requiredFallbackIds = fallbackEntriesFor(rubrics.automated.rubric, id, notObserved)
+      .map((entry) => entry.id)
     const inputHash = hashJson({
       job: request.job,
       criteria: request.criteria,
@@ -838,8 +896,13 @@ export async function runProductJudging({
           JSON.stringify({ results: cached.results }),
           request.criteria,
           request.job,
+          { requireSourceCitationsFor: requiredFallbackIds },
         )
-        judges[id] = results
+        const verified = validateFallbackCitations(results, requiredFallbackIds, request.verified_source_paths)
+        if (requiredFallbackIds.length > 0 && !fallbackAuditVerified(cached.audit_results, verified, requiredFallbackIds)) {
+          throw new JudgeOutputError(`cached fallback ${id} lacks a confirmed source audit`)
+        }
+        judges[id] = verified
         attempts[id] = cached.attempts ?? []
         auditAttempts[id] = cached.audit_attempts ?? []
         audits[id] = cached.audit_results ?? null
@@ -853,7 +916,10 @@ export async function runProductJudging({
       }
     }
     await startJob?.({ id, inputHash, request })
-    const outcome = await runJudgeJob({ request, invoke })
+    const outcome = await runJudgeJob({
+      request: { ...request, requireSourceCitationsFor: requiredFallbackIds },
+      invoke,
+    })
     judges[id] = outcome.results
     attempts[id] = outcome.attempts
     auditAttempts[id] = outcome.audit_attempts

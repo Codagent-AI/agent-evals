@@ -133,6 +133,18 @@ test('only a finalized scored Agent Runner candidate with completed human review
   }
 })
 
+test('a review hold recorded by an earlier harness does not block publication', () => {
+  const eligibility = publicationEligibility({
+    mode: 'agent-runner',
+    evaluation_status: 'complete',
+    product_verdict: 'fail',
+    official_score: 61,
+    human_review: { complete: true },
+    review_hold: { active: true },
+  })
+  assert.deepEqual(eligibility, { publishable: true, reason: null })
+})
+
 test('publication rejects run identifiers that are not one safe directory name', async () => {
   const { repo, dir } = await disposableRepo()
   const { runDir } = await finalizedRun(dir)

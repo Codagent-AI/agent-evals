@@ -82,6 +82,38 @@ function result(overrides = {}) {
   }
 }
 
+test('an adjudicated gate renders its revised record as current and its harness output as raw data', () => {
+  const adjudicated = result()
+  adjudicated.score.gates = [{
+    id: 'verification-every-produced-step-renders',
+    requirement: 'Every produced step renders',
+    verdict: 'pass',
+    rationale: 'Harness defects corrected by replay.',
+    evidence: ['technical adjudication approved by user at 2026-07-28T20:00:00.000Z'],
+    raw_verdict: 'fail',
+    raw_rationale: '4 runtime or console failure(s) occurred while stepping the demo',
+    raw_evidence: ['Could not find Google Chrome executable'],
+    adjudication_changed: true,
+  }, {
+    id: 'verification-clear-outcome',
+    requirement: 'Clear outcome',
+    verdict: 'pass',
+    rationale: 'machine-readable pass',
+    evidence: ['phases/verification.json'],
+    raw_verdict: 'pass',
+    adjudication_changed: false,
+  }]
+
+  const html = renderReport(adjudicated)
+  const gates = html.slice(html.indexOf('<summary>Hard gates</summary>'))
+  const [changedRow, unchangedRow] = gates.split('<tr>').slice(2)
+
+  assert.match(gates, /<th>Raw adjudication data<\/th>/)
+  assert.match(changedRow, /<td>pass<\/td><td>Harness defects corrected by replay\.<\/td>/)
+  assert.match(changedRow, /raw verdict fail: 4 runtime or console failure\(s\)[^<]*Could not find Google Chrome executable/)
+  assert.doesNotMatch(unchangedRow, /raw verdict/)
+})
+
 test('a passing verdict leads with PASS and the official score', () => {
   const html = renderReport(result())
   assert.match(html, /<h1[^>]*>\s*PASS\s*<\/h1>/)
@@ -454,6 +486,14 @@ test('delivery identity and evidence ownership render in separate auditable sect
   assert.match(html, /route-probe/)
   assert.match(html, /contradiction-1/)
   assert.match(html, /narrow viewport not claimed/)
+})
+
+test('evaluator contradictions and a review hold recorded by an earlier harness are not rendered', () => {
+  const html = renderReport(result({
+    evaluator_contradictions: [{ proposition: 'The demo is one evolving scene.' }],
+    review_hold: { active: true, release_command: 'review-hold.sh' },
+  }))
+  assert.doesNotMatch(html, /evolving scene|Held from publication|review-hold\.sh/)
 })
 
 test('details for every reported dimension are expandable', () => {

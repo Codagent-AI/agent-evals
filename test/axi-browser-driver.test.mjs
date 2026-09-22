@@ -23,6 +23,12 @@ test('the AXI driver opens the candidate route and returns structured browser st
       caption: 'caption',
       sceneId: 'How to make a presentation',
       entityIds: ['box:person'],
+      entityConventions: [
+        '[data-layout-id]', '[data-scene-entity]', '[data-node]', '[data-entity-id]', '[data-scene-node]',
+        '[data-presentation-node]', '[data-presentation-box]', '[data-presentation-label]',
+        '[data-presentation-arrow]', '[data-presentation-frame]', '[data-presentation-emphasis]',
+        '[data-presentation-symbol-chip]',
+      ],
       titleProminent: true,
       captionVisible: false,
       controls: [],
@@ -41,17 +47,48 @@ test('the AXI driver opens the candidate route and returns structured browser st
 
   assert.deepEqual(await driver.routes(), ['/how-to-make-a-presentation'])
   await driver.open('how-to-make-a-presentation')
-  assert.equal((await driver.state()).stepCount, 9)
+  const state = await driver.state()
+  assert.equal(state.stepCount, 9)
+  assert.deepEqual(state.entityConventions, [
+    '[data-layout-id]', '[data-scene-entity]', '[data-node]', '[data-entity-id]', '[data-scene-node]',
+    '[data-presentation-node]', '[data-presentation-box]', '[data-presentation-label]',
+    '[data-presentation-arrow]', '[data-presentation-frame]', '[data-presentation-emphasis]',
+    '[data-presentation-symbol-chip]',
+  ])
   assert.deepEqual(calls[1].args, ['resize', '1280', '720'])
   assert.match(calls[2].input, /http:\/\/127\.0\.0\.1:4319\/how-to-make-a-presentation/)
   assert.match(calls[2].input, /initialMode/)
   assert.doesNotMatch(calls[2].input, /page\.press\(/)
   assert.match(calls[3].input, /data-step-count/)
+  assert.match(calls[3].input, /data-entity-id/)
+  assert.match(calls[3].input, /data-scene-node/)
   assert.doesNotMatch(calls[3].input, /page\.press\(/)
   assert.doesNotMatch(
     calls[3].input,
     /const wasBrowsing = await page\.eval\(\(\) => Boolean\(document\.querySelector/,
   )
+})
+
+test('the AXI driver releases focus to the presentation root without leaving a tabindex behind', async () => {
+  const { createAxiBrowserDriver } = await import(
+    '../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs'
+  )
+  const calls = []
+  const driver = createAxiBrowserDriver({
+    baseUrl: 'http://127.0.0.1:4319/',
+    command: async (args, input) => {
+      calls.push({ args, input })
+      return { status: 0, stdout: `${JSON.stringify(true)}\n`, stderr: '' }
+    },
+  })
+
+  assert.equal(await driver.releaseFocus(), true)
+  await driver.restoreFocusTarget()
+
+  assert.match(calls[0].input, /tabindex/, 'releaseFocus adds a temporary tabindex when needed')
+  assert.match(calls[0].input, /data-presentation.*data-presentation-root/, 'focus stays in the presentation')
+  assert.match(calls[0].input, /interactive/i)
+  assert.match(calls[1].input, /removeAttribute\('tabindex'\)/)
 })
 
 test('the AXI driver establishes mode and position explicitly and waits for settled state', async () => {
@@ -85,7 +122,7 @@ test('the AXI driver establishes mode and position explicitly and waits for sett
   assert.match(calls[0].input, /requiredMode/)
   assert.match(calls[0].input, /page\.press\('p'\)/)
   assert.match(calls[1].input, /data-presentation-progress-dot/)
-  assert.match(calls[1].input, /requiredPosition/)
+  assert.match(calls[1].input, /controls\[4\]/)
   assert.match(calls[1].input, /page\.press\('ArrowRight'\)/)
   assert.match(calls[1].input, /observedPosition/)
   assert.match(calls[2].input, /stableReads/)
@@ -93,7 +130,7 @@ test('the AXI driver establishes mode and position explicitly and waits for sett
   assert.match(calls[2].input, /iterations !== Infinity/)
   assert.doesNotMatch(calls[2].input, /document\.getAnimations/)
   assert.match(calls[2].input, /timed out waiting for a settled browser state/)
-  assert.doesNotMatch(calls[2].input, /^await page\.wait\(100\);/m)
+  assert.doesNotMatch(calls[2].input, /^await new Promise\(\(resolve\) => setTimeout\(resolve, 100\)\);/m)
 })
 
 test('the AXI driver records durable canvas geometry after an explicit viewport resize', async () => {
@@ -156,8 +193,8 @@ test('the AXI driver observes compatible stable presentation hooks without requi
     calls[1].input,
     /TouchEvent\('touchstart',[\s\S]*touches: \[touch\(startX\)\],[\s\S]*changedTouches: \[touch\(startX\)\]/,
   )
-  assert.match(calls[1].input, /page\.wait\(100\)/)
-  assert.match(calls[2].input, /page\.wait\(100\)/)
+  assert.match(calls[1].input, /setTimeout\(resolve, 100\)/)
+  assert.match(calls[2].input, /setTimeout\(resolve, 100\)/)
 })
 
 test('the AXI driver recognizes the delivered candidate hook vocabulary for modes and controls', async () => {
@@ -336,4 +373,174 @@ test('the AXI driver reports a nonzero status when stderr and stdout are empty',
   })
 
   await assert.rejects(driver.routes(), /exited with status 7/)
+})
+
+// The adapter's page scripts run in Chromium, so the suite inspects the source
+// it emits. These assertions pin the discovery contract the evaluator depends
+// on rather than one candidate's markup.
+async function emitted(call) {
+  const { createAxiBrowserDriver } = await import(
+    '../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs'
+  )
+  const calls = []
+  const driver = createAxiBrowserDriver({
+    baseUrl: 'http://127.0.0.1:4319/',
+    command: async (args, input) => {
+      calls.push({ args, input })
+      return { status: 0, stdout: `${JSON.stringify(true)}\n`, stderr: '' }
+    },
+  })
+  await call(driver)
+  return calls.filter(({ args }) => args[0] === 'run').map(({ input }) => input).join('\n')
+}
+
+test('the AXI driver accepts every ARIA-valid current-step value', async () => {
+  const source = await emitted((driver) => driver.state())
+
+  assert.match(source, /\['step', 'true'\]\.includes\(control\.getAttribute\('aria-current'\)\)/)
+})
+
+test('the AXI driver derives a scene identity only from a declared, non-boolean value', async () => {
+  const source = await emitted((driver) => driver.state())
+
+  assert.match(source, /sceneId: declaredSceneId\(\)/)
+  assert.doesNotMatch(source, /sceneId:[^\n]*location\.pathname/)
+  assert.match(source, /\['true', 'false'\]\.includes\(value\.toLowerCase\(\)\)/)
+  assert.match(source, /data-presentation-scene-id/)
+})
+
+test('the AXI driver reports which selector or strategy matched each navigation role', async () => {
+  const source = await emitted((driver) => driver.state())
+
+  assert.match(source, /matchedSelectors,/)
+  for (const role of ['title', 'caption', 'toc', 'progress_chrome', 'previous', 'next']) {
+    assert.ok(source.includes(`'${role}'`), role)
+  }
+  assert.match(source, /semantic-progress-region/)
+  assert.match(source, /titleTexts,/)
+  assert.match(source, /presentation-owned-control-hook/)
+  assert.match(source, /accessible-step-name/)
+})
+
+test('the AXI driver changes modes through the presentation control before any keybinding', async () => {
+  for (const call of [(driver) => driver.toggleMode(), (driver) => driver.setMode('browse')]) {
+    const source = await emitted(call)
+
+    assert.match(source, /const toggle = modeToggle\(/)
+    assert.match(source, /toggle\.click\(\);/)
+    assert.match(source, /if \(!usedControl\) await page\.press\('p'\);/)
+    assert.ok(
+      source.indexOf('modeToggle(') < source.indexOf("page.press('p')"),
+      'the mode control is tried before the keyboard fallback',
+    )
+  }
+})
+
+test('the AXI driver selects the mode control for the mode it is establishing', async () => {
+  // "Present mode" and "Browse mode" can be separate controls. Clicking the
+  // first visible one would leave the mode unchanged and turn a harness
+  // ambiguity into a candidate deduction.
+  const setMode = await emitted((driver) => driver.setMode('browse'))
+  assert.match(setMode, /const toggle = modeToggle\("browse"\);/)
+
+  const toggle = await emitted((driver) => driver.toggleMode())
+  assert.match(toggle, /const toggle = modeToggle\(readMode\(\) === 'present' \? 'browse' : 'present'\);/)
+
+  for (const source of [setMode, toggle]) {
+    assert.match(source, /if \(toggle === 'ambiguous'\) return 'ambiguous';/)
+    assert.match(source, /ambiguous presentation mode control/)
+  }
+})
+
+test('the AXI driver disambiguates mode controls by the required mode before giving up', async () => {
+  const source = await emitted((driver) => driver.setMode('present'))
+
+  assert.match(source, /const modeToggle = \(requiredMode\) => \{/)
+  assert.match(source, /requiredMode === 'browse'/)
+  assert.match(source, /selected\.length === 1/)
+  assert.match(source, /return 'ambiguous';/)
+})
+
+test('the AXI driver activates the discovered directional control', async () => {
+  const next = await emitted((driver) => driver.activateDirection('next'))
+
+  assert.match(next, /findDirectionalControls\(\[/)
+  assert.match(next, /\/\^next\\b\/i/)
+  assert.match(next, /target\.focus\(\);\s*\n?\s*target\.click\(\);/)
+  assert.match(next, /if \(matches\.length > 1\) return 'ambiguous';/)
+  assert.match(next, /ambiguous semantic navigation/)
+
+  const previous = await emitted((driver) => driver.activateDirection('previous'))
+  assert.match(previous, /\/\^\(previous\|prev\|back\)\\b\/i/)
+})
+
+test('the AXI driver reports whether a directional control was available', async () => {
+  const { createAxiBrowserDriver } = await import(
+    '../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs'
+  )
+  const driver = (stdout) => createAxiBrowserDriver({
+    baseUrl: 'http://127.0.0.1:4319/',
+    command: async () => ({ status: 0, stdout, stderr: '' }),
+  })
+
+  assert.equal(await driver('true\n').activateDirection('next'), true)
+  assert.equal(await driver('false\n').activateDirection('next'), false)
+  await assert.rejects(
+    driver('true\n').activateDirection('sideways'),
+    (error) => error.name === 'BrowserDriverError',
+  )
+})
+
+test('the AXI driver rejects an adapter diagnostic in place of a route list', async () => {
+  const { createAxiBrowserDriver } = await import(
+    '../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs'
+  )
+  const driver = createAxiBrowserDriver({
+    baseUrl: 'http://127.0.0.1:4319/',
+    command: async (args) => (args[0] === 'resize'
+      ? { status: 0, stdout: '', stderr: '' }
+      : {
+        status: 0,
+        stdout: `${JSON.stringify("Could not find Google Chrome executable for channel 'stable' at:")}\n`,
+        stderr: '',
+      }),
+  })
+
+  await assert.rejects(driver.routes(), (error) => error.code === 'browser-driver-failed')
+})
+
+test('the AXI driver activates a control the way a pointer does', async () => {
+  // A real pointer activation focuses the control first. A presentation that
+  // suppresses deck keys while a control holds focus is a product defect the
+  // probe can only observe if the driver reproduces that focus.
+  const source = await emitted((driver) => driver.activate('Next step'))
+
+  assert.match(source, /target\.focus\(\);\s*\n?\s*target\.click\(\);/)
+})
+
+test('the AXI driver waits without the adapter-specific wait helper', async () => {
+  // `page.wait` is not implemented the same way across chrome-devtools-axi
+  // builds, and a script that calls it can fail wholesale. Waiting through
+  // primitives every build provides keeps the driver independent of the
+  // adapter's version.
+  const source = await emitted(async (driver) => {
+    await driver.open('how-to-make-a-presentation').catch(() => {})
+    await driver.activate('Next step').catch(() => {})
+    await driver.swipe('left').catch(() => {})
+    await driver.setMode('browse').catch(() => {})
+    await driver.press('ArrowRight').catch(() => {})
+  })
+
+  assert.doesNotMatch(source, /page\.wait\(/)
+  assert.match(source, /setTimeout\(/)
+})
+
+test('the AXI driver never reads a script constant inside a page callback', async () => {
+  // The script runs in the adapter and the callback runs in the page. Builds
+  // differ on whether the callback closes over the script's scope, so an
+  // interpolated value is embedded at its use site instead.
+  const source = await emitted((driver) => driver.setPosition(4).catch(() => {}))
+
+  assert.doesNotMatch(source, /const requiredPosition = /)
+  assert.match(source, /controls\[4\]/)
 })

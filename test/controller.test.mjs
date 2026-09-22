@@ -1174,9 +1174,11 @@ test('exhausted required judge output is a harness failure that preserves other 
     score.components.find(({ id }) => id === 'testing-evidence-quality').points_awarded,
     null,
   )
+  // The scene-kit job owns every scene-kit criterion, so its surviving
+  // checkpoint keeps a complete component score while another job fails.
   const sceneKit = score.components.find(({ id }) => id === 'scene-kit-correctness')
-  assert.equal(sceneKit.points_awarded, null)
-  assert.equal(sceneKit.points_observed, 23)
+  assert.equal(sceneKit.points_awarded, 24)
+  assert.equal(sceneKit.points_observed, 24)
 })
 
 test('fresh collisions and legacy checkpoint-only runs are not silently resumed', async () => {
@@ -1332,7 +1334,7 @@ test('browser probes are durable hashed evaluator-owned work units even when a p
   assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
   const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
   const units = state.phases['browser-evaluation'].units
-  assert.equal(Object.keys(units).length, 15)
+  assert.equal(Object.keys(units).length, 14)
   assert.ok(Object.values(units).every(({ state: unitState }) => unitState === 'complete'))
   for (const [id, unit] of Object.entries(units)) {
     assert.equal(unit.outputs.length, 1, id)

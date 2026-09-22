@@ -77,6 +77,27 @@ test('an all-pass automated evaluation scores the full 70-point subtotal', () =>
   assert.equal(result.gates_passed, true)
 })
 
+test('a not-observed scene criterion is resolved by its declared fallback judge', () => {
+  const data = inputs()
+  data.deterministic = data.deterministic.map((row) => row.id === 'demo-evolving-scene-structure'
+    ? { ...row, verdict: null, outcome: 'not-observed', looked_for: ['data-layout-id'], observed: false }
+    : row)
+  data.judges['demo-integration'] = [
+    ...data.judges['demo-integration'],
+    { id: 'demo-evolving-scene-structure', verdict: 'pass', rationale: 'stable identities are in source', evidence: ['src/demo.tsx'], citations: ['src/demo.tsx'] },
+  ]
+
+  const result = scoreProduct(data)
+  const criterion = component(result, 'demo-technical-quality').subcomponents
+    .find(({ id }) => id === 'demo-canonical-content').criteria
+    .find(({ id }) => id === 'demo-evolving-scene-structure')
+  assert.equal(criterion.verdict, 'pass')
+  assert.equal(criterion.verdict_source, 'fallback')
+  assert.equal(criterion.fallback_job, 'demo-integration')
+  assert.equal(result.fallback.criteria, 1)
+  assert.equal(result.fallback.points, 1)
+})
+
 test('a pending human review reports the subtotal but no official total or verdict', () => {
   const result = scoreProduct(inputs())
 
@@ -294,11 +315,11 @@ test('unobserved evaluator output leaves its component incomplete instead of fai
   assert.equal(component(result, 'scene-kit-correctness').points_awarded, null)
   // Components with complete evidence keep their scores.
   assert.equal(component(result, 'demo-technical-quality').points_awarded, 24)
-  assert.equal(result.automated_subtotal.points, 47)
+  assert.equal(result.automated_subtotal.points, 46)
   assert.equal(result.automated_subtotal.possible, 70)
   assert.equal(result.automated_subtotal.complete, false)
   // The observed subtotal is never rescaled to hide the missing evidence.
-  assert.equal(result.automated_subtotal.observed_possible, 47)
+  assert.equal(result.automated_subtotal.observed_possible, 46)
   assert.equal(result.official_score, null)
   assert.equal(result.official_pass, null)
   assert.equal(result.automated_pass, null)

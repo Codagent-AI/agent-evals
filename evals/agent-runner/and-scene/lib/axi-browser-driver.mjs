@@ -31,6 +31,17 @@ const TITLE_SELECTORS = [
   '[data-presentation-title]',
 ]
 const TITLE_SELECTOR = TITLE_SELECTORS.join(', ')
+// Asking *which* element is the title requires a ranked list. Asking whether
+// the active step's title is exposed at all does not, so that question is
+// answered from every text-bearing element of the presentation's own chrome.
+const TITLE_TEXT_SELECTORS = [
+  ...TITLE_SELECTORS,
+  '[data-presentation-presenter-title]',
+  '[data-presentation-active-title]',
+  ...['header', 'footer', 'stage'].flatMap((region) => (
+    ['h1', 'h2', 'h3', 'h4', 'p', 'span'].map((tag) => `[data-presentation-${region}] ${tag}`)
+  )),
+]
 const CAPTION_SELECTORS = [
   '[data-presentation-caption]',
   '[data-presentation-node="caption"]',
@@ -78,6 +89,18 @@ const NEXT_SELECTORS = [
   '[data-presentation-button="next"]',
   '[data-presentation-node="next"]',
 ]
+const MODE_TOGGLE_SELECTORS = [
+  '[data-presentation-mode-toggle]',
+  '[data-presentation-button="mode"]',
+  '[data-presentation-node="mode-toggle"]',
+]
+// A scene identity has to identify something. A bare boolean marker names no
+// scene, so it is not a declared identity.
+const SCENE_ID_SELECTORS = [
+  '[data-presentation-scene-id]',
+  '[data-scene-id]',
+  '[data-presentation-scene]',
+]
 
 function navigationDiscoverySource() {
   return `
@@ -99,11 +122,16 @@ function navigationDiscoverySource() {
       || '';
   };
   const scope = presentation || document;
-  const firstVisibleMatch = (selectors) => {
+  const matchedSelectors = {};
+  const firstVisibleMatch = (selectors, role = null) => {
     for (const selector of selectors) {
       const match = [...scope.querySelectorAll(selector)].find(visible);
-      if (match) return match;
+      if (match) {
+        if (role) matchedSelectors[role] = selector;
+        return match;
+      }
     }
+    if (role) matchedSelectors[role] = null;
     return null;
   };
   const allInteractive = [...scope.querySelectorAll('${INTERACTIVE_SELECTOR}')];
@@ -115,7 +143,7 @@ function navigationDiscoverySource() {
   const explicitControls = inDomOrder([
     ...scope.querySelectorAll(${JSON.stringify(EXPLICIT_CONTROL_SELECTOR)}),
   ]);
-  const progressRegion = firstVisibleMatch(${JSON.stringify(PROGRESS_SELECTORS)});
+  const progressRegion = firstVisibleMatch(${JSON.stringify(PROGRESS_SELECTORS)}, 'progress');
   const semanticControls = progressRegion
     ? inDomOrder([...progressRegion.querySelectorAll('${INTERACTIVE_SELECTOR}')])
     : [];
@@ -125,18 +153,69 @@ function navigationDiscoverySource() {
   const controls = semanticControls.length > 0
     ? semanticControls
     : (explicitControls.length > 0 ? explicitControls : namedStepControls);
-  const directionalRegion = firstVisibleMatch(${JSON.stringify(STEP_CONTROL_REGION_SELECTORS)});
+  matchedSelectors.controls = semanticControls.length > 0
+    ? 'semantic-progress-region'
+    : (explicitControls.length > 0 ? 'presentation-owned-control-hook' : (
+      namedStepControls.length > 0 ? 'accessible-step-name' : null
+    ));
+  const directionalRegion = firstVisibleMatch(${JSON.stringify(STEP_CONTROL_REGION_SELECTORS)}, 'directional_region');
   const directionalCandidates = directionalRegion
     ? [...directionalRegion.querySelectorAll('${INTERACTIVE_SELECTOR}')]
     : allInteractive;
-  const findDirectionalControls = (selectors, namePattern) => {
+  const findDirectionalControls = (selectors, namePattern, role = null) => {
     for (const selector of selectors) {
       const explicit = [...scope.querySelectorAll(selector)].filter(visible);
-      if (explicit.length > 0) return inDomOrder(explicit);
+      if (explicit.length > 0) {
+        if (role) matchedSelectors[role] = selector;
+        return inDomOrder(explicit);
+      }
     }
-    return inDomOrder(directionalCandidates.filter(
+    const named = inDomOrder(directionalCandidates.filter(
       (element) => namePattern.test(accessibleName(element)),
     ));
+    if (role) matchedSelectors[role] = named.length > 0 ? 'accessible-directional-name' : null;
+    return named;
+  };
+  const readMode = () => {
+    const declared = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
+      ?.getAttribute('data-presentation-mode');
+    if (declared === 'present' || declared === 'browse') return declared;
+    return [...document.querySelectorAll(${JSON.stringify(`${CAPTION_SELECTOR}, ${TOC_SELECTOR}`)})]
+      .some(visible) ? 'browse' : 'present';
+  };
+  // A presentation may expose one control that flips the mode, or a separate
+  // control per mode. Picking the first visible match would click "Present
+  // mode" when browse mode was required, so the mode being asked for takes
+  // part in discovery. When it still cannot pick one control, it says so and
+  // the caller raises a harness failure rather than judging the candidate on
+  // an observation the harness never made.
+  const modeToggle = (requiredMode) => {
+    let candidates = [];
+    for (const selector of ${JSON.stringify(MODE_TOGGLE_SELECTORS)}) {
+      const matches = [...scope.querySelectorAll(selector)].filter(visible);
+      if (matches.length > 0) {
+        matchedSelectors.mode_toggle = selector;
+        candidates = matches;
+        break;
+      }
+    }
+    if (candidates.length === 0) {
+      candidates = allInteractive.filter(visible).filter(
+        (element) => /\\b(present|presenter|browse|reading)\\b.*\\bmode\\b|\\bmode\\b.*\\b(present|presenter|browse|reading)\\b/i
+          .test(accessibleName(element)),
+      );
+      matchedSelectors.mode_toggle = candidates.length > 0 ? 'accessible-mode-name' : null;
+    }
+    if (candidates.length === 0) return null;
+    if (candidates.length === 1) return candidates[0];
+    const wanted = requiredMode === 'browse'
+      ? /\\b(browse|browsing|reading|read)\\b/i
+      : (requiredMode === 'present' ? /\\b(present|presenter|presenting|slideshow)\\b/i : null);
+    const selected = wanted
+      ? candidates.filter((element) => wanted.test(accessibleName(element)))
+      : [];
+    if (selected.length === 1) return selected[0];
+    return 'ambiguous';
   };
 `
 }
@@ -164,6 +243,26 @@ function failureMessage(result) {
     || result?.stderr?.trim()
     || result?.stdout?.trim()
     || `chrome-devtools-axi exited with status ${result?.status ?? 'unknown'}`
+}
+
+// chrome-devtools-axi builds do not agree on `page.wait`: in some of them every
+// form of it fails and takes the rest of the script with it. Waiting through
+// primitives every build provides keeps the driver independent of the adapter
+// version, which the suite does not pin.
+function sleepSource(ms) {
+  return `await new Promise((resolve) => setTimeout(resolve, ${ms}));`
+}
+
+function waitForSelectorSource(selector, timeout) {
+  const probe = JSON.stringify(`!!document.querySelector(${JSON.stringify(selector)})`)
+  return `{
+  const deadline = Date.now() + ${timeout};
+  for (;;) {
+    if (await page.eval(${probe})) break;
+    if (Date.now() >= deadline) throw new Error(${JSON.stringify(`timed out waiting for ${selector}`)});
+    ${sleepSource(50)}
+  }
+}`
 }
 
 export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {}) {
@@ -204,7 +303,7 @@ export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {
     async routes() {
       const routes = await run(`
 await page.open(${JSON.stringify(base.href)});
-await page.wait(50);
+${sleepSource(50)}
 const routes = await page.eval(() => [...document.querySelectorAll('a[href]')]
   .map((link) => new URL(link.href, location.href))
   .filter((url) => url.origin === location.origin)
@@ -222,7 +321,7 @@ console.log(JSON.stringify([...new Set(routes)]));
       await invoke(['resize', '1280', '720'])
       return run(`
 const opened = await page.open(${JSON.stringify(routeUrl(route))});
-await page.wait('[data-step-count]', 30000);
+${waitForSelectorSource('[data-step-count]', 30000)}
 const initialMode = await page.eval(() => {
   const explicit = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
     ?.getAttribute('data-presentation-mode');
@@ -260,8 +359,24 @@ const mode = await page.eval(() => {
   return browsing ? 'browse' : 'present';
 });
 if (mode !== requiredMode) {
-  await page.press('p');
-  await page.wait(100);
+  const outcome = await page.eval(() => {
+    const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
+${navigationDiscoverySource()}
+    const toggle = modeToggle(${JSON.stringify(requiredMode)});
+    if (toggle === 'ambiguous') return 'ambiguous';
+    if (!toggle) return 'none';
+    toggle.click();
+    return 'control';
+  });
+  if (outcome === 'ambiguous') {
+    throw new Error(
+      'ambiguous presentation mode control: no single visible control selects '
+        + ${JSON.stringify(requiredMode)} + ' mode',
+    );
+  }
+  const usedControl = outcome === 'control';
+  if (!usedControl) await page.press('p');
+  ${sleepSource(100)}
 }
 console.log(JSON.stringify(true));
 `)
@@ -272,21 +387,20 @@ console.log(JSON.stringify(true));
         throw new BrowserDriverError(`invalid presentation position: ${requiredPosition}`)
       }
       return run(`
-const requiredPosition = ${requiredPosition};
 const readPosition = () => page.eval(() => Number(
   document.querySelector('[data-step-count]')?.getAttribute('data-step-index'),
 ));
 const positionedByControl = await page.eval(() => {
   const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
 ${navigationDiscoverySource()}
-  const target = controls[requiredPosition];
+  const target = controls[${requiredPosition}];
   if (!target) return false;
   target.click();
   return true;
 });
-if (positionedByControl) await page.wait(100);
+if (positionedByControl) ${sleepSource(100)}
 let observedPosition = await readPosition();
-if (observedPosition !== requiredPosition) {
+if (observedPosition !== ${requiredPosition}) {
   const stepCount = await page.eval(() => Number(
     document.querySelector('[data-step-count]')?.getAttribute('data-step-count'),
   ));
@@ -295,18 +409,18 @@ if (observedPosition !== requiredPosition) {
   }
   for (let index = 0; index < stepCount; index += 1) {
     await page.press('ArrowLeft');
-    await page.wait(100);
+    ${sleepSource(100)}
   }
-  for (let index = 0; index < requiredPosition; index += 1) {
+  for (let index = 0; index < ${requiredPosition}; index += 1) {
     await page.press('ArrowRight');
-    await page.wait(100);
+    ${sleepSource(100)}
   }
   observedPosition = await readPosition();
 }
-if (observedPosition !== requiredPosition) {
+if (observedPosition !== ${requiredPosition}) {
   throw new Error(
     'required navigation position was not established: expected '
-      + requiredPosition + ', observed ' + observedPosition,
+      + ${requiredPosition} + ', observed ' + observedPosition,
   );
 }
 console.log(JSON.stringify(true));
@@ -363,7 +477,7 @@ for (let attempt = 0; attempt < 50; attempt += 1) {
     break;
   }
   previous = state.signature;
-  await page.wait(100);
+  ${sleepSource(100)}
   if (attempt === 49) throw new Error('timed out waiting for a settled browser state');
 }
 `)
@@ -435,12 +549,21 @@ const captured = await page.eval(() => {
   const explicitMode = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
     ?.getAttribute('data-presentation-mode');
 ${navigationDiscoverySource()}
-  const title = firstVisibleMatch(${JSON.stringify(TITLE_SELECTORS)});
-  const caption = firstVisibleMatch(${JSON.stringify(CAPTION_SELECTORS)});
-  const toc = firstVisibleMatch(${JSON.stringify(TOC_SELECTORS)});
-  const progressChrome = firstVisibleMatch(${JSON.stringify(PROGRESS_SELECTORS)});
-  const previousMatches = findDirectionalControls(${JSON.stringify(PREVIOUS_SELECTORS)}, /^(previous|prev|back)\\b/i);
-  const nextMatches = findDirectionalControls(${JSON.stringify(NEXT_SELECTORS)}, /^next\\b/i);
+  const title = firstVisibleMatch(${JSON.stringify(TITLE_SELECTORS)}, 'title');
+  // Which element a presentation uses for the deck title and which for the
+  // active step title is its own choice, so report every visible title-bearing
+  // text and let the probe ask whether the step title is exposed at all.
+  const titleTexts = [...new Set(${JSON.stringify(TITLE_TEXT_SELECTORS)}
+    .flatMap((selector) => [...scope.querySelectorAll(selector)])
+    .filter(visible)
+    .map((element) => element.textContent?.trim() || '')
+    .filter(Boolean))].slice(0, 24);
+  const caption = firstVisibleMatch(${JSON.stringify(CAPTION_SELECTORS)}, 'caption');
+  const toc = firstVisibleMatch(${JSON.stringify(TOC_SELECTORS)}, 'toc');
+  const progressChrome = firstVisibleMatch(${JSON.stringify(PROGRESS_SELECTORS)}, 'progress_chrome');
+  const previousMatches = findDirectionalControls(${JSON.stringify(PREVIOUS_SELECTORS)}, /^(previous|prev|back)\\b/i, 'previous');
+  const nextMatches = findDirectionalControls(${JSON.stringify(NEXT_SELECTORS)}, /^next\\b/i, 'next');
+  modeToggle(null);
   const previous = previousMatches[0] || null;
   const next = nextMatches[0] || null;
   const navigationAmbiguities = [
@@ -451,7 +574,7 @@ ${navigationDiscoverySource()}
   const controlStates = controls.map((control) => ({
     name: accessibleName(control),
     role: control.getAttribute('role') || control.tagName.toLowerCase(),
-    ariaCurrent: control.getAttribute('aria-current') === 'step',
+    ariaCurrent: ['step', 'true'].includes(control.getAttribute('aria-current')),
     focusable: !control.disabled && control.tabIndex >= 0,
   }));
   const entityOccurrences = new Map();
@@ -459,6 +582,8 @@ ${navigationDiscoverySource()}
     '[data-layout-id]',
     '[data-scene-entity]',
     '[data-node]',
+    '[data-entity-id]',
+    '[data-scene-node]',
     '[data-presentation-node]',
     '[data-presentation-box]',
     '[data-presentation-label]',
@@ -476,7 +601,9 @@ ${navigationDiscoverySource()}
     .map((element) => {
       const explicit = element.getAttribute('data-layout-id')
         || element.getAttribute('data-scene-entity')
-        || element.getAttribute('data-node');
+        || element.getAttribute('data-node')
+        || element.getAttribute('data-entity-id')
+        || element.getAttribute('data-scene-node');
       if (explicit) return explicit;
       const hook = element.getAttributeNames()
         .find((name) => name.startsWith('data-presentation-'));
@@ -493,14 +620,26 @@ ${navigationDiscoverySource()}
       return base + ':' + occurrence;
     })
     .filter(Boolean);
+  const declaredSceneId = () => {
+    for (const selector of ${JSON.stringify(SCENE_ID_SELECTORS)}) {
+      const attribute = selector.slice(1, -1);
+      for (const element of [presentation, ...scope.querySelectorAll(selector)]) {
+        const value = element?.getAttribute(attribute)?.trim();
+        if (value && !['true', 'false'].includes(value.toLowerCase())) return value;
+      }
+    }
+    return null;
+  };
   const focused = accessibleName(document.activeElement) || null;
   return {
     stepIndex: Number(progress?.getAttribute('data-step-index')),
     stepCount: Number(progress?.getAttribute('data-step-count')),
     title: title?.textContent?.trim() || '',
+    titleTexts,
     caption: caption?.textContent?.trim() || '',
-    sceneId: presentation?.getAttribute('data-presentation') || location.pathname,
+    sceneId: declaredSceneId(),
     entityIds,
+    entityConventions: entitySelectors,
     titleProminent: visible(title),
     mode: explicitMode === 'present' || explicitMode === 'browse'
       ? explicitMode
@@ -513,6 +652,7 @@ ${navigationDiscoverySource()}
     controls: controlStates,
     focused,
     viewport: { width: window.innerWidth, height: window.innerHeight },
+    matchedSelectors,
     navigationAmbiguities,
   };
 });
@@ -530,6 +670,44 @@ console.log(JSON.stringify(captured));
       await run(`await page.press(${JSON.stringify(key)}); console.log(JSON.stringify(true));`)
     },
 
+    async releaseFocus() {
+      return run(`
+const released = await page.eval(() => {
+  const root = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
+  if (!root) return false;
+  if (root.tabIndex < 0 && !root.hasAttribute('tabindex')) {
+    root.setAttribute('tabindex', '-1');
+    root.__andSceneTemporaryTabindex = true;
+  }
+  root.focus();
+  const active = document.activeElement;
+  const interactiveTags = new Set(['a', 'button', 'input', 'select', 'textarea', 'summary']);
+  const interactiveRoles = new Set([
+    'button', 'checkbox', 'combobox', 'gridcell', 'link', 'listbox', 'menuitem',
+    'menuitemcheckbox', 'menuitemradio', 'option', 'radio', 'searchbox', 'slider',
+    'spinbutton', 'switch', 'tab', 'textbox', 'treeitem',
+  ]);
+  return active === root
+    && !interactiveTags.has(active.tagName.toLowerCase())
+    && !interactiveRoles.has(active.getAttribute('role'));
+});
+console.log(JSON.stringify(released));
+`)
+    },
+
+    async restoreFocusTarget() {
+      await run(`
+await page.eval(() => {
+  const root = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
+  if (root?.__andSceneTemporaryTabindex) {
+    root.removeAttribute('tabindex');
+    delete root.__andSceneTemporaryTabindex;
+  }
+});
+console.log(JSON.stringify(true));
+`)
+    },
+
     async activate(name) {
       await run(`
 const activated = await page.eval(() => {
@@ -537,13 +715,52 @@ const activated = await page.eval(() => {
 ${navigationDiscoverySource()}
   const target = controls.find((element) => accessibleName(element) === ${JSON.stringify(name)});
   if (!target) return false;
+  // A pointer activation focuses the control before it fires. Reproducing that
+  // is what lets a probe observe a presentation that suppresses deck keys
+  // while one of its own controls holds focus.
+  target.focus();
   target.click();
   return true;
 });
 if (!activated) throw new Error('navigation control was not found');
-await page.wait(100);
+${sleepSource(100)}
 console.log(JSON.stringify(true));
 `)
+    },
+
+    // Activating the discovered Previous or Next control, so a probe can
+    // traverse a presentation the way a reader does instead of inferring
+    // reachability from a control merely being visible. Returns false when no
+    // control for that direction is discoverable, which a boundary design may
+    // legitimately produce.
+    async activateDirection(direction) {
+      if (!['previous', 'next'].includes(direction)) {
+        throw new BrowserDriverError(`unsupported navigation direction: ${direction}`)
+      }
+      const selectors = direction === 'next' ? NEXT_SELECTORS : PREVIOUS_SELECTORS
+      const pattern = direction === 'next' ? '/^next\\b/i' : '/^(previous|prev|back)\\b/i'
+      const outcome = await run(`
+const outcome = await page.eval(() => {
+  const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
+${navigationDiscoverySource()}
+  const matches = findDirectionalControls(${JSON.stringify(selectors)}, ${pattern});
+  if (matches.length > 1) return 'ambiguous';
+  const target = matches[0];
+  if (!target) return 'none';
+  // A pointer activation focuses the control before it fires.
+  target.focus();
+  target.click();
+  return 'activated';
+});
+if (outcome === 'ambiguous') {
+  throw new Error(
+    'ambiguous semantic navigation: multiple visible ' + ${JSON.stringify(direction)} + ' controls',
+  );
+}
+${sleepSource(100)}
+console.log(JSON.stringify(outcome === 'activated'));
+`)
+      return outcome === true
     },
 
     async focus(name) {
@@ -577,13 +794,32 @@ const dispatched = await page.eval(() => {
   target.dispatchEvent(new TouchEvent('touchend', { changedTouches: [touch(endX)], bubbles: true }));
   return true;
 });
-await page.wait(100);
+${sleepSource(100)}
 console.log(JSON.stringify(dispatched));
 `)
     },
 
+    // A presentation owns its own mode affordance. Reach for the key only when
+    // no mode control is discoverable, rather than requiring one keybinding.
     async toggleMode() {
-      await run("await page.press('p'); await page.wait(50); console.log(JSON.stringify(true));")
+      await run(`
+const outcome = await page.eval(() => {
+  const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
+${navigationDiscoverySource()}
+  const toggle = modeToggle(readMode() === 'present' ? 'browse' : 'present');
+  if (toggle === 'ambiguous') return 'ambiguous';
+  if (!toggle) return 'none';
+  toggle.click();
+  return 'control';
+});
+if (outcome === 'ambiguous') {
+  throw new Error('ambiguous presentation mode control: no single visible control selects the opposite mode');
+}
+const usedControl = outcome === 'control';
+if (!usedControl) await page.press('p');
+${sleepSource(50)}
+console.log(JSON.stringify(usedControl));
+`)
     },
 
     async failures() {
