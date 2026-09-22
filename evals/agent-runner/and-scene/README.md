@@ -525,6 +525,12 @@ explicitly confirms the full summary; before that the run stays
 Once the reviewer confirms, the run is finalized and published; see
 [Publication](#publication).
 
+Pass `--no-publish` to finalize the review without committing or pushing from
+this checkout. The agent factory uses it: it runs the review from a pinned,
+detached agent-evals worktree and saves each finished run directory to the
+eval repository itself. A later invocation against the same run with
+`--no-publish` also skips any unfinished publication.
+
 Pass `--baseline-run-dir` to review a pending reference baseline first. Each run
 keeps its own candidate, rubric, response, score, and completion state, and the
 candidate's result records baseline totals, component, subcomponent, and gate
