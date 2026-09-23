@@ -3,8 +3,9 @@ cli:
     - codex
   adapters:
     codex:
+      model: gpt-6-sol
       allow_tool_use: false
-      thinking_budget: low
+      thinking_budget: medium
 
 entry_points:
   - path: "."

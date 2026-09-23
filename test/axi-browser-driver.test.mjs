@@ -87,6 +87,9 @@ test('the AXI driver releases focus to the presentation root without leaving a t
 
   assert.match(calls[0].input, /tabindex/, 'releaseFocus adds a temporary tabindex when needed')
   assert.match(calls[0].input, /data-presentation.*data-presentation-root/, 'focus stays in the presentation')
+  assert.match(calls[0].input, /data-presentation-mode[\s\S]*document\.body/, 'a presentation without a root hook still gets focus')
+  assert.doesNotMatch(calls[0].input, /if \(!root\) return false/, 'a missing root hook is not a failure to release focus')
+  assert.match(calls[1].input, /data-presentation-mode/, 'the tabindex is removed from the same root')
   assert.match(calls[0].input, /interactive/i)
   assert.match(calls[1].input, /removeAttribute\('tabindex'\)/)
 })

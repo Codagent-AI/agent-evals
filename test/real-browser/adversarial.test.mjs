@@ -74,3 +74,8 @@ test('(e) a deck that listens for keys on its own root is not deducted', { timeo
 test('(f) a control that cannot release focus is a harness failure, not a verdict', { timeout: 600_000 }, async () => {
   await assert.rejects(evaluate('f'), /could not release focus from the navigation control/)
 })
+
+test('(g) a deck whose root has no root hook still has its focus released', { timeout: 600_000 }, async () => {
+  const keys = criterion(await evaluate('g'), KEYS)
+  assert.equal(keys.verdict, 'pass', keys.rationale)
+})

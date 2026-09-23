@@ -821,12 +821,12 @@ the build and serve commands. It takes a few minutes.
 ### Adversarial real-browser pages
 
 `test/real-browser/adversarial.test.mjs` drives the production evaluator in real
-Chrome against six hand-made pages that no real candidate resembles: a deck
+Chrome against seven hand-made pages that no real candidate resembles: a deck
 that ignores deck keys while a button holds focus, one whose keys stay dead
 after any control use, a correct scene with no recognised hook, a hidden step
-title, a deck that listens for keys on its own root, and a control that will not
-release focus. It sits outside the `test/*.test.mjs` glob because CI has no
-browser. Run it before merging any change to the control-key, scene, or
+title, a deck that listens for keys on its own root, a control that will not
+release focus, and a deck whose root has no root hook. It sits outside the
+`test/*.test.mjs` glob because CI has no browser. Run it before merging any change to the control-key, scene, or
 present-mode probes, and never while the candidate check is running:
 
 ```bash
