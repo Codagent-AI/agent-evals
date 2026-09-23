@@ -102,6 +102,15 @@ const SCENE_ID_SELECTORS = [
   '[data-presentation-scene]',
 ]
 
+// Where focus rests once a control lets go of it. No fixture requirement names
+// a root hook, so a presentation marked only by its mode is still its own
+// root, and a page with neither falls back to the document body.
+function focusRootSource() {
+  return `(document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)})
+    || document.querySelector(${JSON.stringify(MODE_SELECTOR)})
+    || document.body)`
+}
+
 function navigationDiscoverySource() {
   return `
   const visible = (element) => Boolean(element && element.getClientRects().length > 0
@@ -673,8 +682,7 @@ console.log(JSON.stringify(captured));
     async releaseFocus() {
       return run(`
 const released = await page.eval(() => {
-  const root = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
-  if (!root) return false;
+  const root = ${focusRootSource()};
   if (root.tabIndex < 0 && !root.hasAttribute('tabindex')) {
     root.setAttribute('tabindex', '-1');
     root.__andSceneTemporaryTabindex = true;
@@ -698,8 +706,8 @@ console.log(JSON.stringify(released));
     async restoreFocusTarget() {
       await run(`
 await page.eval(() => {
-  const root = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
-  if (root?.__andSceneTemporaryTabindex) {
+  const root = ${focusRootSource()};
+  if (root.__andSceneTemporaryTabindex) {
     root.removeAttribute('tabindex');
     delete root.__andSceneTemporaryTabindex;
   }

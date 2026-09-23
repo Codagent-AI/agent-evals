@@ -25,7 +25,7 @@
   </nav>
 </div>
 <script>
-// One page, six behaviours. The server injects VARIANT and STEPS; nothing here
+// One page, seven behaviours. The server injects VARIANT and STEPS; nothing here
 // is a candidate. Each variant isolates one judgment the evaluator must make.
 const variant = window.VARIANT
 const steps = window.STEPS
@@ -34,6 +34,9 @@ const progress = document.getElementById('progress')
 let index = 0
 let mode = 'present'
 let keysDead = false
+// (g) is a correct deck whose root carries only its mode, with no root hook,
+// as a real candidate built its presentation.
+if (variant === 'g') root.removeAttribute('data-presentation')
 
 function render() {
   root.setAttribute('data-presentation-mode', mode)
