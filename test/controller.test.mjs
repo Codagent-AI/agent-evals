@@ -788,7 +788,10 @@ test('a fresh Runner execution waits for its linked audit before delivery verifi
     trigger: null,
     state: 'completed',
     warning: null,
+    outcome: 'failed',
+    reason: 'audit finished without a local report',
   }])
+  assert.ok(execution.events.some(({ event }) => event === 'linked-audit-failed'))
   const report = await readJson(join(context.runDir, 'result.json'))
   assert.deepEqual(report.workflow.linked_audits, execution.linked_audits)
 })
@@ -796,6 +799,13 @@ test('a fresh Runner execution waits for its linked audit before delivery verifi
 test('a completed core implement-change run without a linked audit starts replay and waits', async () => {
   const context = await environment()
   const waited = []
+  // The sandbox has no reporting connection, so the replayed audit's report
+  // waits for the host to deliver it.
+  await mkdir(join(dirname(context.sessionDir), 'audit-replay'), { recursive: true })
+  await writeFile(
+    join(dirname(context.sessionDir), 'audit-replay', 'local-report.json'),
+    JSON.stringify({ delivery_state: 'pending' }),
+  )
 
   const result = await evaluate(context, profiles, {
     readRunnerState: () => runnerInvocations(context).length === 0
@@ -860,9 +870,71 @@ test('a completed core implement-change run without a linked audit starts replay
     trigger: 'replay',
     state: 'completed',
     warning: null,
+    outcome: 'pending-delivery',
+    reason: 'Sheets delivery pending',
   }])
+  assert.ok(!execution.events.some(({ event }) => event === 'linked-audit-failed'))
   const report = await readJson(join(context.runDir, 'result.json'))
   assert.deepEqual(report.workflow.linked_audits, execution.linked_audits)
+})
+
+test('an unreadable linked audit report is recorded as a failed audit with its error', async () => {
+  const context = await environment()
+  const waited = []
+  // The sandbox has no reporting connection, so the replayed audit's report
+  // waits for the host to deliver it.
+  await mkdir(join(dirname(context.sessionDir), 'audit-replay'), { recursive: true })
+  await writeFile(
+    join(dirname(context.sessionDir), 'audit-replay', 'local-report.json'),
+    '{',
+  )
+
+  const result = await evaluate(context, profiles, {
+    readRunnerState: () => runnerInvocations(context).length === 0
+      ? null
+      : {
+          run_id: 'runner-7',
+          session_dir: context.sessionDir,
+          workflow_name: 'implement-change',
+          workflow_completed: true,
+          history,
+          audit: auditReplayInvocations(context).length === 0
+            ? { links: [] }
+            : {
+                links: [{
+                  auditRunId: 'audit-replay',
+                  executionSessionId: 'execution-1',
+                  trigger: 'replay',
+                  state: waited.length > 0 ? 'completed' : 'started',
+                }],
+              },
+        },
+    waitForRun: async (runId) => {
+      waited.push(runId)
+      return {
+        run_id: runId,
+        session_dir: context.sessionDir,
+        workflow_name: 'implement-change',
+        workflow_completed: true,
+        history,
+        audit: {
+          links: [{
+            auditRunId: 'audit-replay',
+            executionSessionId: 'execution-1',
+            trigger: 'replay',
+            state: 'completed',
+          }],
+        },
+      }
+    },
+    verifyDelivery: async () => delivery(context),
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const execution = await readJson(join(context.runDir, 'phases/workflow-execution.json'))
+  assert.equal(execution.linked_audits[0].outcome, 'failed')
+  assert.match(execution.linked_audits[0].reason, /^unreadable local report .*local-report\.json: /)
+  assert.ok(execution.events.some(({ event }) => event === 'linked-audit-failed'))
 })
 
 test('a completed run with multiple execution sessions replays the last closed session', async () => {
@@ -1000,6 +1072,8 @@ test('an already-terminal linked audit warning is recorded without changing sour
     trigger: 'automatic',
     state: 'failed',
     warning: 'crosscheck profile unavailable',
+    outcome: 'failed',
+    reason: 'crosscheck profile unavailable',
   }])
 })
 

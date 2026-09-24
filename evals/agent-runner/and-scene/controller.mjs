@@ -232,6 +232,40 @@ function linkedAuditsOf(state) {
   }))
 }
 
+// A linked audit's lifecycle state says only that the audit process finished.
+// Whether its step-value rows exist comes from the audit's local report: a
+// completed audit whose stage failed has none, and one assembled without a
+// reporting connection (as in this sandbox) is pending until the host delivers it.
+async function withAuditOutcomes(audits, sessionDir) {
+  return Promise.all(audits.map(async (audit) => ({
+    ...audit,
+    ...(await linkedAuditOutcome(audit, sessionDir)),
+  })))
+}
+
+async function linkedAuditOutcome(audit, sessionDir) {
+  if (['reserved', 'launching', 'started'].includes(audit.state)) {
+    return { outcome: 'active', reason: null }
+  }
+  if (audit.state === 'failed') {
+    return { outcome: 'failed', reason: audit.warning ?? 'audit launch failed' }
+  }
+  let delivery = null
+  if (sessionDir && audit.run_id) {
+    const reportPath = join(dirname(sessionDir), audit.run_id, 'local-report.json')
+    try {
+      delivery = JSON.parse(await readFile(reportPath, 'utf8'))?.delivery_state ?? null
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        return { outcome: 'failed', reason: `unreadable local report ${reportPath}: ${error.message}` }
+      }
+    }
+  }
+  if (delivery === 'delivered') return { outcome: 'delivered', reason: null }
+  if (delivery === 'pending') return { outcome: 'pending-delivery', reason: 'Sheets delivery pending' }
+  return { outcome: 'failed', reason: audit.warning ?? 'audit finished without a local report' }
+}
+
 async function fingerprintFiles(paths) {
   const hashes = await Promise.all(paths.map(async (path) => [
     path,
@@ -957,7 +991,17 @@ export async function runEvaluation({
           audits: linkedAuditsOf(state),
         })
       }
-      record.linkedAudits = linkedAuditsOf(runnerStateSnapshot)
+      record.linkedAudits = await withAuditOutcomes(
+        linkedAuditsOf(runnerStateSnapshot),
+        runnerStateSnapshot?.session_dir,
+      )
+      const failedAudits = record.linkedAudits.filter((audit) => audit.outcome === 'failed')
+      if (failedAudits.length > 0) {
+        // Reported, not fatal: the audit measures the workflow and never changes
+        // the evaluation's own result.
+        record.events.push({ event: 'linked-audit-failed', status: 'failed', audits: failedAudits })
+        log(`agent-runner: linked audit failed: ${failedAudits.map((audit) => `${audit.run_id}: ${audit.reason}`).join('; ')}`)
+      }
       record.events.push({ event: 'continue', status: decision.status, reason: null, adopted: false })
 
       record.observed_steps = await readSteps(runnerStateSnapshot)
