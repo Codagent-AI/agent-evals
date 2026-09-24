@@ -49,7 +49,10 @@ const ARTIFACT_NAME = /(session[-_]?report|assumption|context[-_]?gap|ambiguit|a
 
 export const AMBIGUITY_RESULT_SCHEMA = {
   type: 'object',
-  required: ['findings', 'coverage'],
+  // Codex sends this as an OpenAI strict structured-output schema: every object
+  // must require every property key, so optional values are required and
+  // nullable, and a finding list with no proposals returns an empty array.
+  required: ['findings', 'coverage', 'proposals'],
   additionalProperties: false,
   properties: {
     coverage: { enum: ['complete', 'incomplete'] },
@@ -57,17 +60,18 @@ export const AMBIGUITY_RESULT_SCHEMA = {
       type: 'array',
       items: {
         type: 'object',
-        required: ['origin', 'source', 'concern', 'evidence', 'handling', 'consequence', 'classification', 'rationale'],
+        required: ['origin', 'source', 'concern', 'evidence', 'handling', 'consequence', 'classification', 'rationale', 'resolution'],
         additionalProperties: false,
         properties: {
           origin: {
             type: 'object',
+            required: ['run_id', 'step', 'agent_role', 'task'],
             additionalProperties: false,
             properties: {
-              run_id: { type: 'string' },
-              step: { type: 'string' },
-              agent_role: { type: 'string' },
-              task: { type: 'string' },
+              run_id: { type: ['string', 'null'] },
+              step: { type: ['string', 'null'] },
+              agent_role: { type: ['string', 'null'] },
+              task: { type: ['string', 'null'] },
             },
           },
           source: { enum: ['reported', 'judge-discovered'] },
@@ -77,7 +81,7 @@ export const AMBIGUITY_RESULT_SCHEMA = {
           consequence: { type: 'string' },
           classification: { enum: AMBIGUITY_CLASSIFICATIONS },
           rationale: { type: 'string', minLength: 1 },
-          resolution: { type: 'string' },
+          resolution: { type: ['string', 'null'] },
         },
       },
     },
