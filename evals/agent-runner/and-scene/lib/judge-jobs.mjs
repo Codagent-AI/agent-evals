@@ -115,7 +115,7 @@ export const JUDGE_RESULT_SCHEMA = {
   },
 }
 
-const SOURCE_JUDGE_RESULT_SCHEMA = {
+export const SOURCE_JUDGE_RESULT_SCHEMA = {
   ...JUDGE_RESULT_SCHEMA,
   properties: {
     results: {
@@ -141,7 +141,7 @@ const SOURCE_JUDGE_RESULT_SCHEMA = {
   },
 }
 
-const SOURCE_AUDIT_RESULT_SCHEMA = {
+export const SOURCE_AUDIT_RESULT_SCHEMA = {
   type: 'object',
   required: ['results'],
   additionalProperties: false,
