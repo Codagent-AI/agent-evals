@@ -788,7 +788,10 @@ test('a fresh Runner execution waits for its linked audit before delivery verifi
     trigger: null,
     state: 'completed',
     warning: null,
+    outcome: 'failed',
+    reason: 'audit finished without a local report',
   }])
+  assert.ok(execution.events.some(({ event }) => event === 'linked-audit-failed'))
   const report = await readJson(join(context.runDir, 'result.json'))
   assert.deepEqual(report.workflow.linked_audits, execution.linked_audits)
 })
@@ -796,6 +799,13 @@ test('a fresh Runner execution waits for its linked audit before delivery verifi
 test('a completed core implement-change run without a linked audit starts replay and waits', async () => {
   const context = await environment()
   const waited = []
+  // The sandbox has no reporting connection, so the replayed audit's report
+  // waits for the host to deliver it.
+  await mkdir(join(dirname(context.sessionDir), 'audit-replay'), { recursive: true })
+  await writeFile(
+    join(dirname(context.sessionDir), 'audit-replay', 'local-report.json'),
+    JSON.stringify({ delivery_state: 'pending' }),
+  )
 
   const result = await evaluate(context, profiles, {
     readRunnerState: () => runnerInvocations(context).length === 0
@@ -860,7 +870,10 @@ test('a completed core implement-change run without a linked audit starts replay
     trigger: 'replay',
     state: 'completed',
     warning: null,
+    outcome: 'pending-delivery',
+    reason: 'Sheets delivery pending',
   }])
+  assert.ok(!execution.events.some(({ event }) => event === 'linked-audit-failed'))
   const report = await readJson(join(context.runDir, 'result.json'))
   assert.deepEqual(report.workflow.linked_audits, execution.linked_audits)
 })
@@ -1000,6 +1013,8 @@ test('an already-terminal linked audit warning is recorded without changing sour
     trigger: 'automatic',
     state: 'failed',
     warning: 'crosscheck profile unavailable',
+    outcome: 'failed',
+    reason: 'crosscheck profile unavailable',
   }])
 })
 
