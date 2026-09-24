@@ -252,13 +252,13 @@ async function linkedAuditOutcome(audit, sessionDir) {
   }
   let delivery = null
   if (sessionDir && audit.run_id) {
+    const reportPath = join(dirname(sessionDir), audit.run_id, 'local-report.json')
     try {
-      const report = JSON.parse(
-        await readFile(join(dirname(sessionDir), audit.run_id, 'local-report.json'), 'utf8'),
-      )
-      delivery = report?.delivery_state ?? null
-    } catch {
-      delivery = null
+      delivery = JSON.parse(await readFile(reportPath, 'utf8'))?.delivery_state ?? null
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        return { outcome: 'failed', reason: `unreadable local report ${reportPath}: ${error.message}` }
+      }
     }
   }
   if (delivery === 'delivered') return { outcome: 'delivered', reason: null }
