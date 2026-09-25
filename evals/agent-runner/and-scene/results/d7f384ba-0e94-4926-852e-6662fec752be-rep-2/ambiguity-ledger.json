@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-09-25T06-20-01-71130602Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Default GitHub attribution is missing; the evidence does not establish whether this reflects an assumption, missing context, or an implementation omission.",
+      "evidence": [
+        "Product check attribution-default-link failed: &quot;Default made by and-scene GitHub attribution is missing.&quot;",
+        "The supplied session-report excerpts truncate before substantive audit findings."
+      ],
+      "handling": "No handling of the attribution requirement is visible in the supplied workflow excerpts.",
+      "consequence": "The delivered product lacks the default attribution identified by the product check.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure establishes an observable omission, but the specification, implementation decisions, and completed self-reports are unavailable. Its cause cannot be classified more specifically.",
+      "resolution": "unresolved",
+      "id": "acb924478928c817"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The screenshot helper lacks an active-state visual comparison warning.",
+      "evidence": [
+        "Product check visual-helper-active-state-warning failed: &quot;Active-state visual comparison warning is missing.&quot;",
+        "Checks for the project-local screenshot helper, overlap warning, and attribution polish warning passed.",
+        "The navigation-active-state check passed for semantic current state and a stable active hook."
+      ],
+      "handling": "Related helper warnings and navigation hooks were delivered; the reason this warning was omitted is not visible.",
+      "consequence": "The helper lacks the specified diagnostic for active-state visual comparison, although navigation semantics passed their separate check.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The checks isolate a missing helper capability but do not reveal whether its absence arose from unclear requirements, undiscovered context, an assumption, or an implementation oversight.",
+      "resolution": "unresolved",
+      "id": "37d5bdb51b7b402d"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Supported demo navigation failed verification, with no explanation of the affected interaction.",
+      "evidence": [
+        "Product check demo-supported-navigation failed without diagnostic detail.",
+        "Checks for navigation boundaries and control keys, focus and keyboard accessibility, and step and transition reliability passed."
+      ],
+      "handling": "The supplied excerpts do not show investigation or resolution of this failure.",
+      "consequence": "Verification reports a supported-navigation failure; the triggering input and user-visible symptom are unknown.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "A bare failure cannot establish which navigation behavior was expected or which assumption materially affected it. Adjacent passing checks do not resolve that uncertainty.",
+      "resolution": "unresolved",
+      "id": "904390aa24cac311"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
