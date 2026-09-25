@@ -316,14 +316,15 @@ test('Codex judge invoker stops a stalled call and retries it once', async () =>
     runDir,
     candidateWorktree: join(runDir, 'candidate'),
     spawnImpl,
-    timeoutMs: 20,
+    timeoutMs: 250,
+    killGraceMs: 20,
   })
 
   const output = await invoke({ job: 'testing-evidence', schema: {}, prompt: 'judge' })
 
   assert.equal(output, '{"results":["retried"]}')
   assert.equal(spawnImpl.calls.length, 2)
-  assert.deepEqual(spawnImpl.calls[0].child.kills, ['SIGTERM'])
+  assert.equal(spawnImpl.calls[0].child.kills[0], 'SIGTERM')
   assert.equal(spawnImpl.calls[1].child.input, 'judge')
   // The stalled attempt's evidence survives beside the retry's.
   assert.match(
@@ -332,7 +333,7 @@ test('Codex judge invoker stops a stalled call and retries it once', async () =>
   )
   assert.match(
     await readFile(join(judgeDir, '01-testing-evidence.stderr.log'), 'utf8'),
-    /timed out after 20 ms; sent SIGTERM/,
+    /timed out after 250 ms; sent SIGTERM/,
   )
   assert.match(
     await readFile(join(judgeDir, '01-testing-evidence.attempt-2.events.jsonl'), 'utf8'),
@@ -341,7 +342,7 @@ test('Codex judge invoker stops a stalled call and retries it once', async () =>
   const usage = await invoke.readUsageEntries()
   assert.equal(usage.length, 2)
   assert.equal(usage[0].usage.state, 'unavailable')
-  assert.match(usage[0].usage.reason, /timed out after 20 ms/)
+  assert.match(usage[0].usage.reason, /timed out after 250 ms/)
   assert.equal(usage[1].usage.state, 'available')
   assert.notEqual(usage[0].invocation_id, usage[1].invocation_id)
 })
@@ -352,6 +353,7 @@ test('Codex judge invoker keeps usage a timed-out call reported before stalling'
     runDir,
     candidateWorktree: join(runDir, 'candidate'),
     timeoutMs: 20,
+    killGraceMs: 20,
     spawnImpl: fakeSpawn((child) => {
       child.stdout.write(`${JSON.stringify({
         type: 'turn.completed',
@@ -451,11 +453,67 @@ test('Codex judge invoker does not wait on pipes a stopped call left open', asyn
     runDir,
     candidateWorktree: join(runDir, 'candidate'),
     spawnImpl,
-    timeoutMs: 10,
+    timeoutMs: 250,
+    killGraceMs: 20,
   })
 
   assert.equal(await invoke({ job: 'scene-kit', schema: {}, prompt: 'x' }), '{}')
   assert.equal(spawnImpl.calls[0].options.detached, true)
+  assert.equal(spawnImpl.calls[0].child.stdout.destroyed, true)
+})
+
+test('Codex judge invoker still force-kills a stopped call whose descendant outlives it', async () => {
+  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const spawnImpl = fakeSpawn((child, { args }, attempt) => {
+    if (attempt === 1) {
+      // Codex exits on SIGTERM, but a descendant in its group still runs.
+      child.on('kill', (signal) => {
+        if (signal === 'SIGTERM') setImmediate(() => child.emit('exit', null, signal))
+      })
+      return
+    }
+    writeFinalOutput(args, '{}')
+    child.exit(0)
+  })
+  const invoke = createCodexJudgeInvoker({
+    runDir,
+    candidateWorktree: join(runDir, 'candidate'),
+    spawnImpl,
+    timeoutMs: 250,
+    killGraceMs: 30,
+  })
+
+  assert.equal(await invoke({ job: 'scene-kit', schema: {}, prompt: 'x' }), '{}')
+  await new Promise((resolve) => setTimeout(resolve, 60))
+  assert.deepEqual(spawnImpl.calls[0].child.kills, ['SIGTERM', 'SIGKILL'])
+  // The settled attempt's evidence files are closed; the late kill is not noted.
+  assert.doesNotMatch(
+    await readFile(join(runDir, '.runtime/judge/01-scene-kit.stderr.log'), 'utf8'),
+    /sent SIGKILL/,
+  )
+})
+
+test('Codex judge invoker settles a timed-out call whose Codex exited before the stop', { timeout: 2000 }, async () => {
+  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const spawnImpl = fakeSpawn((child, { args }, attempt) => {
+    if (attempt === 1) {
+      // Codex exits normally while a descendant holds its output pipes.
+      child.emit('exit', 0, null)
+      return
+    }
+    writeFinalOutput(args, '{}')
+    child.exit(0)
+  })
+  const invoke = createCodexJudgeInvoker({
+    runDir,
+    candidateWorktree: join(runDir, 'candidate'),
+    spawnImpl,
+    timeoutMs: 250,
+    killGraceMs: 10,
+  })
+
+  assert.equal(await invoke({ job: 'scene-kit', schema: {}, prompt: 'x' }), '{}')
+  assert.equal(spawnImpl.calls.length, 2)
   assert.equal(spawnImpl.calls[0].child.stdout.destroyed, true)
 })
 
@@ -529,6 +587,7 @@ test('Codex judge invoker stops a call that exceeds its stdout limit', async () 
     candidateWorktree: join(runDir, 'candidate'),
     spawnImpl,
     maxStdoutBytes: 50,
+    killGraceMs: 20,
   })
 
   await assert.rejects(
@@ -536,7 +595,7 @@ test('Codex judge invoker stops a call that exceeds its stdout limit', async () 
     /Codex judge scene-kit exceeded the 50-byte stdout limit/,
   )
   assert.equal(spawnImpl.calls.length, 1)
-  assert.deepEqual(spawnImpl.calls[0].child.kills, ['SIGTERM'])
+  assert.equal(spawnImpl.calls[0].child.kills[0], 'SIGTERM')
   assert.match(
     await readFile(join(runDir, '.runtime/judge/01-scene-kit.stderr.log'), 'utf8'),
     /wrote more than 50 bytes to stdout; sent SIGTERM/,

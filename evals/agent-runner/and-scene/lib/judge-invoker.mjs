@@ -100,6 +100,7 @@ function runAttempt({
     let pendingLine = ''
     let timedOut = false
     let killTimer = null
+    let exited = null
     let settled = false
     let writeError = null
     let eventWrites = Promise.resolve()
@@ -143,7 +144,8 @@ function runAttempt({
       if (settled) return
       settled = true
       clearTimeout(timer)
-      clearTimeout(killTimer)
+      // A descendant may outlive a stopped Codex, so its SIGKILL stays armed.
+      if (!stopping) clearTimeout(killTimer)
       if (pendingLine.includes('"turn.completed"')) usageLine = pendingLine
       if (pendingLine) writeEvents(persistableEventLine(pendingLine))
       await Promise.all([eventWrites, stderrWrites])
@@ -165,9 +167,12 @@ function runAttempt({
       note(`${reason}; sent SIGTERM`)
       stop('SIGTERM')
       killTimer = setTimeout(() => {
-        note(`did not exit within ${killGraceMs} ms of SIGTERM; sent SIGKILL`)
+        // A settled attempt's evidence files are already closed.
+        if (!settled) note(`did not exit within ${killGraceMs} ms of SIGTERM; sent SIGKILL`)
         stop('SIGKILL')
       }, killGraceMs)
+      // Codex may have exited already, leaving no `exit` event to settle on.
+      if (exited) settleExited()
     }
     const timer = setTimeout(() => {
       timedOut = true
@@ -201,11 +206,14 @@ function runAttempt({
     child.on('close', (status, signal) => finish(status, signal))
     // A stopped call must not wait on output pipes held by an escaped
     // descendant; its evidence up to the stop is already on disk.
-    child.on('exit', (status, signal) => {
-      if (!stopping) return
+    const settleExited = () => {
       child.stdout.destroy()
       child.stderr.destroy()
-      finish(status, signal)
+      finish(exited.status, exited.signal)
+    }
+    child.on('exit', (status, signal) => {
+      exited = { status, signal }
+      if (stopping) settleExited()
     })
     // Codex may exit before reading its prompt; that failure is reported by
     // its exit status rather than an unhandled stdin error.
