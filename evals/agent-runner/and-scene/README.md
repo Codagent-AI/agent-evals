@@ -440,6 +440,7 @@ artifacts/evals/and-scene/<run-id>/
     ├── candidate-worktree/
     │   └── .agent-runner/config.yaml
     ├── agent-runner-projects/
+    ├── judge/
     └── agent-session-state/
         ├── codex/
         │   ├── archived_sessions/
@@ -788,6 +789,14 @@ To diagnose or review scoring behavior, run `--calibrate` and read
 broke, and each case's `problems` and `unintended_regressions` say whether the
 harness scored the wrong component, opened the wrong gate, or turned a product
 regression into a harness failure.
+
+For a stalled or failed Codex judge call, read `.runtime/judge/`. Each call has
+`NN-<job>.schema.json` and `.output.json`, and each attempt streams Codex's JSON
+events to `.events.jsonl` and its stderr to `.stderr.log` as it runs; a retry or
+a later recovery of the same call writes `NN-<job>.attempt-<n>.*` beside the
+earlier attempt. The last event shows what a stalled call was waiting on. Shell
+command output is omitted from persisted events. A call that runs longer than
+10 minutes is stopped, noted in its stderr log, and retried once.
 
 For publication failures, `publication.json` records the stage, the result
 commit if one exists, and the git error. Re-run the review command against the
