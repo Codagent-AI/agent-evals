@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-09-25T01-41-03-802718547Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered attribution and its verification helper failed checks, but the underlying assumption or context gap is not observable.",
+      "evidence": [
+        "attribution-default-link: fail — Default made by and-scene GitHub attribution is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "The supplied artifacts show the missing default attribution and incomplete warning, but do not show the implementation decision behind either.",
+      "consequence": "The product lacks the checked default attribution, and the helper does not fully cover the checked attribution conditions.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "These failures establish product deficiencies, but the supplied task excerpts and implementation history cannot distinguish a specification gap, overlooked repository context, an incorrect assumption…",
+      "resolution": "unresolved",
+      "id": "39001e220727c6a3"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Caption, navigation, and control checks failed without enough detail to identify an assumption or context gap.",
+      "evidence": [
+        "quality-captions-and-navigation: fail — no diagnostic detail supplied.",
+        "demo-supported-navigation: fail — no diagnostic detail supplied.",
+        "demo-control-semantics: fail — no diagnostic detail supplied.",
+        "demo-navigation-boundaries-and-control-keys and demo-focus-and-keyboard-accessibility both passed."
+      ],
+      "handling": "The evidence reports check outcomes but does not expose the affected interactions or implementation reasoning.",
+      "consequence": "The delivered product failed three checks; the exact user-visible symptoms and their causes remain unspecified.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failures cannot establish which navigation or semantic requirements were missed, much less whether ambiguity materially caused them. The adjacent passing checks also preclude inferring a general …",
+      "resolution": "unresolved",
+      "id": "f5bc40ca99dc8bb6"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "session-report",
+        "agent_role": "session-report agent",
+        "task": "Tasks 01, 02, and 03"
+      },
+      "source": "judge-discovered",
+      "concern": "The supplied session-report excerpts do not expose the agents&#39; actual assumption audits or context-gap conclusions.",
+      "evidence": [
+        "All three session-report outputs show an intention to audit the task and inspect validator_logs/report.txt.",
+        "The visible command outputs truncate during the session-report skill text.",
+        "No completed audit findings or validator_logs/report.txt contents appear in the supplied excerpts."
+      ],
+      "handling": "The agents visibly began the audits; their completed handling and any reported assumptions are unavailable.",
+      "consequence": "Reported findings cannot be inventoried, and their relationship to the product failures cannot be assessed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "Audit instructions and statements of intent are not evidence of completed findings. Missing report conclusions establish a coverage limitation, not that agents failed to perform or report their audit…",
+      "resolution": "unresolved",
+      "id": "7a8e14603fde5393"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
