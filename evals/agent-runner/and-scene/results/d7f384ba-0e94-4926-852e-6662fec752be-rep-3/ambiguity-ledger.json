@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-09-25T11-50-18-402574056Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The product check reports a missing active-state visual comparison warning, but the evidence does not establish whether an assumption or context gap caused the omission.",
+      "evidence": [
+        "Product evidence: visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "Product evidence: navigation-active-state: pass — Semantic current state and stable active hook are present.",
+        "The three supplied session-report outputs are truncated before their audit conclusions; they do not expose reported assumptions or context gaps."
+      ],
+      "handling": "The supplied artifacts do not show the implementation decision or any response to this failed check.",
+      "consequence": "The delivered product lacks the warning identified by the product check. No downstream behavioral impact is demonstrated.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check establishes an omission, but the relevant requirements, implementation, and complete session reports are unavailable. The evidence cannot distinguish a specification gap, overlooked …",
+      "resolution": "unresolved",
+      "id": "5ee9d95e95a36f4a"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
