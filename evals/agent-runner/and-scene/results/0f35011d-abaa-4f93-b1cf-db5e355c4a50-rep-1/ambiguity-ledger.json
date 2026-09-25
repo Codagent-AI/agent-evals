@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-09-25T17-15-54-315192238Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered screenshot helper lacks three assessed visual safeguards; the underlying assumption or context gap is not established.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: pass — Project-local Playwright screenshot helper is present.",
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "The helper was delivered, but the supplied excerpts do not show the decisions behind these omissions or any subsequent remediation.",
+      "consequence": "The helper failed three visual-warning checks. The evidence does not establish that the application itself has overlap, active-state appearance, or attribution defects.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "These omissions observably affect verification coverage. Without the applicable requirements, helper implementation, or completed session reports, they cannot be attributed to a specification gap, ov…",
+      "resolution": "unresolved",
+      "id": "e4843f6c2c271ceb"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
