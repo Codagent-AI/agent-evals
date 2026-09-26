@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-09-26T16-41-45-536940605Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Verification did not satisfy the required IPv4 loopback convention.",
+      "evidence": [
+        "Product evidence: verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost.",
+        "The supplied session-report excerpts end before substantive audit findings; no additional workspace files were discoverable."
+      ],
+      "handling": "The actual verification command and the agent&#39;s reasoning are not visible.",
+      "consequence": "The loopback-specific check failed, although whole-app build and every-produced-step rendering checks passed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure establishes a mismatch with the evaluated requirement, but does not establish whether the requirement was available to the agents, overlooked, or interpreted incorrectly.",
+      "resolution": "unresolved",
+      "id": "07a947ff8cab5af0"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered product lacked the expected default GitHub attribution.",
+      "evidence": [
+        "Product evidence: attribution-default-link: fail — Default made by and-scene GitHub attribution is missing."
+      ],
+      "handling": "The attribution was reported missing; no implementation decision or explanation is visible.",
+      "consequence": "The default attribution check failed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The product evidence identifies an omission but cannot distinguish a specification gap, missing repository context, or an implementation mistake. The visible reports contain no substantive self-repor…",
+      "resolution": "unresolved",
+      "id": "19f3a42c127c2a66"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The expected project-local Playwright screenshot helper was absent.",
+      "evidence": [
+        "Product evidence: quality-project-local-screenshot-helper: fail — Project-local Playwright screenshot helper is missing.",
+        "Product evidence: verification-every-produced-step-renders: pass."
+      ],
+      "handling": "No project-local helper was found by the product check. The supplied excerpts do not reveal whether another screenshot workflow was used.",
+      "consequence": "The helper requirement failed despite successful rendering verification.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "Successful rendering verification does not establish delivery of the required helper. Its absence is observable, but the artifacts do not establish the assumption or context gap responsible.",
+      "resolution": "unresolved",
+      "id": "ff1df5c24265fe85"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Expected visual diagnostic warnings were missing or incomplete.",
+      "evidence": [
+        "Product evidence: visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "Product evidence: visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "Product evidence: visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "Product evidence: navigation-active-state: pass — Semantic current state and stable active hook are present."
+      ],
+      "handling": "The evaluated artifact did not provide the complete warning coverage. No rationale is visible in the truncated session reports.",
+      "consequence": "Three visual diagnostic checks failed. These results do not independently establish actual overlap or defective active-state appearance.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The evidence establishes missing diagnostics, but cannot determine whether these failures share a cause with the missing screenshot helper or reflect separate decisions. The task requirements and sub…",
+      "resolution": "unresolved",
+      "id": "ae2239e316e226db"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
