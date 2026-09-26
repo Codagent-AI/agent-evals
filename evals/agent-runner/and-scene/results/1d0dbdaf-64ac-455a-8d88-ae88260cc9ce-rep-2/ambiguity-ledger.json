@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-09-26T19-02-31-323643779Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The visual helper lacks several warnings identified by product verification.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: pass — Project-local Playwright screenshot helper is present.",
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "A screenshot helper was delivered, but the supplied verification reports missing or incomplete warning coverage. The implementation rationale is unavailable.",
+      "consequence": "The delivered helper failed three visual-warning checks.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "These failures establish a product limitation but do not identify its cause. The supplied session-report excerpts end before substantive findings, and no fuller workspace artifacts were available. Th…",
+      "resolution": "unresolved",
+      "id": "d918e5d373fbba6c"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Supported demo navigation failed verification, but the affected interaction is unspecified.",
+      "evidence": [
+        "demo-supported-navigation: fail — no diagnostic detail supplied.",
+        "demo-navigation-boundaries-and-control-keys: pass.",
+        "demo-focus-and-keyboard-accessibility: pass.",
+        "demo-mode-position-preservation: pass."
+      ],
+      "handling": "Navigation was implemented and several related checks passed. No explanation or remediation for the supported-navigation failure is visible.",
+      "consequence": "One navigation acceptance check remained failed; the specific user-visible failure cannot be established.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The result supplies neither the failing input nor expected and actual behavior. It therefore cannot establish which assumption, if any, affected navigation or whether the requirement itself was ambig…",
+      "resolution": "unresolved",
+      "id": "acd96cd21aa7a4da"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
