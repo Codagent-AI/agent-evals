@@ -193,7 +193,7 @@ test('judge input policies expose only the source and provenance each rubric per
   }
   assert.deepEqual(JUDGE_INPUT_POLICIES['testing-evidence'], {
     neutral_source: false,
-    neutral_requirements: false,
+    neutral_requirements: 'inventory-only',
     deterministic_facts: false,
     candidate_evidence: true,
     evaluator_evidence: 'contradictions-only',

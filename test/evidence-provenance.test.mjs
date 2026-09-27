@@ -12,6 +12,7 @@ import {
   detectEvidenceContradictions,
   recordEvidenceContradictions,
   materializeEvidenceJudgeViews,
+  testedRevisionFacts,
   validateCandidateEvidenceLineage,
   validateEvidenceLineage,
 } from '../evals/agent-runner/and-scene/lib/evidence.mjs'
@@ -494,7 +495,7 @@ test('lineage allows evidence-only alignment only without tracked product change
     ],
   })
   assert.equal(rejected.accepted, false)
-  assert.ok(rejected.findings.some(({ code }) => code === 'new-final-full-flow-required'))
+  assert.ok(rejected.findings.some(({ code }) => code === 'final-revision-not-established'))
 })
 
 test('manifest lineage verifies revision ancestry without treating broad retests as bounded', async () => {
@@ -618,7 +619,7 @@ test('manifest lineage independently rejects evidence-only alignment after produ
   })
 
   assert.equal(lineage.accepted, false)
-  assert.ok(lineage.findings.some(({ code }) => code === 'new-final-full-flow-required'))
+  assert.ok(lineage.findings.some(({ code }) => code === 'final-revision-not-established'))
 })
 
 test('lineage treats product source under evidence-named directories as product changes', async () => {
@@ -761,12 +762,13 @@ test('testing and assumption judges receive bounded, distinct evidence views', a
     candidate_evidence: true,
     evaluator_evidence: 'contradictions-only',
     revision_provenance: true,
+    approved_requirements: false,
   })
   assert.match(views['testing-evidence'].packet, /BEGIN VERIFIED INDEX/)
   assert.match(views['testing-evidence'].packet, /Full flow: passed/)
   assert.ok(views['testing-evidence'].packet.length <= 220_000)
   assert.deepEqual(views['assumption-handling'].roles, [
-    'assumptions-ledger', 'final-handoff', 'findings-history', 'session-audit',
+    'acceptance-pass-record', 'assumptions-ledger', 'final-handoff', 'findings-history', 'session-audit',
   ])
   const testingIndex = JSON.parse(await readFile(
     join(context.runDir, views['testing-evidence'].index),
@@ -803,4 +805,270 @@ test('malformed screenshot metadata invalidates the screenshots it should descri
   assert.equal(screenshot.verification_state, 'defective')
   assert.ok(screenshot.limitations.includes('missing-capture-metadata'))
   assert.ok(manifest.findings.some(({ code }) => code === 'malformed-metadata'))
+})
+
+const PRIOR_SHA = 'a'.repeat(40)
+const STRAY_SHA = 'c'.repeat(40)
+
+// A Git stand-in for one history: PRIOR_SHA is an ancestor of FINAL_SHA,
+// STRAY_SHA resolves but is not, and `diffs` maps "from..to" to changed paths.
+function fakeGit(diffs = {}) {
+  const known = [PRIOR_SHA, FINAL_SHA, STRAY_SHA, BASELINE_SHA]
+  return (command, args) => {
+    const verb = args[2]
+    if (verb === 'rev-parse') {
+      const claimed = args.at(-1).replace('^{commit}', '')
+      const sha = known.find((candidate) => candidate.startsWith(claimed))
+      return sha ? { status: 0, stdout: `${sha}\n` } : { status: 1, stdout: '' }
+    }
+    if (verb === 'merge-base') return { status: args[4] === STRAY_SHA ? 1 : 0, stdout: '' }
+    if (verb === 'diff') {
+      const [from, to] = [args[5], args[6]]
+      return { status: 0, stdout: (diffs[`${from}..${to}`] ?? []).map((path) => `${path}\0`).join('') }
+    }
+    return { status: 1, stdout: '' }
+  }
+}
+
+function testedRevisionManifest(sha, extra = []) {
+  return {
+    artifacts: [{
+      id: 'tested',
+      role: 'tested-revision',
+      verification_state: 'verified',
+      claimed_revision: sha,
+      revision_relation: sha === FINAL_SHA ? 'final' : 'ancestor-of-final',
+    }, ...extra],
+  }
+}
+
+test('exploratory pass records and the tested revision are discovered, verified, and sent to the testing judge', async () => {
+  const context = await fixture()
+  await writeRequiredArtifacts(context, {
+    'acceptance-exploration-log.md': `# Exploration log, pass 2\n- Tested revision: ${FINAL_SHA}\n- Diff base: ${PRIOR_SHA.slice(0, 7)}\nRe-tested the fix diff.\n`,
+    'acceptance-findings-pass1.md': `# Findings, pass 1\nTested revision: ${PRIOR_SHA}\nF1: overlap warning missed.\n`,
+    'acceptance-tested-revision.txt': `${FINAL_SHA}\n`,
+  })
+
+  const candidate = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+    exec: fakeGit(),
+  })
+
+  const byName = (name) => candidate.artifacts.find(({ origin }) => origin.relative_path.endsWith(name))
+  const log = byName('acceptance-exploration-log.md')
+  assert.equal(log.role, 'acceptance-pass-record')
+  assert.equal(log.verification_state, 'verified')
+  assert.equal(log.declared_diff_base, PRIOR_SHA.slice(0, 7))
+
+  // A record of an earlier pass that names an ancestor of the final revision
+  // is an honest record of that revision, not a revision mismatch.
+  const prior = byName('acceptance-findings-pass1.md')
+  assert.equal(prior.role, 'acceptance-pass-record')
+  assert.equal(prior.verification_state, 'verified')
+  assert.equal(prior.claimed_revision, PRIOR_SHA)
+  assert.equal(prior.revision_relation, 'ancestor-of-final')
+
+  const tested = byName('acceptance-tested-revision.txt')
+  assert.equal(tested.role, 'tested-revision')
+  assert.equal(tested.claimed_revision, FINAL_SHA)
+  assert.equal(tested.revision_relation, 'final')
+
+  const views = await materializeEvidenceJudgeViews({
+    runDir: context.runDir,
+    candidate,
+    evaluator: null,
+    contradictions: { items: [] },
+    lineage: { final_sha: FINAL_SHA, accepted: true },
+  })
+  const packet = views['testing-evidence'].packet
+  assert.match(packet, new RegExp(`UNTRUSTED CANDIDATE ARTIFACT ${log.id} \\(acceptance-pass-record\\)`))
+  assert.match(packet, /F1: overlap warning missed/)
+  assert.match(packet, new RegExp(`UNTRUSTED CANDIDATE ARTIFACT ${tested.id} \\(tested-revision\\)`))
+  // Under the character budget the current handoff outranks earlier-pass records.
+  assert.ok(packet.indexOf('(final-handoff)') < packet.indexOf('(acceptance-pass-record)'))
+})
+
+test('a record naming a revision off the final history stays defective', async () => {
+  const context = await fixture()
+  await writeRequiredArtifacts(context, {
+    'acceptance-findings-pass1.md': `Tested revision: ${STRAY_SHA}\n`,
+    'acceptance-exploration.md': 'Tested revision: 1234567\n',
+  })
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+    exec: fakeGit(),
+  })
+  const stray = manifest.artifacts.find(({ origin }) => origin.relative_path.endsWith('pass1.md'))
+  assert.equal(stray.verification_state, 'defective')
+  assert.equal(stray.revision_relation, 'not-ancestor')
+  assert.ok(stray.limitations.includes('claimed-revision-mismatch'))
+  const unresolved = manifest.artifacts.find(({ origin }) => origin.relative_path.endsWith('acceptance-exploration.md'))
+  assert.equal(unresolved.verification_state, 'defective')
+  assert.equal(unresolved.revision_relation, 'unresolved')
+})
+
+test('a tested revision equal to the final revision establishes final-revision applicability', async () => {
+  const lineage = await validateCandidateEvidenceLineage({
+    finalSha: FINAL_SHA,
+    worktree: '/candidate',
+    manifest: testedRevisionManifest(FINAL_SHA),
+    exec: fakeGit(),
+  })
+  assert.equal(lineage.accepted, true)
+  assert.equal(lineage.mode, 'tested-revision-final')
+  assert.equal(lineage.tested_revision.state, 'recorded')
+  assert.equal(lineage.tested_revision.recorded.changes_to_final.product.count, 0)
+  assert.deepEqual(lineage.findings, [])
+})
+
+test('an ancestor tested revision is accepted only when later changes are test-only or harness-owned', async () => {
+  const quiet = await validateCandidateEvidenceLineage({
+    finalSha: FINAL_SHA,
+    worktree: '/candidate',
+    manifest: testedRevisionManifest(PRIOR_SHA),
+    exec: fakeGit({
+      [`${PRIOR_SHA}..${FINAL_SHA}`]: ['src/scene.test.ts', 'openspec/changes/create-and-scene/tasks.md'],
+    }),
+  })
+  assert.equal(quiet.accepted, true)
+  assert.equal(quiet.mode, 'tested-revision-no-product-change')
+  assert.deepEqual(quiet.tested_revision.recorded.changes_to_final.test_only.paths, ['src/scene.test.ts'])
+  assert.deepEqual(
+    quiet.tested_revision.recorded.changes_to_final.harness.paths,
+    ['openspec/changes/create-and-scene/tasks.md'],
+  )
+
+  const untested = await validateCandidateEvidenceLineage({
+    finalSha: FINAL_SHA,
+    worktree: '/candidate',
+    manifest: testedRevisionManifest(PRIOR_SHA),
+    exec: fakeGit({ [`${PRIOR_SHA}..${FINAL_SHA}`]: ['src/scene.tsx', 'src/scene.test.ts'] }),
+  })
+  assert.equal(untested.accepted, false)
+  assert.deepEqual(untested.tested_revision.recorded.changes_to_final.product, {
+    count: 1, paths: ['src/scene.tsx'], truncated: false,
+  })
+  assert.deepEqual(
+    untested.findings.map(({ code }) => code),
+    ['product-changes-after-tested-revision', 'final-revision-not-established'],
+  )
+})
+
+test('a missing tested-revision record is reported rather than assumed', async () => {
+  const lineage = await validateCandidateEvidenceLineage({
+    finalSha: FINAL_SHA,
+    worktree: '/candidate',
+    manifest: { artifacts: [] },
+    exec: fakeGit(),
+  })
+  assert.equal(lineage.accepted, false)
+  assert.equal(lineage.tested_revision.state, 'absent')
+  assert.deepEqual(
+    lineage.findings.map(({ code }) => code),
+    ['tested-revision-unrecorded', 'final-revision-not-established'],
+  )
+})
+
+test('a diff-scoped pass is given the files between its declared diff base and the revision it tested', () => {
+  const facts = testedRevisionFacts({
+    finalSha: FINAL_SHA,
+    worktree: '/candidate',
+    manifest: testedRevisionManifest(FINAL_SHA, [{
+      id: 'pass-2-log',
+      role: 'acceptance-pass-record',
+      verification_state: 'verified',
+      claimed_revision: FINAL_SHA,
+      revision_relation: 'final',
+      declared_diff_base: PRIOR_SHA.slice(0, 7),
+    }, {
+      id: 'unverified-log',
+      role: 'acceptance-pass-record',
+      verification_state: 'defective',
+      declared_diff_base: PRIOR_SHA,
+    }]),
+    exec: fakeGit({ [`${PRIOR_SHA}..${FINAL_SHA}`]: ['scripts/verify.mjs', 'scripts/verify.test.mjs'] }),
+  })
+  assert.deepEqual(facts.diff_bases, [{
+    artifact_id: 'pass-2-log',
+    declared: PRIOR_SHA.slice(0, 7),
+    sha: PRIOR_SHA,
+    relation: 'ancestor-of-final',
+    tested_revision: FINAL_SHA,
+    changes_to_tested_revision: {
+      product: { count: 1, paths: ['scripts/verify.mjs'], truncated: false },
+      test_only: { count: 1, paths: ['scripts/verify.test.mjs'], truncated: false },
+      harness: { count: 0, paths: [], truncated: false },
+    },
+  }])
+})
+
+test('the testing judge view carries the approved requirement inventory as reference only', async () => {
+  const context = await fixture()
+  await writeRequiredArtifacts(context)
+  const requirementsRoot = join(context.root, 'requirements')
+  await mkdir(requirementsRoot, { recursive: true })
+  await writeFile(join(requirementsRoot, 'requirement-001.md'), [
+    '### Requirement: Keyboard navigation',
+    'The presentation SHALL advance on Right.',
+    '#### Scenario: Right advances',
+    '- **WHEN** the user presses Right',
+    '#### Scenario: Left goes back',
+    '### Requirement: Present mode',
+    '#### Scenario: Title-focused',
+  ].join('\n'))
+  const candidate = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  const views = await materializeEvidenceJudgeViews({
+    runDir: context.runDir,
+    candidate,
+    evaluator: null,
+    contradictions: { items: [] },
+    lineage: { final_sha: FINAL_SHA, accepted: true },
+    requirementsRoot,
+  })
+
+  assert.equal(views['testing-evidence'].permissions.approved_requirements, 'inventory-only')
+  const index = JSON.parse(await readFile(join(context.runDir, views['testing-evidence'].index), 'utf8'))
+  assert.equal(index.approved_requirements.ownership, 'evaluator-supplied reference')
+  assert.deepEqual(index.approved_requirements.documents, [{
+    document: 'requirement-001.md',
+    requirements: [
+      { requirement: 'Keyboard navigation', scenarios: ['Right advances', 'Left goes back'] },
+      { requirement: 'Present mode', scenarios: ['Title-focused'] },
+    ],
+  }])
+  assert.match(views['testing-evidence'].packet, /Keyboard navigation/)
+  assert.doesNotMatch(views['testing-evidence'].packet, /SHALL advance on Right/)
+  assert.equal(views['assumption-handling'].packet.includes('Keyboard navigation'), false)
+})
+
+test('a tested-revision file is read for its SHA, and one without a SHA is malformed', async () => {
+  for (const [content, expected, state] of [
+    [`Tested: \`${FINAL_SHA}\`\n`, FINAL_SHA, 'verified'],
+    ['not recorded\n', 'not recorded', 'defective'],
+  ]) {
+    const context = await fixture()
+    await writeRequiredArtifacts(context, { 'acceptance-tested-revision.txt': content })
+    const manifest = await buildCandidateEvidenceManifest({
+      worktree: context.worktree,
+      sessionDir: context.sessionDir,
+      runDir: context.runDir,
+      delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+    })
+    const tested = manifest.artifacts.find(({ role }) => role === 'tested-revision')
+    assert.equal(tested.claimed_revision, expected)
+    assert.equal(tested.verification_state, state)
+  }
 })

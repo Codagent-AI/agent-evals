@@ -110,7 +110,10 @@ export function validateTraceability({ rubric, fixture, fixtureRef }) {
 
   for (const component of rubric.components ?? []) {
     for (const subcomponent of component.subcomponents ?? []) {
-      const guidance = (subcomponent.review_guidance ?? []).join('\n')
+      const guidance = [
+        ...(subcomponent.review_guidance ?? []),
+        ...Object.values(subcomponent.criterion_definitions ?? {}),
+      ].join('\n')
       for (const value of uncitedValues(guidance, subcomponent.criteria ?? [])) {
         errors.push(`subcomponent ${subcomponent.id} has uncited concrete value ${value}`)
       }

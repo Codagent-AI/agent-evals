@@ -129,3 +129,13 @@ test('snapshot refresh copies fixture files with their git blob ids only at the 
     execFileSync('git', ['-C', checkout, 'ls-tree', 'HEAD', '--', 'README.md'], { encoding: 'utf8' }).trim().split(/\s+/)[2])
   assert.equal(await readFile(join(snapshot, 'fixture-root-README.md'), 'utf8'), 'fixture root\n')
 })
+
+test('criterion definitions are held to the same concrete-value check as review guidance', () => {
+  const mutated = structuredClone(rubric)
+  mutated.eval_owned_values = []
+  mutated.components[0].subcomponents[0].criterion_definitions = { controls: 'Pass when data-step-label is shown.' }
+  assert.match(
+    validateTraceability({ rubric: mutated, fixture, fixtureRef: 'fixture-pin' }).join('\n'),
+    /navigation.*data-step-label/,
+  )
+})

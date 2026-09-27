@@ -62,7 +62,8 @@ export const JUDGE_INPUT_POLICIES = Object.freeze({
   },
   'testing-evidence': {
     neutral_source: false,
-    neutral_requirements: false,
+    // Requirement and scenario headings only, as the coverage reference.
+    neutral_requirements: 'inventory-only',
     deterministic_facts: false,
     candidate_evidence: true,
     evaluator_evidence: 'contradictions-only',

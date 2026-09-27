@@ -173,6 +173,29 @@ export function sourceError(id, source) {
   return complete ? null : `criterion ${id} fixture source requires document, heading, and quote`
 }
 
+// Criteria whose identifiers alone do not tell a judge what to look for. The
+// judge sees each definition beside its identifier, so it cannot substitute
+// its own reading, such as coverage of a fixed test-plan inventory.
+const DEFINED_CRITERIA_JOBS = ['testing-evidence']
+
+function definitionErrors(subcomponent) {
+  const definitions = subcomponent.criterion_definitions
+  if (definitions === undefined) return []
+  if (!definitions || typeof definitions !== 'object' || Array.isArray(definitions)) {
+    return [`subcomponent ${subcomponent.id} criterion_definitions must be an object`]
+  }
+  const errors = []
+  const criteria = subcomponent.criteria ?? []
+  for (const [id, text] of Object.entries(definitions)) {
+    if (!criteria.includes(id)) errors.push(`subcomponent ${subcomponent.id} defines unknown criterion ${id}`)
+    else if (!filled(text)) errors.push(`criterion ${id} definition must be non-empty text`)
+  }
+  for (const id of criteria) {
+    if (!(id in definitions)) errors.push(`subcomponent ${subcomponent.id} does not define criterion ${id}`)
+  }
+  return errors
+}
+
 export function criteriaForJob(rubric, job) {
   return rubricCriteria(rubric).filter((row) => row.job === job).map(({ id }) => id)
 }
@@ -219,6 +242,7 @@ export function validateAutomatedRubric(rubric) {
       if (!Array.isArray(subcomponent.criteria) || subcomponent.criteria.length === 0) {
         errors.push(`subcomponent ${subcomponent.id} requires criteria`)
       }
+      errors.push(...definitionErrors(subcomponent))
     }
   }
   if (automated !== rubric.automated_points) {
@@ -295,6 +319,13 @@ export function validateAutomatedRubric(rubric) {
     const actual = criteriaForJob(rubric, job)
     if (JSON.stringify(actual) !== JSON.stringify(expected)) {
       errors.push(`${job} must own exactly its four approved workflow-quality criteria`)
+    }
+  }
+  for (const job of DEFINED_CRITERIA_JOBS) {
+    for (const subcomponent of rubric.components.flatMap(({ subcomponents = [] }) => subcomponents)) {
+      if (subcomponent.job === job && subcomponent.criterion_definitions === undefined) {
+        errors.push(`subcomponent ${subcomponent.id} must define every ${job} criterion for its judge`)
+      }
     }
   }
   return errors

@@ -238,6 +238,11 @@ function evidenceJudgePrompt({ job, definition, slice, view }) {
         'Evaluator-produced evidence is limited to recorded contradictions: contradictions may disprove',
         'candidate claims, but evaluator evidence can never supply affirmative credit.',
         'Visual inspection and warning disposition are evaluated as proof quality, not visual taste.',
+        'Judge whether the evidence shows the delivered product works, not whether a particular testing',
+        'process was followed. Apply each criterion exactly as it is defined below.',
+        'The approved requirement inventory and the tested_revision facts are evaluator-supplied reference',
+        'material: they define what to look for and which files changed, but they are never evidence that',
+        'the candidate exercised anything.',
       ]
     : [
         'Score only the four fixed assumption-handling criteria listed below.',
@@ -287,7 +292,11 @@ export function buildJudgeRequest({
     .filter(({ subcomponent }) => subcomponent.job === job)
     .map(({ subcomponent }) => [
       `## ${subcomponent.title}`,
-      subcomponent.criteria.map((id) => `- ${id}`).join('\n'),
+      subcomponent.criteria.map((id) => (
+        subcomponent.criterion_definitions?.[id]
+          ? `- ${id}: ${subcomponent.criterion_definitions[id]}`
+          : `- ${id}`
+      )).join('\n'),
       ...(subcomponent.review_guidance?.length
         ? ['', 'Review guidance:', ...subcomponent.review_guidance.map((item) => `- ${item}`)]
         : []),

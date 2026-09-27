@@ -192,6 +192,23 @@ test('testing-evidence receives only verified candidate evidence plus evaluator 
   assert.doesNotMatch(request.prompt, /NEUTRAL SOURCE FILES/)
 })
 
+test('the testing-evidence judge sees each criterion definition beside its id', () => {
+  const request = buildJudgeRequest({ rubrics, job: 'testing-evidence', authority })
+  const definitions = automated.components
+    .flatMap(({ subcomponents }) => subcomponents)
+    .find(({ job }) => job === 'testing-evidence')
+    .criterion_definitions
+
+  for (const id of criteriaForJob(automated, 'testing-evidence')) {
+    assert.ok(request.prompt.includes(`- ${id}: ${definitions[id]}`), id)
+  }
+  assert.match(request.prompt, /not whether a particular testing\s+process was followed/)
+  assert.match(request.prompt, /never evidence that\s+the candidate exercised anything/)
+  // Jobs without definitions keep the bare criterion list.
+  const sceneKit = buildJudgeRequest({ rubrics, job: 'scene-kit', authority, sources: ['src/a.tsx'] })
+  assert.match(sceneKit.prompt, /^- scene-step-narration-and-identity$/m)
+})
+
 test('assumption handling receives only its fixed criteria and assumption evidence view', () => {
   const request = buildJudgeRequest({
     rubrics,

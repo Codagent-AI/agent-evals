@@ -1089,6 +1089,7 @@ export async function runEvaluation({
           sessionDir: record.run?.session_dir ?? null,
           runDir,
           delivery: record.delivery,
+          exec,
         })
         record.evidenceLineage = await validateCandidateEvidenceLineage({
           finalSha: record.delivery.final_sha,
@@ -1332,6 +1333,7 @@ export async function runEvaluation({
           evaluator: record.evaluatorEvidence,
           contradictions: record.contradictions,
           lineage: record.evidenceLineage,
+          requirementsRoot: record.neutral ? join(runDir, record.neutral.requirements.root) : null,
         })
       }
 
