@@ -1029,6 +1029,10 @@ export function validateEvidenceLineage({
   const recorded = testedRevision?.recorded ?? null
   let accepted = false
   let mode = 'unsupported'
+  // A baseline plus a targeted retest or alignment claim at the final revision
+  // is not a recorded tested revision, so it never establishes final-revision
+  // support. It is kept only as a diagnostic for reading older runs.
+  let fallbackMode = null
   if (fullAtFinal) {
     accepted = true
     mode = 'final-full-flow'
@@ -1060,11 +1064,9 @@ export function validateEvidenceLineage({
       && item.tracked_product_changed === false
     ))
     if (baselines.length > 0 && targeted) {
-      accepted = true
-      mode = 'ancestor-plus-targeted'
+      fallbackMode = 'ancestor-plus-targeted'
     } else if (baselines.length > 0 && alignment) {
-      accepted = true
-      mode = 'evidence-only-alignment'
+      fallbackMode = 'evidence-only-alignment'
     }
   }
 
@@ -1102,6 +1104,7 @@ export function validateEvidenceLineage({
     accepted: accepted && Boolean(finalRevision),
     final_revision_supported: accepted && Boolean(finalRevision),
     mode,
+    fallback_mode: fallbackMode,
     revisions,
     evidence: evidence.map((item) => ({ ...item })),
     tested_revision: testedRevision,

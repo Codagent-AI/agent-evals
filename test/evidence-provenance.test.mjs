@@ -441,7 +441,7 @@ test('candidate CI claims remain verbatim and revision-scoped without external v
   }])
 })
 
-test('lineage accepts final full flow and bounded ancestor targeted verification', () => {
+test('lineage accepts final full flow; bounded ancestor targeted verification is diagnostic only', () => {
   const finalFlow = validateEvidenceLineage({
     finalSha: FINAL_SHA,
     revisions: [{ sha: FINAL_SHA, ancestor_of_final: true }],
@@ -470,11 +470,16 @@ test('lineage accepts final full flow and bounded ancestor targeted verification
       },
     ],
   })
-  assert.equal(targeted.accepted, true)
-  assert.equal(targeted.mode, 'ancestor-plus-targeted')
+  // Without a recorded tested revision, a baseline plus targeted retest does
+  // not establish final-revision support; it survives only as a diagnostic.
+  assert.equal(targeted.accepted, false)
+  assert.equal(targeted.final_revision_supported, false)
+  assert.equal(targeted.mode, 'unsupported')
+  assert.equal(targeted.fallback_mode, 'ancestor-plus-targeted')
+  assert.ok(targeted.findings.some(({ code }) => code === 'final-revision-not-established'))
 })
 
-test('lineage allows evidence-only alignment only without tracked product changes', () => {
+test('lineage records evidence-only alignment as a diagnostic only without tracked product changes', () => {
   const accepted = validateEvidenceLineage({
     finalSha: FINAL_SHA,
     revisions: [{ sha: BASELINE_SHA, ancestor_of_final: true }, { sha: FINAL_SHA, ancestor_of_final: true }],
@@ -483,8 +488,10 @@ test('lineage allows evidence-only alignment only without tracked product change
       { id: 'alignment', kind: 'external-alignment', revision: FINAL_SHA, tracked_product_changed: false },
     ],
   })
-  assert.equal(accepted.mode, 'evidence-only-alignment')
-  assert.equal(accepted.accepted, true)
+  assert.equal(accepted.fallback_mode, 'evidence-only-alignment')
+  assert.equal(accepted.mode, 'unsupported')
+  assert.equal(accepted.accepted, false)
+  assert.equal(accepted.final_revision_supported, false)
 
   const rejected = validateEvidenceLineage({
     finalSha: FINAL_SHA,
@@ -495,6 +502,7 @@ test('lineage allows evidence-only alignment only without tracked product change
     ],
   })
   assert.equal(rejected.accepted, false)
+  assert.equal(rejected.fallback_mode, null)
   assert.ok(rejected.findings.some(({ code }) => code === 'final-revision-not-established'))
 })
 
@@ -533,8 +541,8 @@ test('manifest lineage verifies revision ancestry without treating broad retests
     },
   })
 
-  assert.equal(lineage.accepted, true)
-  assert.equal(lineage.mode, 'ancestor-plus-targeted')
+  assert.equal(lineage.accepted, false)
+  assert.equal(lineage.fallback_mode, 'ancestor-plus-targeted')
   assert.ok(commands.some(([, ...args]) => args.includes('merge-base')))
 
   const broad = await validateCandidateEvidenceLineage({
@@ -557,6 +565,7 @@ test('manifest lineage verifies revision ancestry without treating broad retests
     exec: () => ({ status: 0, stdout: '' }),
   })
   assert.equal(broad.accepted, false)
+  assert.equal(broad.fallback_mode, null)
 })
 
 test('bounded lineage matches explicitly named source suffixes without requiring test-only files', async () => {
@@ -592,8 +601,8 @@ test('bounded lineage matches explicitly named source suffixes without requiring
       : { status: 0, stdout: '' },
   })
 
-  assert.equal(lineage.accepted, true)
-  assert.equal(lineage.mode, 'ancestor-plus-targeted')
+  assert.equal(lineage.accepted, false)
+  assert.equal(lineage.fallback_mode, 'ancestor-plus-targeted')
 })
 
 test('manifest lineage independently rejects evidence-only alignment after product changes', async () => {
@@ -619,6 +628,7 @@ test('manifest lineage independently rejects evidence-only alignment after produ
   })
 
   assert.equal(lineage.accepted, false)
+  assert.equal(lineage.fallback_mode, null)
   assert.ok(lineage.findings.some(({ code }) => code === 'final-revision-not-established'))
 })
 
