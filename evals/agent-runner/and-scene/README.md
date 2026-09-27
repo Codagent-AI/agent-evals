@@ -391,13 +391,14 @@ filenames are:
 
 | Role | Accepted aliases |
 |---|---|
-| Acceptance flow record | `acceptance-flow-evidence.md`, `acceptance-test-results.md`, `acceptance-flow.md`, `acceptance-evidence.md`, `flow-evidence.md` |
-| Screenshots | `.png`, `.jpg`, `.jpeg`, or `.webp` files referenced by the handoff or found in the recorded acceptance output |
-| Screenshot metadata | `capture-metadata.json`, `screenshot-metadata.json`, `screenshot-manifest.json`, `capture-manifest.json` |
+| Acceptance flow record (or an exploration log in its place) | `acceptance-flow-evidence.md`, `acceptance-test-results.md`, `acceptance-flow.md`, `acceptance-evidence.md`, `flow-evidence.md` |
+| Exploration log (satisfies the flow record) | `exploration-log.md`, `acceptance-exploration-log.md`, `acceptance-exploration.md` |
+| Screenshots | `.png`, `.jpg`, `.jpeg`, or `.webp` files referenced by the handoff or found in the recorded acceptance output, such as `acceptance-screenshots/` |
+| Screenshot metadata (optional) | `acceptance-test.md`, `capture-metadata.json`, `screenshot-metadata.json`, `screenshot-manifest.json`, `capture-manifest.json` |
 | Findings and retest history | `findings-history.md`, `retest-history.md`, `acceptance-findings.md`, `findings.md`, `acceptance-retest.md` |
 | Final handoff | `acceptance-handoff.md`, `final-acceptance-handoff.md`, `acceptance-final-handoff.md`, `final-handoff.md` |
 | Assumptions ledger | `acceptance-assumptions.md`, `assumptions-ledger.md`, `acceptance-assumption-ledger.md`, `assumptions.md` |
-| Acceptance pass record (optional) | `acceptance-exploration-log.md`, `exploration-log.md`, `acceptance-exploration.md`, `acceptance-exploration-plan.md`, `exploration-plan.md`, and pass-numbered copies of acceptance records such as `acceptance-findings-pass1.md` |
+| Acceptance pass record (optional) | `exploration-plan.md`, `acceptance-exploration-plan.md`, and pass-numbered copies of acceptance records such as `acceptance-findings-pass1.md` |
 | Tested revision (optional) | `acceptance-tested-revision.txt` |
 
 Referenced session reports and assumption/context-gap audits are retained when
@@ -414,8 +415,15 @@ test-only, and harness-owned paths. Each verified pass record that declares a
 so the judge can check that a diff-scoped re-test explored them. A tested
 revision equal to the final SHA, or an ancestor with no later product changes,
 establishes final-revision support without a full re-run. Missing expected roles make candidate-evidence coverage incomplete but
-do not stop independent scored judging. Screenshots without capture metadata are
-retained as defective, unverified candidate evidence. Present but stale,
+do not stop independent scored judging. The exploratory `codagent:prepare-acceptance`
+skill writes `exploration-log.md` and stores screenshots under
+`acceptance-screenshots/` without a metadata file; that layout is complete. A
+screenshot with no metadata file is verified only when a verified flow record,
+exploration log, findings record, handoff, or pass record names it or a
+directory holding it (`described_by`), so the judge reads what was inspected
+and observed there. A screenshot no metadata or verified record describes, or
+one beside malformed JSON metadata, is retained as defective, unverified
+candidate evidence. Present but stale,
 malformed, weakly traceable, or wrong-revision content likewise remains
 judgeable and is recorded as an evidence defect.
 

@@ -8,6 +8,7 @@ import {
   EVIDENCE_ROLE_REGISTRY,
   EvidenceReadinessError,
   buildCandidateEvidenceManifest,
+  inspectCandidateEvidenceReadiness,
   buildEvaluatorEvidenceManifest,
   detectEvidenceContradictions,
   recordEvidenceContradictions,
@@ -63,12 +64,210 @@ test('the suite documents aliases for every required candidate evidence role', (
   assert.deepEqual(required.map(({ role }) => role), [
     'acceptance-flow-record',
     'screenshot',
-    'screenshot-metadata',
     'findings-history',
     'final-handoff',
     'assumptions-ledger',
   ])
   assert.ok(required.every(({ aliases }) => aliases.length > 0))
+  // The exploratory prepare-acceptance skill writes an exploration log instead
+  // of a flow record, and names no screenshot metadata file.
+  const flow = EVIDENCE_ROLE_REGISTRY.find(({ role }) => role === 'acceptance-flow-record')
+  assert.deepEqual(flow.satisfied_by, ['exploration-log'])
+  const log = EVIDENCE_ROLE_REGISTRY.find(({ role }) => role === 'exploration-log')
+  assert.ok(log.aliases.includes('exploration-log.md'))
+  assert.equal(
+    EVIDENCE_ROLE_REGISTRY.find(({ role }) => role === 'screenshot-metadata').required,
+    false,
+  )
+})
+
+// The evidence directory exactly as the exploratory codagent:prepare-acceptance
+// skill and Agent Runner's verify-change acceptance loop leave it.
+async function writeExploratoryArtifacts(context, overrides = {}) {
+  const files = {
+    'exploration-plan.md': '# Exploration plan\n- Floor: presentation navigation\n- Budget: 2 steps (two seams)\n',
+    'exploration-log.md': [
+      '# Exploration log',
+      `Tested revision: ${FINAL_SHA}`,
+      '## Floor',
+      '- Keyboard navigation: pressed ArrowRight on step 1; observed step 2 rendered.',
+      '  Screenshot: `acceptance-screenshots/step-2.png` shows the step 2 heading.',
+      '## Not exercised',
+      '- Touch navigation: no touch device in the sandbox.',
+    ].join('\n'),
+    'acceptance-findings.md': `# Acceptance findings\nTested revision: ${FINAL_SHA}\nNo defects found.\n`,
+    'acceptance-assumptions.md': 'No unresolved assumptions or context gaps.\n',
+    'acceptance-handoff.md': [
+      '# Acceptance handoff',
+      `Current head SHA: ${FINAL_SHA}`,
+      '## Visual and client evidence',
+      '- `acceptance-screenshots/step-2.png`: step 2 after ArrowRight.',
+    ].join('\n'),
+    'acceptance-tested-revision.txt': `${FINAL_SHA}\n`,
+    'acceptance-round-status.txt': `READY ${FINAL_SHA}\n`,
+    'acceptance-preparation-status.txt': 'ACCEPTANCE_COMPLETE\n',
+    'acceptance-screenshots/step-2.png': Buffer.from([137, 80, 78, 71, 1]),
+    ...overrides,
+  }
+  for (const [relative, content] of Object.entries(files)) {
+    if (content === null) continue
+    const path = join(context.sessionDir, 'output', relative)
+    await mkdir(join(path, '..'), { recursive: true })
+    await writeFile(path, content)
+  }
+}
+
+test('evidence shaped like the exploratory prepare-acceptance output is complete', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context)
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  assert.equal(manifest.readiness, 'ready')
+  assert.deepEqual(manifest.missing_roles, [])
+  assert.ok(!manifest.findings.some(({ code }) => code === 'missing-evidence-role'))
+  const byName = (name) => manifest.artifacts.find(({ origin }) => origin.relative_path === `output/${name}`)
+  assert.equal(byName('exploration-log.md').role, 'exploration-log')
+  assert.equal(byName('exploration-log.md').verification_state, 'verified')
+  assert.equal(byName('exploration-plan.md').role, 'acceptance-pass-record')
+  assert.equal(byName('acceptance-tested-revision.txt').role, 'tested-revision')
+  const screenshot = byName('acceptance-screenshots/step-2.png')
+  assert.equal(screenshot.role, 'screenshot')
+  assert.equal(screenshot.verification_state, 'verified')
+  assert.deepEqual(screenshot.limitations, [])
+  assert.deepEqual(
+    new Set(screenshot.described_by),
+    new Set([byName('exploration-log.md').id, byName('acceptance-handoff.md').id]),
+  )
+  assert.ok(!manifest.findings.some(({ code }) => code === 'screenshot-metadata-inconsistent'))
+
+  const readiness = await inspectCandidateEvidenceReadiness({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+  })
+  assert.deepEqual(readiness.missing_roles, [])
+
+  const views = await materializeEvidenceJudgeViews({
+    runDir: context.runDir,
+    candidate: manifest,
+    evaluator: null,
+    contradictions: { items: [] },
+    lineage: { final_sha: FINAL_SHA, accepted: true },
+  })
+  const packet = views['testing-evidence'].packet
+  // The current exploration log leads the bounded testing packet.
+  assert.ok(packet.indexOf('(exploration-log)') > 0)
+  assert.ok(packet.indexOf('(exploration-log)') < packet.indexOf('(final-handoff)'))
+  assert.ok(views['assumption-handling'].roles.includes('exploration-log'))
+})
+
+test('an exploration log named with the acceptance- prefix also satisfies the flow-record requirement', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'exploration-log.md': null,
+    'acceptance-exploration-log.md': `# Exploration log\nTested revision: ${FINAL_SHA}\nSee acceptance-screenshots/step-2.png.\n`,
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  assert.deepEqual(manifest.missing_roles, [])
+  assert.equal(
+    manifest.artifacts.find(({ origin }) => origin.relative_path.endsWith('acceptance-exploration-log.md')).role,
+    'exploration-log',
+  )
+})
+
+test('without a flow record or an exploration log the flow-record role is still missing', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, { 'exploration-log.md': null })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  assert.equal(manifest.readiness, 'incomplete')
+  assert.deepEqual(manifest.missing_roles, ['acceptance-flow-record'])
+})
+
+test('an old-layout flow record keeps its role beside an exploration log', async () => {
+  const context = await fixture()
+  await writeRequiredArtifacts(context, {
+    'exploration-log.md': `# Exploration log\nTested revision: ${FINAL_SHA}\n`,
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  assert.equal(manifest.readiness, 'ready')
+  const roleOf = (name) => manifest.artifacts.find(({ origin }) => origin.relative_path === `output/${name}`).role
+  assert.equal(roleOf('acceptance-test-results.md'), 'acceptance-flow-record')
+  assert.equal(roleOf('exploration-log.md'), 'exploration-log')
+  assert.equal(roleOf('capture-metadata.json'), 'screenshot-metadata')
+  const screenshot = manifest.artifacts.find(({ role }) => role === 'screenshot')
+  assert.equal(screenshot.verification_state, 'verified')
+  assert.deepEqual(screenshot.capture_metadata, { path: 'captures/final.png', flow: 'demo-flow', state: 'final' })
+})
+
+test('a screenshot no metadata or verified record describes stays defective', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'acceptance-screenshots/orphan.png': Buffer.from([1, 2, 3]),
+    'exploration-log.md': `# Exploration log\nTested revision: ${FINAL_SHA}\nSee step-2.png for step 2.\n`,
+    'acceptance-handoff.md': `# Acceptance handoff\nCurrent head SHA: ${FINAL_SHA}\n`,
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  const byName = (name) => manifest.artifacts.find(({ origin }) => origin.relative_path.endsWith(name))
+  assert.equal(byName('step-2.png').verification_state, 'verified')
+  const orphan = byName('orphan.png')
+  assert.equal(orphan.verification_state, 'defective')
+  assert.ok(orphan.limitations.includes('missing-capture-metadata'))
+  assert.ok(manifest.findings.some(({ code, artifact_id: id }) => (
+    code === 'screenshot-metadata-inconsistent' && id === orphan.id
+  )))
+})
+
+test('a screenshot described only by a defective record stays defective', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'exploration-log.md': 'Tested revision: 1234567\nSee acceptance-screenshots/step-2.png.\n',
+    'acceptance-handoff.md': '# Acceptance handoff\nCurrent head SHA: 1234567\nSee acceptance-screenshots/step-2.png.\n',
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+    exec: () => ({ status: 1, stdout: '' }),
+  })
+
+  const screenshot = manifest.artifacts.find(({ role }) => role === 'screenshot')
+  assert.equal(screenshot.verification_state, 'defective')
+  assert.ok(screenshot.limitations.includes('missing-capture-metadata'))
 })
 
 test('candidate evidence is discovered from handoff aliases and copied byte-for-byte', async () => {
@@ -86,7 +285,10 @@ test('candidate evidence is discovered from handoff aliases and copied byte-for-
   assert.equal(manifest.delivery.final_sha, FINAL_SHA)
   assert.deepEqual(
     new Set(manifest.artifacts.map(({ role }) => role)),
-    new Set(EVIDENCE_ROLE_REGISTRY.filter(({ required }) => required).map(({ role }) => role)),
+    new Set([
+      ...EVIDENCE_ROLE_REGISTRY.filter(({ required }) => required).map(({ role }) => role),
+      'screenshot-metadata',
+    ]),
   )
   const screenshot = manifest.artifacts.find(({ role }) => role === 'screenshot')
   assert.deepEqual(
@@ -337,8 +539,7 @@ test('candidate references cannot traverse outside the worktree or recorded sess
 
 test('missing candidate evidence roles remain judgeable as incomplete coverage', async () => {
   const context = await fixture()
-  await writeRequiredArtifacts(context)
-  await writeFile(join(context.sessionDir, 'output', 'capture-metadata.json'), '')
+  await writeRequiredArtifacts(context, { 'retest-history.md': '' })
 
   const manifest = await buildCandidateEvidenceManifest({
     worktree: context.worktree,
@@ -348,13 +549,32 @@ test('missing candidate evidence roles remain judgeable as incomplete coverage',
   })
 
   assert.equal(manifest.readiness, 'incomplete')
-  assert.deepEqual(manifest.missing_roles, ['screenshot-metadata'])
+  assert.deepEqual(manifest.missing_roles, ['findings-history'])
   assert.ok(manifest.findings.some(({ code, role }) => (
-    code === 'missing-evidence-role' && role === 'screenshot-metadata'
+    code === 'missing-evidence-role' && role === 'findings-history'
   )))
+})
+
+test('screenshots without a metadata file are verified when a verified record describes them', async () => {
+  const context = await fixture()
+  await writeRequiredArtifacts(context, { 'capture-metadata.json': '' })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  assert.equal(manifest.readiness, 'ready')
+  assert.deepEqual(manifest.missing_roles, [])
   const screenshot = manifest.artifacts.find(({ role }) => role === 'screenshot')
-  assert.equal(screenshot.verification_state, 'defective')
-  assert.ok(screenshot.limitations.includes('missing-capture-metadata'))
+  assert.equal(screenshot.verification_state, 'verified')
+  assert.equal(screenshot.capture_metadata, null)
+  assert.deepEqual(
+    screenshot.described_by,
+    [manifest.artifacts.find(({ role }) => role === 'final-handoff').id],
+  )
 })
 
 test('an oversized candidate artifact is omitted without stopping judging', async () => {
@@ -778,7 +998,8 @@ test('testing and assumption judges receive bounded, distinct evidence views', a
   assert.match(views['testing-evidence'].packet, /Full flow: passed/)
   assert.ok(views['testing-evidence'].packet.length <= 220_000)
   assert.deepEqual(views['assumption-handling'].roles, [
-    'acceptance-pass-record', 'assumptions-ledger', 'final-handoff', 'findings-history', 'session-audit',
+    'acceptance-pass-record', 'assumptions-ledger', 'exploration-log', 'final-handoff', 'findings-history',
+    'session-audit',
   ])
   const testingIndex = JSON.parse(await readFile(
     join(context.runDir, views['testing-evidence'].index),
@@ -870,7 +1091,7 @@ test('exploratory pass records and the tested revision are discovered, verified,
 
   const byName = (name) => candidate.artifacts.find(({ origin }) => origin.relative_path.endsWith(name))
   const log = byName('acceptance-exploration-log.md')
-  assert.equal(log.role, 'acceptance-pass-record')
+  assert.equal(log.role, 'exploration-log')
   assert.equal(log.verification_state, 'verified')
   assert.equal(log.declared_diff_base, PRIOR_SHA.slice(0, 7))
 
@@ -895,7 +1116,7 @@ test('exploratory pass records and the tested revision are discovered, verified,
     lineage: { final_sha: FINAL_SHA, accepted: true },
   })
   const packet = views['testing-evidence'].packet
-  assert.match(packet, new RegExp(`UNTRUSTED CANDIDATE ARTIFACT ${log.id} \\(acceptance-pass-record\\)`))
+  assert.match(packet, new RegExp(`UNTRUSTED CANDIDATE ARTIFACT ${log.id} \\(exploration-log\\)`))
   assert.match(packet, /F1: overlap warning missed/)
   assert.match(packet, new RegExp(`UNTRUSTED CANDIDATE ARTIFACT ${tested.id} \\(tested-revision\\)`))
   // Under the character budget the current handoff outranks earlier-pass records.

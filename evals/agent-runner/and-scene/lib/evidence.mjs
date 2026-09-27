@@ -15,8 +15,11 @@ export const CONTRADICTION_SCHEMA_VERSION = 1
 
 export const EVIDENCE_ROLE_REGISTRY = [
   {
+    // The exploratory prepare-acceptance skill records its pass in an
+    // exploration log rather than a flow record, so either satisfies this.
     role: 'acceptance-flow-record',
     required: true,
+    satisfied_by: ['exploration-log'],
     multiple: false,
     aliases: [
       'acceptance-flow-evidence.md',
@@ -33,8 +36,10 @@ export const EVIDENCE_ROLE_REGISTRY = [
     aliases: ['*.png', '*.jpg', '*.jpeg', '*.webp'],
   },
   {
+    // Optional: the exploratory skill names no metadata file. Screenshots
+    // without one are verified only when a verified record describes them.
     role: 'screenshot-metadata',
-    required: true,
+    required: false,
     multiple: false,
     aliases: [
       'acceptance-test.md',
@@ -79,16 +84,25 @@ export const EVIDENCE_ROLE_REGISTRY = [
     ],
   },
   {
-    // Exploratory acceptance writes a log (and sometimes a plan) per pass. A
-    // pass-numbered copy of any acceptance record is the record of an earlier
-    // pass, kept when the tester preserves it rather than overwriting it.
+    // The current exploratory acceptance pass: what was exercised, each step's
+    // prediction and observation, and what was not exercised.
+    role: 'exploration-log',
+    required: false,
+    multiple: true,
+    aliases: [
+      'exploration-log.md',
+      'acceptance-exploration-log.md',
+      'acceptance-exploration.md',
+    ],
+  },
+  {
+    // The exploration plan written before a pass, and pass-numbered copies of
+    // any acceptance record, kept when the tester preserves an earlier pass
+    // rather than overwriting it.
     role: 'acceptance-pass-record',
     required: false,
     multiple: true,
     aliases: [
-      'acceptance-exploration-log.md',
-      'exploration-log.md',
-      'acceptance-exploration.md',
       'acceptance-exploration-plan.md',
       'exploration-plan.md',
     ],
@@ -112,6 +126,44 @@ export const EVIDENCE_ROLE_REGISTRY = [
     ],
   },
 ]
+
+// A required role is present when it or any role declared to satisfy it is.
+function missingRequiredRoles(presentRoles) {
+  return EVIDENCE_ROLE_REGISTRY
+    .filter(({ required, role, satisfied_by: alternatives = [] }) => (
+      required && ![role, ...alternatives].some((candidate) => presentRoles.has(candidate))
+    ))
+    .map(({ role }) => role)
+}
+
+// Verified narrative records that can describe a screenshot in place of a
+// capture metadata file, by naming the file or a directory that holds it.
+const SCREENSHOT_DESCRIBING_ROLES = new Set([
+  'acceptance-flow-record',
+  'exploration-log',
+  'findings-history',
+  'final-handoff',
+  'acceptance-pass-record',
+])
+
+function describesScreenshot(text, relativePath) {
+  const segments = relativePath.split('/')
+  // Paths are relative to the Runner session; the evidence directory is output/.
+  const withinOutput = segments[0] === 'output' ? segments.slice(1) : segments
+  const mentions = [withinOutput.at(-1)]
+  for (let index = 1; index < withinOutput.length; index += 1) {
+    mentions.push(`${withinOutput.slice(0, index).join('/')}/`)
+    mentions.push(withinOutput.slice(0, index).join('/'))
+  }
+  return mentions.some((mention) => mention && text.includes(mention))
+}
+
+function missingRoleMessage(role) {
+  const alternatives = EVIDENCE_ROLE_REGISTRY.find((entry) => entry.role === role)?.satisfied_by ?? []
+  return alternatives.length === 0
+    ? `candidate evidence does not include the expected ${role} role`
+    : `candidate evidence does not include the expected ${role} role or an ${alternatives.join(' or ')} role in its place`
+}
 
 const PRIOR_PASS_RECORD = /^(?:acceptance|exploration)-[\w.-]*?(?:pass|round)[-_]?\d+[\w.-]*\.(?:md|txt|json|log)$/
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp'])
@@ -663,6 +715,7 @@ export async function buildCandidateEvidenceManifest({
   let totalBytes = 0
   let screenshotMetadata = null
   let screenshotMetadataMalformed = false
+  const artifactText = new Map()
   const impactText = discovery.selected
     .find(({ origin }) => basename(origin.relative_path).toLowerCase() === 'acceptance-impact-scope.md')
     ?.bytes.toString('utf8') ?? ''
@@ -706,6 +759,7 @@ export async function buildCandidateEvidenceManifest({
     const text = TEXT_EXTENSIONS.has(extname(source.origin.relative_path).toLowerCase())
       ? source.bytes.toString('utf8')
       : ''
+    artifactText.set(id, text)
     const references = extractReferences(text)
     const rawRevision = source.role === 'tested-revision'
       ? testedRevisionClaim(text)
@@ -760,13 +814,11 @@ export async function buildCandidateEvidenceManifest({
   }
 
   const materializedRoles = new Set(artifacts.map(({ role }) => role))
-  const missingRoles = EVIDENCE_ROLE_REGISTRY
-    .filter(({ required, role }) => required && !materializedRoles.has(role))
-    .map(({ role }) => role)
+  const missingRoles = missingRequiredRoles(materializedRoles)
   for (const role of missingRoles) {
     findings.push(finding(
       'missing-evidence-role',
-      `candidate evidence does not include the expected ${role} role`,
+      missingRoleMessage(role),
       null,
       { role },
     ))
@@ -827,13 +879,27 @@ export async function buildCandidateEvidenceManifest({
       }
     }
   } else if (screenshotMetadataMalformed || !materializedRoles.has('screenshot-metadata')) {
-    // Metadata that is absent and JSON metadata that failed to parse are both
-    // unusable: role presence alone must not leave screenshots unvalidated.
-    // Non-JSON metadata is a supported form and is covered by text extraction.
+    // JSON metadata that failed to parse is unusable: role presence alone must
+    // not leave screenshots unvalidated. With no metadata file at all, a
+    // screenshot stays verified only when a verified narrative record names it,
+    // so the judge can read what was inspected and observed there. Non-JSON
+    // metadata is a supported form and is covered by text extraction.
+    const describing = screenshotMetadataMalformed
+      ? []
+      : artifacts.filter(({ role, verification_state: state }) => (
+          SCREENSHOT_DESCRIBING_ROLES.has(role) && state === 'verified'
+        ))
     const reason = screenshotMetadataMalformed
       ? 'has unusable candidate-provided capture metadata'
-      : 'has no candidate-provided capture metadata'
+      : 'has no candidate-provided capture metadata or verified record describing it'
     for (const artifact of artifacts.filter(({ role }) => role === 'screenshot')) {
+      const describedBy = describing
+        .filter(({ id }) => describesScreenshot(artifactText.get(id) ?? '', artifact.origin.relative_path))
+        .map(({ id }) => id)
+      if (describedBy.length > 0) {
+        artifact.described_by = describedBy
+        continue
+      }
       artifact.verification_state = 'defective'
       artifact.limitations.push('missing-capture-metadata')
       findings.push(finding(
@@ -855,8 +921,8 @@ export async function buildCandidateEvidenceManifest({
       branch: delivery.branch ?? null,
       pull_request: delivery.pull_request.url ?? delivery.pull_request.number ?? null,
     },
-    role_registry: EVIDENCE_ROLE_REGISTRY.map(({ role, required, aliases }) => ({
-      role, required, aliases,
+    role_registry: EVIDENCE_ROLE_REGISTRY.map(({ role, required, satisfied_by: satisfiedBy, aliases }) => ({
+      role, required, ...(satisfiedBy ? { satisfied_by: satisfiedBy } : {}), aliases,
     })),
     artifacts,
     findings,
@@ -872,9 +938,7 @@ export async function buildCandidateEvidenceManifest({
 export async function inspectCandidateEvidenceReadiness({ worktree, sessionDir }) {
   const discovery = await discoverCandidateFiles({ worktree, sessionDir })
   const presentRoles = new Set(discovery.selected.map(({ role }) => role))
-  const missingRoles = EVIDENCE_ROLE_REGISTRY
-    .filter(({ required, role }) => required && !presentRoles.has(role))
-    .map(({ role }) => role)
+  const missingRoles = missingRequiredRoles(presentRoles)
   return {
     artifacts: discovery.selected.map(({ role, origin, bytes }) => ({
       role: role === 'screenshot' ? 'acceptance-screenshot' : role,
@@ -886,7 +950,7 @@ export async function inspectCandidateEvidenceReadiness({ worktree, sessionDir }
       ...discovery.findings,
       ...missingRoles.map((role) => finding(
         'missing-evidence-role',
-        `candidate evidence does not include the expected ${role} role`,
+        missingRoleMessage(role),
         null,
         { role },
       )),
@@ -1331,6 +1395,7 @@ const JUDGE_PACKET_ARTIFACT_MAX_CHARS = 50_000
 // first, then earlier-pass records, then referenced supporting material.
 const TESTING_PACKET_ROLES = [
   'acceptance-flow-record',
+  'exploration-log',
   'final-handoff',
   'findings-history',
   'assumptions-ledger',
@@ -1464,6 +1529,7 @@ export async function materializeEvidenceJudgeViews({
   const assumptionRoles = [
     'acceptance-pass-record',
     'assumptions-ledger',
+    'exploration-log',
     'final-handoff',
     'findings-history',
     'session-audit',

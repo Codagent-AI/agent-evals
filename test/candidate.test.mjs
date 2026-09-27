@@ -1050,7 +1050,7 @@ test('delivery verification freezes an identifiable candidate when acceptance ev
   assert.equal(delivery.final_sha, head)
   assert.deepEqual(delivery.acceptance_artifacts.map(({ role }) => role), ['final-handoff'])
   assert.ok(delivery.acceptance_findings.some(({ code, role }) => (
-    code === 'missing-evidence-role' && role === 'screenshot-metadata'
+    code === 'missing-evidence-role' && role === 'acceptance-flow-record'
   )))
 })
 

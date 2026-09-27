@@ -29,9 +29,14 @@ The evaluator SHALL NOT perform another subjective visual-quality review. The se
 - **AND** it does not invoke a third subjective visual-review job
 
 ### Requirement: Required evidence before scored judging
-Before scored product judging begins, the evaluation SHALL require readable candidate-produced acceptance flow evidence, screenshot evidence and metadata, findings history, final handoff, and assumptions ledger. It SHALL also require a verifiable candidate repository, draft pull request, final local commit, pull-request head, and pull-request base identity.
+Before scored product judging begins, the evaluation SHALL require readable candidate-produced acceptance flow evidence, screenshot evidence, findings history, final handoff, and assumptions ledger. An exploration log SHALL satisfy the acceptance flow evidence requirement. A screenshot capture metadata file SHALL be optional; a screenshot without one SHALL be verified only when a verified candidate record that states what was inspected and observed names it or a directory holding it. It SHALL also require a verifiable candidate repository, draft pull request, final local commit, pull-request head, and pull-request base identity.
 
 If the evaluated workflow fails to produce those required artifacts or identities, the evaluation SHALL report `implementation-workflow-failed`, preserve available diagnostics, and SHALL NOT begin scored product judging or issue an official product score or verdict. If those inputs exist but the harness cannot process otherwise valid inputs because of an evaluator defect, it SHALL report `evaluation-harness-failed`.
+
+#### Scenario: Exploratory acceptance evidence is complete
+- **WHEN** the candidate's evidence directory holds an exploration log, findings, handoff, assumptions ledger, and screenshots under `acceptance-screenshots/` that the log or handoff names, with no flow record or screenshot metadata file
+- **THEN** the harness reports no missing evidence role
+- **AND** it verifies the named screenshots against the records that describe them
 
 #### Scenario: Required candidate evidence is missing
 - **WHEN** the completed workflow omits a required acceptance artifact
@@ -97,6 +102,11 @@ The evaluation SHALL treat candidate evidence as untrusted. Before judging it, t
 - **WHEN** screenshot metadata does not establish the claimed flow, state, capture identity, or revision
 - **THEN** the harness records the inconsistency
 - **AND** the screenshot cannot support the affected criterion
+
+#### Scenario: Screenshot has no metadata and no describing record
+- **WHEN** no capture metadata file exists and no verified candidate record names a screenshot or a directory holding it
+- **THEN** the harness records the screenshot as defective
+- **AND** the screenshot cannot support any criterion
 
 #### Scenario: Candidate claim conflicts with independent evidence
 - **WHEN** candidate evidence claims a behavior that verified evaluator evidence disproves
