@@ -104,6 +104,7 @@ import {
   classifyRunnerRun,
   IMPLEMENTATION_WORKFLOW_INSPECTION_REF,
   IMPLEMENTATION_WORKFLOW_LOGICAL_NAME,
+  VERIFICATION_WORKFLOW_INSPECTION_REF,
   resolveBoundary,
   verifyWorkflowContract,
 } from './lib/workflow.mjs'
@@ -403,6 +404,7 @@ export async function runEvaluation({
   let provenance = null
   let agentSkillsProvenance = null
   let workflowText = ''
+  let delegatedVerification = false
   if (rescore) {
     provenance = importedRun.agent_runner_provenance
     agentSkillsProvenance = importedRun.agent_skills_provenance
@@ -437,10 +439,14 @@ export async function runEvaluation({
       }])
     }
     workflowText = await readFile(provenance.workflow_path, 'utf8')
-    const contract = verifyWorkflowContract(workflowText)
+    const verificationText = provenance.verification_workflow_path
+      ? await readFile(provenance.verification_workflow_path, 'utf8')
+      : null
+    const contract = verifyWorkflowContract(workflowText, { verificationText })
     if (!contract.ok) {
       return failure(contract.errors.map((message) => ({ code: 'workflow-contract', message })))
     }
+    delegatedVerification = contract.layout === 'verify-change'
     const credentials = exec('gh', ['auth', 'status'], { cwd: resolve(options.agentRunnerDir) })
     if (credentials.status !== 0 || credentials.error) {
       return failure([{
@@ -509,25 +515,33 @@ export async function runEvaluation({
     return failure([{ code: error.code ?? 'candidate-worktree', message: error.message }])
   }
   if (mode === 'agent-runner' && !rescore) {
-    const resolvedWorkflow = exec(
-      'agent-runner',
-      ['debug', '--show-workflow', IMPLEMENTATION_WORKFLOW_INSPECTION_REF],
-      {
-        cwd: candidateWorktree,
-        env: { ...process.env, HOME: home, AGENT_RUNNER_NO_TUI: '1' },
-      },
-    )
-    if (resolvedWorkflow.status !== 0 || resolvedWorkflow.error) {
-      return failure([{
-        code: 'workflow-resolution',
-        message: 'Cannot resolve the logical Agent Runner workflow selected for execution',
-      }])
+    // Agent Runner runs its embedded workflows, so each verified checkout file
+    // must be exactly what the installed CLI resolves.
+    const inspected = [[IMPLEMENTATION_WORKFLOW_INSPECTION_REF, provenance.workflow_sha256]]
+    if (delegatedVerification) {
+      inspected.push([VERIFICATION_WORKFLOW_INSPECTION_REF, provenance.verification_workflow_sha256])
     }
-    if (hashString(resolvedWorkflow.stdout ?? '') !== provenance.workflow_sha256) {
-      return failure([{
-        code: 'workflow-resolution',
-        message: 'The logical Agent Runner workflow does not match the verified pinned workflow',
-      }])
+    for (const [workflowRef, expectedSha256] of inspected) {
+      const resolvedWorkflow = exec(
+        'agent-runner',
+        ['debug', '--show-workflow', workflowRef],
+        {
+          cwd: candidateWorktree,
+          env: { ...process.env, HOME: home, AGENT_RUNNER_NO_TUI: '1' },
+        },
+      )
+      if (resolvedWorkflow.status !== 0 || resolvedWorkflow.error) {
+        return failure([{
+          code: 'workflow-resolution',
+          message: `Cannot resolve the logical Agent Runner workflow ${workflowRef} selected for execution`,
+        }])
+      }
+      if (hashString(resolvedWorkflow.stdout ?? '') !== expectedSha256) {
+        return failure([{
+          code: 'workflow-resolution',
+          message: `The logical Agent Runner workflow ${workflowRef} does not match the verified pinned workflow`,
+        }])
+      }
     }
     const permission = repositoryPermissionLevel(
       candidateSource.repository,

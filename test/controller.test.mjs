@@ -7,7 +7,10 @@ import { test } from 'node:test'
 import { runEvaluation } from '../evals/agent-runner/and-scene/controller.mjs'
 import { loadCheckpoint } from '../evals/agent-runner/and-scene/lib/checkpoint.mjs'
 import { readJson } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
-import { WORKFLOW_RELATIVE_PATH } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
+import {
+  VERIFICATION_WORKFLOW_RELATIVE_PATH,
+  WORKFLOW_RELATIVE_PATH,
+} from '../evals/agent-runner/and-scene/lib/provenance.mjs'
 import { DEMO_CONTRACT } from '../evals/agent-runner/and-scene/lib/demo-contract.mjs'
 
 const workflowYaml = `name: implement-change
@@ -32,6 +35,33 @@ steps:
   - id: prepare-acceptance
   - id: verify-acceptance-handoff
 `
+
+// Current Agent Runner delegates final delivery to core:verify-change.
+const delegatingWorkflowYaml = `${workflowYaml.slice(0, workflowYaml.indexOf('steps:\n'))}steps:
+  - id: implement-tasks
+  - id: verify-change
+    workflow: verify-change-v1.0.yaml
+`
+
+const verificationWorkflowYaml = `name: verify-change
+params:
+  - name: skip_validator
+    default: "false"
+steps:
+  - id: run-validator
+  - id: open-draft-pr
+  - id: verify-draft-pr
+  - id: prepare-acceptance
+  - id: write-acceptance-status
+  - id: verify-acceptance-handoff
+`
+
+const delegatedHistory = [
+  { step: 'implement-tasks', step_path: ['implement-tasks'], outcome: 'success' },
+  ...['run-validator', 'open-draft-pr', 'verify-draft-pr', 'prepare-acceptance', 'verify-acceptance-handoff']
+    .map((step) => ({ step: 'verify-change', step_path: ['verify-change', 'sub:verify-change', step], outcome: 'success' })),
+  { step: 'verify-change', step_path: ['verify-change'], outcome: 'success' },
+]
 
 const history = [
   { step: 'run-validator', outcome: 'success' },
@@ -75,6 +105,8 @@ const profiles = [
 async function environment({
   workflow = workflowYaml,
   resolvedWorkflow = workflow,
+  verificationWorkflow = null,
+  resolvedVerificationWorkflow = verificationWorkflow,
   dirty = '',
   commit = 'a'.repeat(40),
   ghAuthenticated = true,
@@ -88,6 +120,9 @@ async function environment({
   const agentSkillsDir = join(root, 'agent-skills')
   await mkdir(join(agentRunnerDir, 'workflows/core'), { recursive: true })
   if (workflow !== null) await writeFile(join(agentRunnerDir, WORKFLOW_RELATIVE_PATH), workflow)
+  if (verificationWorkflow !== null) {
+    await writeFile(join(agentRunnerDir, VERIFICATION_WORKFLOW_RELATIVE_PATH), verificationWorkflow)
+  }
   await mkdir(join(agentSkillsDir, '.claude-plugin'), { recursive: true })
   await writeFile(join(agentSkillsDir, '.claude-plugin/marketplace.json'), '{"name":"codagent"}\n')
   const runDir = join(root, 'run-1')
@@ -161,6 +196,11 @@ async function environment({
       return { status: 0, stdout: 'agent-runner 2.4.0\n' }
     }
     if (command === 'agent-runner' && args[0] === 'debug') {
+      if (args.includes('core:verify-change')) {
+        return resolvedVerificationWorkflow === null
+          ? { status: 1, stderr: 'unknown workflow core:verify-change' }
+          : { status: 0, stdout: resolvedVerificationWorkflow }
+      }
       return { status: 0, stdout: resolvedWorkflow }
     }
     if (command === 'agent-runner') {
@@ -529,6 +569,58 @@ test('an incompatible fixture is a typed harness preflight failure and launches 
 test('logical workflow resolution must match the verified pinned workflow before Runner starts', async () => {
   const context = await environment({
     resolvedWorkflow: `${workflowYaml}\n# unexpected newer workflow`,
+  })
+
+  const result = await evaluate(context, profiles)
+
+  assert.equal(result.exitCode, 2)
+  assert.deepEqual(runnerInvocations(context), [])
+  assert.match(JSON.stringify(result.errors), /workflow-resolution/)
+})
+
+test('a workflow delegating to verify-change is verified and resolved through that sub-workflow', async () => {
+  const context = await environment({
+    workflow: delegatingWorkflowYaml,
+    verificationWorkflow: verificationWorkflowYaml,
+  })
+
+  const result = await evaluate(context, profiles, {
+    readRunnerState: () => (runnerInvocations(context).length === 0
+      ? null
+      : {
+          run_id: 'runner-7',
+          session_dir: context.sessionDir,
+          workflow_name: 'implement-change',
+          workflow_completed: true,
+          history: delegatedHistory,
+        }),
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const inspected = context.invocations
+    .filter(({ command, args }) => command === 'agent-runner' && args[0] === 'debug')
+    .map(({ args }) => args.at(-1))
+  assert.deepEqual(inspected, ['core:implement-change', 'core:verify-change'])
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(written.workflow.history_complete, true)
+  assert.deepEqual(written.workflow.missing_steps, [])
+})
+
+test('a delegating workflow without its verify-change sub-workflow is rejected before Runner starts', async () => {
+  const context = await environment({ workflow: delegatingWorkflowYaml })
+
+  const result = await evaluate(context, profiles)
+
+  assert.equal(result.exitCode, 2)
+  assert.deepEqual(runnerInvocations(context), [])
+  assert.match(JSON.stringify(result.errors), /workflow-contract.*verify-change-v1\.0\.yaml/)
+})
+
+test('the resolved verify-change workflow must match the verified checkout before Runner starts', async () => {
+  const context = await environment({
+    workflow: delegatingWorkflowYaml,
+    verificationWorkflow: verificationWorkflowYaml,
+    resolvedVerificationWorkflow: `${verificationWorkflowYaml}# unexpected newer workflow\n`,
   })
 
   const result = await evaluate(context, profiles)

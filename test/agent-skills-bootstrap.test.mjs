@@ -108,6 +108,37 @@ test('validates every skill when one workflow line names more than one', async (
   await assert.rejects(readFile(context.calls, 'utf8'), { code: 'ENOENT' })
 })
 
+test('validates skills named by sub-workflows the workflow invokes', async () => {
+  const context = await fixture({ missingSkill: 'prepare-acceptance' })
+  // Current Agent Runner moves acceptance into a delegated verify-change
+  // sub-workflow, which in turn invokes a shared Validator sub-workflow.
+  await writeFile(context.workflow, [
+    'steps:',
+    '  - id: implement-tasks',
+    '    loop:',
+    '      over: tasks/*.md',
+    '    steps:',
+    '      - id: implement-single-task',
+    '        workflow: ../core/implement-task.yaml',
+    '  - id: verify-change',
+    '    workflow: "verify-change.yaml"',
+  ].join('\n'))
+  await writeFile(join(context.root, 'verify-change.yaml'), [
+    'steps:',
+    '  - id: run-validator',
+    '    workflow: run-validator.yaml',
+    '  - id: acceptance-test',
+    '    prompt: Use codagent:prepare-acceptance.',
+  ].join('\n'))
+  await writeFile(join(context.root, 'run-validator.yaml'), 'steps:\n  - id: again\n    workflow: verify-change.yaml\n')
+
+  const result = run(context, ['claude'])
+
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /missing required Codagent skill: prepare-acceptance/)
+  await assert.rejects(readFile(context.calls, 'utf8'), { code: 'ENOENT' })
+})
+
 test('rejects unsupported adapters instead of silently leaving them without skills', async () => {
   const context = await fixture()
 

@@ -6,12 +6,14 @@ import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 
 import {
+  VERIFICATION_WORKFLOW_RELATIVE_PATH,
   WORKFLOW_RELATIVE_PATH,
   resolveAgentRunnerDir,
 } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
 import {
   checkWorkflowHistory,
   classifyRunnerRun,
+  finalWorkflowStepEntry,
   parseWorkflowContract,
   resolveBoundary,
   verifyWorkflowContract,
@@ -41,6 +43,88 @@ steps:
   - id: prepare-acceptance
   - id: verify-acceptance-handoff
 `
+
+// Current Agent Runner delegates validation, the draft PR, and acceptance to a
+// `core:verify-change` sub-workflow invoked by a top-level `verify-change` step.
+const delegatingWorkflowYaml = `name: implement-change
+params:
+  - name: change_name
+    required: true
+  - name: change_dir
+    required: true
+  - name: change_label
+    required: true
+  - name: change_kind
+    required: true
+  - name: artifact_validation_instruction
+    required: true
+  - name: skip_validator
+    default: false
+steps:
+  - id: implement-tasks
+    loop:
+      over: "{{change_dir}}/tasks/*.md"
+    steps:
+      - id: implement-single-task
+        workflow: ../core/implement-task-v1.0.yaml
+  - id: verify-task-index
+  - id: verify-change
+    workflow: verify-change-v1.0.yaml
+    params:
+      skip_validator: "{{skip_validator}}"
+`
+
+const verificationWorkflowYaml = `name: verify-change
+params:
+  - name: change_name
+    required: true
+  - name: skip_validator
+    required: false
+    default: "false"
+steps:
+  - id: review-assumptions
+  - id: run-validator
+    workflow: run-validator-v1.0.yaml
+  - id: verify-validator-result
+  - id: open-draft-pr
+  - id: verify-draft-pr
+  - id: prepare-acceptance
+    loop:
+      max_param: acceptance_rounds
+    steps:
+      - id: acceptance-test
+      - id: acceptance-gate
+  - id: write-acceptance-status
+  - id: verify-acceptance-handoff
+`
+
+const VERIFY = ['verify-change', 'sub:verify-change']
+
+function delegatedHistory({ validatorOutcome = 'success' } = {}) {
+  return [
+    { step: 'implement-tasks', step_path: ['implement-tasks'], outcome: 'success' },
+    { step: 'verify-change', step_path: ['verify-change'], outcome: null },
+    { step: 'verify-change', step_path: [...VERIFY, 'run-validator'], outcome: validatorOutcome },
+    { step: 'verify-change', step_path: [...VERIFY, 'open-draft-pr'], outcome: 'success' },
+    { step: 'verify-change', step_path: [...VERIFY, 'verify-draft-pr'], outcome: 'success' },
+    {
+      step: 'verify-change',
+      step_path: [...VERIFY, 'prepare-acceptance', 'acceptance-gate'],
+      outcome: 'failed',
+    },
+    { step: 'verify-change', step_path: [...VERIFY, 'prepare-acceptance'], outcome: 'success' },
+    { step: 'verify-change', step_path: [...VERIFY, 'verify-acceptance-handoff'], outcome: 'success' },
+    { step: 'verify-change', step_path: ['verify-change'], outcome: 'success' },
+  ]
+}
+
+const REQUIRED_STEPS = [
+  'run-validator',
+  'open-draft-pr',
+  'verify-draft-pr',
+  'prepare-acceptance',
+  'verify-acceptance-handoff',
+]
 
 const requiredHistory = [
   { step: 'run-validator', outcome: 'success' },
@@ -110,7 +194,7 @@ test('the workflow contract exposes direct top-level list and mapping parameters
 test('full-workflow preflight requires the parameter and every final delivery step', () => {
   assert.deepEqual(
     verifyWorkflowContract(workflowYaml),
-    { ok: true, errors: [], prohibited_steps: [] },
+    { ok: true, errors: [], prohibited_steps: [], layout: 'inline' },
   )
 
   for (const missing of [
@@ -220,6 +304,107 @@ test('enabled validation requires a successful final Validator outcome', () => {
   }])
 })
 
+test('the workflow contract records the sub-workflow each top-level step invokes', () => {
+  assert.deepEqual(parseWorkflowContract(delegatingWorkflowYaml).step_workflows, {
+    'verify-change': 'verify-change-v1.0.yaml',
+  })
+})
+
+test('a workflow delegating to verify-change satisfies the contract through that sub-workflow', () => {
+  assert.deepEqual(
+    verifyWorkflowContract(delegatingWorkflowYaml, { verificationText: verificationWorkflowYaml }),
+    { ok: true, errors: [], prohibited_steps: [], layout: 'verify-change' },
+  )
+  assert.equal(verifyWorkflowContract(workflowYaml).layout, 'inline')
+
+  const unavailable = verifyWorkflowContract(delegatingWorkflowYaml)
+  assert.equal(unavailable.ok, false)
+  assert.match(unavailable.errors.join(' '), /verify-change-v1\.0\.yaml/)
+
+  for (const missing of REQUIRED_STEPS) {
+    const result = verifyWorkflowContract(delegatingWorkflowYaml, {
+      verificationText: verificationWorkflowYaml.replace(`  - id: ${missing}\n`, ''),
+    })
+    assert.equal(result.ok, false, missing)
+    assert.match(result.errors.join(' '), new RegExp(`verify-change lacks required final-workflow step ${missing}`))
+  }
+
+  const noSkip = verifyWorkflowContract(delegatingWorkflowYaml, {
+    verificationText: verificationWorkflowYaml.replace('  - name: skip_validator\n', ''),
+  })
+  assert.match(noSkip.errors.join(' '), /verify-change lacks the skip_validator parameter/)
+
+  const prohibited = verifyWorkflowContract(delegatingWorkflowYaml, {
+    verificationText: `${verificationWorkflowYaml}  - id: merge-pr\n`,
+  })
+  assert.equal(prohibited.ok, false)
+  assert.deepEqual(prohibited.prohibited_steps, ['merge-pr'])
+})
+
+test('delegated history finds final delivery steps inside the verify-change sub-workflow', () => {
+  const history = delegatedHistory()
+  const checked = checkWorkflowHistory(history)
+  assert.deepEqual(checked, {
+    ok: true,
+    missing_steps: [],
+    invalid_outcomes: [],
+    prohibited_effects: [],
+    observed_steps: history.map(({ step }) => step),
+  })
+
+  const skipped = checkWorkflowHistory(delegatedHistory({ validatorOutcome: 'skipped' }), {
+    skipValidator: true,
+  })
+  assert.equal(skipped.ok, true)
+  const unexpectedlyRan = checkWorkflowHistory(history, { skipValidator: true })
+  assert.deepEqual(unexpectedlyRan.invalid_outcomes, [{
+    step: 'run-validator',
+    expected: 'skipped',
+    observed: 'success',
+  }])
+
+  const missing = checkWorkflowHistory(history.filter(({ step_path: path }) => path.at(-1) !== 'open-draft-pr'))
+  assert.equal(missing.ok, false)
+  assert.deepEqual(missing.missing_steps, ['open-draft-pr'])
+})
+
+test('delegated history ignores same-named steps outside the final verify-change position', () => {
+  // A task-level Validator, or a step of the same id nested deeper inside
+  // verify-change, never stands in for the final delivery step.
+  const history = [
+    ...delegatedHistory().filter(({ step_path: path }) => path.at(-1) !== 'run-validator'),
+    { step: 'implement-tasks', step_path: ['implement-tasks', 'implement-single-task', 'sub:implement-task', 'run-validator'], outcome: 'success' },
+    { step: 'verify-change', step_path: [...VERIFY, 'prepare-acceptance', 'run-validator'], outcome: 'success' },
+  ]
+  const checked = checkWorkflowHistory(history)
+  assert.equal(checked.ok, false)
+  assert.deepEqual(checked.missing_steps, ['run-validator'])
+
+  // Once a run delegates, inline top-level steps from another layout do not count.
+  const mixed = checkWorkflowHistory([
+    { step: 'verify-change', step_path: ['verify-change'], outcome: 'success' },
+    ...requiredHistory,
+  ])
+  assert.equal(mixed.ok, false)
+  assert.deepEqual(mixed.missing_steps, REQUIRED_STEPS)
+})
+
+test('delegated history still rejects prohibited effects inside verify-change', () => {
+  const violated = checkWorkflowHistory([
+    ...delegatedHistory(),
+    { step: 'verify-change', step_path: [...VERIFY, 'prepare-acceptance', 'merge-pr'], outcome: 'success' },
+  ])
+  assert.equal(violated.ok, false)
+  assert.equal(violated.prohibited_effects[0].step, 'merge-pr')
+})
+
+test('the final workflow step entry is found in either layout', () => {
+  assert.deepEqual(finalWorkflowStepEntry(requiredHistory, 'run-validator'), requiredHistory[0])
+  const delegated = delegatedHistory({ validatorOutcome: 'skipped' })
+  assert.deepEqual(finalWorkflowStepEntry(delegated, 'run-validator'), delegated[2])
+  assert.equal(finalWorkflowStepEntry(delegated.slice(3), 'run-validator'), null)
+})
+
 test('available Agent Runner checkout satisfies the pinned core workflow contract', async (t) => {
   const evalsRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
   const agentRunnerDir = resolveAgentRunnerDir({ env: process.env, evalsRoot })
@@ -230,7 +415,11 @@ test('available Agent Runner checkout satisfies the pinned core workflow contrac
     t.skip(`Agent Runner checkout is unavailable at ${workflowPath}; skipping live contract check`)
     return
   }
-  const contract = verifyWorkflowContract(await readFile(workflowPath, 'utf8'))
+  const verificationText = await readFile(
+    join(agentRunnerDir, VERIFICATION_WORKFLOW_RELATIVE_PATH),
+    'utf8',
+  ).catch(() => null)
+  const contract = verifyWorkflowContract(await readFile(workflowPath, 'utf8'), { verificationText })
   assert.equal(contract.ok, true, contract.errors.join('\n'))
 })
 

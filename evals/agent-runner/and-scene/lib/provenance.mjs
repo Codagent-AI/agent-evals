@@ -9,6 +9,9 @@ import { join, resolve } from 'node:path'
 import { hashFile } from './persistence.mjs'
 
 export const WORKFLOW_RELATIVE_PATH = 'workflows/core/implement-change-v1.0.yaml'
+// Current Agent Runner delegates final delivery to this sub-workflow. It is
+// recorded when present; earlier revisions have none.
+export const VERIFICATION_WORKFLOW_RELATIVE_PATH = 'workflows/core/verify-change-v1.0.yaml'
 export const AGENT_SKILLS_MANIFEST_PATH = '.claude-plugin/marketplace.json'
 
 // `run.sh` reads AGENT_RUNNER_DIR and otherwise falls back to the sibling
@@ -65,6 +68,9 @@ export async function readWorkflowProvenance({ agentRunnerDir, exec = defaultExe
     throw provenanceError('missing-workflow', `Workflow not found: ${workflowPath}`)
   }
 
+  const verificationWorkflowPath = join(agentRunnerDir, VERIFICATION_WORKFLOW_RELATIVE_PATH)
+  const verificationWorkflowSha256 = await hashFile(verificationWorkflowPath)
+
   const head = exec('git', ['-C', agentRunnerDir, 'rev-parse', 'HEAD'])
   const commit = head.status === 0 ? (head.stdout ?? '').trim() || null : null
 
@@ -78,6 +84,9 @@ export async function readWorkflowProvenance({ agentRunnerDir, exec = defaultExe
     workflow_path: workflowPath,
     workflow_relative_path: WORKFLOW_RELATIVE_PATH,
     workflow_sha256: workflowSha256,
+    verification_workflow_path: verificationWorkflowSha256 === null ? null : verificationWorkflowPath,
+    verification_workflow_relative_path: VERIFICATION_WORKFLOW_RELATIVE_PATH,
+    verification_workflow_sha256: verificationWorkflowSha256,
     cli_version: cliVersion,
   }
   // Incomplete provenance is recorded as such rather than presented as a

@@ -2,6 +2,12 @@
 //
 // Agent Runner owns workflow execution and its internal resume point. The eval
 // owns the immutable workflow contract and never supplies an early stop.
+//
+// The final delivery steps have lived in two places. Earlier Agent Runner
+// revisions declared them inline at the top level of implement-change. Current
+// revisions delegate them to the `core:verify-change` sub-workflow through a
+// top-level `verify-change` step. Both layouts are accepted so that runs of
+// either revision stay verifiable and rescorable.
 
 export const IMPLEMENTATION_WORKFLOW = 'implement-change'
 export const IMPLEMENTATION_WORKFLOW_LOGICAL_NAME = 'core:implement-change'
@@ -16,6 +22,11 @@ export const REQUIRED_WORKFLOW_PARAMETERS = [
   'artifact_validation_instruction',
   'skip_validator',
 ]
+
+export const VERIFICATION_WORKFLOW_STEP = 'verify-change'
+export const VERIFICATION_WORKFLOW_FILE = 'verify-change-v1.0.yaml'
+export const VERIFICATION_WORKFLOW_INSPECTION_REF = 'core:verify-change'
+const VERIFICATION_STEP_PREFIX = [VERIFICATION_WORKFLOW_STEP, `sub:${VERIFICATION_WORKFLOW_STEP}`]
 
 export const REQUIRED_FINAL_WORKFLOW_STEPS = [
   'run-validator',
@@ -63,10 +74,12 @@ export function resolveBoundary({ skipValidator = false, changeName }) {
 }
 
 // A deliberately small reader: the contract this suite depends on is the
-// presence of a parameter name and a top-level step id, not full YAML support.
+// presence of a parameter name, a top-level step id, and the sub-workflow a
+// top-level step invokes, not full YAML support.
 export function parseWorkflowContract(text) {
   const parameters = []
   const steps = []
+  const stepWorkflows = {}
   let section = null
 
   for (const rawLine of text.split('\n')) {
@@ -83,13 +96,22 @@ export function parseWorkflowContract(text) {
       if (mapped) parameters.push(mapped[1])
     } else if (section === 'steps') {
       const step = rawLine.match(/^ {2}-\s+id:\s*(\S+)/)
-      if (step) steps.push(step[1])
+      if (step) { steps.push(step[1]); continue }
+      const workflow = rawLine.match(/^ {4}workflow:\s*["']?([^"'\s#]+)/)
+      if (workflow && steps.length > 0) stepWorkflows[steps.at(-1)] = workflow[1]
     }
   }
-  return { parameters, steps }
+  return { parameters, steps, step_workflows: stepWorkflows }
 }
 
-export function verifyWorkflowContract(text) {
+function delegatesVerification(contract) {
+  const workflow = contract.step_workflows[VERIFICATION_WORKFLOW_STEP]
+  return typeof workflow === 'string' && workflow.split('/').at(-1) === VERIFICATION_WORKFLOW_FILE
+}
+
+// `verificationText` is the checkout's verify-change workflow, or null when the
+// checkout has none. It is required only when implement-change delegates to it.
+export function verifyWorkflowContract(text, { verificationText = null } = {}) {
   const contract = parseWorkflowContract(text)
   const errors = []
   for (const parameter of REQUIRED_WORKFLOW_PARAMETERS) {
@@ -97,16 +119,36 @@ export function verifyWorkflowContract(text) {
       errors.push(`workflow ${IMPLEMENTATION_WORKFLOW} lacks the ${parameter} parameter`)
     }
   }
-  for (const step of REQUIRED_FINAL_WORKFLOW_STEPS) {
-    if (!contract.steps.includes(step)) {
-      errors.push(`workflow ${IMPLEMENTATION_WORKFLOW} lacks required final-workflow step ${step}`)
+
+  const layout = delegatesVerification(contract) ? 'verify-change' : 'inline'
+  let finalContract = contract
+  let finalWorkflow = IMPLEMENTATION_WORKFLOW
+  const declaredSteps = [...contract.steps]
+  if (layout === 'verify-change') {
+    finalWorkflow = VERIFICATION_WORKFLOW_STEP
+    if (typeof verificationText !== 'string') {
+      errors.push(`workflow ${IMPLEMENTATION_WORKFLOW} delegates to ${VERIFICATION_WORKFLOW_FILE}, which is unavailable`)
+      finalContract = null
+    } else {
+      finalContract = parseWorkflowContract(verificationText)
+      declaredSteps.push(...finalContract.steps)
+      if (!finalContract.parameters.includes('skip_validator')) {
+        errors.push(`workflow ${VERIFICATION_WORKFLOW_STEP} lacks the skip_validator parameter`)
+      }
     }
   }
-  const prohibitedSteps = contract.steps.filter(isProhibitedWorkflowStep)
+  if (finalContract) {
+    for (const step of REQUIRED_FINAL_WORKFLOW_STEPS) {
+      if (!finalContract.steps.includes(step)) {
+        errors.push(`workflow ${finalWorkflow} lacks required final-workflow step ${step}`)
+      }
+    }
+  }
+  const prohibitedSteps = declaredSteps.filter(isProhibitedWorkflowStep)
   for (const step of prohibitedSteps) {
     errors.push(`workflow ${IMPLEMENTATION_WORKFLOW} declares prohibited publication step ${step}`)
   }
-  return { ok: errors.length === 0, errors, prohibited_steps: prohibitedSteps }
+  return { ok: errors.length === 0, errors, prohibited_steps: prohibitedSteps, layout }
 }
 
 // The outer eval process restarting must never launch a second implementation
@@ -196,16 +238,41 @@ function historyStepPath(entry) {
     : [entry.step]
 }
 
+// A run delegates when Agent Runner recorded a top-level verify-change step;
+// its final delivery steps then sit directly inside that sub-workflow.
+function finalStepPrefix(normalized) {
+  return normalized.some((entry) => historyStepPath(entry)[0] === VERIFICATION_WORKFLOW_STEP)
+    ? VERIFICATION_STEP_PREFIX
+    : []
+}
+
+function isFinalStepEntry(entry, prefix, step) {
+  const path = historyStepPath(entry)
+  return path.length === prefix.length + 1
+    && prefix.every((segment, index) => path[index] === segment)
+    && path.at(-1) === step
+}
+
+// The last recorded entry of a final delivery step, such as the final
+// `run-validator`, in whichever layout the history uses.
+export function finalWorkflowStepEntry(history = [], step) {
+  const entries = history.filter((entry) => normalizeHistoryEntry(entry).step)
+  const prefix = finalStepPrefix(entries.map(normalizeHistoryEntry))
+  return entries.findLast((entry) => isFinalStepEntry(normalizeHistoryEntry(entry), prefix, step)) ?? null
+}
+
 export function checkWorkflowHistory(history = [], { skipValidator = false } = {}) {
   const normalized = history.map(normalizeHistoryEntry).filter(({ step }) => step)
   const expectedOutcomes = Object.fromEntries(REQUIRED_FINAL_WORKFLOW_STEPS.map((step) => [
     step,
     step === 'run-validator' && skipValidator ? 'skipped' : 'success',
   ]))
+  const prefix = finalStepPrefix(normalized)
   const terminalOutcomes = new Map()
   for (const entry of normalized) {
-    const path = historyStepPath(entry)
-    if (path.length === 1 && entry.outcome) terminalOutcomes.set(entry.step, entry.outcome)
+    if (!entry.outcome) continue
+    const step = historyStepPath(entry).at(-1)
+    if (isFinalStepEntry(entry, prefix, step)) terminalOutcomes.set(step, entry.outcome)
   }
   const missingSteps = REQUIRED_FINAL_WORKFLOW_STEPS.filter((step) => !terminalOutcomes.has(step))
   const invalidOutcomes = REQUIRED_FINAL_WORKFLOW_STEPS.flatMap((step) => {
