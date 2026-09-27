@@ -114,6 +114,13 @@ export function validateTraceability({ rubric, fixture, fixtureRef }) {
       for (const value of uncitedValues(guidance, subcomponent.criteria ?? [])) {
         errors.push(`subcomponent ${subcomponent.id} has uncited concrete value ${value}`)
       }
+      // A definition belongs to one criterion, so only that criterion's
+      // citations can account for its values.
+      for (const [id, definition] of Object.entries(subcomponent.criterion_definitions ?? {})) {
+        for (const value of uncitedValues(definition, [id])) {
+          errors.push(`subcomponent ${subcomponent.id} criterion ${id} definition has uncited concrete value ${value}`)
+        }
+      }
     }
   }
   for (const [id, fallback] of Object.entries(rubric.fallbacks ?? {})) {

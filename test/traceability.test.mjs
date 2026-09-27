@@ -129,3 +129,44 @@ test('snapshot refresh copies fixture files with their git blob ids only at the 
     execFileSync('git', ['-C', checkout, 'ls-tree', 'HEAD', '--', 'README.md'], { encoding: 'utf8' }).trim().split(/\s+/)[2])
   assert.equal(await readFile(join(snapshot, 'fixture-root-README.md'), 'utf8'), 'fixture root\n')
 })
+
+test('criterion definitions are held to the same concrete-value check as review guidance', () => {
+  const mutated = structuredClone(rubric)
+  mutated.eval_owned_values = []
+  mutated.components[0].subcomponents[0].criterion_definitions = { controls: 'Pass when data-step-label is shown.' }
+  assert.match(
+    validateTraceability({ rubric: mutated, fixture, fixtureRef: 'fixture-pin' }).join('\n'),
+    /navigation.*data-step-label/,
+  )
+})
+
+test('a criterion definition is checked against its own criterion sources only', () => {
+  const twoCriteria = structuredClone(rubric)
+  twoCriteria.eval_owned_values = []
+  twoCriteria.components[0].subcomponents[0].review_guidance = ['Transitions take 300ms.']
+  twoCriteria.components[0].subcomponents[0].criteria = ['controls', 'timing']
+  const twoFixture = structuredClone(fixture)
+  twoFixture.files[0].content += '\n## Scenario: Transitions are quick\n\nEach transition takes 300ms.\n'
+  twoCriteria.criterion_sources.timing = {
+    owner: 'fixture', document: fixture.files[0].path,
+    heading: 'Scenario: Transitions are quick',
+    quote: 'Each transition takes 300ms.',
+  }
+
+  // Review guidance spans the subcomponent, and timing's own definition is
+  // backed by timing's citation.
+  twoCriteria.components[0].subcomponents[0].criterion_definitions = {
+    timing: 'Pass when each transition takes 300ms.',
+  }
+  assert.deepEqual(validateTraceability({ rubric: twoCriteria, fixture: twoFixture, fixtureRef: 'fixture-pin' }), [])
+
+  // A citation approved for timing cannot justify the same value in the
+  // controls definition.
+  twoCriteria.components[0].subcomponents[0].criterion_definitions = {
+    controls: 'Pass when control focus settles within 300ms.',
+    timing: 'Pass when each transition takes 300ms.',
+  }
+  const errors = validateTraceability({ rubric: twoCriteria, fixture: twoFixture, fixtureRef: 'fixture-pin' })
+  assert.equal(errors.length, 1)
+  assert.match(errors[0], /navigation.*controls.*300ms/)
+})

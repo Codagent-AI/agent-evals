@@ -15,8 +15,11 @@ export const CONTRADICTION_SCHEMA_VERSION = 1
 
 export const EVIDENCE_ROLE_REGISTRY = [
   {
+    // The exploratory prepare-acceptance skill records its pass in an
+    // exploration log rather than a flow record, so either satisfies this.
     role: 'acceptance-flow-record',
     required: true,
+    satisfied_by: ['exploration-log'],
     multiple: false,
     aliases: [
       'acceptance-flow-evidence.md',
@@ -33,8 +36,10 @@ export const EVIDENCE_ROLE_REGISTRY = [
     aliases: ['*.png', '*.jpg', '*.jpeg', '*.webp'],
   },
   {
+    // Optional: the exploratory skill names no metadata file. Screenshots
+    // without one are verified only when a verified record describes them.
     role: 'screenshot-metadata',
-    required: true,
+    required: false,
     multiple: false,
     aliases: [
       'acceptance-test.md',
@@ -79,6 +84,37 @@ export const EVIDENCE_ROLE_REGISTRY = [
     ],
   },
   {
+    // The current exploratory acceptance pass: what was exercised, each step's
+    // prediction and observation, and what was not exercised.
+    role: 'exploration-log',
+    required: false,
+    multiple: true,
+    aliases: [
+      'exploration-log.md',
+      'acceptance-exploration-log.md',
+      'acceptance-exploration.md',
+    ],
+  },
+  {
+    // The exploration plan written before a pass, and pass-numbered copies of
+    // any acceptance record, kept when the tester preserves an earlier pass
+    // rather than overwriting it.
+    role: 'acceptance-pass-record',
+    required: false,
+    multiple: true,
+    aliases: [
+      'acceptance-exploration-plan.md',
+      'exploration-plan.md',
+    ],
+  },
+  {
+    // The SHA the last acceptance pass tested, and the diff base of the next.
+    role: 'tested-revision',
+    required: false,
+    multiple: false,
+    aliases: ['acceptance-tested-revision.txt'],
+  },
+  {
     role: 'session-audit',
     required: false,
     multiple: true,
@@ -91,6 +127,45 @@ export const EVIDENCE_ROLE_REGISTRY = [
   },
 ]
 
+// A required role is present when it or any role declared to satisfy it is.
+function missingRequiredRoles(presentRoles) {
+  return EVIDENCE_ROLE_REGISTRY
+    .filter(({ required, role, satisfied_by: alternatives = [] }) => (
+      required && ![role, ...alternatives].some((candidate) => presentRoles.has(candidate))
+    ))
+    .map(({ role }) => role)
+}
+
+// Verified narrative records that can describe a screenshot in place of a
+// capture metadata file, by naming the file or a directory that holds it.
+const SCREENSHOT_DESCRIBING_ROLES = new Set([
+  'acceptance-flow-record',
+  'exploration-log',
+  'findings-history',
+  'final-handoff',
+  'acceptance-pass-record',
+])
+
+function describesScreenshot(text, relativePath) {
+  const segments = relativePath.split('/')
+  // Paths are relative to the Runner session; the evidence directory is output/.
+  const withinOutput = segments[0] === 'output' ? segments.slice(1) : segments
+  const mentions = [withinOutput.at(-1)]
+  for (let index = 1; index < withinOutput.length; index += 1) {
+    mentions.push(`${withinOutput.slice(0, index).join('/')}/`)
+    mentions.push(withinOutput.slice(0, index).join('/'))
+  }
+  return mentions.some((mention) => mention && text.includes(mention))
+}
+
+function missingRoleMessage(role) {
+  const alternatives = EVIDENCE_ROLE_REGISTRY.find((entry) => entry.role === role)?.satisfied_by ?? []
+  return alternatives.length === 0
+    ? `candidate evidence does not include the expected ${role} role`
+    : `candidate evidence does not include the expected ${role} role or an ${alternatives.join(' or ')} role in its place`
+}
+
+const PRIOR_PASS_RECORD = /^(?:acceptance|exploration)-[\w.-]*?(?:pass|round)[-_]?\d+[\w.-]*\.(?:md|txt|json|log)$/
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp'])
 const TEXT_EXTENSIONS = new Set(['.md', '.txt', '.json', '.yaml', '.yml', '.log'])
 const MAX_DISCOVERY_ENTRIES = 2000
@@ -133,6 +208,7 @@ function roleFor(path) {
     if (definition.role === 'screenshot' && IMAGE_EXTENSIONS.has(extension)) return definition.role
     if (definition.aliases.some((alias) => alias.toLowerCase() === name)) return definition.role
   }
+  if (PRIOR_PASS_RECORD.test(name)) return 'acceptance-pass-record'
   const normalized = path.split(sep).join('/').toLowerCase()
   if (/session-reports?\//.test(normalized) || /(?:session|assumption|context-gap)[-_]?audit/.test(name)) {
     return 'session-audit'
@@ -559,11 +635,68 @@ async function discoverCandidateFiles({ worktree, sessionDir }) {
   return { roots, selected: [...selected.values()], findings }
 }
 
+const defaultExec = (command, args, options = {}) => spawnSync(command, args, { encoding: 'utf8', ...options })
+
+// How a candidate-claimed revision relates to the final SHA. Only Git decides:
+// a record of an earlier pass that names an ancestor of the final revision is
+// an honest record of that revision, not a mismatch, while a SHA that does not
+// resolve or lies off the final history stays unverifiable.
+function revisionRelation({ worktree, finalSha, claimed, exec }) {
+  if (typeof claimed !== 'string' || !/^[a-f0-9]{7,40}$/i.test(claimed)) {
+    return { sha: null, relation: 'malformed' }
+  }
+  if (finalSha.toLowerCase().startsWith(claimed.toLowerCase())) return { sha: finalSha, relation: 'final' }
+  if (!worktree) return { sha: null, relation: 'unresolved' }
+  const parsed = exec('git', ['-C', worktree, 'rev-parse', '--verify', '--quiet', `${claimed}^{commit}`])
+  const sha = parsed?.status === 0 && !parsed.error ? String(parsed.stdout ?? '').trim() : ''
+  if (!/^[a-f0-9]{40}$/i.test(sha)) return { sha: null, relation: 'unresolved' }
+  if (sha === finalSha) return { sha, relation: 'final' }
+  const ancestry = exec('git', ['-C', worktree, 'merge-base', '--is-ancestor', sha, finalSha])
+  return {
+    sha,
+    relation: ancestry?.status === 0 && !ancestry.error ? 'ancestor-of-final' : 'not-ancestor',
+  }
+}
+
+function revisionResolver({ worktree, finalSha, exec }) {
+  const cache = new Map()
+  return (claimed) => {
+    const key = String(claimed ?? '').toLowerCase()
+    if (!cache.has(key)) cache.set(key, revisionRelation({ worktree, finalSha, claimed, exec }))
+    return cache.get(key)
+  }
+}
+
+const ACCEPTED_RELATIONS = new Set(['final', 'ancestor-of-final'])
+
+// The file should hold only the SHA. A labelled or decorated SHA is still read,
+// but content with no SHA at all stays a malformed claim rather than absent.
+function testedRevisionClaim(text) {
+  const trimmed = text.trim()
+  if (trimmed.length === 0) return null
+  return trimmed.match(/(?<![a-f0-9])[a-f0-9]{7,40}(?![a-f0-9])/i)?.[0] ?? trimmed.slice(0, 80)
+}
+
+function declaredDiffBase(text) {
+  for (const label of [
+    'Diff base',
+    'Diff base revision',
+    'Previous tested revision',
+    'Prior tested revision',
+    'Last tested revision',
+  ]) {
+    const sha = textField(text, label)?.match(/\b([a-f0-9]{7,40})\b/i)?.[1]
+    if (sha) return sha
+  }
+  return null
+}
+
 export async function buildCandidateEvidenceManifest({
   worktree,
   sessionDir,
   runDir,
   delivery,
+  exec = defaultExec,
 }) {
   if (!delivery?.final_sha || delivery.pull_request?.head_sha !== delivery.final_sha) {
     throw new EvidenceReadinessError(
@@ -573,6 +706,7 @@ export async function buildCandidateEvidenceManifest({
   }
 
   const discovery = await discoverCandidateFiles({ worktree, sessionDir })
+  const relationOf = revisionResolver({ worktree, finalSha: delivery.final_sha, exec })
   const root = join(resolve(runDir), 'evidence', 'candidate')
   const artifactRoot = join(root, 'artifacts')
   await mkdir(artifactRoot, { recursive: true })
@@ -581,6 +715,7 @@ export async function buildCandidateEvidenceManifest({
   let totalBytes = 0
   let screenshotMetadata = null
   let screenshotMetadataMalformed = false
+  const artifactText = new Map()
   const impactText = discovery.selected
     .find(({ origin }) => basename(origin.relative_path).toLowerCase() === 'acceptance-impact-scope.md')
     ?.bytes.toString('utf8') ?? ''
@@ -624,19 +759,20 @@ export async function buildCandidateEvidenceManifest({
     const text = TEXT_EXTENSIONS.has(extname(source.origin.relative_path).toLowerCase())
       ? source.bytes.toString('utf8')
       : ''
+    artifactText.set(id, text)
     const references = extractReferences(text)
-    const rawRevision = parsed?.revision ?? parsed?.sha ?? claimedRevision(text)
+    const rawRevision = source.role === 'tested-revision'
+      ? testedRevisionClaim(text)
+      : (parsed?.revision ?? parsed?.sha ?? claimedRevision(text))
     const validRevision = typeof rawRevision === 'string'
       && /^[a-f0-9]{7,40}$/i.test(rawRevision)
-    const revision = (
-      validRevision
-      && delivery.final_sha.toLowerCase().startsWith(rawRevision.toLowerCase())
-    ) ? delivery.final_sha : rawRevision
+    const resolved = validRevision ? relationOf(rawRevision) : null
+    const revision = ACCEPTED_RELATIONS.has(resolved?.relation) ? resolved.sha : rawRevision
     const verification = []
     if (rawRevision !== null && rawRevision !== undefined && !validRevision) {
       verification.push('malformed-revision')
     }
-    if (revision && revision !== delivery.final_sha) verification.push('claimed-revision-mismatch')
+    if (revision && !ACCEPTED_RELATIONS.has(resolved?.relation)) verification.push('claimed-revision-mismatch')
     if (metadataError) verification.push('malformed-metadata')
     const verificationState = verification.length === 0 ? 'verified' : 'defective'
     artifacts.push({
@@ -653,6 +789,8 @@ export async function buildCandidateEvidenceManifest({
       bytes: source.bytes.length,
       sha256: hashString(source.bytes),
       claimed_revision: revision ?? null,
+      revision_relation: resolved?.relation ?? null,
+      declared_diff_base: declaredDiffBase(text),
       capture_metadata: source.role === 'screenshot-metadata' ? parsed : null,
       coverage: coverageFrom(parsed ?? text),
       references,
@@ -676,13 +814,11 @@ export async function buildCandidateEvidenceManifest({
   }
 
   const materializedRoles = new Set(artifacts.map(({ role }) => role))
-  const missingRoles = EVIDENCE_ROLE_REGISTRY
-    .filter(({ required, role }) => required && !materializedRoles.has(role))
-    .map(({ role }) => role)
+  const missingRoles = missingRequiredRoles(materializedRoles)
   for (const role of missingRoles) {
     findings.push(finding(
       'missing-evidence-role',
-      `candidate evidence does not include the expected ${role} role`,
+      missingRoleMessage(role),
       null,
       { role },
     ))
@@ -714,9 +850,11 @@ export async function buildCandidateEvidenceManifest({
           ?? screenshotMetadata.revision
           ?? screenshotMetadata.sha
           ?? null
+        const captureRelation = captureRevision === null ? null : relationOf(captureRevision).relation
+        artifact.revision_relation = captureRelation
         for (const [code, absent] of [
           ['missing-capture-revision', captureRevision === null],
-          ['capture-revision-mismatch', captureRevision !== null && captureRevision !== delivery.final_sha],
+          ['capture-revision-mismatch', captureRevision !== null && !ACCEPTED_RELATIONS.has(captureRelation)],
           ['missing-capture-flow', artifact.coverage.length === 0],
           ['missing-capture-state', !metadata.state],
         ]) {
@@ -741,13 +879,27 @@ export async function buildCandidateEvidenceManifest({
       }
     }
   } else if (screenshotMetadataMalformed || !materializedRoles.has('screenshot-metadata')) {
-    // Metadata that is absent and JSON metadata that failed to parse are both
-    // unusable: role presence alone must not leave screenshots unvalidated.
-    // Non-JSON metadata is a supported form and is covered by text extraction.
+    // JSON metadata that failed to parse is unusable: role presence alone must
+    // not leave screenshots unvalidated. With no metadata file at all, a
+    // screenshot stays verified only when a verified narrative record names it,
+    // so the judge can read what was inspected and observed there. Non-JSON
+    // metadata is a supported form and is covered by text extraction.
+    const describing = screenshotMetadataMalformed
+      ? []
+      : artifacts.filter(({ role, verification_state: state }) => (
+          SCREENSHOT_DESCRIBING_ROLES.has(role) && state === 'verified'
+        ))
     const reason = screenshotMetadataMalformed
       ? 'has unusable candidate-provided capture metadata'
-      : 'has no candidate-provided capture metadata'
+      : 'has no candidate-provided capture metadata or verified record describing it'
     for (const artifact of artifacts.filter(({ role }) => role === 'screenshot')) {
+      const describedBy = describing
+        .filter(({ id }) => describesScreenshot(artifactText.get(id) ?? '', artifact.origin.relative_path))
+        .map(({ id }) => id)
+      if (describedBy.length > 0) {
+        artifact.described_by = describedBy
+        continue
+      }
       artifact.verification_state = 'defective'
       artifact.limitations.push('missing-capture-metadata')
       findings.push(finding(
@@ -769,8 +921,8 @@ export async function buildCandidateEvidenceManifest({
       branch: delivery.branch ?? null,
       pull_request: delivery.pull_request.url ?? delivery.pull_request.number ?? null,
     },
-    role_registry: EVIDENCE_ROLE_REGISTRY.map(({ role, required, aliases }) => ({
-      role, required, aliases,
+    role_registry: EVIDENCE_ROLE_REGISTRY.map(({ role, required, satisfied_by: satisfiedBy, aliases }) => ({
+      role, required, ...(satisfiedBy ? { satisfied_by: satisfiedBy } : {}), aliases,
     })),
     artifacts,
     findings,
@@ -786,9 +938,7 @@ export async function buildCandidateEvidenceManifest({
 export async function inspectCandidateEvidenceReadiness({ worktree, sessionDir }) {
   const discovery = await discoverCandidateFiles({ worktree, sessionDir })
   const presentRoles = new Set(discovery.selected.map(({ role }) => role))
-  const missingRoles = EVIDENCE_ROLE_REGISTRY
-    .filter(({ required, role }) => required && !presentRoles.has(role))
-    .map(({ role }) => role)
+  const missingRoles = missingRequiredRoles(presentRoles)
   return {
     artifacts: discovery.selected.map(({ role, origin, bytes }) => ({
       role: role === 'screenshot' ? 'acceptance-screenshot' : role,
@@ -800,7 +950,7 @@ export async function inspectCandidateEvidenceReadiness({ worktree, sessionDir }
       ...discovery.findings,
       ...missingRoles.map((role) => finding(
         'missing-evidence-role',
-        `candidate evidence does not include the expected ${role} role`,
+        missingRoleMessage(role),
         null,
         { role },
       )),
@@ -840,17 +990,125 @@ function declaredChange(path, declared) {
   })
 }
 
-export function validateEvidenceLineage({ finalSha, revisions = [], evidence = [] }) {
+// Only exact harness-owned namespaces are non-product. Ordinary product
+// modules named evidence, delivery, or acceptance remain product changes.
+function harnessPath(path) {
+  return path.startsWith('.agent-runner/') || path.startsWith('openspec/changes/')
+}
+
+const MAX_CHANGED_PATHS = 200
+
+function changedPaths({ worktree, from, to, exec }) {
+  const diff = exec('git', ['-C', worktree, 'diff', '--name-only', '-z', from, to, '--'], { encoding: 'utf8' })
+  if (diff?.status !== 0 || diff.error) return null
+  const paths = String(diff.stdout ?? '').split('\0').filter(Boolean)
+  const groups = { product: [], test_only: [], harness: [] }
+  for (const path of paths) {
+    if (harnessPath(path)) groups.harness.push(path)
+    else if (testOnlyChange(path)) groups.test_only.push(path)
+    else groups.product.push(path)
+  }
+  return Object.fromEntries(Object.entries(groups).map(([group, list]) => [group, {
+    count: list.length,
+    paths: list.slice(0, MAX_CHANGED_PATHS),
+    truncated: list.length > MAX_CHANGED_PATHS,
+  }]))
+}
+
+const NO_CHANGES = Object.freeze({
+  product: { count: 0, paths: [], truncated: false },
+  test_only: { count: 0, paths: [], truncated: false },
+  harness: { count: 0, paths: [], truncated: false },
+})
+
+// Deterministic facts for the final-revision criterion. The candidate records
+// the SHA its last acceptance pass tested; Git, not the candidate, says whether
+// that SHA is the final revision or an ancestor of it and which files changed
+// since. Each verified record that declares the diff base of a diff-scoped pass
+// also gets the files that pass was responsible for exploring.
+export function testedRevisionFacts({ finalSha, worktree, manifest, exec = defaultExec }) {
+  const relationOf = revisionResolver({ worktree, finalSha, exec })
+  const records = (manifest?.artifacts ?? []).filter(({ role }) => role === 'tested-revision')
+  const verified = records.find(({ verification_state: state, claimed_revision: sha }) => (
+    state === 'verified' && typeof sha === 'string' && sha.length > 0
+  ))
+  let recorded = null
+  if (verified) {
+    const { sha, relation } = relationOf(verified.claimed_revision)
+    recorded = {
+      artifact_id: verified.id,
+      sha,
+      relation,
+      changes_to_final: relation === 'final'
+        ? NO_CHANGES
+        : (relation === 'ancestor-of-final' && worktree
+            ? changedPaths({ worktree, from: sha, to: finalSha, exec })
+            : null),
+    }
+  }
+  const seen = new Set()
+  const diffBases = []
+  for (const artifact of manifest?.artifacts ?? []) {
+    if (artifact.verification_state !== 'verified' || !artifact.declared_diff_base) continue
+    const base = relationOf(artifact.declared_diff_base)
+    const tested = ACCEPTED_RELATIONS.has(artifact.revision_relation) && artifact.claimed_revision
+      ? artifact.claimed_revision
+      : finalSha
+    const key = `${base.sha ?? artifact.declared_diff_base}:${tested}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    diffBases.push({
+      artifact_id: artifact.id,
+      declared: artifact.declared_diff_base,
+      sha: base.sha,
+      relation: base.relation,
+      tested_revision: tested,
+      changes_to_tested_revision: base.sha === tested
+        ? NO_CHANGES
+        : (base.relation === 'ancestor-of-final' && worktree
+            ? changedPaths({ worktree, from: base.sha, to: tested, exec })
+            : null),
+    })
+  }
+  return {
+    final_sha: finalSha,
+    state: recorded ? 'recorded' : (records.length > 0 ? 'unverified' : 'absent'),
+    recorded,
+    diff_bases: diffBases,
+    product_path_rule: 'every changed path except test-only files and the .agent-runner/ and openspec/changes/ harness namespaces',
+  }
+}
+
+export function validateEvidenceLineage({
+  finalSha,
+  revisions = [],
+  evidence = [],
+  testedRevision = null,
+}) {
   const findings = []
   const finalRevision = revisionNode(revisions, finalSha)
   const fullAtFinal = evidence.find((item) => (
     item.kind === 'full-flow' && item.revision === finalSha && item.trustworthy === true
   ))
+  const recorded = testedRevision?.recorded ?? null
   let accepted = false
   let mode = 'unsupported'
+  // A baseline plus a targeted retest or alignment claim at the final revision
+  // is not a recorded tested revision, so it never establishes final-revision
+  // support. It is kept only as a diagnostic for reading older runs.
+  let fallbackMode = null
   if (fullAtFinal) {
     accepted = true
     mode = 'final-full-flow'
+  } else if (recorded?.relation === 'final') {
+    accepted = true
+    mode = 'tested-revision-final'
+  } else if (
+    recorded?.relation === 'ancestor-of-final'
+    && recorded.changes_to_final?.product?.count === 0
+  ) {
+    accepted = true
+    mode = 'tested-revision-no-product-change'
   } else {
     const baselines = evidence.filter((item) => {
       const revision = revisionNode(revisions, item.revision)
@@ -870,11 +1128,9 @@ export function validateEvidenceLineage({ finalSha, revisions = [], evidence = [
       && item.tracked_product_changed === false
     ))
     if (baselines.length > 0 && targeted) {
-      accepted = true
-      mode = 'ancestor-plus-targeted'
+      fallbackMode = 'ancestor-plus-targeted'
     } else if (baselines.length > 0 && alignment) {
-      accepted = true
-      mode = 'evidence-only-alignment'
+      fallbackMode = 'evidence-only-alignment'
     }
   }
 
@@ -883,20 +1139,39 @@ export function validateEvidenceLineage({ finalSha, revisions = [], evidence = [
   } else if (finalRevision.ancestor_of_final === false) {
     findings.push(finding('final-revision-invalid', `lineage final node ${finalSha} is not accepted`))
   }
+  if (testedRevision && !recorded) {
+    findings.push(finding(
+      'tested-revision-unrecorded',
+      'no verified candidate record names the revision the last acceptance pass tested',
+    ))
+  } else if (recorded && !ACCEPTED_RELATIONS.has(recorded.relation)) {
+    findings.push(finding(
+      'tested-revision-off-final-history',
+      `the recorded tested revision is ${recorded.relation}, not the final revision or an ancestor of it`,
+    ))
+  } else if (recorded?.changes_to_final?.product?.count > 0) {
+    findings.push(finding(
+      'product-changes-after-tested-revision',
+      `${recorded.changes_to_final.product.count} product file(s) changed after the recorded tested revision; `
+        + 'a verified pass must have explored them',
+    ))
+  }
   if (!accepted) {
     findings.push(finding(
-      'new-final-full-flow-required',
-      'a trustworthy final full flow is required because bounded final-revision support was not established',
+      'final-revision-not-established',
+      'no verified record shows the final revision was tested or that it has no product changes since the last tested revision',
     ))
   }
   return {
-    schema_version: 1,
+    schema_version: 2,
     final_sha: finalSha,
     accepted: accepted && Boolean(finalRevision),
     final_revision_supported: accepted && Boolean(finalRevision),
     mode,
+    fallback_mode: fallbackMode,
     revisions,
     evidence: evidence.map((item) => ({ ...item })),
+    tested_revision: testedRevision,
     findings,
   }
 }
@@ -905,7 +1180,7 @@ export async function validateCandidateEvidenceLineage({
   finalSha,
   worktree,
   manifest,
-  exec = (command, args, options = {}) => spawnSync(command, args, { encoding: 'utf8', ...options }),
+  exec = defaultExec,
 }) {
   let evidence = (manifest?.artifacts ?? []).flatMap((artifact) => (
     (artifact.lineage_claims ?? []).map((claim) => ({ id: artifact.id, ...claim }))
@@ -938,12 +1213,7 @@ export async function validateCandidateEvidenceLineage({
     const changed = diff.status === 0 && !diff.error
       ? String(diff.stdout ?? '').split('\0').filter(Boolean)
       : null
-    // Only exact harness-owned namespaces are non-product. Ordinary product
-    // modules named evidence, delivery, or acceptance remain product changes.
-    const productChanges = changed?.filter((path) => (
-      !path.startsWith('.agent-runner/')
-      && !path.startsWith('openspec/changes/')
-    )) ?? null
+    const productChanges = changed?.filter((path) => !harnessPath(path)) ?? null
     evidence = evidence.map((item) => {
       if (item.revision !== finalSha || !['targeted', 'external-alignment'].includes(item.kind)) {
         return item
@@ -966,7 +1236,12 @@ export async function validateCandidateEvidenceLineage({
       }
     })
   }
-  return validateEvidenceLineage({ finalSha, revisions, evidence })
+  return validateEvidenceLineage({
+    finalSha,
+    revisions,
+    evidence,
+    testedRevision: testedRevisionFacts({ finalSha, worktree, manifest, exec }),
+  })
 }
 
 export async function buildEvaluatorEvidenceManifest({
@@ -1116,14 +1391,47 @@ async function copyViewArtifacts({ runDir, root, artifacts }) {
 
 const JUDGE_PACKET_MAX_CHARS = 220_000
 const JUDGE_PACKET_ARTIFACT_MAX_CHARS = 50_000
-const TESTING_PACKET_ROLES = new Set([
+// Packet order under the character budget: the current acceptance record
+// first, then earlier-pass records, then referenced supporting material.
+const TESTING_PACKET_ROLES = [
   'acceptance-flow-record',
-  'assumptions-ledger',
+  'exploration-log',
   'final-handoff',
   'findings-history',
+  'assumptions-ledger',
   'screenshot-metadata',
+  'tested-revision',
+  'acceptance-pass-record',
   'session-audit',
-])
+]
+
+// The requirement and scenario headings of the approved specs, so the testing
+// judge measures coverage against what the change adds rather than against a
+// test plan's case list. Headings only: the judge needs to know which
+// behaviors exist, and the full text would crowd candidate evidence out of the
+// bounded packet.
+async function approvedRequirementInventory(requirementsRoot) {
+  if (!requirementsRoot) return null
+  let names
+  try {
+    names = (await readdir(requirementsRoot)).filter((name) => name.endsWith('.md')).sort()
+  } catch (error) {
+    if (error.code === 'ENOENT') return null
+    throw error
+  }
+  const documents = []
+  for (const name of names) {
+    const requirements = []
+    for (const line of (await readFile(join(requirementsRoot, name), 'utf8')).split(/\r?\n/)) {
+      const requirement = line.match(/^#{2,4}\s+Requirement:\s*(.+?)\s*$/)
+      const scenario = line.match(/^#{3,5}\s+Scenario:\s*(.+?)\s*$/)
+      if (requirement) requirements.push({ requirement: requirement[1], scenarios: [] })
+      else if (scenario && requirements.length > 0) requirements.at(-1).scenarios.push(scenario[1])
+    }
+    if (requirements.length > 0) documents.push({ document: name, requirements })
+  }
+  return documents.length > 0 ? documents : null
+}
 
 async function evidenceJudgePacket({ runDir, index, artifacts }) {
   let packet = [
@@ -1168,6 +1476,7 @@ export async function materializeEvidenceJudgeViews({
   evaluator,
   contradictions,
   lineage,
+  requirementsRoot = null,
 }) {
   const runRoot = resolve(runDir)
   const viewsRoot = join(runRoot, 'evidence', 'judge-views')
@@ -1181,13 +1490,22 @@ export async function materializeEvidenceJudgeViews({
     root: testingRoot,
     artifacts: candidate?.artifacts ?? [],
   })
+  const approvedRequirements = await approvedRequirementInventory(requirementsRoot)
   const testingIndex = {
     ownership_boundary: 'candidate evidence may support credit; evaluator evidence may only disprove it',
     permissions: {
       candidate_evidence: true,
       evaluator_evidence: 'contradictions-only',
       revision_provenance: true,
+      approved_requirements: approvedRequirements ? 'inventory-only' : false,
     },
+    ...(approvedRequirements ? {
+      approved_requirements: {
+        ownership: 'evaluator-supplied reference',
+        scoring_effect: 'defines the user-visible behaviors coverage is measured against; never evidence of testing',
+        documents: approvedRequirements,
+      },
+    } : {}),
     candidate: {
       ownership: 'candidate-produced',
       artifacts: testingArtifacts,
@@ -1201,11 +1519,17 @@ export async function materializeEvidenceJudgeViews({
   const testingPacket = await evidenceJudgePacket({
     runDir,
     index: testingIndex,
-    artifacts: testingArtifacts.filter(({ role }) => TESTING_PACKET_ROLES.has(role)),
+    artifacts: testingArtifacts
+      .filter(({ role }) => TESTING_PACKET_ROLES.includes(role))
+      .sort((left, right) => TESTING_PACKET_ROLES.indexOf(left.role) - TESTING_PACKET_ROLES.indexOf(right.role)),
   })
 
+  // Pass records reached this view as referenced session material before they
+  // had a role of their own, so they stay here.
   const assumptionRoles = [
+    'acceptance-pass-record',
     'assumptions-ledger',
+    'exploration-log',
     'final-handoff',
     'findings-history',
     'session-audit',

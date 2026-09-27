@@ -114,9 +114,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 5.0 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
+test('rubric 6.0 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '5.0.0')
+  assert.equal(rubric.version, '6.0.0')
   assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(
@@ -416,4 +416,48 @@ test('the fit and attribution guidance settle the verdicts the judge split on', 
   assert.match(guidance('scene-fixed-canvas-uniform-fit'), /minimum-scale floor[^.]*is not by itself a failure/)
   // Repetitions 2 and 3 both position the link only through sample CSS; the judge split them.
   assert.match(guidance('scene-style-and-attribution'), /For attribution-default-link, the scene kit itself must place/)
+})
+
+test('every testing-evidence criterion carries the definition its judge applies', async () => {
+  const rubric = await automatedRubric()
+  const row = rubric.components
+    .flatMap(({ subcomponents }) => subcomponents)
+    .find(({ job }) => job === 'testing-evidence')
+  const definition = (id) => row.criterion_definitions[id]
+
+  assert.deepEqual(Object.keys(row.criterion_definitions), row.criteria)
+  // Coverage is measured against the approved specs, whatever the approach.
+  assert.match(definition('testing-evidence-traceable-coverage'), /approved specs/)
+  assert.match(definition('testing-evidence-traceable-coverage'), /Any testing approach is acceptable/)
+  assert.match(definition('testing-evidence-traceable-coverage'), /do not require a fixed case inventory/)
+  assert.match(definition('testing-evidence-traceable-coverage'), /undisclosed omission counts fully/)
+  assert.match(definition('testing-evidence-usable-proof'), /verified candidate artifacts/)
+  // A diff-scoped re-test is enough; a full re-run is not demanded.
+  assert.match(definition('testing-evidence-final-revision-applicability'), /tested_revision/)
+  assert.match(definition('testing-evidence-final-revision-applicability'), /full re-run of earlier passes and bounded-impact lineage are not required/)
+  assert.match(definition('testing-evidence-final-revision-applicability'), /product changes after the last recorded tested revision that no verified pass explored/)
+  assert.match(definition('testing-evidence-complete-honest-record'), /no completion or coverage claim exceeds/)
+})
+
+test('rubric validation rejects incomplete, unknown, and missing criterion definitions', async () => {
+  const rubric = await automatedRubric()
+  const testingRow = (mutated) => mutated.components
+    .flatMap(({ subcomponents }) => subcomponents)
+    .find(({ job }) => job === 'testing-evidence')
+
+  const incomplete = structuredClone(rubric)
+  delete testingRow(incomplete).criterion_definitions['testing-evidence-usable-proof']
+  assert.match(validateAutomatedRubric(incomplete).join('\n'), /does not define criterion testing-evidence-usable-proof/)
+
+  const unknown = structuredClone(rubric)
+  testingRow(unknown).criterion_definitions['scene-kit-anything'] = 'text'
+  assert.match(validateAutomatedRubric(unknown).join('\n'), /defines unknown criterion scene-kit-anything/)
+
+  const blank = structuredClone(rubric)
+  testingRow(blank).criterion_definitions['testing-evidence-usable-proof'] = ' '
+  assert.match(validateAutomatedRubric(blank).join('\n'), /testing-evidence-usable-proof definition must be non-empty/)
+
+  const missing = structuredClone(rubric)
+  delete testingRow(missing).criterion_definitions
+  assert.match(validateAutomatedRubric(missing).join('\n'), /must define every testing-evidence criterion/)
 })

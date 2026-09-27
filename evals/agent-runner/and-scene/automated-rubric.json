@@ -494,19 +494,19 @@
     },
     "testing-evidence-traceable-coverage": {
       "owner": "eval",
-      "reason": "Judges implementation-workflow evidence, which the fixture does not describe."
+      "reason": "Judges the candidate's acceptance-testing record against the approved specs; the fixture does not prescribe a testing process."
     },
     "testing-evidence-usable-proof": {
       "owner": "eval",
-      "reason": "Judges implementation-workflow evidence, which the fixture does not describe."
+      "reason": "Judges the candidate's acceptance-testing record against the approved specs; the fixture does not prescribe a testing process."
     },
     "testing-evidence-final-revision-applicability": {
       "owner": "eval",
-      "reason": "Judges implementation-workflow evidence, which the fixture does not describe."
+      "reason": "Judges the candidate's acceptance-testing record against the approved specs; the fixture does not prescribe a testing process."
     },
     "testing-evidence-complete-honest-record": {
       "owner": "eval",
-      "reason": "Judges implementation-workflow evidence, which the fixture does not describe."
+      "reason": "Judges the candidate's acceptance-testing record against the approved specs; the fixture does not prescribe a testing process."
     },
     "assumption-consequential-ambiguities-surfaced": {
       "owner": "eval",
@@ -556,7 +556,7 @@
     }
   ],
   "rubric_id": "and-scene-automated-product",
-  "version": "5.0.0",
+  "version": "6.0.0",
   "total_points": 100,
   "automated_points": 70,
   "human_points": 30,
@@ -961,7 +961,13 @@
             "testing-evidence-usable-proof",
             "testing-evidence-final-revision-applicability",
             "testing-evidence-complete-honest-record"
-          ]
+          ],
+          "criterion_definitions": {
+            "testing-evidence-traceable-coverage": "Pass when verified candidate evidence shows that the user-visible behaviors the change adds, as described by the requirements and scenarios in the approved specs, were exercised through the product's public surfaces. Any testing approach is acceptable, including scripted flows and exploratory passes sized from the diff; do not require a fixed case inventory such as a test plan's numbered acceptance flows, and do not require one record per scenario. An omission the record discloses with a reason counts against coverage only in proportion to the user-visible behavior it leaves unexercised; an undisclosed omission counts fully. Fail when a significant user-visible behavior is omitted without disclosure, or when omissions together leave a substantial share of the added user-visible behavior unexercised.",
+            "testing-evidence-usable-proof": "Pass when each behavior the candidate claims to have exercised is backed by verified candidate artifacts in this packet, such as command output, logs, transcripts, captures with metadata, or recorded observations that state the action taken and the result seen, specific enough for a reviewer to tell what was done and what happened. Recorded visual inspection counts when it states what was inspected and what was observed. A bare verdict, a summary claim, or a screenshot without a recorded observation is not proof. A verified record from an earlier pass proves behavior at the revision it names. Fail when a material claimed behavior rests only on unverified, defective, or missing artifacts.",
+            "testing-evidence-final-revision-applicability": "Use the harness-computed tested_revision facts in the verified index together with verified candidate records. Pass when the candidate recorded the revision it last tested and either that revision is the final revision, or the final revision has no product changes since it. When the last pass was scoped to a diff, such as a re-test after a fix, it must also be shown by a verified record to have explored the product changes between the diff base it declares and the revision it tested; the harness lists those changed files. A full re-run of earlier passes and bounded-impact lineage are not required. Fail when the final revision has product changes after the last recorded tested revision that no verified pass explored, when no tested revision is recorded, or when the recorded revision is not an ancestor of the final revision.",
+            "testing-evidence-complete-honest-record": "Pass when the record discloses the gaps and limitations of the testing, including what was not exercised and why, self-played or simulated interactions, environment limits, CI status, and the disposition of visual-inspection warnings, and discloses every unresolved finding, and when no completion or coverage claim exceeds what the verified evidence shows. Fail when a material gap, limitation, or unresolved finding is concealed, or when the record claims more testing or a stronger outcome than its evidence supports."
+          }
         }
       ]
     },

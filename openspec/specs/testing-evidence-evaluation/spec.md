@@ -29,9 +29,14 @@ The evaluator SHALL NOT perform another subjective visual-quality review. The se
 - **AND** it does not invoke a third subjective visual-review job
 
 ### Requirement: Required evidence before scored judging
-Before scored product judging begins, the evaluation SHALL require readable candidate-produced acceptance flow evidence, screenshot evidence and metadata, findings history, final handoff, and assumptions ledger. It SHALL also require a verifiable candidate repository, draft pull request, final local commit, pull-request head, and pull-request base identity.
+Before scored product judging begins, the evaluation SHALL require readable candidate-produced acceptance flow evidence, screenshot evidence, findings history, final handoff, and assumptions ledger. An exploration log SHALL satisfy the acceptance flow evidence requirement. A screenshot capture metadata file SHALL be optional; a screenshot without one SHALL be verified only when a verified candidate record that states what was inspected and observed names it or a directory holding it. It SHALL also require a verifiable candidate repository, draft pull request, final local commit, pull-request head, and pull-request base identity.
 
 If the evaluated workflow fails to produce those required artifacts or identities, the evaluation SHALL report `implementation-workflow-failed`, preserve available diagnostics, and SHALL NOT begin scored product judging or issue an official product score or verdict. If those inputs exist but the harness cannot process otherwise valid inputs because of an evaluator defect, it SHALL report `evaluation-harness-failed`.
+
+#### Scenario: Exploratory acceptance evidence is complete
+- **WHEN** the candidate's evidence directory holds an exploration log, findings, handoff, assumptions ledger, and screenshots under `acceptance-screenshots/` that the log or handoff names, with no flow record or screenshot metadata file
+- **THEN** the harness reports no missing evidence role
+- **AND** it verifies the named screenshots against the records that describe them
 
 #### Scenario: Required candidate evidence is missing
 - **WHEN** the completed workflow omits a required acceptance artifact
@@ -56,24 +61,30 @@ If the evaluated workflow fails to produce those required artifacts or identitie
 ### Requirement: Final-revision evidence provenance
 The evaluation SHALL verify a coherent acceptance-evidence lineage terminating at the final evaluated pull-request SHA. The final handoff, local `HEAD`, and pull-request head SHALL identify that SHA. When candidate-produced acceptance evidence reports CI status, it SHALL identify the revision to which that status applies or explicitly state that CI evidence is absent, pending, or unavailable. The harness SHALL NOT independently query CI or require a particular CI state before judging.
 
-The evaluation SHALL accept a lineage using a trustworthy full-flow pass from an ancestor commit plus targeted verification at the final SHA only when the candidate evidence identifies the intervening changes, bounds their impact, covers affected and directly dependent flows, and explains why other flows remain supported by the baseline. Evidence-only final verification SHALL be valid only when no tracked product content changed after the trustworthy full-flow pass. A broad change, an unbounded impact, or the absence of a trustworthy baseline SHALL require a new full-flow pass at the final SHA.
+The final-revision criterion SHALL accept a diff-scoped re-test in place of a full re-run. The harness SHALL supply deterministic facts from verified candidate evidence and Git only: the revision the candidate recorded as last tested, whether Git resolves it to the final SHA or an ancestor of it, and the files changed from it to the final SHA, split into product, test-only, and harness-owned paths. For each verified pass record that declares the diff base of its pass, the harness SHALL also supply the files changed between that base and the revision the pass tested. Final-revision applicability SHALL be established when the recorded tested revision is the final SHA, or is an ancestor with no later product changes, and every diff-scoped pass is shown by verified evidence to have explored the product changes since its declared base. It SHALL NOT be established when the final revision has product changes after the last recorded tested revision that no verified pass explored, when no tested revision is recorded, or when the recorded revision is not an ancestor of the final SHA. A candidate record that names an ancestor of the final SHA SHALL be verified as a record of that earlier revision rather than treated as a revision mismatch.
 
-#### Scenario: Full flow passes at the final revision
-- **WHEN** complete acceptance flow evidence was produced at the final evaluated SHA
-- **THEN** the evaluation accepts that evidence as the final-revision lineage
+#### Scenario: Last pass tested the final revision
+- **WHEN** the verified tested-revision record names the final evaluated SHA
+- **THEN** the evaluation accepts the final-revision lineage without requiring a full re-run of earlier passes
 
-#### Scenario: Targeted retest closes a bounded change
-- **WHEN** a trustworthy full-flow baseline exists at an ancestor SHA and final-SHA evidence explicitly bounds and tests the intervening change and dependent flows
-- **THEN** the evaluation accepts the combined baseline and targeted evidence as a lineage terminating at the final SHA
+#### Scenario: Diff-scoped re-test after a fix
+- **WHEN** an earlier pass tested an ancestor SHA, a fix followed, and a later verified pass declares that SHA as its diff base and explores the files changed since
+- **THEN** the harness supplies the changed files for that diff
+- **AND** the final-revision criterion passes when the verified pass record shows those product changes were explored
 
-#### Scenario: Only external alignment changed
-- **WHEN** no tracked product content changed after a trustworthy full-flow pass and final verification only aligns the PR, CI, or other external state
-- **THEN** the evaluation accepts evidence-only verification that ties the handoff and external state to the final SHA
+#### Scenario: Only tests or harness files changed after the last pass
+- **WHEN** the recorded tested revision is an ancestor of the final SHA and every later change is test-only or harness-owned
+- **THEN** the evaluation accepts the final-revision lineage
 
-#### Scenario: Change impact is not bounded
-- **WHEN** the intervening change is broad, its impact cannot be bounded, or no trustworthy full-flow baseline exists
-- **THEN** the evaluation requires a new full-flow pass at the final SHA
-- **AND** it withholds the final-revision evidence point when that pass is absent
+#### Scenario: Product changed after the last tested revision
+- **WHEN** product files changed after the last recorded tested revision and no verified pass explored them
+- **THEN** the harness records the untested product changes
+- **AND** the testing-evidence judge withholds the final-revision evidence point
+
+#### Scenario: Earlier pass records are retained
+- **WHEN** the candidate keeps the exploration log, findings, or other records of an earlier acceptance pass
+- **THEN** the harness includes them in the bounded testing-evidence view
+- **AND** a record naming an ancestor of the final SHA is verified as evidence about that revision
 
 ### Requirement: Evidence integrity and contradiction handling
 The evaluation SHALL treat candidate evidence as untrusted. Before judging it, the harness SHALL verify referenced files, hashes, screenshot metadata, revision claims, requirement and flow coverage, and pull-request identity. It SHALL preserve missing, malformed, stale, or contradictory evidence as findings and SHALL NOT silently repair, replace, or reinterpret candidate-produced evidence. It SHALL treat CI status as a candidate-produced claim and SHALL NOT query GitHub checks or other CI systems to replace or validate that claim.
@@ -92,6 +103,11 @@ The evaluation SHALL treat candidate evidence as untrusted. Before judging it, t
 - **THEN** the harness records the inconsistency
 - **AND** the screenshot cannot support the affected criterion
 
+#### Scenario: Screenshot has no metadata and no describing record
+- **WHEN** no capture metadata file exists and no verified candidate record names a screenshot or a directory holding it
+- **THEN** the harness records the screenshot as defective
+- **AND** the screenshot cannot support any criterion
+
 #### Scenario: Candidate claim conflicts with independent evidence
 - **WHEN** candidate evidence claims a behavior that verified evaluator evidence disproves
 - **THEN** the harness preserves both sources and identifies the contradiction
@@ -107,10 +123,12 @@ The evaluation SHALL score candidate testing-evidence quality out of four points
 
 | Criterion | Points | Required behavior |
 |---|---:|---|
-| Traceable coverage | 1 | Requirements, user flows, and representative visual states are covered and traceable. |
-| Usable proof | 1 | Actions, observed outcomes, screenshots, and warning dispositions provide usable proof. |
-| Final-revision applicability | 1 | Evidence, candidate-reported CI status when present, and pull-request identity apply through a valid lineage to the final evaluated SHA. |
-| Complete and honest record | 1 | Limitations, unexercised flows, failures, fixes, and retesting are complete and honest enough for independent judging. |
+| Traceable coverage | 1 | Verified evidence shows the user-visible behaviors the approved specs add were exercised, by any testing approach; disclosed, reasoned omissions count proportionally and undisclosed omissions fully. |
+| Usable proof | 1 | Each claimed exercised behavior is backed by verified artifacts, such as logs, captures, transcripts, or recorded observations, in the bounded view. |
+| Final-revision applicability | 1 | The recorded last-tested revision is the final SHA, or every product change after it was explored by a verified diff-scoped pass. |
+| Complete and honest record | 1 | Gaps, limitations, warning dispositions, and unresolved findings are disclosed, and completion claims do not exceed the evidence. |
+
+The rubric SHALL carry an explicit definition for each criterion, and the testing-evidence judge SHALL receive each definition beside its identifier together with the requirement and scenario headings of the approved specs as reference. Coverage SHALL NOT be measured against a fixed test-plan case inventory.
 
 The component SHALL have no independent score floor. For a reference-baseline evaluation, the component SHALL be not applicable and SHALL contribute neither points earned nor points possible.
 

@@ -93,7 +93,8 @@ test('calibration covers workflow evidence defects, missing judging, N/A arithme
   const ids = new Set(ledger.cases.map(({ id }) => id))
   for (const id of [
     'evidence-ownership-regression',
-    'evidence-lineage-regression',
+    'evidence-coverage-regression',
+    'evidence-final-revision-regression',
     'evidence-contradiction-regression',
     'visual-warning-disposition-regression',
     'assumption-surfacing-regression',
@@ -202,4 +203,21 @@ test('calibration invokes no subprocess, so it can never start Agent Runner', as
   // And it completes with no Agent Runner checkout, sandbox, or home configured.
   const ledger = await runCalibration({ rubrics, outDir: await out() })
   assert.equal(ledger.passed, true)
+})
+
+test('each testing-evidence criterion has its own calibration case', () => {
+  const cases = calibrationCases(rubrics.automated.rubric)
+  const single = (id) => cases.find(({ fail_criteria: failing }) => (
+    failing.length === 1 && failing[0] === id
+  ))
+  for (const id of [
+    'testing-evidence-traceable-coverage',
+    'testing-evidence-usable-proof',
+    'testing-evidence-final-revision-applicability',
+    'testing-evidence-complete-honest-record',
+  ]) assert.ok(single(id), id)
+  assert.deepEqual(
+    cases.find(({ id }) => id === 'visual-warning-disposition-regression').fail_criteria,
+    ['testing-evidence-complete-honest-record'],
+  )
 })
