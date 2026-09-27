@@ -7,6 +7,7 @@ import { test } from 'node:test'
 import { hashString } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
 import {
   AGENT_SKILLS_MANIFEST_PATH,
+  VERIFICATION_WORKFLOW_RELATIVE_PATH,
   WORKFLOW_RELATIVE_PATH,
   compareAgentSkillsProvenance,
   compareProvenance,
@@ -108,6 +109,23 @@ test('a clean checkout records commit, workflow hash, and CLI version', async ()
   assert.equal(provenance.cli_version, 'agent-runner 2.4.0')
   assert.equal(provenance.workflow_path, join(dir, WORKFLOW_RELATIVE_PATH))
   assert.equal(provenance.complete, true)
+})
+
+test('the delegated verify-change workflow is recorded when the checkout has one', async () => {
+  const legacy = await readWorkflowProvenance({ agentRunnerDir: await checkout(), exec: execStub() })
+  assert.equal(legacy.verification_workflow_path, null)
+  assert.equal(legacy.verification_workflow_sha256, null)
+  assert.equal(legacy.complete, true)
+
+  const dir = await checkout()
+  const verification = 'name: verify-change\nsteps:\n  - id: verify-acceptance-handoff\n'
+  await writeFile(join(dir, VERIFICATION_WORKFLOW_RELATIVE_PATH), verification)
+
+  const provenance = await readWorkflowProvenance({ agentRunnerDir: dir, exec: execStub() })
+
+  assert.equal(provenance.verification_workflow_path, join(dir, VERIFICATION_WORKFLOW_RELATIVE_PATH))
+  assert.equal(provenance.verification_workflow_sha256, hashString(verification))
+  assert.equal(provenance.workflow_sha256, hashString(workflowYaml))
 })
 
 test('the recorded commit is not compared against a predetermined value', async () => {

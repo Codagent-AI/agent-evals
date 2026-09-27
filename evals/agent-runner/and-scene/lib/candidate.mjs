@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 
 import { hashFile, hashJson, hashString, writeJsonAtomic } from './persistence.mjs'
 import { inspectCandidateEvidenceReadiness } from './evidence.mjs'
-import { checkWorkflowHistory } from './workflow.mjs'
+import { checkWorkflowHistory, finalWorkflowStepEntry } from './workflow.mjs'
 
 export const CANDIDATE_SOURCE_MANIFEST_SCHEMA_VERSION = 1
 export const EVAL_GIT_EXCLUDES = ['/.agent-runner/config.yaml']
@@ -893,9 +893,7 @@ export async function verifyCandidateDelivery({
     final_sha: finalSha,
     remote_sha: remoteSha,
     pull_request: pullRequest,
-    final_validator: workflowHistory
-      .filter((entry) => (entry.step ?? entry.id) === 'run-validator')
-      .at(-1) ?? null,
+    final_validator: finalWorkflowStepEntry(workflowHistory, 'run-validator'),
     workflow_history: workflowHistory,
     acceptance_artifacts: acceptance.artifacts,
     acceptance_findings: acceptance.findings,

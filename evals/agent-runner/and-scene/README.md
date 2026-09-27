@@ -42,13 +42,14 @@ adapters plus Codex. Model identifiers are passed through unchanged: Cursor
 accepts a versioned id such as `grok-4.6` or a full Cursor id such as
 `cursor-grok-4.6-high`. A bare family such as `grok` is passed through, but the
 Cursor CLI rejects it. Before starting Agent Runner, the suite verifies the
-workflow's named Codagent skills
+Codagent skills named by the workflow and the sub-workflows it invokes
 against the pinned Agent Skills checkout and installs that local plugin for
 each selected CLI.
 
 The profile names match the workflow's `lead`, `implementor`, and `tester`
-agents; acceptance work runs through the `acceptance-tester` named session,
-and recorded attribution for those attempts uses the `acceptance-reviewer`
+agents; acceptance work runs through the `acceptance-tester` named session.
+Agent Runner records the `tester` role for those attempts; attempts delegated
+through `call_agent` by earlier Runner revisions use the `acceptance-reviewer`
 role name.
 
 The implementation agents use unrestricted permissions inside the container.
@@ -135,7 +136,7 @@ Agent Validator execution: task-level compliance, the final Validator, and
 acceptance-remediation Validator calls. Without it, all of those Validator
 paths remain enabled. Both modes still complete the draft-PR,
 acceptance-preparation, and handoff-verification steps. In skipped mode the
-harness requires an explicit skipped outcome for the top-level `run-validator`
+harness requires an explicit skipped outcome for the final `run-validator`
 step; an absent, interrupted, or unexpectedly successful step is not accepted
 as proof of intentional skipping.
 The first complete benchmark candidate explicitly uses `--skip-validator`.
@@ -322,7 +323,20 @@ There is no early `--until` boundary. `--skip-validator` skips task-level,
 final, and acceptance-remediation Agent Validator execution while the draft
 pull request, acceptance preparation, and handoff verification always remain
 required. The final `run-validator` step must be recorded as `skipped` in that
-mode and `success` when validation is enabled. The Agent Runner checkout must be a clean Git worktree; the suite
+mode and `success` when validation is enabled.
+
+Current Agent Runner delegates those final steps (`run-validator`,
+`open-draft-pr`, `verify-draft-pr`, `prepare-acceptance`, and
+`verify-acceptance-handoff`) to the `core:verify-change` sub-workflow,
+`workflows/core/verify-change-v1.0.yaml`, through a top-level `verify-change`
+step. The suite then checks the contract in that file, requires
+`agent-runner debug --show-workflow core:verify-change` to match it, records its
+hash as `verification_workflow_sha256`, and reads the final step outcomes at
+`verify-change > sub:verify-change > <step>` in the run history. Earlier Runner
+revisions declared the same steps at the top level of implement-change; that
+layout is still accepted so their runs remain verifiable and rescorable. The
+sub-workflow shares its parent's session directory, so acceptance evidence is
+still discovered under the run's `output/` directory. The Agent Runner checkout must be a clean Git worktree; the suite
 records whichever commit, workflow hash, and CLI version it used. The Agent
 Skills checkout must also be clean; the suite records its commit and plugin
 manifest hash.
@@ -779,7 +793,8 @@ they can be reused.
 
 Preflight failures exit 2 before any workflow starts and name the exact cause: a
 dirty Agent Runner or Agent Skills checkout, a missing or non-conforming
-`implement-change-v1.0.yaml`, a missing workflow-named Codagent skill, missing
+`implement-change-v1.0.yaml` or delegated `verify-change-v1.0.yaml`, a missing
+Codagent skill named by the workflow or a sub-workflow it invokes, missing
 publishing credentials, an invalid role profile with its role and field, a
 role-profile mismatch on resume, a resume-provenance change, or a stale
 run-state identity.

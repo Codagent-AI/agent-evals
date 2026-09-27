@@ -303,3 +303,28 @@ test('Runner state includes complete ordered step outcomes from the durable audi
   ])
   assert.deepEqual(state.history[2].step_path, ['prepare-acceptance', 'release-product'])
 })
+
+test('Runner state keeps the full path of steps inside the verify-change sub-workflow', async () => {
+  const dir = await projects({
+    'run-v': {
+      workflowName: 'implement-change',
+      currentStep: { stepId: 'verify-change', completed: true },
+      completed: true,
+    },
+  })
+  const sessionDir = join(dir, 'encoded-project/runs/run-v')
+  await writeFile(join(sessionDir, 'audit.log'), [
+    '2026-09-27T00:00:00Z [verify-change, sub:verify-change, run-validator] step_end {"outcome":"skipped"}',
+    '2026-09-27T00:00:01Z [verify-change, sub:verify-change, prepare-acceptance:1, acceptance-test] step_end {"outcome":"success"}',
+    '2026-09-27T00:00:02Z [verify-change, sub:verify-change, verify-acceptance-handoff] step_end {"outcome":"success"}',
+    '',
+  ].join('\n'))
+
+  const state = await readRunnerState(dir, 'run-v')
+
+  assert.deepEqual(state.history.map(({ step_path: path, outcome }) => ({ path, outcome })), [
+    { path: ['verify-change', 'sub:verify-change', 'run-validator'], outcome: 'skipped' },
+    { path: ['verify-change', 'sub:verify-change', 'prepare-acceptance', 'acceptance-test'], outcome: 'success' },
+    { path: ['verify-change', 'sub:verify-change', 'verify-acceptance-handoff'], outcome: 'success' },
+  ])
+})

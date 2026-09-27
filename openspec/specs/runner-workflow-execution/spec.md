@@ -4,7 +4,7 @@
 Define clean, configurable, resumable execution of the Agent Runner implementation workflow and the ordered evaluation lifecycle.
 ## Requirements
 ### Requirement: Clean recorded Agent Runner revision
-The evaluation harness SHALL use `workflows/core/implement-change-v1.0.yaml` from the configured Agent Runner checkout. Before starting or resuming an Agent Runner workflow, the harness SHALL require that checkout to be a Git worktree with no staged, unstaged, or untracked changes. It SHALL record the checkout's commit SHA, the SHA-256 hash of the workflow file, and the Agent Runner CLI version, but SHALL NOT require the commit SHA to match a predetermined value.
+The evaluation harness SHALL use `workflows/core/implement-change-v1.0.yaml` from the configured Agent Runner checkout. Before starting or resuming an Agent Runner workflow, the harness SHALL require that checkout to be a Git worktree with no staged, unstaged, or untracked changes. It SHALL record the checkout's commit SHA, the SHA-256 hash of the workflow file, and the Agent Runner CLI version, but SHALL NOT require the commit SHA to match a predetermined value. When the checkout contains `workflows/core/verify-change-v1.0.yaml`, it SHALL also record that file's SHA-256 hash as supplementary provenance; resume compatibility continues to rest on the commit, implement-change workflow hash, and CLI version.
 
 On resume, the recorded Agent Runner commit, workflow hash, and CLI version SHALL match the checkout being used. A missing workflow, dirty checkout, or provenance mismatch SHALL stop the evaluation before Agent Runner execution.
 
@@ -28,6 +28,10 @@ On resume, the recorded Agent Runner commit, workflow hash, and CLI version SHAL
 - **WHEN** the workflow Agent Runner resolves for the logical reference `core:implement-change` does not match the hash recorded from the pinned workflow file
 - **THEN** the harness stops before Agent Runner execution and reports a workflow-resolution error
 
+#### Scenario: Resolved verify-change workflow does not match the checkout
+- **WHEN** implement-change delegates to verify-change and the workflow Agent Runner resolves for `core:verify-change` does not match the hash of the checkout's `verify-change-v1.0.yaml`
+- **THEN** the harness stops before Agent Runner execution and reports a workflow-resolution error
+
 ### Requirement: Validator control and stop boundary
 The evaluation harness SHALL expose a `--skip-validator` option and SHALL hard-code the exact versioned workflow at `workflows/core/implement-change-v1.0.yaml` as the implementation workflow for this change, invoking it by the logical reference `core:implement-change`. It SHALL record the workflow's Agent Runner commit and content hash and SHALL pass the fixture change name, the OpenSpec artifact directory, change label, and artifact-validation instruction, together with an explicit `skip_validator` workflow argument. The option SHALL skip every workflow-owned Agent Validator execution: task-level compliance inside the implementation loop, the final Validator, and Validator calls requested after acceptance remediation. It SHALL NOT select an early workflow stop boundary or skip draft-PR creation, acceptance preparation, or handoff verification.
 
@@ -40,9 +44,9 @@ Each supplied parameter value SHALL be fully substituted before it is passed. Ag
 | With `--skip-validator` | `skip_validator=true` | Skipped | Skipped | Full workflow completion |
 | Without `--skip-validator` | `skip_validator=false` | Required | Required | Full workflow completion |
 
-The option SHALL default to false. Before starting the workflow, the harness SHALL verify that the `change_name`, `change_dir`, `change_label`, `artifact_validation_instruction`, and `skip_validator` parameters exist, and that the final Validator, draft-PR, draft-PR verification, acceptance-preparation, and handoff-verification steps exist as direct top-level steps of the invoked workflow. A required step declared only inside a loop, group, or nested step definition SHALL NOT satisfy the contract, because completed-step verification identifies a step by the first segment of its recorded step path. It SHALL also verify a clean pinned Agent Skills checkout containing every `codagent:*` skill named by the workflow and install that exact checkout for every selected workflow CLI before invoking an agent. The first complete evaluation required by this change SHALL explicitly use `--skip-validator`.
+The option SHALL default to false. Before starting the workflow, the harness SHALL verify that the `change_name`, `change_dir`, `change_label`, `artifact_validation_instruction`, and `skip_validator` parameters exist, and that the final Validator (`run-validator`), draft-PR (`open-draft-pr`), draft-PR verification (`verify-draft-pr`), acceptance-preparation (`prepare-acceptance`), and handoff-verification (`verify-acceptance-handoff`) steps exist as direct top-level steps of the workflow that owns final delivery. When implement-change declares a top-level `verify-change` step invoking `verify-change-v1.0.yaml`, final delivery is owned by that `core:verify-change` sub-workflow: the harness SHALL read `workflows/core/verify-change-v1.0.yaml` from the same checkout, require its `skip_validator` parameter and the final steps as its direct top-level steps, and reject a prohibited publication step declared at the top level of either workflow. Otherwise the final steps SHALL be direct top-level steps of implement-change, as in earlier Agent Runner revisions. A required step declared only inside a loop, group, or nested step definition of the owning workflow SHALL NOT satisfy the contract. It SHALL also verify a clean pinned Agent Skills checkout containing every `codagent:*` skill named by the workflow or by a sub-workflow file it references, and install that exact checkout for every selected workflow CLI before invoking an agent. The first complete evaluation required by this change SHALL explicitly use `--skip-validator`.
 
-After execution, the harness SHALL require the direct top-level `run-validator` step to have outcome `skipped` when `skip_validator=true` and `success` when `skip_validator=false`. A missing step, an interrupted step without a terminal outcome, or an outcome that contradicts the selected mode SHALL make workflow delivery incomplete. Resume and evaluator-only rescore SHALL enforce the same recorded argument-to-outcome relationship.
+After execution, the harness SHALL require the final `run-validator` step to have outcome `skipped` when `skip_validator=true` and `success` when `skip_validator=false`. A final step is identified by its full recorded step path: `verify-change > sub:verify-change > <step>` when the run history records a top-level `verify-change` step, and the direct top-level `<step>` otherwise. A same-named step at any other path, such as a task-level Validator, SHALL NOT stand in for it. A missing step, an interrupted step without a terminal outcome, or an outcome that contradicts the selected mode SHALL make workflow delivery incomplete. Resume and evaluator-only rescore SHALL enforce the same recorded argument-to-outcome relationship.
 
 #### Scenario: Validator is skipped
 - **WHEN** the eval is invoked with `--skip-validator`
@@ -56,15 +60,15 @@ After execution, the harness SHALL require the direct top-level `run-validator` 
 - **AND** Agent Runner runs both task-level compliance and the final Validator before completing the workflow
 
 #### Scenario: Skipped final Validator is explicitly recorded
-- **WHEN** `skip_validator=true` and the complete workflow records the direct top-level `run-validator` outcome as `skipped`
+- **WHEN** `skip_validator=true` and the complete workflow records the final `run-validator` outcome as `skipped`
 - **THEN** the harness accepts the Validator disposition and continues delivery verification
 
 #### Scenario: Skipped final Validator evidence is missing or contradictory
-- **WHEN** `skip_validator=true` but the direct top-level `run-validator` event is absent, nonterminal, or reports an outcome other than `skipped`
+- **WHEN** `skip_validator=true` but the final `run-validator` event is absent, nonterminal, or reports an outcome other than `skipped`
 - **THEN** the harness reports incomplete implementation-workflow delivery and does not begin scored judging
 
 #### Scenario: Enabled final Validator did not pass
-- **WHEN** `skip_validator=false` but the direct top-level `run-validator` event is absent, nonterminal, or reports an outcome other than `success`
+- **WHEN** `skip_validator=false` but the final `run-validator` event is absent, nonterminal, or reports an outcome other than `success`
 - **THEN** the harness reports incomplete implementation-workflow delivery and does not begin scored judging
 
 #### Scenario: OpenSpec artifact parameters are supplied
@@ -85,6 +89,20 @@ After execution, the harness SHALL require the direct top-level `run-validator` 
 - **WHEN** a required final-workflow step is declared only inside a loop, group, or nested step definition rather than as a direct top-level step
 - **THEN** the harness fails before starting Agent Runner
 - **AND** it identifies the step that does not satisfy the contract
+
+#### Scenario: Final delivery is delegated to verify-change
+- **WHEN** implement-change invokes `verify-change-v1.0.yaml` from a top-level `verify-change` step and that file declares `skip_validator` and every required final step at its top level
+- **THEN** the harness accepts the workflow contract
+- **AND** after execution it reads each final step outcome at `verify-change > sub:verify-change > <step>`
+
+#### Scenario: Delegated verify-change workflow is unavailable or incomplete
+- **WHEN** implement-change delegates to verify-change but the checkout lacks `verify-change-v1.0.yaml`, or that file lacks `skip_validator` or a required final step
+- **THEN** the harness fails before starting Agent Runner
+- **AND** it identifies the missing verify-change contract
+
+#### Scenario: Earlier inline layout remains verifiable
+- **WHEN** a completed run from an earlier Agent Runner revision recorded the final steps at the top level of implement-change
+- **THEN** resume and evaluator-only rescore verify it against that inline layout
 
 #### Scenario: Required workflow skill is unavailable
 - **WHEN** the pinned Agent Skills checkout is dirty, cannot be identified, or lacks a `codagent:*` skill named by the workflow

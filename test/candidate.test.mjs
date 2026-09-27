@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { test } from 'node:test'
 
@@ -995,6 +995,79 @@ test('delivery verification proves branch, remote head, draft PR identity, and f
     }),
     /base.*evaluation-fixture.*expected.*main|expected.*base.*main/i,
   )
+})
+
+test('delivery verification accepts verify-change delivery and its shared session evidence', async () => {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
+  const sessionDir = join(repo.root, 'session')
+  await prepareCandidateWorktree({
+    repo: repo.source,
+    worktree,
+    ref: repo.fixture,
+    resume: false,
+    runId: 'run-123',
+    kind: 'candidate',
+    exec,
+  })
+  await mkdir(join(worktree, 'openspec/changes/create-and-scene'), { recursive: true })
+  // verify-change shares its parent's session directory, so exploratory
+  // acceptance writes into the same output directory as before.
+  await mkdir(join(sessionDir, 'output'), { recursive: true })
+  const head = git(worktree, 'rev-parse', 'HEAD')
+  const outputs = {
+    'acceptance-assumptions.md': 'No unresolved assumptions or context gaps.\n',
+    'acceptance-findings.md': 'No findings.\n',
+    'acceptance-handoff.md': 'Exploration log: exploration-log.md\n',
+    'exploration-log.md': 'Floor items exercised.\n',
+    'acceptance-tested-revision.txt': `${head}\n`,
+    'acceptance-round-status.txt': `READY ${head}\n`,
+    'acceptance-preparation-status.txt': 'ACCEPTANCE_COMPLETE\n',
+  }
+  for (const [file, content] of Object.entries(outputs)) {
+    await writeFile(join(sessionDir, 'output', file), content)
+  }
+
+  const verify = ['verify-change', 'sub:verify-change']
+  const workflowHistory = [
+    { step: 'implement-tasks', step_path: ['implement-tasks', 'implement-single-task', 'sub:implement-task', 'run-validator'], outcome: 'skipped' },
+    { step: 'verify-change', step_path: [...verify, 'run-validator'], event: 'step_start', outcome: null },
+    { step: 'verify-change', step_path: [...verify, 'run-validator'], event: 'step_end', outcome: 'skipped' },
+    ...['open-draft-pr', 'verify-draft-pr', 'prepare-acceptance', 'verify-acceptance-handoff']
+      .map((step) => ({ step: 'verify-change', step_path: [...verify, step], event: 'step_end', outcome: 'success' })),
+    { step: 'verify-change', step_path: ['verify-change'], event: 'step_end', outcome: 'success' },
+  ]
+  const delivery = await verifyCandidateDelivery({
+    worktree,
+    fixtureCommit: repo.fixture,
+    branch: 'eval/and-scene/run-123',
+    expectedBase: 'main',
+    changeName: 'create-and-scene',
+    sessionDir,
+    skipValidator: true,
+    workflowHistory,
+    exec: (command, args, options) => {
+      if (command === 'git' && args.includes('ls-remote')) {
+        return { status: 0, stdout: `${head}\trefs/heads/eval/and-scene/run-123\n` }
+      }
+      return exec(command, args, options)
+    },
+    inspectPullRequest: async () => ({
+      number: 53,
+      url: 'https://github.com/Codagent-AI/and-scene/pull/53',
+      state: 'OPEN',
+      draft: true,
+      base: 'main',
+      head_branch: 'eval/and-scene/run-123',
+      head_sha: head,
+    }),
+  })
+
+  assert.deepEqual(delivery.final_validator, workflowHistory[2])
+  const recorded = delivery.acceptance_artifacts.map(({ path }) => basename(path))
+  for (const file of ['acceptance-handoff.md', 'acceptance-findings.md', 'acceptance-assumptions.md', 'exploration-log.md']) {
+    assert.ok(recorded.includes(file), `${file} in ${JSON.stringify(recorded)}`)
+  }
 })
 
 test('delivery verification freezes an identifiable candidate when acceptance evidence is incomplete', async () => {

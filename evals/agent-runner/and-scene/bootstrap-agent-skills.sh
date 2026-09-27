@@ -25,8 +25,8 @@ fi
 # degrade into an agent-authored fallback with a different evidence contract.
 required_skills="$(
   node - "$SOURCE_DIR" "$WORKFLOW_PATH" "$@" <<'NODE'
-const { readFileSync } = require('node:fs')
-const { resolve } = require('node:path')
+const { existsSync, readFileSync } = require('node:fs')
+const { dirname, resolve } = require('node:path')
 const sourceDir = resolve(process.argv[2])
 const workflowPath = process.argv[3]
 const adapters = new Set(process.argv.slice(4))
@@ -81,10 +81,23 @@ if (adapters.has('cursor')) {
     process.exit(2)
   }
 }
-const text = readFileSync(workflowPath, 'utf8')
-const skills = [...text.matchAll(/codagent:([a-z0-9][a-z0-9-]*)/g)]
-  .map((match) => match[1])
-console.log([...new Set(skills)].sort().join('\n'))
+// Follow file-relative sub-workflow references, such as the delegated
+// verify-change workflow, so every skill a nested step names is validated too.
+const skills = new Set()
+const pending = [resolve(workflowPath)]
+const visited = new Set()
+while (pending.length > 0) {
+  const path = pending.pop()
+  if (visited.has(path)) continue
+  visited.add(path)
+  const text = readFileSync(path, 'utf8')
+  for (const match of text.matchAll(/codagent:([a-z0-9][a-z0-9-]*)/g)) skills.add(match[1])
+  for (const match of text.matchAll(/^\s*workflow:\s*[\x22\x27]?([^\x22\x27\s#]+)/gm)) {
+    const referenced = resolve(dirname(path), match[1])
+    if (existsSync(referenced)) pending.push(referenced)
+  }
+}
+console.log([...skills].sort().join('\n'))
 NODE
 )"
 while IFS= read -r skill; do
