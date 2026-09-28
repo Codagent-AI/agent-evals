@@ -123,6 +123,7 @@ export function applyRunStateEvent(state, event) {
         if (field === 'final_validator'
           && delivery.final_validator
           && !delivery.final_validator.step_path
+          && value?.step === 'run-validator'
           && delivery.final_validator.step === value?.step_path?.[0]) {
           delivery.final_validator = { ...delivery.final_validator, step: value.step }
         }

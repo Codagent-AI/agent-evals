@@ -1471,6 +1471,42 @@ test('a named per-flow screenshot directory describes only that flow', async () 
   assert.equal(screenshot('flow-b/step.png').verification_state, 'defective')
 })
 
+test('a nested shared screenshot root does not describe its screenshots', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'acceptance/screenshots/a.png': Buffer.from([1, 2, 3]),
+    'acceptance/screenshots/b.png': Buffer.from([4, 5, 6]),
+    'exploration-log.md': `# Exploration log\nTested revision: ${FINAL_SHA}\nSee acceptance/screenshots/ for observed states.\n`,
+  })
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree, sessionDir: context.sessionDir, runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+  for (const name of ['a.png', 'b.png']) {
+    const screenshot = manifest.artifacts.find(({ origin }) => (
+      origin.relative_path === `output/acceptance/screenshots/${name}`
+    ))
+    assert.equal(screenshot.verification_state, 'defective', name)
+    assert.ok(screenshot.limitations.includes('missing-capture-metadata'), name)
+  }
+})
+
+test('a per-flow screenshot directory directly under output describes its screenshot', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'flow-a/a.png': Buffer.from([1, 2, 3]),
+    'exploration-log.md': `# Exploration log\nTested revision: ${FINAL_SHA}\nSee flow-a/ for observed state.\n`,
+  })
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree, sessionDir: context.sessionDir, runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+  const screenshot = manifest.artifacts.find(({ origin }) => (
+    origin.relative_path === 'output/flow-a/a.png'
+  ))
+  assert.equal(screenshot.verification_state, 'verified')
+})
+
 test('a screenshot path does not match the suffix of another screenshot path', async () => {
   const context = await fixture()
   await mkdir(join(context.worktree, 'flow-b'), { recursive: true })

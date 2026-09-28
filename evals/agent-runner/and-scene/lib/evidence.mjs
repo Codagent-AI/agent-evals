@@ -145,6 +145,7 @@ const SCREENSHOT_DESCRIBING_ROLES = new Set([
   'final-handoff',
   'acceptance-pass-record',
 ])
+const SHARED_SCREENSHOT_ROOT = /^(?:acceptance[-_])?screenshots?$/i
 
 function describesScreenshot(text, relativePath) {
   const inOutput = relativePath.startsWith('output/')
@@ -155,7 +156,8 @@ function describesScreenshot(text, relativePath) {
   const before = '(^|[^a-zA-Z0-9._/-])'
   const after = '(?=$|[^a-zA-Z0-9._/-]|\\.(?=$|\\s))'
   const named = (path) => new RegExp(`${before}${escaped(path)}${after}`).test(text)
-  const directory = segments.length > 2 ? `${parent}/` : null
+  const directory = parent && !SHARED_SCREENSHOT_ROOT.test(segments.at(-2))
+    ? `${parent}/` : null
   const paths = [relativePath, withinOutput, directory].filter(Boolean)
   if (paths.some((path) => named(path) || named(`./${path}`))) return true
   if (inOutput && [withinOutput, directory].filter(Boolean).some((path) => (
