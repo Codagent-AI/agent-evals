@@ -158,7 +158,12 @@ function implementationUsageSection(result) {
     ['Implementation total', 'Value'],
     keyValueRows(cost?.total ?? cost?.implementation ?? {}),
   )
-  const stepsByTopLevel = Map.groupBy(cost?.steps ?? [], (entry) => entry.top_level_step)
+  const stepsByTopLevel = new Map()
+  for (const step of cost?.steps ?? []) {
+    const group = stepsByTopLevel.get(step.top_level_step) ?? []
+    group.push(step)
+    stepsByTopLevel.set(step.top_level_step, group)
+  }
   const stepRows = []
   for (const rollup of cost?.step_rollup ?? []) {
     stepRows.push([
