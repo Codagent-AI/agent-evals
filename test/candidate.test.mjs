@@ -12,6 +12,7 @@ import {
   verifyCandidateDelivery,
   verifyRecordedDeliveryIdentity,
 } from '../evals/agent-runner/and-scene/lib/candidate.mjs'
+import { buildCandidateEvidenceManifest, testedRevisionFacts, validateEvidenceLineage } from '../evals/agent-runner/and-scene/lib/evidence.mjs'
 
 function exec(command, args, options = {}) {
   return spawnSync(command, args, { encoding: 'utf8', ...options })
@@ -1250,4 +1251,86 @@ test('resume revalidates the recorded branch, PR, and final SHA before Runner ac
     }),
     /pull request.*head_sha|head_sha.*recorded/i,
   )
+})
+
+test('runner main session layout produces verified scoring lineage and nested delivery identity', async () => {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
+  const sessionDir = join(repo.root, 'session')
+  const runDir = join(repo.root, 'run')
+  await prepareCandidateWorktree({
+    repo: repo.source,
+    worktree,
+    ref: repo.fixture,
+    resume: false,
+    runId: 'run-layout',
+    kind: 'candidate',
+    exec,
+  })
+  await mkdir(join(worktree, 'openspec/changes/create-and-scene'), { recursive: true })
+  await mkdir(join(sessionDir, 'output', 'acceptance-screenshots'), { recursive: true })
+  const finalSha = git(worktree, 'rev-parse', 'HEAD')
+  const output = {
+    'exploration-log.md': `# Exploration log\nTested revision: ${finalSha}\nObserved navigation in acceptance-screenshots/step-2.png.\n`,
+    'acceptance-tested-revision.txt': `${finalSha}\n`,
+    'acceptance-assumptions.md': 'No unresolved assumptions.\n',
+    'acceptance-findings.md': 'No findings.\n',
+    'acceptance-handoff.md': `# Final handoff\nFinal revision: ${finalSha}\nExploration: exploration-log.md\nScreenshot: acceptance-screenshots/step-2.png\n`,
+    'acceptance-round-status.txt': `READY ${finalSha}\n`,
+    'acceptance-preparation-status.txt': 'ACCEPTANCE_COMPLETE\n',
+    'acceptance-screenshots/step-2.png': Buffer.from([137, 80, 78, 71, 1]),
+  }
+  for (const [path, content] of Object.entries(output)) {
+    await writeFile(join(sessionDir, 'output', path), content)
+  }
+  const verify = ['verify-change', 'sub:verify-change']
+  const workflowHistory = [
+    { step: 'verify-change', step_path: [...verify, 'run-validator'], event: 'step_end', outcome: 'skipped' },
+    ...['open-draft-pr', 'verify-draft-pr', 'prepare-acceptance', 'verify-acceptance-handoff']
+      .map((step) => ({ step: 'verify-change', step_path: [...verify, step], event: 'step_end', outcome: 'success' })),
+    { step: 'verify-change', step_path: ['verify-change'], event: 'step_end', outcome: 'success' },
+  ]
+  const delivery = await verifyCandidateDelivery({
+    worktree,
+    fixtureCommit: repo.fixture,
+    branch: 'eval/and-scene/run-layout',
+    expectedBase: 'main',
+    changeName: 'create-and-scene',
+    sessionDir,
+    skipValidator: true,
+    workflowHistory,
+    exec: (command, args, options) => command === 'git' && args.includes('ls-remote')
+      ? { status: 0, stdout: `${finalSha}\trefs/heads/eval/and-scene/run-layout\n` }
+      : exec(command, args, options),
+    inspectPullRequest: async () => ({
+      number: 53,
+      url: 'https://github.com/Codagent-AI/and-scene/pull/53',
+      state: 'OPEN',
+      draft: true,
+      base: 'main',
+      head_branch: 'eval/and-scene/run-layout',
+      head_sha: finalSha,
+    }),
+  })
+  const manifest = await buildCandidateEvidenceManifest({ worktree, sessionDir, runDir, delivery })
+  const screenshot = manifest.artifacts.find(({ role }) => role === 'screenshot')
+  const exploration = manifest.artifacts.find(({ role }) => role === 'exploration-log')
+  assert.equal(screenshot.verification_state, 'verified')
+  assert.equal(screenshot.capture_metadata, null)
+  assert.ok(screenshot.described_by.includes(exploration.id))
+  assert.ok(manifest.artifacts.some(({ role }) => role === 'final-handoff'))
+  const testedRevision = testedRevisionFacts({ finalSha, worktree, manifest })
+  assert.equal(testedRevision.state, 'recorded')
+  assert.equal(testedRevision.recorded.relation, 'final')
+  const lineage = validateEvidenceLineage({
+    finalSha,
+    revisions: [{ sha: finalSha, ancestor_of_final: true }],
+    testedRevision,
+  })
+  assert.equal(lineage.accepted, true)
+  assert.equal(lineage.mode, 'tested-revision-final')
+  assert.equal(delivery.final_validator.step, 'run-validator')
+  assert.deepEqual(delivery.final_validator.step_path, [...verify, 'run-validator'])
+  assert.equal(delivery.pull_request.head_sha, finalSha)
+  assert.equal(delivery.pull_request.base, 'main')
 })

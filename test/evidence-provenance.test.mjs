@@ -1311,6 +1311,7 @@ test('a screenshot is described only by its own path, whole filename, or immedia
     ['The unrelated-dir/ directory contains images.', false],
     ['See other-step-2.png for the observed state.', false],
     ['See step-2.png for the observed state.', true],
+    ['Observed acceptance-screenshots/step-2.png.', true],
     ['See acceptance-screenshots/ for the observed state.', true],
     ['See acceptance-screenshots for the observed state.', true],
   ]) {

@@ -156,7 +156,7 @@ function describesScreenshot(text, relativePath) {
   return mentions.some((mention) => {
     if (!mention) return false
     const escaped = mention.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    return new RegExp(`(^|[^a-zA-Z0-9._/-])${escaped}(?=$|[^a-zA-Z0-9._/-])`).test(text)
+    return new RegExp(`(^|[^a-zA-Z0-9._/-])${escaped}(?=$|[^a-zA-Z0-9._/-]|\\.(?=$|\\s))`).test(text)
   })
 }
 
