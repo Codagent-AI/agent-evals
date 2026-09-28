@@ -692,25 +692,34 @@ function insufficientAudits(auditResults) {
 
 function buildFocusedRejudgeRequest(request, insufficient) {
   const criteria = insufficient.map(({ id }) => id)
+  const schema = judgeResultSchemaFor(request.schema ?? SOURCE_JUDGE_RESULT_SCHEMA, criteria)
+  const promptBody = [
+    request.prompt_body ?? request.prompt ?? '',
+    '',
+    '# Previous source audit found insufficient citations',
+    'The prior verdict could not be verified from the paths it cited. Re-inspect the',
+    'neutral source. Return the verdict the source supports and cite every exact',
+    'implementation and focused-test path needed to prove it. Do not repeat an',
+    'unsupported pass or fail, and do not cite ad-hoc command output. If the cited',
+    'implementation itself is an explicit counterexample, explain that source mechanism',
+    'directly instead of claiming an uncaptured executable check.',
+    ...insufficient.map((result) => (
+      `- ${result.id}: ${bounded(result.rationale, MAX_RATIONALE_CHARS)}`
+    )),
+  ].join('\n')
   return {
     ...request,
     criteria,
+    schema,
     rejudge_stage: 'source-citation-retry',
+    prompt_body: promptBody,
     prompt: [
-      request.prompt,
-      '',
-      '# Previous source audit found insufficient citations',
-      'The prior verdict could not be verified from the paths it cited. Re-inspect the',
-      'neutral source. Return the verdict the source supports and cite every exact',
-      'implementation and focused-test path needed to prove it. Do not repeat an',
-      'unsupported pass or fail, and do not cite ad-hoc command output. If the cited',
-      'implementation itself is an explicit counterexample, explain that source mechanism',
-      'directly instead of claiming an uncaptured executable check.',
-      ...insufficient.map((result) => (
-        `- ${result.id}: ${bounded(result.rationale, MAX_RATIONALE_CHARS)}`
-      )),
+      promptBody,
       '',
       `Return results for exactly these criterion IDs and no others: ${criteria.join(', ')}`,
+      '',
+      '# Response',
+      `Reply with JSON matching this schema: ${JSON.stringify(schema)}`,
     ].join('\n'),
   }
 }

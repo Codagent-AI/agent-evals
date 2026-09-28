@@ -865,6 +865,53 @@ test('insufficient audit citations trigger a focused re-judge instead of a produ
   }
 })
 
+test('focused source re-judge and its missing-ID retry keep narrowed schemas and audit guidance', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const sourceRoot = join(root, 'source')
+  await mkdir(join(sourceRoot, 'src/presentation-kit'), { recursive: true })
+  await writeFile(join(sourceRoot, 'src/presentation-kit/Scene.tsx'), 'export function Scene() { return null }\n')
+  const request = buildJudgeRequest({
+    rubrics, job: 'scene-kit', authority, sources: ['src/presentation-kit/Scene.tsx'],
+    neutral: { root, source_root: sourceRoot, requirements_root: join(root, 'requirements') },
+  })
+  const focusedIds = request.criteria.slice(-2)
+  const responses = [
+    judgeOutput(request.criteria),
+    auditOutput(request.criteria, Object.fromEntries(focusedIds.map((id) => [id, 'insufficient']))),
+    judgeOutput(focusedIds.slice(0, 1)),
+    judgeOutput(focusedIds.slice(1)),
+    auditOutput(focusedIds),
+  ]
+  const requests = []
+
+  try {
+    const result = await runJudgeJob({
+      request,
+      invoke: async (next) => {
+        requests.push(next)
+        return responses.shift()
+      },
+    })
+
+    assert.equal(result.ok, true)
+    assert.deepEqual(result.results.map(({ id }) => id), request.criteria)
+    assert.deepEqual(requests[2].criteria, focusedIds)
+    assert.deepEqual(requests[2].schema.properties.results.items.properties.id.enum, focusedIds)
+    assert.equal(requests[2].schema.properties.results.minItems, 2)
+    assert.equal(requests[2].schema.properties.results.maxItems, 2)
+    assert.equal(requests[2].prompt.match(/Reply with JSON matching this schema:/g)?.length, 1)
+    assert.deepEqual(requests[3].criteria, focusedIds.slice(1))
+    assert.deepEqual(requests[3].schema.properties.results.items.properties.id.enum, focusedIds.slice(1))
+    assert.equal(requests[3].schema.properties.results.minItems, 1)
+    assert.equal(requests[3].schema.properties.results.maxItems, 1)
+    assert.match(requests[3].prompt, /Previous source audit found insufficient citations/)
+    assert.match(requests[3].prompt, /omits the required mechanism/)
+    assert.equal(requests[3].prompt.match(/Reply with JSON matching this schema:/g)?.length, 1)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('an insufficient primary fail is re-judged instead of charged to the candidate', async () => {
   const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
