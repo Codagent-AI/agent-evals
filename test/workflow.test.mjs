@@ -12,6 +12,7 @@ import {
 } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
 import {
   checkWorkflowHistory,
+  checkBoundary,
   classifyRunnerRun,
   finalWorkflowStepEntry,
   parseWorkflowContract,
@@ -399,9 +400,9 @@ test('delegated history still rejects prohibited effects inside verify-change', 
 })
 
 test('the final workflow step entry is found in either layout', () => {
-  assert.deepEqual(finalWorkflowStepEntry(requiredHistory, 'run-validator'), requiredHistory[0])
+  assert.deepEqual(finalWorkflowStepEntry(requiredHistory, 'run-validator'), { ...requiredHistory[0], step_path: ['run-validator'] })
   const delegated = delegatedHistory({ validatorOutcome: 'skipped' })
-  assert.deepEqual(finalWorkflowStepEntry(delegated, 'run-validator'), delegated[2])
+  assert.deepEqual(finalWorkflowStepEntry(delegated, 'run-validator'), { ...delegated[2], step: 'run-validator' })
   assert.equal(finalWorkflowStepEntry(delegated.slice(3), 'run-validator'), null)
 })
 
@@ -512,4 +513,12 @@ test('unverifiable run, process, and workflow identity never starts another run'
     assert.equal(decision.action, 'error')
     assert.notEqual(decision.action, 'start')
   }
+})
+
+
+test('boundary reports the leaf of a nested observed step and retains its path', () => {
+  const path = [...VERIFY, 'run-validator']
+  const boundary = checkBoundary({ observedSteps: [{ step: 'verify-change', step_path: path, outcome: 'success' }] })
+  assert.equal(boundary.last_observed_step, 'run-validator')
+  assert.deepEqual(boundary.step_path, path)
 })

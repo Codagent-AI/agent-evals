@@ -258,7 +258,8 @@ function isFinalStepEntry(entry, prefix, step) {
 export function finalWorkflowStepEntry(history = [], step) {
   const entries = history.filter((entry) => normalizeHistoryEntry(entry).step)
   const prefix = finalStepPrefix(entries.map(normalizeHistoryEntry))
-  return entries.findLast((entry) => isFinalStepEntry(normalizeHistoryEntry(entry), prefix, step)) ?? null
+  const entry = entries.findLast((candidate) => isFinalStepEntry(normalizeHistoryEntry(candidate), prefix, step))
+  return entry ? { ...entry, step, step_path: historyStepPath(entry) } : null
 }
 
 export function checkWorkflowHistory(history = [], { skipValidator = false } = {}) {
@@ -302,7 +303,12 @@ export function checkBoundary({ observedSteps, skipValidator = false }) {
   return {
     ok: checked.ok,
     unexpected_step: checked.prohibited_effects[0]?.step ?? null,
-    last_observed_step: checked.observed_steps.at(-1) ?? null,
+    last_observed_step: observedSteps.length > 0
+      ? historyStepPath(normalizeHistoryEntry(observedSteps.at(-1))).at(-1)
+      : null,
+    step_path: observedSteps.length > 0
+      ? historyStepPath(normalizeHistoryEntry(observedSteps.at(-1)))
+      : null,
     ...checked,
   }
 }

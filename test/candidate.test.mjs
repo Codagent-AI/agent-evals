@@ -1063,7 +1063,7 @@ test('delivery verification accepts verify-change delivery and its shared sessio
     }),
   })
 
-  assert.deepEqual(delivery.final_validator, workflowHistory[2])
+  assert.deepEqual(delivery.final_validator, { ...workflowHistory[2], step: 'run-validator' })
   const recorded = delivery.acceptance_artifacts.map(({ path }) => basename(path))
   for (const file of ['acceptance-handoff.md', 'acceptance-findings.md', 'acceptance-assumptions.md', 'exploration-log.md']) {
     assert.ok(recorded.includes(file), `${file} in ${JSON.stringify(recorded)}`)
