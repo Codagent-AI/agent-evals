@@ -413,6 +413,10 @@ export async function resolveAttemptCost({ attempt, catalog, invoke, authority =
     return unresolved(`token category ${malformed} has an unusable count`)
   }
   if (billedCategories(tokens).length === 0) {
+    if (tokens && typeof tokens === 'object' && !Array.isArray(tokens)
+      && Object.keys(tokens).length > 0 && Object.values(tokens).every((count) => count === 0)) {
+      return unresolved('reported token usage is zero')
+    }
     return unresolved('usage has no complete billing-token partition to price against the catalog')
   }
 

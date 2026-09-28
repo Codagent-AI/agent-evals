@@ -621,6 +621,29 @@ test('available Codex usage without a billing partition reports the partition bl
   }
 })
 
+test('available usage with only zero billing counts reports zero usage without asking the judge', async () => {
+  let judgeCalls = 0
+  const resolution = await resolveAttemptCost({
+    attempt: attempt({ usage: { state: 'available', billing_tokens: { input: 0, output: 0 } } }),
+    catalog: await loadedCatalog(),
+    invoke: async () => { judgeCalls += 1; return '{}' },
+  })
+
+  assert.equal(resolution.state, 'unavailable')
+  assert.equal(resolution.reason, 'reported token usage is zero')
+  assert.equal(judgeCalls, 0)
+})
+
+test('null billing tokens still report a missing partition instead of zero usage', async () => {
+  const resolution = await resolveAttemptCost({
+    attempt: attempt({ usage: { state: 'available', billing_tokens: null } }),
+    catalog: await loadedCatalog(),
+    invoke: async () => { throw new Error('judge must not be called') },
+  })
+
+  assert.equal(resolution.reason, 'usage has no complete billing-token partition to price against the catalog')
+})
+
 test('billable usage reaches the judge when the catalog cannot price it', async () => {
   const loaded = await loadedCatalog()
   const unavailableCatalog = { ...loaded, state: 'unavailable', entries: null }
