@@ -830,7 +830,7 @@ dirty Agent Runner or Agent Skills checkout, a missing or non-conforming
 `implement-change-v1.0.yaml` or delegated `verify-change-v1.0.yaml`, a missing
 Codagent skill named by the workflow or a sub-workflow it invokes, missing
 publishing credentials, an invalid role profile with its role and field, a
-role-profile mismatch on resume, a resume-provenance change, or a stale
+role-profile mismatch on resume, a resume-provenance change (including a changed delegated verification workflow when recorded), or a stale
 run-state identity.
 
 To diagnose or review scoring behavior, run `--calibrate` and read
