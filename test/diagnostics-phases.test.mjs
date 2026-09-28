@@ -376,7 +376,7 @@ test('an attempt priced from models.dev reports its rates and catalog hash', asy
   assert.equal(record.cost.total.state, 'available')
   assert.equal(record.cost.total.estimated_api_cost_usd, 3 + 1.5)
   assert.equal(record.cost.rows[0].model, 'sonnet')
-  assert.equal(record.cost.rows[0].verification, 'verified')
+  assert.equal(record.cost.rows[0].verification, 'catalog')
   assert.equal(record.pricing.catalog.url, MODELS_DEV_URL)
   assert.equal(record.pricing.catalog.sha256, hashString(CATALOG_BODY))
 })
