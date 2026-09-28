@@ -1,8 +1,19 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'
 import { deriveBillingTokens, refreshBillingTokens } from '../evals/agent-runner/and-scene/lib/runner-metrics.mjs'
-import { calculateRateCost, loadFallbackRates, lookupFallbackRate, resolveAttemptCost, validateFallbackRates } from '../evals/agent-runner/and-scene/lib/pricing.mjs'
+import {
+  calculateRateCost,
+  loadFallbackRates,
+  lookupFallbackRate,
+  resolveAttemptCost,
+  resolveImplementationPricing,
+  validateFallbackRates,
+} from '../evals/agent-runner/and-scene/lib/pricing.mjs'
 import { aggregateImplementationCost } from '../evals/agent-runner/and-scene/lib/cost.mjs'
+import { renderReport } from '../evals/agent-runner/and-scene/lib/report.mjs'
+
+const readJson = async (relativePath) => JSON.parse(await readFile(new URL(relativePath, import.meta.url)))
 
 const available = (value) => ({ availability: 'available', value })
 const missing = (reason) => ({ availability: 'unavailable', reason })
@@ -12,6 +23,22 @@ const envelopes = {
   normalized_total: available(1_659_009),
 }
 const table = await loadFallbackRates()
+
+// The trimmed d7f384ba-…-rep-1 attempts with billing re-derived from their
+// retained envelopes, and the pinned models.dev excerpt.
+async function loadRetainedAttempts() {
+  const fixture = await readJson('./fixtures/feature-43-retained-attempts.json')
+  const entries = await readJson('./fixtures/feature-43-catalog.json')
+  return {
+    attempts: refreshBillingTokens(fixture.attempts),
+    catalog: { state: 'available', url: 'https://models.dev/api.json', retrieved_at: '2026-09-27', sha256: 'fixture', entries },
+  }
+}
+
+function costsFromSource(pricing, attempts, usageSource) {
+  const ids = new Set(attempts.filter((attempt) => attempt.usage_source === usageSource).map((attempt) => attempt.attempt_id))
+  return pricing.costs.filter((cost) => ids.has(cost.attempt_id))
+}
 
 test('checked-in fallback is valid and exact-match only', () => {
   assert.equal(table.state, 'available')
@@ -73,21 +100,15 @@ test('unresolved attempt leaves step amount unavailable with known subtotal', ()
 })
 
 test('retained result replay prices Runner Codex and keeps Validator gaps', async () => {
-  const { readFile } = await import('node:fs/promises')
-  const { resolveImplementationPricing } = await import('../evals/agent-runner/and-scene/lib/pricing.mjs')
-  const fixture = JSON.parse(await readFile(new URL('./fixtures/feature-43-retained-attempts.json', import.meta.url)))
-  const entries = JSON.parse(await readFile(new URL('./fixtures/feature-43-catalog.json', import.meta.url)))
-  const attempts = refreshBillingTokens(fixture.attempts)
-  const pricing = await resolveImplementationPricing({ attempts,
-    catalog: { state: 'available', url: 'https://models.dev/api.json', retrieved_at: '2026-09-27', sha256: 'fixture', entries },
-    fallbackTable: table, invoke: null })
-  const runnerCodex = pricing.costs.filter((cost) => attempts.find((attempt) => attempt.attempt_id === cost.attempt_id)?.usage_source === 'codex:turn.completed')
+  const { attempts, catalog } = await loadRetainedAttempts()
+  const pricing = await resolveImplementationPricing({ attempts, catalog, fallbackTable: table, invoke: null })
+  const runnerCodex = costsFromSource(pricing, attempts, 'codex:turn.completed')
   assert.equal(runnerCodex.length, 11)
   assert.ok(runnerCodex.every((cost) => cost.state === 'resolved' && cost.source === 'models.dev' && cost.verification === 'estimated'))
-  const validators = pricing.costs.filter((cost) => attempts.find((attempt) => attempt.attempt_id === cost.attempt_id)?.usage_source === 'agent-validator:metrics')
+  const validators = costsFromSource(pricing, attempts, 'agent-validator:metrics')
   assert.equal(validators.length, 16)
   assert.ok(validators.every((cost) => cost.state === 'unavailable' && /exact provider and model identity/.test(cost.reason)))
-  const claude = pricing.costs.filter((cost) => attempts.find((attempt) => attempt.attempt_id === cost.attempt_id)?.usage_source === 'claude:result-event')
+  const claude = costsFromSource(pricing, attempts, 'claude:result-event')
   assert.ok(claude.every((cost) => cost.state === 'resolved' && cost.verification === 'reported'))
   const cost = aggregateImplementationCost({ attempts, costs: pricing.costs })
   assert.equal(cost.total.state, 'unavailable')
@@ -112,9 +133,7 @@ test('multi-model reported attempt keeps model usage and one undivided cost row'
 })
 
 test('historical result and new step schedule both render safely', async () => {
-  const { readFile } = await import('node:fs/promises')
-  const { renderReport } = await import('../evals/agent-runner/and-scene/lib/report.mjs')
-  const historical = JSON.parse(await readFile(new URL('../evals/agent-runner/and-scene/results/d7f384ba-0e94-4926-852e-6662fec752be-rep-1/result.json', import.meta.url)))
+  const historical = await readJson('../evals/agent-runner/and-scene/results/d7f384ba-0e94-4926-852e-6662fec752be-rep-1/result.json')
   const oldHtml = renderReport(historical, { current: historical })
   assert.match(oldHtml, /Per-step cost was not recorded for this result/)
   const cost = aggregateImplementationCost({ attempts: [{ attempt_id: 'a', invoked_cli: true, step: '<script>',
@@ -130,17 +149,13 @@ test('historical result and new step schedule both render safely', async () => {
 })
 
 test('complete retained attempt pricing reconciles rows, steps, and total', async () => {
-  const { readFile } = await import('node:fs/promises')
-  const { resolveImplementationPricing } = await import('../evals/agent-runner/and-scene/lib/pricing.mjs')
-  const fixture = JSON.parse(await readFile(new URL('./fixtures/feature-43-retained-attempts.json', import.meta.url)))
-  const entries = JSON.parse(await readFile(new URL('./fixtures/feature-43-catalog.json', import.meta.url)))
-  const attempts = refreshBillingTokens(fixture.attempts)
+  const { attempts, catalog } = await loadRetainedAttempts()
+  // Stands in for agent-validator#160: Validator attempts gain an exact identity.
   for (const attempt of attempts.filter((entry) => entry.usage_source === 'agent-validator:metrics')) {
-    attempt.provider = 'openai'; attempt.model = 'gpt-6-luna'
+    attempt.provider = 'openai'
+    attempt.model = 'gpt-6-luna'
   }
-  const pricing = await resolveImplementationPricing({ attempts,
-    catalog: { state: 'available', url: 'https://models.dev/api.json', retrieved_at: '2026-09-27', sha256: 'fixture', entries },
-    fallbackTable: table, invoke: null })
+  const pricing = await resolveImplementationPricing({ attempts, catalog, fallbackTable: table, invoke: null })
   assert.equal(pricing.complete, true)
   assert.equal(pricing.verified, false)
   assert.equal(pricing.verification, 'estimated')
@@ -150,7 +165,6 @@ test('complete retained attempt pricing reconciles rows, steps, and total', asyn
   assert.ok(Math.abs(cost.rows.reduce((sum, row) => sum + (row.cost.amount_usd ?? 0), 0) - total) < 1e-9)
   assert.ok(Math.abs(cost.step_rollup.reduce((sum, row) => sum + row.amount_usd, 0) - total) < 1e-9)
 })
-
 
 test('aggregate tokens do not all receive a high context rate from one long request', async () => {
   const attempt = { attempt_id: 'mixed-requests', invoked_cli: true, provider: 'openai', model: 'gpt-6-luna',

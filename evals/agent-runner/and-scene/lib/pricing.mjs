@@ -8,28 +8,67 @@
 // token category that has no rate so the remaining ones add up to something.
 // Either would turn "we do not know" into a figure someone would quote.
 import { readFile } from 'node:fs/promises'
-import { relative, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { bounded } from './browser-eval.mjs'
 import { hashString } from './persistence.mjs'
 
 export const MODELS_DEV_URL = 'https://models.dev/api.json'
 
-export const VERIFICATION_ORDER = ['reported', 'catalog', 'estimated', 'unverified']
+const SUITE_DIR = dirname(dirname(fileURLToPath(import.meta.url)))
+const REPOSITORY_ROOT = resolve(SUITE_DIR, '../../..')
+export const FALLBACK_RATES_PATH = join(SUITE_DIR, 'pricing/fallback-rates.json')
+
+// Rate keys a catalog or fallback-table entry may carry. Input and output are
+// required of every fallback row; the rest are priced only when present.
+const RATE_KEYS = ['input', 'output', 'cache_read', 'cache_write', 'reasoning']
+const REQUIRED_RATE_KEYS = ['input', 'output']
+const REQUIRED_FALLBACK_FIELDS = ['provider', 'model', 'source_url', 'retrieved_date']
+
+// Strongest first. A figure combined from several costs is only as certain as
+// its least certain part.
+const VERIFICATION_ORDER = ['reported', 'catalog', 'estimated', 'unverified']
+
 export function weakestVerification(states = []) {
-  return states.filter((state) => VERIFICATION_ORDER.includes(state))
-    .reduce((weakest, state) => !weakest || VERIFICATION_ORDER.indexOf(state) > VERIFICATION_ORDER.indexOf(weakest) ? state : weakest, null)
+  const ranks = states.map((state) => VERIFICATION_ORDER.indexOf(state)).filter((rank) => rank >= 0)
+  return ranks.length > 0 ? VERIFICATION_ORDER[Math.max(...ranks)] : null
+}
+
+// The verification disclosure shared by the pricing summary and the cost total.
+export function summarizeVerification(states = []) {
+  return {
+    verification: weakestVerification(states),
+    includes_estimated: states.includes('estimated'),
+    includes_unverified: states.includes('unverified'),
+  }
 }
 
 export function validateFallbackRates(table) {
-  if (table?.schema_version !== 1 || !Array.isArray(table.rows)) throw new Error('fallback table needs schema_version 1 and rows')
+  if (table?.schema_version !== 1 || !Array.isArray(table.rows)) {
+    throw new Error('fallback table needs schema_version 1 and rows')
+  }
   const seen = new Set()
   for (const row of table.rows) {
-    if (!row || !['provider', 'model', 'source_url', 'retrieved_date'].every((key) => typeof row[key] === 'string' && row[key])) throw new Error('fallback row is missing a required field')
-    if (row.unit !== PRICING_UNIT || !/^https:\/\//.test(row.source_url) || !/^\d{4}-\d{2}-\d{2}$/.test(row.retrieved_date)) throw new Error('fallback row has invalid unit or source')
-    for (const key of ['input', 'output']) if (!nonNegative(row.rates?.[key])) throw new Error(`fallback row has invalid ${key} rate`)
-    for (const key of ['cache_read', 'cache_write', 'reasoning']) if (row.rates[key] !== undefined && !nonNegative(row.rates[key])) throw new Error(`fallback row has invalid ${key} rate`)
+    if (!row || !REQUIRED_FALLBACK_FIELDS.every((key) => typeof row[key] === 'string' && row[key])) {
+      throw new Error('fallback row is missing a required field')
+    }
+    const validSource = /^https:\/\//.test(row.source_url) && /^\d{4}-\d{2}-\d{2}$/.test(row.retrieved_date)
+    if (row.unit !== PRICING_UNIT || !validSource) {
+      throw new Error('fallback row has invalid unit or source')
+    }
+    for (const key of RATE_KEYS) {
+      const rate = row.rates?.[key]
+      const required = REQUIRED_RATE_KEYS.includes(key)
+      if ((required || rate !== undefined) && !nonNegative(rate)) {
+        throw new Error(`fallback row has invalid ${key} rate`)
+      }
+    }
     for (const tier of row.rates.tiers ?? []) {
-      if (tier.tier?.type !== 'context' || !nonNegative(tier.tier.size) || !nonNegative(tier.input) || !nonNegative(tier.output)) throw new Error('fallback row has invalid context tier')
+      const validTier = tier.tier?.type === 'context'
+        && nonNegative(tier.tier.size)
+        && nonNegative(tier.input)
+        && nonNegative(tier.output)
+      if (!validTier) throw new Error('fallback row has invalid context tier')
     }
     const key = JSON.stringify([row.provider, row.model])
     if (seen.has(key)) throw new Error('duplicate fallback provider/model row')
@@ -38,8 +77,10 @@ export function validateFallbackRates(table) {
   return table
 }
 
-export async function loadFallbackRates({ path = 'evals/agent-runner/and-scene/pricing/fallback-rates.json' } = {}) {
-  const displayPath = relative(process.cwd(), resolve(path))
+export async function loadFallbackRates({ path = FALLBACK_RATES_PATH } = {}) {
+  // Recorded relative to the repository so a result names the same file
+  // whichever directory the evaluation ran from.
+  const displayPath = relative(REPOSITORY_ROOT, resolve(path))
   let sha256 = null
   try {
     const body = await readFile(path, 'utf8')
@@ -246,33 +287,69 @@ export function calculateRateCost({ cost, tokens, assumptions = [], promptBounds
   if (malformed) return unavailable(`token category ${malformed} has an unusable count`)
   const billed = billedCategories(tokens)
   if (billed.length === 0) return unavailable('no billable token usage was reported')
-  const definitions = [
-    ...(cost.tiers ?? []).filter((tier) => tier.tier?.type === 'context').map((tier) => ({ threshold: tier.tier.size, rates: tier })),
-    ...Object.entries(cost).filter(([key]) => /^context_over_\d+k$/.test(key)).map(([key, rates]) => ({ threshold: Number(key.match(/\d+/)[0]) * 1000, rates })),
-  ]
-  let selected = cost
-  let basis = 'no_tier'
-  if (definitions.length) {
-    const low = Math.min(...definitions.map((item) => item.threshold))
-    const high = Math.max(...definitions.map((item) => item.threshold))
-    const rateKeys = ['input', 'output', 'cache_read', 'cache_write', 'reasoning']
-    const sameRates = definitions.every((item) => rateKeys.every((key) => item.rates[key] === definitions[0].rates[key]))
-    if (Number.isFinite(promptBounds.upper) && promptBounds.upper <= low) basis = 'within_lowest'
-    else if (promptBounds.single_request === true && Number.isFinite(promptBounds.lower) && promptBounds.lower > high && sameRates) {
-      basis = 'above_highest'; selected = definitions[0].rates
-    } else if (Number.isFinite(promptBounds.lower)) { basis = 'ambiguous'; assumptions = [...assumptions, 'context_tier_ambiguous_priced_at_base'] }
-    else { basis = 'unknown'; assumptions = [...assumptions, 'context_tier_unknown_priced_at_base'] }
-  }
-  const rates = {}; let amount = 0
+
+  const definitions = contextTierDefinitions(cost)
+  const tier = selectContextTier(definitions, promptBounds)
+  const selected = tier.rates ?? cost
+  const rates = {}
+  let amount = 0
   for (const [category, count] of billed) {
     const rateKey = CATEGORY_RATE_KEYS[category]
     const rate = rateKey ? selected[rateKey] : undefined
     if (!nonNegative(rate)) return unavailable(`rate source has no rate for token category ${category}`)
-    rates[category] = rate; amount += count * rate / TOKENS_PER_UNIT
+    rates[category] = rate
+    amount += (count * rate) / TOKENS_PER_UNIT
   }
-  return { state: 'resolved', amount_usd: amount, reason: null, rates, unit: PRICING_UNIT,
-    token_categories: billed.map(([category]) => category), assumptions,
-    context_tier: { thresholds: definitions.map((item) => item.threshold), applied: basis === 'above_highest' ? 'tier' : 'base', basis } }
+  return {
+    state: 'resolved',
+    amount_usd: amount,
+    reason: null,
+    rates,
+    unit: PRICING_UNIT,
+    token_categories: billed.map(([category]) => category),
+    assumptions: tier.assumption ? [...assumptions, tier.assumption] : [...assumptions],
+    context_tier: {
+      thresholds: definitions.map((definition) => definition.threshold),
+      applied: tier.rates ? 'tier' : 'base',
+      basis: tier.basis,
+    },
+  }
+}
+
+// Every context-size tier a rate source declares, in either of the catalog's
+// two shapes. Neither shape is preferred: when they disagree the tier is
+// ambiguous, not resolved by precedence.
+function contextTierDefinitions(cost) {
+  const structured = (cost.tiers ?? [])
+    .filter((tier) => tier.tier?.type === 'context')
+    .map((tier) => ({ threshold: tier.tier.size, rates: tier }))
+  const legacy = Object.entries(cost)
+    .filter(([key]) => /^context_over_\d+k$/.test(key))
+    .map(([key, rates]) => ({ threshold: Number(key.match(/\d+/)[0]) * 1000, rates }))
+  return [...structured, ...legacy]
+}
+
+// Base rates apply unless the billed tokens are known to be one request whose
+// prompt exceeds every declared threshold under identical tier rates. Any other
+// uncertainty prices at base and is disclosed as an assumption.
+function selectContextTier(definitions, promptBounds) {
+  if (definitions.length === 0) return { basis: 'no_tier', rates: null, assumption: null }
+  const low = Math.min(...definitions.map((definition) => definition.threshold))
+  const high = Math.max(...definitions.map((definition) => definition.threshold))
+  const sameRates = definitions.every((definition) => (
+    RATE_KEYS.every((key) => definition.rates[key] === definitions[0].rates[key])
+  ))
+  if (Number.isFinite(promptBounds.upper) && promptBounds.upper <= low) {
+    return { basis: 'within_lowest', rates: null, assumption: null }
+  }
+  const lowerKnown = Number.isFinite(promptBounds.lower)
+  if (promptBounds.single_request === true && lowerKnown && promptBounds.lower > high && sameRates) {
+    return { basis: 'above_highest', rates: definitions[0].rates, assumption: null }
+  }
+  if (lowerKnown) {
+    return { basis: 'ambiguous', rates: null, assumption: 'context_tier_ambiguous_priced_at_base' }
+  }
+  return { basis: 'unknown', rates: null, assumption: 'context_tier_unknown_priced_at_base' }
 }
 
 export function calculateCatalogCost({ entry, tokens }) {
@@ -280,12 +357,32 @@ export function calculateCatalogCost({ entry, tokens }) {
   return calculateRateCost({ cost: entry.cost, tokens })
 }
 
+// The attempt's total input bounds every request's prompt from above. Nothing
+// currently reports a per-request size, so `lower` and `single_request` are only
+// set by a producer that does.
 function promptBoundsOf(item) {
-  const upper = item.usage?.token_envelopes?.input_total?.value
+  const inputTotal = item.usage?.token_envelopes?.input_total?.value
   const tokens = item.usage?.billing_tokens
-  return { upper: Number.isFinite(upper) ? upper : (tokens ? (tokens.input ?? 0) + (tokens.cached_input ?? 0) + (tokens.cache_write ?? 0) : null),
+  const billedInput = tokens
+    ? (tokens.input ?? 0) + (tokens.cached_input ?? 0) + (tokens.cache_write ?? 0)
+    : null
+  return {
+    upper: Number.isFinite(inputTotal) ? inputTotal : billedInput,
     lower: item.max_request_prompt_tokens ?? null,
-    single_request: item.request_count === 1 || item.usage?.request_count === 1 }
+    single_request: item.request_count === 1 || item.usage?.request_count === 1,
+  }
+}
+
+function rateSourceProvenance({ source, entry, catalog, fallbackTable }) {
+  if (source === 'models.dev') {
+    return { url: catalog.url, retrieved_at: catalog.retrieved_at, response_sha256: catalog.sha256 }
+  }
+  return {
+    table_path: fallbackTable.path,
+    table_sha256: fallbackTable.sha256,
+    source_url: entry.row.source_url,
+    retrieved_date: entry.row.retrieved_date,
+  }
 }
 
 export function buildPricingRequest({ attempt, authority }) {
@@ -423,7 +520,13 @@ export async function resolveAttemptCost({ attempt, catalog, fallbackTable = nul
           invoked_cli: true,
           provider: allocation.provider,
           model: allocation.model,
-          usage: { state: 'available', billing_tokens: tokens, billing_assumptions: allocation.usage?.billing_assumptions ?? [], billing_derivation: allocation.usage?.billing_derivation ?? null, token_envelopes: allocation.usage?.token_envelopes },
+          usage: {
+            state: 'available',
+            billing_tokens: tokens,
+            billing_assumptions: allocation.usage.billing_assumptions ?? [],
+            billing_derivation: allocation.usage.billing_derivation ?? null,
+            token_envelopes: allocation.usage.token_envelopes,
+          },
           max_request_prompt_tokens: allocation.max_request_prompt_tokens,
           cost: { state: 'unavailable', amount_usd: null },
           provider_reported_costs: [],
@@ -476,39 +579,56 @@ export async function resolveAttemptCost({ attempt, catalog, fallbackTable = nul
   }
 
   const assumptions = attempt.usage?.billing_assumptions ?? []
+  const billingDerivation = attempt.usage?.billing_derivation ?? null
+  const promptBounds = promptBoundsOf(attempt)
   const failures = []
   for (const [source, entry] of [
     ['models.dev', lookupCatalogEntry(catalog, attempt.provider, attempt.model)],
     ['fallback-table', lookupFallbackRate(fallbackTable, attempt.provider, attempt.model)],
   ]) {
-    const calculated = entry ? calculateRateCost({ cost: entry.cost, tokens, assumptions: [...assumptions], promptBounds: promptBoundsOf(attempt) }) : unavailable('no exact provider/model match')
-    if (calculated.state === 'resolved') {
-      return { ...base, state: 'resolved', amount_usd: calculated.amount_usd, known_subtotal_usd: calculated.amount_usd,
-        source, verification: calculated.assumptions.length ? 'estimated' : 'catalog', reason: null,
-        provenance: { requested_provider: attempt.provider, requested_model: attempt.model,
-          matched_provider: entry.provider, matched_model: entry.model, rates: calculated.rates,
-          unit: calculated.unit, token_categories: calculated.token_categories,
-          assumptions: calculated.assumptions, billing_derivation: attempt.usage?.billing_derivation ?? null,
-          context_tier: calculated.context_tier, rate_source: source,
-          ...(source === 'models.dev' ? { url: catalog.url, retrieved_at: catalog.retrieved_at, response_sha256: catalog.sha256 }
-            : { table_path: fallbackTable.path, table_sha256: fallbackTable.sha256, source_url: entry.row.source_url, retrieved_date: entry.row.retrieved_date }) },
-      }
+    const calculated = calculateRateCost({ cost: entry?.cost, tokens, assumptions, promptBounds })
+    if (calculated.state !== 'resolved') {
+      failures.push(`${source}: ${calculated.reason}`)
+      continue
     }
-    failures.push(`${source}: ${calculated.reason}`)
+    return {
+      ...base,
+      state: 'resolved',
+      amount_usd: calculated.amount_usd,
+      known_subtotal_usd: calculated.amount_usd,
+      source,
+      verification: calculated.assumptions.length > 0 ? 'estimated' : 'catalog',
+      reason: null,
+      provenance: {
+        requested_provider: attempt.provider,
+        requested_model: attempt.model,
+        matched_provider: entry.provider,
+        matched_model: entry.model,
+        rates: calculated.rates,
+        unit: calculated.unit,
+        token_categories: calculated.token_categories,
+        assumptions: calculated.assumptions,
+        billing_derivation: billingDerivation,
+        context_tier: calculated.context_tier,
+        rate_source: source,
+        ...rateSourceProvenance({ source, entry, catalog, fallbackTable }),
+      },
+    }
   }
+  const lookupFailures = failures.join('; ')
 
   if (!invoke) {
-    return unresolved(failures.join("; "))
+    return unresolved(lookupFailures)
   }
 
   let finding
   try {
     finding = parsePricingFinding(await invoke(buildPricingRequest({ attempt, authority })), attempt)
   } catch (error) {
-    return unresolved(`${failures.join("; ")}; ${error.message}`)
+    return unresolved(`${lookupFailures}; ${error.message}`)
   }
   if (!finding.found) {
-    return unresolved(`${failures.join("; ")}; ${finding.reason}`)
+    return unresolved(`${lookupFailures}; ${finding.reason}`)
   }
   // An answer about another model is an answer to another question. Accepting it
   // is exactly the similar-name inference this module forbids.
@@ -545,7 +665,8 @@ export async function resolveAttemptCost({ attempt, catalog, fallbackTable = nul
       token_categories: billedCategories(tokens).map(([category]) => category),
       rationale: finding.rationale,
       judge_model: finding.judge_model,
-      assumptions, billing_derivation: attempt.usage?.billing_derivation ?? null,
+      assumptions,
+      billing_derivation: billingDerivation,
     },
   }
 }
@@ -577,14 +698,23 @@ export async function resolveImplementationPricing({ attempts = [], catalog, fal
   const unresolved = costs.filter((entry) => entry.state !== 'resolved')
   const sources = [...new Set(costs.map((entry) => entry.source).filter(Boolean))]
   const complete = unresolved.length === 0
+  const resolvedVerifications = costs
+    .filter((entry) => entry.state === 'resolved')
+    .map((entry) => entry.verification)
   return {
     costs,
     complete,
-    verification: weakestVerification(costs.filter((entry) => entry.state === 'resolved').map((entry) => entry.verification)),
-    includes_estimated: costs.some((entry) => entry.verification === 'estimated'),
-    includes_unverified: costs.some((entry) => entry.verification === 'unverified'),
-    verified: complete && costs.every((entry) => ['reported', 'catalog'].includes(entry.verification)),
-    fallback_table: fallbackTable ? { path: fallbackTable.path, state: fallbackTable.state, sha256: fallbackTable.sha256, reason: fallbackTable.reason, row_count: fallbackTable.row_count } : null,
+    ...summarizeVerification(resolvedVerifications),
+    verified: complete && resolvedVerifications.every((state) => ['reported', 'catalog'].includes(state)),
+    fallback_table: fallbackTable
+      ? {
+          path: fallbackTable.path,
+          state: fallbackTable.state,
+          sha256: fallbackTable.sha256,
+          reason: fallbackTable.reason,
+          row_count: fallbackTable.row_count,
+        }
+      : null,
     sources,
     unresolved_attempts: unresolved.map((entry) => entry.attempt_id),
     catalog: {

@@ -1,4 +1,3 @@
-import { weakestVerification } from './pricing.mjs'
 // Agent-and-model implementation cost aggregation.
 //
 // Attempts aggregate by the exact tuple `agent role + provider + model`. The
@@ -13,6 +12,7 @@ import { weakestVerification } from './pricing.mjs'
 //
 // Nothing here feeds scoring. Cost is reported so runs can be compared, and two
 // runs with identical products score identically however much they cost.
+import { summarizeVerification, weakestVerification } from './pricing.mjs'
 
 // Sums of decimal cents accumulate binary float error (0.01 + 0.02 becomes
 // 0.030000000000000002). Rounding to sub-microdollar precision keeps reported
@@ -50,9 +50,52 @@ function completeTokenTotals(totals) {
   return ['input', 'output', 'total'].every((category) => Number.isFinite(totals?.[category]))
 }
 
+// Row-level verification keeps its historical `verified` value for reported and
+// catalog prices and names the weaker states explicitly.
 function verificationOf(states) {
   const weakest = weakestVerification(states)
-  return weakest === 'unverified' || weakest === 'estimated' ? weakest : (weakest ? 'verified' : null)
+  if (!weakest) return null
+  return ['reported', 'catalog'].includes(weakest) ? 'verified' : weakest
+}
+
+// The attempt's resolved amount, or null when it has no defensible cost.
+function resolvedAmount(resolution) {
+  return resolution?.state === 'resolved' && Number.isFinite(resolution.amount_usd) && resolution.amount_usd >= 0
+    ? resolution.amount_usd
+    : null
+}
+
+// A lone allocation or unallocated remainder is the whole attempt, so it is
+// keyed by the attempt's resolved identity. Several pieces keep one fragment
+// each, plus a cost-only fragment when the attempt's cost was not divided among
+// them.
+function costFragments(attempt, costNotAllocated) {
+  const pieces = [
+    ...(attempt.allocations ?? []).map((allocation) => ({ ...allocation, allocation: 'attributed' })),
+    ...(attempt.unallocated_usage
+      ? [{ ...attempt.unallocated_usage, allocation: 'unallocated', provider: null, model: null, effort: null }]
+      : []),
+  ]
+  if (pieces.length <= 1) {
+    const only = pieces[0] ?? {}
+    return [{
+      allocation: 'attempt',
+      allocation_id: only.allocation_id ?? null,
+      provider: only.provider ?? attempt.provider,
+      model: only.model ?? attempt.model,
+      effort: only.effort ?? attempt.effort,
+      usage: only.usage ?? attempt.usage,
+    }]
+  }
+  if (!costNotAllocated) return pieces
+  return [
+    ...pieces,
+    { allocation: 'unattributed_cost', allocation_id: null, provider: null, model: null, usage: null },
+  ]
+}
+
+function pieceCount(attempt) {
+  return (attempt.allocations?.length ?? 0) + (attempt.unallocated_usage ? 1 : 0)
 }
 
 // `attemptsComplete` is false when Agent Runner's metrics were rejected or its
@@ -85,8 +128,9 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
     }
 
     const resolution = byAttempt.get(attempt.attempt_id)
-    if (resolution?.state === 'resolved' && Number.isFinite(resolution.amount_usd) && resolution.amount_usd >= 0) {
-      knownSubtotal += resolution.amount_usd
+    const attemptAmount = resolvedAmount(resolution)
+    if (attemptAmount !== null) {
+      knownSubtotal += attemptAmount
     } else {
       if (Number.isFinite(resolution?.known_subtotal_usd) && resolution.known_subtotal_usd >= 0) {
         knownSubtotal += resolution.known_subtotal_usd
@@ -94,21 +138,13 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
       unresolved.push(attempt.attempt_id)
     }
 
-    const pieces = [
-      ...(attempt.allocations ?? []).map((allocation) => ({ ...allocation, allocation: 'attributed' })),
-      ...(attempt.unallocated_usage ? [{ ...attempt.unallocated_usage, allocation: 'unallocated', provider: null, model: null, effort: null }] : []),
-    ]
-    const single = pieces.length <= 1
-    const fragments = single ? [{
-      allocation: 'attempt', allocation_id: pieces[0]?.allocation_id ?? null,
-      provider: pieces[0]?.provider ?? attempt.provider,
-      model: pieces[0]?.model ?? attempt.model,
-      effort: pieces[0]?.effort ?? attempt.effort,
-      usage: pieces[0]?.usage ?? attempt.usage,
-    }] : [...pieces, ...(resolution?.state === 'resolved' && !resolution.allocation_costs?.length
-      ? [{ allocation: 'unattributed_cost', allocation_id: null, provider: null, model: null, usage: null }] : [])]
+    // A multi-model attempt whose cost resolved only as a whole-attempt amount:
+    // its model rows keep their usage, and the amount goes to one cost-only row.
+    const costNotAllocated = pieceCount(attempt) > 1
+      && resolution?.state === 'resolved'
+      && !resolution.allocation_costs?.length
 
-    for (const fragment of fragments) {
+    for (const fragment of costFragments(attempt, costNotAllocated)) {
       const descriptor = {
         agent_role: attempt.agent_role,
         tool: attempt.tool ?? null,
@@ -173,8 +209,12 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
       const allocationCost = resolution?.allocation_costs?.find(
         (entry) => entry.allocation_id === fragment.allocation_id,
       )
-      const rowAmount = fragment.allocation === 'unattributed_cost' ? resolution?.amount_usd
-        : (fragment.allocation === 'attempt' && resolution?.state === 'resolved' ? resolution.amount_usd : allocationCost?.amount_usd)
+      let rowAmount = allocationCost?.amount_usd
+      if (fragment.allocation === 'unattributed_cost') {
+        rowAmount = resolution?.amount_usd
+      } else if (fragment.allocation === 'attempt' && resolution?.state === 'resolved') {
+        rowAmount = resolution.amount_usd
+      }
       if (Number.isFinite(rowAmount) && rowAmount >= 0) {
         row.resolved_amount_usd += rowAmount
         row.resolved_count += 1
@@ -182,8 +222,7 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
         if (source && !row.sources.includes(source)) row.sources.push(source)
         row.verifications.push(allocationCost?.verification ?? resolution.verification)
       }
-      if (pieces.length > 1 && resolution?.state === 'resolved' && !resolution.allocation_costs?.length
-        && fragment.allocation !== 'unattributed_cost') {
+      if (costNotAllocated && fragment.allocation !== 'unattributed_cost') {
         if (!row.not_allocated_attempts.includes(attempt.attempt_id)) row.not_allocated_attempts.push(attempt.attempt_id)
       } else if (!Number.isFinite(rowAmount) || rowAmount < 0 || allocationCost?.state === 'incomplete') {
         if (!row.unresolved_attempts.includes(attempt.attempt_id)) {
@@ -228,8 +267,11 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
       complete: rowComplete,
     }
   })
-  const stepCosts = buildStepCosts({ attempts, costs })
-  const resolvedVerifications = cliAttempts.map((attempt) => byAttempt.get(attempt.attempt_id)).filter((entry) => entry?.state === 'resolved').map((entry) => entry.verification)
+  const stepCosts = buildStepCosts({ cliAttempts, byAttempt })
+  const resolvedVerifications = cliAttempts
+    .map((attempt) => byAttempt.get(attempt.attempt_id))
+    .filter((entry) => entry?.state === 'resolved')
+    .map((entry) => entry.verification)
   const attemptCount = cliAttempts.length
   const usageComplete = attemptsComplete
     && attemptCount > 0
@@ -257,9 +299,7 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
       estimated_api_cost_usd: complete ? roundUsd(knownSubtotal) : null,
       known_cost_subtotal_usd: roundUsd(knownSubtotal),
       complete,
-      verification: weakestVerification(resolvedVerifications),
-      includes_estimated: resolvedVerifications.includes('estimated'),
-      includes_unverified: resolvedVerifications.includes('unverified'),
+      ...summarizeVerification(resolvedVerifications),
       unresolved_attempts: unresolved,
       reason: attemptsComplete
         ? (complete ? null : 'one or more agent attempts have no defensible cost')
@@ -269,44 +309,88 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
   }
 }
 
-export function buildStepCosts({ attempts = [], costs = [] }) {
-  const byAttempt = new Map(costs.map((cost) => [cost.attempt_id, cost]))
+// The first step-path segment without its iteration suffix. Validator attempts
+// carry the invoking Runner step's prefix, so they roll up under that step.
+function topLevelStep(stepPath) {
+  return stepPath ? stepPath.split('/')[0].replace(/:\d+$/, '') : null
+}
+
+function stepEntry(attempt, resolution) {
+  const amount = resolvedAmount(resolution)
+  const stepPath = [attempt.prefix, attempt.step].filter(Boolean).join('/') || null
+  const allocations = (resolution?.allocation_costs ?? []).map((cost) => {
+    const allocation = attempt.allocations?.find((item) => item.allocation_id === cost.allocation_id)
+    return {
+      allocation_id: cost.allocation_id,
+      provider: allocation?.provider ?? null,
+      model: allocation?.model ?? null,
+      amount_usd: cost.amount_usd ?? null,
+      source: cost.source ?? null,
+      verification: cost.verification ?? null,
+    }
+  })
+  return {
+    attempt_id: attempt.attempt_id,
+    step_path: stepPath,
+    top_level_step: topLevelStep(stepPath),
+    producer: attempt.measurement_producer ?? attempt.tool ?? null,
+    agent_role: attempt.agent_role ?? null,
+    cli: attempt.cli ?? null,
+    provider: attempt.provider ?? null,
+    model: attempt.model ?? null,
+    billing_tokens: attempt.usage?.billing_tokens ?? null,
+    amount_usd: amount,
+    known_subtotal_usd: resolution?.known_subtotal_usd ?? 0,
+    state: resolution?.state ?? 'unavailable',
+    source: resolution?.source ?? null,
+    verification: amount === null ? null : resolution.verification ?? null,
+    assumptions: resolution?.provenance?.assumptions ?? [],
+    reason: amount === null ? resolution?.reason ?? 'cost unavailable' : null,
+    duration_ms: attempt.duration_ms ?? null,
+    allocations,
+  }
+}
+
+// One entry per CLI attempt, and one rollup per top-level workflow step in
+// first-observed order, with unattributed attempts last. A rollup's amount is
+// null when any of its attempts is unresolved; its known subtotal never is.
+function buildStepCosts({ cliAttempts, byAttempt }) {
+  const steps = cliAttempts.map((attempt) => stepEntry(attempt, byAttempt.get(attempt.attempt_id)))
   const groups = new Map()
-  const steps = []
-  for (const attempt of attempts.filter((entry) => entry.invoked_cli)) {
-    const path = [attempt.prefix, attempt.step].filter(Boolean).join('/') || null
-    const first = (attempt.prefix || attempt.step || '').split('/')[0]
-    const top = first ? first.replace(/:\d+$/, '') : null
-    const resolution = byAttempt.get(attempt.attempt_id)
-    const resolved = resolution?.state === 'resolved' && Number.isFinite(resolution.amount_usd)
-    const allocations = (resolution?.allocation_costs ?? []).map((cost) => {
-      const allocation = attempt.allocations?.find((item) => item.allocation_id === cost.allocation_id)
-      return { allocation_id: cost.allocation_id, provider: allocation?.provider ?? null,
-        model: allocation?.model ?? null, amount_usd: cost.amount_usd ?? null,
-        source: cost.source ?? null, verification: cost.verification ?? null }
-    })
-    const entry = { attempt_id: attempt.attempt_id, step_path: path, top_level_step: top,
-      producer: attempt.measurement_producer ?? attempt.tool ?? null, agent_role: attempt.agent_role ?? null,
-      cli: attempt.cli ?? null, provider: attempt.provider ?? null, model: attempt.model ?? null,
-      billing_tokens: attempt.usage?.billing_tokens ?? null, amount_usd: resolved ? resolution.amount_usd : null,
-      known_subtotal_usd: resolution?.known_subtotal_usd ?? 0,
-      state: resolution?.state ?? 'unavailable', source: resolution?.source ?? null,
-      verification: resolved ? resolution.verification ?? null : null,
-      assumptions: resolution?.provenance?.assumptions ?? [], reason: resolved ? null : resolution?.reason ?? 'cost unavailable',
-      duration_ms: attempt.duration_ms ?? null, allocations }
-    steps.push(entry)
-    const group = groups.get(top) ?? { top_level_step: top, label: top ?? 'unattributed', attempt_count: 0,
-      attempt_ids: [], known_subtotal_usd: 0, amount_usd: 0, complete: true, verifications: [] }
-    group.attempt_count += 1; group.attempt_ids.push(attempt.attempt_id)
+  for (const entry of steps) {
+    const top = entry.top_level_step
+    const group = groups.get(top) ?? {
+      top_level_step: top,
+      label: top ?? 'unattributed',
+      attempt_ids: [],
+      known_subtotal_usd: 0,
+      amount_usd: 0,
+      complete: true,
+      verifications: [],
+    }
+    group.attempt_ids.push(entry.attempt_id)
     group.known_subtotal_usd += entry.known_subtotal_usd
-    if (resolved) { group.amount_usd += resolution.amount_usd; group.verifications.push(resolution.verification) }
-    else group.complete = false
+    if (entry.amount_usd === null) {
+      group.complete = false
+    } else {
+      group.amount_usd += entry.amount_usd
+      group.verifications.push(entry.verification)
+    }
     groups.set(top, group)
   }
-  const ordered = [...groups.values()].sort((a, b) => a.top_level_step === null ? 1 : b.top_level_step === null ? -1 : 0)
-  return { steps, step_rollup: ordered.map(({ verifications, ...group }) => ({ ...group,
-    known_subtotal_usd: roundUsd(group.known_subtotal_usd), amount_usd: group.complete ? roundUsd(group.amount_usd) : null,
-    verification: weakestVerification(verifications) })) }
+  const ordered = [...groups.values()]
+    .sort((a, b) => (a.top_level_step === null) - (b.top_level_step === null))
+  const stepRollup = ordered.map(({ verifications, ...group }) => ({
+    top_level_step: group.top_level_step,
+    label: group.label,
+    attempt_count: group.attempt_ids.length,
+    attempt_ids: group.attempt_ids,
+    known_subtotal_usd: roundUsd(group.known_subtotal_usd),
+    amount_usd: group.complete ? roundUsd(group.amount_usd) : null,
+    complete: group.complete,
+    verification: weakestVerification(verifications),
+  }))
+  return { steps, step_rollup: stepRollup }
 }
 
 // Eval-owned work — judging, evidence repair, pricing lookup, reporting — is

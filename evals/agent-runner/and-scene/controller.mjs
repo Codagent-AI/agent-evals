@@ -207,6 +207,11 @@ async function prepareRunDirectory(runDir) {
   }
 }
 
+// How a rescore names the completed run it imported.
+function importedRunReference(run) {
+  return { run_id: run.source_run_id, provenance_sha256: run.provenance_sha256 }
+}
+
 function failure(errors) {
   return { exitCode: 2, errors, outcome: null }
 }
@@ -808,10 +813,7 @@ export async function runEvaluation({
           events: record.events,
           history: record.observed_steps,
           history_verification: record.workflowHistory,
-          imported_from: {
-            run_id: importedRun.source_run_id,
-            provenance_sha256: importedRun.provenance_sha256,
-          },
+          imported_from: importedRunReference(importedRun),
         })
         return
       }
@@ -1508,11 +1510,14 @@ export async function runEvaluation({
           workflow: boundary.workflow,
         })
       }
-      const fallbackTable = await loadFallbackRates()
-
-      const catalog = needsPricingLookup(record.metrics.attempts)
-        ? await fetchPricingCatalog(pricingFetch ? { fetchImpl: pricingFetch } : {})
-        : null
+      // The pinned table is a local read and the catalog a network fetch; neither
+      // depends on the other.
+      const [fallbackTable, catalog] = await Promise.all([
+        loadFallbackRates(),
+        needsPricingLookup(record.metrics.attempts)
+          ? fetchPricingCatalog(pricingFetch ? { fetchImpl: pricingFetch } : {})
+          : null,
+      ])
       record.pricing = await resolveImplementationPricing({
         attempts: record.metrics.attempts,
         catalog,
@@ -1520,7 +1525,9 @@ export async function runEvaluation({
         invoke: judgeInvoke,
         authority: judgeAuthority,
       })
-      if (rescore) record.pricing.repriced_from = { run_id: importedRun.source_run_id, provenance_sha256: importedRun.provenance_sha256 }
+      if (rescore) {
+        record.pricing.repriced_from = importedRunReference(importedRun)
+      }
       record.cost = {
         ...aggregateImplementationCost({
           attempts: record.metrics.attempts,
@@ -1541,7 +1548,7 @@ export async function runEvaluation({
         metrics: record.metrics,
         pricing: record.pricing,
         cost: record.cost,
-        ...(rescore ? { repriced: true, imported_from: { run_id: importedRun.source_run_id, provenance_sha256: importedRun.provenance_sha256 } } : {}),
+        ...(rescore ? { repriced: true, imported_from: importedRunReference(importedRun) } : {}),
       })
     },
 

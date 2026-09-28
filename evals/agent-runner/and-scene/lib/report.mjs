@@ -85,6 +85,24 @@ function usd(value) {
   return Number.isFinite(value) ? `$${value.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')}` : 'not available'
 }
 
+// The pricing summary and the schedule it used. Per-attempt pricing records stay
+// in result.json; the per-step table is their readable form.
+function pricingSourcesSection(pricing) {
+  return section('Pricing sources', table(['Field', 'Value'], [
+    ['Complete', pricing?.complete],
+    ['Verification', pricing?.verification],
+    ['Includes estimated', pricing?.includes_estimated],
+    ['Includes unverified', pricing?.includes_unverified],
+    ['Verified', pricing?.verified],
+    ['Sources', pricing?.sources?.join(', ')],
+    ['Unresolved attempt count', pricing?.unresolved_attempts?.length],
+    ...['url', 'state', 'retrieved_at', 'sha256', 'reason']
+      .map((field) => [`Catalog ${field}`, pricing?.catalog?.[field]]),
+    ...['path', 'state', 'sha256', 'reason']
+      .map((field) => [`Fallback table ${field}`, pricing?.fallback_table?.[field]]),
+  ]))
+}
+
 function implementationUsageSection(result) {
   const cost = result.cost && typeof result.cost === 'object' ? result.cost : null
   const rows = Array.isArray(cost?.rows) ? cost.rows : []
@@ -94,25 +112,30 @@ function implementationUsageSection(result) {
       'Cache write', 'Canonical output', 'Reasoning detail', 'Canonical total',
       'Usage', 'Cost', 'Cost state', 'Cost source', 'Verification',
     ],
-    rows.map((row) => [
-      row.agent_role ?? 'unknown',
-      row.tool ?? 'unknown',
-      row.provider ?? 'unknown',
-      row.model ?? 'unknown',
-      row.allocation === 'unattributed_cost' ? 'whole-attempt cost (not divided among models)' : (row.allocation ?? 'attempt'),
-      tokenCount(row.participating_attempt_count ?? row.attempt_count),
-      row.allocation === 'unattributed_cost' ? '' : tokenCount(row.token_totals?.input),
-      row.allocation === 'unattributed_cost' ? '' : tokenCount(row.tokens?.cached_input),
-      row.allocation === 'unattributed_cost' ? '' : tokenCount(row.tokens?.cache_write),
-      row.allocation === 'unattributed_cost' ? '' : tokenCount(row.token_totals?.output),
-      row.allocation === 'unattributed_cost' ? '' : tokenCount(row.tokens?.reasoning ?? row.tokens?.reasoning_output),
-      row.allocation === 'unattributed_cost' ? '' : tokenCount(row.token_totals?.total),
-      row.usage_complete ? 'complete' : 'incomplete',
-      usd(row.cost?.amount_usd),
-      row.cost?.state ?? 'unavailable',
-      row.cost?.sources?.join(', ') || 'not available',
-      row.verification ?? 'not available',
-    ]),
+    rows.map((row) => {
+      // A cost-only row carries a whole-attempt amount and no usage of its own.
+      const costOnly = row.allocation === 'unattributed_cost'
+      const usageCount = (value) => (costOnly ? '' : tokenCount(value))
+      return [
+        row.agent_role ?? 'unknown',
+        row.tool ?? 'unknown',
+        row.provider ?? 'unknown',
+        row.model ?? 'unknown',
+        costOnly ? 'whole-attempt cost (not divided among models)' : (row.allocation ?? 'attempt'),
+        tokenCount(row.participating_attempt_count ?? row.attempt_count),
+        usageCount(row.token_totals?.input),
+        usageCount(row.tokens?.cached_input),
+        usageCount(row.tokens?.cache_write),
+        usageCount(row.token_totals?.output),
+        usageCount(row.tokens?.reasoning ?? row.tokens?.reasoning_output),
+        usageCount(row.token_totals?.total),
+        row.usage_complete ? 'complete' : 'incomplete',
+        usd(row.cost?.amount_usd),
+        row.cost?.state ?? 'unavailable',
+        row.cost?.sources?.join(', ') || 'not available',
+        row.verification ?? 'not available',
+      ]
+    }),
   )
   const usage = cost?.usage
   const usageTotal = [
@@ -135,17 +158,33 @@ function implementationUsageSection(result) {
     ['Implementation total', 'Value'],
     keyValueRows(cost?.total ?? cost?.implementation ?? {}),
   )
+  const stepsByTopLevel = Map.groupBy(cost?.steps ?? [], (entry) => entry.top_level_step)
   const stepRows = []
   for (const rollup of cost?.step_rollup ?? []) {
-    stepRows.push([rollup.label ?? rollup.top_level_step ?? 'unattributed', '', '', '', '', '',
-      rollup.complete ? usd(rollup.amount_usd) : 'unavailable', usd(rollup.known_subtotal_usd),
-      rollup.verification ?? '', '', '', `${rollup.attempt_count} attempts`])
-    for (const step of (cost?.steps ?? []).filter((entry) => entry.top_level_step === rollup.top_level_step)) {
-      stepRows.push([step.step_path ?? 'unattributed', step.agent_role ?? '', step.model ?? '',
-        tokenCount(step.billing_tokens?.input), tokenCount(step.billing_tokens?.cached_input),
-        tokenCount(step.billing_tokens?.output), Number.isFinite(step.amount_usd) ? usd(step.amount_usd) : step.reason ?? 'unavailable',
-        usd(step.known_subtotal_usd), step.verification ?? '',
-        step.source ?? '', (step.assumptions ?? []).join(', '), ''])
+    stepRows.push([
+      rollup.label ?? rollup.top_level_step ?? 'unattributed',
+      '', '', '', '', '',
+      rollup.complete ? usd(rollup.amount_usd) : 'unavailable',
+      usd(rollup.known_subtotal_usd),
+      rollup.verification ?? '',
+      '', '',
+      `${rollup.attempt_count} attempts`,
+    ])
+    for (const step of stepsByTopLevel.get(rollup.top_level_step) ?? []) {
+      stepRows.push([
+        step.step_path ?? 'unattributed',
+        step.agent_role ?? '',
+        step.model ?? '',
+        tokenCount(step.billing_tokens?.input),
+        tokenCount(step.billing_tokens?.cached_input),
+        tokenCount(step.billing_tokens?.output),
+        Number.isFinite(step.amount_usd) ? usd(step.amount_usd) : step.reason ?? 'unavailable',
+        usd(step.known_subtotal_usd),
+        step.verification ?? '',
+        step.source ?? '',
+        (step.assumptions ?? []).join(', '),
+        '',
+      ])
     }
   }
   const perStep = '<h3>Per-step cost</h3>' + (Array.isArray(cost?.steps)
@@ -655,14 +694,7 @@ export function renderReport(result, { current = null } = {}) {
     ),
     section('Agent roles and models', table(['Role', 'Selection'], keyValueRows(result.role_configuration))),
     implementationUsageSection(result),
-    section('Pricing sources', table(['Field', 'Value'], [
-      ['Complete', result.pricing?.complete], ['Verification', result.pricing?.verification],
-      ['Includes estimated', result.pricing?.includes_estimated], ['Includes unverified', result.pricing?.includes_unverified],
-      ['Verified', result.pricing?.verified], ['Sources', result.pricing?.sources?.join(', ')],
-      ['Unresolved attempt count', result.pricing?.unresolved_attempts?.length],
-      ...['url', 'state', 'retrieved_at', 'sha256', 'reason'].map((field) => [`Catalog ${field}`, result.pricing?.catalog?.[field]]),
-      ...['path', 'state', 'sha256', 'reason'].map((field) => [`Fallback table ${field}`, result.pricing?.fallback_table?.[field]]),
-    ])),
+    pricingSourcesSection(result.pricing),
     section('Machine timing', table(['Field', 'Value'], keyValueRows(result.timing))),
     section('Completeness', table(['Dimension', 'State'], keyValueRows(result.completeness))),
     section('Ambiguity diagnostics', table(['Field', 'Value'], keyValueRows(result.ambiguity))),
