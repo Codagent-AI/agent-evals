@@ -13,6 +13,7 @@ import {
   verifyRecordedDeliveryIdentity,
 } from '../evals/agent-runner/and-scene/lib/candidate.mjs'
 import { buildCandidateEvidenceManifest, testedRevisionFacts, validateEvidenceLineage } from '../evals/agent-runner/and-scene/lib/evidence.mjs'
+import { checkWorkflowHistory, finalWorkflowStepEntry } from '../evals/agent-runner/and-scene/lib/workflow.mjs'
 
 function exec(command, args, options = {}) {
   return spawnSync(command, args, { encoding: 'utf8', ...options })
@@ -1284,12 +1285,29 @@ test('runner main session layout produces verified scoring lineage and nested de
     await writeFile(join(sessionDir, 'output', path), content)
   }
   const verify = ['verify-change', 'sub:verify-change']
+  const pair = (step, step_path, outcome = 'success') => [
+    { step, step_path, event: 'step_start' },
+    { step, step_path, event: 'step_end', outcome },
+  ]
   const workflowHistory = [
-    { step: 'verify-change', step_path: [...verify, 'run-validator'], event: 'step_end', outcome: 'skipped' },
-    ...['open-draft-pr', 'verify-draft-pr', 'prepare-acceptance', 'verify-acceptance-handoff']
-      .map((step) => ({ step: 'verify-change', step_path: [...verify, step], event: 'step_end', outcome: 'success' })),
+    { step: 'verify-change', step_path: ['verify-change'], event: 'step_start' },
+    { step: 'verify-change', step_path: [...verify, 'run-validator'], event: 'step_start' },
+    ...pair('verify-change', [...verify, 'run-validator', 'sub:run-validator', 'validator-retry', 'run-validator']),
+    { step: 'verify-change', step_path: [...verify, 'run-validator'], event: 'step_end', outcome: 'success' },
+    ...pair('verify-change', [...verify, 'open-draft-pr']),
+    ...pair('verify-change', [...verify, 'verify-draft-pr']),
+    { step: 'verify-change', step_path: [...verify, 'prepare-acceptance'], event: 'step_start' },
+    ...pair('verify-change', [...verify, 'prepare-acceptance', 'sub:prepare-acceptance', 'acceptance-validator', 'sub:acceptance-validator', 'run-validator']),
+    { step: 'verify-change', step_path: [...verify, 'prepare-acceptance'], event: 'step_end', outcome: 'success' },
+    ...pair('verify-change', [...verify, 'verify-acceptance-handoff']),
     { step: 'verify-change', step_path: ['verify-change'], event: 'step_end', outcome: 'success' },
   ]
+  const history = checkWorkflowHistory(workflowHistory, { skipValidator: false })
+  assert.equal(history.ok, true)
+  assert.equal(history.last_observed_step, 'verify-acceptance-handoff')
+  assert.deepEqual(history.last_observed_step_path, [...verify, 'verify-acceptance-handoff'])
+  assert.equal(finalWorkflowStepEntry(workflowHistory, 'run-validator').outcome, 'success')
+  assert.deepEqual(finalWorkflowStepEntry(workflowHistory, 'run-validator').step_path, [...verify, 'run-validator'])
   const delivery = await verifyCandidateDelivery({
     worktree,
     fixtureCommit: repo.fixture,
@@ -1297,7 +1315,7 @@ test('runner main session layout produces verified scoring lineage and nested de
     expectedBase: 'main',
     changeName: 'create-and-scene',
     sessionDir,
-    skipValidator: true,
+    skipValidator: false,
     workflowHistory,
     exec: (command, args, options) => command === 'git' && args.includes('ls-remote')
       ? { status: 0, stdout: `${finalSha}\trefs/heads/eval/and-scene/run-layout\n` }
@@ -1330,6 +1348,7 @@ test('runner main session layout produces verified scoring lineage and nested de
   assert.equal(lineage.accepted, true)
   assert.equal(lineage.mode, 'tested-revision-final')
   assert.equal(delivery.final_validator.step, 'run-validator')
+  assert.equal(delivery.final_validator.outcome, 'success')
   assert.deepEqual(delivery.final_validator.step_path, [...verify, 'run-validator'])
   assert.equal(delivery.pull_request.head_sha, finalSha)
   assert.equal(delivery.pull_request.base, 'main')

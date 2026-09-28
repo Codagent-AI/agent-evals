@@ -238,6 +238,19 @@ function historyStepPath(entry) {
     : [entry.step]
 }
 
+function lastLeafStep(normalized) {
+  const leaves = normalized.filter((entry, index) => {
+    const path = historyStepPath(entry)
+    const childPrefix = [...path, `sub:${path.at(-1)}`]
+    return !normalized.slice(0, index).some((earlier) => {
+      const earlierPath = historyStepPath(earlier)
+      return childPrefix.every((segment, position) => earlierPath[position] === segment)
+    })
+  })
+  const path = leaves.length > 0 ? historyStepPath(leaves.at(-1)) : null
+  return { step: path?.at(-1) ?? null, path }
+}
+
 // A run delegates when Agent Runner recorded a top-level verify-change step;
 // its final delivery steps then sit directly inside that sub-workflow.
 function finalStepPrefix(normalized) {
@@ -264,6 +277,7 @@ export function finalWorkflowStepEntry(history = [], step) {
 
 export function checkWorkflowHistory(history = [], { skipValidator = false } = {}) {
   const normalized = history.map(normalizeHistoryEntry).filter(({ step }) => step)
+  const lastLeaf = lastLeafStep(normalized)
   const expectedOutcomes = Object.fromEntries(REQUIRED_FINAL_WORKFLOW_STEPS.map((step) => [
     step,
     step === 'run-validator' && skipValidator ? 'skipped' : 'success',
@@ -293,6 +307,8 @@ export function checkWorkflowHistory(history = [], { skipValidator = false } = {
     invalid_outcomes: invalidOutcomes,
     prohibited_effects: prohibitedEffects,
     observed_steps: normalized.map((entry) => historyStepPath(entry).at(-1)),
+    last_observed_step: lastLeaf.step,
+    last_observed_step_path: lastLeaf.path,
   }
 }
 
@@ -301,14 +317,9 @@ export function checkWorkflowHistory(history = [], { skipValidator = false } = {
 export function checkBoundary({ observedSteps, skipValidator = false }) {
   const checked = checkWorkflowHistory(observedSteps, { skipValidator })
   return {
+    ...checked,
     ok: checked.ok,
     unexpected_step: checked.prohibited_effects[0]?.step ?? null,
-    last_observed_step: observedSteps.length > 0
-      ? historyStepPath(normalizeHistoryEntry(observedSteps.at(-1))).at(-1)
-      : null,
-    step_path: observedSteps.length > 0
-      ? historyStepPath(normalizeHistoryEntry(observedSteps.at(-1)))
-      : null,
-    ...checked,
+    step_path: checked.last_observed_step_path,
   }
 }

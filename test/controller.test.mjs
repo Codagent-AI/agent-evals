@@ -1554,8 +1554,13 @@ test('published result reports the leaf of the last nested workflow step', async
     workflow: delegatingWorkflowYaml,
     verificationWorkflow: verificationWorkflowYaml,
   })
-  const nestedHistory = delegatedHistory.slice(0, -1)
+  const nestedHistory = delegatedHistory
   const result = await evaluate(context, profiles, {
+    verifyDelivery: async () => ({
+      ...delivery(context),
+      final_validator: { ...nestedHistory[1], step: 'run-validator' },
+      workflow_history: nestedHistory,
+    }),
     readRunnerState: () => (runnerInvocations(context).length === 0
       ? null
       : {
@@ -1569,7 +1574,9 @@ test('published result reports the leaf of the last nested workflow step', async
   assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
   const written = await readJson(join(context.runDir, 'result.json'))
   assert.equal(written.workflow.last_observed_step, 'verify-acceptance-handoff')
-  assert.deepEqual(written.workflow.observed_steps.at(-1).step_path, [
-    'verify-change', 'sub:verify-change', 'verify-acceptance-handoff',
+  assert.equal(written.delivery.final_validator.step, 'run-validator')
+  assert.deepEqual(written.delivery.final_validator.step_path, [
+    'verify-change', 'sub:verify-change', 'run-validator',
   ])
+  assert.deepEqual(written.workflow.observed_steps.at(-1).step_path, ['verify-change'])
 })

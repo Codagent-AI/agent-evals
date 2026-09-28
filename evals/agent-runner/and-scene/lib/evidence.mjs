@@ -155,10 +155,11 @@ function describesScreenshot(text, relativePath) {
   const before = '(^|[^a-zA-Z0-9._/-])'
   const after = '(?=$|[^a-zA-Z0-9._/-]|\\.(?=$|\\s))'
   const named = (path) => new RegExp(`${before}${escaped(path)}${after}`).test(text)
-  const paths = [relativePath, withinOutput, parent, parent && `${parent}/`].filter(Boolean)
+  const directory = segments.length > 2 ? `${parent}/` : null
+  const paths = [relativePath, withinOutput, directory].filter(Boolean)
   if (paths.some((path) => named(path) || named(`./${path}`))) return true
-  if (inOutput && [withinOutput, parent, parent && `${parent}/`].filter(Boolean).some((path) => (
-    new RegExp(`${before}/(?:[^/\\s]+/)*output/${escaped(path)}${after}`).test(text)
+  if (inOutput && [withinOutput, directory].filter(Boolean).some((path) => (
+    new RegExp(`${before}(?:\\S*/)?output/${escaped(path)}${after}`).test(text)
   ))) return true
   return named(segments.at(-1))
 }
@@ -680,11 +681,9 @@ function testedRevisionClaim(text) {
   const trimmed = text.trim()
   if (trimmed.length === 0) return null
   const lines = trimmed.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
-  for (const line of lines.reverse()) {
-    const sha = line.match(/(?<![a-f0-9])[a-f0-9]{7,40}(?![a-f0-9])/i)?.[0]
-    if (sha) return sha
-  }
-  return trimmed.slice(0, 80)
+  const lastLine = lines.at(-1)
+  return lastLine.match(/(?<![a-f0-9])[a-f0-9]{7,40}(?![a-f0-9])/i)?.[0]
+    ?? lastLine.slice(0, 80)
 }
 
 function declaredDiffBase(text) {
@@ -1048,6 +1047,7 @@ export function testedRevisionFacts({ finalSha, worktree, manifest, exec = defau
     && Array.isArray(limitations)
     && limitations.length === 1
     && limitations[0] === 'claimed-revision-mismatch'
+    && relationOf(sha).relation === 'not-ancestor'
   ))
   const selected = verified ?? offHistory
   let recorded = null
@@ -1165,7 +1165,7 @@ export function validateEvidenceLineage({
       'tested-revision-unrecorded',
       'no verified candidate record names the revision the last acceptance pass tested',
     ))
-  } else if (recorded && !ACCEPTED_RELATIONS.has(recorded.relation)) {
+  } else if (testedRevision?.state === 'recorded-off-history' && recorded) {
     findings.push(finding(
       'tested-revision-off-final-history',
       `the recorded tested revision is ${recorded.relation}, not the final revision or an ancestor of it`,

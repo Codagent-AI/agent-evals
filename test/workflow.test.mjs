@@ -238,6 +238,8 @@ test('completed workflow history requires every final delivery step and rejects 
     invalid_outcomes: [],
     prohibited_effects: [],
     observed_steps: requiredHistory.map(({ step }) => step),
+    last_observed_step: 'verify-acceptance-handoff',
+    last_observed_step_path: ['verify-acceptance-handoff'],
   })
 
   assert.deepEqual(
@@ -275,6 +277,8 @@ test('skipped validation requires an explicit skipped final Validator outcome', 
     invalid_outcomes: [],
     prohibited_effects: [],
     observed_steps: skippedHistory.map(({ step }) => step),
+    last_observed_step: 'verify-acceptance-handoff',
+    last_observed_step_path: ['verify-acceptance-handoff'],
   })
 
   const absent = checkWorkflowHistory(skippedHistory.slice(1), { skipValidator: true })
@@ -351,6 +355,8 @@ test('delegated history finds final delivery steps inside the verify-change sub-
     invalid_outcomes: [],
     prohibited_effects: [],
     observed_steps: history.map(({ step_path }) => step_path.at(-1)),
+    last_observed_step: 'verify-acceptance-handoff',
+    last_observed_step_path: [...VERIFY, 'verify-acceptance-handoff'],
   })
 
   const skipped = checkWorkflowHistory(delegatedHistory({ validatorOutcome: 'skipped' }), {
@@ -526,6 +532,20 @@ test('boundary reports the leaf of a nested observed step and retains its path',
 test('nested observed steps use path leaves in workflow history', () => {
   const checked = checkWorkflowHistory([{ step: 'verify-change', step_path: [...VERIFY, 'run-validator'], outcome: 'success' }])
   assert.deepEqual(checked.observed_steps, ['run-validator'])
+})
+
+test('closing delegated containers do not replace the last observed leaf', () => {
+  const history = [
+    ...delegatedHistory(),
+    { step: 'verify-change', step_path: ['verify-change'], event: 'step_end', outcome: 'success' },
+  ]
+  const checked = checkWorkflowHistory(history)
+  assert.equal(checked.last_observed_step, 'verify-acceptance-handoff')
+  assert.deepEqual(checked.last_observed_step_path, [...VERIFY, 'verify-acceptance-handoff'])
+  assert.equal(checked.observed_steps.at(-1), 'verify-change')
+  const boundary = checkBoundary({ observedSteps: history })
+  assert.equal(boundary.last_observed_step, 'verify-acceptance-handoff')
+  assert.deepEqual(boundary.step_path, [...VERIFY, 'verify-acceptance-handoff'])
 })
 
 test('final workflow step normalizes string and id-only history entries', () => {

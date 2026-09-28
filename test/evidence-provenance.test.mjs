@@ -1316,10 +1316,13 @@ test('a screenshot is described only by its own path, whole filename, or immedia
     ['See ./acceptance-screenshots/step-2.png for the observed state.', true],
     ['See /sessions/r1/output/acceptance-screenshots/step-2.png for the observed state.', true],
     ['See xstep-2.png for an unrelated image.', false],
-    ['See acceptance-screenshots/ for the observed state.', true],
-    ['See ./acceptance-screenshots/ for the observed state.', true],
-    ['See /sessions/r1/output/acceptance-screenshots/ for the observed state.', true],
-    ['See acceptance-screenshots for the observed state.', true],
+    ['See acceptance-screenshots/ for the observed state.', false],
+    ['See ./acceptance-screenshots/ for the observed state.', false],
+    ['See /sessions/r1/output/acceptance-screenshots/ for the observed state.', false],
+    ['See acceptance-screenshots for the observed state.', false],
+    ['No screenshots were saved under acceptance-screenshots.', false],
+    ['See $SESSION_DIR/output/acceptance-screenshots/step-2.png.', true],
+    ['See ../session/output/acceptance-screenshots/step-2.png.', true],
   ]) {
     const context = await fixture()
     await writeExploratoryArtifacts(context, {
@@ -1374,6 +1377,35 @@ test('the last non-empty SHA line is the tested revision claim', async () => {
   assert.equal(tested.verification_state, 'verified')
 })
 
+test('a trailing note makes a tested-revision claim defective', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'acceptance-tested-revision.txt': `${FINAL_SHA}\nnotes: re-tested nav\n`,
+  })
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree, sessionDir: context.sessionDir, runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+    exec: fakeGit(),
+  })
+  const tested = manifest.artifacts.find(({ role }) => role === 'tested-revision')
+  assert.equal(tested.claimed_revision, 'notes: re-tested nav')
+  assert.equal(tested.verification_state, 'defective')
+})
+
+test('an unresolvable tested revision remains unrecorded', async () => {
+  const lineage = await validateCandidateEvidenceLineage({
+    finalSha: FINAL_SHA, worktree: null,
+    manifest: { artifacts: [{
+      id: 'tested-missing', role: 'tested-revision', verification_state: 'defective',
+      claimed_revision: 'deadbee', limitations: ['claimed-revision-mismatch'],
+    }] },
+  })
+  assert.equal(lineage.tested_revision.state, 'unverified')
+  assert.equal(lineage.tested_revision.recorded, null)
+  assert.ok(lineage.findings.some(({ code }) => code === 'tested-revision-unrecorded'))
+  assert.ok(!lineage.findings.some(({ code }) => code === 'tested-revision-off-final-history'))
+})
+
 test('a well-formed tested revision off final history is reported specifically', async () => {
   const lineage = await validateCandidateEvidenceLineage({
     finalSha: FINAL_SHA,
@@ -1418,6 +1450,25 @@ test('a path to one screenshot does not describe another with the same filename'
   assert.equal(screenshot('flow-a').verification_state, 'verified')
   assert.equal(screenshot('flow-b').verification_state, 'defective')
   assert.ok(screenshot('flow-b').limitations.includes('missing-capture-metadata'))
+})
+
+test('a named per-flow screenshot directory describes only that flow', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'acceptance-screenshots/step-2.png': null,
+    'acceptance-screenshots/flow-a/step.png': Buffer.from([1, 2, 3]),
+    'acceptance-screenshots/flow-b/step.png': Buffer.from([4, 5, 6]),
+    'exploration-log.md': `# Exploration log\nTested revision: ${FINAL_SHA}\nSee acceptance-screenshots/flow-a/ for observed state.\n`,
+  })
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree, sessionDir: context.sessionDir, runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+  const screenshot = (path) => manifest.artifacts.find(({ origin }) => (
+    origin.relative_path === `output/acceptance-screenshots/${path}`
+  ))
+  assert.equal(screenshot('flow-a/step.png').verification_state, 'verified')
+  assert.equal(screenshot('flow-b/step.png').verification_state, 'defective')
 })
 
 test('a screenshot path does not match the suffix of another screenshot path', async () => {

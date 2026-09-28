@@ -26,7 +26,7 @@ fi
 required_skills="$(
   node - "$SOURCE_DIR" "$WORKFLOW_PATH" "$@" <<'NODE'
 const { existsSync, readFileSync } = require('node:fs')
-const { dirname, resolve } = require('node:path')
+const { basename, dirname, resolve } = require('node:path')
 const sourceDir = resolve(process.argv[2])
 const workflowPath = process.argv[3]
 const adapters = new Set(process.argv.slice(4))
@@ -85,6 +85,12 @@ if (adapters.has('cursor')) {
 // verify-change workflow, so every skill a nested step names is validated too.
 const skills = new Set()
 const pending = [resolve(workflowPath)]
+let workflowsRoot = dirname(resolve(workflowPath))
+while (basename(workflowsRoot) !== 'workflows' && dirname(workflowsRoot) !== workflowsRoot) {
+  workflowsRoot = dirname(workflowsRoot)
+}
+const hasWorkflowsRoot = basename(workflowsRoot) === 'workflows'
+if (!hasWorkflowsRoot) workflowsRoot = dirname(resolve(workflowPath))
 const visited = new Set()
 while (pending.length > 0) {
   const path = pending.pop()
@@ -98,7 +104,12 @@ while (pending.length > 0) {
       console.error(`warning: unresolved templated sub-workflow reference ${value} in ${path}; skills in it are not checked`)
       continue
     }
-    const referenced = resolve(dirname(path), value)
+    if (value.startsWith('builtin:') && !hasWorkflowsRoot) {
+      console.error(`cannot root builtin sub-workflow ${value}: ${workflowPath} has no workflows ancestor`)
+    }
+    const referenced = value.startsWith('builtin:')
+      ? resolve(workflowsRoot, value.slice('builtin:'.length))
+      : resolve(dirname(path), value)
     if (!existsSync(referenced)) {
       console.error(`missing sub-workflow ${value} referenced by ${path}`)
       process.exit(2)

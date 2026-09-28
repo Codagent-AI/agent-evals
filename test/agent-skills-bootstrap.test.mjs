@@ -211,3 +211,28 @@ test('a templated sub-workflow warns while checking available skills', async () 
   assert.equal(result.status, 0, result.stderr)
   assert.match(result.stderr, /warning: unresolved templated sub-workflow reference \$\{next_workflow\}\.yaml in/)
 })
+
+test('builtin sub-workflows resolve from the nearest workflows root and require their skills', async () => {
+  const context = await fixture({ missingSkill: 'prepare-acceptance' })
+  context.workflow = join(context.root, 'workflows', 'entry.yaml')
+  await mkdir(join(context.root, 'workflows', 'core'), { recursive: true })
+  await writeFile(context.workflow, 'steps:\n  - id: delegated\n    workflow: builtin:core/x.yaml\n')
+  await writeFile(join(context.root, 'workflows', 'core', 'x.yaml'),
+    'prompt: Use codagent:prepare-acceptance.\n')
+  const result = run(context, ['claude'])
+  assert.equal(result.status, 2)
+  assert.match(result.stderr, /missing required Codagent skill: prepare-acceptance/)
+  await mkdir(join(context.source, 'skills', 'prepare-acceptance'), { recursive: true })
+  await writeFile(join(context.source, 'skills', 'prepare-acceptance', 'SKILL.md'), '# skill\n')
+  assert.equal(run(context, ['claude']).status, 0)
+})
+
+test('a missing builtin sub-workflow fails before installation', async () => {
+  const context = await fixture()
+  context.workflow = join(context.root, 'workflows', 'entry.yaml')
+  await mkdir(join(context.root, 'workflows'), { recursive: true })
+  await writeFile(context.workflow, 'steps:\n  - id: delegated\n    workflow: builtin:core/missing.yaml\n')
+  const result = run(context, ['claude'])
+  assert.equal(result.status, 2)
+  assert.match(result.stderr, /missing sub-workflow builtin:core\/missing.yaml referenced by/)
+})

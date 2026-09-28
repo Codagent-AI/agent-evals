@@ -425,7 +425,7 @@ final SHA is verified as a record of that earlier revision
 resolve or lies off the final history stays defective. A well-formed tested-revision SHA off the final history is still recorded for lineage diagnosis as `recorded-off-history`; it never establishes final-revision support.
 
 The evidence lineage carries deterministic `tested_revision` facts for the
-final-revision criterion: the last non-empty SHA line in the verified tested-revision record, its
+final-revision criterion: the SHA on the last non-empty line of the verified tested-revision record, its
 relation to the final SHA, and the files changed since, split into product,
 test-only, and harness-owned paths. Each verified pass record that declares a
 `Diff base:` also gets the files between that base and the revision it tested,
@@ -437,8 +437,10 @@ skill writes `exploration-log.md` and stores screenshots under
 `acceptance-screenshots/` without a metadata file; that layout is complete. A
 screenshot with no metadata file is verified only when a verified flow record,
 exploration log, findings record, handoff, or pass record names its path,
-filename, or exact immediate directory (`described_by`). `./` links, absolute
-paths, and sentence-ending paths count, so the judge reads what was inspected
+filename, or a per-flow or per-screenshot subdirectory in path form (`described_by`).
+The shared `acceptance-screenshots/` root does not describe an individual screenshot.
+`./` links, relative and variable-prefixed output paths, absolute paths, and
+sentence-ending paths count, so the judge reads what was inspected
 and observed there. A screenshot no metadata or verified record describes, or
 one beside malformed JSON metadata, is retained as defective, unverified
 candidate evidence. Present but stale,
