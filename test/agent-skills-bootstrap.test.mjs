@@ -236,3 +236,15 @@ test('a missing builtin sub-workflow fails before installation', async () => {
   assert.equal(result.status, 2)
   assert.match(result.stderr, /missing sub-workflow builtin:core\/missing.yaml referenced by/)
 })
+
+test('a builtin reference outside workflows fails even if a same-named local file exists', async () => {
+  const context = await fixture()
+  await mkdir(join(context.root, 'core'), { recursive: true })
+  await writeFile(context.workflow, 'steps:\n  - id: delegated\n    workflow: builtin:core/x.yaml\n')
+  await writeFile(join(context.root, 'core', 'x.yaml'), 'steps: []\n')
+
+  const result = run(context, ['claude'])
+  assert.equal(result.status, 2)
+  assert.match(result.stderr, /cannot root builtin sub-workflow builtin:core\/x.yaml/)
+  await assert.rejects(readFile(context.calls, 'utf8'), { code: 'ENOENT' })
+})

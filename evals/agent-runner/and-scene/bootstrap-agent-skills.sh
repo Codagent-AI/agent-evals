@@ -90,7 +90,6 @@ while (basename(workflowsRoot) !== 'workflows' && dirname(workflowsRoot) !== wor
   workflowsRoot = dirname(workflowsRoot)
 }
 const hasWorkflowsRoot = basename(workflowsRoot) === 'workflows'
-if (!hasWorkflowsRoot) workflowsRoot = dirname(resolve(workflowPath))
 const visited = new Set()
 while (pending.length > 0) {
   const path = pending.pop()
@@ -106,6 +105,7 @@ while (pending.length > 0) {
     }
     if (value.startsWith('builtin:') && !hasWorkflowsRoot) {
       console.error(`cannot root builtin sub-workflow ${value}: ${workflowPath} has no workflows ancestor`)
+      process.exit(2)
     }
     const referenced = value.startsWith('builtin:')
       ? resolve(workflowsRoot, value.slice('builtin:'.length))
