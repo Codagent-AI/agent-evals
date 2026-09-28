@@ -21,16 +21,10 @@
               "size": 272000
             }
           }
-        ],
-        "context_over_200k": {
-          "input": 0.2,
-          "output": 0.75,
-          "cache_read": 0.02,
-          "cache_write": 0.25
-        }
+        ]
       },
-      "source_url": "https://models.dev/api.json",
-      "retrieved_date": "2026-09-27"
+      "source_url": "https://developers.openai.com/api/docs/models/gpt-6-luna",
+      "retrieved_date": "2026-09-28"
     },
     {
       "provider": "openai",
@@ -52,16 +46,10 @@
               "size": 272000
             }
           }
-        ],
-        "context_over_200k": {
-          "input": 4,
-          "output": 15,
-          "cache_read": 0.4,
-          "cache_write": 5
-        }
+        ]
       },
-      "source_url": "https://models.dev/api.json",
-      "retrieved_date": "2026-09-27"
+      "source_url": "https://developers.openai.com/api/docs/models/gpt-6-sol",
+      "retrieved_date": "2026-09-28"
     },
     {
       "provider": "anthropic",
@@ -73,8 +61,8 @@
         "cache_read": 0.2,
         "cache_write": 5
       },
-      "source_url": "https://models.dev/api.json",
-      "retrieved_date": "2026-09-27"
+      "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "retrieved_date": "2026-09-28"
     }
   ]
 }

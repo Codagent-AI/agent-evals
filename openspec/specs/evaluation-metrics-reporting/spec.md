@@ -112,13 +112,13 @@ The total SHALL disclose its pricing verification: the weakest attempt verificat
 ### Requirement: Real-time pricing resolution
 For each Agent Runner agent attempt without exhaustive, non-overlapping reported USD cost, the harness SHALL resolve cost from the following sources in order, stopping at the first that yields a defensible price: an exact provider/model lookup in the current `https://models.dev/api.json` catalog; an exact provider/model row in the checked-in fallback pricing table; and an LLM judge pricing search. A successful catalog or fallback-table calculation SHALL require billing tokens for the attempt and a compatible rate for every billed token category, where billing tokens are either an exact reported partition or the estimate defined by Estimated attempt pricing. A fully attributed multi-model attempt SHALL be priced from its exact allocations separately; an unallocated remainder prevents a complete allocation-derived estimate. The harness SHALL record the retrieval time, response SHA-256 hash, requested and matched provider/model identifiers, rates, units, token categories used, and any pricing assumptions.
 
-A catalog or fallback-table price SHALL have verification `catalog` when it rests on an exact reported partition at base rates that need no context-tier assumption, and `estimated` when any pricing assumption applies. A price from the fallback table SHALL be labelled with the source `fallback-table`, distinct from `models.dev`.
+A catalog or fallback-table price SHALL have verification `catalog` when it rests on an exact reported partition at base rates that need no context-tier assumption, and `estimated` when any pricing assumption applies. A price from the fallback table SHALL be labelled with the source `fallback-table`, distinct from `models.dev`. When an earlier rate source failed before the fallback table resolved the attempt, pricing provenance SHALL retain each earlier source and failure reason in `prior_source_failures`.
 
 Provider-reported cost SHALL remain distinct evidence with its attempt or allocation scope, currency, coverage, and overlap. Only an exhaustive full-attempt USD cost or exhaustive, disjoint full allocation costs MAY resolve an attempt directly, with verification `reported`. Partial, unknown-currency, unknown-scope, or potentially overlapping amounts MAY contribute a labeled known subtotal only when doing so cannot double count; they SHALL NOT be promoted to a full-attempt cost.
 
 If neither models.dev nor the fallback table provides an exact usable match, the LLM judge SHALL be authorized to search for another pricing source and return a pricing finding. A judge-found rate SHALL have verification state `unverified`, MAY contribute to the total, and SHALL record the source URL, retrieval time, extracted rates and units, applicable token categories, requested and matched model identifiers, model-matching rationale, and judge model. Pricing lookup SHALL NOT affect product scoring.
 
-If no exact defensible match or sufficient usage can be established, the attempt's cost SHALL remain unavailable. When an attempt has billing tokens but no exact provider and model identity, its reason SHALL be `exact provider and model identity are required for pricing`. The harness SHALL NOT infer a price from a similar model name, from a default or configured model that the attempt did not report, or by omitting an unpriced token category to manufacture a complete estimate.
+If no exact defensible match or sufficient usage can be established, the attempt's cost SHALL remain unavailable. When an attempt has billing tokens but no exact provider and model identity, its reason SHALL be `exact provider and model identity are required for pricing`. When all reported billing categories are zero, its reason SHALL be `reported token usage is zero in every billed category`; `no reported token usage to price this attempt with` SHALL describe missing usage only. Such an attempt SHALL remain unresolved, and the total SHALL remain unavailable with any known subtotal retained. The harness SHALL NOT infer a price from a similar model name, from a default or configured model that the attempt did not report, or by omitting an unpriced token category to manufacture a complete estimate.
 
 #### Scenario: Agent Runner reports cost
 - **WHEN** an Agent Runner agent attempt contains a non-null reported USD cost
@@ -146,6 +146,10 @@ If no exact defensible match or sufficient usage can be established, the attempt
 - **AND** it records the row's source URL, retrieved date, rates, unit, and the table's SHA-256 hash
 - **AND** it does not invoke the LLM judge for that attempt
 
+#### Scenario: Fallback follows an incomplete catalog rate
+- **WHEN** models.dev matches the exact model but lacks a rate for a billed category and the fallback table resolves the attempt
+- **THEN** the fallback-table pricing provenance includes the models.dev failure in `prior_source_failures`
+
 #### Scenario: Similarly named model is not matched
 - **WHEN** an attempt's model differs from every models.dev and fallback-table model id, even if a listed id differs only by a suffix, prefix, version, or case
 - **THEN** neither source prices the attempt and resolution continues to the LLM judge
@@ -164,6 +168,11 @@ If no exact defensible match or sufficient usage can be established, the attempt
 - **WHEN** an attempt has billing tokens but a null provider or model
 - **THEN** its cost is unavailable with reason `exact provider and model identity are required for pricing`
 - **AND** no catalog, fallback-table, or judge price is applied
+
+#### Scenario: All reported billing categories are zero
+- **WHEN** an attempt reports billing categories and every category count is zero
+- **THEN** its cost is unresolved with reason `reported token usage is zero in every billed category`
+- **AND** the overall total remains unavailable while retaining the known subtotal
 
 #### Scenario: Pricing remains ambiguous
 - **WHEN** neither models.dev, the fallback table, nor the LLM judge establishes a defensible exact price or the required token usage is unavailable
@@ -469,7 +478,7 @@ Uncached input: a producer-supplied `input_uncached` count SHALL be used when av
 
 Cache writes: when uncached input is established, usage collection is complete, and the source marks the cache-write count unavailable with a reason that means the producer's usage record has no cache-write field, the harness SHALL price all uncached input at the exact model's input rate, record the assumption `cache_write_not_reported_priced_as_input` together with the producer's original reason, and resolve the attempt as `estimated`. The recognized reasons are `not_reported` and, for source format `codex-exec-jsonl-turn.completed` only, Agent Validator's `codex_usage_not_observed`. Any other unavailability reason SHALL leave the attempt without billing tokens and SHALL preserve that reason. Reasoning tokens that the source establishes are included in output SHALL be billed only within output.
 
-Context tiers: when the exact rate source defines a context-size tier, the harness SHALL apply the tier's rates only when the attempt's prompt size is known to exceed the tier threshold, and SHALL use base rates without an assumption when the prompt size is known not to exceed it. An attempt's reported total input, including cached input, is an upper bound on any single request's prompt size: when that total does not exceed the threshold, the prompt size is known not to exceed it. A reported per-request maximum above the threshold proves that at least one request crossed it, but does not identify the billed tokens for that request. The harness SHALL apply tier rates to an attempt's aggregate tokens only when those tokens belong to one request and that request's prompt is known to exceed the threshold. When a maximum is known but the token partition is not, the harness SHALL use base rates with `context_tier_ambiguous_priced_at_base`. When prompt size is unknown, it SHALL use base rates with `context_tier_unknown_priced_at_base`. Both assumptions resolve the attempt as `estimated`.
+Context tiers: when the exact rate source defines a context-size tier, the harness SHALL apply the tier's rates only when the attempt's prompt size is known to exceed the tier threshold, and SHALL use base rates without an assumption when the prompt size is known not to exceed it. An attempt's reported total input, including cached input, is an upper bound on any single request's prompt size: when that total does not exceed the threshold, the prompt size is known not to exceed it. A reported per-request maximum at or below the lowest threshold also establishes that every prompt is within it, even if aggregate input exceeds that threshold. A reported per-request maximum above the threshold proves that at least one request crossed it, but does not identify the billed tokens for that request. The harness SHALL apply tier rates to an attempt's aggregate tokens only when those tokens belong to one request and that request's prompt is known to exceed the threshold. When a maximum is known but the token partition is not, the harness SHALL use base rates with `context_tier_ambiguous_priced_at_base`. When prompt size is unknown, it SHALL use base rates with `context_tier_unknown_priced_at_base`. Both assumptions resolve the attempt as `estimated`.
 
 When one rate source declares several context-tier definitions whose thresholds or rates disagree, the harness SHALL NOT choose one by precedence. Base rates without an assumption SHALL apply only when the prompt size is known not to exceed the lowest declared threshold. Tier rates without an assumption SHALL apply only when the billed tokens belong to one request, that request's prompt is known to exceed the highest declared threshold, and every definition specifies the same tier rates. For any other known prompt size, the harness SHALL price at base rates, record the assumption `context_tier_ambiguous_priced_at_base`, and resolve the attempt as `estimated`; an unknown prompt size SHALL be handled as above.
 
@@ -517,6 +526,10 @@ When one rate source declares several context-tier definitions whose thresholds 
 - **WHEN** an attempt's exact rate source defines one or more context tiers and the attempt's total input, including cached input, does not exceed the lowest declared threshold
 - **THEN** the attempt is priced at base rates and no context-tier assumption is recorded
 
+#### Scenario: Per-request maximum is within the lowest tier threshold
+- **WHEN** total input exceeds the lowest context-tier threshold but the reported maximum prompt for any request is at or below it
+- **THEN** the attempt is priced at base rates with no context-tier assumption and verification `catalog` when no other assumption applies
+
 #### Scenario: Prompt size known to exceed a tier
 - **WHEN** an attempt's billed tokens belong to one request, its producer reports that request's prompt size above every declared context-tier threshold of its exact model, and all declared definitions agree on the tier rates
 - **THEN** the attempt is priced at those tier rates and no context-tier assumption is recorded
@@ -532,7 +545,7 @@ When one rate source declares several context-tier definitions whose thresholds 
 - **AND** its pricing provenance lists `context_tier_ambiguous_priced_at_base`
 
 ### Requirement: Pinned fallback pricing table
-The suite SHALL include a checked-in fallback pricing table at `evals/agent-runner/and-scene/pricing/fallback-rates.json`. Each row SHALL state provider, exact model id, per-category rates, unit, source URL, and retrieved date. A row SHALL match an attempt only when both its provider and model id equal the attempt's exactly. A table that cannot be read, fails validation, or contains more than one row for the same provider and model id SHALL be treated as unavailable for pricing, with its reason recorded, and resolution SHALL continue to the LLM judge. The repository's automated checks SHALL reject an invalid table.
+The suite SHALL include a checked-in fallback pricing table at `evals/agent-runner/and-scene/pricing/fallback-rates.json`. Each row SHALL state provider, exact model id, per-category rates, unit, the vendor's published pricing page as source URL, and retrieved date. Context tiers SHALL appear only as structured `tiers`; legacy `context_over_*` keys SHALL be rejected. A row SHALL match an attempt only when both its provider and model id equal the attempt's exactly. A table that cannot be read, fails validation, or contains more than one row for the same provider and model id SHALL be treated as unavailable for pricing, with its reason recorded, and resolution SHALL continue to the LLM judge. The repository's automated checks SHALL reject an invalid table.
 
 #### Scenario: Valid table row prices an attempt
 - **WHEN** models.dev cannot price an attempt and the table contains exactly one row for its provider and model id
@@ -546,6 +559,10 @@ The suite SHALL include a checked-in fallback pricing table at `evals/agent-runn
 #### Scenario: Invalid table is committed
 - **WHEN** a change introduces a fallback-table row missing a required field or duplicating another row's provider and model id
 - **THEN** the repository's automated checks fail
+
+#### Scenario: Legacy context tier appears in a fallback row
+- **WHEN** a fallback row contains a `context_over_*` rate key
+- **THEN** table validation rejects it even when a structured context tier is also present
 
 ### Requirement: Pricing verification ordering
 Attempt pricing verification states SHALL be ordered from strongest to weakest as `reported`, `catalog`, `estimated`, `unverified`. Wherever the harness combines resolved costs into one figure, the combined verification SHALL be the weakest state among the resolved parts. An unresolved part SHALL NOT be assigned a verification state; it SHALL instead make the combined amount unavailable while the known subtotal of resolved parts is retained. The pricing summary SHALL report as verified only when pricing is complete and every resolved cost is `reported` or `catalog`.
@@ -607,7 +624,7 @@ When the implementation cost total is complete, the rollup amounts SHALL sum to 
 - **AND** the entry lists each allocation's id, provider, model, amount, source, and verification
 
 ### Requirement: Per-step cost report
-`report.html` SHALL render a per-step cost table built from `cost.steps` and `cost.step_rollup`, grouped by top-level step. Each group SHALL show the rollup's attempt count, amount or unavailable state, known subtotal, and verification, followed by one row per attempt showing step path, role, model, token counts, cost or unavailable reason, source, verification, and assumptions. The report SHALL keep the existing agent-and-model cost table and SHALL display the pricing schedule identity. It SHALL NOT render the raw per-attempt pricing records as a JSON dump. A result that predates per-step cost SHALL render with a statement that per-step cost was not recorded, and without failing.
+`report.html` SHALL render a per-step cost table built from `cost.steps` and `cost.step_rollup`, grouped by top-level step. Each group SHALL show the rollup's attempt count, amount or unavailable state, known subtotal, and verification, followed by one row per attempt showing step path, role, model, token counts, cost or unavailable reason, source, verification, and assumptions. An incomplete rollup SHALL display verification as `partial (resolved: <verification>)`, or `partial` if no child is resolved. The report SHALL keep the existing agent-and-model cost table and SHALL display the pricing schedule identity. It SHALL NOT render the raw per-attempt pricing records as a JSON dump. A result that predates per-step cost SHALL render with a statement that per-step cost was not recorded, and without failing.
 
 #### Scenario: Per-step table is rendered
 - **WHEN** a result contains `cost.steps` and `cost.step_rollup`
@@ -616,6 +633,10 @@ When the implementation cost total is complete, the rollup amounts SHALL sum to 
 #### Scenario: Estimated and unavailable costs are distinguishable
 - **WHEN** a step contains an estimated attempt and an unavailable attempt
 - **THEN** the report labels the estimated cost with its verification and assumptions and shows the unavailable attempt's reason instead of a number
+
+#### Scenario: Incomplete rollup has resolved estimated children
+- **WHEN** a rollup has an unavailable amount and its resolved children have weakest verification `estimated`
+- **THEN** the report shows `partial (resolved: estimated)` beside the unavailable amount
 
 #### Scenario: Earlier published result is rendered
 - **WHEN** a report is regenerated for a result without `cost.steps`
@@ -632,4 +653,3 @@ An evaluator-only rescore SHALL re-resolve implementation pricing and cost from 
 #### Scenario: Published result directory is given as rescore source
 - **WHEN** the rescore source is a published result directory without the retained run state
 - **THEN** the harness rejects the source without producing a result
-

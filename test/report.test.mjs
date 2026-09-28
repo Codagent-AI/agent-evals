@@ -82,6 +82,15 @@ function result(overrides = {}) {
   }
 }
 
+test('incomplete step rollup labels resolved verification as partial', () => {
+  const html = renderReport(result({ cost: { steps: [], step_rollup: [{
+    top_level_step: 'implement-tasks', label: 'implement-tasks', complete: false,
+    amount_usd: null, known_subtotal_usd: 2, verification: 'estimated', attempt_count: 2,
+  }] } }))
+  assert.match(html, /partial \(resolved: estimated\)/)
+  assert.doesNotMatch(html, /<td>unavailable<\/td><td>\$2\.00<\/td><td>estimated<\/td>/)
+})
+
 test('an adjudicated gate renders its revised record as current and its harness output as raw data', () => {
   const adjudicated = result()
   adjudicated.score.gates = [{

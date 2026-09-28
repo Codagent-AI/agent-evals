@@ -56,6 +56,9 @@ export function validateFallbackRates(table) {
     if (row.unit !== PRICING_UNIT || !validSource) {
       throw new Error('fallback row has invalid unit or source')
     }
+    if (Object.keys(row.rates ?? {}).some((key) => /^context_over_\d+k$/.test(key))) {
+      throw new Error('fallback row has unsupported legacy context tier key')
+    }
     for (const key of RATE_KEYS) {
       const rate = row.rates?.[key]
       const required = REQUIRED_RATE_KEYS.includes(key)
@@ -343,6 +346,9 @@ function selectContextTier(definitions, promptBounds) {
     return { basis: 'within_lowest', rates: null, assumption: null }
   }
   const lowerKnown = Number.isFinite(promptBounds.lower)
+  if (lowerKnown && promptBounds.lower <= low) {
+    return { basis: 'within_lowest', rates: null, assumption: null }
+  }
   if (promptBounds.single_request === true && lowerKnown && promptBounds.lower > high && sameRates) {
     return { basis: 'above_highest', rates: definitions[0].rates, assumption: null }
   }
@@ -576,6 +582,9 @@ export async function resolveAttemptCost({ attempt, catalog, fallbackTable = nul
     return unresolved(`token category ${malformed} has an unusable count`)
   }
   if (billedCategories(tokens).length === 0) {
+    if (tokens && Object.keys(tokens).length > 0 && Object.values(tokens).every((count) => count === 0)) {
+      return unresolved(attempt.usage?.billing_reason ?? 'reported token usage is zero in every billed category')
+    }
     return unresolved(attempt.usage?.billing_reason ?? 'no reported token usage to price this attempt with')
   }
 
@@ -616,6 +625,7 @@ export async function resolveAttemptCost({ attempt, catalog, fallbackTable = nul
         billing_derivation: billingDerivation,
         context_tier: calculated.context_tier,
         rate_source: source,
+        ...(failures.length > 0 ? { prior_source_failures: [...failures] } : {}),
         ...rateSourceProvenance({ source, entry, catalog, fallbackTable }),
       },
     }

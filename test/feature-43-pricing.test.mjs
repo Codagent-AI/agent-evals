@@ -46,6 +46,10 @@ test('checked-in fallback is valid and exact-match only', () => {
   assert.equal(lookupFallbackRate(table, 'openai', 'gpt-6-luna')?.row.model, 'gpt-6-luna')
   assert.equal(lookupFallbackRate(table, 'openai', 'gpt-6-lun'), null)
   assert.throws(() => validateFallbackRates({ schema_version: 1, rows: [...table.rows, table.rows[0]] }), /duplicate/)
+  const legacy = structuredClone(table.rows[0])
+  legacy.rates.context_over_200k = { input: 1, output: 2 }
+  assert.throws(() => validateFallbackRates({ schema_version: 1, rows: [legacy] }), /unsupported legacy context tier key/)
+  assert.ok(table.rows.every((row) => !Object.keys(row.rates).some((key) => /^context_over_\d+k$/.test(key))))
 })
 
 test('Codex billing derivation preserves the cache-write assumption and collection gate', () => {
@@ -89,7 +93,46 @@ test('context tiers use bounds without choosing conflicting thresholds', () => {
   assert.equal(calculateRateCost({ cost: rates, tokens, promptBounds: { upper: 100000 } }).context_tier.basis, 'within_lowest')
   assert.equal(calculateRateCost({ cost: rates, tokens, promptBounds: { lower: 300000 } }).context_tier.basis, 'ambiguous')
   assert.equal(calculateRateCost({ cost: rates, tokens, promptBounds: { lower: 300000, single_request: true } }).context_tier.basis, 'above_highest')
-  assert.equal(calculateRateCost({ cost: rates, tokens, promptBounds: { lower: 240000 } }).context_tier.basis, 'ambiguous')
+  const conflicting = { ...rates, context_over_200k: { input: 0.2, output: 0.75 } }
+  assert.equal(calculateRateCost({ cost: conflicting, tokens, promptBounds: { lower: 240000 } }).context_tier.basis, 'ambiguous')
+  const knownSmall = calculateRateCost({ cost: rates, tokens, promptBounds: { upper: 300000, lower: 200000 } })
+  assert.equal(knownSmall.context_tier.basis, 'within_lowest')
+  assert.deepEqual(knownSmall.assumptions, [])
+})
+
+test('known-small prompt uses catalog verification even when total input exceeds the tier', async () => {
+  const attempt = { attempt_id: 'small-prompt', invoked_cli: true, provider: 'openai', model: 'gpt-6-luna',
+    max_request_prompt_tokens: 200000, usage: { state: 'available', billing_tokens: { input: 300000 } } }
+  const catalog = { state: 'available', url: 'https://models.dev/api.json', retrieved_at: '2026-09-28', sha256: 'fixture',
+    entries: { openai: { models: { 'gpt-6-luna': { cost: table.rows[0].rates } } } } }
+  const priced = await resolveAttemptCost({ attempt, catalog, fallbackTable: table })
+  assert.equal(priced.verification, 'catalog')
+  assert.equal(priced.provenance.context_tier.basis, 'within_lowest')
+  assert.deepEqual(priced.provenance.assumptions, [])
+})
+
+test('fallback provenance preserves a partial catalog rate failure', async () => {
+  const attempt = { attempt_id: 'fallback', invoked_cli: true, provider: 'openai', model: 'gpt-6-luna',
+    usage: { state: 'available', billing_tokens: { cached_input: 1000 } } }
+  const catalog = { state: 'available', url: 'https://models.dev/api.json', retrieved_at: '2026-09-28', sha256: 'fixture',
+    entries: { openai: { models: { 'gpt-6-luna': { cost: { input: 0.1, output: 0.5 } } } } } }
+  const priced = await resolveAttemptCost({ attempt, catalog, fallbackTable: table })
+  assert.equal(priced.source, 'fallback-table')
+  assert.deepEqual(priced.provenance.prior_source_failures, ['models.dev: rate source has no rate for token category cached_input'])
+})
+
+test('zero reported tokens and missing tokens have distinct unresolved reasons', async () => {
+  const zero = { attempt_id: 'zero', invoked_cli: true, provider: 'openai', model: 'gpt-6-luna',
+    usage: { state: 'available', billing_tokens: { input: 0, output: 0 } } }
+  const missing = { ...zero, attempt_id: 'missing', usage: { state: 'available', billing_tokens: null } }
+  const pricing = await resolveImplementationPricing({ attempts: [zero, missing], catalog: null, fallbackTable: table })
+  assert.equal(pricing.costs[0].reason, 'reported token usage is zero in every billed category')
+  assert.equal(pricing.costs[1].reason, 'no reported token usage to price this attempt with')
+  const resolved = { attempt_id: 'priced', invoked_cli: true, cost: { state: 'available', estimated_api_cost_usd: 2 } }
+  const withSubtotal = await resolveImplementationPricing({ attempts: [resolved, zero], catalog: null, fallbackTable: table })
+  const cost = aggregateImplementationCost({ attempts: [resolved, zero], costs: withSubtotal.costs })
+  assert.equal(cost.total.state, 'unavailable')
+  assert.equal(cost.total.known_cost_subtotal_usd, 2)
 })
 
 test('unresolved attempt leaves step amount unavailable with known subtotal', () => {

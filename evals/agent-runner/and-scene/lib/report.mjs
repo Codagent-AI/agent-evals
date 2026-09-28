@@ -171,7 +171,9 @@ function implementationUsageSection(result) {
       '', '', '', '', '',
       rollup.complete ? usd(rollup.amount_usd) : 'unavailable',
       usd(rollup.known_subtotal_usd),
-      rollup.verification ?? '',
+      rollup.complete
+        ? (rollup.verification ?? '')
+        : (rollup.verification ? `partial (resolved: ${rollup.verification})` : 'partial'),
       '', '',
       `${rollup.attempt_count} attempts`,
     ])
