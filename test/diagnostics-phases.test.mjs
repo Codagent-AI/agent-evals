@@ -707,7 +707,7 @@ test('the pricing and ambiguity jobs reuse the recorded judge authority', async 
   assert.equal(jobs.length, 2)
   for (const request of jobs) {
     assert.equal(request.authority.cli, 'codex')
-    assert.equal(request.authority.model, 'codex-default')
+    assert.equal(request.authority.model, 'gpt-6-sol')
     assert.equal(request.scoring_effect, 'none')
   }
 })

@@ -154,7 +154,7 @@ export function parseArgs(argv) {
     referenceBaseline: false,
     changeName: 'create-and-scene',
     changeNameProvided: false,
-    judgeModel: 'codex-default',
+    judgeModel: 'gpt-6-sol',
     repo: 'https://github.com/Codagent-AI/and-scene.git',
     fixtureRef: '892dfbcf3762bc95cdbae6f05b18cc2b168a5fab',
     capabilitiesPath: DEFAULT_CAPABILITIES,

@@ -29,7 +29,7 @@ WORKFLOW_RELATIVE_PATH="workflows/core/implement-change-v1.0.yaml"
 # satisfy the controller's clean-worktree provenance check.
 CONTAINER_AGENT_RUNNER_DIR="${CONTAINER_AGENT_RUNNER_DIR:-/agent-runner-source}"
 CONTAINER_AGENT_SKILLS_DIR="${CONTAINER_AGENT_SKILLS_DIR:-/agent-skills-source}"
-JUDGE_MODEL="${JUDGE_MODEL:-codex-default}"
+JUDGE_MODEL="${JUDGE_MODEL:-gpt-6-sol}"
 CANDIDATE_REF="${CANDIDATE_REF:-}"
 RESCORE_FROM="${RESCORE_FROM:-}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-}"
@@ -121,7 +121,7 @@ Options:
   --tester-cli CLI       Tester CLI adapter.
   --tester-model MODEL   Tester model.
   --tester-effort EFFORT Tester effort.
-  --judge-model MODEL    Eval-owned judge model. Default: the Codex CLI default.
+  --judge-model MODEL    Eval-owned judge model. Default: gpt-6-sol.
   --env NAME             Pass through one named environment variable.
                           Repeatable.
   --env-file PATH        Read simple NAME=value or export NAME=value entries
