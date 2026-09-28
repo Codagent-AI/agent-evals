@@ -156,9 +156,13 @@ function describesScreenshot(text, relativePath) {
   return mentions.some((mention, index) => {
     if (!mention) return false
     const escaped = mention.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const before = index < 3
-      ? '(^|[^a-zA-Z0-9._-])'
-      : '(^|[^a-zA-Z0-9._/-]|\\./|/output/)'
+    const before = index === 0
+      ? '(^|[^a-zA-Z0-9._/-]|/)'
+      : index === 1
+        ? '(^|[^a-zA-Z0-9._/-]|\\./|/output/)'
+        : index === 2
+          ? '(^|[^a-zA-Z0-9._/-])'
+          : '(^|[^a-zA-Z0-9._/-]|\\./|/output/)'
     return new RegExp(`${before}${escaped}(?=$|[^a-zA-Z0-9._/-]|\\.(?=$|\\s))`).test(text)
   })
 }

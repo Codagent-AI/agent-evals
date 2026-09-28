@@ -1396,3 +1396,26 @@ test('a well-formed tested revision off final history is reported specifically',
   assert.ok(lineage.findings.some(({ code }) => code === 'tested-revision-off-final-history'))
   assert.ok(!lineage.findings.some(({ code }) => code === 'tested-revision-unrecorded'))
 })
+
+test('a path to one screenshot does not describe another with the same filename', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'acceptance-screenshots/step-2.png': null,
+    'acceptance-screenshots/flow-a/step.png': Buffer.from([1, 2, 3]),
+    'acceptance-screenshots/flow-b/step.png': Buffer.from([4, 5, 6]),
+    'exploration-log.md': `# Exploration log\nTested revision: ${FINAL_SHA}\nSee ./acceptance-screenshots/flow-a/step.png.\n`,
+    'acceptance-handoff.md': `# Acceptance handoff\nCurrent head SHA: ${FINAL_SHA}\n`,
+  })
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+  const screenshot = (flow) => manifest.artifacts.find(({ origin }) => (
+    origin.relative_path === `output/acceptance-screenshots/${flow}/step.png`
+  ))
+  assert.equal(screenshot('flow-a').verification_state, 'verified')
+  assert.equal(screenshot('flow-b').verification_state, 'defective')
+  assert.ok(screenshot('flow-b').limitations.includes('missing-capture-metadata'))
+})
