@@ -93,8 +93,17 @@ while (pending.length > 0) {
   const text = readFileSync(path, 'utf8')
   for (const match of text.matchAll(/codagent:([a-z0-9][a-z0-9-]*)/g)) skills.add(match[1])
   for (const match of text.matchAll(/^\s*workflow:\s*[\x22\x27]?([^\x22\x27\s#]+)/gm)) {
-    const referenced = resolve(dirname(path), match[1])
-    if (existsSync(referenced)) pending.push(referenced)
+    const value = match[1]
+    if (value.includes('{{') || value.includes('${') || value.includes('$')) {
+      console.error(`warning: unresolved templated sub-workflow reference ${value} in ${path}; skills in it are not checked`)
+      continue
+    }
+    const referenced = resolve(dirname(path), value)
+    if (!existsSync(referenced)) {
+      console.error(`missing sub-workflow ${value} referenced by ${path}`)
+      process.exit(2)
+    }
+    pending.push(referenced)
   }
 }
 console.log([...skills].sort().join('\n'))

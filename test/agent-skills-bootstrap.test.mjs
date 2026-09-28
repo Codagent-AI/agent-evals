@@ -123,6 +123,8 @@ test('validates skills named by sub-workflows the workflow invokes', async () =>
     '  - id: verify-change',
     '    workflow: "verify-change.yaml"',
   ].join('\n'))
+  await mkdir(join(context.root, '..', 'core'), { recursive: true })
+  await writeFile(join(context.root, '..', 'core', 'implement-task.yaml'), 'steps: []\n')
   await writeFile(join(context.root, 'verify-change.yaml'), [
     'steps:',
     '  - id: run-validator',
@@ -191,4 +193,21 @@ test('fails before Codex installation when its plugin manifest does not export t
   assert.notEqual(result.status, 0)
   assert.match(result.stderr, /Codex Codagent plugin must export the pinned skills root/)
   await assert.rejects(readFile(context.calls, 'utf8'), { code: 'ENOENT' })
+})
+
+test('a missing literal sub-workflow fails before installation', async () => {
+  const context = await fixture()
+  await writeFile(context.workflow, 'steps:\n  - id: delegated\n    workflow: missing.yaml\n')
+  const result = run(context, ['claude'])
+  assert.equal(result.status, 2)
+  assert.match(result.stderr, /missing sub-workflow missing.yaml referenced by/)
+  await assert.rejects(readFile(context.calls, 'utf8'), { code: 'ENOENT' })
+})
+
+test('a templated sub-workflow warns while checking available skills', async () => {
+  const context = await fixture()
+  await writeFile(context.workflow, 'steps:\n  - id: delegated\n    workflow: "${next_workflow}.yaml"\n')
+  const result = run(context, ['claude'])
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(result.stderr, /warning: unresolved templated sub-workflow reference \$\{next_workflow\}\.yaml in/)
 })

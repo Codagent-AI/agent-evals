@@ -44,7 +44,8 @@ accepts a versioned id such as `grok-4.6` or a full Cursor id such as
 Cursor CLI rejects it. Before starting Agent Runner, the suite verifies the
 Codagent skills named by the workflow and the sub-workflows it invokes
 against the pinned Agent Skills checkout and installs that local plugin for
-each selected CLI.
+each selected CLI. Missing literal sub-workflows fail preflight; templated
+references emit a warning because their skills cannot be checked statically.
 
 The profile names match the workflow's `lead`, `implementor`, and `tester`
 agents; acceptance work runs through the `acceptance-tester` named session.
