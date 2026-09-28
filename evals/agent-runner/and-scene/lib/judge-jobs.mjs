@@ -208,9 +208,9 @@ function sourceJudgePrompt({ definition, slice, sources, evidence }) {
   return [
     `You are reviewing ${definition.brief}.`,
     '',
-    'Assess only the criteria listed below. Return a pass/fail verdict, a rationale,',
-    'and at least one cited verified source or evidence item for every one of them,',
-    'and return no other criteria.',
+    'Assess only the criterion IDs required by the response schema, using the criteria below',
+    'as context. Return exactly one pass/fail verdict, a rationale, and at least one cited',
+    'verified source or evidence item for each required ID, and return no other criteria.',
     '',
     'You are assessing technical implementation only. Do not judge visual composition,',
     'perceived transition quality, responsive visual quality, or overall polish: those',
@@ -268,7 +268,7 @@ function evidenceJudgePrompt({ job, definition, slice, view }) {
         'the candidate exercised anything.',
       ]
     : [
-        'Score only the four fixed assumption-handling criteria listed below.',
+        'Score only the assumption-handling criterion IDs required by the response schema.',
         'Diagnostic ambiguity severity and fixture proposals have no scoring effect.',
         'A genuine unresolved gap and an evidence-backed no-findings conclusion remain eligible for full credit.',
         'Compare candidate classifications against approved requirements and discoverable repository facts.',
@@ -351,12 +351,10 @@ export function buildJudgeRequest({
   const body = evidenceJob
     ? evidenceJudgePrompt({ job, definition, slice, view })
     : sourceJudgePrompt({ definition, slice, sources: discoverableSources, evidence })
+  const promptBody = body.join('\n')
   const prompt = [
-    ...body,
+    promptBody,
     '',
-    ...(fallbackEntries.length ? [
-      `Return a result for each browser fallback criterion ID: ${fallbackEntries.map(({ id }) => id).join(', ')}.`,
-    ] : []),
     '# Response',
     `Reply with JSON matching this schema: ${JSON.stringify(responseSchema)}`,
   ].join('\n')
@@ -384,6 +382,7 @@ export function buildJudgeRequest({
     source_audit_version: !evidenceJob && neutral?.source_root
       ? 'closed-world-v8-absence-confirmed-fail'
       : null,
+    prompt_body: promptBody,
     prompt,
   }
 }
@@ -726,10 +725,12 @@ function buildMissingCriteriaRequest(request, missing) {
     criteria: missing,
     schema,
     prompt: [
-      request.prompt,
+      request.prompt_body ?? request.prompt,
       '',
       '# Missing criterion results',
       `Return results for exactly these criterion IDs and no others: ${missing.join(', ')}`,
+      '',
+      '# Response',
       `Reply with JSON matching this schema: ${JSON.stringify(schema)}`,
     ].join('\n'),
   }
