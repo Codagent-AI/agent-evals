@@ -583,7 +583,7 @@ export async function resolveAttemptCost({ attempt, catalog, fallbackTable = nul
   }
   if (billedCategories(tokens).length === 0) {
     if (tokens && Object.keys(tokens).length > 0 && Object.values(tokens).every((count) => count === 0)) {
-      return unresolved(attempt.usage?.billing_reason ?? 'reported token usage is zero in every billed category')
+      return unresolved(attempt.usage?.billing_reason ?? 'reported token usage is zero')
     }
     return unresolved(attempt.usage?.billing_reason ?? 'no reported token usage to price this attempt with')
   }

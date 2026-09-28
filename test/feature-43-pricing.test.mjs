@@ -42,8 +42,9 @@ function costsFromSource(pricing, attempts, usageSource) {
 
 test('checked-in fallback is valid and exact-match only', () => {
   assert.equal(table.state, 'available')
-  assert.equal(table.rows.length, 3)
+  assert.equal(table.rows.length, 4)
   assert.equal(lookupFallbackRate(table, 'openai', 'gpt-6-luna')?.row.model, 'gpt-6-luna')
+  assert.equal(lookupFallbackRate(table, 'openai', 'gpt-6-astra')?.row.model, 'gpt-6-astra')
   assert.equal(lookupFallbackRate(table, 'openai', 'gpt-6-lun'), null)
   assert.throws(() => validateFallbackRates({ schema_version: 1, rows: [...table.rows, table.rows[0]] }), /duplicate/)
   const legacy = structuredClone(table.rows[0])
@@ -121,12 +122,26 @@ test('fallback provenance preserves a partial catalog rate failure', async () =>
   assert.deepEqual(priced.provenance.prior_source_failures, ['models.dev: rate source has no rate for token category cached_input'])
 })
 
+test('gpt-6-astra prices from the pinned table when models.dev is unavailable', async () => {
+  const offline = { state: 'unavailable', reason: 'offline', entries: null }
+  const attempt = { attempt_id: 'astra', invoked_cli: true, provider: 'openai', model: 'gpt-6-astra',
+    usage: { state: 'available', billing_tokens: { input: 1_000_000, cached_input: 1_000_000,
+      cache_write: 1_000_000, output: 100_000 } } }
+  const priced = await resolveAttemptCost({ attempt, catalog: offline, fallbackTable: table, invoke: null })
+  assert.equal(priced.source, 'fallback-table')
+  assert.equal(priced.amount_usd, 28.5)
+  assert.equal(priced.provenance.source_url, 'https://developers.openai.com/api/docs/models/gpt-6-astra')
+  const row = lookupFallbackRate(table, 'openai', 'gpt-6-astra').row
+  assert.deepEqual(row.rates.tiers[0], { input: 20, output: 75, cache_read: 2, cache_write: 25,
+    tier: { type: 'context', size: 272000 } })
+})
+
 test('zero reported tokens and missing tokens have distinct unresolved reasons', async () => {
   const zero = { attempt_id: 'zero', invoked_cli: true, provider: 'openai', model: 'gpt-6-luna',
     usage: { state: 'available', billing_tokens: { input: 0, output: 0 } } }
   const missing = { ...zero, attempt_id: 'missing', usage: { state: 'available', billing_tokens: null } }
   const pricing = await resolveImplementationPricing({ attempts: [zero, missing], catalog: null, fallbackTable: table })
-  assert.equal(pricing.costs[0].reason, 'reported token usage is zero in every billed category')
+  assert.equal(pricing.costs[0].reason, 'reported token usage is zero')
   assert.equal(pricing.costs[1].reason, 'no reported token usage to price this attempt with')
   const resolved = { attempt_id: 'priced', invoked_cli: true, cost: { state: 'available', estimated_api_cost_usd: 2 } }
   const withSubtotal = await resolveImplementationPricing({ attempts: [resolved, zero], catalog: null, fallbackTable: table })
@@ -159,6 +174,10 @@ test('retained result replay prices Runner Codex and keeps Validator gaps', asyn
   const cost = aggregateImplementationCost({ attempts, costs: pricing.costs })
   assert.equal(cost.total.state, 'unavailable')
   assert.ok(cost.total.known_cost_subtotal_usd > 0)
+  const runnerRows = cost.rows.filter((row) => row.provider === 'openai' && row.model === 'gpt-6-luna')
+  assert.ok(runnerRows.length > 0)
+  assert.equal(runnerRows.reduce((sum, row) => sum + row.attempt_count, 0), 11)
+  assert.equal(Number(runnerRows.reduce((sum, row) => sum + row.cost.amount_usd, 0).toFixed(6)), 0.825724)
   assert.equal(cost.steps.length, 33)
   assert.equal(cost.step_rollup.reduce((sum, row) => sum + row.attempt_count, 0), 33)
 })

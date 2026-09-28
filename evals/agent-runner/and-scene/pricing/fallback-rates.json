@@ -52,6 +52,31 @@
       "retrieved_date": "2026-09-28"
     },
     {
+      "provider": "openai",
+      "model": "gpt-6-astra",
+      "unit": "usd_per_million_tokens",
+      "rates": {
+        "input": 10,
+        "output": 50,
+        "cache_read": 1,
+        "cache_write": 12.5,
+        "tiers": [
+          {
+            "input": 20,
+            "output": 75,
+            "cache_read": 2,
+            "cache_write": 25,
+            "tier": {
+              "type": "context",
+              "size": 272000
+            }
+          }
+        ]
+      },
+      "source_url": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+      "retrieved_date": "2026-09-28"
+    },
+    {
       "provider": "anthropic",
       "model": "claude-opus-5-5",
       "unit": "usd_per_million_tokens",

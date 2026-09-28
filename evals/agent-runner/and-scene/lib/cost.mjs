@@ -51,7 +51,10 @@ function completeTokenTotals(totals) {
 }
 
 function verificationOf(states) {
-  return weakestVerification(states)
+  // Rows retain the historical verified vocabulary for reported and catalog
+  // prices; the pricing summary keeps their more precise source states.
+  const weakest = weakestVerification(states)
+  return weakest === 'reported' || weakest === 'catalog' ? 'verified' : weakest
 }
 
 // The attempt's resolved amount, or null when it has no defensible cost.
@@ -61,10 +64,9 @@ function resolvedAmount(resolution) {
     : null
 }
 
-// A lone attributed allocation can use the attempt's resolved identity. An
-// unallocated remainder has no observed model identity, even when it is the
-// only usage piece. Several pieces keep one fragment each, plus a cost-only
-// fragment when the attempt's cost was not divided among them.
+// A single usage piece takes the attempt's resolved identity and whole cost.
+// Several pieces keep one fragment each, plus a cost-only fragment when the
+// attempt's cost was not divided among them.
 function costFragments(attempt, costNotAllocated) {
   const pieces = [
     ...(attempt.allocations ?? []).map((allocation) => ({ ...allocation, allocation: 'attributed' })),
@@ -74,13 +76,12 @@ function costFragments(attempt, costNotAllocated) {
   ]
   if (pieces.length <= 1) {
     const only = pieces[0] ?? {}
-    const unallocated = only.allocation === 'unallocated'
     return [{
-      allocation: unallocated ? 'unallocated' : 'attempt',
+      allocation: 'attempt',
       allocation_id: only.allocation_id ?? null,
-      provider: unallocated ? null : (only.provider ?? attempt.provider),
-      model: unallocated ? null : (only.model ?? attempt.model),
-      effort: unallocated ? null : (only.effort ?? attempt.effort),
+      provider: only.provider ?? attempt.provider,
+      model: only.model ?? attempt.model,
+      effort: only.effort ?? attempt.effort,
       usage: only.usage ?? attempt.usage,
     }]
   }
@@ -226,7 +227,7 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
       if (fragment.allocation === 'unattributed_cost') {
         rowAmount = resolution?.amount_usd
       } else if (
-        (fragment.allocation === 'attempt' || (fragment.allocation === 'unallocated' && pieceCount(attempt) === 1))
+        fragment.allocation === 'attempt'
         && resolution?.state === 'resolved'
       ) {
         rowAmount = resolution.amount_usd

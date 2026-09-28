@@ -54,7 +54,7 @@ History, delivery, usage, identity, per-model attribution, and pricing completen
 ### Requirement: Agent-and-model implementation cost aggregation
 The harness SHALL assign each Agent Runner agent attempt to its workflow agent role and actual provider/model using workflow, step, role-configuration, and usage source-and-version details. It SHALL aggregate attempts by the exact tuple `agent role + provider + model`, preserving token categories and summing every attempt and retry.
 
-Each aggregate row SHALL contain its agent role, tool, provider, model, allocation kind, participating-attempt count, available token-category totals, canonical token totals, cost amount, cost source, verification state, and completeness. A row's verification state SHALL be the weakest contributing resolved cost under Pricing verification ordering: `reported`, `catalog`, `estimated`, or `unverified`. The pricing summary's complete-and-verified classification SHALL remain separate from row verification. A multi-model dispatch SHALL remain one dispatch while producing separate attributed model rows and, when applicable, an explicit unallocated row; row participation counts are non-additive. Unallocated usage SHALL keep null provider and model even when it is the sole usage piece and the attempt has a selected identity. When a multi-model dispatch's cost is resolved only as a whole-attempt amount that is not divided among its allocations, the harness SHALL report that amount in a separate cost-only row for the attempt's agent role with allocation kind `unattributed_cost`, no provider, no model, and no token usage; it SHALL NOT divide the amount among the model rows, and those model rows SHALL keep their usage and mark their cost as not allocated rather than unresolved. When the total is complete, it SHALL equal the sum of all row amounts, including cost-only rows. The result SHALL count the authoritative attempt total once and SHALL also report canonical total tokens across all implementation attempts when complete. The result SHALL report a numeric total estimated API cost only when every Agent Runner agent attempt that invoked a CLI has a resolved cost. If any such attempt remains unresolved, it SHALL report a known-cost subtotal and an unavailable/incomplete total; it SHALL NOT obtain a numeric total by treating unresolved attempts as zero.
+Each aggregate row SHALL contain its agent role, tool, provider, model, allocation kind, participating-attempt count, available token-category totals, canonical token totals, cost amount, cost source, verification state, and completeness. A row's verification state SHALL be unverified when any contributing resolved cost is unverified, otherwise estimated when any is estimated, and otherwise verified. A multi-model dispatch SHALL remain one dispatch while producing separate attributed model rows and, when applicable, an explicit unallocated row; row participation counts are non-additive. When a multi-model dispatch's cost is resolved only as a whole-attempt amount that is not divided among its allocations, the harness SHALL report that amount in a separate cost-only row for the attempt's agent role with allocation kind `unattributed_cost`, no provider, no model, and no token usage; it SHALL NOT divide the amount among the model rows, and those model rows SHALL keep their usage and mark their cost as not allocated rather than unresolved. When the total is complete, it SHALL equal the sum of all row amounts, including cost-only rows. The result SHALL count the authoritative attempt total once and SHALL also report canonical total tokens across all implementation attempts when complete. The result SHALL report a numeric total estimated API cost only when every Agent Runner agent attempt that invoked a CLI has a resolved cost. If any such attempt remains unresolved, it SHALL report a known-cost subtotal and an unavailable/incomplete total; it SHALL NOT obtain a numeric total by treating unresolved attempts as zero.
 
 The total SHALL disclose its pricing verification: the weakest attempt verification state among resolved attempts under the ordering defined by Pricing verification ordering, and whether it includes `estimated` figures and whether it includes `unverified` figures. This disclosure SHALL be present whether the total is numeric or unavailable.
 
@@ -66,18 +66,18 @@ The total SHALL disclose its pricing verification: the weakest attempt verificat
 - **WHEN** attempts for one agent role use different actual models
 - **THEN** the result reports a separate aggregate row for each provider/model
 
-#### Scenario: Aggregate row combines reported and catalog prices
+#### Scenario: Reported and catalog prices share a row
 - **WHEN** an aggregate row has resolved costs with verification `reported` and `catalog`
-- **THEN** its verification is `catalog` while the pricing summary may classify complete pricing as verified
+- **THEN** its verification is `verified`
 
 #### Scenario: One dispatch uses several models
 - **WHEN** one authoritative attempt contains attributed model allocations and an unallocated remainder
 - **THEN** the result reports each allocation and the unallocated remainder separately while keeping the dispatch count at one
 - **AND** it counts the attempt-level usage only once in the implementation total
 
-#### Scenario: Unallocated usage is the only usage piece
+#### Scenario: Sole unallocated usage takes the attempt identity
 - **WHEN** an attempt has only unallocated usage and its attempt-level identity names a selected provider and model
-- **THEN** the unallocated row retains null provider and model while carrying that usage and any resolved whole-attempt cost
+- **THEN** one `attempt` row carries that usage, the resolved provider and model, and any resolved whole-attempt cost
 
 #### Scenario: Every implementation attempt has resolved cost
 - **WHEN** every Agent Runner agent attempt that invoked a CLI has a reported or calculated cost
@@ -126,7 +126,7 @@ Provider-reported cost SHALL remain distinct evidence with its attempt or alloca
 
 If neither models.dev nor the fallback table provides an exact usable match, the LLM judge SHALL be authorized to search for another pricing source and return a pricing finding. A judge-found rate SHALL have verification state `unverified`, MAY contribute to the total, and SHALL record the source URL, retrieval time, extracted rates and units, applicable token categories, requested and matched model identifiers, model-matching rationale, and judge model. Pricing lookup SHALL NOT affect product scoring.
 
-If no exact defensible match or sufficient usage can be established, the attempt's cost SHALL remain unavailable. When an attempt has billing tokens but no exact provider and model identity, its reason SHALL be `exact provider and model identity are required for pricing`. When all reported billing categories are zero, its reason SHALL be `reported token usage is zero in every billed category`; `no reported token usage to price this attempt with` SHALL describe missing usage only. Such an attempt SHALL remain unresolved, and the total SHALL remain unavailable with any known subtotal retained. The harness SHALL NOT infer a price from a similar model name, from a default or configured model that the attempt did not report, or by omitting an unpriced token category to manufacture a complete estimate.
+If no exact defensible match or sufficient usage can be established, the attempt's cost SHALL remain unavailable. When an attempt has billing tokens but no exact provider and model identity, its reason SHALL be `exact provider and model identity are required for pricing`. When all reported billing categories are zero, its reason SHALL be `reported token usage is zero`; `no reported token usage to price this attempt with` SHALL describe missing usage only. Such an attempt SHALL remain unresolved, and the total SHALL remain unavailable with any known subtotal retained. The harness SHALL NOT infer a price from a similar model name, from a default or configured model that the attempt did not report, or by omitting an unpriced token category to manufacture a complete estimate.
 
 #### Scenario: Agent Runner reports cost
 - **WHEN** an Agent Runner agent attempt contains a non-null reported USD cost
@@ -179,7 +179,7 @@ If no exact defensible match or sufficient usage can be established, the attempt
 
 #### Scenario: All reported billing categories are zero
 - **WHEN** an attempt reports billing categories and every category count is zero
-- **THEN** its cost is unresolved with reason `reported token usage is zero in every billed category`
+- **THEN** its cost is unresolved with reason `reported token usage is zero`
 - **AND** the overall total remains unavailable while retaining the known subtotal
 
 #### Scenario: Pricing remains ambiguous
@@ -573,7 +573,7 @@ The suite SHALL include a checked-in fallback pricing table at `evals/agent-runn
 - **THEN** table validation rejects it even when a structured context tier is also present
 
 ### Requirement: Pricing verification ordering
-Attempt pricing verification states SHALL be ordered from strongest to weakest as `reported`, `catalog`, `estimated`, `unverified`. Wherever the harness combines resolved costs into one figure, the combined verification SHALL be the weakest state among the resolved parts. An unresolved part SHALL NOT be assigned a verification state; it SHALL instead make the combined amount unavailable while the known subtotal of resolved parts is retained. The pricing summary SHALL report as verified only when pricing is complete and every resolved cost is `reported` or `catalog`.
+Attempt pricing verification states SHALL be ordered from strongest to weakest as `reported`, `catalog`, `estimated`, `unverified`. The pricing summary, totals, and step rollups SHALL use the weakest state among their resolved parts; aggregate rows SHALL use the row vocabulary defined in Agent-and-model implementation cost aggregation. An unresolved part SHALL NOT be assigned a verification state; it SHALL instead make the combined amount unavailable while the known subtotal of resolved parts is retained. The pricing summary SHALL report as verified only when pricing is complete and every resolved cost is `reported` or `catalog`.
 
 #### Scenario: Weakest state wins
 - **WHEN** a combined figure has resolved parts with verifications `reported`, `catalog`, and `estimated`
