@@ -336,8 +336,8 @@ hash as `verification_workflow_sha256`, and reads the final step outcomes at
 `verify-change > sub:verify-change > <step>` in the run history. Earlier Runner
 revisions declared the same steps at the top level of implement-change; that
 layout is still accepted so their runs remain verifiable and rescorable. Delivery
-reports the leaf step (for example `run-validator`) and retains its full
-`step_path`. The
+and the published workflow result report the leaf step (for example
+`run-validator`) and retain the full `step_path` in the history entry. The
 sub-workflow shares its parent's session directory, so acceptance evidence is
 still discovered under the run's `output/` directory. The Agent Runner checkout must be a clean Git worktree; the suite
 records whichever commit, workflow hash, and CLI version it used. The Agent
@@ -436,8 +436,9 @@ do not stop independent scored judging. The exploratory `codagent:prepare-accept
 skill writes `exploration-log.md` and stores screenshots under
 `acceptance-screenshots/` without a metadata file; that layout is complete. A
 screenshot with no metadata file is verified only when a verified flow record,
-exploration log, findings record, handoff, or pass record names it or a
-its exact immediate directory (`described_by`), including a path followed by sentence punctuation, so the judge reads what was inspected
+exploration log, findings record, handoff, or pass record names its path,
+filename, or exact immediate directory (`described_by`). `./` links, absolute
+paths, and sentence-ending paths count, so the judge reads what was inspected
 and observed there. A screenshot no metadata or verified record describes, or
 one beside malformed JSON metadata, is retained as defective, unverified
 candidate evidence. Present but stale,

@@ -256,9 +256,9 @@ function isFinalStepEntry(entry, prefix, step) {
 // The last recorded entry of a final delivery step, such as the final
 // `run-validator`, in whichever layout the history uses.
 export function finalWorkflowStepEntry(history = [], step) {
-  const entries = history.filter((entry) => normalizeHistoryEntry(entry).step)
-  const prefix = finalStepPrefix(entries.map(normalizeHistoryEntry))
-  const entry = entries.findLast((candidate) => isFinalStepEntry(normalizeHistoryEntry(candidate), prefix, step))
+  const entries = history.map(normalizeHistoryEntry).filter(({ step }) => step)
+  const prefix = finalStepPrefix(entries)
+  const entry = entries.findLast((candidate) => isFinalStepEntry(candidate, prefix, step))
   return entry ? { ...entry, step, step_path: historyStepPath(entry) } : null
 }
 
@@ -292,7 +292,7 @@ export function checkWorkflowHistory(history = [], { skipValidator = false } = {
     missing_steps: missingSteps,
     invalid_outcomes: invalidOutcomes,
     prohibited_effects: prohibitedEffects,
-    observed_steps: normalized.map(({ step }) => step),
+    observed_steps: normalized.map((entry) => historyStepPath(entry).at(-1)),
   }
 }
 

@@ -1309,10 +1309,16 @@ test('a screenshot is described only by its own path, whole filename, or immedia
   for (const [description, verified] of [
     ['The output directory contains acceptance notes.', false],
     ['The unrelated-dir/ directory contains images.', false],
+    ['The unrelated/acceptance-screenshots/ directory contains images.', false],
     ['See other-step-2.png for the observed state.', false],
     ['See step-2.png for the observed state.', true],
     ['Observed acceptance-screenshots/step-2.png.', true],
+    ['See ./acceptance-screenshots/step-2.png for the observed state.', true],
+    ['See /sessions/r1/output/acceptance-screenshots/step-2.png for the observed state.', true],
+    ['See xstep-2.png for an unrelated image.', false],
     ['See acceptance-screenshots/ for the observed state.', true],
+    ['See ./acceptance-screenshots/ for the observed state.', true],
+    ['See /sessions/r1/output/acceptance-screenshots/ for the observed state.', true],
     ['See acceptance-screenshots for the observed state.', true],
   ]) {
     const context = await fixture()

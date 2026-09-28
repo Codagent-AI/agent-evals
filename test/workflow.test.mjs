@@ -350,7 +350,7 @@ test('delegated history finds final delivery steps inside the verify-change sub-
     missing_steps: [],
     invalid_outcomes: [],
     prohibited_effects: [],
-    observed_steps: history.map(({ step }) => step),
+    observed_steps: history.map(({ step_path }) => step_path.at(-1)),
   })
 
   const skipped = checkWorkflowHistory(delegatedHistory({ validatorOutcome: 'skipped' }), {
@@ -521,4 +521,18 @@ test('boundary reports the leaf of a nested observed step and retains its path',
   const boundary = checkBoundary({ observedSteps: [{ step: 'verify-change', step_path: path, outcome: 'success' }] })
   assert.equal(boundary.last_observed_step, 'run-validator')
   assert.deepEqual(boundary.step_path, path)
+})
+
+test('nested observed steps use path leaves in workflow history', () => {
+  const checked = checkWorkflowHistory([{ step: 'verify-change', step_path: [...VERIFY, 'run-validator'], outcome: 'success' }])
+  assert.deepEqual(checked.observed_steps, ['run-validator'])
+})
+
+test('final workflow step normalizes string and id-only history entries', () => {
+  assert.deepEqual(finalWorkflowStepEntry(['run-validator'], 'run-validator'), {
+    step: 'run-validator', outcome: 'success', step_path: ['run-validator'],
+  })
+  assert.deepEqual(finalWorkflowStepEntry([{ id: 'run-validator', outcome: 'success' }], 'run-validator'), {
+    id: 'run-validator', step: 'run-validator', outcome: 'success', step_path: ['run-validator'],
+  })
 })

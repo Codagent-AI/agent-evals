@@ -153,10 +153,13 @@ function describesScreenshot(text, relativePath) {
   const segments = withinOutput.split('/')
   const parent = segments.slice(0, -1).join('/')
   const mentions = [relativePath, withinOutput, segments.at(-1), parent, `${parent}/`]
-  return mentions.some((mention) => {
+  return mentions.some((mention, index) => {
     if (!mention) return false
     const escaped = mention.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    return new RegExp(`(^|[^a-zA-Z0-9._/-])${escaped}(?=$|[^a-zA-Z0-9._/-]|\\.(?=$|\\s))`).test(text)
+    const before = index < 3
+      ? '(^|[^a-zA-Z0-9._-])'
+      : '(^|[^a-zA-Z0-9._/-]|\\./|/output/)'
+    return new RegExp(`${before}${escaped}(?=$|[^a-zA-Z0-9._/-]|\\.(?=$|\\s))`).test(text)
   })
 }
 
