@@ -178,6 +178,52 @@ test('multi-model reported attempt keeps model usage and one undivided cost row'
   assert.equal(result.steps.length, 1)
 })
 
+const mixedAttempt = () => ({ attempt_id: 'mixed', invoked_cli: true, step: 'deliver', agent_role: 'lead',
+  usage: { state: 'available' }, allocations: [
+    { allocation_id: 'one', provider: 'openai', model: 'gpt-6-luna', usage: { state: 'available', tokens: { input: 1 } } },
+    { allocation_id: 'two', provider: 'anthropic', model: 'claude-opus-5-5', usage: { state: 'available', tokens: { output: 2 } } },
+  ] })
+const rowSum = (rows) => Number(rows.reduce((sum, row) => sum + (row.cost.amount_usd ?? 0), 0).toFixed(10))
+
+test('a full-attempt cost with only some allocation costs stays one undivided cost row', () => {
+  const costs = [{ attempt_id: 'mixed', state: 'resolved', amount_usd: 3, known_subtotal_usd: 3,
+    source: 'agent-runner-reported', verification: 'reported',
+    allocation_costs: [{ allocation_id: 'one', amount_usd: 1, state: 'resolved', source: 'agent-runner-reported' }] }]
+  const result = aggregateImplementationCost({ attempts: [mixedAttempt()], costs })
+  assert.equal(result.total.estimated_api_cost_usd, 3)
+  assert.equal(result.rows.find((row) => row.allocation === 'unattributed_cost').cost.amount_usd, 3)
+  const modelRows = result.rows.filter((row) => row.allocation === 'attributed')
+  assert.ok(modelRows.every((row) => row.cost.state === 'not_allocated' && row.cost.amount_usd === null))
+  assert.equal(rowSum(result.rows), result.total.estimated_api_cost_usd)
+})
+
+test('allocation costs that exhaust the resolved amount divide it among model rows', () => {
+  const costs = [{ attempt_id: 'mixed', state: 'resolved', amount_usd: 0.3, known_subtotal_usd: 0.3,
+    source: 'mixed-allocation-pricing', verification: 'estimated', allocation_costs: [
+      { allocation_id: 'one', amount_usd: 0.1, source: 'models.dev', verification: 'estimated' },
+      { allocation_id: 'two', amount_usd: 0.2, source: 'models.dev', verification: 'estimated' },
+    ] }]
+  const result = aggregateImplementationCost({ attempts: [mixedAttempt()], costs })
+  assert.equal(result.rows.some((row) => row.allocation === 'unattributed_cost'), false)
+  assert.deepEqual(result.rows.map((row) => row.cost.amount_usd), [0.1, 0.2])
+  assert.equal(rowSum(result.rows), result.total.estimated_api_cost_usd)
+})
+
+test('a step entry states the pricing assumptions of every allocation', () => {
+  const costs = [{ attempt_id: 'mixed', state: 'resolved', amount_usd: 0.3, known_subtotal_usd: 0.3,
+    source: 'models.dev', verification: 'estimated', allocation_costs: [
+      { allocation_id: 'one', amount_usd: 0.1, source: 'models.dev', verification: 'estimated' },
+      { allocation_id: 'two', amount_usd: 0.2, source: 'models.dev', verification: 'estimated' },
+    ], provenance: { allocations: [
+      { allocation_id: 'one', provenance: { assumptions: ['context_tier_unknown_priced_at_base'] } },
+      { allocation_id: 'two', provenance: { assumptions: [
+        'cache_write_not_reported_priced_as_input', 'context_tier_unknown_priced_at_base',
+      ] } },
+    ] } }]
+  const [step] = aggregateImplementationCost({ attempts: [mixedAttempt()], costs }).steps
+  assert.deepEqual(step.assumptions, ['context_tier_unknown_priced_at_base', 'cache_write_not_reported_priced_as_input'])
+})
+
 test('historical result and new step schedule both render safely', async () => {
   const historical = await readJson('../evals/agent-runner/and-scene/results/d7f384ba-0e94-4926-852e-6662fec752be-rep-1/result.json')
   const oldHtml = renderReport(historical, { current: historical })

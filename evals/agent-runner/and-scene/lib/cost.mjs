@@ -95,6 +95,21 @@ function pieceCount(attempt) {
   return (attempt.allocations?.length ?? 0) + (attempt.unallocated_usage ? 1 : 0)
 }
 
+// Allocation costs divide a resolved amount only when every usage piece has a
+// complete cost and together they account for that whole amount. Anything less
+// is evidence about the attempt, not a division of its cost: splitting on it
+// would leave model rows that no longer sum to the total.
+function allocationCostsExhaust(attempt, resolution) {
+  if (attempt.unallocated_usage) return false
+  const costs = (attempt.allocations ?? []).map((allocation) => (
+    resolution.allocation_costs?.find((cost) => cost.allocation_id === allocation.allocation_id)
+  ))
+  const complete = costs.every((cost) => (
+    cost && cost.state !== 'incomplete' && Number.isFinite(cost.amount_usd) && cost.amount_usd >= 0
+  ))
+  return complete && roundUsd(costs.reduce((sum, cost) => sum + cost.amount_usd, 0)) === roundUsd(resolution.amount_usd)
+}
+
 // `attemptsComplete` is false when Agent Runner's metrics were rejected or its
 // history was partial. Without it, an empty or truncated attempt list would
 // aggregate to a confident $0.00 — the most misleading number this module could
@@ -135,11 +150,12 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
       unresolved.push(attempt.attempt_id)
     }
 
-    // A multi-model attempt whose cost resolved only as a whole-attempt amount:
-    // its model rows keep their usage, and the amount goes to one cost-only row.
+    // A multi-model attempt whose resolved amount its allocation costs do not
+    // exhaust: its model rows keep their usage, and the whole amount goes to one
+    // cost-only row.
     const costNotAllocated = pieceCount(attempt) > 1
       && resolution?.state === 'resolved'
-      && !resolution.allocation_costs?.length
+      && !allocationCostsExhaust(attempt, resolution)
 
     for (const fragment of costFragments(attempt, costNotAllocated)) {
       const descriptor = {
@@ -203,7 +219,7 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
         }
       }
 
-      const allocationCost = resolution?.allocation_costs?.find(
+      const allocationCost = costNotAllocated ? undefined : resolution?.allocation_costs?.find(
         (entry) => entry.allocation_id === fragment.allocation_id,
       )
       let rowAmount = allocationCost?.amount_usd
@@ -344,7 +360,11 @@ function stepEntry(attempt, resolution) {
     state: resolution?.state ?? 'unavailable',
     source: resolution?.source ?? null,
     verification: amount === null ? null : resolution.verification ?? null,
-    assumptions: resolution?.provenance?.assumptions ?? [],
+    // Estimated allocations each carry their own pricing assumptions.
+    assumptions: [...new Set([
+      ...(resolution?.provenance?.assumptions ?? []),
+      ...(resolution?.provenance?.allocations ?? []).flatMap((entry) => entry.provenance?.assumptions ?? []),
+    ])],
     reason: amount === null ? resolution?.reason ?? 'cost unavailable' : null,
     duration_ms: attempt.duration_ms ?? null,
     allocations,
