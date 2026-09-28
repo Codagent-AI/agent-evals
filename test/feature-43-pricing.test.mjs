@@ -58,6 +58,9 @@ test('Codex billing derivation preserves the cache-write assumption and collecti
   assert.equal(deriveBillingTokens({ ...envelopes, cache_read: available(2_000_000) }, 'codex:turn.completed', { collectionComplete: true }).billing_tokens, null)
   assert.equal(deriveBillingTokens({ ...envelopes, cache_write: missing('codex_usage_not_observed') }, 'codex-exec-jsonl-turn.completed', { collectionComplete: true }).billing_tokens.input, 74204)
   assert.equal(deriveBillingTokens({ ...envelopes, cache_write: missing('other') }, 'codex:turn.completed', { collectionComplete: true }).billing_tokens, null)
+  const reportedWrite = deriveBillingTokens({ ...envelopes, cache_write: available(10_000) }, 'codex:turn.completed', { collectionComplete: true })
+  assert.equal(reportedWrite.billing_tokens, null)
+  assert.match(reportedWrite.billing_reason, /cannot be derived beside a reported cache_write/)
 })
 
 test('Codex sample estimates at exact rates and reprices retained envelopes', async () => {
@@ -189,4 +192,46 @@ test('rescore refreshes a legacy native single allocation from attempt envelopes
   const resolution = await resolveAttemptCost({ attempt: legacy, catalog: null, fallbackTable: table, invoke: null })
   assert.equal(resolution.state, 'resolved')
   assert.equal(resolution.verification, 'estimated')
+})
+
+test('a catalog miss and a fallback-table miss hand the attempt to the judge', async () => {
+  const attempt = { attempt_id: 'unlisted', invoked_cli: true, provider: 'openai', model: 'gpt-7-unlisted',
+    usage: { state: 'available', billing_tokens: { input: 1_000_000, output: 1_000_000 } }, cost: { state: 'unavailable' } }
+  const catalog = { state: 'available', url: 'https://models.dev/api.json', retrieved_at: '2026-09-27', sha256: 'hash',
+    entries: { openai: { models: { 'gpt-6-luna': { cost: table.rows[0].rates } } } } }
+  const requests = []
+  const invoke = async (request) => {
+    requests.push(request)
+    return JSON.stringify({ found: true, source_url: 'https://example.test/pricing', matched_provider: 'openai',
+      matched_model: 'gpt-7-unlisted', unit: 'usd_per_million_tokens', rates: { input: 2, output: 8 },
+      rationale: 'the vendor page lists this model', judge_model: 'codex-default' })
+  }
+  const resolution = await resolveAttemptCost({ attempt, catalog, fallbackTable: table, invoke })
+  assert.equal(requests.length, 1)
+  assert.equal(resolution.state, 'resolved')
+  assert.equal(resolution.source, 'judge-web-search')
+  assert.equal(resolution.verification, 'unverified')
+  assert.equal(resolution.amount_usd, 10)
+})
+
+test('an undivided multi-model cost renders as a whole-attempt row without usage counts', async () => {
+  const historical = await readJson('../evals/agent-runner/and-scene/results/d7f384ba-0e94-4926-852e-6662fec752be-rep-1/result.json')
+  const attempts = [{ attempt_id: 'mixed', invoked_cli: true, step: 'deliver', agent_role: 'lead',
+    usage: { state: 'available' }, allocations: [
+      { allocation_id: 'one', provider: 'openai', model: 'gpt-6-luna',
+        usage: { state: 'available', tokens: { input: 1 } } },
+      { allocation_id: 'two', provider: 'anthropic', model: 'claude-opus-5-5',
+        usage: { state: 'available', tokens: { output: 2 } } },
+    ] }]
+  const cost = aggregateImplementationCost({ attempts, costs: [{ attempt_id: 'mixed', state: 'resolved', amount_usd: 3,
+    known_subtotal_usd: 3, source: 'agent-runner-reported', verification: 'reported', allocation_costs: [] }] })
+  const current = { ...historical, cost }
+  const html = renderReport(current, { current })
+  const row = html.split('<tr>').find((cells) => cells.includes('whole-attempt cost (not divided among models)'))
+  assert.ok(row, 'the whole-attempt cost row is rendered')
+  const cells = [...row.matchAll(/<td>(.*?)<\/td>/g)].map((match) => match[1])
+  // Six usage columns stay blank: the row carries a cost, never usage of its own.
+  assert.deepEqual(cells.slice(4, 13), ['whole-attempt cost (not divided among models)', '1',
+    '', '', '', '', '', '', 'incomplete'])
+  assert.equal(cells[13], '$3')
 })

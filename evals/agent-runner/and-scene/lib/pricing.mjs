@@ -508,6 +508,11 @@ export async function resolveAttemptCost({ attempt, catalog, fallbackTable = nul
   // price each exact identity separately and add the disjoint allocations;
   // never collapse them into a made-up whole-attempt model identity.
   if ((attempt.allocations?.length ?? 0) > 0 && !attempt.unallocated_usage) {
+    // Allocations divide the attempt's collection; a partial collection leaves
+    // every allocation's count truncated, however complete its envelopes look.
+    if (attempt.usage?.state !== 'available') {
+      return unresolved(attempt.usage?.billing_reason ?? 'token usage collection is incomplete')
+    }
     const allocationCosts = []
     for (const allocation of attempt.allocations) {
       const tokens = allocation.usage?.billing_tokens

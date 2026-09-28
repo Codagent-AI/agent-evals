@@ -9,7 +9,9 @@ import {
   RUNNER_METRICS_FILENAME,
   ingestRunnerMetrics,
   readRunnerMetrics,
+  refreshBillingTokens,
 } from '../evals/agent-runner/and-scene/lib/runner-metrics.mjs'
+import { loadFallbackRates, resolveAttemptCost } from '../evals/agent-runner/and-scene/lib/pricing.mjs'
 
 const RUN_ID = 'run-7f3a'
 const WORKFLOW = 'implement-change'
@@ -1000,4 +1002,70 @@ test('no recorded session directory leaves metrics unavailable', async () => {
 
   assert.equal(ingested.state, 'rejected')
   assert.equal(ingested.attempts.length, 0)
+})
+
+// Agent Validator's streaming Codex collector marks a timed-out or failed
+// review's collection partial while every envelope still carries a count.
+function partialCollectionValidator({ allocated }) {
+  const tokens = canonicalTokens({ cache_write: unavailable('codex_usage_not_observed') })
+  return validatorPayload({
+    observed_identities: [{
+      ...identity('gpt-6-luna', 'identity-a'),
+      provider: { availability: 'available', value: 'openai', reason: null },
+    }],
+    tokens,
+    completeness: {
+      collection: 'partial', canonical_fields: 'partial', normalized_total: 'complete',
+      per_model_attribution: allocated ? 'complete' : 'unavailable', history: 'complete',
+    },
+    allocations: allocated
+      ? [{ allocation_id: 'allocation-a', observed_identity_ref: 'identity-a', usage: tokens }]
+      : [],
+    unallocated_usage: null,
+    provider_reported_costs: [],
+    provenance: {
+      ...validatorPayload().provenance,
+      source_format_version: { availability: 'available', value: 'codex-exec-jsonl-turn.completed', reason: null },
+    },
+  })
+}
+
+for (const allocated of [false, true]) {
+  test(`partial Validator collection is never priced (${allocated ? 'with' : 'without'} an allocation)`, async () => {
+    const payload = v4Metrics({
+      native_measurements: [],
+      measurement_heads: [head(invocationPayload()), head(partialCollectionValidator({ allocated }))],
+    })
+    const ingested = ingestRunnerMetrics({ text: JSON.stringify(payload), runId: RUN_ID, workflow: WORKFLOW })
+    const [attempt] = ingested.attempts
+    const fallbackTable = await loadFallbackRates()
+    const assertUnpriced = async (label) => {
+      assert.equal(attempt.usage.state, 'partial', label)
+      for (const item of [attempt, ...attempt.allocations, attempt.unallocated_usage].filter(Boolean)) {
+        assert.notEqual(item.usage.state, 'available', `${label}: ${item.allocation_id ?? 'attempt'}`)
+        assert.equal(item.usage.billing_tokens, null, `${label}: ${item.allocation_id ?? 'attempt'}`)
+      }
+      const resolution = await resolveAttemptCost({ attempt, catalog: null, fallbackTable, invoke: null })
+      assert.equal(resolution.state, 'unavailable', label)
+      assert.match(resolution.reason, /usage collection is incomplete/, label)
+      assert.doesNotMatch(resolution.reason, /no reported token usage/, label)
+    }
+    assert.equal(attempt.allocations.length, allocated ? 1 : 0)
+    await assertUnpriced('ingest')
+    refreshBillingTokens(ingested.attempts)
+    await assertUnpriced('rescore')
+  })
+}
+
+test('rescore gates a stored allocation on its attempt\'s partial collection', async () => {
+  const payload = v4Metrics({
+    native_measurements: [],
+    measurement_heads: [head(invocationPayload()), head(partialCollectionValidator({ allocated: true }))],
+  })
+  const [attempt] = ingestRunnerMetrics({ text: JSON.stringify(payload), runId: RUN_ID, workflow: WORKFLOW }).attempts
+  // A result stored before the ingest gate recorded the allocation as available.
+  attempt.allocations[0].usage.state = 'available'
+  refreshBillingTokens([attempt])
+  assert.equal(attempt.allocations[0].usage.billing_tokens, null)
+  assert.match(attempt.allocations[0].usage.billing_reason, /usage collection is incomplete/)
 })
