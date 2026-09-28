@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 
 import {
+  JUDGE_ATTEMPTS,
   PRODUCT_JUDGE_JOB_IDS,
   buildSourceAuditRequest,
   buildJudgeRequest,
@@ -19,6 +20,10 @@ const rubrics = await loadRubrics()
 const automated = rubrics.automated.rubric
 
 const authority = { cli: 'codex', model: 'gpt-5-codex', effort: 'high' }
+const browserFallbacks = [
+  'demo-required-scene-content',
+  'demo-evolving-scene-structure',
+].map((id) => ({ id, rationale: 'browser could not observe it', looked_for: ['scene content'], evidence: ['browser-probe.json'] }))
 
 function judgeOutput(ids, overrides = {}) {
   return JSON.stringify({
@@ -85,7 +90,7 @@ test('a fallback request adds not-observed scene criteria and requires source ci
     }],
   })
   assert.ok(request.criteria.includes('demo-evolving-scene-structure'))
-  assert.match(request.prompt, /Browser check could not observe/i)
+  assert.match(request.prompt, /## Browser fallback criteria/)
   assert.match(request.prompt, /data-layout-id/)
   assert.throws(
     () => parseJudgeOutput(JSON.stringify({ results: request.criteria.map((id) => ({
@@ -96,6 +101,73 @@ test('a fallback request adds not-observed scene criteria and requires source ci
     }),
     /source citations/i,
   )
+})
+
+test('demo fallback criteria are required by the per-job schema and appear inside the criteria section', () => {
+  const request = buildJudgeRequest({
+    rubrics, job: 'demo-integration', authority, sources: ['src/demo.tsx'],
+    notObserved: browserFallbacks,
+  })
+  assert.deepEqual(request.criteria.slice(-2), browserFallbacks.map(({ id }) => id))
+  assert.deepEqual(request.schema.properties.results.items.properties.id.enum, request.criteria)
+  assert.equal(request.schema.properties.results.minItems, request.criteria.length)
+  assert.equal(request.schema.properties.results.maxItems, request.criteria.length)
+  const criteriaSection = request.prompt.split('# Criteria\n')[1].split('# NEUTRAL SOURCE FILES')[0]
+  for (const { id } of browserFallbacks) {
+    assert.match(criteriaSection, new RegExp(`- ${id}:`))
+    assert.match(request.rubric_slice, new RegExp(`- ${id}:`))
+  }
+  assert.doesNotMatch(request.prompt, /# Browser check could not observe/)
+})
+
+test('a missing-criteria retry asks only for omitted fallback IDs and merges all results', async () => {
+  const request = buildJudgeRequest({
+    rubrics, job: 'demo-integration', authority, sources: ['src/demo.tsx'],
+    notObserved: browserFallbacks,
+  })
+  const native = request.criteria.slice(0, -2)
+  const fallback = request.criteria.slice(-2)
+  const invoked = []
+  const result = await runJudgeJob({
+    request,
+    invoke: async (next) => {
+      invoked.push(next)
+      if (invoked.length === 1) return judgeOutput(native)
+      return JSON.stringify({ results: fallback.map((id) => ({
+        id, verdict: 'fail', rationale: 'not implemented', evidence: ['src/demo.tsx'],
+      })) })
+    },
+  })
+  assert.equal(result.ok, true)
+  assert.equal(invoked.length, 2)
+  assert.deepEqual(invoked[1].criteria, fallback)
+  assert.deepEqual(invoked[1].schema.properties.results.items.properties.id.enum, fallback)
+  assert.equal(invoked[1].schema.properties.results.minItems, 2)
+  assert.equal(invoked[1].schema.properties.results.maxItems, 2)
+  for (const id of fallback) assert.match(invoked[1].prompt, new RegExp(id))
+  assert.deepEqual(result.results.map(({ id }) => id), request.criteria)
+  assert.deepEqual(result.attempts[0].missing, fallback)
+  assert.equal(result.attempts[0].retry, 'missing-criteria')
+})
+
+test('a judge that keeps omitting fallback criteria exhausts the attempt budget', async () => {
+  const request = buildJudgeRequest({
+    rubrics, job: 'demo-integration', authority, sources: ['src/demo.tsx'],
+    notObserved: browserFallbacks,
+  })
+  const native = request.criteria.slice(0, -2)
+  const invoked = []
+  const result = await runJudgeJob({
+    request,
+    invoke: async (next) => {
+      invoked.push(next)
+      return judgeOutput(native)
+    },
+  })
+  assert.equal(result.ok, false)
+  assert.equal(result.results, null)
+  assert.equal(invoked.length, JUDGE_ATTEMPTS)
+  assert.equal(result.attempts.length, JUDGE_ATTEMPTS)
 })
 
 test('fallback passes cannot cite paths outside the verified delivered-source inventory', async () => {
