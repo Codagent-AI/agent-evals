@@ -1548,3 +1548,24 @@ test('the controller converts product-owned serve failure into a conclusive unsc
   assert.equal(result.outcome.product_failure.gate, 'verification-every-produced-step-renders')
   assert.equal(browserOpened, false)
 })
+
+test('evaluator-only rescore refreshes retained Codex usage and pricing', async () => {
+  const context = await environment()
+  const fixture = JSON.parse(await readFile(new URL('./fixtures/feature-43-retained-attempts.json', import.meta.url)))
+  const entries = JSON.parse(await readFile(new URL('./fixtures/feature-43-catalog.json', import.meta.url)))
+  const imported = importedRescore(context)
+  imported.implementation_metrics = { state: 'ingested', complete: true, attempts: fixture.attempts }
+  imported.pricing = { complete: false, costs: [] }
+  imported.cost = { total: { state: 'unavailable' } }
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    loadRescoreSource: async () => imported,
+    pricingFetch: async () => ({ ok: true, text: async () => JSON.stringify(entries) }),
+  })
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const phase = await readJson(join(context.runDir, 'phases/metrics-pricing.json'))
+  assert.equal(phase.repriced, true)
+  assert.equal(phase.pricing.repriced_from.run_id, imported.source_run_id)
+  assert.equal(phase.cost.steps.length, fixture.attempts.length)
+  assert.equal(phase.pricing.costs.filter((cost) => cost.source === 'models.dev' && cost.verification === 'estimated').length, 11)
+  assert.equal(phase.pricing.costs.filter((cost) => cost.source === 'agent-runner-reported').length, 6)
+})

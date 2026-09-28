@@ -40,13 +40,14 @@ export function validateFallbackRates(table) {
 
 export async function loadFallbackRates({ path = 'evals/agent-runner/and-scene/pricing/fallback-rates.json' } = {}) {
   const displayPath = relative(process.cwd(), resolve(path))
+  let sha256 = null
   try {
     const body = await readFile(path, 'utf8')
-    const sha256 = hashString(body)
+    sha256 = hashString(body)
     const rows = validateFallbackRates(JSON.parse(body)).rows
     return { state: 'available', path: displayPath, sha256, rows, row_count: rows.length, reason: null }
   } catch (error) {
-    return { state: 'unavailable', path: displayPath, sha256: null, rows: [], row_count: 0, reason: error.message }
+    return { state: 'unavailable', path: displayPath, sha256, rows: [], row_count: 0, reason: error.message }
   }
 }
 

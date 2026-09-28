@@ -5,7 +5,7 @@ issue's two delivery slices in order: estimated pricing first, then per-step cos
 a commit with a green `npm run check`, so the work can be split across two pull requests when the
 issue's PR 1 / PR 2 plan is followed.
 
-- [ ] [Estimated pricing, fallback rates, and per-step cost for and-scene results](tasks/01-estimated-per-step-cost.md)
+- [x] [Estimated pricing, fallback rates, and per-step cost for and-scene results](tasks/01-estimated-per-step-cost.md)
 
 These are not implementor tasks. They run after this task:
 
