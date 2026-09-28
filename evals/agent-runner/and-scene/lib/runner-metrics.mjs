@@ -416,6 +416,20 @@ export function refreshBillingTokens(attempts = []) {
       Object.assign(item.usage, billingFields(item.usage.token_envelopes, sourceFormat,
         item.usage.state === 'available', item.usage.reason))
     }
+    // Older native attempts retained the attempt envelopes but omitted them on
+    // their sole observed allocation. Both records describe the same usage.
+    const allocation = attempt.allocations?.length === 1 && !attempt.unallocated_usage
+      ? attempt.allocations[0] : null
+    if (allocation?.allocation_id === 'native-observed' && allocation.usage
+      && !allocation.usage.token_envelopes && attempt.usage?.token_envelopes) {
+      Object.assign(allocation.usage, {
+        token_envelopes: attempt.usage.token_envelopes,
+        billing_tokens: attempt.usage.billing_tokens,
+        billing_assumptions: attempt.usage.billing_assumptions,
+        billing_derivation: attempt.usage.billing_derivation,
+        billing_reason: attempt.usage.billing_reason,
+      })
+    }
   }
   return attempts
 }

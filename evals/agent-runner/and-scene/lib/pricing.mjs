@@ -258,7 +258,7 @@ export function calculateRateCost({ cost, tokens, assumptions = [], promptBounds
     const rateKeys = ['input', 'output', 'cache_read', 'cache_write', 'reasoning']
     const sameRates = definitions.every((item) => rateKeys.every((key) => item.rates[key] === definitions[0].rates[key]))
     if (Number.isFinite(promptBounds.upper) && promptBounds.upper <= low) basis = 'within_lowest'
-    else if (Number.isFinite(promptBounds.lower) && promptBounds.lower > high && sameRates) {
+    else if (promptBounds.single_request === true && Number.isFinite(promptBounds.lower) && promptBounds.lower > high && sameRates) {
       basis = 'above_highest'; selected = definitions[0].rates
     } else if (Number.isFinite(promptBounds.lower)) { basis = 'ambiguous'; assumptions = [...assumptions, 'context_tier_ambiguous_priced_at_base'] }
     else { basis = 'unknown'; assumptions = [...assumptions, 'context_tier_unknown_priced_at_base'] }
@@ -284,7 +284,8 @@ function promptBoundsOf(item) {
   const upper = item.usage?.token_envelopes?.input_total?.value
   const tokens = item.usage?.billing_tokens
   return { upper: Number.isFinite(upper) ? upper : (tokens ? (tokens.input ?? 0) + (tokens.cached_input ?? 0) + (tokens.cache_write ?? 0) : null),
-    lower: item.max_request_prompt_tokens ?? null }
+    lower: item.max_request_prompt_tokens ?? null,
+    single_request: item.request_count === 1 || item.usage?.request_count === 1 }
 }
 
 export function buildPricingRequest({ attempt, authority }) {

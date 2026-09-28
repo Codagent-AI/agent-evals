@@ -57,7 +57,8 @@ test('context tiers use bounds without choosing conflicting thresholds', () => {
   const rates = table.rows[0].rates
   const tokens = { input: 1000 }
   assert.equal(calculateRateCost({ cost: rates, tokens, promptBounds: { upper: 100000 } }).context_tier.basis, 'within_lowest')
-  assert.equal(calculateRateCost({ cost: rates, tokens, promptBounds: { lower: 300000 } }).context_tier.basis, 'above_highest')
+  assert.equal(calculateRateCost({ cost: rates, tokens, promptBounds: { lower: 300000 } }).context_tier.basis, 'ambiguous')
+  assert.equal(calculateRateCost({ cost: rates, tokens, promptBounds: { lower: 300000, single_request: true } }).context_tier.basis, 'above_highest')
   assert.equal(calculateRateCost({ cost: rates, tokens, promptBounds: { lower: 240000 } }).context_tier.basis, 'ambiguous')
 })
 
@@ -148,4 +149,30 @@ test('complete retained attempt pricing reconciles rows, steps, and total', asyn
   assert.equal(cost.total.complete, true)
   assert.ok(Math.abs(cost.rows.reduce((sum, row) => sum + (row.cost.amount_usd ?? 0), 0) - total) < 1e-9)
   assert.ok(Math.abs(cost.step_rollup.reduce((sum, row) => sum + row.amount_usd, 0) - total) < 1e-9)
+})
+
+
+test('aggregate tokens do not all receive a high context rate from one long request', async () => {
+  const attempt = { attempt_id: 'mixed-requests', invoked_cli: true, provider: 'openai', model: 'gpt-6-luna',
+    max_request_prompt_tokens: 300000, usage: { state: 'available', billing_tokens: { input: 400000 },
+      token_envelopes: { input_total: available(400000) } }, cost: { state: 'unavailable' } }
+  const resolution = await resolveAttemptCost({ attempt, catalog: { state: 'available', url: 'catalog',
+    entries: { openai: { models: { 'gpt-6-luna': { cost: table.rows[0].rates } } } } },
+  fallbackTable: table, invoke: null })
+  assert.equal(resolution.amount_usd, 0.04)
+  assert.equal(resolution.verification, 'estimated')
+  assert.ok(resolution.provenance.assumptions.includes('context_tier_ambiguous_priced_at_base'))
+})
+
+test('rescore refreshes a legacy native single allocation from attempt envelopes', async () => {
+  const legacy = { attempt_id: 'native', invoked_cli: true, provider: 'openai', model: 'gpt-6-luna',
+    usage_source: 'codex:turn.completed', usage: { state: 'available', token_envelopes: envelopes, billing_tokens: null },
+    cost: { state: 'unavailable' }, allocations: [{ allocation_id: 'native-observed', provider: 'openai',
+      model: 'gpt-6-luna', usage: { state: 'available', billing_tokens: null } }], unallocated_usage: null }
+  refreshBillingTokens([legacy])
+  assert.deepEqual(legacy.allocations[0].usage.billing_tokens, legacy.usage.billing_tokens)
+  assert.deepEqual(legacy.allocations[0].usage.billing_assumptions, ['cache_write_not_reported_priced_as_input'])
+  const resolution = await resolveAttemptCost({ attempt: legacy, catalog: null, fallbackTable: table, invoke: null })
+  assert.equal(resolution.state, 'resolved')
+  assert.equal(resolution.verification, 'estimated')
 })

@@ -408,8 +408,8 @@
   - Tier definitions are collected without ranking.
   - Base rates with no assumption apply only when the prompt is known to be within the lowest
     threshold.
-  - Tier rates apply only when the prompt is known to be above the highest threshold and all definitions
-    agree on rates.
+  - Tier rates apply only when the billed tokens belong to one request, its prompt is known to be
+    above the highest threshold, and all definitions agree on rates.
   - Any other known size gets base rates plus `context_tier_ambiguous_priced_at_base` (`estimated`).
     Unknown sizes keep `context_tier_unknown_priced_at_base`.
 - **Where:** the spec requirement plus a disputed-range scenario; design §2 and Decision 4; unit tests

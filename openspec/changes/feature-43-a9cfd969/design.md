@@ -195,7 +195,7 @@ refresh.
      - If there are no definitions, use the base rates.
      - If `promptBounds.upper <= low`, use the base rates with no assumption. The prompt is known to be
        within every definition.
-     - If `promptBounds.lower > high` and every definition has identical rates, use those tier rates
+     - If the billed tokens belong to one request, `promptBounds.lower > high`, and every definition has identical rates, use those tier rates
        with no assumption.
      - If `promptBounds.lower` is known (the prompt size is known) but neither case above holds, use the
        base rates and add `context_tier_ambiguous_priced_at_base`. This covers a known size between
@@ -212,6 +212,7 @@ refresh.
 - `upper`: the `input_total` envelope value. If that is unavailable, `input + cached_input +
   cache_write` from the billing tokens.
 - `lower`: a producer-reported per-request prompt size. No current producer emits one, so it is `null`.
+- `single_request`: true only when the producer establishes that the billed token partition belongs to one request. An aggregate attempt with one long request cannot apply tier rates to its other requests.
 
 This is the only place a future `max_request_prompt_tokens`-style field would be read.
 
