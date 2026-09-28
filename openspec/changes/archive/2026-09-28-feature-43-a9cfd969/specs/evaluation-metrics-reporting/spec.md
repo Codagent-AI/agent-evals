@@ -99,9 +99,10 @@ If no exact defensible match or sufficient usage can be established, the attempt
 - **WHEN** an attempt's model differs from every models.dev and fallback-table model id, even if a listed id differs only by a suffix, prefix, version, or case
 - **THEN** neither source prices the attempt and resolution continues to the LLM judge
 
-#### Scenario: Models.dev and fallback table cannot price an attempt
-- **WHEN** models.dev is unavailable or lacks an exact usable provider/model match and the fallback table has no exact usable row
-- **THEN** the harness asks the LLM judge to search for another pricing source
+#### Scenario: Models.dev cannot price an attempt
+- **WHEN** models.dev is unavailable or lacks an exact usable provider/model match
+- **THEN** the harness consults the checked-in fallback pricing table for an exact provider/model row
+- **AND** when the fallback table also has no exact usable row, the harness asks the LLM judge to search for another pricing source
 
 #### Scenario: Judge finds another pricing source
 - **WHEN** the LLM judge returns a source, exact model match, rates, units, and matching rationale sufficient to calculate the attempt cost
