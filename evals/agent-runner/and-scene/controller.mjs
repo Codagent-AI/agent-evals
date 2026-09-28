@@ -40,8 +40,8 @@ import { loadCandidateRescoreSource } from './lib/rescore.mjs'
 import { runCandidateVerification } from './lib/candidate-verification.mjs'
 import { createHostCandidateServer } from './lib/candidate-server-host.mjs'
 import { aggregateImplementationCost, summarizeEvalOwnedUsage } from './lib/cost.mjs'
-import { fetchPricingCatalog, needsPricingLookup, resolveImplementationPricing } from './lib/pricing.mjs'
-import { readRunnerMetrics } from './lib/runner-metrics.mjs'
+import { fetchPricingCatalog, needsPricingLookup, resolveImplementationPricing, loadFallbackRates } from './lib/pricing.mjs'
+import { readRunnerMetrics, refreshBillingTokens } from './lib/runner-metrics.mjs'
 import {
   createTimingLedger,
   mergeTimingLedgers,
@@ -1500,22 +1500,15 @@ export async function runEvaluation({
 
     'metrics-pricing': async () => {
       if (rescore) {
-        await writeJsonAtomic(join(runDir, 'phases/metrics-pricing.json'), {
-          metrics: record.metrics,
-          pricing: record.pricing,
-          cost: record.cost,
-          imported_from: {
-            run_id: importedRun.source_run_id,
-            provenance_sha256: importedRun.provenance_sha256,
-          },
+        refreshBillingTokens(record.metrics.attempts)
+      } else {
+        record.metrics = await readRunnerMetrics({
+          sessionDir: record.run?.session_dir ?? null,
+          runId: record.run?.run_id ?? runId,
+          workflow: boundary.workflow,
         })
-        return
       }
-      record.metrics = await readRunnerMetrics({
-        sessionDir: record.run?.session_dir ?? null,
-        runId: record.run?.run_id ?? runId,
-        workflow: boundary.workflow,
-      })
+      const fallbackTable = await loadFallbackRates()
 
       const catalog = needsPricingLookup(record.metrics.attempts)
         ? await fetchPricingCatalog(pricingFetch ? { fetchImpl: pricingFetch } : {})
@@ -1523,9 +1516,11 @@ export async function runEvaluation({
       record.pricing = await resolveImplementationPricing({
         attempts: record.metrics.attempts,
         catalog,
+        fallbackTable,
         invoke: judgeInvoke,
         authority: judgeAuthority,
       })
+      if (rescore) record.pricing.repriced_from = { run_id: importedRun.source_run_id, provenance_sha256: importedRun.provenance_sha256 }
       record.cost = {
         ...aggregateImplementationCost({
           attempts: record.metrics.attempts,
@@ -1546,6 +1541,7 @@ export async function runEvaluation({
         metrics: record.metrics,
         pricing: record.pricing,
         cost: record.cost,
+        ...(rescore ? { repriced: true, imported_from: { run_id: importedRun.source_run_id, provenance_sha256: importedRun.provenance_sha256 } } : {}),
       })
     },
 

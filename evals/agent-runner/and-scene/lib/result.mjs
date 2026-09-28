@@ -95,6 +95,8 @@ function implementationCostCompleteness(cost) {
 function pricingCompleteness(pricing) {
   if (!pricing) return 'unavailable'
   if (pricing.complete === false) return 'incomplete'
+  if (pricing.includes_unverified === true) return 'unverified'
+  if (pricing.includes_estimated === true) return 'estimated'
   if (pricing.verified === true) return 'verified'
   return 'unverified'
 }
