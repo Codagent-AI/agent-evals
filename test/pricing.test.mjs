@@ -570,6 +570,120 @@ test('an attempt with no usable usage is never priced', async () => {
   assert.match(resolution.reason, /usage/)
 })
 
+test('missing identity takes precedence over unavailable usage without consulting the catalog or judge', async () => {
+  let catalogReads = 0
+  let judgeCalls = 0
+  const catalog = { get state() { catalogReads += 1; return 'available' } }
+  const resolution = await resolveAttemptCost({
+    attempt: attempt({ model: null, usage: { state: 'unavailable', tokens: null } }),
+    catalog,
+    invoke: async () => { judgeCalls += 1; return '{}' },
+  })
+
+  assert.equal(resolution.reason, 'exact provider and model identity are required for pricing')
+  assert.equal(catalogReads, 0)
+  assert.equal(judgeCalls, 0)
+})
+
+test('Validator identity is required even when usage is available', async () => {
+  const resolution = await resolveAttemptCost({
+    attempt: attempt({ provider: null, model: null, usage: { state: 'available', billing_tokens: null, tokens: { input: 1000 } } }),
+    catalog: await loadedCatalog(),
+    invoke: async () => { throw new Error('judge must not be called') },
+  })
+
+  assert.equal(resolution.reason, 'exact provider and model identity are required for pricing')
+})
+
+test('missing usage with known identity reports the usage reason without asking the judge', async () => {
+  const resolution = await resolveAttemptCost({
+    attempt: attempt({ usage: null }),
+    catalog: await loadedCatalog(),
+    invoke: async () => { throw new Error('judge must not be called') },
+  })
+
+  assert.equal(resolution.reason, 'no reported token usage to price this attempt with')
+})
+
+test('available Codex usage without a billing partition reports the partition blocker', async () => {
+  for (const billingTokens of [null, {}]) {
+    let judgeCalls = 0
+    const resolution = await resolveAttemptCost({
+      attempt: attempt({ usage: { state: 'available', tokens: { input: 1000, output: 50 }, billing_tokens: billingTokens } }),
+      catalog: await loadedCatalog(),
+      invoke: async () => { judgeCalls += 1; return '{}' },
+    })
+
+    assert.equal(resolution.state, 'unavailable')
+    assert.equal(resolution.reason, 'usage has no complete billing-token partition to price against the catalog')
+    assert.equal(resolution.amount_usd, null)
+    assert.equal(judgeCalls, 0)
+  }
+})
+
+test('available usage with only zero billing counts reports zero usage without asking the judge', async () => {
+  let judgeCalls = 0
+  const resolution = await resolveAttemptCost({
+    attempt: attempt({ usage: { state: 'available', billing_tokens: { input: 0, output: 0 } } }),
+    catalog: await loadedCatalog(),
+    invoke: async () => { judgeCalls += 1; return '{}' },
+  })
+
+  assert.equal(resolution.state, 'unavailable')
+  assert.equal(resolution.reason, 'reported token usage is zero')
+  assert.equal(judgeCalls, 0)
+})
+
+test('null billing tokens still report a missing partition instead of zero usage', async () => {
+  const resolution = await resolveAttemptCost({
+    attempt: attempt({ usage: { state: 'available', billing_tokens: null } }),
+    catalog: await loadedCatalog(),
+    invoke: async () => { throw new Error('judge must not be called') },
+  })
+
+  assert.equal(resolution.reason, 'usage has no complete billing-token partition to price against the catalog')
+})
+
+test('billable usage reaches the judge when the catalog cannot price it', async () => {
+  const loaded = await loadedCatalog()
+  const unavailableCatalog = { ...loaded, state: 'unavailable', entries: null }
+  const scenarios = [
+    { name: 'missing model', model: 'gpt-5-other', catalog: loaded, reason: /no exact models.dev/ },
+    { name: 'unavailable catalog', model: 'gpt-5-codex', catalog: unavailableCatalog, reason: /no exact models.dev/ },
+    { name: 'missing output rate', model: 'gpt-5-nano', catalog: loaded, reason: /no rate for token category output/ },
+  ]
+  for (const { name, model, catalog, reason } of scenarios) {
+    const candidate = attempt({ model, usage: { state: 'available', billing_tokens: { input: 1000, output: 50 } } })
+    const withoutJudge = await resolveAttemptCost({ attempt: candidate, catalog, invoke: null })
+    assert.equal(withoutJudge.state, 'unavailable', name)
+    assert.match(withoutJudge.reason, reason, name)
+
+    let judgeCalls = 0
+    const resolution = await resolveAttemptCost({
+      attempt: candidate,
+      catalog,
+      invoke: async () => {
+        judgeCalls += 1
+        return JSON.stringify({
+          found: true,
+          source_url: 'https://example.test/pricing',
+          matched_provider: 'openai',
+          matched_model: model,
+          unit: 'usd_per_million_tokens',
+          rates: { input: 2, output: 4 },
+          rationale: 'exact model rate',
+          judge_model: 'codex-default',
+        })
+      },
+    })
+    assert.equal(judgeCalls, 1, name)
+    assert.equal(resolution.state, 'resolved', name)
+    assert.equal(resolution.source, 'judge-web-search', name)
+    assert.equal(resolution.verification, 'unverified', name)
+    assert.equal(resolution.amount_usd, 0.0022, name)
+  }
+})
+
 test('the pricing finding schema is enforced on the judge response', () => {
   assert.equal(PRICING_FINDING_SCHEMA.type, 'object')
   assert.equal(PRICING_FINDING_SCHEMA.additionalProperties, false)
