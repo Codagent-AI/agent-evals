@@ -12,6 +12,7 @@
 //
 // Nothing here feeds scoring. Cost is reported so runs can be compared, and two
 // runs with identical products score identically however much they cost.
+import { summarizeVerification, weakestVerification } from './pricing.mjs'
 
 // Sums of decimal cents accumulate binary float error (0.01 + 0.02 becomes
 // 0.030000000000000002). Rounding to sub-microdollar precision keeps reported
@@ -49,9 +50,65 @@ function completeTokenTotals(totals) {
   return ['input', 'output', 'total'].every((category) => Number.isFinite(totals?.[category]))
 }
 
-function verificationOf(sources) {
-  if (sources.length === 0) return null
-  return sources.includes('judge-web-search') ? 'unverified' : 'verified'
+function verificationOf(states) {
+  // Rows retain the historical verified vocabulary for reported and catalog
+  // prices; the pricing summary keeps their more precise source states.
+  const weakest = weakestVerification(states)
+  return weakest === 'reported' || weakest === 'catalog' ? 'verified' : weakest
+}
+
+// The attempt's resolved amount, or null when it has no defensible cost.
+function resolvedAmount(resolution) {
+  return resolution?.state === 'resolved' && Number.isFinite(resolution.amount_usd) && resolution.amount_usd >= 0
+    ? resolution.amount_usd
+    : null
+}
+
+// A single usage piece takes the attempt's resolved identity and whole cost.
+// Several pieces keep one fragment each, plus a cost-only fragment when the
+// attempt's cost was not divided among them.
+function costFragments(attempt, costNotAllocated) {
+  const pieces = [
+    ...(attempt.allocations ?? []).map((allocation) => ({ ...allocation, allocation: 'attributed' })),
+    ...(attempt.unallocated_usage
+      ? [{ ...attempt.unallocated_usage, allocation: 'unallocated', provider: null, model: null, effort: null }]
+      : []),
+  ]
+  if (pieces.length <= 1) {
+    const only = pieces[0] ?? {}
+    return [{
+      allocation: 'attempt',
+      allocation_id: only.allocation_id ?? null,
+      provider: only.provider ?? attempt.provider,
+      model: only.model ?? attempt.model,
+      effort: only.effort ?? attempt.effort,
+      usage: only.usage ?? attempt.usage,
+    }]
+  }
+  if (!costNotAllocated) return pieces
+  return [
+    ...pieces,
+    { allocation: 'unattributed_cost', allocation_id: null, provider: null, model: null, usage: null },
+  ]
+}
+
+function pieceCount(attempt) {
+  return (attempt.allocations?.length ?? 0) + (attempt.unallocated_usage ? 1 : 0)
+}
+
+// Allocation costs divide a resolved amount only when every usage piece has a
+// complete cost and together they account for that whole amount. Anything less
+// is evidence about the attempt, not a division of its cost: splitting on it
+// would leave model rows that no longer sum to the total.
+function allocationCostsExhaust(attempt, resolution) {
+  if (attempt.unallocated_usage) return false
+  const costs = (attempt.allocations ?? []).map((allocation) => (
+    resolution.allocation_costs?.find((cost) => cost.allocation_id === allocation.allocation_id)
+  ))
+  const complete = costs.every((cost) => (
+    cost && cost.state !== 'incomplete' && Number.isFinite(cost.amount_usd) && cost.amount_usd >= 0
+  ))
+  return complete && roundUsd(costs.reduce((sum, cost) => sum + cost.amount_usd, 0)) === roundUsd(resolution.amount_usd)
 }
 
 // `attemptsComplete` is false when Agent Runner's metrics were rejected or its
@@ -84,8 +141,9 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
     }
 
     const resolution = byAttempt.get(attempt.attempt_id)
-    if (resolution?.state === 'resolved' && Number.isFinite(resolution.amount_usd) && resolution.amount_usd >= 0) {
-      knownSubtotal += resolution.amount_usd
+    const attemptAmount = resolvedAmount(resolution)
+    if (attemptAmount !== null) {
+      knownSubtotal += attemptAmount
     } else {
       if (Number.isFinite(resolution?.known_subtotal_usd) && resolution.known_subtotal_usd >= 0) {
         knownSubtotal += resolution.known_subtotal_usd
@@ -93,30 +151,14 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
       unresolved.push(attempt.attempt_id)
     }
 
-    const fragments = (attempt.allocations?.length ?? 0) > 0 || attempt.unallocated_usage
-      ? [
-          ...(attempt.allocations ?? []).map((allocation) => ({
-            ...allocation,
-            allocation: 'attributed',
-          })),
-          ...(attempt.unallocated_usage ? [{
-            ...attempt.unallocated_usage,
-            allocation: 'unallocated',
-            provider: null,
-            model: null,
-            effort: null,
-          }] : []),
-        ]
-      : [{
-          allocation: 'attempt',
-          allocation_id: null,
-          provider: attempt.provider,
-          model: attempt.model,
-          effort: attempt.effort,
-          usage: attempt.usage,
-        }]
+    // A multi-model attempt whose resolved amount its allocation costs do not
+    // exhaust: its model rows keep their usage, and the whole amount goes to one
+    // cost-only row.
+    const costNotAllocated = pieceCount(attempt) > 1
+      && resolution?.state === 'resolved'
+      && !allocationCostsExhaust(attempt, resolution)
 
-    for (const fragment of fragments) {
+    for (const fragment of costFragments(attempt, costNotAllocated)) {
       const descriptor = {
         agent_role: attempt.agent_role,
         tool: attempt.tool ?? null,
@@ -143,6 +185,8 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
         resolved_count: 0,
         sources: [],
         unresolved_attempts: [],
+        not_allocated_attempts: [],
+        verifications: [],
       }
       if (!row.attempt_ids.includes(attempt.attempt_id)) {
         row.attempt_count += 1
@@ -176,18 +220,28 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
         }
       }
 
-      const allocationCost = resolution?.allocation_costs?.find(
+      const allocationCost = costNotAllocated ? undefined : resolution?.allocation_costs?.find(
         (entry) => entry.allocation_id === fragment.allocation_id,
       )
-      const rowAmount = allocationCost?.amount_usd
-        ?? (fragment.allocation === 'attempt' && resolution?.state === 'resolved' ? resolution.amount_usd : null)
+      let rowAmount = allocationCost?.amount_usd
+      if (fragment.allocation === 'unattributed_cost') {
+        rowAmount = resolution?.amount_usd
+      } else if (
+        fragment.allocation === 'attempt'
+        && resolution?.state === 'resolved'
+      ) {
+        rowAmount = resolution.amount_usd
+      }
       if (Number.isFinite(rowAmount) && rowAmount >= 0) {
         row.resolved_amount_usd += rowAmount
         row.resolved_count += 1
         const source = allocationCost?.source ?? resolution.source
         if (source && !row.sources.includes(source)) row.sources.push(source)
+        row.verifications.push(allocationCost?.verification ?? resolution.verification)
       }
-      if (!Number.isFinite(rowAmount) || rowAmount < 0 || allocationCost?.state === 'incomplete') {
+      if (costNotAllocated && fragment.allocation !== 'unattributed_cost') {
+        if (!row.not_allocated_attempts.includes(attempt.attempt_id)) row.not_allocated_attempts.push(attempt.attempt_id)
+      } else if (!Number.isFinite(rowAmount) || rowAmount < 0 || allocationCost?.state === 'incomplete') {
         if (!row.unresolved_attempts.includes(attempt.attempt_id)) {
           row.unresolved_attempts.push(attempt.attempt_id)
         }
@@ -220,15 +274,21 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
       cost: {
         // A row missing any attempt's cost reports what is known and says so,
         // rather than presenting a partial sum as the row's cost.
-        state: rowComplete ? 'available' : 'incomplete',
+        state: rowComplete ? (row.not_allocated_attempts.length ? 'not_allocated' : 'available') : 'incomplete',
         amount_usd: row.resolved_count > 0 ? roundUsd(row.resolved_amount_usd) : null,
         sources: row.sources,
         unresolved_attempts: row.unresolved_attempts,
+        not_allocated_attempts: row.not_allocated_attempts,
       },
-      verification: verificationOf(row.sources),
+      verification: verificationOf(row.verifications),
       complete: rowComplete,
     }
   })
+  const stepCosts = buildStepCosts({ cliAttempts, byAttempt })
+  const resolvedVerifications = cliAttempts
+    .map((attempt) => byAttempt.get(attempt.attempt_id))
+    .filter((entry) => entry?.state === 'resolved')
+    .map((entry) => entry.verification)
   const attemptCount = cliAttempts.length
   const usageComplete = attemptsComplete
     && attemptCount > 0
@@ -238,6 +298,7 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
 
   return {
     rows: rendered,
+    ...stepCosts,
     dispatch_count: attemptCount,
     usage: {
       state: usageComplete
@@ -255,6 +316,7 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
       estimated_api_cost_usd: complete ? roundUsd(knownSubtotal) : null,
       known_cost_subtotal_usd: roundUsd(knownSubtotal),
       complete,
+      ...summarizeVerification(resolvedVerifications),
       unresolved_attempts: unresolved,
       reason: attemptsComplete
         ? (complete ? null : 'one or more agent attempts have no defensible cost')
@@ -262,6 +324,94 @@ export function aggregateImplementationCost({ attempts = [], costs = [], attempt
     },
     scoring_effect: 'none',
   }
+}
+
+// The first step-path segment without its iteration suffix. Validator attempts
+// carry the invoking Runner step's prefix, so they roll up under that step.
+function topLevelStep(stepPath) {
+  return stepPath ? stepPath.split('/')[0].replace(/:\d+$/, '') : null
+}
+
+function stepEntry(attempt, resolution) {
+  const amount = resolvedAmount(resolution)
+  const stepPath = [attempt.prefix, attempt.step].filter(Boolean).join('/') || null
+  const allocations = (resolution?.allocation_costs ?? []).map((cost) => {
+    const allocation = attempt.allocations?.find((item) => item.allocation_id === cost.allocation_id)
+    return {
+      allocation_id: cost.allocation_id,
+      provider: allocation?.provider ?? null,
+      model: allocation?.model ?? null,
+      amount_usd: cost.amount_usd ?? null,
+      source: cost.source ?? null,
+      verification: cost.verification ?? null,
+    }
+  })
+  return {
+    attempt_id: attempt.attempt_id,
+    step_path: stepPath,
+    top_level_step: topLevelStep(stepPath),
+    producer: attempt.measurement_producer ?? attempt.tool ?? null,
+    agent_role: attempt.agent_role ?? null,
+    cli: attempt.cli ?? null,
+    provider: attempt.provider ?? null,
+    model: attempt.model ?? null,
+    billing_tokens: attempt.usage?.billing_tokens ?? null,
+    amount_usd: amount,
+    known_subtotal_usd: resolution?.known_subtotal_usd ?? 0,
+    state: resolution?.state ?? 'unavailable',
+    source: resolution?.source ?? null,
+    verification: amount === null ? null : resolution.verification ?? null,
+    // Estimated allocations each carry their own pricing assumptions.
+    assumptions: [...new Set([
+      ...(resolution?.provenance?.assumptions ?? []),
+      ...(resolution?.provenance?.allocations ?? []).flatMap((entry) => entry.provenance?.assumptions ?? []),
+    ])],
+    reason: amount === null ? resolution?.reason ?? 'cost unavailable' : null,
+    duration_ms: attempt.duration_ms ?? null,
+    allocations,
+  }
+}
+
+// One entry per CLI attempt, and one rollup per top-level workflow step in
+// first-observed order, with unattributed attempts last. A rollup's amount is
+// null when any of its attempts is unresolved; its known subtotal never is.
+function buildStepCosts({ cliAttempts, byAttempt }) {
+  const steps = cliAttempts.map((attempt) => stepEntry(attempt, byAttempt.get(attempt.attempt_id)))
+  const groups = new Map()
+  for (const entry of steps) {
+    const top = entry.top_level_step
+    const group = groups.get(top) ?? {
+      top_level_step: top,
+      label: top ?? 'unattributed',
+      attempt_ids: [],
+      known_subtotal_usd: 0,
+      amount_usd: 0,
+      complete: true,
+      verifications: [],
+    }
+    group.attempt_ids.push(entry.attempt_id)
+    group.known_subtotal_usd += entry.known_subtotal_usd
+    if (entry.amount_usd === null) {
+      group.complete = false
+    } else {
+      group.amount_usd += entry.amount_usd
+      group.verifications.push(entry.verification)
+    }
+    groups.set(top, group)
+  }
+  const ordered = [...groups.values()]
+    .sort((a, b) => (a.top_level_step === null) - (b.top_level_step === null))
+  const stepRollup = ordered.map(({ verifications, ...group }) => ({
+    top_level_step: group.top_level_step,
+    label: group.label,
+    attempt_count: group.attempt_ids.length,
+    attempt_ids: group.attempt_ids,
+    known_subtotal_usd: roundUsd(group.known_subtotal_usd),
+    amount_usd: group.complete ? roundUsd(group.amount_usd) : null,
+    complete: group.complete,
+    verification: weakestVerification(verifications),
+  }))
+  return { steps, step_rollup: stepRollup }
 }
 
 // Eval-owned work — judging, evidence repair, pricing lookup, reporting — is

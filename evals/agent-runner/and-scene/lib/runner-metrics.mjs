@@ -368,22 +368,125 @@ function allocationUsageState(tokens) {
     : 'partial'
 }
 
+// Source formats whose reported input includes cached input, each mapped to the
+// cache-write unavailability reasons that mean "this producer's usage record has
+// no cache-write field" rather than "collection failed".
+const CACHE_INCLUSIVE_SOURCE_FORMATS = {
+  'codex:turn.completed': ['not_reported'],
+  // Agent Validator's Codex adapter defaults every category to this reason and
+  // overwrites only the ones Codex's usage event carries.
+  'codex-exec-jsonl-turn.completed': ['not_reported', 'codex_usage_not_observed'],
+}
+
+const BILLING_FIELDS = ['billing_tokens', 'billing_assumptions', 'billing_derivation', 'billing_reason']
+
+function pickBillingFields(usage) {
+  return Object.fromEntries(BILLING_FIELDS.map((field) => [field, usage[field]]))
+}
+
 // Pricing needs an exhaustive, non-overlapping billing partition. In
 // particular, input_total minus known cache categories is not a measurement of
 // uncached input when another cache category is unavailable.
-function billingTokensFromEnvelopes(tokens) {
-  const required = ['input_uncached', 'cache_read', 'cache_write', 'output']
-  if (!required.every((field) => (
-    tokens[field]?.availability === 'available'
-    && Number.isFinite(tokens[field].value)
-    && tokens[field].value >= 0
-  ))) return null
-  return Object.fromEntries(Object.entries({
-    input: tokens.input_uncached.value,
-    cached_input: tokens.cache_read.value,
-    cache_write: tokens.cache_write.value,
-    output: tokens.output.value,
-  }).filter(([, count]) => count > 0))
+export function deriveBillingTokens(envelopes, sourceFormat, { collectionComplete = true, reason = null } = {}) {
+  const empty = (billingReason = null) => ({
+    billing_tokens: null,
+    billing_assumptions: [],
+    billing_derivation: null,
+    billing_reason: billingReason,
+  })
+  if (!collectionComplete) {
+    return empty(`token usage collection is incomplete: ${reason ?? envelopes?.normalized_total?.reason ?? 'unknown reason'}`)
+  }
+  if (!envelopes) return empty()
+  const count = (field) => {
+    const envelope = envelopes[field]
+    return envelope?.availability === 'available' && Number.isFinite(envelope.value) && envelope.value >= 0
+      ? envelope.value
+      : null
+  }
+  const notReportedWriteReasons = CACHE_INCLUSIVE_SOURCE_FORMATS[sourceFormat] ?? null
+  const inputTotal = count('input_total')
+  const cacheRead = count('cache_read')
+  const output = count('output')
+  const cacheWrite = count('cache_write')
+
+  let input = count('input_uncached')
+  let derivation = null
+  if (input === null && notReportedWriteReasons && inputTotal !== null && cacheRead !== null) {
+    // These formats report no cache writes. If one ever does, input_total may
+    // include them, and subtracting cache_read alone would bill them twice.
+    if (cacheWrite !== null) return empty('token category input_uncached cannot be derived beside a reported cache_write')
+    input = inputTotal - cacheRead
+    if (input < 0) return empty('token category input_uncached has an unusable count')
+    derivation = { input_uncached: 'input_total_minus_cache_read', source_format: sourceFormat }
+  }
+  if (input === null || cacheRead === null || output === null) return empty()
+
+  const assumptions = []
+  if (cacheWrite === null) {
+    const writeReason = envelopes.cache_write?.reason ?? 'unknown reason'
+    if (!notReportedWriteReasons?.includes(writeReason)) {
+      return empty(`cache_write is unavailable: ${writeReason}`)
+    }
+    assumptions.push('cache_write_not_reported_priced_as_input')
+    derivation = { ...derivation, cache_write_reason: writeReason }
+  }
+  const categories = { input, cached_input: cacheRead, cache_write: cacheWrite, output }
+  return {
+    billing_tokens: Object.fromEntries(Object.entries(categories).filter(([, value]) => value > 0)),
+    billing_assumptions: assumptions,
+    billing_derivation: derivation,
+    billing_reason: null,
+  }
+}
+
+// Billing fields for one allocation's envelope set, gated on the same rule
+// that sets its usage state: its envelopes and its attempt's collection must
+// both be complete. Present envelopes do not make a truncated collection whole.
+function allocationUsage(tokens, sourceFormat, collectionComplete) {
+  const state = collectionComplete ? allocationUsageState(tokens) : (
+    allocationUsageState(tokens) === 'unavailable' ? 'unavailable' : 'partial'
+  )
+  return {
+    state,
+    token_envelopes: tokens,
+    tokens: legacyTokensFromEnvelopes(tokens),
+    token_totals: tokenTotalsFromEnvelopes(tokens),
+    ...deriveBillingTokens(tokens, sourceFormat, {
+      collectionComplete: state === PRESENT,
+      reason: collectionComplete ? null : 'attempt usage collection is partial',
+    }),
+  }
+}
+
+export function refreshBillingTokens(attempts = []) {
+  for (const attempt of attempts) {
+    const sourceFormat = attempt.usage_source === 'agent-validator:metrics'
+      ? attempt.usage_source_version : (attempt.source_provenance?.source_format ?? attempt.usage_source)
+    // An allocation is part of its attempt's collection: a partial attempt
+    // leaves every allocation unpriceable, even one stored as available.
+    const attemptComplete = attempt.usage?.state === 'available'
+    for (const item of [attempt, ...(attempt.allocations ?? []), attempt.unallocated_usage].filter(Boolean)) {
+      if (!item.usage?.token_envelopes) continue
+      const complete = item.usage.state === 'available' && attemptComplete
+      Object.assign(item.usage, deriveBillingTokens(item.usage.token_envelopes, sourceFormat, {
+        collectionComplete: complete,
+        reason: item.usage.reason ?? (complete ? null : attempt.usage?.reason),
+      }))
+    }
+    // Older native attempts retained the attempt envelopes but omitted them on
+    // their sole observed allocation. Both records describe the same usage.
+    const allocation = attempt.allocations?.length === 1 && !attempt.unallocated_usage
+      ? attempt.allocations[0] : null
+    if (allocation?.allocation_id === 'native-observed' && allocation.usage
+      && !allocation.usage.token_envelopes && attempt.usage?.token_envelopes) {
+      Object.assign(allocation.usage, {
+        token_envelopes: attempt.usage.token_envelopes,
+        ...pickBillingFields(attempt.usage),
+      })
+    }
+  }
+  return attempts
 }
 
 function sourceVersion(provenance) {
@@ -422,55 +525,34 @@ function normalizedIdentity(measurement) {
   }
 }
 
-function normalizeAllocation(raw, identities, profile) {
+function normalizeAllocation(raw, identities, profile, sourceFormat, collectionComplete) {
   const identity = identities.find((entry) => entry.identity_id === raw.observed_identity_ref) ?? null
-  const tokenTotals = tokenTotalsFromEnvelopes(raw.usage)
   return {
     allocation_id: raw.allocation_id,
     observed_identity_ref: raw.observed_identity_ref,
     provider: identity?.provider ?? profile.provider,
     model: identity?.model ?? null,
     effort: identity?.effort ?? profile.effort,
-    usage: {
-      state: allocationUsageState(raw.usage),
-      token_envelopes: raw.usage,
-      tokens: legacyTokensFromEnvelopes(raw.usage),
-      token_totals: tokenTotals,
-      billing_tokens: billingTokensFromEnvelopes(raw.usage),
-    },
+    usage: allocationUsage(raw.usage, sourceFormat, collectionComplete),
   }
 }
 
-function normalizeUnallocated(raw, tokens, identities) {
+function normalizeUnallocated(raw, tokens, identities, sourceFormat, collectionComplete) {
   if (raw) {
-    const tokenTotals = tokenTotalsFromEnvelopes(raw.usage)
     return {
       allocation_id: raw.allocation_id,
       observed_identity_ref: raw.observed_identity_ref,
       observed_identities: identities,
       reason: raw.observed_identity_ref?.reason ?? 'usage is not allocated to a model',
-      usage: {
-        state: allocationUsageState(raw.usage),
-        token_envelopes: raw.usage,
-        tokens: legacyTokensFromEnvelopes(raw.usage),
-        token_totals: tokenTotals,
-        billing_tokens: billingTokensFromEnvelopes(raw.usage),
-      },
+      usage: allocationUsage(raw.usage, sourceFormat, collectionComplete),
     }
   }
-  const tokenTotals = tokenTotalsFromEnvelopes(tokens)
   return {
     allocation_id: 'unallocated',
     observed_identity_ref: { availability: 'unavailable', reason: 'per_model_attribution_unavailable' },
     observed_identities: identities,
     reason: 'per-model attribution is unavailable',
-    usage: {
-      state: allocationUsageState(tokens),
-      token_envelopes: tokens,
-      tokens: legacyTokensFromEnvelopes(tokens),
-      token_totals: tokenTotals,
-      billing_tokens: billingTokensFromEnvelopes(tokens),
-    },
+    usage: allocationUsage(tokens, sourceFormat, collectionComplete),
   }
 }
 
@@ -486,24 +568,25 @@ function completeReportedAttemptCost(costs) {
   return eligible.length === 1 ? eligible[0].amount.value : null
 }
 
-function measurementUsage(tokens, completeness = {}) {
+function measurementUsage(tokens, completeness = {}, sourceFormat = null) {
   const values = Object.values(tokens)
   const known = values.some((value) => availableNumber(value) !== null)
   const complete = completeness.collection === 'complete'
     && tokens.normalized_total?.availability === 'available'
     && Number.isFinite(tokens.normalized_total.value)
+  const reason = complete ? null : (tokens.normalized_total?.reason ?? 'measurement collection is incomplete')
   return {
     state: complete ? PRESENT : (known ? 'partial' : 'unavailable'),
-    reason: complete ? null : (tokens.normalized_total?.reason ?? 'measurement collection is incomplete'),
+    reason,
     tokens: legacyTokensFromEnvelopes(tokens),
     token_totals: tokenTotalsFromEnvelopes(tokens),
-    billing_tokens: billingTokensFromEnvelopes(tokens),
+    ...deriveBillingTokens(tokens, sourceFormat, { collectionComplete: complete, reason }),
     token_envelopes: tokens,
     completeness,
   }
 }
 
-function nativeUsage(tokens, limitations) {
+function nativeUsage(tokens, limitations, sourceFormat) {
   const normalized = tokens.normalized_total
   return measurementUsage(tokens, {
     collection: normalized?.availability === 'available' ? 'complete' : 'partial',
@@ -513,14 +596,14 @@ function nativeUsage(tokens, limitations) {
     normalized_total: normalized?.availability === 'available' ? 'complete' : 'unavailable',
     per_model_attribution: limitations.includes('model_allocation_unavailable') ? 'unavailable' : 'complete',
     history: limitations.includes('legacy_token_relationships_unknown') ? 'partial' : 'complete',
-  })
+  }, sourceFormat)
 }
 
 function normalizeNativeMeasurement(raw, step) {
   const profile = normalizedIdentity(raw)
   const costs = raw.provider_reported_costs ?? []
   const reported = completeReportedAttemptCost(costs)
-  const usage = nativeUsage(raw.tokens, raw.limitations ?? [])
+  const usage = nativeUsage(raw.tokens, raw.limitations ?? [], raw.source_format)
   const attributable = profile.observed.length === 1 && raw.unallocated_usage === null
   const allocations = attributable
     ? [{
@@ -534,7 +617,7 @@ function normalizeNativeMeasurement(raw, step) {
           token_envelopes: raw.tokens,
           tokens: usage.tokens,
           token_totals: usage.token_totals,
-          billing_tokens: usage.billing_tokens,
+          ...pickBillingFields(usage),
         },
       }]
     : []
@@ -571,7 +654,7 @@ function normalizeNativeMeasurement(raw, step) {
     },
     allocations,
     unallocated_usage: allocations.length === 0
-      ? normalizeUnallocated(null, raw.tokens, profile.observed)
+      ? normalizeUnallocated(null, raw.tokens, profile.observed, raw.source_format, usage.state === PRESENT)
       : null,
     usage_source: raw.source_format,
     usage_source_version: null,
@@ -604,13 +687,17 @@ function normalizeValidatorAttempt(head) {
   const profile = normalizedIdentity(raw)
   const costs = raw.provider_reported_costs ?? []
   const reported = completeReportedAttemptCost(costs)
-  const usage = measurementUsage(raw.tokens, raw.completeness)
+  const sourceFormat = sourceVersion(raw.provenance)
+  const usage = measurementUsage(raw.tokens, raw.completeness, sourceFormat)
+  const collectionComplete = raw.completeness?.collection === 'complete'
   const allocations = (raw.allocations ?? []).map(
-    (allocation) => normalizeAllocation(allocation, profile.observed, profile),
+    (allocation) => normalizeAllocation(allocation, profile.observed, profile, sourceFormat, collectionComplete),
   )
   const unallocated = raw.unallocated_usage
-    ? normalizeUnallocated(raw.unallocated_usage, raw.tokens, profile.observed)
-    : (allocations.length === 0 ? normalizeUnallocated(null, raw.tokens, profile.observed) : null)
+    ? normalizeUnallocated(raw.unallocated_usage, raw.tokens, profile.observed, sourceFormat, collectionComplete)
+    : (allocations.length === 0
+      ? normalizeUnallocated(null, raw.tokens, profile.observed, sourceFormat, collectionComplete)
+      : null)
   return {
     attempt_id: raw.attempt_id,
     producer_attempt_id: raw.attempt_id,
@@ -651,7 +738,7 @@ function normalizeValidatorAttempt(head) {
     allocations,
     unallocated_usage: unallocated,
     usage_source: 'agent-validator:metrics',
-    usage_source_version: sourceVersion(raw.provenance),
+    usage_source_version: sourceFormat,
     session: raw.session_id,
     duration_ms: durationBetween(raw.lifecycle),
     lifecycle: raw.lifecycle,

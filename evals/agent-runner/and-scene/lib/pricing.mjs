@@ -1,18 +1,105 @@
 // Cost resolution for Agent Runner attempts that reported no cost.
 //
-// Three ordered sources, each weaker than the last and each labelled as what it
-// is: the cost Agent Runner reported, an exact match in the current models.dev
-// catalog, and — only when both fail — a web-searching judge whose finding is
-// recorded as `unverified`.
+// Ordered sources: reported cost, exact models.dev rate, exact pinned fallback
+// rate, then a judge. Derived billing or uncertain context tiers are estimated.
 //
 // Two things are forbidden throughout, because both manufacture a confident
 // number out of nothing: pricing a model from a similar name, and dropping a
 // token category that has no rate so the remaining ones add up to something.
 // Either would turn "we do not know" into a figure someone would quote.
+import { readFile } from 'node:fs/promises'
+import { dirname, join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { bounded } from './browser-eval.mjs'
 import { hashString } from './persistence.mjs'
 
 export const MODELS_DEV_URL = 'https://models.dev/api.json'
+
+const SUITE_DIR = dirname(dirname(fileURLToPath(import.meta.url)))
+const REPOSITORY_ROOT = resolve(SUITE_DIR, '../../..')
+export const FALLBACK_RATES_PATH = join(SUITE_DIR, 'pricing/fallback-rates.json')
+
+// Rate keys a catalog or fallback-table entry may carry. Input and output are
+// required of every fallback row; the rest are priced only when present.
+const RATE_KEYS = ['input', 'output', 'cache_read', 'cache_write', 'reasoning']
+const REQUIRED_RATE_KEYS = ['input', 'output']
+const REQUIRED_FALLBACK_FIELDS = ['provider', 'model', 'source_url', 'retrieved_date']
+
+// Strongest first. A figure combined from several costs is only as certain as
+// its least certain part.
+const VERIFICATION_ORDER = ['reported', 'catalog', 'estimated', 'unverified']
+
+export function weakestVerification(states = []) {
+  const ranks = states.map((state) => VERIFICATION_ORDER.indexOf(state)).filter((rank) => rank >= 0)
+  return ranks.length > 0 ? VERIFICATION_ORDER[Math.max(...ranks)] : null
+}
+
+// The verification disclosure shared by the pricing summary and the cost total.
+export function summarizeVerification(states = []) {
+  return {
+    verification: weakestVerification(states),
+    includes_estimated: states.includes('estimated'),
+    includes_unverified: states.includes('unverified'),
+  }
+}
+
+export function validateFallbackRates(table) {
+  if (table?.schema_version !== 1 || !Array.isArray(table.rows)) {
+    throw new Error('fallback table needs schema_version 1 and rows')
+  }
+  const seen = new Set()
+  for (const row of table.rows) {
+    if (!row || !REQUIRED_FALLBACK_FIELDS.every((key) => typeof row[key] === 'string' && row[key])) {
+      throw new Error('fallback row is missing a required field')
+    }
+    const validSource = /^https:\/\//.test(row.source_url) && /^\d{4}-\d{2}-\d{2}$/.test(row.retrieved_date)
+    if (row.unit !== PRICING_UNIT || !validSource) {
+      throw new Error('fallback row has invalid unit or source')
+    }
+    if (Object.keys(row.rates ?? {}).some((key) => /^context_over_\d+k$/.test(key))) {
+      throw new Error('fallback row has unsupported legacy context tier key')
+    }
+    for (const key of RATE_KEYS) {
+      const rate = row.rates?.[key]
+      const required = REQUIRED_RATE_KEYS.includes(key)
+      if ((required || rate !== undefined) && !nonNegative(rate)) {
+        throw new Error(`fallback row has invalid ${key} rate`)
+      }
+    }
+    for (const tier of row.rates.tiers ?? []) {
+      const validTier = tier.tier?.type === 'context'
+        && nonNegative(tier.tier.size)
+        && nonNegative(tier.input)
+        && nonNegative(tier.output)
+      if (!validTier) throw new Error('fallback row has invalid context tier')
+    }
+    const key = JSON.stringify([row.provider, row.model])
+    if (seen.has(key)) throw new Error('duplicate fallback provider/model row')
+    seen.add(key)
+  }
+  return table
+}
+
+export async function loadFallbackRates({ path = FALLBACK_RATES_PATH } = {}) {
+  // Recorded relative to the repository so a result names the same file
+  // whichever directory the evaluation ran from.
+  const displayPath = relative(REPOSITORY_ROOT, resolve(path))
+  let sha256 = null
+  try {
+    const body = await readFile(path, 'utf8')
+    sha256 = hashString(body)
+    const rows = validateFallbackRates(JSON.parse(body)).rows
+    return { state: 'available', path: displayPath, sha256, rows, row_count: rows.length, reason: null }
+  } catch (error) {
+    return { state: 'unavailable', path: displayPath, sha256, rows: [], row_count: 0, reason: error.message }
+  }
+}
+
+export function lookupFallbackRate(table, provider, model) {
+  if (table?.state !== 'available') return null
+  const row = table.rows.find((item) => item.provider === provider && item.model === model)
+  return row ? { provider, model, cost: row.rates, row } : null
+}
 
 // models.dev publishes rates in USD per million tokens.
 export const PRICING_UNIT = 'usd_per_million_tokens'
@@ -197,27 +284,25 @@ function reportedCostSummary(attempt) {
   }
 }
 
-export function calculateCatalogCost({ entry, tokens }) {
-  if (!entry) return unavailable('no exact models.dev provider/model match')
+export function calculateRateCost({ cost, tokens, assumptions = [], promptBounds = {} }) {
+  if (!cost) return unavailable('no exact provider/model match')
   const malformed = malformedCategory(tokens)
   if (malformed) return unavailable(`token category ${malformed} has an unusable count`)
   const billed = billedCategories(tokens)
   if (billed.length === 0) return unavailable('no billable token usage was reported')
 
+  const definitions = contextTierDefinitions(cost)
+  const tier = selectContextTier(definitions, promptBounds)
+  const selected = tier.rates ?? cost
   const rates = {}
   let amount = 0
   for (const [category, count] of billed) {
     const rateKey = CATEGORY_RATE_KEYS[category]
-    const rate = rateKey ? entry.cost[rateKey] : undefined
-    if (!nonNegative(rate)) {
-      // Every reported category must be priced. Omitting this one would produce
-      // a complete-looking estimate that silently undercounts.
-      return unavailable(`models.dev has no rate for token category ${category}`)
-    }
+    const rate = rateKey ? selected[rateKey] : undefined
+    if (!nonNegative(rate)) return unavailable(`rate source has no rate for token category ${category}`)
     rates[category] = rate
     amount += (count * rate) / TOKENS_PER_UNIT
   }
-
   return {
     state: 'resolved',
     amount_usd: amount,
@@ -225,6 +310,84 @@ export function calculateCatalogCost({ entry, tokens }) {
     rates,
     unit: PRICING_UNIT,
     token_categories: billed.map(([category]) => category),
+    assumptions: tier.assumption ? [...assumptions, tier.assumption] : [...assumptions],
+    context_tier: {
+      thresholds: definitions.map((definition) => definition.threshold),
+      applied: tier.rates ? 'tier' : 'base',
+      basis: tier.basis,
+    },
+  }
+}
+
+// Every context-size tier a rate source declares, in either of the catalog's
+// two shapes. Neither shape is preferred: when they disagree the tier is
+// ambiguous, not resolved by precedence.
+function contextTierDefinitions(cost) {
+  const structured = (cost.tiers ?? [])
+    .filter((tier) => tier.tier?.type === 'context')
+    .map((tier) => ({ threshold: tier.tier.size, rates: tier }))
+  const legacy = Object.entries(cost)
+    .filter(([key]) => /^context_over_\d+k$/.test(key))
+    .map(([key, rates]) => ({ threshold: Number(key.match(/\d+/)[0]) * 1000, rates }))
+  return [...structured, ...legacy]
+}
+
+// Base rates apply unless the billed tokens are known to be one request whose
+// prompt exceeds every declared threshold under identical tier rates. Any other
+// uncertainty prices at base and is disclosed as an assumption.
+function selectContextTier(definitions, promptBounds) {
+  if (definitions.length === 0) return { basis: 'no_tier', rates: null, assumption: null }
+  const low = Math.min(...definitions.map((definition) => definition.threshold))
+  const high = Math.max(...definitions.map((definition) => definition.threshold))
+  const sameRates = definitions.every((definition) => (
+    RATE_KEYS.every((key) => definition.rates[key] === definitions[0].rates[key])
+  ))
+  if (Number.isFinite(promptBounds.upper) && promptBounds.upper <= low) {
+    return { basis: 'within_lowest', rates: null, assumption: null }
+  }
+  const lowerKnown = Number.isFinite(promptBounds.lower)
+  if (lowerKnown && promptBounds.lower <= low) {
+    return { basis: 'within_lowest', rates: null, assumption: null }
+  }
+  if (promptBounds.single_request === true && lowerKnown && promptBounds.lower > high && sameRates) {
+    return { basis: 'above_highest', rates: definitions[0].rates, assumption: null }
+  }
+  if (lowerKnown) {
+    return { basis: 'ambiguous', rates: null, assumption: 'context_tier_ambiguous_priced_at_base' }
+  }
+  return { basis: 'unknown', rates: null, assumption: 'context_tier_unknown_priced_at_base' }
+}
+
+export function calculateCatalogCost({ entry, tokens }) {
+  if (!entry) return unavailable('no exact models.dev provider/model match')
+  return calculateRateCost({ cost: entry.cost, tokens })
+}
+
+// The attempt's total input bounds every request's prompt from above. Nothing
+// currently reports a per-request size, so `lower` and `single_request` are only
+// set by a producer that does.
+function promptBoundsOf(item) {
+  const inputTotal = item.usage?.token_envelopes?.input_total?.value
+  const tokens = item.usage?.billing_tokens
+  const billedInput = tokens
+    ? (tokens.input ?? 0) + (tokens.cached_input ?? 0) + (tokens.cache_write ?? 0)
+    : null
+  return {
+    upper: Number.isFinite(inputTotal) ? inputTotal : billedInput,
+    lower: item.max_request_prompt_tokens ?? null,
+    single_request: item.request_count === 1 || item.usage?.request_count === 1,
+  }
+}
+
+function rateSourceProvenance({ source, entry, catalog, fallbackTable }) {
+  if (source === 'models.dev') {
+    return { url: catalog.url, retrieved_at: catalog.retrieved_at, response_sha256: catalog.sha256 }
+  }
+  return {
+    table_path: fallbackTable.path,
+    table_sha256: fallbackTable.sha256,
+    source_url: entry.row.source_url,
+    retrieved_date: entry.row.retrieved_date,
   }
 }
 
@@ -303,7 +466,7 @@ function calculateFindingCost({ finding, tokens }) {
   return { state: 'resolved', amount_usd: amount, reason: null, rates }
 }
 
-export async function resolveAttemptCost({ attempt, catalog, invoke, authority = null }) {
+export async function resolveAttemptCost({ attempt, catalog, fallbackTable = null, invoke, authority = null }) {
   const reported = reportedCostSummary(attempt)
   const base = {
     attempt_id: attempt.attempt_id,
@@ -351,6 +514,11 @@ export async function resolveAttemptCost({ attempt, catalog, invoke, authority =
   // price each exact identity separately and add the disjoint allocations;
   // never collapse them into a made-up whole-attempt model identity.
   if ((attempt.allocations?.length ?? 0) > 0 && !attempt.unallocated_usage) {
+    // Allocations divide the attempt's collection; a partial collection leaves
+    // every allocation's count truncated, however complete its envelopes look.
+    if (attempt.usage?.state !== 'available') {
+      return unresolved(attempt.usage?.billing_reason ?? 'token usage collection is incomplete')
+    }
     const allocationCosts = []
     for (const allocation of attempt.allocations) {
       const tokens = allocation.usage?.billing_tokens
@@ -363,13 +531,21 @@ export async function resolveAttemptCost({ attempt, catalog, invoke, authority =
           invoked_cli: true,
           provider: allocation.provider,
           model: allocation.model,
-          usage: { state: 'available', billing_tokens: tokens },
+          usage: {
+            state: 'available',
+            billing_tokens: tokens,
+            billing_assumptions: allocation.usage.billing_assumptions ?? [],
+            billing_derivation: allocation.usage.billing_derivation ?? null,
+            token_envelopes: allocation.usage.token_envelopes,
+          },
+          max_request_prompt_tokens: allocation.max_request_prompt_tokens,
           cost: { state: 'unavailable', amount_usd: null },
           provider_reported_costs: [],
           allocations: [],
           unallocated_usage: null,
         },
         catalog,
+        fallbackTable,
         invoke,
         authority,
       })
@@ -386,15 +562,15 @@ export async function resolveAttemptCost({ attempt, catalog, invoke, authority =
     }
     const amount = Number(allocationCosts.reduce((sum, cost) => sum + cost.amount_usd, 0).toFixed(10))
     const sources = [...new Set(allocationCosts.map((cost) => cost.source))]
-    const unverified = allocationCosts.some((cost) => cost.verification === 'unverified')
+    const verification = weakestVerification(allocationCosts.map((cost) => cost.verification))
     return {
       ...base,
       state: 'resolved',
       amount_usd: amount,
       known_subtotal_usd: amount,
       allocation_costs: allocationCosts,
-      source: unverified ? 'judge-web-search' : (sources.length === 1 ? sources[0] : 'mixed-allocation-pricing'),
-      verification: unverified ? 'unverified' : 'catalog',
+      source: sources.length === 1 ? sources[0] : 'mixed-allocation-pricing',
+      verification,
       reason: null,
       provenance: { allocations: allocationCosts.map(({ allocation_id, provenance }) => ({ allocation_id, provenance })) },
     }
@@ -404,7 +580,7 @@ export async function resolveAttemptCost({ attempt, catalog, invoke, authority =
     return unresolved('exact provider and model identity are required for pricing')
   }
   if (attempt.usage?.state !== 'available') {
-    return unresolved('no reported token usage to price this attempt with')
+    return unresolved(attempt.usage?.billing_reason ?? 'no reported token usage to price this attempt with')
   }
 
   const tokens = attemptBillingTokens(attempt)
@@ -415,26 +591,33 @@ export async function resolveAttemptCost({ attempt, catalog, invoke, authority =
   if (billedCategories(tokens).length === 0) {
     if (tokens && typeof tokens === 'object' && !Array.isArray(tokens)
       && Object.keys(tokens).length > 0 && Object.values(tokens).every((count) => count === 0)) {
-      return unresolved('reported token usage is zero')
+      return unresolved(attempt.usage?.billing_reason ?? 'reported token usage is zero')
     }
-    return unresolved('usage has no complete billing-token partition to price against the catalog')
+    return unresolved(attempt.usage?.billing_reason ?? 'usage has no complete billing-token partition to price against the catalog')
   }
 
-  const entry = lookupCatalogEntry(catalog, attempt.provider, attempt.model)
-  const calculated = calculateCatalogCost({ entry, tokens })
-  if (calculated.state === 'resolved') {
+  const assumptions = attempt.usage?.billing_assumptions ?? []
+  const billingDerivation = attempt.usage?.billing_derivation ?? null
+  const promptBounds = promptBoundsOf(attempt)
+  const failures = []
+  for (const [source, entry] of [
+    ['models.dev', lookupCatalogEntry(catalog, attempt.provider, attempt.model)],
+    ['fallback-table', lookupFallbackRate(fallbackTable, attempt.provider, attempt.model)],
+  ]) {
+    const calculated = calculateRateCost({ cost: entry?.cost, tokens, assumptions, promptBounds })
+    if (calculated.state !== 'resolved') {
+      failures.push(`${source}: ${calculated.reason}`)
+      continue
+    }
     return {
       ...base,
       state: 'resolved',
       amount_usd: calculated.amount_usd,
       known_subtotal_usd: calculated.amount_usd,
-      source: 'models.dev',
-      verification: 'catalog',
+      source,
+      verification: calculated.assumptions.length > 0 ? 'estimated' : 'catalog',
       reason: null,
       provenance: {
-        url: catalog.url,
-        retrieved_at: catalog.retrieved_at,
-        response_sha256: catalog.sha256,
         requested_provider: attempt.provider,
         requested_model: attempt.model,
         matched_provider: entry.provider,
@@ -442,22 +625,29 @@ export async function resolveAttemptCost({ attempt, catalog, invoke, authority =
         rates: calculated.rates,
         unit: calculated.unit,
         token_categories: calculated.token_categories,
+        assumptions: calculated.assumptions,
+        billing_derivation: billingDerivation,
+        context_tier: calculated.context_tier,
+        rate_source: source,
+        ...(failures.length > 0 ? { prior_source_failures: [...failures] } : {}),
+        ...rateSourceProvenance({ source, entry, catalog, fallbackTable }),
       },
     }
   }
+  const lookupFailures = failures.join('; ')
 
   if (!invoke) {
-    return unresolved(calculated.reason)
+    return unresolved(lookupFailures)
   }
 
   let finding
   try {
     finding = parsePricingFinding(await invoke(buildPricingRequest({ attempt, authority })), attempt)
   } catch (error) {
-    return unresolved(error.message)
+    return unresolved(`${lookupFailures}; ${error.message}`)
   }
   if (!finding.found) {
-    return unresolved(finding.reason)
+    return unresolved(`${lookupFailures}; ${finding.reason}`)
   }
   // An answer about another model is an answer to another question. Accepting it
   // is exactly the similar-name inference this module forbids.
@@ -494,6 +684,8 @@ export async function resolveAttemptCost({ attempt, catalog, invoke, authority =
       token_categories: billedCategories(tokens).map(([category]) => category),
       rationale: finding.rationale,
       judge_model: finding.judge_model,
+      assumptions,
+      billing_derivation: billingDerivation,
     },
   }
 }
@@ -515,20 +707,33 @@ export function needsPricingLookup(attempts = []) {
   ))
 }
 
-export async function resolveImplementationPricing({ attempts = [], catalog, invoke, authority = null }) {
+export async function resolveImplementationPricing({ attempts = [], catalog, fallbackTable = null, invoke, authority = null }) {
   const costs = []
   // Sequential: the pricing judge shares one authority and rate budget with the
   // product judges, and a lookup failure must stay attributable to its attempt.
   for (const attempt of attempts.filter((entry) => entry.invoked_cli)) {
-    costs.push(await resolveAttemptCost({ attempt, catalog, invoke, authority }))
+    costs.push(await resolveAttemptCost({ attempt, catalog, fallbackTable, invoke, authority }))
   }
   const unresolved = costs.filter((entry) => entry.state !== 'resolved')
   const sources = [...new Set(costs.map((entry) => entry.source).filter(Boolean))]
   const complete = unresolved.length === 0
+  const resolvedVerifications = costs
+    .filter((entry) => entry.state === 'resolved')
+    .map((entry) => entry.verification)
   return {
     costs,
     complete,
-    verified: complete && !sources.includes('judge-web-search'),
+    ...summarizeVerification(resolvedVerifications),
+    verified: complete && resolvedVerifications.every((state) => ['reported', 'catalog'].includes(state)),
+    fallback_table: fallbackTable
+      ? {
+          path: fallbackTable.path,
+          state: fallbackTable.state,
+          sha256: fallbackTable.sha256,
+          reason: fallbackTable.reason,
+          row_count: fallbackTable.row_count,
+        }
+      : null,
     sources,
     unresolved_attempts: unresolved.map((entry) => entry.attempt_id),
     catalog: {

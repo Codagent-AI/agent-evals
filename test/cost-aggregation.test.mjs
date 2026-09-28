@@ -145,6 +145,36 @@ test('one multi-model dispatch renders attributed and unallocated rows without i
   assert.equal(total.known_cost_subtotal_usd, 0.01)
 })
 
+test('a sole unallocated usage fragment inherits the attempt identity and whole cost', () => {
+  const selected = attempt({
+    attempt_id: 'unallocated-only', provider: 'openai', model: 'selected-model', effort: 'high',
+    allocations: [],
+    unallocated_usage: {
+      allocation_id: 'unallocated-1',
+      usage: { state: 'available', tokens: { input: 100 }, token_totals: { input: 100, output: 0, total: 100 } },
+    },
+  })
+  const { rows, total } = aggregateImplementationCost({
+    attempts: [selected], costs: [resolved('unallocated-only', 0.01)],
+  })
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].provider, 'openai')
+  assert.equal(rows[0].model, 'selected-model')
+  assert.equal(rows[0].allocation, 'attempt')
+  assert.deepEqual(rows[0].tokens, { input: 100 })
+  assert.equal(rows[0].cost.amount_usd, 0.01)
+  assert.equal(total.estimated_api_cost_usd, 0.01)
+})
+
+test('aggregate row verification maps reported and catalog prices to verified', () => {
+  const attempts = [attempt({ attempt_id: 'reported' }), attempt({ attempt_id: 'catalog' })]
+  const costs = [resolved('reported', 0.01), resolved('catalog', 0.02, {
+    source: 'models.dev', verification: 'catalog',
+  })]
+  const { rows } = aggregateImplementationCost({ attempts, costs })
+  assert.equal(rows[0].verification, 'verified')
+})
+
 test('several allocations from one dispatch count as one participating attempt per model row', () => {
   const attempts = [attempt({
     attempt_id: 'multi-allocation',

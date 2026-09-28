@@ -648,8 +648,8 @@ test('billable usage reaches the judge when the catalog cannot price it', async 
   const loaded = await loadedCatalog()
   const unavailableCatalog = { ...loaded, state: 'unavailable', entries: null }
   const scenarios = [
-    { name: 'missing model', model: 'gpt-5-other', catalog: loaded, reason: /no exact models.dev/ },
-    { name: 'unavailable catalog', model: 'gpt-5-codex', catalog: unavailableCatalog, reason: /no exact models.dev/ },
+    { name: 'missing model', model: 'gpt-5-other', catalog: loaded, reason: /no exact provider\/model match/ },
+    { name: 'unavailable catalog', model: 'gpt-5-codex', catalog: unavailableCatalog, reason: /no exact provider\/model match/ },
     { name: 'missing output rate', model: 'gpt-5-nano', catalog: loaded, reason: /no rate for token category output/ },
   ]
   for (const { name, model, catalog, reason } of scenarios) {

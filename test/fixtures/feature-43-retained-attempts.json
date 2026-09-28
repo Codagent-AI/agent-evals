@@ -1,0 +1,5142 @@
+{
+  "source_run_id": "d7f384ba-0e94-4926-852e-6662fec752be-rep-1",
+  "attempts": [
+    {
+      "attempt_id": "implement-tasks%3A0%2Fimplement-single-task%2Fsub%3Aimplement-task/generate-code#1",
+      "step": "generate-code",
+      "prefix": "implement-tasks:0/implement-single-task/sub:implement-task",
+      "agent_role": "implementor",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "measurement_producer": "agent-runner",
+      "tool": "agent-runner",
+      "duration_ms": 441483,
+      "usage_source": "codex:turn.completed",
+      "usage_source_version": null,
+      "source_provenance": {
+        "source_format": "codex:turn.completed"
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "cache_read": {
+              "availability": "available",
+              "value": 1569792,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "input_total": {
+              "availability": "available",
+              "value": 1643996,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 1659009,
+              "reason": null
+            },
+            "output": {
+              "availability": "available",
+              "value": 15013,
+              "reason": null
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "reasoning": {
+              "availability": "available",
+              "value": 2845,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 1643996,
+            "cached_input": 1569792,
+            "output": 15013,
+            "reasoning": 2845
+          },
+          "token_totals": {
+            "input": 1643996,
+            "output": 15013,
+            "total": 1659009
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "cache_read": {
+            "availability": "available",
+            "value": 1569792,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "input_total": {
+            "availability": "available",
+            "value": 1643996,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 1659009,
+            "reason": null
+          },
+          "output": {
+            "availability": "available",
+            "value": 15013,
+            "reason": null
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "reasoning": {
+            "availability": "available",
+            "value": 2845,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 1643996,
+          "cached_input": 1569792,
+          "output": 15013,
+          "reasoning": 2845
+        },
+        "token_totals": {
+          "input": 1643996,
+          "output": 15013,
+          "total": 1659009
+        }
+      }
+    },
+    {
+      "attempt_id": "implement-tasks%3A0%2Fimplement-single-task%2Fsub%3Aimplement-task%2Frun-validator%2Fsub%3Arun-validator%2Fvalidator-retry%3A0/fix-violations#1",
+      "step": "fix-violations",
+      "prefix": "implement-tasks:0/implement-single-task/sub:implement-task/run-validator/sub:run-validator/validator-retry:0",
+      "agent_role": "implementor",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "measurement_producer": "agent-runner",
+      "tool": "agent-runner",
+      "duration_ms": 99354,
+      "usage_source": "codex:turn.completed",
+      "usage_source_version": null,
+      "source_provenance": {
+        "source_format": "codex:turn.completed"
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "cache_read": {
+              "availability": "available",
+              "value": 630656,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "input_total": {
+              "availability": "available",
+              "value": 642392,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 645402,
+              "reason": null
+            },
+            "output": {
+              "availability": "available",
+              "value": 3010,
+              "reason": null
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "reasoning": {
+              "availability": "available",
+              "value": 622,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 642392,
+            "cached_input": 630656,
+            "output": 3010,
+            "reasoning": 622
+          },
+          "token_totals": {
+            "input": 642392,
+            "output": 3010,
+            "total": 645402
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "cache_read": {
+            "availability": "available",
+            "value": 630656,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "input_total": {
+            "availability": "available",
+            "value": 642392,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 645402,
+            "reason": null
+          },
+          "output": {
+            "availability": "available",
+            "value": 3010,
+            "reason": null
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "reasoning": {
+            "availability": "available",
+            "value": 622,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 642392,
+          "cached_input": 630656,
+          "output": 3010,
+          "reasoning": 622
+        },
+        "token_totals": {
+          "input": 642392,
+          "output": 3010,
+          "total": 645402
+        }
+      }
+    },
+    {
+      "attempt_id": "implement-tasks%3A0%2Fimplement-single-task%2Fsub%3Aimplement-task/session-report#1",
+      "step": "session-report",
+      "prefix": "implement-tasks:0/implement-single-task/sub:implement-task",
+      "agent_role": "implementor",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "measurement_producer": "agent-runner",
+      "tool": "agent-runner",
+      "duration_ms": 28342,
+      "usage_source": "codex:turn.completed",
+      "usage_source_version": null,
+      "source_provenance": {
+        "source_format": "codex:turn.completed"
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "cache_read": {
+              "availability": "available",
+              "value": 220800,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "input_total": {
+              "availability": "available",
+              "value": 224952,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 225770,
+              "reason": null
+            },
+            "output": {
+              "availability": "available",
+              "value": 818,
+              "reason": null
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "reasoning": {
+              "availability": "available",
+              "value": 474,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 224952,
+            "cached_input": 220800,
+            "output": 818,
+            "reasoning": 474
+          },
+          "token_totals": {
+            "input": 224952,
+            "output": 818,
+            "total": 225770
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "cache_read": {
+            "availability": "available",
+            "value": 220800,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "input_total": {
+            "availability": "available",
+            "value": 224952,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 225770,
+            "reason": null
+          },
+          "output": {
+            "availability": "available",
+            "value": 818,
+            "reason": null
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "reasoning": {
+            "availability": "available",
+            "value": 474,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 224952,
+          "cached_input": 220800,
+          "output": 818,
+          "reasoning": 474
+        },
+        "token_totals": {
+          "input": 224952,
+          "output": 818,
+          "total": 225770
+        }
+      }
+    },
+    {
+      "attempt_id": "implement-tasks%3A1%2Fimplement-single-task%2Fsub%3Aimplement-task/generate-code#1",
+      "step": "generate-code",
+      "prefix": "implement-tasks:1/implement-single-task/sub:implement-task",
+      "agent_role": "implementor",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "measurement_producer": "agent-runner",
+      "tool": "agent-runner",
+      "duration_ms": 316172,
+      "usage_source": "codex:turn.completed",
+      "usage_source_version": null,
+      "source_provenance": {
+        "source_format": "codex:turn.completed"
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "cache_read": {
+              "availability": "available",
+              "value": 1323776,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "input_total": {
+              "availability": "available",
+              "value": 1385375,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 1395947,
+              "reason": null
+            },
+            "output": {
+              "availability": "available",
+              "value": 10572,
+              "reason": null
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "reasoning": {
+              "availability": "available",
+              "value": 2581,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 1385375,
+            "cached_input": 1323776,
+            "output": 10572,
+            "reasoning": 2581
+          },
+          "token_totals": {
+            "input": 1385375,
+            "output": 10572,
+            "total": 1395947
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "cache_read": {
+            "availability": "available",
+            "value": 1323776,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "input_total": {
+            "availability": "available",
+            "value": 1385375,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 1395947,
+            "reason": null
+          },
+          "output": {
+            "availability": "available",
+            "value": 10572,
+            "reason": null
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "reasoning": {
+            "availability": "available",
+            "value": 2581,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 1385375,
+          "cached_input": 1323776,
+          "output": 10572,
+          "reasoning": 2581
+        },
+        "token_totals": {
+          "input": 1385375,
+          "output": 10572,
+          "total": 1395947
+        }
+      }
+    },
+    {
+      "attempt_id": "implement-tasks%3A1%2Fimplement-single-task%2Fsub%3Aimplement-task%2Frun-validator%2Fsub%3Arun-validator%2Fvalidator-retry%3A0/fix-violations#1",
+      "step": "fix-violations",
+      "prefix": "implement-tasks:1/implement-single-task/sub:implement-task/run-validator/sub:run-validator/validator-retry:0",
+      "agent_role": "implementor",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "measurement_producer": "agent-runner",
+      "tool": "agent-runner",
+      "duration_ms": 345011,
+      "usage_source": "codex:turn.completed",
+      "usage_source_version": null,
+      "source_provenance": {
+        "source_format": "codex:turn.completed"
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "cache_read": {
+              "availability": "available",
+              "value": 1692672,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "input_total": {
+              "availability": "available",
+              "value": 1742097,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 1749804,
+              "reason": null
+            },
+            "output": {
+              "availability": "available",
+              "value": 7707,
+              "reason": null
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "reasoning": {
+              "availability": "available",
+              "value": 3249,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 1742097,
+            "cached_input": 1692672,
+            "output": 7707,
+            "reasoning": 3249
+          },
+          "token_totals": {
+            "input": 1742097,
+            "output": 7707,
+            "total": 1749804
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "cache_read": {
+            "availability": "available",
+            "value": 1692672,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "input_total": {
+            "availability": "available",
+            "value": 1742097,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 1749804,
+            "reason": null
+          },
+          "output": {
+            "availability": "available",
+            "value": 7707,
+            "reason": null
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "reasoning": {
+            "availability": "available",
+            "value": 3249,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 1742097,
+          "cached_input": 1692672,
+          "output": 7707,
+          "reasoning": 3249
+        },
+        "token_totals": {
+          "input": 1742097,
+          "output": 7707,
+          "total": 1749804
+        }
+      }
+    },
+    {
+      "attempt_id": "implement-tasks%3A1%2Fimplement-single-task%2Fsub%3Aimplement-task/session-report#1",
+      "step": "session-report",
+      "prefix": "implement-tasks:1/implement-single-task/sub:implement-task",
+      "agent_role": "implementor",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "measurement_producer": "agent-runner",
+      "tool": "agent-runner",
+      "duration_ms": 49702,
+      "usage_source": "codex:turn.completed",
+      "usage_source_version": null,
+      "source_provenance": {
+        "source_format": "codex:turn.completed"
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "cache_read": {
+              "availability": "available",
+              "value": 239872,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "input_total": {
+              "availability": "available",
+              "value": 244113,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 246195,
+              "reason": null
+            },
+            "output": {
+              "availability": "available",
+              "value": 2082,
+              "reason": null
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "reasoning": {
+              "availability": "available",
+              "value": 1532,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 244113,
+            "cached_input": 239872,
+            "output": 2082,
+            "reasoning": 1532
+          },
+          "token_totals": {
+            "input": 244113,
+            "output": 2082,
+            "total": 246195
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "cache_read": {
+            "availability": "available",
+            "value": 239872,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "input_total": {
+            "availability": "available",
+            "value": 244113,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 246195,
+            "reason": null
+          },
+          "output": {
+            "availability": "available",
+            "value": 2082,
+            "reason": null
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "reasoning": {
+            "availability": "available",
+            "value": 1532,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 244113,
+          "cached_input": 239872,
+          "output": 2082,
+          "reasoning": 1532
+        },
+        "token_totals": {
+          "input": 244113,
+          "output": 2082,
+          "total": 246195
+        }
+      }
+    },
+    {
+      "attempt_id": "implement-tasks%3A2%2Fimplement-single-task%2Fsub%3Aimplement-task/generate-code#1",
+      "step": "generate-code",
+      "prefix": "implement-tasks:2/implement-single-task/sub:implement-task",
+      "agent_role": "implementor",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "measurement_producer": "agent-runner",
+      "tool": "agent-runner",
+      "duration_ms": 3587555,
+      "usage_source": "codex:turn.completed",
+      "usage_source_version": null,
+      "source_provenance": {
+        "source_format": "codex:turn.completed"
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "cache_read": {
+              "availability": "available",
+              "value": 14133120,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "input_total": {
+              "availability": "available",
+              "value": 14340035,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 14381111,
+              "reason": null
+            },
+            "output": {
+              "availability": "available",
+              "value": 41076,
+              "reason": null
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "reasoning": {
+              "availability": "available",
+              "value": 19163,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 14340035,
+            "cached_input": 14133120,
+            "output": 41076,
+            "reasoning": 19163
+          },
+          "token_totals": {
+            "input": 14340035,
+            "output": 41076,
+            "total": 14381111
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "cache_read": {
+            "availability": "available",
+            "value": 14133120,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "input_total": {
+            "availability": "available",
+            "value": 14340035,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 14381111,
+            "reason": null
+          },
+          "output": {
+            "availability": "available",
+            "value": 41076,
+            "reason": null
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "reasoning": {
+            "availability": "available",
+            "value": 19163,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 14340035,
+          "cached_input": 14133120,
+          "output": 41076,
+          "reasoning": 19163
+        },
+        "token_totals": {
+          "input": 14340035,
+          "output": 41076,
+          "total": 14381111
+        }
+      }
+    },
+    {
+      "attempt_id": "implement-tasks%3A2%2Fimplement-single-task%2Fsub%3Aimplement-task%2Frun-validator%2Fsub%3Arun-validator%2Fvalidator-retry%3A0/fix-violations#1",
+      "step": "fix-violations",
+      "prefix": "implement-tasks:2/implement-single-task/sub:implement-task/run-validator/sub:run-validator/validator-retry:0",
+      "agent_role": "implementor",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "measurement_producer": "agent-runner",
+      "tool": "agent-runner",
+      "duration_ms": 100819,
+      "usage_source": "codex:turn.completed",
+      "usage_source_version": null,
+      "source_provenance": {
+        "source_format": "codex:turn.completed"
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "cache_read": {
+              "availability": "available",
+              "value": 1072128,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "input_total": {
+              "availability": "available",
+              "value": 1087629,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 1089332,
+              "reason": null
+            },
+            "output": {
+              "availability": "available",
+              "value": 1703,
+              "reason": null
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "reasoning": {
+              "availability": "available",
+              "value": 863,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 1087629,
+            "cached_input": 1072128,
+            "output": 1703,
+            "reasoning": 863
+          },
+          "token_totals": {
+            "input": 1087629,
+            "output": 1703,
+            "total": 1089332
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "cache_read": {
+            "availability": "available",
+            "value": 1072128,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "input_total": {
+            "availability": "available",
+            "value": 1087629,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 1089332,
+            "reason": null
+          },
+          "output": {
+            "availability": "available",
+            "value": 1703,
+            "reason": null
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "reasoning": {
+            "availability": "available",
+            "value": 863,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 1087629,
+          "cached_input": 1072128,
+          "output": 1703,
+          "reasoning": 863
+        },
+        "token_totals": {
+          "input": 1087629,
+          "output": 1703,
+          "total": 1089332
+        }
+      }
+    },
+    {
+      "attempt_id": "implement-tasks%3A2%2Fimplement-single-task%2Fsub%3Aimplement-task/session-report#1",
+      "step": "session-report",
+      "prefix": "implement-tasks:2/implement-single-task/sub:implement-task",
+      "agent_role": "implementor",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "measurement_producer": "agent-runner",
+      "tool": "agent-runner",
+      "duration_ms": 62171,
+      "usage_source": "codex:turn.completed",
+      "usage_source_version": null,
+      "source_provenance": {
+        "source_format": "codex:turn.completed"
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "cache_read": {
+              "availability": "available",
+              "value": 413696,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "input_total": {
+              "availability": "available",
+              "value": 418146,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 420247,
+              "reason": null
+            },
+            "output": {
+              "availability": "available",
+              "value": 2101,
+              "reason": null
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "reasoning": {
+              "availability": "available",
+              "value": 1633,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 418146,
+            "cached_input": 413696,
+            "output": 2101,
+            "reasoning": 1633
+          },
+          "token_totals": {
+            "input": 418146,
+            "output": 2101,
+            "total": 420247
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "cache_read": {
+            "availability": "available",
+            "value": 413696,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "input_total": {
+            "availability": "available",
+            "value": 418146,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 420247,
+            "reason": null
+          },
+          "output": {
+            "availability": "available",
+            "value": 2101,
+            "reason": null
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "reasoning": {
+            "availability": "available",
+            "value": 1633,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 418146,
+          "cached_input": 413696,
+          "output": 2101,
+          "reasoning": 1633
+        },
+        "token_totals": {
+          "input": 418146,
+          "output": 2101,
+          "total": 420247
+        }
+      }
+    },
+    {
+      "attempt_id": "complete-task-index#1",
+      "step": "complete-task-index",
+      "prefix": "",
+      "agent_role": "lead",
+      "invoked_cli": true,
+      "cli": "claude",
+      "provider": "anthropic",
+      "model": "claude-opus-5-5",
+      "measurement_producer": "agent-runner",
+      "tool": "agent-runner",
+      "duration_ms": 10941,
+      "usage_source": "claude:result-event",
+      "usage_source_version": null,
+      "source_provenance": {
+        "source_format": "claude:result-event"
+      },
+      "cost": {
+        "state": "available",
+        "reason": null,
+        "estimated_api_cost_usd": 0.12072079999999999
+      },
+      "provider_reported_costs": [
+        {
+          "cost_evidence_id": "reported-cost",
+          "amount": {
+            "availability": "available",
+            "value": 0.12072079999999999,
+            "reason": null,
+            "source": "provider_usage",
+            "origin": "observed",
+            "precision": "exact",
+            "derivation": null,
+            "included_in": null
+          },
+          "currency": {
+            "availability": "available",
+            "value": "USD",
+            "reason": null
+          },
+          "scope": "attempt",
+          "coverage": "full",
+          "overlap": "established",
+          "source": "provider_usage"
+        }
+      ],
+      "allocations": [
+        {
+          "allocation_id": "native-observed",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "usage": {
+            "state": "available",
+            "token_envelopes": {
+              "cache_read": {
+                "availability": "available",
+                "value": 71924,
+                "reason": null
+              },
+              "cache_write": {
+                "availability": "available",
+                "value": 11328,
+                "reason": null
+              },
+              "input_total": {
+                "availability": "available",
+                "value": 83260,
+                "reason": null
+              },
+              "input_uncached": {
+                "availability": "available",
+                "value": 8,
+                "reason": null
+              },
+              "normalized_total": {
+                "availability": "available",
+                "value": 84044,
+                "reason": null
+              },
+              "output": {
+                "availability": "available",
+                "value": 784,
+                "reason": null
+              },
+              "provider_total": {
+                "availability": "unavailable",
+                "value": null,
+                "reason": "not_reported"
+              },
+              "reasoning": {
+                "availability": "unavailable",
+                "value": null,
+                "reason": "not_reported"
+              }
+            },
+            "tokens": {
+              "input": 83260,
+              "cached_input": 71924,
+              "cache_write": 11328,
+              "output": 784
+            },
+            "token_totals": {
+              "input": 83260,
+              "output": 784,
+              "total": 84044
+            },
+            "billing_tokens": {
+              "input": 8,
+              "cached_input": 71924,
+              "cache_write": 11328,
+              "output": 784
+            }
+          }
+        }
+      ],
+      "unallocated_usage": null,
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": {
+          "input": 8,
+          "cached_input": 71924,
+          "cache_write": 11328,
+          "output": 784
+        },
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "cache_read": {
+            "availability": "available",
+            "value": 71924,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "available",
+            "value": 11328,
+            "reason": null
+          },
+          "input_total": {
+            "availability": "available",
+            "value": 83260,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "available",
+            "value": 8,
+            "reason": null
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 84044,
+            "reason": null
+          },
+          "output": {
+            "availability": "available",
+            "value": 784,
+            "reason": null
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          }
+        },
+        "tokens": {
+          "input": 83260,
+          "cached_input": 71924,
+          "cache_write": 11328,
+          "output": 784
+        },
+        "token_totals": {
+          "input": 83260,
+          "output": 784,
+          "total": 84044
+        }
+      }
+    },
+    {
+      "attempt_id": "review-assumptions#1",
+      "step": "review-assumptions",
+      "prefix": "",
+      "agent_role": "lead",
+      "invoked_cli": true,
+      "cli": "claude",
+      "provider": "anthropic",
+      "model": "claude-opus-5-5",
+      "measurement_producer": "agent-runner",
+      "tool": "agent-runner",
+      "duration_ms": 3498431,
+      "usage_source": "claude:result-event",
+      "usage_source_version": null,
+      "source_provenance": {
+        "source_format": "claude:result-event"
+      },
+      "cost": {
+        "state": "available",
+        "reason": null,
+        "estimated_api_cost_usd": 3.650281400000001
+      },
+      "provider_reported_costs": [
+        {
+          "cost_evidence_id": "reported-cost",
+          "amount": {
+            "availability": "available",
+            "value": 3.650281400000001,
+            "reason": null,
+            "source": "provider_usage",
+            "origin": "observed",
+            "precision": "exact",
+            "derivation": null,
+            "included_in": null
+          },
+          "currency": {
+            "availability": "available",
+            "value": "USD",
+            "reason": null
+          },
+          "scope": "attempt",
+          "coverage": "full",
+          "overlap": "established",
+          "source": "provider_usage"
+        }
+      ],
+      "allocations": [
+        {
+          "allocation_id": "native-observed",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "usage": {
+            "state": "available",
+            "token_envelopes": {
+              "cache_read": {
+                "availability": "available",
+                "value": 7251267,
+                "reason": null
+              },
+              "cache_write": {
+                "availability": "available",
+                "value": 132118,
+                "reason": null
+              },
+              "input_total": {
+                "availability": "available",
+                "value": 7383531,
+                "reason": null
+              },
+              "input_uncached": {
+                "availability": "available",
+                "value": 146,
+                "reason": null
+              },
+              "normalized_total": {
+                "availability": "available",
+                "value": 7440656,
+                "reason": null
+              },
+              "output": {
+                "availability": "available",
+                "value": 57125,
+                "reason": null
+              },
+              "provider_total": {
+                "availability": "unavailable",
+                "value": null,
+                "reason": "not_reported"
+              },
+              "reasoning": {
+                "availability": "unavailable",
+                "value": null,
+                "reason": "not_reported"
+              }
+            },
+            "tokens": {
+              "input": 7383531,
+              "cached_input": 7251267,
+              "cache_write": 132118,
+              "output": 57125
+            },
+            "token_totals": {
+              "input": 7383531,
+              "output": 57125,
+              "total": 7440656
+            },
+            "billing_tokens": {
+              "input": 146,
+              "cached_input": 7251267,
+              "cache_write": 132118,
+              "output": 57125
+            }
+          }
+        }
+      ],
+      "unallocated_usage": null,
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": {
+          "input": 146,
+          "cached_input": 7251267,
+          "cache_write": 132118,
+          "output": 57125
+        },
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "cache_read": {
+            "availability": "available",
+            "value": 7251267,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "available",
+            "value": 132118,
+            "reason": null
+          },
+          "input_total": {
+            "availability": "available",
+            "value": 7383531,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "available",
+            "value": 146,
+            "reason": null
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 7440656,
+            "reason": null
+          },
+          "output": {
+            "availability": "available",
+            "value": 57125,
+            "reason": null
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          }
+        },
+        "tokens": {
+          "input": 7383531,
+          "cached_input": 7251267,
+          "cache_write": 132118,
+          "output": 57125
+        },
+        "token_totals": {
+          "input": 7383531,
+          "output": 57125,
+          "total": 7440656
+        }
+      }
+    },
+    {
+      "attempt_id": "simplify#1",
+      "step": "simplify",
+      "prefix": "",
+      "agent_role": "lead",
+      "invoked_cli": true,
+      "cli": "claude",
+      "provider": "anthropic",
+      "model": "claude-opus-5-5",
+      "measurement_producer": "agent-runner",
+      "tool": "agent-runner",
+      "duration_ms": 1072261,
+      "usage_source": "claude:result-event",
+      "usage_source_version": null,
+      "source_provenance": {
+        "source_format": "claude:result-event"
+      },
+      "cost": {
+        "state": "available",
+        "reason": null,
+        "estimated_api_cost_usd": 2.3578368000000003
+      },
+      "provider_reported_costs": [
+        {
+          "cost_evidence_id": "reported-cost",
+          "amount": {
+            "availability": "available",
+            "value": 2.3578368000000003,
+            "reason": null,
+            "source": "provider_usage",
+            "origin": "observed",
+            "precision": "exact",
+            "derivation": null,
+            "included_in": null
+          },
+          "currency": {
+            "availability": "available",
+            "value": "USD",
+            "reason": null
+          },
+          "scope": "attempt",
+          "coverage": "full",
+          "overlap": "established",
+          "source": "provider_usage"
+        }
+      ],
+      "allocations": [
+        {
+          "allocation_id": "native-observed",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "usage": {
+            "state": "available",
+            "token_envelopes": {
+              "cache_read": {
+                "availability": "available",
+                "value": 2530934,
+                "reason": null
+              },
+              "cache_write": {
+                "availability": "available",
+                "value": 20299,
+                "reason": null
+              },
+              "input_total": {
+                "availability": "available",
+                "value": 2551263,
+                "reason": null
+              },
+              "input_uncached": {
+                "availability": "available",
+                "value": 30,
+                "reason": null
+              },
+              "normalized_total": {
+                "availability": "available",
+                "value": 2561352,
+                "reason": null
+              },
+              "output": {
+                "availability": "available",
+                "value": 10089,
+                "reason": null
+              },
+              "provider_total": {
+                "availability": "unavailable",
+                "value": null,
+                "reason": "not_reported"
+              },
+              "reasoning": {
+                "availability": "unavailable",
+                "value": null,
+                "reason": "not_reported"
+              }
+            },
+            "tokens": {
+              "input": 2551263,
+              "cached_input": 2530934,
+              "cache_write": 20299,
+              "output": 10089
+            },
+            "token_totals": {
+              "input": 2551263,
+              "output": 10089,
+              "total": 2561352
+            },
+            "billing_tokens": {
+              "input": 30,
+              "cached_input": 2530934,
+              "cache_write": 20299,
+              "output": 10089
+            }
+          }
+        }
+      ],
+      "unallocated_usage": null,
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": {
+          "input": 30,
+          "cached_input": 2530934,
+          "cache_write": 20299,
+          "output": 10089
+        },
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "cache_read": {
+            "availability": "available",
+            "value": 2530934,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "available",
+            "value": 20299,
+            "reason": null
+          },
+          "input_total": {
+            "availability": "available",
+            "value": 2551263,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "available",
+            "value": 30,
+            "reason": null
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 2561352,
+            "reason": null
+          },
+          "output": {
+            "availability": "available",
+            "value": 10089,
+            "reason": null
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          }
+        },
+        "tokens": {
+          "input": 2551263,
+          "cached_input": 2530934,
+          "cache_write": 20299,
+          "output": 10089
+        },
+        "token_totals": {
+          "input": 2551263,
+          "output": 10089,
+          "total": 2561352
+        }
+      }
+    },
+    {
+      "attempt_id": "run-validator%2Fsub%3Arun-validator%2Fvalidator-retry%3A0/fix-violations#1",
+      "step": "fix-violations",
+      "prefix": "run-validator/sub:run-validator/validator-retry:0",
+      "agent_role": "lead",
+      "invoked_cli": true,
+      "cli": "claude",
+      "provider": "anthropic",
+      "model": "claude-opus-5-5",
+      "measurement_producer": "agent-runner",
+      "tool": "agent-runner",
+      "duration_ms": 214595,
+      "usage_source": "claude:result-event",
+      "usage_source_version": null,
+      "source_provenance": {
+        "source_format": "claude:result-event"
+      },
+      "cost": {
+        "state": "available",
+        "reason": null,
+        "estimated_api_cost_usd": 0.46784300000000023
+      },
+      "provider_reported_costs": [
+        {
+          "cost_evidence_id": "reported-cost",
+          "amount": {
+            "availability": "available",
+            "value": 0.46784300000000023,
+            "reason": null,
+            "source": "provider_usage",
+            "origin": "observed",
+            "precision": "exact",
+            "derivation": null,
+            "included_in": null
+          },
+          "currency": {
+            "availability": "available",
+            "value": "USD",
+            "reason": null
+          },
+          "scope": "attempt",
+          "coverage": "full",
+          "overlap": "established",
+          "source": "provider_usage"
+        }
+      ],
+      "allocations": [
+        {
+          "allocation_id": "native-observed",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "usage": {
+            "state": "available",
+            "token_envelopes": {
+              "cache_read": {
+                "availability": "available",
+                "value": 1558515,
+                "reason": null
+              },
+              "cache_write": {
+                "availability": "available",
+                "value": 7867,
+                "reason": null
+              },
+              "input_total": {
+                "availability": "available",
+                "value": 1566398,
+                "reason": null
+              },
+              "input_uncached": {
+                "availability": "available",
+                "value": 16,
+                "reason": null
+              },
+              "normalized_total": {
+                "availability": "available",
+                "value": 1571055,
+                "reason": null
+              },
+              "output": {
+                "availability": "available",
+                "value": 4657,
+                "reason": null
+              },
+              "provider_total": {
+                "availability": "unavailable",
+                "value": null,
+                "reason": "not_reported"
+              },
+              "reasoning": {
+                "availability": "unavailable",
+                "value": null,
+                "reason": "not_reported"
+              }
+            },
+            "tokens": {
+              "input": 1566398,
+              "cached_input": 1558515,
+              "cache_write": 7867,
+              "output": 4657
+            },
+            "token_totals": {
+              "input": 1566398,
+              "output": 4657,
+              "total": 1571055
+            },
+            "billing_tokens": {
+              "input": 16,
+              "cached_input": 1558515,
+              "cache_write": 7867,
+              "output": 4657
+            }
+          }
+        }
+      ],
+      "unallocated_usage": null,
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": {
+          "input": 16,
+          "cached_input": 1558515,
+          "cache_write": 7867,
+          "output": 4657
+        },
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "cache_read": {
+            "availability": "available",
+            "value": 1558515,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "available",
+            "value": 7867,
+            "reason": null
+          },
+          "input_total": {
+            "availability": "available",
+            "value": 1566398,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "available",
+            "value": 16,
+            "reason": null
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 1571055,
+            "reason": null
+          },
+          "output": {
+            "availability": "available",
+            "value": 4657,
+            "reason": null
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          }
+        },
+        "tokens": {
+          "input": 1566398,
+          "cached_input": 1558515,
+          "cache_write": 7867,
+          "output": 4657
+        },
+        "token_totals": {
+          "input": 1566398,
+          "output": 4657,
+          "total": 1571055
+        }
+      }
+    },
+    {
+      "attempt_id": "open-draft-pr#1",
+      "step": "open-draft-pr",
+      "prefix": "",
+      "agent_role": "lead",
+      "invoked_cli": true,
+      "cli": "claude",
+      "provider": "anthropic",
+      "model": "claude-opus-5-5",
+      "measurement_producer": "agent-runner",
+      "tool": "agent-runner",
+      "duration_ms": 54481,
+      "usage_source": "claude:result-event",
+      "usage_source_version": null,
+      "source_provenance": {
+        "source_format": "claude:result-event"
+      },
+      "cost": {
+        "state": "available",
+        "reason": null,
+        "estimated_api_cost_usd": 0.42801199999999984
+      },
+      "provider_reported_costs": [
+        {
+          "cost_evidence_id": "reported-cost",
+          "amount": {
+            "availability": "available",
+            "value": 0.42801199999999984,
+            "reason": null,
+            "source": "provider_usage",
+            "origin": "observed",
+            "precision": "exact",
+            "derivation": null,
+            "included_in": null
+          },
+          "currency": {
+            "availability": "available",
+            "value": "USD",
+            "reason": null
+          },
+          "scope": "attempt",
+          "coverage": "full",
+          "overlap": "established",
+          "source": "provider_usage"
+        }
+      ],
+      "allocations": [
+        {
+          "allocation_id": "native-observed",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "usage": {
+            "state": "available",
+            "token_envelopes": {
+              "cache_read": {
+                "availability": "available",
+                "value": 1606800,
+                "reason": null
+              },
+              "cache_write": {
+                "availability": "available",
+                "value": 6151,
+                "reason": null
+              },
+              "input_total": {
+                "availability": "available",
+                "value": 1612967,
+                "reason": null
+              },
+              "input_uncached": {
+                "availability": "available",
+                "value": 16,
+                "reason": null
+              },
+              "normalized_total": {
+                "availability": "available",
+                "value": 1615836,
+                "reason": null
+              },
+              "output": {
+                "availability": "available",
+                "value": 2869,
+                "reason": null
+              },
+              "provider_total": {
+                "availability": "unavailable",
+                "value": null,
+                "reason": "not_reported"
+              },
+              "reasoning": {
+                "availability": "unavailable",
+                "value": null,
+                "reason": "not_reported"
+              }
+            },
+            "tokens": {
+              "input": 1612967,
+              "cached_input": 1606800,
+              "cache_write": 6151,
+              "output": 2869
+            },
+            "token_totals": {
+              "input": 1612967,
+              "output": 2869,
+              "total": 1615836
+            },
+            "billing_tokens": {
+              "input": 16,
+              "cached_input": 1606800,
+              "cache_write": 6151,
+              "output": 2869
+            }
+          }
+        }
+      ],
+      "unallocated_usage": null,
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": {
+          "input": 16,
+          "cached_input": 1606800,
+          "cache_write": 6151,
+          "output": 2869
+        },
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "cache_read": {
+            "availability": "available",
+            "value": 1606800,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "available",
+            "value": 6151,
+            "reason": null
+          },
+          "input_total": {
+            "availability": "available",
+            "value": 1612967,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "available",
+            "value": 16,
+            "reason": null
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 1615836,
+            "reason": null
+          },
+          "output": {
+            "availability": "available",
+            "value": 2869,
+            "reason": null
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          }
+        },
+        "tokens": {
+          "input": 1612967,
+          "cached_input": 1606800,
+          "cache_write": 6151,
+          "output": 2869
+        },
+        "token_totals": {
+          "input": 1612967,
+          "output": 2869,
+          "total": 1615836
+        }
+      }
+    },
+    {
+      "attempt_id": "prepare-acceptance/44caefd3-cd25-44f1-8a2d-5fded3f34260#1",
+      "step": "44caefd3-cd25-44f1-8a2d-5fded3f34260",
+      "prefix": "prepare-acceptance",
+      "agent_role": "tester",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "measurement_producer": "agent-runner",
+      "tool": "agent-runner",
+      "duration_ms": 2953481,
+      "usage_source": "codex:turn.completed",
+      "usage_source_version": null,
+      "source_provenance": {
+        "source_format": "codex:turn.completed"
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "cache_read": {
+              "availability": "available",
+              "value": 38577024,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "input_total": {
+              "availability": "available",
+              "value": 38977692,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 39086343,
+              "reason": null
+            },
+            "output": {
+              "availability": "available",
+              "value": 108651,
+              "reason": null
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "reasoning": {
+              "availability": "available",
+              "value": 52730,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 38977692,
+            "cached_input": 38577024,
+            "output": 108651,
+            "reasoning": 52730
+          },
+          "token_totals": {
+            "input": 38977692,
+            "output": 108651,
+            "total": 39086343
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "cache_read": {
+            "availability": "available",
+            "value": 38577024,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "input_total": {
+            "availability": "available",
+            "value": 38977692,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 39086343,
+            "reason": null
+          },
+          "output": {
+            "availability": "available",
+            "value": 108651,
+            "reason": null
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "reasoning": {
+            "availability": "available",
+            "value": 52730,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 38977692,
+          "cached_input": 38577024,
+          "output": 108651,
+          "reasoning": 52730
+        },
+        "token_totals": {
+          "input": 38977692,
+          "output": 108651,
+          "total": 39086343
+        }
+      }
+    },
+    {
+      "attempt_id": "prepare-acceptance/0df86102-4543-47fb-be12-5395736dd3bd#1",
+      "step": "0df86102-4543-47fb-be12-5395736dd3bd",
+      "prefix": "prepare-acceptance",
+      "agent_role": "tester",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "measurement_producer": "agent-runner",
+      "tool": "agent-runner",
+      "duration_ms": 584609,
+      "usage_source": "codex:turn.completed",
+      "usage_source_version": null,
+      "source_provenance": {
+        "source_format": "codex:turn.completed"
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "cache_read": {
+              "availability": "available",
+              "value": 2523648,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "input_total": {
+              "availability": "available",
+              "value": 2610889,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 2637634,
+              "reason": null
+            },
+            "output": {
+              "availability": "available",
+              "value": 26745,
+              "reason": null
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported"
+            },
+            "reasoning": {
+              "availability": "available",
+              "value": 11323,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 2610889,
+            "cached_input": 2523648,
+            "output": 26745,
+            "reasoning": 11323
+          },
+          "token_totals": {
+            "input": 2610889,
+            "output": 26745,
+            "total": 2637634
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "cache_read": {
+            "availability": "available",
+            "value": 2523648,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "input_total": {
+            "availability": "available",
+            "value": 2610889,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 2637634,
+            "reason": null
+          },
+          "output": {
+            "availability": "available",
+            "value": 26745,
+            "reason": null
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "reasoning": {
+            "availability": "available",
+            "value": 11323,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 2610889,
+          "cached_input": 2523648,
+          "output": 26745,
+          "reasoning": 11323
+        },
+        "token_totals": {
+          "input": 2610889,
+          "output": 26745,
+          "total": 2637634
+        }
+      }
+    },
+    {
+      "attempt_id": "prepare-acceptance#1",
+      "step": "prepare-acceptance",
+      "prefix": "",
+      "agent_role": "lead",
+      "invoked_cli": true,
+      "cli": "claude",
+      "provider": "anthropic",
+      "model": "claude-opus-5-5",
+      "measurement_producer": "agent-runner",
+      "tool": "agent-runner",
+      "duration_ms": 4194925,
+      "usage_source": "claude:result-event",
+      "usage_source_version": null,
+      "source_provenance": {
+        "source_format": "claude:result-event"
+      },
+      "cost": {
+        "state": "available",
+        "reason": null,
+        "estimated_api_cost_usd": 1.9677804000000014
+      },
+      "provider_reported_costs": [
+        {
+          "cost_evidence_id": "reported-cost",
+          "amount": {
+            "availability": "available",
+            "value": 1.9677804000000014,
+            "reason": null,
+            "source": "provider_usage",
+            "origin": "observed",
+            "precision": "exact",
+            "derivation": null,
+            "included_in": null
+          },
+          "currency": {
+            "availability": "available",
+            "value": "USD",
+            "reason": null
+          },
+          "scope": "attempt",
+          "coverage": "full",
+          "overlap": "established",
+          "source": "provider_usage"
+        }
+      ],
+      "allocations": [
+        {
+          "allocation_id": "native-observed",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "usage": {
+            "state": "available",
+            "token_envelopes": {
+              "cache_read": {
+                "availability": "available",
+                "value": 5750382,
+                "reason": null
+              },
+              "cache_write": {
+                "availability": "available",
+                "value": 51068,
+                "reason": null
+              },
+              "input_total": {
+                "availability": "available",
+                "value": 5801500,
+                "reason": null
+              },
+              "input_uncached": {
+                "availability": "available",
+                "value": 50,
+                "reason": null
+              },
+              "normalized_total": {
+                "availability": "available",
+                "value": 5821948,
+                "reason": null
+              },
+              "output": {
+                "availability": "available",
+                "value": 20448,
+                "reason": null
+              },
+              "provider_total": {
+                "availability": "unavailable",
+                "value": null,
+                "reason": "not_reported"
+              },
+              "reasoning": {
+                "availability": "unavailable",
+                "value": null,
+                "reason": "not_reported"
+              }
+            },
+            "tokens": {
+              "input": 5801500,
+              "cached_input": 5750382,
+              "cache_write": 51068,
+              "output": 20448
+            },
+            "token_totals": {
+              "input": 5801500,
+              "output": 20448,
+              "total": 5821948
+            },
+            "billing_tokens": {
+              "input": 50,
+              "cached_input": 5750382,
+              "cache_write": 51068,
+              "output": 20448
+            }
+          }
+        }
+      ],
+      "unallocated_usage": null,
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": {
+          "input": 50,
+          "cached_input": 5750382,
+          "cache_write": 51068,
+          "output": 20448
+        },
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "cache_read": {
+            "availability": "available",
+            "value": 5750382,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "available",
+            "value": 51068,
+            "reason": null
+          },
+          "input_total": {
+            "availability": "available",
+            "value": 5801500,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "available",
+            "value": 50,
+            "reason": null
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 5821948,
+            "reason": null
+          },
+          "output": {
+            "availability": "available",
+            "value": 20448,
+            "reason": null
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          }
+        },
+        "tokens": {
+          "input": 5801500,
+          "cached_input": 5750382,
+          "cache_write": 51068,
+          "output": 20448
+        },
+        "token_totals": {
+          "input": 5801500,
+          "output": 20448,
+          "total": 5821948
+        }
+      }
+    },
+    {
+      "attempt_id": "c7ef1ba0-fd48-4479-ab21-4d1063d44209",
+      "step": "run-validator",
+      "prefix": "implement-tasks:0/implement-single-task/sub:implement-task/run-validator/sub:run-validator/validator-retry:0",
+      "agent_role": "implementation-validator",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": null,
+      "model": null,
+      "measurement_producer": "agent-validator",
+      "tool": "agent-validator",
+      "duration_ms": 20665,
+      "usage_source": "agent-validator:metrics",
+      "usage_source_version": "codex-exec-jsonl-turn.completed",
+      "source_provenance": {
+        "source_format": null
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "input_total": {
+              "availability": "available",
+              "value": 43189,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "cache_read": {
+              "availability": "available",
+              "value": 0,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "output": {
+              "availability": "available",
+              "value": 472,
+              "reason": null
+            },
+            "reasoning": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 43661,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 43189,
+            "cached_input": 0,
+            "output": 472
+          },
+          "token_totals": {
+            "input": 43189,
+            "output": 472,
+            "total": 43661
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "input_total": {
+            "availability": "available",
+            "value": 43189,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "cache_read": {
+            "availability": "available",
+            "value": 0,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "output": {
+            "availability": "available",
+            "value": 472,
+            "reason": null
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 43661,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 43189,
+          "cached_input": 0,
+          "output": 472
+        },
+        "token_totals": {
+          "input": 43189,
+          "output": 472,
+          "total": 43661
+        }
+      }
+    },
+    {
+      "attempt_id": "e6d6fe28-6833-4cc9-9abc-0a2c0eb93eed",
+      "step": "run-validator",
+      "prefix": "implement-tasks:0/implement-single-task/sub:implement-task/run-validator/sub:run-validator/validator-retry:0",
+      "agent_role": "implementation-validator",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": null,
+      "model": null,
+      "measurement_producer": "agent-validator",
+      "tool": "agent-validator",
+      "duration_ms": 5700,
+      "usage_source": "agent-validator:metrics",
+      "usage_source_version": "codex-exec-jsonl-turn.completed",
+      "source_provenance": {
+        "source_format": null
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "input_total": {
+              "availability": "available",
+              "value": 44933,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "cache_read": {
+              "availability": "available",
+              "value": 11520,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "output": {
+              "availability": "available",
+              "value": 28,
+              "reason": null
+            },
+            "reasoning": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 44961,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 44933,
+            "cached_input": 11520,
+            "output": 28
+          },
+          "token_totals": {
+            "input": 44933,
+            "output": 28,
+            "total": 44961
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "input_total": {
+            "availability": "available",
+            "value": 44933,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "cache_read": {
+            "availability": "available",
+            "value": 11520,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "output": {
+            "availability": "available",
+            "value": 28,
+            "reason": null
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 44961,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 44933,
+          "cached_input": 11520,
+          "output": 28
+        },
+        "token_totals": {
+          "input": 44933,
+          "output": 28,
+          "total": 44961
+        }
+      }
+    },
+    {
+      "attempt_id": "1ab90652-bc98-43be-bfb3-d11315083565",
+      "step": "run-validator",
+      "prefix": "implement-tasks:0/implement-single-task/sub:implement-task/run-validator/sub:run-validator/validator-retry:1",
+      "agent_role": "implementation-validator",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": null,
+      "model": null,
+      "measurement_producer": "agent-validator",
+      "tool": "agent-validator",
+      "duration_ms": 6641,
+      "usage_source": "agent-validator:metrics",
+      "usage_source_version": "codex-exec-jsonl-turn.completed",
+      "source_provenance": {
+        "source_format": null
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "input_total": {
+              "availability": "available",
+              "value": 17665,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "cache_read": {
+              "availability": "available",
+              "value": 11520,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "output": {
+              "availability": "available",
+              "value": 43,
+              "reason": null
+            },
+            "reasoning": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 17708,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 17665,
+            "cached_input": 11520,
+            "output": 43
+          },
+          "token_totals": {
+            "input": 17665,
+            "output": 43,
+            "total": 17708
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "input_total": {
+            "availability": "available",
+            "value": 17665,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "cache_read": {
+            "availability": "available",
+            "value": 11520,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "output": {
+            "availability": "available",
+            "value": 43,
+            "reason": null
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 17708,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 17665,
+          "cached_input": 11520,
+          "output": 43
+        },
+        "token_totals": {
+          "input": 17665,
+          "output": 43,
+          "total": 17708
+        }
+      }
+    },
+    {
+      "attempt_id": "e772be68-b2e8-4061-9e15-463213250b6f",
+      "step": "run-validator",
+      "prefix": "implement-tasks:0/implement-single-task/sub:implement-task/run-validator/sub:run-validator/validator-retry:1",
+      "agent_role": "implementation-validator",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": null,
+      "model": null,
+      "measurement_producer": "agent-validator",
+      "tool": "agent-validator",
+      "duration_ms": 4715,
+      "usage_source": "agent-validator:metrics",
+      "usage_source_version": "codex-exec-jsonl-turn.completed",
+      "source_provenance": {
+        "source_format": null
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "input_total": {
+              "availability": "available",
+              "value": 18869,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "cache_read": {
+              "availability": "available",
+              "value": 0,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "output": {
+              "availability": "available",
+              "value": 15,
+              "reason": null
+            },
+            "reasoning": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 18884,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 18869,
+            "cached_input": 0,
+            "output": 15
+          },
+          "token_totals": {
+            "input": 18869,
+            "output": 15,
+            "total": 18884
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "input_total": {
+            "availability": "available",
+            "value": 18869,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "cache_read": {
+            "availability": "available",
+            "value": 0,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "output": {
+            "availability": "available",
+            "value": 15,
+            "reason": null
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 18884,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 18869,
+          "cached_input": 0,
+          "output": 15
+        },
+        "token_totals": {
+          "input": 18869,
+          "output": 15,
+          "total": 18884
+        }
+      }
+    },
+    {
+      "attempt_id": "33612779-d6a4-472f-82b4-9723126178c8",
+      "step": "run-validator",
+      "prefix": "implement-tasks:1/implement-single-task/sub:implement-task/run-validator/sub:run-validator/validator-retry:0",
+      "agent_role": "implementation-validator",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": null,
+      "model": null,
+      "measurement_producer": "agent-validator",
+      "tool": "agent-validator",
+      "duration_ms": 61896,
+      "usage_source": "agent-validator:metrics",
+      "usage_source_version": "codex-exec-jsonl-turn.completed",
+      "source_provenance": {
+        "source_format": null
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "input_total": {
+              "availability": "available",
+              "value": 70527,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "cache_read": {
+              "availability": "available",
+              "value": 13568,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "output": {
+              "availability": "available",
+              "value": 847,
+              "reason": null
+            },
+            "reasoning": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 71374,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 70527,
+            "cached_input": 13568,
+            "output": 847
+          },
+          "token_totals": {
+            "input": 70527,
+            "output": 847,
+            "total": 71374
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "input_total": {
+            "availability": "available",
+            "value": 70527,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "cache_read": {
+            "availability": "available",
+            "value": 13568,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "output": {
+            "availability": "available",
+            "value": 847,
+            "reason": null
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 71374,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 70527,
+          "cached_input": 13568,
+          "output": 847
+        },
+        "token_totals": {
+          "input": 70527,
+          "output": 847,
+          "total": 71374
+        }
+      }
+    },
+    {
+      "attempt_id": "d338c60f-e639-4ccc-a2b3-48016ffe3b58",
+      "step": "run-validator",
+      "prefix": "implement-tasks:1/implement-single-task/sub:implement-task/run-validator/sub:run-validator/validator-retry:0",
+      "agent_role": "implementation-validator",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": null,
+      "model": null,
+      "measurement_producer": "agent-validator",
+      "tool": "agent-validator",
+      "duration_ms": 47983,
+      "usage_source": "agent-validator:metrics",
+      "usage_source_version": "codex-exec-jsonl-turn.completed",
+      "source_provenance": {
+        "source_format": null
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "input_total": {
+              "availability": "available",
+              "value": 72271,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "cache_read": {
+              "availability": "available",
+              "value": 13568,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "output": {
+              "availability": "available",
+              "value": 453,
+              "reason": null
+            },
+            "reasoning": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 72724,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 72271,
+            "cached_input": 13568,
+            "output": 453
+          },
+          "token_totals": {
+            "input": 72271,
+            "output": 453,
+            "total": 72724
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "input_total": {
+            "availability": "available",
+            "value": 72271,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "cache_read": {
+            "availability": "available",
+            "value": 13568,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "output": {
+            "availability": "available",
+            "value": 453,
+            "reason": null
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 72724,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 72271,
+          "cached_input": 13568,
+          "output": 453
+        },
+        "token_totals": {
+          "input": 72271,
+          "output": 453,
+          "total": 72724
+        }
+      }
+    },
+    {
+      "attempt_id": "094fb7ba-861d-415e-8231-d6bea7fc0b0a",
+      "step": "run-validator",
+      "prefix": "implement-tasks:1/implement-single-task/sub:implement-task/run-validator/sub:run-validator/validator-retry:1",
+      "agent_role": "implementation-validator",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": null,
+      "model": null,
+      "measurement_producer": "agent-validator",
+      "tool": "agent-validator",
+      "duration_ms": 38337,
+      "usage_source": "agent-validator:metrics",
+      "usage_source_version": "codex-exec-jsonl-turn.completed",
+      "source_provenance": {
+        "source_format": null
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "input_total": {
+              "availability": "available",
+              "value": 20585,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "cache_read": {
+              "availability": "available",
+              "value": 0,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "output": {
+              "availability": "available",
+              "value": 61,
+              "reason": null
+            },
+            "reasoning": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 20646,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 20585,
+            "cached_input": 0,
+            "output": 61
+          },
+          "token_totals": {
+            "input": 20585,
+            "output": 61,
+            "total": 20646
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "input_total": {
+            "availability": "available",
+            "value": 20585,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "cache_read": {
+            "availability": "available",
+            "value": 0,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "output": {
+            "availability": "available",
+            "value": 61,
+            "reason": null
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 20646,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 20585,
+          "cached_input": 0,
+          "output": 61
+        },
+        "token_totals": {
+          "input": 20585,
+          "output": 61,
+          "total": 20646
+        }
+      }
+    },
+    {
+      "attempt_id": "a06b88bd-b048-485e-9ea6-9bc559245714",
+      "step": "run-validator",
+      "prefix": "implement-tasks:1/implement-single-task/sub:implement-task/run-validator/sub:run-validator/validator-retry:1",
+      "agent_role": "implementation-validator",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": null,
+      "model": null,
+      "measurement_producer": "agent-validator",
+      "tool": "agent-validator",
+      "duration_ms": 40092,
+      "usage_source": "agent-validator:metrics",
+      "usage_source_version": "codex-exec-jsonl-turn.completed",
+      "source_provenance": {
+        "source_format": null
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "input_total": {
+              "availability": "available",
+              "value": 21918,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "cache_read": {
+              "availability": "available",
+              "value": 0,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "output": {
+              "availability": "available",
+              "value": 43,
+              "reason": null
+            },
+            "reasoning": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 21961,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 21918,
+            "cached_input": 0,
+            "output": 43
+          },
+          "token_totals": {
+            "input": 21918,
+            "output": 43,
+            "total": 21961
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "input_total": {
+            "availability": "available",
+            "value": 21918,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "cache_read": {
+            "availability": "available",
+            "value": 0,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "output": {
+            "availability": "available",
+            "value": 43,
+            "reason": null
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 21961,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 21918,
+          "cached_input": 0,
+          "output": 43
+        },
+        "token_totals": {
+          "input": 21918,
+          "output": 43,
+          "total": 21961
+        }
+      }
+    },
+    {
+      "attempt_id": "5b50bacb-aaf1-4e61-8c1e-30ae5cbf28ac",
+      "step": "run-validator",
+      "prefix": "implement-tasks:2/implement-single-task/sub:implement-task/run-validator/sub:run-validator/validator-retry:0",
+      "agent_role": "implementation-validator",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": null,
+      "model": null,
+      "measurement_producer": "agent-validator",
+      "tool": "agent-validator",
+      "duration_ms": 28672,
+      "usage_source": "agent-validator:metrics",
+      "usage_source_version": "codex-exec-jsonl-turn.completed",
+      "source_provenance": {
+        "source_format": null
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "input_total": {
+              "availability": "available",
+              "value": 27920,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "cache_read": {
+              "availability": "available",
+              "value": 0,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "output": {
+              "availability": "available",
+              "value": 187,
+              "reason": null
+            },
+            "reasoning": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 28107,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 27920,
+            "cached_input": 0,
+            "output": 187
+          },
+          "token_totals": {
+            "input": 27920,
+            "output": 187,
+            "total": 28107
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "input_total": {
+            "availability": "available",
+            "value": 27920,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "cache_read": {
+            "availability": "available",
+            "value": 0,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "output": {
+            "availability": "available",
+            "value": 187,
+            "reason": null
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 28107,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 27920,
+          "cached_input": 0,
+          "output": 187
+        },
+        "token_totals": {
+          "input": 27920,
+          "output": 187,
+          "total": 28107
+        }
+      }
+    },
+    {
+      "attempt_id": "3eac02c3-10e8-4a2f-bd92-0c2b8f386360",
+      "step": "run-validator",
+      "prefix": "implement-tasks:2/implement-single-task/sub:implement-task/run-validator/sub:run-validator/validator-retry:0",
+      "agent_role": "implementation-validator",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": null,
+      "model": null,
+      "measurement_producer": "agent-validator",
+      "tool": "agent-validator",
+      "duration_ms": 43466,
+      "usage_source": "agent-validator:metrics",
+      "usage_source_version": "codex-exec-jsonl-turn.completed",
+      "source_provenance": {
+        "source_format": null
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "input_total": {
+              "availability": "available",
+              "value": 26176,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "cache_read": {
+              "availability": "available",
+              "value": 0,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "output": {
+              "availability": "available",
+              "value": 312,
+              "reason": null
+            },
+            "reasoning": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 26488,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 26176,
+            "cached_input": 0,
+            "output": 312
+          },
+          "token_totals": {
+            "input": 26176,
+            "output": 312,
+            "total": 26488
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "input_total": {
+            "availability": "available",
+            "value": 26176,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "cache_read": {
+            "availability": "available",
+            "value": 0,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "output": {
+            "availability": "available",
+            "value": 312,
+            "reason": null
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 26488,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 26176,
+          "cached_input": 0,
+          "output": 312
+        },
+        "token_totals": {
+          "input": 26176,
+          "output": 312,
+          "total": 26488
+        }
+      }
+    },
+    {
+      "attempt_id": "63b475af-9733-4411-a8a7-5084a967e6c6",
+      "step": "run-validator",
+      "prefix": "implement-tasks:2/implement-single-task/sub:implement-task/run-validator/sub:run-validator/validator-retry:1",
+      "agent_role": "implementation-validator",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": null,
+      "model": null,
+      "measurement_producer": "agent-validator",
+      "tool": "agent-validator",
+      "duration_ms": 34201,
+      "usage_source": "agent-validator:metrics",
+      "usage_source_version": "codex-exec-jsonl-turn.completed",
+      "source_provenance": {
+        "source_format": null
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "input_total": {
+              "availability": "available",
+              "value": 16416,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "cache_read": {
+              "availability": "available",
+              "value": 13568,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "output": {
+              "availability": "available",
+              "value": 48,
+              "reason": null
+            },
+            "reasoning": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 16464,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 16416,
+            "cached_input": 13568,
+            "output": 48
+          },
+          "token_totals": {
+            "input": 16416,
+            "output": 48,
+            "total": 16464
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "input_total": {
+            "availability": "available",
+            "value": 16416,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "cache_read": {
+            "availability": "available",
+            "value": 13568,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "output": {
+            "availability": "available",
+            "value": 48,
+            "reason": null
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 16464,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 16416,
+          "cached_input": 13568,
+          "output": 48
+        },
+        "token_totals": {
+          "input": 16416,
+          "output": 48,
+          "total": 16464
+        }
+      }
+    },
+    {
+      "attempt_id": "531ec040-c46c-4886-bca5-c417e1a896c3",
+      "step": "run-validator",
+      "prefix": "implement-tasks:2/implement-single-task/sub:implement-task/run-validator/sub:run-validator/validator-retry:1",
+      "agent_role": "implementation-validator",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": null,
+      "model": null,
+      "measurement_producer": "agent-validator",
+      "tool": "agent-validator",
+      "duration_ms": 33402,
+      "usage_source": "agent-validator:metrics",
+      "usage_source_version": "codex-exec-jsonl-turn.completed",
+      "source_provenance": {
+        "source_format": null
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "input_total": {
+              "availability": "available",
+              "value": 18141,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "cache_read": {
+              "availability": "available",
+              "value": 0,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "output": {
+              "availability": "available",
+              "value": 33,
+              "reason": null
+            },
+            "reasoning": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 18174,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 18141,
+            "cached_input": 0,
+            "output": 33
+          },
+          "token_totals": {
+            "input": 18141,
+            "output": 33,
+            "total": 18174
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "input_total": {
+            "availability": "available",
+            "value": 18141,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "cache_read": {
+            "availability": "available",
+            "value": 0,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "output": {
+            "availability": "available",
+            "value": 33,
+            "reason": null
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 18174,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 18141,
+          "cached_input": 0,
+          "output": 33
+        },
+        "token_totals": {
+          "input": 18141,
+          "output": 33,
+          "total": 18174
+        }
+      }
+    },
+    {
+      "attempt_id": "f949bfba-fb59-4ab7-9ef4-7f5f10ffd644",
+      "step": "run-validator",
+      "prefix": "run-validator/sub:run-validator/validator-retry:0",
+      "agent_role": "implementation-validator",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": null,
+      "model": null,
+      "measurement_producer": "agent-validator",
+      "tool": "agent-validator",
+      "duration_ms": 34063,
+      "usage_source": "agent-validator:metrics",
+      "usage_source_version": "codex-exec-jsonl-turn.completed",
+      "source_provenance": {
+        "source_format": null
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "input_total": {
+              "availability": "available",
+              "value": 27993,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "cache_read": {
+              "availability": "available",
+              "value": 0,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "output": {
+              "availability": "available",
+              "value": 37,
+              "reason": null
+            },
+            "reasoning": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 28030,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 27993,
+            "cached_input": 0,
+            "output": 37
+          },
+          "token_totals": {
+            "input": 27993,
+            "output": 37,
+            "total": 28030
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "input_total": {
+            "availability": "available",
+            "value": 27993,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "cache_read": {
+            "availability": "available",
+            "value": 0,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "output": {
+            "availability": "available",
+            "value": 37,
+            "reason": null
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 28030,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 27993,
+          "cached_input": 0,
+          "output": 37
+        },
+        "token_totals": {
+          "input": 27993,
+          "output": 37,
+          "total": 28030
+        }
+      }
+    },
+    {
+      "attempt_id": "4edccd4d-8787-455b-9bdb-4a4c43ec7ced",
+      "step": "run-validator",
+      "prefix": "run-validator/sub:run-validator/validator-retry:0",
+      "agent_role": "implementation-validator",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": null,
+      "model": null,
+      "measurement_producer": "agent-validator",
+      "tool": "agent-validator",
+      "duration_ms": 50468,
+      "usage_source": "agent-validator:metrics",
+      "usage_source_version": "codex-exec-jsonl-turn.completed",
+      "source_provenance": {
+        "source_format": null
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "input_total": {
+              "availability": "available",
+              "value": 83270,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "cache_read": {
+              "availability": "available",
+              "value": 52352,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "output": {
+              "availability": "available",
+              "value": 457,
+              "reason": null
+            },
+            "reasoning": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 83727,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 83270,
+            "cached_input": 52352,
+            "output": 457
+          },
+          "token_totals": {
+            "input": 83270,
+            "output": 457,
+            "total": 83727
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "input_total": {
+            "availability": "available",
+            "value": 83270,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "cache_read": {
+            "availability": "available",
+            "value": 52352,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "output": {
+            "availability": "available",
+            "value": 457,
+            "reason": null
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 83727,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 83270,
+          "cached_input": 52352,
+          "output": 457
+        },
+        "token_totals": {
+          "input": 83270,
+          "output": 457,
+          "total": 83727
+        }
+      }
+    },
+    {
+      "attempt_id": "4b40ded6-b869-4c66-aada-83544b68a8b4",
+      "step": "run-validator",
+      "prefix": "run-validator/sub:run-validator/validator-retry:1",
+      "agent_role": "implementation-validator",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": null,
+      "model": null,
+      "measurement_producer": "agent-validator",
+      "tool": "agent-validator",
+      "duration_ms": 40305,
+      "usage_source": "agent-validator:metrics",
+      "usage_source_version": "codex-exec-jsonl-turn.completed",
+      "source_provenance": {
+        "source_format": null
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "input_total": {
+              "availability": "available",
+              "value": 17506,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "cache_read": {
+              "availability": "available",
+              "value": 11520,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "output": {
+              "availability": "available",
+              "value": 49,
+              "reason": null
+            },
+            "reasoning": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 17555,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 17506,
+            "cached_input": 11520,
+            "output": 49
+          },
+          "token_totals": {
+            "input": 17506,
+            "output": 49,
+            "total": 17555
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "input_total": {
+            "availability": "available",
+            "value": 17506,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "cache_read": {
+            "availability": "available",
+            "value": 11520,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "output": {
+            "availability": "available",
+            "value": 49,
+            "reason": null
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 17555,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 17506,
+          "cached_input": 11520,
+          "output": 49
+        },
+        "token_totals": {
+          "input": 17506,
+          "output": 49,
+          "total": 17555
+        }
+      }
+    },
+    {
+      "attempt_id": "5675f2d9-78ff-45e9-a7d7-c03a2f485e66",
+      "step": "run-validator",
+      "prefix": "run-validator/sub:run-validator/validator-retry:1",
+      "agent_role": "implementation-validator",
+      "invoked_cli": true,
+      "cli": "codex",
+      "provider": null,
+      "model": null,
+      "measurement_producer": "agent-validator",
+      "tool": "agent-validator",
+      "duration_ms": 36147,
+      "usage_source": "agent-validator:metrics",
+      "usage_source_version": "codex-exec-jsonl-turn.completed",
+      "source_provenance": {
+        "source_format": null
+      },
+      "cost": {
+        "state": "unavailable",
+        "reason": "no exhaustive non-overlapping full-attempt USD cost was reported",
+        "estimated_api_cost_usd": null
+      },
+      "provider_reported_costs": [],
+      "allocations": [],
+      "unallocated_usage": {
+        "allocation_id": "unallocated",
+        "observed_identity_ref": {
+          "availability": "unavailable",
+          "reason": "per_model_attribution_unavailable"
+        },
+        "observed_identities": [],
+        "reason": "per-model attribution is unavailable",
+        "usage": {
+          "state": "available",
+          "token_envelopes": {
+            "input_total": {
+              "availability": "available",
+              "value": 18756,
+              "reason": null
+            },
+            "input_uncached": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "cache_read": {
+              "availability": "available",
+              "value": 13568,
+              "reason": null
+            },
+            "cache_write": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "output": {
+              "availability": "available",
+              "value": 15,
+              "reason": null
+            },
+            "reasoning": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "codex_usage_not_observed"
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 18771,
+              "reason": null
+            }
+          },
+          "tokens": {
+            "input": 18756,
+            "cached_input": 13568,
+            "output": 15
+          },
+          "token_totals": {
+            "input": 18756,
+            "output": 15,
+            "total": 18771
+          },
+          "billing_tokens": null
+        }
+      },
+      "usage": {
+        "state": "available",
+        "reason": null,
+        "billing_tokens": null,
+        "billing_assumptions": null,
+        "billing_derivation": null,
+        "token_envelopes": {
+          "input_total": {
+            "availability": "available",
+            "value": 18756,
+            "reason": null
+          },
+          "input_uncached": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "cache_read": {
+            "availability": "available",
+            "value": 13568,
+            "reason": null
+          },
+          "cache_write": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "output": {
+            "availability": "available",
+            "value": 15,
+            "reason": null
+          },
+          "reasoning": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "provider_total": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "codex_usage_not_observed"
+          },
+          "normalized_total": {
+            "availability": "available",
+            "value": 18771,
+            "reason": null
+          }
+        },
+        "tokens": {
+          "input": 18756,
+          "cached_input": 13568,
+          "output": 15
+        },
+        "token_totals": {
+          "input": 18756,
+          "output": 15,
+          "total": 18771
+        }
+      }
+    }
+  ]
+}

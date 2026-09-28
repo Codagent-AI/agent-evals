@@ -1549,6 +1549,34 @@ test('the controller converts product-owned serve failure into a conclusive unsc
   assert.equal(browserOpened, false)
 })
 
+test('evaluator-only rescore refreshes retained Codex usage and pricing', async () => {
+  const context = await environment()
+  const fixture = JSON.parse(await readFile(new URL('./fixtures/feature-43-retained-attempts.json', import.meta.url)))
+  const entries = JSON.parse(await readFile(new URL('./fixtures/feature-43-catalog.json', import.meta.url)))
+  const imported = importedRescore(context)
+  imported.implementation_metrics = { state: 'ingested', complete: true, attempts: fixture.attempts }
+  imported.pricing = { complete: false, costs: [] }
+  imported.cost = { total: { state: 'unavailable' } }
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    loadRescoreSource: async () => imported,
+    pricingFetch: async () => ({ ok: true, text: async () => JSON.stringify(entries) }),
+  })
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const phase = await readJson(join(context.runDir, 'phases/metrics-pricing.json'))
+  assert.equal(phase.repriced, true)
+  assert.equal(phase.pricing.repriced_from.run_id, imported.source_run_id)
+  assert.equal(phase.cost.steps.length, fixture.attempts.length)
+  const codex = phase.pricing.costs.filter((cost) => cost.source === 'models.dev' && cost.verification === 'estimated')
+  assert.equal(codex.length, 11)
+  assert.ok(codex.every((cost) => cost.provenance.assumptions.includes('cache_write_not_reported_priced_as_input')))
+  assert.ok(Math.abs(codex.reduce((sum, cost) => sum + cost.amount_usd, 0) - 0.8257) < 1e-4)
+  assert.equal(phase.pricing.costs.filter((cost) => cost.source === 'agent-runner-reported').length, 6)
+  const validatorIds = new Set(fixture.attempts.filter((attempt) => attempt.usage_source === 'agent-validator:metrics').map((attempt) => attempt.attempt_id))
+  const validators = phase.pricing.costs.filter((cost) => validatorIds.has(cost.attempt_id))
+  assert.equal(validators.length, 16)
+  assert.ok(validators.every((cost) => cost.state === 'unavailable' && cost.reason === 'exact provider and model identity are required for pricing'))
+})
+
 test('published result reports the leaf of the last nested workflow step', async () => {
   const context = await environment({
     workflow: delegatingWorkflowYaml,
