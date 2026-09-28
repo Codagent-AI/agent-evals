@@ -1548,3 +1548,35 @@ test('the controller converts product-owned serve failure into a conclusive unsc
   assert.equal(result.outcome.product_failure.gate, 'verification-every-produced-step-renders')
   assert.equal(browserOpened, false)
 })
+
+test('published result reports the leaf of the last nested workflow step', async () => {
+  const context = await environment({
+    workflow: delegatingWorkflowYaml,
+    verificationWorkflow: verificationWorkflowYaml,
+  })
+  const nestedHistory = delegatedHistory
+  const result = await evaluate(context, profiles, {
+    verifyDelivery: async () => ({
+      ...delivery(context),
+      final_validator: { ...nestedHistory[1], step: 'run-validator' },
+      workflow_history: nestedHistory,
+    }),
+    readRunnerState: () => (runnerInvocations(context).length === 0
+      ? null
+      : {
+          run_id: 'runner-7',
+          session_dir: context.sessionDir,
+          workflow_name: 'implement-change',
+          workflow_completed: true,
+          history: nestedHistory,
+        }),
+  })
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(written.workflow.last_observed_step, 'verify-acceptance-handoff')
+  assert.equal(written.delivery.final_validator.step, 'run-validator')
+  assert.deepEqual(written.delivery.final_validator.step_path, [
+    'verify-change', 'sub:verify-change', 'run-validator',
+  ])
+  assert.deepEqual(written.workflow.observed_steps.at(-1).step_path, ['verify-change'])
+})

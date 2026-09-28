@@ -26,7 +26,7 @@ fi
 required_skills="$(
   node - "$SOURCE_DIR" "$WORKFLOW_PATH" "$@" <<'NODE'
 const { existsSync, readFileSync } = require('node:fs')
-const { dirname, resolve } = require('node:path')
+const { basename, dirname, resolve } = require('node:path')
 const sourceDir = resolve(process.argv[2])
 const workflowPath = process.argv[3]
 const adapters = new Set(process.argv.slice(4))
@@ -85,6 +85,11 @@ if (adapters.has('cursor')) {
 // verify-change workflow, so every skill a nested step names is validated too.
 const skills = new Set()
 const pending = [resolve(workflowPath)]
+let workflowsRoot = dirname(resolve(workflowPath))
+while (basename(workflowsRoot) !== 'workflows' && dirname(workflowsRoot) !== workflowsRoot) {
+  workflowsRoot = dirname(workflowsRoot)
+}
+const hasWorkflowsRoot = basename(workflowsRoot) === 'workflows'
 const visited = new Set()
 while (pending.length > 0) {
   const path = pending.pop()
@@ -93,8 +98,23 @@ while (pending.length > 0) {
   const text = readFileSync(path, 'utf8')
   for (const match of text.matchAll(/codagent:([a-z0-9][a-z0-9-]*)/g)) skills.add(match[1])
   for (const match of text.matchAll(/^\s*workflow:\s*[\x22\x27]?([^\x22\x27\s#]+)/gm)) {
-    const referenced = resolve(dirname(path), match[1])
-    if (existsSync(referenced)) pending.push(referenced)
+    const value = match[1]
+    if (value.includes('{{') || value.includes('${') || value.includes('$')) {
+      console.error(`warning: unresolved templated sub-workflow reference ${value} in ${path}; skills in it are not checked`)
+      continue
+    }
+    if (value.startsWith('builtin:') && !hasWorkflowsRoot) {
+      console.error(`cannot root builtin sub-workflow ${value}: ${workflowPath} has no workflows ancestor`)
+      process.exit(2)
+    }
+    const referenced = value.startsWith('builtin:')
+      ? resolve(workflowsRoot, value.slice('builtin:'.length))
+      : resolve(dirname(path), value)
+    if (!existsSync(referenced)) {
+      console.error(`missing sub-workflow ${value} referenced by ${path}`)
+      process.exit(2)
+    }
+    pending.push(referenced)
   }
 }
 console.log([...skills].sort().join('\n'))

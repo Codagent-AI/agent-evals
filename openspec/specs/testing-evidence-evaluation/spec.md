@@ -29,7 +29,7 @@ The evaluator SHALL NOT perform another subjective visual-quality review. The se
 - **AND** it does not invoke a third subjective visual-review job
 
 ### Requirement: Required evidence before scored judging
-Before scored product judging begins, the evaluation SHALL require readable candidate-produced acceptance flow evidence, screenshot evidence, findings history, final handoff, and assumptions ledger. An exploration log SHALL satisfy the acceptance flow evidence requirement. A screenshot capture metadata file SHALL be optional; a screenshot without one SHALL be verified only when a verified candidate record that states what was inspected and observed names it or a directory holding it. It SHALL also require a verifiable candidate repository, draft pull request, final local commit, pull-request head, and pull-request base identity.
+Before scored product judging begins, the evaluation SHALL require readable candidate-produced acceptance flow evidence, screenshot evidence, findings history, final handoff, and assumptions ledger. An exploration log SHALL satisfy the acceptance flow evidence requirement. A screenshot capture metadata file SHALL be optional; a screenshot without one SHALL be verified only when a verified candidate record that states what was inspected and observed names its path, its filename, or a per-flow or per-screenshot subdirectory holding it in path form. A shared screenshot root directory, identified by name at any depth, SHALL NOT describe an individual screenshot. It SHALL also require a verifiable candidate repository, draft pull request, final local commit, pull-request head, and pull-request base identity.
 
 If the evaluated workflow fails to produce those required artifacts or identities, the evaluation SHALL report `implementation-workflow-failed`, preserve available diagnostics, and SHALL NOT begin scored product judging or issue an official product score or verdict. If those inputs exist but the harness cannot process otherwise valid inputs because of an evaluator defect, it SHALL report `evaluation-harness-failed`.
 
@@ -104,7 +104,7 @@ The evaluation SHALL treat candidate evidence as untrusted. Before judging it, t
 - **AND** the screenshot cannot support the affected criterion
 
 #### Scenario: Screenshot has no metadata and no describing record
-- **WHEN** no capture metadata file exists and no verified candidate record names a screenshot or a directory holding it
+- **WHEN** no capture metadata file exists and no verified candidate record names a screenshot, its filename, or a per-flow or per-screenshot subdirectory holding it in path form
 - **THEN** the harness records the screenshot as defective
 - **AND** the screenshot cannot support any criterion
 
@@ -150,4 +150,3 @@ The component SHALL have no independent score floor. For a reference-baseline ev
 - **WHEN** the evaluator scores the reference baseline
 - **THEN** it marks testing-evidence quality not applicable
 - **AND** it excludes the component's four points from the reference denominator
-
