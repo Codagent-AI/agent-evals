@@ -1419,3 +1419,51 @@ test('a path to one screenshot does not describe another with the same filename'
   assert.equal(screenshot('flow-b').verification_state, 'defective')
   assert.ok(screenshot('flow-b').limitations.includes('missing-capture-metadata'))
 })
+
+test('a screenshot path does not match the suffix of another screenshot path', async () => {
+  const context = await fixture()
+  await mkdir(join(context.worktree, 'flow-b'), { recursive: true })
+  await mkdir(join(context.worktree, 'other', 'flow-b'), { recursive: true })
+  await writeFile(join(context.worktree, 'flow-b', 'step.png'), Buffer.from([1, 2, 3]))
+  await writeFile(join(context.worktree, 'other', 'flow-b', 'step.png'), Buffer.from([4, 5, 6]))
+  await writeExploratoryArtifacts(context, {
+    'acceptance-screenshots/step-2.png': null,
+    'session-report.md': '# Audit\n- [one](flow-b/step.png)\n- [two](other/flow-b/step.png)\n',
+    'exploration-log.md': `# Exploration log\nTested revision: ${FINAL_SHA}\nSee other/flow-b/step.png.\n`,
+    'acceptance-handoff.md': `# Acceptance handoff\nCurrent head SHA: ${FINAL_SHA}\n[audit](session-report.md)\n`,
+  })
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+  const screenshot = (path) => manifest.artifacts.find(({ origin }) => (
+    origin.namespace === 'candidate-worktree' && origin.relative_path === path
+  ))
+  assert.equal(screenshot('other/flow-b/step.png').verification_state, 'verified')
+  assert.equal(screenshot('flow-b/step.png').verification_state, 'defective')
+  assert.ok(screenshot('flow-b/step.png').limitations.includes('missing-capture-metadata'))
+})
+
+test('an absolute output path describes only that screenshot, not its path suffix', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'acceptance-screenshots/step-2.png': null,
+    'flow-b/step.png': Buffer.from([1, 2, 3]),
+    'other/flow-b/step.png': Buffer.from([4, 5, 6]),
+    'exploration-log.md': `# Exploration log\nTested revision: ${FINAL_SHA}\nSee ${join(context.sessionDir, 'output', 'other', 'flow-b', 'step.png')}.\n`,
+    'acceptance-handoff.md': `# Acceptance handoff\nCurrent head SHA: ${FINAL_SHA}\n`,
+  })
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+  const screenshot = (path) => manifest.artifacts.find(({ origin }) => (
+    origin.relative_path === `output/${path}`
+  ))
+  assert.equal(screenshot('other/flow-b/step.png').verification_state, 'verified')
+  assert.equal(screenshot('flow-b/step.png').verification_state, 'defective')
+})

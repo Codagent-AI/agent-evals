@@ -147,24 +147,20 @@ const SCREENSHOT_DESCRIBING_ROLES = new Set([
 ])
 
 function describesScreenshot(text, relativePath) {
-  const withinOutput = relativePath.startsWith('output/')
-    ? relativePath.slice('output/'.length)
-    : relativePath
+  const inOutput = relativePath.startsWith('output/')
+  const withinOutput = inOutput ? relativePath.slice('output/'.length) : relativePath
   const segments = withinOutput.split('/')
   const parent = segments.slice(0, -1).join('/')
-  const mentions = [relativePath, withinOutput, segments.at(-1), parent, `${parent}/`]
-  return mentions.some((mention, index) => {
-    if (!mention) return false
-    const escaped = mention.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const before = index === 0
-      ? '(^|[^a-zA-Z0-9._/-]|/)'
-      : index === 1
-        ? '(^|[^a-zA-Z0-9._/-]|\\./|/output/)'
-        : index === 2
-          ? '(^|[^a-zA-Z0-9._/-])'
-          : '(^|[^a-zA-Z0-9._/-]|\\./|/output/)'
-    return new RegExp(`${before}${escaped}(?=$|[^a-zA-Z0-9._/-]|\\.(?=$|\\s))`).test(text)
-  })
+  const escaped = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const before = '(^|[^a-zA-Z0-9._/-])'
+  const after = '(?=$|[^a-zA-Z0-9._/-]|\\.(?=$|\\s))'
+  const named = (path) => new RegExp(`${before}${escaped(path)}${after}`).test(text)
+  const paths = [relativePath, withinOutput, parent, parent && `${parent}/`].filter(Boolean)
+  if (paths.some((path) => named(path) || named(`./${path}`))) return true
+  if (inOutput && [withinOutput, parent, parent && `${parent}/`].filter(Boolean).some((path) => (
+    new RegExp(`${before}/(?:[^/\\s]+/)*output/${escaped(path)}${after}`).test(text)
+  ))) return true
+  return named(segments.at(-1))
 }
 
 function missingRoleMessage(role) {
