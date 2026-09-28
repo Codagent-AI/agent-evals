@@ -1055,7 +1055,7 @@ export function testedRevisionFacts({ finalSha, worktree, manifest, exec = defau
     const base = relationOf(artifact.declared_diff_base)
     const tested = ACCEPTED_RELATIONS.has(artifact.revision_relation) && artifact.claimed_revision
       ? artifact.claimed_revision
-      : finalSha
+      : null
     const key = `${base.sha ?? artifact.declared_diff_base}:${tested}`
     if (seen.has(key)) continue
     seen.add(key)
@@ -1065,7 +1065,10 @@ export function testedRevisionFacts({ finalSha, worktree, manifest, exec = defau
       sha: base.sha,
       relation: base.relation,
       tested_revision: tested,
-      changes_to_tested_revision: base.sha === tested
+      retest_coverage: tested ? 'established' : 'not-established',
+      changes_to_tested_revision: !tested
+        ? null
+        : base.sha === tested
         ? NO_CHANGES
         : (base.relation === 'ancestor-of-final' && worktree
             ? changedPaths({ worktree, from: base.sha, to: tested, exec })

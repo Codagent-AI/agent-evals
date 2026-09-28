@@ -1232,6 +1232,7 @@ test('a diff-scoped pass is given the files between its declared diff base and t
     sha: PRIOR_SHA,
     relation: 'ancestor-of-final',
     tested_revision: FINAL_SHA,
+    retest_coverage: 'established',
     changes_to_tested_revision: {
       product: { count: 1, paths: ['scripts/verify.mjs'], truncated: false },
       test_only: { count: 1, paths: ['scripts/verify.test.mjs'], truncated: false },
@@ -1328,4 +1329,23 @@ test('a screenshot is described only by its own path, whole filename, or immedia
     assert.equal(screenshot.verification_state, verified ? 'verified' : 'defective', description)
     assert.equal(screenshot.limitations.includes('missing-capture-metadata'), !verified, description)
   }
+})
+
+test('a diff base without an accepted tested revision does not establish retest coverage', () => {
+  const facts = testedRevisionFacts({
+    finalSha: FINAL_SHA,
+    worktree: '/candidate',
+    manifest: { artifacts: [{
+      id: 'pass-without-revision',
+      role: 'acceptance-pass-record',
+      verification_state: 'verified',
+      claimed_revision: null,
+      revision_relation: null,
+      declared_diff_base: PRIOR_SHA,
+    }] },
+    exec: fakeGit({ [`${PRIOR_SHA}..${FINAL_SHA}`]: ['src/unretested.ts'] }),
+  })
+  assert.equal(facts.diff_bases[0].tested_revision, null)
+  assert.equal(facts.diff_bases[0].changes_to_tested_revision, null)
+  assert.equal(facts.diff_bases[0].retest_coverage, 'not-established')
 })

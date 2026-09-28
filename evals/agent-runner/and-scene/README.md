@@ -426,7 +426,7 @@ final-revision criterion: the SHA in the verified tested-revision record, its
 relation to the final SHA, and the files changed since, split into product,
 test-only, and harness-owned paths. Each verified pass record that declares a
 `Diff base:` also gets the files between that base and the revision it tested,
-so the judge can check that a diff-scoped re-test explored them. A tested
+so the judge can check that a diff-scoped re-test explored them. If the record does not identify an accepted tested revision, the diff base has null `tested_revision` and `changes_to_tested_revision`, with `retest_coverage: not-established`. A tested
 revision equal to the final SHA, or an ancestor with no later product changes,
 establishes final-revision support without a full re-run. Missing expected roles make candidate-evidence coverage incomplete but
 do not stop independent scored judging. The exploratory `codagent:prepare-acceptance`
