@@ -576,20 +576,24 @@ export async function resolveAttemptCost({ attempt, catalog, fallbackTable = nul
     }
   }
 
-  const tokens = attempt.usage?.state === 'available' ? attemptBillingTokens(attempt) : null
+  if (!attempt.provider || !attempt.model) {
+    return unresolved('exact provider and model identity are required for pricing')
+  }
+  if (attempt.usage?.state !== 'available') {
+    return unresolved(attempt.usage?.billing_reason ?? 'no reported token usage to price this attempt with')
+  }
+
+  const tokens = attemptBillingTokens(attempt)
   const malformed = malformedCategory(tokens)
   if (malformed) {
     return unresolved(`token category ${malformed} has an unusable count`)
   }
   if (billedCategories(tokens).length === 0) {
-    if (tokens && Object.keys(tokens).length > 0 && Object.values(tokens).every((count) => count === 0)) {
+    if (tokens && typeof tokens === 'object' && !Array.isArray(tokens)
+      && Object.keys(tokens).length > 0 && Object.values(tokens).every((count) => count === 0)) {
       return unresolved(attempt.usage?.billing_reason ?? 'reported token usage is zero')
     }
-    return unresolved(attempt.usage?.billing_reason ?? 'no reported token usage to price this attempt with')
-  }
-
-  if (!attempt.provider || !attempt.model) {
-    return unresolved('exact provider and model identity are required for pricing')
+    return unresolved(attempt.usage?.billing_reason ?? 'usage has no complete billing-token partition to price against the catalog')
   }
 
   const assumptions = attempt.usage?.billing_assumptions ?? []

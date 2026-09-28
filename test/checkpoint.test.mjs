@@ -345,6 +345,41 @@ test('the reducer records evolving delivery identity and rejects conflicting ide
   )
 })
 
+test('revalidating a legacy final Validator adopts its nested leaf', () => {
+  const initial = createRunState({
+    runId: 'legacy',
+    delivery: { final_validator: { step: 'verify-change', outcome: 'success' } },
+  })
+  const finalValidator = {
+    step: 'run-validator',
+    step_path: ['verify-change', 'sub:verify-change', 'run-validator'],
+    outcome: 'success',
+  }
+  const updated = applyRunStateEvent(initial, {
+    type: 'delivery-identity-recorded', final_validator: finalValidator,
+  })
+  assert.deepEqual(updated.delivery.final_validator, finalValidator)
+  assert.throws(() => applyRunStateEvent(initial, {
+    type: 'delivery-identity-recorded',
+    final_validator: { ...finalValidator, step_path: ['other', 'sub:other', 'run-validator'] },
+  }), /conflicting delivery identity at delivery.final_validator.step/)
+})
+
+test('revalidating a legacy final Validator rejects a different nested leaf', () => {
+  const initial = createRunState({
+    runId: 'legacy',
+    delivery: { final_validator: { step: 'verify-change', outcome: 'success' } },
+  })
+  assert.throws(() => applyRunStateEvent(initial, {
+    type: 'delivery-identity-recorded',
+    final_validator: {
+      step: 'push-pr',
+      step_path: ['verify-change', 'sub:verify-change', 'push-pr'],
+      outcome: 'success',
+    },
+  }), /conflicting delivery identity at delivery.final_validator.step/)
+})
+
 test('revalidating acceptance identity preserves artifact arrays as arrays', () => {
   const artifacts = [
     { role: 'acceptance-handoff', path: 'acceptance-handoff.md', sha256: 'abc123' },

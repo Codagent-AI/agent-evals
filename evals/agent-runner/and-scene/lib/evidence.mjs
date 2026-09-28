@@ -145,17 +145,25 @@ const SCREENSHOT_DESCRIBING_ROLES = new Set([
   'final-handoff',
   'acceptance-pass-record',
 ])
+const SHARED_SCREENSHOT_ROOT = /^(?:acceptance[-_])?screenshots?$/i
 
 function describesScreenshot(text, relativePath) {
-  const segments = relativePath.split('/')
-  // Paths are relative to the Runner session; the evidence directory is output/.
-  const withinOutput = segments[0] === 'output' ? segments.slice(1) : segments
-  const mentions = [withinOutput.at(-1)]
-  for (let index = 1; index < withinOutput.length; index += 1) {
-    mentions.push(`${withinOutput.slice(0, index).join('/')}/`)
-    mentions.push(withinOutput.slice(0, index).join('/'))
-  }
-  return mentions.some((mention) => mention && text.includes(mention))
+  const inOutput = relativePath.startsWith('output/')
+  const withinOutput = inOutput ? relativePath.slice('output/'.length) : relativePath
+  const segments = withinOutput.split('/')
+  const parent = segments.slice(0, -1).join('/')
+  const escaped = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const before = '(^|[^a-zA-Z0-9._/-])'
+  const after = '(?=$|[^a-zA-Z0-9._/-]|\\.(?=$|\\s))'
+  const named = (path) => new RegExp(`${before}${escaped(path)}${after}`).test(text)
+  const directory = parent && !SHARED_SCREENSHOT_ROOT.test(segments.at(-2))
+    ? `${parent}/` : null
+  const paths = [relativePath, withinOutput, directory].filter(Boolean)
+  if (paths.some((path) => named(path) || named(`./${path}`))) return true
+  if (inOutput && [withinOutput, directory].filter(Boolean).some((path) => (
+    new RegExp(`${before}(?:\\S*/)?output/${escaped(path)}${after}`).test(text)
+  ))) return true
+  return named(segments.at(-1))
 }
 
 function missingRoleMessage(role) {
@@ -674,7 +682,10 @@ const ACCEPTED_RELATIONS = new Set(['final', 'ancestor-of-final'])
 function testedRevisionClaim(text) {
   const trimmed = text.trim()
   if (trimmed.length === 0) return null
-  return trimmed.match(/(?<![a-f0-9])[a-f0-9]{7,40}(?![a-f0-9])/i)?.[0] ?? trimmed.slice(0, 80)
+  const lines = trimmed.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  const lastLine = lines.at(-1)
+  return lastLine.match(/(?<![a-f0-9])[a-f0-9]{7,40}(?![a-f0-9])/i)?.[0]
+    ?? lastLine.slice(0, 80)
 }
 
 function declaredDiffBase(text) {
@@ -1032,11 +1043,20 @@ export function testedRevisionFacts({ finalSha, worktree, manifest, exec = defau
   const verified = records.find(({ verification_state: state, claimed_revision: sha }) => (
     state === 'verified' && typeof sha === 'string' && sha.length > 0
   ))
+  const offHistory = verified ? null : records.find(({ verification_state: state, claimed_revision: sha, limitations }) => (
+    state === 'defective'
+    && /^[a-f0-9]{7,40}$/i.test(sha ?? '')
+    && Array.isArray(limitations)
+    && limitations.length === 1
+    && limitations[0] === 'claimed-revision-mismatch'
+    && relationOf(sha).relation === 'not-ancestor'
+  ))
+  const selected = verified ?? offHistory
   let recorded = null
-  if (verified) {
-    const { sha, relation } = relationOf(verified.claimed_revision)
+  if (selected) {
+    const { sha, relation } = relationOf(selected.claimed_revision)
     recorded = {
-      artifact_id: verified.id,
+      artifact_id: selected.id,
       sha,
       relation,
       changes_to_final: relation === 'final'
@@ -1053,7 +1073,7 @@ export function testedRevisionFacts({ finalSha, worktree, manifest, exec = defau
     const base = relationOf(artifact.declared_diff_base)
     const tested = ACCEPTED_RELATIONS.has(artifact.revision_relation) && artifact.claimed_revision
       ? artifact.claimed_revision
-      : finalSha
+      : null
     const key = `${base.sha ?? artifact.declared_diff_base}:${tested}`
     if (seen.has(key)) continue
     seen.add(key)
@@ -1063,7 +1083,10 @@ export function testedRevisionFacts({ finalSha, worktree, manifest, exec = defau
       sha: base.sha,
       relation: base.relation,
       tested_revision: tested,
-      changes_to_tested_revision: base.sha === tested
+      retest_coverage: tested ? 'established' : 'not-established',
+      changes_to_tested_revision: !tested
+        ? null
+        : base.sha === tested
         ? NO_CHANGES
         : (base.relation === 'ancestor-of-final' && worktree
             ? changedPaths({ worktree, from: base.sha, to: tested, exec })
@@ -1072,7 +1095,7 @@ export function testedRevisionFacts({ finalSha, worktree, manifest, exec = defau
   }
   return {
     final_sha: finalSha,
-    state: recorded ? 'recorded' : (records.length > 0 ? 'unverified' : 'absent'),
+    state: verified ? 'recorded' : (offHistory ? 'recorded-off-history' : (records.length > 0 ? 'unverified' : 'absent')),
     recorded,
     diff_bases: diffBases,
     product_path_rule: 'every changed path except test-only files and the .agent-runner/ and openspec/changes/ harness namespaces',
@@ -1144,7 +1167,7 @@ export function validateEvidenceLineage({
       'tested-revision-unrecorded',
       'no verified candidate record names the revision the last acceptance pass tested',
     ))
-  } else if (recorded && !ACCEPTED_RELATIONS.has(recorded.relation)) {
+  } else if (testedRevision?.state === 'recorded-off-history' && recorded) {
     findings.push(finding(
       'tested-revision-off-final-history',
       `the recorded tested revision is ${recorded.relation}, not the final revision or an ancestor of it`,

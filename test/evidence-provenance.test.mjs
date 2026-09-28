@@ -1232,6 +1232,7 @@ test('a diff-scoped pass is given the files between its declared diff base and t
     sha: PRIOR_SHA,
     relation: 'ancestor-of-final',
     tested_revision: FINAL_SHA,
+    retest_coverage: 'established',
     changes_to_tested_revision: {
       product: { count: 1, paths: ['scripts/verify.mjs'], truncated: false },
       test_only: { count: 1, paths: ['scripts/verify.test.mjs'], truncated: false },
@@ -1302,4 +1303,254 @@ test('a tested-revision file is read for its SHA, and one without a SHA is malfo
     assert.equal(tested.claimed_revision, expected)
     assert.equal(tested.verification_state, state)
   }
+})
+
+test('a screenshot is described only by its own path, whole filename, or immediate directory', async () => {
+  for (const [description, verified] of [
+    ['The output directory contains acceptance notes.', false],
+    ['The unrelated-dir/ directory contains images.', false],
+    ['The unrelated/acceptance-screenshots/ directory contains images.', false],
+    ['See other-step-2.png for the observed state.', false],
+    ['See step-2.png for the observed state.', true],
+    ['Observed acceptance-screenshots/step-2.png.', true],
+    ['See ./acceptance-screenshots/step-2.png for the observed state.', true],
+    ['See /sessions/r1/output/acceptance-screenshots/step-2.png for the observed state.', true],
+    ['See xstep-2.png for an unrelated image.', false],
+    ['See acceptance-screenshots/ for the observed state.', false],
+    ['See ./acceptance-screenshots/ for the observed state.', false],
+    ['See /sessions/r1/output/acceptance-screenshots/ for the observed state.', false],
+    ['See acceptance-screenshots for the observed state.', false],
+    ['No screenshots were saved under acceptance-screenshots.', false],
+    ['See $SESSION_DIR/output/acceptance-screenshots/step-2.png.', true],
+    ['See ../session/output/acceptance-screenshots/step-2.png.', true],
+  ]) {
+    const context = await fixture()
+    await writeExploratoryArtifacts(context, {
+      'exploration-log.md': `# Exploration log\nTested revision: ${FINAL_SHA}\n${description}\n`,
+      'acceptance-handoff.md': `# Acceptance handoff\nCurrent head SHA: ${FINAL_SHA}\n`,
+    })
+    const manifest = await buildCandidateEvidenceManifest({
+      worktree: context.worktree,
+      sessionDir: context.sessionDir,
+      runDir: context.runDir,
+      delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+    })
+    const screenshot = manifest.artifacts.find(({ role }) => role === 'screenshot')
+    assert.equal(screenshot.verification_state, verified ? 'verified' : 'defective', description)
+    assert.equal(screenshot.limitations.includes('missing-capture-metadata'), !verified, description)
+  }
+})
+
+test('a diff base without an accepted tested revision does not establish retest coverage', () => {
+  const facts = testedRevisionFacts({
+    finalSha: FINAL_SHA,
+    worktree: '/candidate',
+    manifest: { artifacts: [{
+      id: 'pass-without-revision',
+      role: 'acceptance-pass-record',
+      verification_state: 'verified',
+      claimed_revision: null,
+      revision_relation: null,
+      declared_diff_base: PRIOR_SHA,
+    }] },
+    exec: fakeGit({ [`${PRIOR_SHA}..${FINAL_SHA}`]: ['src/unretested.ts'] }),
+  })
+  assert.equal(facts.diff_bases[0].tested_revision, null)
+  assert.equal(facts.diff_bases[0].changes_to_tested_revision, null)
+  assert.equal(facts.diff_bases[0].retest_coverage, 'not-established')
+})
+
+test('the last non-empty SHA line is the tested revision claim', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'acceptance-tested-revision.txt': `Previous pass: ${PRIOR_SHA}\nLatest pass: ${FINAL_SHA}\n\n`,
+  })
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+    exec: fakeGit(),
+  })
+  const tested = manifest.artifacts.find(({ role }) => role === 'tested-revision')
+  assert.equal(tested.claimed_revision, FINAL_SHA)
+  assert.equal(tested.verification_state, 'verified')
+})
+
+test('a trailing note makes a tested-revision claim defective', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'acceptance-tested-revision.txt': `${FINAL_SHA}\nnotes: re-tested nav\n`,
+  })
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree, sessionDir: context.sessionDir, runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+    exec: fakeGit(),
+  })
+  const tested = manifest.artifacts.find(({ role }) => role === 'tested-revision')
+  assert.equal(tested.claimed_revision, 'notes: re-tested nav')
+  assert.equal(tested.verification_state, 'defective')
+})
+
+test('an unresolvable tested revision remains unrecorded', async () => {
+  const lineage = await validateCandidateEvidenceLineage({
+    finalSha: FINAL_SHA, worktree: null,
+    manifest: { artifacts: [{
+      id: 'tested-missing', role: 'tested-revision', verification_state: 'defective',
+      claimed_revision: 'deadbee', limitations: ['claimed-revision-mismatch'],
+    }] },
+  })
+  assert.equal(lineage.tested_revision.state, 'unverified')
+  assert.equal(lineage.tested_revision.recorded, null)
+  assert.ok(lineage.findings.some(({ code }) => code === 'tested-revision-unrecorded'))
+  assert.ok(!lineage.findings.some(({ code }) => code === 'tested-revision-off-final-history'))
+})
+
+test('a well-formed tested revision off final history is reported specifically', async () => {
+  const lineage = await validateCandidateEvidenceLineage({
+    finalSha: FINAL_SHA,
+    worktree: '/candidate',
+    manifest: { artifacts: [{
+      id: 'tested-stray',
+      role: 'tested-revision',
+      verification_state: 'defective',
+      claimed_revision: STRAY_SHA,
+      revision_relation: 'not-ancestor',
+      limitations: ['claimed-revision-mismatch'],
+    }] },
+    exec: fakeGit(),
+  })
+  assert.equal(lineage.tested_revision.state, 'recorded-off-history')
+  assert.equal(lineage.tested_revision.recorded.sha, STRAY_SHA)
+  assert.equal(lineage.tested_revision.recorded.relation, 'not-ancestor')
+  assert.equal(lineage.tested_revision.recorded.changes_to_final, null)
+  assert.equal(lineage.accepted, false)
+  assert.ok(lineage.findings.some(({ code }) => code === 'tested-revision-off-final-history'))
+  assert.ok(!lineage.findings.some(({ code }) => code === 'tested-revision-unrecorded'))
+})
+
+test('a path to one screenshot does not describe another with the same filename', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'acceptance-screenshots/step-2.png': null,
+    'acceptance-screenshots/flow-a/step.png': Buffer.from([1, 2, 3]),
+    'acceptance-screenshots/flow-b/step.png': Buffer.from([4, 5, 6]),
+    'exploration-log.md': `# Exploration log\nTested revision: ${FINAL_SHA}\nSee ./acceptance-screenshots/flow-a/step.png.\n`,
+    'acceptance-handoff.md': `# Acceptance handoff\nCurrent head SHA: ${FINAL_SHA}\n`,
+  })
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+  const screenshot = (flow) => manifest.artifacts.find(({ origin }) => (
+    origin.relative_path === `output/acceptance-screenshots/${flow}/step.png`
+  ))
+  assert.equal(screenshot('flow-a').verification_state, 'verified')
+  assert.equal(screenshot('flow-b').verification_state, 'defective')
+  assert.ok(screenshot('flow-b').limitations.includes('missing-capture-metadata'))
+})
+
+test('a named per-flow screenshot directory describes only that flow', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'acceptance-screenshots/step-2.png': null,
+    'acceptance-screenshots/flow-a/step.png': Buffer.from([1, 2, 3]),
+    'acceptance-screenshots/flow-b/step.png': Buffer.from([4, 5, 6]),
+    'exploration-log.md': `# Exploration log\nTested revision: ${FINAL_SHA}\nSee acceptance-screenshots/flow-a/ for observed state.\n`,
+  })
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree, sessionDir: context.sessionDir, runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+  const screenshot = (path) => manifest.artifacts.find(({ origin }) => (
+    origin.relative_path === `output/acceptance-screenshots/${path}`
+  ))
+  assert.equal(screenshot('flow-a/step.png').verification_state, 'verified')
+  assert.equal(screenshot('flow-b/step.png').verification_state, 'defective')
+})
+
+test('a nested shared screenshot root does not describe its screenshots', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'acceptance/screenshots/a.png': Buffer.from([1, 2, 3]),
+    'acceptance/screenshots/b.png': Buffer.from([4, 5, 6]),
+    'exploration-log.md': `# Exploration log\nTested revision: ${FINAL_SHA}\nSee acceptance/screenshots/ for observed states.\n`,
+  })
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree, sessionDir: context.sessionDir, runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+  for (const name of ['a.png', 'b.png']) {
+    const screenshot = manifest.artifacts.find(({ origin }) => (
+      origin.relative_path === `output/acceptance/screenshots/${name}`
+    ))
+    assert.equal(screenshot.verification_state, 'defective', name)
+    assert.ok(screenshot.limitations.includes('missing-capture-metadata'), name)
+  }
+})
+
+test('a per-flow screenshot directory directly under output describes its screenshot', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'flow-a/a.png': Buffer.from([1, 2, 3]),
+    'exploration-log.md': `# Exploration log\nTested revision: ${FINAL_SHA}\nSee flow-a/ for observed state.\n`,
+  })
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree, sessionDir: context.sessionDir, runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+  const screenshot = manifest.artifacts.find(({ origin }) => (
+    origin.relative_path === 'output/flow-a/a.png'
+  ))
+  assert.equal(screenshot.verification_state, 'verified')
+})
+
+test('a screenshot path does not match the suffix of another screenshot path', async () => {
+  const context = await fixture()
+  await mkdir(join(context.worktree, 'flow-b'), { recursive: true })
+  await mkdir(join(context.worktree, 'other', 'flow-b'), { recursive: true })
+  await writeFile(join(context.worktree, 'flow-b', 'step.png'), Buffer.from([1, 2, 3]))
+  await writeFile(join(context.worktree, 'other', 'flow-b', 'step.png'), Buffer.from([4, 5, 6]))
+  await writeExploratoryArtifacts(context, {
+    'acceptance-screenshots/step-2.png': null,
+    'session-report.md': '# Audit\n- [one](flow-b/step.png)\n- [two](other/flow-b/step.png)\n',
+    'exploration-log.md': `# Exploration log\nTested revision: ${FINAL_SHA}\nSee other/flow-b/step.png.\n`,
+    'acceptance-handoff.md': `# Acceptance handoff\nCurrent head SHA: ${FINAL_SHA}\n[audit](session-report.md)\n`,
+  })
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+  const screenshot = (path) => manifest.artifacts.find(({ origin }) => (
+    origin.namespace === 'candidate-worktree' && origin.relative_path === path
+  ))
+  assert.equal(screenshot('other/flow-b/step.png').verification_state, 'verified')
+  assert.equal(screenshot('flow-b/step.png').verification_state, 'defective')
+  assert.ok(screenshot('flow-b/step.png').limitations.includes('missing-capture-metadata'))
+})
+
+test('an absolute output path describes only that screenshot, not its path suffix', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'acceptance-screenshots/step-2.png': null,
+    'flow-b/step.png': Buffer.from([1, 2, 3]),
+    'other/flow-b/step.png': Buffer.from([4, 5, 6]),
+    'exploration-log.md': `# Exploration log\nTested revision: ${FINAL_SHA}\nSee ${join(context.sessionDir, 'output', 'other', 'flow-b', 'step.png')}.\n`,
+    'acceptance-handoff.md': `# Acceptance handoff\nCurrent head SHA: ${FINAL_SHA}\n`,
+  })
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+  const screenshot = (path) => manifest.artifacts.find(({ origin }) => (
+    origin.relative_path === `output/${path}`
+  ))
+  assert.equal(screenshot('other/flow-b/step.png').verification_state, 'verified')
+  assert.equal(screenshot('flow-b/step.png').verification_state, 'defective')
 })

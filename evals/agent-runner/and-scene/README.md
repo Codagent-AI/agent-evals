@@ -44,7 +44,8 @@ accepts a versioned id such as `grok-4.6` or a full Cursor id such as
 Cursor CLI rejects it. Before starting Agent Runner, the suite verifies the
 Codagent skills named by the workflow and the sub-workflows it invokes
 against the pinned Agent Skills checkout and installs that local plugin for
-each selected CLI.
+each selected CLI. Missing literal sub-workflows fail preflight; templated
+references emit a warning because their skills cannot be checked statically.
 
 The profile names match the workflow's `lead`, `implementor`, and `tester`
 agents; acceptance work runs through the `acceptance-tester` named session.
@@ -334,7 +335,9 @@ step. The suite then checks the contract in that file, requires
 hash as `verification_workflow_sha256`, and reads the final step outcomes at
 `verify-change > sub:verify-change > <step>` in the run history. Earlier Runner
 revisions declared the same steps at the top level of implement-change; that
-layout is still accepted so their runs remain verifiable and rescorable. The
+layout is still accepted so their runs remain verifiable and rescorable. Delivery
+and the published workflow result report the leaf step (for example
+`run-validator`) and retain the full `step_path` in the history entry. The
 sub-workflow shares its parent's session directory, so acceptance evidence is
 still discovered under the run's `output/` directory. The Agent Runner checkout must be a clean Git worktree; the suite
 records whichever commit, workflow hash, and CLI version it used. The Agent
@@ -419,22 +422,25 @@ Referenced session reports and assumption/context-gap audits are retained when
 present. A record that names a revision Git resolves to an ancestor of the
 final SHA is verified as a record of that earlier revision
 (`revision_relation: ancestor-of-final`); one naming a revision that does not
-resolve or lies off the final history stays defective.
+resolve or lies off the final history stays defective. A well-formed tested-revision SHA off the final history is still recorded for lineage diagnosis as `recorded-off-history`; it never establishes final-revision support.
 
 The evidence lineage carries deterministic `tested_revision` facts for the
-final-revision criterion: the SHA in the verified tested-revision record, its
+final-revision criterion: the SHA on the last non-empty line of the verified tested-revision record, its
 relation to the final SHA, and the files changed since, split into product,
 test-only, and harness-owned paths. Each verified pass record that declares a
 `Diff base:` also gets the files between that base and the revision it tested,
-so the judge can check that a diff-scoped re-test explored them. A tested
+so the judge can check that a diff-scoped re-test explored them. If the record does not identify an accepted tested revision, the diff base has null `tested_revision` and `changes_to_tested_revision`, with `retest_coverage: not-established`. A tested
 revision equal to the final SHA, or an ancestor with no later product changes,
 establishes final-revision support without a full re-run. Missing expected roles make candidate-evidence coverage incomplete but
 do not stop independent scored judging. The exploratory `codagent:prepare-acceptance`
 skill writes `exploration-log.md` and stores screenshots under
 `acceptance-screenshots/` without a metadata file; that layout is complete. A
 screenshot with no metadata file is verified only when a verified flow record,
-exploration log, findings record, handoff, or pass record names it or a
-directory holding it (`described_by`), so the judge reads what was inspected
+exploration log, findings record, handoff, or pass record names its path,
+filename, or a per-flow or per-screenshot subdirectory in path form (`described_by`).
+The shared `acceptance-screenshots/` root does not describe an individual screenshot.
+`./` links, relative and variable-prefixed output paths, absolute paths, and
+sentence-ending paths count, so the judge reads what was inspected
 and observed there. A screenshot no metadata or verified record describes, or
 one beside malformed JSON metadata, is retained as defective, unverified
 candidate evidence. Present but stale,
@@ -829,7 +835,7 @@ dirty Agent Runner or Agent Skills checkout, a missing or non-conforming
 `implement-change-v1.0.yaml` or delegated `verify-change-v1.0.yaml`, a missing
 Codagent skill named by the workflow or a sub-workflow it invokes, missing
 publishing credentials, an invalid role profile with its role and field, a
-role-profile mismatch on resume, a resume-provenance change, or a stale
+role-profile mismatch on resume, a resume-provenance change (including a changed delegated verification workflow when recorded), or a stale
 run-state identity.
 
 To diagnose or review scoring behavior, run `--calibrate` and read

@@ -22,7 +22,8 @@ export function resolveAgentRunnerDir({ env = {}, evalsRoot }) {
   return configured || resolve(evalsRoot, '..', 'agent-runner')
 }
 
-export const PROVENANCE_FIELDS = ['commit', 'workflow_sha256', 'cli_version']
+export const PROVENANCE_FIELDS = ['commit', 'workflow_sha256', 'verification_workflow_sha256', 'cli_version']
+const REQUIRED_PROVENANCE_FIELDS = ['commit', 'workflow_sha256', 'cli_version']
 export const AGENT_SKILLS_PROVENANCE_FIELDS = ['commit', 'manifest_sha256']
 
 function provenanceError(code, message) {
@@ -91,13 +92,14 @@ export async function readWorkflowProvenance({ agentRunnerDir, exec = defaultExe
   }
   // Incomplete provenance is recorded as such rather than presented as a
   // reproducible run.
-  const complete = PROVENANCE_FIELDS.every((field) => provenance[field] !== null)
+  const complete = REQUIRED_PROVENANCE_FIELDS.every((field) => provenance[field] !== null)
   return { ...provenance, complete, reproducible: complete }
 }
 
 export function compareProvenance(recorded, current) {
   return PROVENANCE_FIELDS.flatMap((field) => (
-    recorded[field] === current[field]
+    (field === 'verification_workflow_sha256' && recorded[field] === undefined)
+      || recorded[field] === current[field]
       ? []
       : [{ field, recorded: recorded[field], current: current[field] }]
   ))

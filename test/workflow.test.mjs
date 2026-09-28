@@ -12,6 +12,7 @@ import {
 } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
 import {
   checkWorkflowHistory,
+  checkBoundary,
   classifyRunnerRun,
   finalWorkflowStepEntry,
   parseWorkflowContract,
@@ -237,6 +238,8 @@ test('completed workflow history requires every final delivery step and rejects 
     invalid_outcomes: [],
     prohibited_effects: [],
     observed_steps: requiredHistory.map(({ step }) => step),
+    last_observed_step: 'verify-acceptance-handoff',
+    last_observed_step_path: ['verify-acceptance-handoff'],
   })
 
   assert.deepEqual(
@@ -274,6 +277,8 @@ test('skipped validation requires an explicit skipped final Validator outcome', 
     invalid_outcomes: [],
     prohibited_effects: [],
     observed_steps: skippedHistory.map(({ step }) => step),
+    last_observed_step: 'verify-acceptance-handoff',
+    last_observed_step_path: ['verify-acceptance-handoff'],
   })
 
   const absent = checkWorkflowHistory(skippedHistory.slice(1), { skipValidator: true })
@@ -349,7 +354,9 @@ test('delegated history finds final delivery steps inside the verify-change sub-
     missing_steps: [],
     invalid_outcomes: [],
     prohibited_effects: [],
-    observed_steps: history.map(({ step }) => step),
+    observed_steps: history.map(({ step_path }) => step_path.at(-1)),
+    last_observed_step: 'verify-acceptance-handoff',
+    last_observed_step_path: [...VERIFY, 'verify-acceptance-handoff'],
   })
 
   const skipped = checkWorkflowHistory(delegatedHistory({ validatorOutcome: 'skipped' }), {
@@ -399,9 +406,9 @@ test('delegated history still rejects prohibited effects inside verify-change', 
 })
 
 test('the final workflow step entry is found in either layout', () => {
-  assert.deepEqual(finalWorkflowStepEntry(requiredHistory, 'run-validator'), requiredHistory[0])
+  assert.deepEqual(finalWorkflowStepEntry(requiredHistory, 'run-validator'), { ...requiredHistory[0], step_path: ['run-validator'] })
   const delegated = delegatedHistory({ validatorOutcome: 'skipped' })
-  assert.deepEqual(finalWorkflowStepEntry(delegated, 'run-validator'), delegated[2])
+  assert.deepEqual(finalWorkflowStepEntry(delegated, 'run-validator'), { ...delegated[2], step: 'run-validator' })
   assert.equal(finalWorkflowStepEntry(delegated.slice(3), 'run-validator'), null)
 })
 
@@ -512,4 +519,40 @@ test('unverifiable run, process, and workflow identity never starts another run'
     assert.equal(decision.action, 'error')
     assert.notEqual(decision.action, 'start')
   }
+})
+
+
+test('boundary reports the leaf of a nested observed step and retains its path', () => {
+  const path = [...VERIFY, 'run-validator']
+  const boundary = checkBoundary({ observedSteps: [{ step: 'verify-change', step_path: path, outcome: 'success' }] })
+  assert.equal(boundary.last_observed_step, 'run-validator')
+  assert.deepEqual(boundary.step_path, path)
+})
+
+test('nested observed steps use path leaves in workflow history', () => {
+  const checked = checkWorkflowHistory([{ step: 'verify-change', step_path: [...VERIFY, 'run-validator'], outcome: 'success' }])
+  assert.deepEqual(checked.observed_steps, ['run-validator'])
+})
+
+test('closing delegated containers do not replace the last observed leaf', () => {
+  const history = [
+    ...delegatedHistory(),
+    { step: 'verify-change', step_path: ['verify-change'], event: 'step_end', outcome: 'success' },
+  ]
+  const checked = checkWorkflowHistory(history)
+  assert.equal(checked.last_observed_step, 'verify-acceptance-handoff')
+  assert.deepEqual(checked.last_observed_step_path, [...VERIFY, 'verify-acceptance-handoff'])
+  assert.equal(checked.observed_steps.at(-1), 'verify-change')
+  const boundary = checkBoundary({ observedSteps: history })
+  assert.equal(boundary.last_observed_step, 'verify-acceptance-handoff')
+  assert.deepEqual(boundary.step_path, [...VERIFY, 'verify-acceptance-handoff'])
+})
+
+test('final workflow step normalizes string and id-only history entries', () => {
+  assert.deepEqual(finalWorkflowStepEntry(['run-validator'], 'run-validator'), {
+    step: 'run-validator', outcome: 'success', step_path: ['run-validator'],
+  })
+  assert.deepEqual(finalWorkflowStepEntry([{ id: 'run-validator', outcome: 'success' }], 'run-validator'), {
+    id: 'run-validator', step: 'run-validator', outcome: 'success', step_path: ['run-validator'],
+  })
 })

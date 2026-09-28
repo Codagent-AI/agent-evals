@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-09-28T00-03-43-51723661Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_verify-change__sub_verify-change__review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Supported navigation failed verification, but the evidence does not establish whether an assumption or context gap caused the failure.",
+      "evidence": [
+        "Product evidence reports &#39;demo-supported-navigation: fail&#39; without diagnostic details.",
+        "Related checks for navigation boundaries, focus and keyboard accessibility, and step and transition reliability passed.",
+        "The supplied session-report excerpts end within initialization metadata and contain no substantive implementation decisions or assumption reports.",
+        "The supplied review-assumptions artifact contains only an empty stderr section."
+      ],
+      "handling": "No handling of the navigation failure is visible in the supplied artifacts.",
+      "consequence": "One navigation requirement failed verification; the affected interaction and its cause cannot be determined.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check establishes a verification issue, but the supplied evidence cannot distinguish a specification gap, missed repository context, an incorrect assumption, or an implementation defect un…",
+      "resolution": "unresolved",
+      "id": "a1103fcbf1daa699"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}

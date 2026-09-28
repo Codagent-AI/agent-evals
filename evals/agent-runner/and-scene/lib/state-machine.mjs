@@ -120,6 +120,13 @@ export function applyRunStateEvent(state, event) {
       }
       const delivery = { ...state.delivery }
       for (const [field, value] of Object.entries(update)) {
+        if (field === 'final_validator'
+          && delivery.final_validator
+          && !delivery.final_validator.step_path
+          && value?.step === 'run-validator'
+          && delivery.final_validator.step === value?.step_path?.[0]) {
+          delivery.final_validator = { ...delivery.final_validator, step: value.step }
+        }
         delivery[field] = mergeStableIdentity(delivery[field], value, `delivery.${field}`)
       }
       return appendEvent({ ...state, delivery }, event)

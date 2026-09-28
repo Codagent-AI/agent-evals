@@ -262,3 +262,15 @@ test('a blank AGENT_RUNNER_DIR falls back rather than selecting an empty path', 
     '/repos/agent-runner',
   )
 })
+
+test('verification workflow hash drift is reported on resume', () => {
+  const recorded = { commit: 'a', workflow_sha256: 'b', verification_workflow_sha256: 'old', cli_version: 'c' }
+  assert.deepEqual(compareProvenance(recorded, { ...recorded, verification_workflow_sha256: 'new' }), [
+    { field: 'verification_workflow_sha256', recorded: 'old', current: 'new' },
+  ])
+})
+
+test('a checkpoint predating verification workflow provenance does not drift', () => {
+  const recorded = { commit: 'a', workflow_sha256: 'b', cli_version: 'c' }
+  assert.deepEqual(compareProvenance(recorded, { ...recorded, verification_workflow_sha256: 'new' }), [])
+})

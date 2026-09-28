@@ -1602,7 +1602,7 @@ export async function runEvaluation({
           arguments: boundary.workflow_arguments,
           full_workflow: true,
           configured_stop_step: null,
-          last_observed_step: record.workflowHistory.observed_steps.at(-1) ?? null,
+          last_observed_step: record.workflowHistory.last_observed_step,
           unexpected_step: record.workflowHistory.prohibited_effects[0]?.step ?? null,
           observed_steps: record.observed_steps,
           history_complete: record.workflowHistory.ok,

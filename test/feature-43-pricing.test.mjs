@@ -142,7 +142,7 @@ test('zero reported tokens and missing tokens have distinct unresolved reasons',
   const missing = { ...zero, attempt_id: 'missing', usage: { state: 'available', billing_tokens: null } }
   const pricing = await resolveImplementationPricing({ attempts: [zero, missing], catalog: null, fallbackTable: table })
   assert.equal(pricing.costs[0].reason, 'reported token usage is zero')
-  assert.equal(pricing.costs[1].reason, 'no reported token usage to price this attempt with')
+  assert.equal(pricing.costs[1].reason, 'usage has no complete billing-token partition to price against the catalog')
   const resolved = { attempt_id: 'priced', invoked_cli: true, cost: { state: 'available', estimated_api_cost_usd: 2 } }
   const withSubtotal = await resolveImplementationPricing({ attempts: [resolved, zero], catalog: null, fallbackTable: table })
   const cost = aggregateImplementationCost({ attempts: [resolved, zero], costs: withSubtotal.costs })
