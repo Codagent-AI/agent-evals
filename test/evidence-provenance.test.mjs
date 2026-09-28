@@ -1303,3 +1303,29 @@ test('a tested-revision file is read for its SHA, and one without a SHA is malfo
     assert.equal(tested.verification_state, state)
   }
 })
+
+test('a screenshot is described only by its own path, whole filename, or immediate directory', async () => {
+  for (const [description, verified] of [
+    ['The output directory contains acceptance notes.', false],
+    ['The unrelated-dir/ directory contains images.', false],
+    ['See other-step-2.png for the observed state.', false],
+    ['See step-2.png for the observed state.', true],
+    ['See acceptance-screenshots/ for the observed state.', true],
+    ['See acceptance-screenshots for the observed state.', true],
+  ]) {
+    const context = await fixture()
+    await writeExploratoryArtifacts(context, {
+      'exploration-log.md': `# Exploration log\nTested revision: ${FINAL_SHA}\n${description}\n`,
+      'acceptance-handoff.md': `# Acceptance handoff\nCurrent head SHA: ${FINAL_SHA}\n`,
+    })
+    const manifest = await buildCandidateEvidenceManifest({
+      worktree: context.worktree,
+      sessionDir: context.sessionDir,
+      runDir: context.runDir,
+      delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+    })
+    const screenshot = manifest.artifacts.find(({ role }) => role === 'screenshot')
+    assert.equal(screenshot.verification_state, verified ? 'verified' : 'defective', description)
+    assert.equal(screenshot.limitations.includes('missing-capture-metadata'), !verified, description)
+  }
+})

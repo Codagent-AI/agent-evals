@@ -147,15 +147,17 @@ const SCREENSHOT_DESCRIBING_ROLES = new Set([
 ])
 
 function describesScreenshot(text, relativePath) {
-  const segments = relativePath.split('/')
-  // Paths are relative to the Runner session; the evidence directory is output/.
-  const withinOutput = segments[0] === 'output' ? segments.slice(1) : segments
-  const mentions = [withinOutput.at(-1)]
-  for (let index = 1; index < withinOutput.length; index += 1) {
-    mentions.push(`${withinOutput.slice(0, index).join('/')}/`)
-    mentions.push(withinOutput.slice(0, index).join('/'))
-  }
-  return mentions.some((mention) => mention && text.includes(mention))
+  const withinOutput = relativePath.startsWith('output/')
+    ? relativePath.slice('output/'.length)
+    : relativePath
+  const segments = withinOutput.split('/')
+  const parent = segments.slice(0, -1).join('/')
+  const mentions = [relativePath, withinOutput, segments.at(-1), parent, `${parent}/`]
+  return mentions.some((mention) => {
+    if (!mention) return false
+    const escaped = mention.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return new RegExp(`(^|[^a-zA-Z0-9._/-])${escaped}(?=$|[^a-zA-Z0-9._/-])`).test(text)
+  })
 }
 
 function missingRoleMessage(role) {

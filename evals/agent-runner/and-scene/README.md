@@ -434,7 +434,7 @@ skill writes `exploration-log.md` and stores screenshots under
 `acceptance-screenshots/` without a metadata file; that layout is complete. A
 screenshot with no metadata file is verified only when a verified flow record,
 exploration log, findings record, handoff, or pass record names it or a
-directory holding it (`described_by`), so the judge reads what was inspected
+its exact immediate directory (`described_by`), so the judge reads what was inspected
 and observed there. A screenshot no metadata or verified record describes, or
 one beside malformed JSON metadata, is retained as defective, unverified
 candidate evidence. Present but stale,
