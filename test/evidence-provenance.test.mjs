@@ -1366,3 +1366,26 @@ test('the last non-empty SHA line is the tested revision claim', async () => {
   assert.equal(tested.claimed_revision, FINAL_SHA)
   assert.equal(tested.verification_state, 'verified')
 })
+
+test('a well-formed tested revision off final history is reported specifically', async () => {
+  const lineage = await validateCandidateEvidenceLineage({
+    finalSha: FINAL_SHA,
+    worktree: '/candidate',
+    manifest: { artifacts: [{
+      id: 'tested-stray',
+      role: 'tested-revision',
+      verification_state: 'defective',
+      claimed_revision: STRAY_SHA,
+      revision_relation: 'not-ancestor',
+      limitations: ['claimed-revision-mismatch'],
+    }] },
+    exec: fakeGit(),
+  })
+  assert.equal(lineage.tested_revision.state, 'recorded-off-history')
+  assert.equal(lineage.tested_revision.recorded.sha, STRAY_SHA)
+  assert.equal(lineage.tested_revision.recorded.relation, 'not-ancestor')
+  assert.equal(lineage.tested_revision.recorded.changes_to_final, null)
+  assert.equal(lineage.accepted, false)
+  assert.ok(lineage.findings.some(({ code }) => code === 'tested-revision-off-final-history'))
+  assert.ok(!lineage.findings.some(({ code }) => code === 'tested-revision-unrecorded'))
+})

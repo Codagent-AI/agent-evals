@@ -1039,11 +1039,19 @@ export function testedRevisionFacts({ finalSha, worktree, manifest, exec = defau
   const verified = records.find(({ verification_state: state, claimed_revision: sha }) => (
     state === 'verified' && typeof sha === 'string' && sha.length > 0
   ))
+  const offHistory = verified ? null : records.find(({ verification_state: state, claimed_revision: sha, limitations }) => (
+    state === 'defective'
+    && /^[a-f0-9]{7,40}$/i.test(sha ?? '')
+    && Array.isArray(limitations)
+    && limitations.length === 1
+    && limitations[0] === 'claimed-revision-mismatch'
+  ))
+  const selected = verified ?? offHistory
   let recorded = null
-  if (verified) {
-    const { sha, relation } = relationOf(verified.claimed_revision)
+  if (selected) {
+    const { sha, relation } = relationOf(selected.claimed_revision)
     recorded = {
-      artifact_id: verified.id,
+      artifact_id: selected.id,
       sha,
       relation,
       changes_to_final: relation === 'final'
@@ -1082,7 +1090,7 @@ export function testedRevisionFacts({ finalSha, worktree, manifest, exec = defau
   }
   return {
     final_sha: finalSha,
-    state: recorded ? 'recorded' : (records.length > 0 ? 'unverified' : 'absent'),
+    state: verified ? 'recorded' : (offHistory ? 'recorded-off-history' : (records.length > 0 ? 'unverified' : 'absent')),
     recorded,
     diff_bases: diffBases,
     product_path_rule: 'every changed path except test-only files and the .agent-runner/ and openspec/changes/ harness namespaces',

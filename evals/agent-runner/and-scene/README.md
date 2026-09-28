@@ -419,7 +419,7 @@ Referenced session reports and assumption/context-gap audits are retained when
 present. A record that names a revision Git resolves to an ancestor of the
 final SHA is verified as a record of that earlier revision
 (`revision_relation: ancestor-of-final`); one naming a revision that does not
-resolve or lies off the final history stays defective.
+resolve or lies off the final history stays defective. A well-formed tested-revision SHA off the final history is still recorded for lineage diagnosis as `recorded-off-history`; it never establishes final-revision support.
 
 The evidence lineage carries deterministic `tested_revision` facts for the
 final-revision criterion: the last non-empty SHA line in the verified tested-revision record, its
