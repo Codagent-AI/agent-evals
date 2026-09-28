@@ -422,7 +422,7 @@ final SHA is verified as a record of that earlier revision
 resolve or lies off the final history stays defective.
 
 The evidence lineage carries deterministic `tested_revision` facts for the
-final-revision criterion: the SHA in the verified tested-revision record, its
+final-revision criterion: the last non-empty SHA line in the verified tested-revision record, its
 relation to the final SHA, and the files changed since, split into product,
 test-only, and harness-owned paths. Each verified pass record that declares a
 `Diff base:` also gets the files between that base and the revision it tested,

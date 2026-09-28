@@ -1349,3 +1349,20 @@ test('a diff base without an accepted tested revision does not establish retest 
   assert.equal(facts.diff_bases[0].changes_to_tested_revision, null)
   assert.equal(facts.diff_bases[0].retest_coverage, 'not-established')
 })
+
+test('the last non-empty SHA line is the tested revision claim', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'acceptance-tested-revision.txt': `Previous pass: ${PRIOR_SHA}\nLatest pass: ${FINAL_SHA}\n\n`,
+  })
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+    exec: fakeGit(),
+  })
+  const tested = manifest.artifacts.find(({ role }) => role === 'tested-revision')
+  assert.equal(tested.claimed_revision, FINAL_SHA)
+  assert.equal(tested.verification_state, 'verified')
+})

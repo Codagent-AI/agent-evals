@@ -676,7 +676,12 @@ const ACCEPTED_RELATIONS = new Set(['final', 'ancestor-of-final'])
 function testedRevisionClaim(text) {
   const trimmed = text.trim()
   if (trimmed.length === 0) return null
-  return trimmed.match(/(?<![a-f0-9])[a-f0-9]{7,40}(?![a-f0-9])/i)?.[0] ?? trimmed.slice(0, 80)
+  const lines = trimmed.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  for (const line of lines.reverse()) {
+    const sha = line.match(/(?<![a-f0-9])[a-f0-9]{7,40}(?![a-f0-9])/i)?.[0]
+    if (sha) return sha
+  }
+  return trimmed.slice(0, 80)
 }
 
 function declaredDiffBase(text) {
