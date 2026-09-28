@@ -400,17 +400,20 @@ export async function resolveAttemptCost({ attempt, catalog, invoke, authority =
     }
   }
 
-  const tokens = attempt.usage?.state === 'available' ? attemptBillingTokens(attempt) : null
+  if (!attempt.provider || !attempt.model) {
+    return unresolved('exact provider and model identity are required for pricing')
+  }
+  if (attempt.usage?.state !== 'available') {
+    return unresolved('no reported token usage to price this attempt with')
+  }
+
+  const tokens = attemptBillingTokens(attempt)
   const malformed = malformedCategory(tokens)
   if (malformed) {
     return unresolved(`token category ${malformed} has an unusable count`)
   }
   if (billedCategories(tokens).length === 0) {
-    return unresolved('no reported token usage to price this attempt with')
-  }
-
-  if (!attempt.provider || !attempt.model) {
-    return unresolved('exact provider and model identity are required for pricing')
+    return unresolved('usage has no complete billing-token partition to price against the catalog')
   }
 
   const entry = lookupCatalogEntry(catalog, attempt.provider, attempt.model)
