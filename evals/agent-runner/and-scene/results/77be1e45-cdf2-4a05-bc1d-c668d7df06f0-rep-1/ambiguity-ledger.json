@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-09-29T02-16-13-892819884Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_verify-change__sub_verify-change__review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": "product verification",
+        "agent_role": null,
+        "task": "app shell"
+      },
+      "source": "judge-discovered",
+      "concern": "The default attribution is missing.",
+      "evidence": [
+        "Product evidence marks attribution-default-link as fail: “Default made by and-scene GitHub attribution is missing.”"
+      ],
+      "handling": "The delivered product did not satisfy this check.",
+      "consequence": "The default attribution does not appear as expected.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The check identifies a missing result, but the available artifacts do not show the implementation decision or establish whether the cause was an assumption, omitted context, or an implementation defe…",
+      "resolution": "unresolved",
+      "id": "e1f57b3903952ba1"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "product verification",
+        "agent_role": null,
+        "task": "demo"
+      },
+      "source": "judge-discovered",
+      "concern": "The demo failed the nine-step content and order check.",
+      "evidence": [
+        "Product evidence marks demo-nine-step-content-and-order as fail.",
+        "Product evidence separately marks demo-required-scene-content and demo-evolving-scene-structure as pass."
+      ],
+      "handling": "The delivered demo passed related scene checks but failed the content and order check.",
+      "consequence": "The canonical demo sequence was not verified as delivered.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The artifacts do not identify which step or ordering requirement failed, or why the implementation diverged.",
+      "resolution": "unresolved",
+      "id": "b1a738cd2195d747"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "product verification",
+        "agent_role": null,
+        "task": "demo"
+      },
+      "source": "judge-discovered",
+      "concern": "Present mode failed verification.",
+      "evidence": [
+        "Product evidence marks demo-present-mode-behavior as fail.",
+        "Product evidence marks demo-browse-mode-behavior and demo-mode-position-preservation as pass."
+      ],
+      "handling": "Present mode remained a failed product check.",
+      "consequence": "At least one expected present-mode behavior was not verified.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "No failed interaction, expected behavior, or agent reasoning is available to distinguish a specification gap from an implementation error.",
+      "resolution": "unresolved",
+      "id": "0e655149ae4b1aae"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "product verification",
+        "agent_role": null,
+        "task": "verification"
+      },
+      "source": "judge-discovered",
+      "concern": "The sample-outline checks have conflicting outcomes.",
+      "evidence": [
+        "Product evidence first marks verification-sample-outline as pass: “Canonical nine-step sample is present.”",
+        "Product evidence later marks verification-sample-outline as fail."
+      ],
+      "handling": "The available verification record leaves the sample-outline outcome unclear.",
+      "consequence": "The delivered sample’s compliance with that check cannot be determined from these artifacts.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The artifacts provide neither the checks’ detailed results nor enough context to tell whether they ran against different versions or applied different criteria.",
+      "resolution": "unresolved",
+      "id": "b37356155646725b"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
