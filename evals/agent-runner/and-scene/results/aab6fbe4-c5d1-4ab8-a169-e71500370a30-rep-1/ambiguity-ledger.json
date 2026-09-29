@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-09-28T22-41-07-708666268Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_verify-change__sub_verify-change__review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Default attribution is reported missing, but the underlying assumption or context gap is not observable.",
+      "evidence": [
+        "attribution-default-link: fail — Default made by and-scene GitHub attribution is missing.",
+        "The supplied session-report excerpts end before their findings."
+      ],
+      "handling": "No implementation decision or response to this failure is visible.",
+      "consequence": "The product evidence reports an absent default attribution link.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "Neither the applicable requirement text nor the implementation reasoning is supplied. The failure cannot establish whether this was an ambiguous requirement, overlooked repository context, or an impl…",
+      "resolution": "unresolved",
+      "id": "2704964619545a8a"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The screenshot helper exists, but several expected visual diagnostics are reported missing or incomplete.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: pass — Project-local Playwright screenshot helper is present.",
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "A project-local helper was delivered; its implementation and the reasoning behind its diagnostic scope are not shown.",
+      "consequence": "The reported verification tooling lacks coverage for overlap, active-state visual comparison, and attribution checks.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The results establish tooling deficiencies against the checks, but do not establish whether agents misunderstood the required scope or lacked sufficient specification.",
+      "resolution": "unresolved",
+      "id": "ae8d176747636719"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Supported navigation has a reported failure whose triggering interaction is unspecified.",
+      "evidence": [
+        "demo-supported-navigation: fail —",
+        "demo-navigation-boundaries-and-control-keys: pass —",
+        "demo-focus-and-keyboard-accessibility: pass —",
+        "demo-step-and-transition-reliability: pass —"
+      ],
+      "handling": "No navigation implementation decision or failure investigation is included.",
+      "consequence": "At least one supported-navigation check failed; the affected input and user-visible symptom cannot be identified.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The bare failure and neighboring passes do not identify a particular assumption, missing requirement, or repository convention.",
+      "resolution": "unresolved",
+      "id": "cf45188263a2762e"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": "03-reference-sample-verification"
+      },
+      "source": "judge-discovered",
+      "concern": "The supplied evidence gives conflicting sample-outline outcomes.",
+      "evidence": [
+        "verification-sample-outline: fail — Canonical nine-step sample or nine-frame evidence is incomplete.",
+        "A later-listed entry states verification-sample-outline: pass —.",
+        "demo-nine-step-content-and-order: pass —",
+        "verification-every-produced-step-renders: pass —"
+      ],
+      "handling": "The task 03 reporter announced an inspection of repository history and validator output, but its conclusions are absent from the supplied excerpt.",
+      "consequence": "Completeness of the canonical sample evidence cannot be determined consistently from these results.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The entries have no timestamps, revision identifiers, or check definitions that distinguish a resolved failure from different evaluation scopes. Their listing order alone does not establish remediati…",
+      "resolution": "unresolved",
+      "id": "f2d5a383f5b49b61"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
