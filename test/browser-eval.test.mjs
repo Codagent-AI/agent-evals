@@ -41,6 +41,10 @@ function createDemo(knobs = {}) {
     focusCannotBeReleased = false,
     titleProminentInPresent = true,
     activeTitleVisibleInBrowse = true,
+    activeTitleExposedInBrowse = true,
+    captionLeadsWithStepTitle = false,
+    staticTitleListVisible = false,
+    staticCaptionListVisible = false,
     presentShowsDeckTitle = false,
     presentAlsoShowsStepTitle = false,
     captionVisibleInBrowse = true,
@@ -111,12 +115,30 @@ function createDemo(knobs = {}) {
         title: (mode === 'browse' && !activeTitleVisibleInBrowse) || (mode === 'present' && presentShowsDeckTitle)
           ? 'Overall presentation title'
           : titles[index % titles.length],
-        titleTexts: mode === 'present' && presentShowsDeckTitle
-          ? ['Overall presentation title', ...(presentAlsoShowsStepTitle ? [titles[index % titles.length]] : [])]
-          : [titles[index % titles.length], 'Overall presentation title'],
+        titleTexts: [
+          ...(mode === 'present' && presentShowsDeckTitle
+            ? ['Overall presentation title', ...(presentAlsoShowsStepTitle ? [titles[index % titles.length]] : [])]
+            : [
+                ...(activeTitleExposedInBrowse ? [titles[index % titles.length]] : []),
+                'Overall presentation title',
+              ]),
+          // A persistent outline lists every normative title at every step.
+          ...(staticTitleListVisible ? TITLES : []),
+        ],
+        // The first caption-bearing element is what the evaluator's ranked
+        // caption lookup reports; a deck may put an unhooked step title first.
         caption: captionHiddenInPresent && mode === 'present'
           ? ''
-          : captions[index % captions.length] ?? '',
+          : (mode === 'browse' && captionLeadsWithStepTitle
+              ? titles[index % titles.length]
+              : captions[index % captions.length] ?? ''),
+        captionTexts: captionHiddenInPresent && mode === 'present'
+          ? []
+          : [
+              ...(mode === 'browse' && captionLeadsWithStepTitle ? [titles[index % titles.length]] : []),
+              captions[index % captions.length] ?? '',
+              ...(staticCaptionListVisible ? DEMO_CONTRACT.step_captions : []),
+            ].filter(Boolean),
         sceneId: declaresSceneId
           ? (perStepSceneId ? `scene-${index}` : 'how-to-make-a-presentation-scene')
           : null,
@@ -380,6 +402,77 @@ test('the canonical outline accepts step titles in browse mode when present mode
     initialMode: 'present',
     presentShowsDeckTitle: true,
     activeTitleVisibleInBrowse: true,
+  })
+
+  assert.equal(verdictOf(result, 'demo-nine-step-content-and-order'), 'pass')
+  assert.equal(verdictOf(result, 'verification-sample-outline'), 'pass')
+})
+
+test('the canonical outline accepts a step title that neither mode exposes through a ranked title hook', async () => {
+  // Both modes' first-ranked title element carries the deck title, while each
+  // step title sits in an unhooked element such as a header <span> or <strong>.
+  // Which element carries the step title is the presentation's choice.
+  const result = await evaluate({
+    activeTitleVisibleInBrowse: false,
+    presentShowsDeckTitle: true,
+    presentAlsoShowsStepTitle: true,
+  })
+
+  assert.equal(verdictOf(result, 'demo-nine-step-content-and-order'), 'pass')
+  assert.equal(verdictOf(result, 'verification-sample-outline'), 'pass')
+})
+
+test('the canonical outline fails when no visible element in either mode exposes a step title', async () => {
+  const result = await evaluate({
+    activeTitleVisibleInBrowse: false,
+    activeTitleExposedInBrowse: false,
+    presentShowsDeckTitle: true,
+  })
+
+  assert.equal(verdictOf(result, 'demo-nine-step-content-and-order'), 'fail')
+  assert.equal(verdictOf(result, 'verification-sample-outline'), 'fail')
+  const criterion = result.criteria.find(({ id }) => id === 'demo-nine-step-content-and-order')
+  assert.match(criterion.rationale, /step 1 title does not match the required outline/)
+})
+
+test('step content accepts the normative caption from any caption-bearing element', async () => {
+  // An unhooked step-title paragraph precedes the caption paragraph, so the
+  // ranked caption lookup reports the title. The caption is still exposed.
+  const result = await evaluate({ captionLeadsWithStepTitle: true })
+
+  assert.equal(verdictOf(result, 'demo-required-scene-content'), 'pass')
+  const probe = result.probes.find(({ id }) => id === 'demo-required-scene-content')
+  const observed = probe.probe_observations.filter(({ kind }) => kind === 'state').at(-1)
+  assert.ok(observed.caption_texts.includes(DEMO_CONTRACT.step_captions.at(-1)))
+})
+
+test('a persistent list of every step title does not stand in for the active step title', async () => {
+  const result = await evaluate({
+    activeTitleVisibleInBrowse: false,
+    activeTitleExposedInBrowse: false,
+    presentShowsDeckTitle: true,
+    staticTitleListVisible: true,
+  })
+
+  assert.equal(verdictOf(result, 'demo-nine-step-content-and-order'), 'fail')
+  assert.equal(verdictOf(result, 'verification-sample-outline'), 'fail')
+})
+
+test('a persistent list of every caption does not stand in for a wrong active caption', async () => {
+  const wrong = DEMO_CONTRACT.step_captions.map((caption) => `${caption} (wrong)`)
+  const result = await evaluate({ captions: wrong, staticCaptionListVisible: true })
+
+  assert.equal(verdictOf(result, 'demo-required-scene-content'), 'fail')
+})
+
+test('a step title exposed beside a persistent title list still counts', async () => {
+  // A table of contents may list every step title. The active step's title is
+  // then exposed once more at its own position than at the others.
+  const result = await evaluate({
+    activeTitleVisibleInBrowse: false,
+    presentShowsDeckTitle: true,
+    presentAlsoShowsStepTitle: true,
+    staticTitleListVisible: true,
   })
 
   assert.equal(verdictOf(result, 'demo-nine-step-content-and-order'), 'pass')

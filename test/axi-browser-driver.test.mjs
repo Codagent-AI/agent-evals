@@ -547,3 +547,47 @@ test('the AXI driver never reads a script constant inside a page callback', asyn
   assert.doesNotMatch(source, /const requiredPosition = /)
   assert.match(source, /controls\[4\]/)
 })
+
+test('the AXI driver never reads a step-title hook as a caption when inferring the mode', async () => {
+  // A deck without a mode attribute is read as browsing while a caption is
+  // visible. A present-mode title paragraph in the footer is not a caption, so
+  // the footer-paragraph fallback must exclude every title hook, or present mode
+  // can never be established.
+  const inference = [
+    await emitted((driver) => driver.open('how-to-make-a-presentation').catch(() => {})),
+    await emitted((driver) => driver.setMode('present')),
+    await emitted((driver) => driver.toggleMode()),
+  ]
+  for (const source of inference) {
+    assert.match(source, /\[data-presentation-footer\] p:not\(\[data-presentation-present-title\]\)/)
+    assert.doesNotMatch(source, /\[data-presentation-footer\] p["',]/)
+  }
+  const state = await emitted((driver) => driver.state())
+  for (const hook of [
+    'data-presentation-present-title',
+    'data-presentation-step-title',
+    'data-presentation-footer-title',
+    'data-presentation-title',
+  ]) {
+    assert.ok(state.includes(`:not([${hook}])`), hook)
+  }
+})
+
+test('the AXI driver reports every visible caption and title text a presentation exposes', async () => {
+  const source = await emitted((driver) => driver.state())
+
+  // Any caption-bearing element, not only the first ranked one.
+  assert.match(source, /captionTexts,/)
+  // How many distinct visible elements expose each text, so a persistent list
+  // of every title or caption can be told apart from the active one.
+  assert.match(source, /titleOccurrences,/)
+  assert.match(source, /captionOccurrences,/)
+  // A step title set in <strong> is as visible as one set in <span>.
+  assert.match(source, /\[data-presentation-header\] strong/)
+  assert.match(source, /\[data-presentation-footer\] strong/)
+  // A title element's own text, apart from a nested step marker such as "01".
+  assert.match(source, /nodeType === 3/)
+  // The page script is emitted from a template literal, so the whitespace class
+  // must survive as \s rather than collapse to a literal "s".
+  assert.ok(source.includes(".replace(/\\s+/g, ' ')"), 'own-text whitespace collapse is emitted intact')
+})

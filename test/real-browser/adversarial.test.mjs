@@ -79,3 +79,28 @@ test('(g) a deck whose root has no root hook still has its focus released', { ti
   const keys = criterion(await evaluate('g'), KEYS)
   assert.equal(keys.verdict, 'pass', keys.rationale)
 })
+
+const TITLE_AND_MODE = [
+  'demo-nine-step-content-and-order',
+  'demo-required-scene-content',
+  'demo-present-mode-behavior',
+  'demo-mode-position-preservation',
+  'demo-mode-interaction-reliability',
+  'verification-sample-outline',
+]
+
+test('(h) step titles in unhooked header <span> and <strong> elements beside a persistent title list are exposed, not missing', { timeout: 600_000 }, async () => {
+  const result = await evaluate('h')
+  for (const id of TITLE_AND_MODE) assert.equal(criterion(result, id)?.verdict ?? result.gates.find((gate) => gate.id === id)?.verdict, 'pass', id)
+})
+
+test('(i) a deck with only data-mode and a footer present-title paragraph still enters present mode', { timeout: 600_000 }, async () => {
+  const result = await evaluate('i')
+  for (const id of TITLE_AND_MODE) assert.equal(criterion(result, id)?.verdict ?? result.gates.find((gate) => gate.id === id)?.verdict, 'pass', id)
+})
+
+test('(j) a persistent list of every step title does not stand in for a missing active title', { timeout: 600_000 }, async () => {
+  const result = await evaluate('j')
+  assert.equal(criterion(result, 'demo-nine-step-content-and-order').verdict, 'fail')
+  assert.equal(result.gates.find((gate) => gate.id === 'verification-sample-outline').verdict, 'fail')
+})
