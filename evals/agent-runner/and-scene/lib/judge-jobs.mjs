@@ -50,10 +50,12 @@ const JOB_BRIEFS = {
 }
 
 export class JudgeOutputError extends Error {
-  constructor(message) {
+  constructor(message, { missing = null, partial = null } = {}) {
     super(message)
     this.name = 'JudgeOutputError'
     this.code = 'judge-output'
+    this.missing = missing
+    this.partial = partial
   }
 }
 
@@ -66,9 +68,9 @@ function fallbackEntriesFor(rubric, job, notObserved) {
 function browserLeadSection(rubric, entry) {
   const fallback = rubric.fallbacks[entry.id]
   return [
-    `## ${entry.id}`,
-    fallback.requirement,
-    ...(fallback.guidance ?? []).map((item) => `- ${item}`),
+    `- ${entry.id}: ${fallback.requirement}`,
+    ...(fallback.guidance?.length ? ['Review guidance:', ...fallback.guidance.map((item) => `- ${item}`)] : []),
+    'Browser observation is a lead, not an authoritative verdict. A pass must cite delivered source.',
     `Looked for: ${(entry.looked_for ?? []).join(', ') || 'not recorded'}`,
     `Browser rationale: ${entry.rationale}`,
     `Browser evidence: ${(entry.evidence ?? []).join(' | ')}`,
@@ -141,6 +143,27 @@ export const SOURCE_JUDGE_RESULT_SCHEMA = {
   },
 }
 
+function judgeResultSchemaFor(baseSchema, criteria) {
+  return {
+    ...baseSchema,
+    properties: {
+      ...baseSchema.properties,
+      results: {
+        ...baseSchema.properties.results,
+        minItems: criteria.length,
+        maxItems: criteria.length,
+        items: {
+          ...baseSchema.properties.results.items,
+          properties: {
+            ...baseSchema.properties.results.items.properties,
+            id: { type: 'string', enum: [...criteria] },
+          },
+        },
+      },
+    },
+  }
+}
+
 export const SOURCE_AUDIT_RESULT_SCHEMA = {
   type: 'object',
   required: ['results'],
@@ -185,9 +208,9 @@ function sourceJudgePrompt({ definition, slice, sources, evidence }) {
   return [
     `You are reviewing ${definition.brief}.`,
     '',
-    'Assess only the criteria listed below. Return a pass/fail verdict, a rationale,',
-    'and at least one cited verified source or evidence item for every one of them,',
-    'and return no other criteria.',
+    'Assess only the criterion IDs required by the response schema, using the criteria below',
+    'as context. Return exactly one pass/fail verdict, a rationale, and at least one cited',
+    'verified source or evidence item for each required ID, and return no other criteria.',
     '',
     'You are assessing technical implementation only. Do not judge visual composition,',
     'perceived transition quality, responsive visual quality, or overall polish: those',
@@ -245,7 +268,7 @@ function evidenceJudgePrompt({ job, definition, slice, view }) {
         'the candidate exercised anything.',
       ]
     : [
-        'Score only the four fixed assumption-handling criteria listed below.',
+        'Score only the assumption-handling criterion IDs required by the response schema.',
         'Diagnostic ambiguity severity and fixture proposals have no scoring effect.',
         'A genuine unresolved gap and an evidence-backed no-findings conclusion remain eligible for full credit.',
         'Compare candidate classifications against approved requirements and discoverable repository facts.',
@@ -287,7 +310,7 @@ export function buildJudgeRequest({
   if (!definition) throw new Error(`unknown product judge job: ${job}`)
 
   const rubric = rubrics.automated.rubric
-  const slice = rubric.components
+  const nativeSlice = rubric.components
     .flatMap((component) => component.subcomponents.map((subcomponent) => ({ component, subcomponent })))
     .filter(({ subcomponent }) => subcomponent.job === job)
     .map(({ subcomponent }) => [
@@ -302,6 +325,14 @@ export function buildJudgeRequest({
         : []),
     ].join('\n'))
     .join('\n\n')
+  const fallbackEntries = fallbackEntriesFor(rubric, job, notObserved)
+  const slice = [
+    nativeSlice,
+    ...(fallbackEntries.length ? [
+      ['## Browser fallback criteria',
+        ...fallbackEntries.map((entry) => browserLeadSection(rubric, entry))].join('\n'),
+    ] : []),
+  ].join('\n\n')
 
   const view = evidenceViews[job] ?? null
   const evidenceJob = ['testing-evidence', 'assumption-handling'].includes(job)
@@ -313,19 +344,17 @@ export function buildJudgeRequest({
   const discoverableSources = manifestSources?.length > 0
     ? [...new Set(manifestSources)].sort()
     : sources
-  const responseSchema = evidenceJob ? JUDGE_RESULT_SCHEMA : SOURCE_JUDGE_RESULT_SCHEMA
+  const responseSchema = judgeResultSchemaFor(
+    evidenceJob ? JUDGE_RESULT_SCHEMA : SOURCE_JUDGE_RESULT_SCHEMA,
+    definition.criteria,
+  )
   const body = evidenceJob
     ? evidenceJudgePrompt({ job, definition, slice, view })
     : sourceJudgePrompt({ definition, slice, sources: discoverableSources, evidence })
-  const fallbackEntries = fallbackEntriesFor(rubric, job, notObserved)
+  const promptBody = body.join('\n')
   const prompt = [
-    ...body,
+    promptBody,
     '',
-    ...(fallbackEntries.length ? [
-      '# Browser check could not observe',
-      'Treat this browser observation as a lead, not an authoritative verdict. A pass must cite delivered source.',
-      ...fallbackEntries.map((entry) => browserLeadSection(rubric, entry)),
-    ] : []),
     '# Response',
     `Reply with JSON matching this schema: ${JSON.stringify(responseSchema)}`,
   ].join('\n')
@@ -353,6 +382,7 @@ export function buildJudgeRequest({
     source_audit_version: !evidenceJob && neutral?.source_root
       ? 'closed-world-v8-absence-confirmed-fail'
       : null,
+    prompt_body: promptBody,
     prompt,
   }
 }
@@ -438,7 +468,10 @@ export function parseJudgeOutput(
   }
   const missing = expectedIds.filter((id) => !seen.has(id))
   if (missing.length > 0) {
-    throw new JudgeOutputError(`missing criterion results for ${job}: ${missing.join(', ')}`)
+    throw new JudgeOutputError(`missing criterion results for ${job}: ${missing.join(', ')}`, {
+      missing,
+      partial: expectedIds.filter((id) => seen.has(id)).map((id) => seen.get(id)),
+    })
   }
   return expectedIds.map((id) => seen.get(id))
 }
@@ -659,25 +692,55 @@ function insufficientAudits(auditResults) {
 
 function buildFocusedRejudgeRequest(request, insufficient) {
   const criteria = insufficient.map(({ id }) => id)
+  const schema = judgeResultSchemaFor(request.schema ?? SOURCE_JUDGE_RESULT_SCHEMA, criteria)
+  const promptBody = [
+    request.prompt_body ?? request.prompt ?? '',
+    '',
+    '# Previous source audit found insufficient citations',
+    'The prior verdict could not be verified from the paths it cited. Re-inspect the',
+    'neutral source. Return the verdict the source supports and cite every exact',
+    'implementation and focused-test path needed to prove it. Do not repeat an',
+    'unsupported pass or fail, and do not cite ad-hoc command output. If the cited',
+    'implementation itself is an explicit counterexample, explain that source mechanism',
+    'directly instead of claiming an uncaptured executable check.',
+    ...insufficient.map((result) => (
+      `- ${result.id}: ${bounded(result.rationale, MAX_RATIONALE_CHARS)}`
+    )),
+  ].join('\n')
   return {
     ...request,
     criteria,
+    schema,
     rejudge_stage: 'source-citation-retry',
+    prompt_body: promptBody,
     prompt: [
-      request.prompt,
-      '',
-      '# Previous source audit found insufficient citations',
-      'The prior verdict could not be verified from the paths it cited. Re-inspect the',
-      'neutral source. Return the verdict the source supports and cite every exact',
-      'implementation and focused-test path needed to prove it. Do not repeat an',
-      'unsupported pass or fail, and do not cite ad-hoc command output. If the cited',
-      'implementation itself is an explicit counterexample, explain that source mechanism',
-      'directly instead of claiming an uncaptured executable check.',
-      ...insufficient.map((result) => (
-        `- ${result.id}: ${bounded(result.rationale, MAX_RATIONALE_CHARS)}`
-      )),
+      promptBody,
       '',
       `Return results for exactly these criterion IDs and no others: ${criteria.join(', ')}`,
+      '',
+      '# Response',
+      `Reply with JSON matching this schema: ${JSON.stringify(schema)}`,
+    ].join('\n'),
+  }
+}
+
+function buildMissingCriteriaRequest(request, missing) {
+  const schema = judgeResultSchemaFor(
+    request.schema ?? (request.source_audit ? SOURCE_JUDGE_RESULT_SCHEMA : JUDGE_RESULT_SCHEMA),
+    missing,
+  )
+  return {
+    ...request,
+    criteria: missing,
+    schema,
+    prompt: [
+      request.prompt_body ?? request.prompt,
+      '',
+      '# Missing criterion results',
+      `Return results for exactly these criterion IDs and no others: ${missing.join(', ')}`,
+      '',
+      '# Response',
+      `Reply with JSON matching this schema: ${JSON.stringify(schema)}`,
     ].join('\n'),
   }
 }
@@ -712,15 +775,22 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
   for (let cycle = 1; cycle <= SOURCE_AUDIT_CYCLES; cycle += 1) {
     let primaryResults = null
     let auditRequest = null
+    let attemptRequest = activeRequest
+    const partialResults = new Map()
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
-        const output = await invoke(activeRequest)
+        const output = await invoke(attemptRequest)
         const fallbackIds = request.requireSourceCitationsFor ?? []
-        const parsed = parseJudgeOutput(output, activeRequest.criteria, request.job, {
+        const parsed = parseJudgeOutput(output, attemptRequest.criteria, request.job, {
           requireSourceCitations: request.source_audit === true,
           requireSourceCitationsFor: fallbackIds,
         })
-        const results = validateFallbackCitations(parsed, fallbackIds, request.verified_source_paths ?? [])
+        for (const result of parsed) partialResults.set(result.id, result)
+        const results = validateFallbackCitations(
+          activeRequest.criteria.map((id) => partialResults.get(id)),
+          fallbackIds,
+          request.verified_source_paths ?? [],
+        )
         const fallbackPass = results.some((result) => (
           result.verdict === 'pass' && fallbackIds.includes(result.id)
         ))
@@ -739,7 +809,17 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
         history.push({ cycle, attempt, ok: true, error: null })
         break
       } catch (error) {
-        history.push({ cycle, attempt, ok: false, error: error.message })
+        if (error instanceof JudgeOutputError && error.missing) {
+          for (const result of error.partial) partialResults.set(result.id, result)
+          const missing = activeRequest.criteria.filter((id) => !partialResults.has(id))
+          history.push({ cycle, attempt, ok: false, error: error.message,
+            retry: 'missing-criteria', missing })
+          attemptRequest = buildMissingCriteriaRequest(activeRequest, missing)
+        } else {
+          history.push({ cycle, attempt, ok: false, error: error.message })
+          partialResults.clear()
+          attemptRequest = activeRequest
+        }
       }
     }
     if (!primaryResults) {
