@@ -209,73 +209,73 @@
     },
     {
       "path": "evidence/evaluator/browser-probes/demo-browse-mode-behavior.json",
-      "bytes": 138286,
-      "sha256": "195ab19b1f1fff1704851baf11134841b6abece63e49458d12b41c1f42d6261c"
+      "bytes": 137178,
+      "sha256": "e23e940f38a4ab959bf8114be5c9e361e27cf9b88da5eb7d43df84a2efde15f7"
     },
     {
       "path": "evidence/evaluator/browser-probes/demo-control-semantics.json",
-      "bytes": 131509,
-      "sha256": "20343ccbbdd0343882e5e821769488e587efddb7fc4658646ef96b1108baacef"
+      "bytes": 130401,
+      "sha256": "4f7d8ee45dc9198822d24b7a2e57ebb8e773630299601d2b1dcf1b1dd273373b"
     },
     {
       "path": "evidence/evaluator/browser-probes/demo-evolving-scene-structure.json",
-      "bytes": 132380,
-      "sha256": "320bb9047d6bf27369d139326157542bca4832ff422bab4e18ec937116fff6f9"
+      "bytes": 131272,
+      "sha256": "1db4742262923be97bd8328cf74a4cd6802eca0e097af5d5e1187648357feab3"
     },
     {
       "path": "evidence/evaluator/browser-probes/demo-focus-and-keyboard-accessibility.json",
       "bytes": 80946,
-      "sha256": "7dc45895ba2c69360c70b6f0b7afcb566ed5fe34601cc97e12fcfda063cc5a8d"
+      "sha256": "49938f47a27ac187e0f863b2710f3fb6ea96495d490d9b013b04e6ecaaf45c93"
     },
     {
       "path": "evidence/evaluator/browser-probes/demo-mode-interaction-reliability.json",
       "bytes": 44065,
-      "sha256": "00d218a8c5f49c06e29706bfeaa8900a378780ca84ba250b48d4749fc2ea8512"
+      "sha256": "1c58d8720203b3e77530a4d1bfbae280dad2c797614b0e5c0f14b5052d2319c3"
     },
     {
       "path": "evidence/evaluator/browser-probes/demo-mode-position-preservation.json",
       "bytes": 44891,
-      "sha256": "c4e7bc63c65bfa95d47d8c05db62db577932c802f7ddceac6afee8723adc2d57"
+      "sha256": "774f1f73cbb07d5a9012ace9f57e5ccf4e666dea676906322cda728d6a8ad787"
     },
     {
       "path": "evidence/evaluator/browser-probes/demo-navigation-boundaries-and-control-keys.json",
-      "bytes": 129257,
-      "sha256": "045d1f040f10b01d3ba267b5ee98e33503b9738c86a0361d7e0b9feb3f0825a0"
+      "bytes": 128785,
+      "sha256": "fee5cce4d646972eb3768f5dc98324a9584c1c95717fb38fc99c21bb962fa4ec"
     },
     {
       "path": "evidence/evaluator/browser-probes/demo-nine-step-content-and-order.json",
-      "bytes": 216373,
-      "sha256": "e34611b46b9bd3c08f2ab76a9785e9066cc2a060fd7b39e0933d11e4a30813bc"
+      "bytes": 214675,
+      "sha256": "426a19623d5c65f841762ca17f5bcda4ddf6a4930b08894e532d1f7de83f1dc7"
     },
     {
       "path": "evidence/evaluator/browser-probes/demo-present-mode-behavior.json",
       "bytes": 20588,
-      "sha256": "7e8c2c6b40c0bf4febed482be1be0a2295cbc0c6bc53584080d9f9e8d1375fa3"
+      "sha256": "d32e854792d509c123bd169c323b7ecdbf7aa98890d1cad22e9ba62978d6f1b0"
     },
     {
       "path": "evidence/evaluator/browser-probes/demo-required-scene-content.json",
-      "bytes": 132370,
-      "sha256": "14311e0f3ed83dc42b895eda41b35ccd1d22015d400c57d262ddbbd483e2d9f7"
+      "bytes": 131262,
+      "sha256": "57312daf762a89e3f28a00cae5c8751c9361a5abb02a90d93ffe7bd9922fae66"
     },
     {
       "path": "evidence/evaluator/browser-probes/demo-route-and-registration.json",
       "bytes": 32335,
-      "sha256": "87b5842cb65ab101faa25faf607bb2121e5831ed85db0d28e149babbbd4c3766"
+      "sha256": "bd33743fcd0966f06d04a6ad210591fdfc1140bcc8b54dd0ac7a7567a9076c2d"
     },
     {
       "path": "evidence/evaluator/browser-probes/demo-step-and-transition-reliability.json",
-      "bytes": 128230,
-      "sha256": "65e9df13f4f284a06f413ea9b838333a0b6fa6a568c226dfd9e1642c1c982f0f"
+      "bytes": 127286,
+      "sha256": "3bad881935d640f242e08c01fff40c8f932758d392cbceeb1c1de772941769d4"
     },
     {
       "path": "evidence/evaluator/browser-probes/demo-supported-navigation.json",
       "bytes": 75157,
-      "sha256": "426453ca329cac2b16769832314c16d2b8134bb613e8bf00e6f2e18add88a805"
+      "sha256": "7c86dc35c780266938a92a5c5551e5c206102b9f5400303a8ede0a5e66783819"
     },
     {
       "path": "evidence/evaluator/browser-probes/quality-captions-and-navigation.json",
-      "bytes": 131532,
-      "sha256": "b8ce444c19426979bfe6cdd622b1dec04fd640b536c7be59b55711afee0f5064"
+      "bytes": 130424,
+      "sha256": "4b754de400e6ac1d329ec6b2277fa463feda53f14eb50476378a6c4b0baccf56"
     },
     {
       "path": "evidence/evaluator/contradictions.json",
@@ -969,8 +969,8 @@
     },
     {
       "path": "phases/browser-evaluation.json",
-      "bytes": 1645598,
-      "sha256": "51c255046370fe8eedaefba8760a16d52fa32c1145c150a8cca9c5dd2b2e1442"
+      "bytes": 1636944,
+      "sha256": "0367f670c9f905e81cda9fec9efed437129677cbe476cf0fb6d04efd6a79185a"
     },
     {
       "path": "phases/delivery-verification.json",
@@ -1060,12 +1060,12 @@
     {
       "path": "report.html",
       "bytes": 390876,
-      "sha256": "e804a9818f68a52a6c5770311b5d6cdf092b176153245920bf34931a0988fbfa"
+      "sha256": "52f35398b58fd20e39a30832bfb3f65f9438b5848bb2928789027b87ab427ea4"
     },
     {
       "path": "result.json",
-      "bytes": 2865468,
-      "sha256": "a7975b8516fa8605b2aaa3ae5aca274b071205ba61d1dbf52dbb65a051962dc3"
+      "bytes": 2857051,
+      "sha256": "9904ff669a167f597a00f9af812e00c1eda6091ab19be4461050c0767c32be9b"
     },
     {
       "path": "run-state.json",
