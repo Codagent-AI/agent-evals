@@ -589,17 +589,25 @@ ${navigationDiscoverySource()}
   // Each distinct visible element is counted once per text it exposes, so a
   // persistent list of every title or caption, which exposes each text equally
   // at every step, can be told apart from the active step's own element.
+  // Every text is counted, so a verbose deck cannot push the active title out
+  // of view. What is returned stays bounded: the shortest texts are kept, since
+  // a normative title or caption is short, and implausibly long ones are skipped.
+  const MAX_EXPOSED_TEXTS = 1000;
+  const MAX_EXPOSED_TEXT_CHARS = 2000;
   const exposedTexts = (selectors, textsOf) => {
     const occurrences = new Map();
     const elements = [...new Set(selectors.flatMap((selector) => [...scope.querySelectorAll(selector)]))]
       .filter(visible);
     for (const element of elements) {
       for (const text of new Set(textsOf(element).filter(Boolean))) {
-        if (occurrences.size >= 48 && !occurrences.has(text)) continue;
+        if (text.length > MAX_EXPOSED_TEXT_CHARS) continue;
         occurrences.set(text, (occurrences.get(text) || 0) + 1);
       }
     }
-    return { texts: [...occurrences.keys()].slice(0, 24), occurrences: Object.fromEntries(occurrences) };
+    const kept = [...occurrences.entries()]
+      .sort((left, right) => left[0].length - right[0].length)
+      .slice(0, MAX_EXPOSED_TEXTS);
+    return { texts: [...occurrences.keys()].slice(0, 24), occurrences: Object.fromEntries(kept) };
   };
   const titleExposure = exposedTexts(
     ${JSON.stringify(TITLE_TEXT_SELECTORS)},

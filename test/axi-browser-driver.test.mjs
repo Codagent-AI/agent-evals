@@ -591,3 +591,15 @@ test('the AXI driver reports every visible caption and title text a presentation
   // must survive as \s rather than collapse to a literal "s".
   assert.ok(source.includes(".replace(/\\s+/g, ' ')"), 'own-text whitespace collapse is emitted intact')
 })
+
+test('the AXI driver counts every exposed text rather than dropping texts past a cap', async () => {
+  // A verbose deck can show many texts before the active title. Dropping texts
+  // once a cap is reached would hide the active title and fail the outline.
+  const source = await emitted((driver) => driver.state())
+
+  assert.doesNotMatch(source, /occurrences\.size >= \d+/)
+  // What is returned stays bounded, keeping the shortest texts, which is where
+  // a normative title or caption sits, and skipping implausibly long ones.
+  assert.match(source, /MAX_EXPOSED_TEXTS/)
+  assert.match(source, /left\[0\]\.length - right\[0\]\.length/)
+})
