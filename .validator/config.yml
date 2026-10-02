@@ -9,6 +9,10 @@ entry_points:
       - syntax:
           command: bash -n evals/agent-runner/and-scene/run.sh && node --check evals/agent-runner/and-scene/scene-shots.mjs
           working_directory: "."
+    reviews:
+      - task-compliance:
+          builtin: task-compliance
+          enabled: false # Opt-in: activate with `agent-validator run --enable-review task-compliance --context-file <task>`
   - path: evals/*
     exclude:
       - "**/results/**"
