@@ -18,6 +18,16 @@ Run commands from the repository root. The suite runbook is
 [`evals/agent-runner/and-scene/README.md`](evals/agent-runner/and-scene/README.md);
 consult `run.sh --help` before constructing an unfamiliar invocation.
 
+- The Validator configuration an eval reviews with is the and-scene fixture's
+  `.validator/config.yml`, at the pinned fixture commit. To change the eval's
+  reviewer CLI or model, commit the new config to `Codagent-AI/and-scene`, then
+  update the fixture commit everywhere it is pinned: `FIXTURE_REF` in `run.sh`
+  (default and `--help`), `controller.mjs`, the suite `README.md`,
+  `fixture-snapshot/snapshot.json`, and `test/and-scene.test.mjs`.
+- Factory evals fetch this repository's `main` at admission, along with Agent
+  Runner and Agent Skills `main` (and Agent Validator `main` on Fly). A change merged here applies
+  to the next eval with no factory deploy.
+
 - Start with `evals/agent-runner/and-scene/run.sh --proof-browser` when checking
   a local Runner/sandbox/browser setup. It does not run implementation agents.
 - Use `--calibrate` only when changing or reviewing the rubric, scoring, gates,
