@@ -756,6 +756,39 @@ test('schema-v4 delivery gaps and incomplete collection prevent complete metrics
   assert.deepEqual(ingested.coverage.delivery_gaps, ['batch_pending'])
 })
 
+test('schema-v4 partial Validator token collection does not make complete history incomplete', () => {
+  // A Claude review reports cache and output tokens plus a full-coverage cost,
+  // but not uncached input, so collection is partial while history is complete.
+  const validator = validatorPayload({
+    completeness: {
+      collection: 'partial', canonical_fields: 'partial', normalized_total: 'unavailable',
+      per_model_attribution: 'unavailable', history: 'complete',
+    },
+    provider_reported_costs: [{
+      cost_evidence_id: 'claude-otel-cost', scope: 'attempt',
+      amount: measured(0.01, { precision: 'approximate' }),
+      currency: { availability: 'available', value: 'USD', reason: null },
+      coverage: 'full', overlap: 'established', source: 'provider_event',
+    }],
+  })
+  const payload = v4Metrics({
+    measurement_heads: [head(invocationPayload()), head(validator)],
+    validator_delivery: {
+      history_coverage: 'complete', collection: 'partial', delivery: 'complete',
+    },
+  })
+  payload.validator_contexts[0] = { ...payload.validator_contexts[0], collection: 'partial' }
+
+  const ingested = ingestRunnerMetrics({
+    text: JSON.stringify(payload), runId: RUN_ID, workflow: WORKFLOW,
+  })
+
+  assert.equal(ingested.complete, true)
+  assert.equal(ingested.delivery_complete, true)
+  const attempt = ingested.attempts.find((entry) => entry.tool === 'agent-validator')
+  assert.equal(attempt.cost.state, 'available')
+})
+
 test('schema-v4 rejects unsupported nested measurement versions instead of using compatibility steps', () => {
   const payload = v4Metrics()
   payload.measurement_heads[1].record.measurement_schema_version = 2
