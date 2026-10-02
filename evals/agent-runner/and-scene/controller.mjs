@@ -156,7 +156,7 @@ export function parseArgs(argv) {
     changeNameProvided: false,
     judgeModel: 'gpt-6-sol',
     repo: 'https://github.com/Codagent-AI/and-scene.git',
-    fixtureRef: '2873b9f96a2d9ca68adb4b5b831c2edd67182c80',
+    fixtureRef: '2262a9f118887593654dc8fa1bed2a565a11301c',
     capabilitiesPath: DEFAULT_CAPABILITIES,
   }
   for (let index = 0; index < argv.length; index += 1) {
