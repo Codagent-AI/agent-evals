@@ -827,19 +827,20 @@ function assertUniqueAttemptIds(attempts) {
   }
 }
 
+// Delivery completeness is about the attempt history reaching Runner. Token
+// collection is reported per attempt and gates token pricing on its own, so a
+// partial collection never makes a complete history incomplete.
 function validatorDeliveryComplete(payload) {
   const hasValidatorScope = payload.validator_contexts.length > 0 || payload.measurement_heads.length > 0
   if (!hasValidatorScope) return true
   const summary = payload.validator_delivery
   if (
     summary?.history_coverage !== 'complete'
-    || summary?.collection !== 'complete'
     || summary?.delivery !== 'complete'
     || (summary.gaps?.length ?? 0) > 0
   ) return false
   return payload.validator_contexts.every((context) => (
     context.history === 'complete'
-    && context.collection === 'complete'
     && context.delivery === 'complete'
     && context.scope_complete === true
     && context.gaps.length === 0
