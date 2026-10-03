@@ -573,6 +573,27 @@ test('the AXI driver never reads a step-title hook as a caption when inferring t
   }
 })
 
+test('the AXI driver never reads a step-marker paragraph as a caption when inferring the mode', async () => {
+  // A deck may show its step marker, such as "01 / 09 · the ask", as a footer
+  // paragraph in both modes. It is not a caption: reading it as one makes a
+  // deck without a mode attribute look like it is always browsing, so present
+  // mode can never be established.
+  const inference = [
+    await emitted((driver) => driver.open('how-to-make-a-presentation').catch(() => {})),
+    await emitted((driver) => driver.setMode('present')),
+    await emitted((driver) => driver.toggleMode()),
+    await emitted((driver) => driver.state()),
+  ]
+  for (const source of inference) {
+    assert.match(source, /\[data-presentation-footer\] p(?::not\(\[[^\]]+\]\))*:not\(\[data-presentation-marker\]\)/)
+    // The other heuristic caption selectors exclude a marker too. An element a
+    // deck explicitly hooks as its caption stays a caption.
+    assert.match(source, /figcaption:not\(\[data-presentation-marker\]\)/)
+    assert.ok(source.includes(`[aria-label*='caption' i]:not([data-presentation-marker])`), 'aria-label caption excludes the marker')
+    assert.doesNotMatch(source, /\[data-presentation-caption\]:not/)
+  }
+})
+
 test('the AXI driver reports every visible caption and title text a presentation exposes', async () => {
   const source = await emitted((driver) => driver.state())
 

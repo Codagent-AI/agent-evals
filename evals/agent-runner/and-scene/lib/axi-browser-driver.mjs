@@ -42,11 +42,13 @@ const TITLE_TEXT_SELECTORS = [
     ['h1', 'h2', 'h3', 'h4', 'p', 'span', 'strong'].map((tag) => `[data-presentation-${region}] ${tag}`)
   )),
 ]
-// Hooks that declare an element a title. The footer-paragraph caption fallback
-// excludes them: a present-mode title paragraph is not a caption, and reading it
-// as one makes a deck without an explicit mode attribute look like it is always
-// browsing.
-const TITLE_HOOK_ATTRIBUTES = [
+// Hooks that declare an element a title or a step marker. The footer-paragraph
+// caption fallback excludes them: a present-mode title paragraph or a marker
+// paragraph such as "01 / 09 · the ask" is not a caption, and reading either as
+// one makes a deck without an explicit mode attribute look like it is always
+// browsing. The marker stays title-bearing text, since a step title nested in a
+// marker element is still visible to a reader.
+const NON_CAPTION_HOOK_ATTRIBUTES = [
   'data-presentation-present-title',
   'data-presentation-step-title',
   'data-presentation-header-title',
@@ -54,13 +56,16 @@ const TITLE_HOOK_ATTRIBUTES = [
   'data-presentation-presenter-title',
   'data-presentation-active-title',
   'data-presentation-title',
+  'data-presentation-marker',
 ]
 const CAPTION_SELECTORS = [
   '[data-presentation-caption]',
   '[data-presentation-node="caption"]',
-  'figcaption',
-  "[aria-label*='caption' i]",
-  `[data-presentation-footer] p${TITLE_HOOK_ATTRIBUTES.map((hook) => `:not([${hook}])`).join('')}`
+  // The heuristic selectors never read a step marker as a caption; an element
+  // a deck explicitly hooks as its caption above stays one.
+  'figcaption:not([data-presentation-marker])',
+  "[aria-label*='caption' i]:not([data-presentation-marker])",
+  `[data-presentation-footer] p${NON_CAPTION_HOOK_ATTRIBUTES.map((hook) => `:not([${hook}])`).join('')}`
     + ':not([data-presentation-node="step-title"])',
 ]
 const CAPTION_SELECTOR = CAPTION_SELECTORS.join(', ')

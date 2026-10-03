@@ -44,6 +44,7 @@ function createDemo(knobs = {}) {
     activeTitleExposedInBrowse = true,
     captionLeadsWithStepTitle = false,
     staticTitleListVisible = false,
+    stepMarkerVisible = false,
     staticCaptionListVisible = false,
     presentShowsDeckTitle = false,
     presentAlsoShowsStepTitle = false,
@@ -124,6 +125,8 @@ function createDemo(knobs = {}) {
               ]),
           // A persistent outline lists every normative title at every step.
           ...(staticTitleListVisible ? TITLES : []),
+          // A step marker is unique to its step in both modes but is not a title.
+          ...(stepMarkerVisible ? [`${String(index + 1).padStart(2, '0')} / ${String(stepCount).padStart(2, '0')} · the ask`] : []),
         ],
         // The first caption-bearing element is what the evaluator's ranked
         // caption lookup reports; a deck may put an unhooked step title first.
@@ -456,6 +459,30 @@ test('a persistent list of every step title does not stand in for the active ste
 
   assert.equal(verdictOf(result, 'demo-nine-step-content-and-order'), 'fail')
   assert.equal(verdictOf(result, 'verification-sample-outline'), 'fail')
+})
+
+test('a step marker shown at every step does not stand in for a missing step title', async () => {
+  const result = await evaluate({
+    activeTitleVisibleInBrowse: false,
+    activeTitleExposedInBrowse: false,
+    presentShowsDeckTitle: true,
+    stepMarkerVisible: true,
+  })
+
+  assert.equal(verdictOf(result, 'demo-nine-step-content-and-order'), 'fail')
+  assert.equal(verdictOf(result, 'verification-sample-outline'), 'fail')
+})
+
+test('a step title exposed beside a step marker still counts', async () => {
+  const result = await evaluate({
+    activeTitleVisibleInBrowse: false,
+    presentShowsDeckTitle: true,
+    presentAlsoShowsStepTitle: true,
+    stepMarkerVisible: true,
+  })
+
+  assert.equal(verdictOf(result, 'demo-nine-step-content-and-order'), 'pass')
+  assert.equal(verdictOf(result, 'verification-sample-outline'), 'pass')
 })
 
 test('a persistent list of every caption does not stand in for a wrong active caption', async () => {

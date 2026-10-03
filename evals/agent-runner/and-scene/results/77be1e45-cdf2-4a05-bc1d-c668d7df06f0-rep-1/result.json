@@ -36,15 +36,15 @@
     },
     {
       "event": "automated-scoring-complete",
-      "evaluation_status": "pending-human-review",
-      "product_verdict": "unavailable",
+      "evaluation_status": "complete",
+      "product_verdict": "fail",
       "phase": null,
       "reason": null
     },
     {
       "event": "cleanup-complete",
-      "evaluation_status": "pending-human-review",
-      "product_verdict": "unavailable",
+      "evaluation_status": "complete",
+      "product_verdict": "fail",
       "phase": null,
       "reason": null
     },
@@ -65562,15 +65562,15 @@
         },
         {
           "event": "automated-scoring-complete",
-          "evaluation_status": "pending-human-review",
-          "product_verdict": "unavailable",
+          "evaluation_status": "complete",
+          "product_verdict": "fail",
           "phase": null,
           "reason": null
         },
         {
           "event": "cleanup-complete",
-          "evaluation_status": "pending-human-review",
-          "product_verdict": "unavailable",
+          "evaluation_status": "complete",
+          "product_verdict": "fail",
           "phase": null,
           "reason": null
         },
