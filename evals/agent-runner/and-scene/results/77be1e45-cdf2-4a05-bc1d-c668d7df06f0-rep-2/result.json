@@ -36,15 +36,15 @@
     },
     {
       "event": "automated-scoring-complete",
-      "evaluation_status": "pending-human-review",
-      "product_verdict": "unavailable",
+      "evaluation_status": "complete",
+      "product_verdict": "fail",
       "phase": null,
       "reason": null
     },
     {
       "event": "cleanup-complete",
-      "evaluation_status": "pending-human-review",
-      "product_verdict": "unavailable",
+      "evaluation_status": "complete",
+      "product_verdict": "fail",
       "phase": null,
       "reason": null
     },
@@ -53,7 +53,7 @@
       "evaluation_status": "pending-human-review",
       "product_verdict": "unavailable",
       "phase": "browser-evaluation",
-      "reason": "browser evaluation re-run with the fixed checker at agent-evals 7d80a895a8ee3fc1d8a9febef4540415db4526d6; product judging reused unchanged"
+      "reason": "browser evaluation re-run with the fixed checker at agent-evals 7d80a895a8ee3fc1d8a9febef4540415db4526d6; product judging reused unchanged except demo-required-scene-content, settled by a supplementary gpt-6-sol demo-integration judge call"
     }
   ],
   "rubrics": {
@@ -66517,15 +66517,15 @@
         },
         {
           "event": "automated-scoring-complete",
-          "evaluation_status": "pending-human-review",
-          "product_verdict": "unavailable",
+          "evaluation_status": "complete",
+          "product_verdict": "fail",
           "phase": null,
           "reason": null
         },
         {
           "event": "cleanup-complete",
-          "evaluation_status": "pending-human-review",
-          "product_verdict": "unavailable",
+          "evaluation_status": "complete",
+          "product_verdict": "fail",
           "phase": null,
           "reason": null
         },
@@ -66534,7 +66534,7 @@
           "evaluation_status": "pending-human-review",
           "product_verdict": "unavailable",
           "phase": "browser-evaluation",
-          "reason": "browser evaluation re-run with the fixed checker at agent-evals 7d80a895a8ee3fc1d8a9febef4540415db4526d6; product judging reused unchanged"
+          "reason": "browser evaluation re-run with the fixed checker at agent-evals 7d80a895a8ee3fc1d8a9febef4540415db4526d6; product judging reused unchanged except demo-required-scene-content, settled by a supplementary gpt-6-sol demo-integration judge call"
         }
       ]
     },
