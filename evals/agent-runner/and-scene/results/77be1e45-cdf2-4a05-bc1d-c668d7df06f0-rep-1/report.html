@@ -17,24 +17,23 @@ summary { cursor: pointer; font-weight: 600; }
 </style>
 </head>
 <body>
-<h1 class="fail">FAIL</h1>
-<p><strong>No official score:</strong> automated requirements failed, so human review was not required.</p>
-<div class="banner"><strong>Automated product failure:</strong> Required automated gate failed: verification-sample-outline</div>
-<p><strong>Automated subtotal:</strong> 57.81 / 70</p>
+<h1 class="pending">PENDING HUMAN REVIEW</h1>
+<p><strong>No official score:</strong> the product verdict is unavailable for this run.</p>
+<p><strong>Automated subtotal:</strong> 59.81 / 70</p>
 <p><strong>Run:</strong> 77be1e45-cdf2-4a05-bc1d-c668d7df06f0-rep-1 (agent-runner)</p>
-<p><strong>Evaluation status:</strong> complete</p>
+<p><strong>Evaluation status:</strong> pending-human-review</p>
 <p><strong>Score denominator:</strong> 100</p>
 <details><summary>Component and subcomponent scores</summary>
 <table><thead><tr><th>Component</th><th>Title</th><th>Raw awarded</th><th>Adjudicated</th><th>Adjustment</th><th>Possible</th><th>Floor</th><th>State</th></tr></thead><tbody>
-<tr><td>demo-technical-quality</td><td>Demo presentation technical quality</td><td>22</td><td>22</td><td>none</td><td>24</td><td>15</td><td>complete</td></tr>
+<tr><td>demo-technical-quality</td><td>Demo presentation technical quality</td><td>24</td><td>24</td><td>none</td><td>24</td><td>15</td><td>complete</td></tr>
 <tr><td>scene-kit-correctness</td><td>Scene kit correctness</td><td>20.35</td><td>20.35</td><td>none</td><td>24</td><td>15</td><td>complete</td></tr>
 <tr><td>presentation-skill-correctness</td><td>Presentation skill correctness</td><td>5.13</td><td>5.13</td><td>none</td><td>7</td><td>none</td><td>complete</td></tr>
 <tr><td>verification-tool-correctness</td><td>Verification tool correctness</td><td>5.33</td><td>5.33</td><td>none</td><td>7</td><td>none</td><td>complete</td></tr>
 <tr><td>testing-evidence-quality</td><td>Testing-evidence quality</td><td>3</td><td>3</td><td>none</td><td>4</td><td>none</td><td>complete</td></tr>
 <tr><td>assumption-handling-quality</td><td>Assumption-handling quality</td><td>2</td><td>2</td><td>none</td><td>4</td><td>none</td><td>complete</td></tr>
 </tbody></table><table><thead><tr><th>Component</th><th>Subcomponent</th><th>Title</th><th>Awarded</th><th>Possible</th><th>State</th></tr></thead><tbody>
-<tr><td>demo-technical-quality</td><td>demo-canonical-content</td><td>Canonical content, routing, and technical structure</td><td>4</td><td>5</td><td>complete</td></tr>
-<tr><td>demo-technical-quality</td><td>demo-navigation-and-modes</td><td>Navigation, modes, boundaries, and controls</td><td>4</td><td>5</td><td>complete</td></tr>
+<tr><td>demo-technical-quality</td><td>demo-canonical-content</td><td>Canonical content, routing, and technical structure</td><td>5</td><td>5</td><td>complete</td></tr>
+<tr><td>demo-technical-quality</td><td>demo-navigation-and-modes</td><td>Navigation, modes, boundaries, and controls</td><td>5</td><td>5</td><td>complete</td></tr>
 <tr><td>demo-technical-quality</td><td>demo-runtime-reliability</td><td>Runtime reliability and accessibility baseline</td><td>4</td><td>4</td><td>complete</td></tr>
 <tr><td>demo-technical-quality</td><td>demo-scene-kit-integration</td><td>Uses scene-kit APIs without bypassing or duplicating them</td><td>4</td><td>4</td><td>complete</td></tr>
 <tr><td>demo-technical-quality</td><td>demo-identity-and-grouping</td><td>Uses stable identities and appropriate grouped-scene architecture</td><td>3</td><td>3</td><td>complete</td></tr>
@@ -60,7 +59,7 @@ summary { cursor: pointer; font-weight: 600; }
 <details><summary>Hard gates</summary>
 <table><thead><tr><th>Gate</th><th>Requirement</th><th>Verdict</th><th>Rationale</th><th>Evidence</th><th>Raw adjudication data</th></tr></thead><tbody>
 <tr><td>verification-build-whole-app</td><td>The complete application builds successfully</td><td>pass</td><td>the complete application built successfully</td><td>phases/verification.json | &amp;gt; and-scene@0.0.0 build &amp;gt; tsc -b &amp;amp;&amp;amp; vite build [36mvite v8.1.3 [32mbuilding client environment for production... [36m [39m [2K transforming...✓ 446 modules transformed. rendering chunks…</td><td></td></tr>
-<tr><td>verification-sample-outline</td><td>The canonical nine-step sample exists, is registered and reachable, and matches its required outline</td><td>fail</td><td>the canonical nine-step sample must be registered, reachable, and match its outline</td><td>evidence/evaluator/browser-probes/demo-route-and-registration.json | evidence/evaluator/browser-probes/demo-nine-step-content-and-order.json</td><td></td></tr>
+<tr><td>verification-sample-outline</td><td>The canonical nine-step sample exists, is registered and reachable, and matches its required outline</td><td>pass</td><td>the canonical nine-step sample must be registered, reachable, and match its outline</td><td>evidence/evaluator/browser-probes/demo-route-and-registration.json | evidence/evaluator/browser-probes/demo-nine-step-content-and-order.json</td><td></td></tr>
 <tr><td>verification-every-produced-step-renders</td><td>Every produced step renders without runtime or console errors</td><td>pass</td><td>every produced step rendered without runtime or console errors</td><td>evidence/evaluator/browser-probes/demo-route-and-registration.json | evidence/evaluator/browser-probes/demo-nine-step-content-and-order.json | evidence/evaluator/browser-probes/demo-required-scene-content.json | evidence/evaluator/browser-probes/demo-evolving-scene-structure.json | evidence/evaluator/browser-probes/quality-captions-and-navigation.json | evidence/evaluator/browser-probes/demo-present-mode-behavior.json | evidence/evaluator/browser-probes/demo-browse-mode-behavior.json | evidence/evaluator/browser-probes/demo-mode-position-preservation.json | evidence/evaluator/browser-probes/demo-supported-navigation.json | evidence/evaluator/browser-probes/demo-navigation-boundaries-and-control-keys.json | evidence/evaluator/browser-probes/demo-step-and-transition-reliability.json | evidence/evaluator/browser-probes/demo-mode-interaction-reliability.json | evidence/evaluator/browser-probes/demo-control-semantics.json | evidence/evaluator/browser-probes/demo-focus-and-keyboard-accessibility.json</td><td></td></tr>
 <tr><td>verification-clear-outcome</td><td>Verification produces an unambiguous machine-readable pass/fail result</td><td>pass</td><td>verification produced a machine-readable pass result</td><td>phases/verification.json</td><td></td></tr>
 </tbody></table><p class="empty">Nothing recorded.</p>
@@ -68,11 +67,11 @@ summary { cursor: pointer; font-weight: 600; }
 <details><summary>Automated criteria</summary>
 <table><thead><tr><th>Criterion</th><th>Subcomponent</th><th>Verdict</th><th>Rationale</th><th>Evidence</th></tr></thead><tbody>
 <tr><td>demo-route-and-registration</td><td>demo-canonical-content</td><td>pass</td><td>the demo route how-to-make-a-presentation is registered and reachable and linked from the landing page</td><td>how-to-make-a-presentation | evidence/evaluator/browser-probes/demo-route-and-registration.json</td></tr>
-<tr><td>demo-nine-step-content-and-order</td><td>demo-canonical-content</td><td>fail</td><td>step 1 title does not match the required outline</td><td>expected: You have a topic | observed in browse: | observed in present: | evidence/evaluator/browser-probes/demo-nine-step-content-and-order.json</td></tr>
+<tr><td>demo-nine-step-content-and-order</td><td>demo-canonical-content</td><td>pass</td><td>all nine required step titles appear in the specified order</td><td>You have a topic | The skill interviews you | Answers become steps | The deck grows | You set the depth | It assembles the scene | It checks its own work | Changed your mind? Loop it. | You&amp;#39;re looking at one | evidence/evaluator/browser-probes/demo-nine-step-content-and-order.json</td></tr>
 <tr><td>demo-required-scene-content</td><td>demo-canonical-content</td><td>pass</td><td>every step renders its normative caption and scene content</td><td>It starts with you, a topic, and mild overconfidence. | One question at a time: the topic, the look, then each beat of the story. | Each answer lands as a step card — title, caption, visual — plus what morphs from one step into the next. | Same shapes, new beats. Every answer extends the story without redrawing it. | Spell out every step, or sketch a few and see how it looks. You hold the gate. | Your steps are wired into one evolving scene, drawn with a shared scene kit — ready-made boxes, arrows, and motion that make entities morph. | Before saying done, it builds and renders every step — and fixes what breaks. | Point at a step and ask. The skill edits the scene in place — nothing is redrawn from scratch. | This presentation was built exactly this way. Thanks for watching. | evidence/evaluator/browser-probes/demo-required-scene-content.json</td></tr>
 <tr><td>demo-evolving-scene-structure</td><td>demo-canonical-content</td><td>pass</td><td>the demo declares no scene identity and its entities persist across every step</td><td>how-to-make-a-presentation | evidence/evaluator/browser-probes/demo-evolving-scene-structure.json</td></tr>
 <tr><td>quality-captions-and-navigation</td><td>demo-canonical-content</td><td>pass</td><td>every step exposes a caption and a navigation control</td><td>evidence/evaluator/browser-probes/quality-captions-and-navigation.json</td></tr>
-<tr><td>demo-present-mode-behavior</td><td>demo-navigation-and-modes</td><td>fail</td><td>present mode reports mode present with the active step title false</td><td>evidence/evaluator/browser-probes/demo-present-mode-behavior.json</td></tr>
+<tr><td>demo-present-mode-behavior</td><td>demo-navigation-and-modes</td><td>pass</td><td>present mode reports mode present with the active step title true</td><td>evidence/evaluator/browser-probes/demo-present-mode-behavior.json</td></tr>
 <tr><td>demo-browse-mode-behavior</td><td>demo-navigation-and-modes</td><td>pass</td><td>browse mode browse at viewport 1280×720; caption true; controls 9/9; every step reached true; previous/next true/true; toc true; progress true</td><td>evidence/evaluator/browser-probes/demo-browse-mode-behavior.json</td></tr>
 <tr><td>demo-mode-position-preservation</td><td>demo-navigation-and-modes</td><td>pass</td><td>step index across a mode round trip: 4 → 4 → 4</td><td>evidence/evaluator/browser-probes/demo-mode-position-preservation.json</td></tr>
 <tr><td>demo-supported-navigation</td><td>demo-navigation-and-modes</td><td>pass</td><td>keyboard 1/0, swipe 1/0, direct jump 4</td><td>evidence/evaluator/browser-probes/demo-supported-navigation.json</td></tr>
@@ -461,13 +460,13 @@ summary { cursor: pointer; font-weight: 600; }
 <tr><td>human</td><td>and-scene-human-review</td><td>2.1.0</td><td>d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4</td></tr>
 </tbody></table><table><thead><tr><th>Event</th><th>Status</th><th>Verdict</th></tr></thead><tbody>
 <tr><td>created</td><td>pending-human-review</td><td>unavailable</td></tr>
-<tr><td>automated-scoring-complete</td><td>complete</td><td>fail</td></tr>
-<tr><td>cleanup-complete</td><td>complete</td><td>fail</td></tr>
+<tr><td>automated-scoring-complete</td><td>pending-human-review</td><td>unavailable</td></tr>
+<tr><td>cleanup-complete</td><td>pending-human-review</td><td>unavailable</td></tr>
+<tr><td>evaluator-rescored</td><td>pending-human-review</td><td>unavailable</td></tr>
 </tbody></table>
 </details>
 <details><summary>Artifacts</summary>
 <table><thead><tr><th>Path</th><th>Bytes</th></tr></thead><tbody>
-<tr><td><a href=".factory/active-job-pgid">.factory/active-job-pgid</a></td><td>4</td></tr>
 <tr><td><a href=".factory/job/1/job.log">.factory/job/1/job.log</a></td><td>985166</td></tr>
 <tr><td><a href=".factory/job/1/job.sh">.factory/job/1/job.sh</a></td><td>5536</td></tr>
 <tr><td><a href=".factory/job/1/setup-complete">.factory/job/1/setup-complete</a></td><td>0</td></tr>
@@ -501,20 +500,20 @@ summary { cursor: pointer; font-weight: 600; }
 <tr><td><a href="evidence/candidate/manifest.json">evidence/candidate/manifest.json</a></td><td>33169</td></tr>
 <tr><td><a href="evidence/evaluator/artifacts/001-deterministic-source-facts">evidence/evaluator/artifacts/001-deterministic-source-facts</a></td><td>6294</td></tr>
 <tr><td><a href="evidence/evaluator/artifacts/002-deterministic-browser-facts">evidence/evaluator/artifacts/002-deterministic-browser-facts</a></td><td>1207010</td></tr>
-<tr><td><a href="evidence/evaluator/browser-probes/demo-browse-mode-behavior.json">evidence/evaluator/browser-probes/demo-browse-mode-behavior.json</a></td><td>100256</td></tr>
-<tr><td><a href="evidence/evaluator/browser-probes/demo-control-semantics.json">evidence/evaluator/browser-probes/demo-control-semantics.json</a></td><td>95885</td></tr>
-<tr><td><a href="evidence/evaluator/browser-probes/demo-evolving-scene-structure.json">evidence/evaluator/browser-probes/demo-evolving-scene-structure.json</a></td><td>96221</td></tr>
-<tr><td><a href="evidence/evaluator/browser-probes/demo-focus-and-keyboard-accessibility.json">evidence/evaluator/browser-probes/demo-focus-and-keyboard-accessibility.json</a></td><td>61448</td></tr>
-<tr><td><a href="evidence/evaluator/browser-probes/demo-mode-interaction-reliability.json">evidence/evaluator/browser-probes/demo-mode-interaction-reliability.json</a></td><td>34927</td></tr>
-<tr><td><a href="evidence/evaluator/browser-probes/demo-mode-position-preservation.json">evidence/evaluator/browser-probes/demo-mode-position-preservation.json</a></td><td>34159</td></tr>
-<tr><td><a href="evidence/evaluator/browser-probes/demo-navigation-boundaries-and-control-keys.json">evidence/evaluator/browser-probes/demo-navigation-boundaries-and-control-keys.json</a></td><td>99171</td></tr>
-<tr><td><a href="evidence/evaluator/browser-probes/demo-nine-step-content-and-order.json">evidence/evaluator/browser-probes/demo-nine-step-content-and-order.json</a></td><td>158973</td></tr>
-<tr><td><a href="evidence/evaluator/browser-probes/demo-present-mode-behavior.json">evidence/evaluator/browser-probes/demo-present-mode-behavior.json</a></td><td>16918</td></tr>
-<tr><td><a href="evidence/evaluator/browser-probes/demo-required-scene-content.json">evidence/evaluator/browser-probes/demo-required-scene-content.json</a></td><td>97640</td></tr>
-<tr><td><a href="evidence/evaluator/browser-probes/demo-route-and-registration.json">evidence/evaluator/browser-probes/demo-route-and-registration.json</a></td><td>25075</td></tr>
-<tr><td><a href="evidence/evaluator/browser-probes/demo-step-and-transition-reliability.json">evidence/evaluator/browser-probes/demo-step-and-transition-reliability.json</a></td><td>95878</td></tr>
-<tr><td><a href="evidence/evaluator/browser-probes/demo-supported-navigation.json">evidence/evaluator/browser-probes/demo-supported-navigation.json</a></td><td>59333</td></tr>
-<tr><td><a href="evidence/evaluator/browser-probes/quality-captions-and-navigation.json">evidence/evaluator/browser-probes/quality-captions-and-navigation.json</a></td><td>95908</td></tr>
+<tr><td><a href="evidence/evaluator/browser-probes/demo-browse-mode-behavior.json">evidence/evaluator/browser-probes/demo-browse-mode-behavior.json</a></td><td>136090</td></tr>
+<tr><td><a href="evidence/evaluator/browser-probes/demo-control-semantics.json">evidence/evaluator/browser-probes/demo-control-semantics.json</a></td><td>129833</td></tr>
+<tr><td><a href="evidence/evaluator/browser-probes/demo-evolving-scene-structure.json">evidence/evaluator/browser-probes/demo-evolving-scene-structure.json</a></td><td>130169</td></tr>
+<tr><td><a href="evidence/evaluator/browser-probes/demo-focus-and-keyboard-accessibility.json">evidence/evaluator/browser-probes/demo-focus-and-keyboard-accessibility.json</a></td><td>76906</td></tr>
+<tr><td><a href="evidence/evaluator/browser-probes/demo-mode-interaction-reliability.json">evidence/evaluator/browser-probes/demo-mode-interaction-reliability.json</a></td><td>43471</td></tr>
+<tr><td><a href="evidence/evaluator/browser-probes/demo-mode-position-preservation.json">evidence/evaluator/browser-probes/demo-mode-position-preservation.json</a></td><td>46893</td></tr>
+<tr><td><a href="evidence/evaluator/browser-probes/demo-navigation-boundaries-and-control-keys.json">evidence/evaluator/browser-probes/demo-navigation-boundaries-and-control-keys.json</a></td><td>127513</td></tr>
+<tr><td><a href="evidence/evaluator/browser-probes/demo-nine-step-content-and-order.json">evidence/evaluator/browser-probes/demo-nine-step-content-and-order.json</a></td><td>218221</td></tr>
+<tr><td><a href="evidence/evaluator/browser-probes/demo-present-mode-behavior.json">evidence/evaluator/browser-probes/demo-present-mode-behavior.json</a></td><td>20726</td></tr>
+<tr><td><a href="evidence/evaluator/browser-probes/demo-required-scene-content.json">evidence/evaluator/browser-probes/demo-required-scene-content.json</a></td><td>131588</td></tr>
+<tr><td><a href="evidence/evaluator/browser-probes/demo-route-and-registration.json">evidence/evaluator/browser-probes/demo-route-and-registration.json</a></td><td>30733</td></tr>
+<tr><td><a href="evidence/evaluator/browser-probes/demo-step-and-transition-reliability.json">evidence/evaluator/browser-probes/demo-step-and-transition-reliability.json</a></td><td>135968</td></tr>
+<tr><td><a href="evidence/evaluator/browser-probes/demo-supported-navigation.json">evidence/evaluator/browser-probes/demo-supported-navigation.json</a></td><td>75735</td></tr>
+<tr><td><a href="evidence/evaluator/browser-probes/quality-captions-and-navigation.json">evidence/evaluator/browser-probes/quality-captions-and-navigation.json</a></td><td>129856</td></tr>
 <tr><td><a href="evidence/evaluator/contradictions.json">evidence/evaluator/contradictions.json</a></td><td>72</td></tr>
 <tr><td><a href="evidence/evaluator/manifest.json">evidence/evaluator/manifest.json</a></td><td>5600</td></tr>
 <tr><td><a href="evidence/judge-views/assumption-handling/candidate/candidate-1f0a8ba6e3c22a13-candidate-1f0a8ba6e3c22a13-acceptance-handoff-tester.md">evidence/judge-views/assumption-handling/candidate/candidate-1f0a8ba6e3c22a13-candidate-1f0a8ba6e3c22a13-acceptance-handoff-tester.md</a></td><td>4169</td></tr>
@@ -657,7 +656,7 @@ summary { cursor: pointer; font-weight: 600; }
 <tr><td><a href="neutral/judge/source/vite.config.ts">neutral/judge/source/vite.config.ts</a></td><td>161</td></tr>
 <tr><td><a href="neutral/provenance/manifest.json">neutral/provenance/manifest.json</a></td><td>56588</td></tr>
 <tr><td><a href="phases/ambiguity-diagnostics.json">phases/ambiguity-diagnostics.json</a></td><td>4981</td></tr>
-<tr><td><a href="phases/browser-evaluation.json">phases/browser-evaluation.json</a></td><td>1207010</td></tr>
+<tr><td><a href="phases/browser-evaluation.json">phases/browser-evaluation.json</a></td><td>1629516</td></tr>
 <tr><td><a href="phases/delivery-verification.json">phases/delivery-verification.json</a></td><td>86408</td></tr>
 <tr><td><a href="phases/eval-owned-usage.jsonl">phases/eval-owned-usage.jsonl</a></td><td>3834</td></tr>
 <tr><td><a href="phases/evidence-provenance.json">phases/evidence-provenance.json</a></td><td>1738</td></tr>
@@ -670,11 +669,11 @@ summary { cursor: pointer; font-weight: 600; }
 <tr><td><a href="phases/metrics-pricing.json">phases/metrics-pricing.json</a></td><td>559421</td></tr>
 <tr><td><a href="phases/preflight.json">phases/preflight.json</a></td><td>3096</td></tr>
 <tr><td><a href="phases/product-judging.json">phases/product-judging.json</a></td><td>84997</td></tr>
-<tr><td><a href="phases/score.json">phases/score.json</a></td><td>96067</td></tr>
+<tr><td><a href="phases/score.json">phases/score.json</a></td><td>96184</td></tr>
 <tr><td><a href="phases/source-evidence.json">phases/source-evidence.json</a></td><td>6294</td></tr>
 <tr><td><a href="phases/verification.json">phases/verification.json</a></td><td>7860</td></tr>
 <tr><td><a href="phases/workflow-execution.json">phases/workflow-execution.json</a></td><td>83394</td></tr>
-<tr><td><a href="run-state.json">run-state.json</a></td><td>340570</td></tr>
+<tr><td><a href="run-state.json">run-state.json</a></td><td>345427</td></tr>
 </tbody></table>
 </details>
 </body>

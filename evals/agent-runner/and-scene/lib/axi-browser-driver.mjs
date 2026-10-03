@@ -39,15 +39,29 @@ const TITLE_TEXT_SELECTORS = [
   '[data-presentation-presenter-title]',
   '[data-presentation-active-title]',
   ...['header', 'footer', 'stage'].flatMap((region) => (
-    ['h1', 'h2', 'h3', 'h4', 'p', 'span'].map((tag) => `[data-presentation-${region}] ${tag}`)
+    ['h1', 'h2', 'h3', 'h4', 'p', 'span', 'strong'].map((tag) => `[data-presentation-${region}] ${tag}`)
   )),
+]
+// Hooks that declare an element a title. The footer-paragraph caption fallback
+// excludes them: a present-mode title paragraph is not a caption, and reading it
+// as one makes a deck without an explicit mode attribute look like it is always
+// browsing.
+const TITLE_HOOK_ATTRIBUTES = [
+  'data-presentation-present-title',
+  'data-presentation-step-title',
+  'data-presentation-header-title',
+  'data-presentation-footer-title',
+  'data-presentation-presenter-title',
+  'data-presentation-active-title',
+  'data-presentation-title',
 ]
 const CAPTION_SELECTORS = [
   '[data-presentation-caption]',
   '[data-presentation-node="caption"]',
   'figcaption',
   "[aria-label*='caption' i]",
-  '[data-presentation-footer] p',
+  `[data-presentation-footer] p${TITLE_HOOK_ATTRIBUTES.map((hook) => `:not([${hook}])`).join('')}`
+    + ':not([data-presentation-node="step-title"])',
 ]
 const CAPTION_SELECTOR = CAPTION_SELECTORS.join(', ')
 const TOC_SELECTORS = [
@@ -562,12 +576,54 @@ ${navigationDiscoverySource()}
   // Which element a presentation uses for the deck title and which for the
   // active step title is its own choice, so report every visible title-bearing
   // text and let the probe ask whether the step title is exposed at all.
-  const titleTexts = [...new Set(${JSON.stringify(TITLE_TEXT_SELECTORS)}
-    .flatMap((selector) => [...scope.querySelectorAll(selector)])
-    .filter(visible)
-    .map((element) => element.textContent?.trim() || '')
-    .filter(Boolean))].slice(0, 24);
+  // A title element may also carry the step's marker in a nested element, as in
+  // "<p>01 <span>…</span></p>" or "<p><span>01</span> You have a topic</p>".
+  // The fixture treats the marker and the title as separate things, so the
+  // element's own text, apart from its nested elements, is reported as well.
+  const ownText = (element) => [...element.childNodes]
+    .filter((node) => node.nodeType === 3)
+    .map((node) => node.textContent)
+    .join('')
+    .replace(/\\s+/g, ' ')
+    .trim();
+  // Each distinct visible element is counted once per text it exposes, so a
+  // persistent list of every title or caption, which exposes each text equally
+  // at every step, can be told apart from the active step's own element.
+  // Every text is counted, so a verbose deck cannot push the active title out
+  // of view. What is returned stays bounded: the shortest texts are kept, since
+  // a normative title or caption is short, and implausibly long ones are skipped.
+  const MAX_EXPOSED_TEXTS = 1000;
+  const MAX_EXPOSED_TEXT_CHARS = 2000;
+  const exposedTexts = (selectors, textsOf) => {
+    const occurrences = new Map();
+    const elements = [...new Set(selectors.flatMap((selector) => [...scope.querySelectorAll(selector)]))]
+      .filter(visible);
+    for (const element of elements) {
+      for (const text of new Set(textsOf(element).filter(Boolean))) {
+        if (text.length > MAX_EXPOSED_TEXT_CHARS) continue;
+        occurrences.set(text, (occurrences.get(text) || 0) + 1);
+      }
+    }
+    const kept = [...occurrences.entries()]
+      .sort((left, right) => left[0].length - right[0].length)
+      .slice(0, MAX_EXPOSED_TEXTS);
+    return { texts: [...occurrences.keys()].slice(0, 24), occurrences: Object.fromEntries(kept) };
+  };
+  const titleExposure = exposedTexts(
+    ${JSON.stringify(TITLE_TEXT_SELECTORS)},
+    (element) => [element.textContent?.trim() || '', ownText(element)],
+  );
+  const titleTexts = titleExposure.texts;
+  const titleOccurrences = titleExposure.occurrences;
   const caption = firstVisibleMatch(${JSON.stringify(CAPTION_SELECTORS)}, 'caption');
+  // The same holds for captions: which caption-bearing element comes first is
+  // the presentation's choice, so every visible one is reported.
+  const captionExposure = exposedTexts(
+    ${JSON.stringify(CAPTION_SELECTORS)},
+    (element) => [element.textContent?.trim() || ''],
+  );
+  const captionTexts = captionExposure.texts;
+  const captionOccurrences = captionExposure.occurrences;
   const toc = firstVisibleMatch(${JSON.stringify(TOC_SELECTORS)}, 'toc');
   const progressChrome = firstVisibleMatch(${JSON.stringify(PROGRESS_SELECTORS)}, 'progress_chrome');
   const previousMatches = findDirectionalControls(${JSON.stringify(PREVIOUS_SELECTORS)}, /^(previous|prev|back)\\b/i, 'previous');
@@ -645,7 +701,10 @@ ${navigationDiscoverySource()}
     stepCount: Number(progress?.getAttribute('data-step-count')),
     title: title?.textContent?.trim() || '',
     titleTexts,
+    titleOccurrences,
     caption: caption?.textContent?.trim() || '',
+    captionTexts,
+    captionOccurrences,
     sceneId: declaredSceneId(),
     entityIds,
     entityConventions: entitySelectors,

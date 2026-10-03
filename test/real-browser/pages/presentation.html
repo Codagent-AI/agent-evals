@@ -25,7 +25,7 @@
   </nav>
 </div>
 <script>
-// One page, seven behaviours. The server injects VARIANT and STEPS; nothing here
+// One page, ten behaviours. The server injects VARIANT and STEPS; nothing here
 // is a candidate. Each variant isolates one judgment the evaluator must make.
 const variant = window.VARIANT
 const steps = window.STEPS
@@ -38,14 +38,71 @@ let keysDead = false
 // as a real candidate built its presentation.
 if (variant === 'g') root.removeAttribute('data-presentation')
 
+// (h) and (i) are correct decks whose chrome carries no title hook the
+// evaluator ranks first. (h) sets the step title in an unhooked header <span>
+// beside an unhooked <strong> deck title in browse mode, and in an unhooked
+// <strong> in present mode. (i) declares its mode only as data-mode, puts an
+// unhooked step-title paragraph before an unhooked caption paragraph in its
+// footer, and in present mode shows a footer title paragraph, carrying the
+// present-title hook, whose step marker is a nested element.
+// (h) also keeps a persistent list of every step title visible in its stage,
+// as a table of contents might. (j) is (h) without the active step title: only
+// that list exposes the titles, so it must not stand in for them.
+const unhooked = variant === 'h' || variant === 'i' || variant === 'j'
+let footer = null
+if (unhooked) {
+  document.getElementById('title').remove()
+  document.getElementById('caption').remove()
+  root.querySelector('[data-presentation-header]').replaceChildren()
+  footer = document.createElement('footer')
+  footer.setAttribute('data-presentation-footer', '')
+  root.insertBefore(footer, progress)
+}
+
+function renderUnhooked() {
+  const step = steps[index]
+  const marker = String(index + 1).padStart(2, '0')
+  const header = root.querySelector('[data-presentation-header]')
+  const element = (tag, text, attributes = {}) => {
+    const node = document.createElement(tag)
+    for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value)
+    if (Array.isArray(text)) node.append(...text)
+    else node.textContent = text
+    return node
+  }
+  if (variant === 'h' || variant === 'j') {
+    const active = variant === 'h' ? [step.title] : []
+    header.replaceChildren(...(mode === 'browse'
+      ? [element('span', `section · ${marker}`), element('strong', 'How to Use This Skill to Make a Presentation'), ...active.map((title) => element('span', title))]
+      : [element('span', `section · ${marker}`), ...active.map((title) => element('strong', title))]))
+    footer.replaceChildren(...(mode === 'browse' ? [element('p', step.caption, { 'data-presentation-caption': '' })] : []))
+    return
+  }
+  header.replaceChildren(...(mode === 'browse'
+    ? [element('div', 'How to Use This Skill to Make a Presentation', { 'data-presentation-title': '' })]
+    : []))
+  footer.replaceChildren(...(mode === 'browse'
+    ? [element('p', step.title, { class: 'step-title' }), element('p', step.caption, { class: 'caption' })]
+    : [element('p', [element('span', marker), ` ${step.title}`], { 'data-presentation-present-title': '' })]))
+}
+
 function render() {
-  root.setAttribute('data-presentation-mode', mode)
+  if (variant === 'i') {
+    root.removeAttribute('data-presentation-mode')
+    root.setAttribute('data-mode', mode)
+  } else {
+    root.setAttribute('data-presentation-mode', mode)
+  }
   progress.setAttribute('data-step-index', String(index))
-  const title = document.getElementById('title')
-  title.textContent = steps[index].title
-  // (d) hides the one thing a reader must see in present mode.
-  title.classList.toggle('hidden', variant === 'd' && mode === 'present')
-  document.getElementById('caption').textContent = steps[index].caption
+  if (unhooked) {
+    renderUnhooked()
+  } else {
+    const title = document.getElementById('title')
+    title.textContent = steps[index].title
+    // (d) hides the one thing a reader must see in present mode.
+    title.classList.toggle('hidden', variant === 'd' && mode === 'present')
+    document.getElementById('caption').textContent = steps[index].caption
+  }
   const stage = document.getElementById('stage')
   stage.replaceChildren()
   // (c) is a correct evolving scene whose hook no evaluator recognises.
@@ -55,6 +112,18 @@ function render() {
     entity.setAttribute(hook, id)
     entity.style.left = `${(id === 'stage-anchor' ? 0 : Number(id.slice(5)) + 1) * 70}px`
     stage.append(entity)
+  }
+  // The list sits inside the stage region, so its spans are title-bearing text.
+  if (variant === 'h' || variant === 'j') {
+    const list = document.createElement('p')
+    list.style.cssText = 'margin: 0; font-size: 10px;'
+    list.append(...steps.map(({ title }) => {
+      const item = document.createElement('span')
+      item.textContent = title
+      item.style.marginRight = '8px'
+      return item
+    }))
+    stage.prepend(list)
   }
   // Buttons are created once and updated in place, as a real app keeps its
   // nodes: recreating them would silently drop focus from the activated control.

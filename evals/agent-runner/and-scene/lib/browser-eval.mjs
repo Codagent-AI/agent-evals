@@ -120,6 +120,44 @@ function exposesTitle(state, expected) {
   return candidates.some((candidate) => sameText(candidate, expected))
 }
 
+function observedTitles(state) {
+  const texts = Array.isArray(state?.titleTexts) && state.titleTexts.length > 0
+    ? state.titleTexts
+    : [state?.title].filter(Boolean)
+  return texts.length > 0 ? bounded(texts.join(' | ')) : '(none)'
+}
+
+// How many visible elements expose `expected`. The driver counts each element
+// once per text; without counts, every listed text counts once.
+function exposureCount(occurrences, texts, fallback, expected) {
+  if (occurrences && typeof occurrences === 'object' && !Array.isArray(occurrences)) {
+    return Object.entries(occurrences)
+      .filter(([text]) => sameText(text, expected))
+      .reduce((sum, [, count]) => sum + (Number.isFinite(count) ? count : 0), 0)
+  }
+  const candidates = Array.isArray(texts) && texts.length > 0 ? texts : [fallback]
+  return candidates.filter((candidate) => sameText(candidate, expected)).length
+}
+
+const titleExposure = (state, expected) => exposureCount(
+  state?.titleOccurrences, state?.titleTexts, state?.title, expected,
+)
+// Which element carries the active caption is the presentation's choice too;
+// an unhooked step-title paragraph may precede the caption paragraph.
+const captionExposure = (state, expected) => exposureCount(
+  state?.captionOccurrences, state?.captionTexts, state?.caption, expected,
+)
+
+// A text belongs to the active step only when a walk over every step shows it
+// more often at that step than at some other step. The active step's own element
+// exposes it there and nowhere else; a persistent list of every title or
+// caption exposes it equally everywhere and so never stands in for it.
+function activeAt(states, position, expected, exposure) {
+  const here = exposure(states[position], expected)
+  if (here === 0) return false
+  return states.some((state, other) => other !== position && exposure(state, expected) < here)
+}
+
 function missingEvidence(message) {
   return Object.assign(new Error(message), {
     owner: 'evaluation-harness',
@@ -231,6 +269,13 @@ function summarizeControls(controls) {
   }))
 }
 
+function summarizeOccurrences(occurrences) {
+  if (!occurrences || typeof occurrences !== 'object' || Array.isArray(occurrences)) return null
+  return Object.entries(occurrences)
+    .slice(0, 24)
+    .map(([text, count]) => ({ text: normalizeEvidence(text), count: Number.isFinite(count) ? count : null }))
+}
+
 // What the evaluator actually saw. A reviewer auditing a deduction needs the
 // viewport it was measured at, the chrome it found, and which selector or
 // discovery strategy produced each navigation role.
@@ -243,6 +288,9 @@ function summarizeState(state) {
     title: normalizeEvidence(state?.title ?? ''),
     title_texts: (state?.titleTexts ?? []).slice(0, 24).map((text) => normalizeEvidence(text)),
     caption: normalizeEvidence(state?.caption ?? ''),
+    caption_texts: (state?.captionTexts ?? []).slice(0, 24).map((text) => normalizeEvidence(text)),
+    title_occurrences: summarizeOccurrences(state?.titleOccurrences),
+    caption_occurrences: summarizeOccurrences(state?.captionOccurrences),
     scene_id: typeof state?.sceneId === 'string' ? normalizeEvidence(state.sceneId) : null,
     entity_ids: (state?.entityIds ?? []).slice(0, MAX_STEP_COUNT).map((id) => normalizeEvidence(id)),
     entity_conventions: (state?.entityConventions ?? []).slice(0, MAX_STEP_COUNT)
@@ -436,16 +484,18 @@ export async function runBrowserEvaluation({
       if (first.stepCount !== contract.step_count) {
         return [false, `the demo reports ${bounded(first.stepCount)} steps, expected ${contract.step_count}`, []]
       }
-      // A presentation may expose its active step title in either mode while
-      // using the other mode's title hook for the overall deck title. Observe
-      // both modes and accept a step only when one reports the canonical title;
-      // browse-mode title visibility is still checked independently below.
+      // A presentation may expose its active step title in either mode, through
+      // any visible title-bearing element, while its first-ranked title hook
+      // carries the overall deck title. Observe both modes and accept a step
+      // when either exposes the canonical title as that step's own, not only in
+      // a persistent list of every title; browse-mode title visibility is still
+      // checked independently below.
       const browseStates = await walk()
       await session({ mode: 'present', position: 0 })
       const presentStates = await walk()
       const mismatch = contract.step_titles.findIndex((title, position) => (
-        !sameText(browseStates[position]?.title, title)
-          && !sameText(presentStates[position]?.title, title)
+        !activeAt(browseStates, position, title, titleExposure)
+          && !activeAt(presentStates, position, title, titleExposure)
       ))
       if (mismatch !== -1) {
         return [
@@ -453,8 +503,8 @@ export async function runBrowserEvaluation({
           `step ${mismatch + 1} title does not match the required outline`,
           [
             `expected: ${contract.step_titles[mismatch]}`,
-            `observed in browse: ${browseStates[mismatch]?.title ?? '(none)'}`,
-            `observed in present: ${presentStates[mismatch]?.title ?? '(none)'}`,
+            `observed in browse: ${observedTitles(browseStates[mismatch])}`,
+            `observed in present: ${observedTitles(presentStates[mismatch])}`,
           ],
         ]
       }
@@ -465,7 +515,7 @@ export async function runBrowserEvaluation({
       await session(PROBE_REQUIREMENTS['demo-required-scene-content'])
       const states = await walk()
       const mismatch = states.findIndex(
-        (state, position) => !sameText(state.caption, contract.step_captions[position]),
+        (_state, position) => !activeAt(states, position, contract.step_captions[position], captionExposure),
       )
       if (mismatch !== -1) {
         return [
