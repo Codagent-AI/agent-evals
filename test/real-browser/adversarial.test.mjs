@@ -104,3 +104,14 @@ test('(j) a persistent list of every step title does not stand in for a missing 
   assert.equal(criterion(result, 'demo-nine-step-content-and-order').verdict, 'fail')
   assert.equal(result.gates.find((gate) => gate.id === 'verification-sample-outline').verdict, 'fail')
 })
+
+test('(k) a deck with only data-mode and a footer step-marker paragraph still enters present mode', { timeout: 600_000 }, async () => {
+  const result = await evaluate('k')
+  for (const id of TITLE_AND_MODE) assert.equal(criterion(result, id)?.verdict ?? result.gates.find((gate) => gate.id === id)?.verdict, 'pass', id)
+})
+
+test('(l) a footer step-marker paragraph does not stand in for a missing step title', { timeout: 600_000 }, async () => {
+  const result = await evaluate('l')
+  assert.equal(criterion(result, 'demo-nine-step-content-and-order').verdict, 'fail')
+  assert.equal(result.gates.find((gate) => gate.id === 'verification-sample-outline').verdict, 'fail')
+})

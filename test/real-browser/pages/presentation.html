@@ -25,7 +25,7 @@
   </nav>
 </div>
 <script>
-// One page, ten behaviours. The server injects VARIANT and STEPS; nothing here
+// One page, twelve behaviours. The server injects VARIANT and STEPS; nothing here
 // is a candidate. Each variant isolates one judgment the evaluator must make.
 const variant = window.VARIANT
 const steps = window.STEPS
@@ -48,7 +48,12 @@ if (variant === 'g') root.removeAttribute('data-presentation')
 // (h) also keeps a persistent list of every step title visible in its stage,
 // as a table of contents might. (j) is (h) without the active step title: only
 // that list exposes the titles, so it must not stand in for them.
-const unhooked = variant === 'h' || variant === 'i' || variant === 'j'
+// (k) is 215c3182 rep 1's footer: it declares its mode only as data-mode and
+// shows a step-marker paragraph ("01 / 09 · era") and a hooked step-title
+// heading in both modes, with a caption paragraph only in browse mode. (l) is
+// (k) without the step-title heading: the marker must not stand in for it.
+const marked = variant === 'k' || variant === 'l'
+const unhooked = variant === 'h' || variant === 'i' || variant === 'j' || marked
 let footer = null
 if (unhooked) {
   document.getElementById('title').remove()
@@ -78,6 +83,17 @@ function renderUnhooked() {
     footer.replaceChildren(...(mode === 'browse' ? [element('p', step.caption, { 'data-presentation-caption': '' })] : []))
     return
   }
+  if (marked) {
+    header.replaceChildren(...(mode === 'browse'
+      ? [element('h1', 'How to Use This Skill to Make a Presentation', { 'data-presentation-title': '' })]
+      : []))
+    footer.replaceChildren(
+      element('p', `${marker} / ${String(steps.length).padStart(2, '0')} · the ask`, { 'data-presentation-marker': '' }),
+      ...(variant === 'k' ? [element('h2', step.title, { 'data-presentation-step-title': '' })] : []),
+      ...(mode === 'browse' ? [element('p', step.caption, { 'data-presentation-caption': '' })] : []),
+    )
+    return
+  }
   header.replaceChildren(...(mode === 'browse'
     ? [element('div', 'How to Use This Skill to Make a Presentation', { 'data-presentation-title': '' })]
     : []))
@@ -87,7 +103,7 @@ function renderUnhooked() {
 }
 
 function render() {
-  if (variant === 'i') {
+  if (variant === 'i' || marked) {
     root.removeAttribute('data-presentation-mode')
     root.setAttribute('data-mode', mode)
   } else {
