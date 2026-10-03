@@ -586,6 +586,11 @@ test('the AXI driver never reads a step-marker paragraph as a caption when infer
   ]
   for (const source of inference) {
     assert.match(source, /\[data-presentation-footer\] p(?::not\(\[[^\]]+\]\))*:not\(\[data-presentation-marker\]\)/)
+    // The other heuristic caption selectors exclude a marker too. An element a
+    // deck explicitly hooks as its caption stays a caption.
+    assert.match(source, /figcaption:not\(\[data-presentation-marker\]\)/)
+    assert.ok(source.includes(`[aria-label*='caption' i]:not([data-presentation-marker])`), 'aria-label caption excludes the marker')
+    assert.doesNotMatch(source, /\[data-presentation-caption\]:not/)
   }
 })
 

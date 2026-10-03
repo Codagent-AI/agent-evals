@@ -61,8 +61,10 @@ const NON_CAPTION_HOOK_ATTRIBUTES = [
 const CAPTION_SELECTORS = [
   '[data-presentation-caption]',
   '[data-presentation-node="caption"]',
-  'figcaption',
-  "[aria-label*='caption' i]",
+  // The heuristic selectors never read a step marker as a caption; an element
+  // a deck explicitly hooks as its caption above stays one.
+  'figcaption:not([data-presentation-marker])',
+  "[aria-label*='caption' i]:not([data-presentation-marker])",
   `[data-presentation-footer] p${NON_CAPTION_HOOK_ATTRIBUTES.map((hook) => `:not([${hook}])`).join('')}`
     + ':not([data-presentation-node="step-title"])',
 ]
