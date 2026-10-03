@@ -310,7 +310,7 @@ map. An incompatible fixture exits as `fixture-planning-contract`, with no
 agent call.
 
 The external fixture is pinned to commit
-`2262a9f118887593654dc8fa1bed2a565a11301c` in
+`ad667a965a0e1ea0b028c36c04d57bf0411d30d9` in
 `https://github.com/Codagent-AI/and-scene.git`. The implemented reference commit
 `171c7def1e12aca2a5f605a5e5feafb20d4e4d19` is the comparable reference baseline.
 It is not a similarity target. The fixture includes the reviewed structured test
