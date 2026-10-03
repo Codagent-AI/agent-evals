@@ -270,7 +270,7 @@
       "owner": "fixture",
       "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
       "heading": "Scenario: Default canvas dimensions",
-      "quote": "it uses the reference dimensions of 880 × 380"
+      "quote": "it uses the default dimensions of 880 × 380"
     },
     "style-kit-hooks": {
       "owner": "fixture",

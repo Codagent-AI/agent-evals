@@ -310,7 +310,7 @@ map. An incompatible fixture exits as `fixture-planning-contract`, with no
 agent call.
 
 The external fixture is pinned to commit
-`2c34b94de0a29b21e633396ffd6b3609e1ab7efc` in
+`f0695b96c0c23b2d17ecc6cfbaf8be1fcdedd6f8` in
 `https://github.com/Codagent-AI/and-scene.git`. The implemented reference commit
 `171c7def1e12aca2a5f605a5e5feafb20d4e4d19` is the comparable reference baseline.
 It is not a similarity target. The fixture includes the reviewed structured test
@@ -319,7 +319,7 @@ planning-only fixture revision. Its `.validator/config.yml` runs the checks and
 `all-reviewers` on the root entry point and scopes the `skill-quality` review
 to a separate `skills` entry point, so that review runs only when files under
 `skills/` change. The pinned commit is kept reachable on the and-scene branch
-`eval/fixture-baseline-skill-scope`.
+`eval/fixture-baseline-scrub`.
 
 The suite runs Agent Runner's exact
 `workflows/core/implement-change-v1.0.yaml` workflow through completion, invoked

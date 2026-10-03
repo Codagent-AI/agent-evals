@@ -11,7 +11,7 @@ import { validateRoleProfiles } from '../evals/agent-runner/and-scene/lib/profil
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const runScript = join(root, 'evals/agent-runner/and-scene/run.sh')
 const shotsScript = join(root, 'evals/agent-runner/and-scene/scene-shots.mjs')
-const fixtureSha = '2c34b94de0a29b21e633396ffd6b3609e1ab7efc'
+const fixtureSha = 'f0695b96c0c23b2d17ecc6cfbaf8be1fcdedd6f8'
 const referenceSha = '171c7def1e12aca2a5f605a5e5feafb20d4e4d19'
 
 const profileArgs = [
