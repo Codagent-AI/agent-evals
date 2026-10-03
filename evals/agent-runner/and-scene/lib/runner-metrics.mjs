@@ -19,6 +19,11 @@ export const RUNNER_METRICS_FILENAME = 'run-metrics.json'
 export const RUNNER_METRICS_SCHEMA_VERSION = 4
 export const SUPPORTED_RUNNER_METRICS_SCHEMA_VERSIONS = [1, 2, 3, RUNNER_METRICS_SCHEMA_VERSION]
 export const RUNNER_MEASUREMENT_SCHEMA_VERSION = 1
+// Agent Runner's own native measurements are versioned separately from the
+// Validator envelopes above. Version 2 adds per-thread Claude allocations
+// (the main thread and each subagent) and the subagent collection's
+// completeness.
+export const SUPPORTED_NATIVE_MEASUREMENT_SCHEMA_VERSIONS = [1, 2]
 export const RUNNER_MEASUREMENT_AGGREGATE_VERSION = 1
 
 // States Agent Runner may report for a usage or cost value. `not-applicable`
@@ -240,16 +245,50 @@ function validateEnvelope(record, label) {
   }
 }
 
+const NATIVE_MEASUREMENT_KEYS = [
+  'native_measurement_schema_version', 'key', 'attribution', 'producer', 'provenance',
+  'source_format', 'requested_identity', 'resolved_identity', 'observed_identities', 'tokens',
+  'unallocated_usage', 'provider_reported_costs', 'limitations',
+]
+const NATIVE_ALLOCATION_KEYS = [
+  'allocation_id', 'kind', 'observed_identity_ref', 'agent_type', 'tool_use_id',
+  'parent_tool_use_id', 'spawn_depth', 'availability', 'reason', 'tokens', 'cost',
+]
+
+function validateNativeAllocation(allocation, label) {
+  assertKnownKeys(allocation, NATIVE_ALLOCATION_KEYS, label)
+  if (!nonEmptyString(allocation.allocation_id)) throw new Error(`${label} has no allocation_id`)
+  if (allocation.observed_identity_ref !== null && !nonEmptyString(allocation.observed_identity_ref)) {
+    throw new Error(`${label} has a malformed observed_identity_ref`)
+  }
+  if (!['available', 'partial', 'unavailable'].includes(allocation.availability)) {
+    throw new Error(`${label} has invalid availability`)
+  }
+  validateTokens(allocation.tokens, `${label}.tokens`, true)
+  validateValue(allocation.cost, `${label}.cost`)
+}
+
 function validateNativeMeasurement(measurement, label) {
-  assertKnownKeys(measurement, [
-    'native_measurement_schema_version', 'key', 'attribution', 'producer', 'provenance',
-    'source_format', 'requested_identity', 'resolved_identity', 'observed_identities', 'tokens',
-    'unallocated_usage', 'provider_reported_costs', 'limitations',
-  ], label)
-  if (measurement.native_measurement_schema_version !== RUNNER_MEASUREMENT_SCHEMA_VERSION) {
-    throw new Error(
-      `${label} uses unsupported measurement schema version ${JSON.stringify(measurement.native_measurement_schema_version)}`,
-    )
+  const version = measurement?.native_measurement_schema_version
+  if (!SUPPORTED_NATIVE_MEASUREMENT_SCHEMA_VERSIONS.includes(version)) {
+    throw new Error(`${label} uses unsupported measurement schema version ${JSON.stringify(version)}`)
+  }
+  assertKnownKeys(
+    measurement,
+    version >= 2 ? [...NATIVE_MEASUREMENT_KEYS, 'allocations', 'subagent_collection'] : NATIVE_MEASUREMENT_KEYS,
+    label,
+  )
+  if (measurement.allocations !== undefined) {
+    if (!Array.isArray(measurement.allocations)) throw new Error(`${label}.allocations is not an array`)
+    for (const [index, allocation] of measurement.allocations.entries()) {
+      validateNativeAllocation(allocation, `${label}.allocations[${index}]`)
+    }
+  }
+  if (measurement.subagent_collection !== undefined) {
+    assertKnownKeys(measurement.subagent_collection, ['completeness', 'reason'], `${label}.subagent_collection`)
+    if (!['complete', 'partial'].includes(measurement.subagent_collection.completeness)) {
+      throw new Error(`${label}.subagent_collection has invalid completeness`)
+    }
   }
   validateAttribution(measurement.attribution, `${label}.attribution`)
   validateIdentity(measurement.requested_identity, `${label}.requested_identity`)
@@ -599,13 +638,43 @@ function nativeUsage(tokens, limitations, sourceFormat) {
   }, sourceFormat)
 }
 
+// Schema-2 Claude attempts divide their usage into disjoint per-thread
+// allocations, each naming the observed model it ran on. One invocation runs
+// on one provider, so a thread whose provider was not observed takes the
+// attempt's. Every allocation must name a model for the attempt to be priced
+// by allocation; otherwise its usage stays unallocated.
+function nativeThreadAllocations(raw, profile, usage) {
+  const threads = raw.allocations ?? []
+  if (threads.length === 0 || raw.unallocated_usage !== null) return null
+  const identities = threads.map((thread) => (
+    profile.observed.find((entry) => entry.identity_id === thread.observed_identity_ref) ?? null
+  ))
+  if (identities.some((identity) => !identity?.model)) return null
+  const collectionComplete = usage.state === PRESENT
+  return threads.map((thread, index) => ({
+    allocation_id: thread.allocation_id,
+    observed_identity_ref: thread.observed_identity_ref,
+    kind: thread.kind ?? null,
+    agent_type: thread.agent_type ?? null,
+    provider: identities[index].provider ?? profile.resolved?.provider ?? profile.provider,
+    model: identities[index].model,
+    effort: identities[index].effort ?? profile.effort,
+    usage: allocationUsage(
+      thread.tokens,
+      raw.source_format,
+      collectionComplete && thread.availability === 'available',
+    ),
+  }))
+}
+
 function normalizeNativeMeasurement(raw, step) {
   const profile = normalizedIdentity(raw)
   const costs = raw.provider_reported_costs ?? []
   const reported = completeReportedAttemptCost(costs)
   const usage = nativeUsage(raw.tokens, raw.limitations ?? [], raw.source_format)
-  const attributable = profile.observed.length === 1 && raw.unallocated_usage === null
-  const allocations = attributable
+  const threads = nativeThreadAllocations(raw, profile, usage)
+  const attributable = !raw.allocations?.length && profile.observed.length === 1 && raw.unallocated_usage === null
+  const allocations = threads ?? (attributable
     ? [{
         allocation_id: 'native-observed',
         observed_identity_ref: profile.observed[0].identity_id,
@@ -620,7 +689,7 @@ function normalizeNativeMeasurement(raw, step) {
           ...pickBillingFields(usage),
         },
       }]
-    : []
+    : [])
   return {
     attempt_id: raw.key,
     producer_attempt_id: raw.key,
@@ -641,7 +710,12 @@ function normalizeNativeMeasurement(raw, step) {
     invoked_cli: true,
     cli: profile.cli,
     provider: profile.provider,
-    model: profile.observed.length > 1 ? null : profile.model,
+    // A Claude attempt's subagents can run on other models. The attempt is the
+    // main thread's, which is what its role configured; its allocations carry
+    // the per-model split.
+    model: threads
+      ? (threads.find((thread) => thread.kind === 'main')?.model ?? null)
+      : (profile.observed.length > 1 ? null : profile.model),
     effort: profile.effort,
     requested_cli: profile.requested_cli,
     requested_model: profile.requested_model,
@@ -650,7 +724,8 @@ function normalizeNativeMeasurement(raw, step) {
       requested: profile.requested,
       resolved: profile.resolved,
       observed: profile.observed,
-      per_model_attribution: allocations.length === 1 ? 'complete' : 'unavailable',
+      per_model_attribution: allocations.length > 0 ? 'complete' : 'unavailable',
+      subagent_collection: raw.subagent_collection ?? null,
     },
     allocations,
     unallocated_usage: allocations.length === 0
