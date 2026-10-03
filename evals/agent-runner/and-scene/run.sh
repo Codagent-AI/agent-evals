@@ -12,7 +12,7 @@ REPO="${REPO:-https://github.com/Codagent-AI/and-scene.git}"
 # are reproducible. This is the reviewed planning-only fixture merged into
 # eval/create-and-scene-spec-only on 2026-08-28; bump it deliberately when the
 # fixture snapshot changes.
-FIXTURE_REF="${FIXTURE_REF:-2262a9f118887593654dc8fa1bed2a565a11301c}"
+FIXTURE_REF="${FIXTURE_REF:-2c34b94de0a29b21e633396ffd6b3609e1ab7efc}"
 # Pin the known-good reference used for calibration and judge tiebreaks.
 REFERENCE_REF="${REFERENCE_REF:-171c7def1e12aca2a5f605a5e5feafb20d4e4d19}"
 if [[ -n "${CHANGE_NAME+x}" ]]; then
@@ -92,7 +92,7 @@ Options:
                           run:   artifacts/evals/and-scene/<timestamp>
   --repo URL             and-scene repository URL.
   --fixture-ref REF      Implementation-ready fixture ref.
-                          Default: 2262a9f118887593654dc8fa1bed2a565a11301c
+                          Default: 2c34b94de0a29b21e633396ffd6b3609e1ab7efc
   --reference-ref REF    Implemented/reference ref.
                           Default: 171c7def1e12aca2a5f605a5e5feafb20d4e4d19
   --candidate-ref REF    Grade an existing candidate ref.
