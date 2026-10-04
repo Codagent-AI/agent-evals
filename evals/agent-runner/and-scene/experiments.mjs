@@ -3,7 +3,7 @@ import { mkdir, unlink } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { readJson, writeJsonAtomic } from './lib/persistence.mjs'
-import { emptyRecord, validateRecord, extractRepetition, applySet, applyAddRep, applyAnchor, formatShow } from './lib/experiment-baseline.mjs'
+import { SOURCES, emptyRecord, validateRecord, extractRepetition, applySet, applyAddRep, applyAnchor, formatShow } from './lib/experiment-baseline.mjs'
 
 const defaultRecord = fileURLToPath(new URL('./experiments/baseline.json', import.meta.url))
 const usage = `Usage: experiments.mjs baseline <command> [options]
@@ -38,7 +38,7 @@ export function parseArgs(argv) {
   options.record = resolve(options.record)
   if (command === 'set') {
     if (!options.directories.length) throw Error('set requires at least one result directory')
-    if (!['accepted-candidate', 'profile-change', 'manual'].includes(options.source)) throw Error('set requires a valid --source')
+    if (!SOURCES.includes(options.source)) throw Error('set requires a valid --source')
     if (!options.reason?.trim()) throw Error('set requires --reason')
     if (options.fromCurrent) throw Error('--from-current is only valid for anchor')
   } else if (command === 'add-rep') {

@@ -1,6 +1,6 @@
 export const RECORD_SCHEMA_VERSION = 1
 export const SUPPORTED_RESULT_SCHEMA_VERSIONS = [8]
-const SOURCES = ['accepted-candidate', 'profile-change', 'manual']
+export const SOURCES = ['accepted-candidate', 'profile-change', 'manual']
 const WORKFLOW_FIELDS = ['workflow', 'workflow_path', 'task_level_compliance', 'final_validator', 'skip_validator']
 const PROFILE_FIELDS = ['cli', 'model', 'effort', 'agent']
 const RUBRIC_FIELDS = ['rubric_id', 'version', 'sha256']
