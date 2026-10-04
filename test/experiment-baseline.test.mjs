@@ -78,9 +78,10 @@ test('admission, identity, lineage and human review', () => {
   const initial = set(baseline.emptyRecord(), [original]).record
   assert.equal(initial.current.median_rep, 'rep-1')
   assert.equal(initial.current.human_review.official_score, 70)
-  for (const patch of [{ schema_version: 7 }, { run_kind: 'reference' }, { failure: { reason: 'quota' } }, { automated_subtotal: { complete: false } }, { workflow: { provenance: { commit: null } } }]) {
+  for (const patch of [{ schema_version: 7 }, { run_id: null }, { run_kind: 'reference' }, { failure: { reason: 'quota' } }, { automated_subtotal: { complete: false } }, { workflow: { provenance: { commit: null } } }]) {
     assert.ok(extracted(patch).refusals.length)
   }
+  refusal(set(baseline.emptyRecord(), [extracted({ run_id: null })]), 'missing-run-id')
   const different = extracted({ run_id: 'rep-2', role_configuration: { roles: { implementor: { configured: { model: 'model-b' } } } } })
   refusal(add(initial, different), 'identity-mismatch')
   const waived = add(initial, different, { allowMismatch: 'alias' }).record

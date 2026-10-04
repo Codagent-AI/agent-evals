@@ -58,6 +58,7 @@ export function validateRecord(raw) {
 export function extractRepetition(result, { directory = null, addedAt, addedBy } = {}) {
   const errors = []
   const context = { directory, run_id: value(result?.run_id) }
+  if (typeof context.run_id !== 'string' || !context.run_id) errors.push(refusal(context, 'missing-run-id', 'Run id is missing'))
   if (!SUPPORTED_RESULT_SCHEMA_VERSIONS.includes(result?.schema_version)) errors.push(refusal(context, 'unsupported-schema', `Unsupported result schema version ${JSON.stringify(result?.schema_version)}; supported: 8`))
   if (result?.run_kind !== 'candidate' || result?.mode !== 'agent-runner') errors.push(refusal(context, 'not-candidate', 'Not an Agent Runner candidate run'))
   const roles = Object.fromEntries(Object.entries(result?.role_configuration?.roles ?? {}).map(([name, role]) => [name, {
