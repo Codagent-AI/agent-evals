@@ -282,17 +282,21 @@ function sleepSource(ms) {
 }
 
 // A swipe travels this far across the presentation, in this many intermediate
-// moves, with at least one frame between consecutive touch events.
+// moves, with the page rendering at least one frame between consecutive touch
+// events. A page that renders no frame within the timeout cannot be swiped the
+// way a finger does, which is a limitation of the harness, not the candidate.
 const SWIPE_DISTANCE = 200
 const SWIPE_MOVES = 4
-const SWIPE_FRAME_MS = 20
+const SWIPE_FRAME_TIMEOUT_MS = 2000
 
 // One touch event of a single-finger horizontal swipe, as a page callback.
 // The finger lands on whatever element is under it at the vertical middle of
 // the stage (or the presentation when it has no stage), just as a real touch
 // targets the element it lands on, and every later event of the gesture keeps
-// that target. Every value is embedded at its use site: the callback must not
-// read the driving script's scope.
+// that target. Every event but the last asks the page for its next animation
+// frame, which the driving script waits on before the next event. Every value
+// is embedded at its use site: the callback must not read the driving script's
+// scope.
 function swipeEventSource(type, sign, progress) {
   const begin = type === 'touchstart'
   const end = type === 'touchend'
@@ -326,7 +330,25 @@ function swipeEventSource(type, sign, progress) {
     cancelable: true,
     composed: true,
   }));
+  ${end ? '' : `const frame = { rendered: false };
+  window.__andSceneSwipe.frame = frame;
+  requestAnimationFrame(() => { frame.rendered = true; });`}
   return true;
+}`
+}
+
+// Waits, from the driving script, until the page has rendered the frame the
+// last touch event asked for. Polling a synchronous evaluation keeps the
+// driver independent of whether an adapter build awaits a page promise.
+function swipeFrameWaitSource() {
+  return `{
+  const deadline = Date.now() + ${SWIPE_FRAME_TIMEOUT_MS};
+  while (!(await page.eval(() => Boolean(window.__andSceneSwipe?.frame?.rendered)))) {
+    if (Date.now() >= deadline) {
+      throw new Error('the page rendered no animation frame between swipe touch events');
+    }
+    ${sleepSource(5)}
+  }
 }`
 }
 
@@ -917,7 +939,7 @@ console.log(JSON.stringify(true));
       ]
       const dispatched = await run(`
 let dispatched = true;
-${phases.map((phase) => `dispatched = (await page.eval(${phase})) && dispatched;`).join(`\n${sleepSource(SWIPE_FRAME_MS)}\n`)}
+${phases.map((phase) => `dispatched = (await page.eval(${phase})) && dispatched;`).join(`\n${swipeFrameWaitSource()}\n`)}
 ${sleepSource(100)}
 console.log(JSON.stringify(dispatched));
 `)

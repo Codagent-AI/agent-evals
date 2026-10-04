@@ -521,9 +521,10 @@ test('the AXI driver activates a control the way a pointer does', async () => {
   assert.match(source, /target\.focus\(\);\s*\n?\s*target\.click\(\);/)
 })
 
-// The page evaluations of one swipe, in order, from the script it emits.
+// The touch-event evaluations of one swipe, in order, from the script it emits,
+// each with the frame wait that follows it.
 function evaluations(source) {
-  return source.split('await page.eval(').slice(1)
+  return source.split('dispatched = (await page.eval(').slice(1)
 }
 
 test('the AXI driver delivers a swipe the way a finger does, one touch event per task', async () => {
@@ -536,8 +537,13 @@ test('the AXI driver delivers a swipe the way a finger does, one touch event per
 
   assert.deepEqual(types, ['touchstart', 'touchmove', 'touchmove', 'touchmove', 'touchmove', 'touchend'])
   for (const phase of phases.slice(0, -1)) {
-    assert.match(phase, /\}\)\) && dispatched;\s*await new Promise\(\(resolve\) => setTimeout\(resolve, 20\)\);/)
+    // Each event asks for the page's next frame, and the next event waits on it.
+    assert.match(phase, /requestAnimationFrame\(\(\) => \{ frame\.rendered = true; \}\);\s*return true;/)
   }
+  const waits = source.match(/while \(!\(await page\.eval\(\(\) => Boolean\(window\.__andSceneSwipe\?\.frame\?\.rendered\)\)\)\)/g)
+  assert.equal(waits.length, phases.length - 1)
+  assert.match(source, /throw new Error\('the page rendered no animation frame between swipe touch events'\)/)
+  assert.doesNotMatch(phases.at(-1), /requestAnimationFrame|while \(!/)
   assert.match(phases.at(-1), /touches: \[\],\s*targetTouches: \[\],\s*changedTouches: \[touch\]/)
 })
 
