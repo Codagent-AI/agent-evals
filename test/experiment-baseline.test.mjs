@@ -262,6 +262,26 @@ test('set reports every bad directory and preserves the first readable identity'
   await assert.rejects(readFile(record))
 })
 
+test('malformed result shapes produce JSON refusals for every directory', async () => {
+  const root = await temp(), record = join(root, 'record.json')
+  const paths = []
+  for (const [name, corrupt] of [
+    ['events', result => { result.workflow.events = {} }],
+    ['gates', result => { result.score.gates = {} }],
+    ['rows', result => { result.cost.rows = {} }],
+  ]) {
+    const result = makeResult({ run_id: name })
+    corrupt(result)
+    paths.push(await resultDir(root, result))
+  }
+  const outcome = spawnSync(process.execPath, [join(suite, 'experiments.mjs'), 'baseline', 'set', ...paths, '--source', 'manual', '--reason', 'test', '--record', record], { encoding: 'utf8' })
+  assert.equal(outcome.status, 1)
+  const refusals = outcome.stderr.trim().split('\n').map(line => JSON.parse(line))
+  assert.deepEqual(refusals.map(x => x.code), ['invalid-result', 'invalid-result', 'invalid-result'])
+  assert.deepEqual(refusals.map(x => x.directory), paths)
+  await assert.rejects(stat(record))
+})
+
 test('parseArgs and invalid records reject before mutation', async () => {
   for (const args of [
     ['baseline', 'promote'], ['baseline', 'set', 'dir', '--source', 'experiment', '--reason', 'x'],

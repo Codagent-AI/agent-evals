@@ -79,7 +79,9 @@ export async function runExperimentsCommand({ argv, now = () => new Date(), stdo
         items.push({ entry: null, directory, refusals: [{ directory, run_id: null, code, message: `${directory}/result.json: ${cause.message}` }] })
         continue
       }
-      items.push(extractRepetition(result, { directory, addedAt: now().toISOString(), addedBy: args.command }))
+      const addedAt = now().toISOString()
+      try { items.push(extractRepetition(result, { directory, addedAt, addedBy: args.command })) }
+      catch (cause) { items.push({ entry: null, directory, refusals: [{ directory, run_id: null, code: 'invalid-result', message: `${directory}/result.json: ${cause.message}` }] }) }
     }
   }
   let applied
