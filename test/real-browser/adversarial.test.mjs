@@ -115,3 +115,23 @@ test('(l) a footer step-marker paragraph does not stand in for a missing step ti
   assert.equal(criterion(result, 'demo-nine-step-content-and-order').verdict, 'fail')
   assert.equal(result.gates.find((gate) => gate.id === 'verification-sample-outline').verdict, 'fail')
 })
+
+const NAVIGATION = 'demo-supported-navigation'
+
+test('(m) a deck that commits its touch start only after a frame still swipes', { timeout: 600_000 }, async () => {
+  const navigation = criterion(await evaluate('m'), NAVIGATION)
+  assert.equal(navigation.verdict, 'pass', navigation.rationale)
+  assert.match(navigation.rationale, /swipe 1\/0/)
+})
+
+test('(n) a deck with no swipe support still fails swipe navigation', { timeout: 600_000 }, async () => {
+  const navigation = criterion(await evaluate('n'), NAVIGATION)
+  assert.equal(navigation.verdict, 'fail', navigation.rationale)
+  assert.match(navigation.rationale, /keyboard 1\/0, swipe 0\/0, direct jump 4/)
+})
+
+test('(o) a deck that listens for touches on its stage swipes when the finger lands on the stage', { timeout: 600_000 }, async () => {
+  const navigation = criterion(await evaluate('o'), NAVIGATION)
+  assert.equal(navigation.verdict, 'pass', navigation.rationale)
+  assert.match(navigation.rationale, /swipe 1\/0/)
+})

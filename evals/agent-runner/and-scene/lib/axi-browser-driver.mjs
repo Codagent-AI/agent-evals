@@ -281,6 +281,87 @@ function sleepSource(ms) {
   return `await new Promise((resolve) => setTimeout(resolve, ${ms}));`
 }
 
+// A swipe travels this far across the presentation, in this many intermediate
+// moves, with the page rendering at least one frame between consecutive touch
+// events. A page that renders no frame within the timeout cannot be swiped the
+// way a finger does, which is a limitation of the harness, not the candidate.
+const SWIPE_DISTANCE = 200
+const SWIPE_MOVES = 4
+const SWIPE_FRAME_TIMEOUT_MS = 2000
+
+// One touch event of a single-finger horizontal swipe, as a page callback.
+// The finger lands on whatever element is under it at the vertical middle of
+// the stage (or the presentation when it has no stage), just as a real touch
+// targets the element it lands on, and every later event of the gesture keeps
+// that target. Every event but the last asks the page for its next animation
+// frame, which the driving script waits on before the next event. Every value
+// is embedded at its use site: the callback must not read the driving script's
+// scope.
+function swipeEventSource(type, sign, progress) {
+  const begin = type === 'touchstart'
+  const end = type === 'touchend'
+  return `() => {
+  ${begin ? `const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)}) || document.body;
+  const surface = presentation.querySelector(${JSON.stringify(STAGE_SELECTOR)}) || presentation;
+  const rect = surface.getBoundingClientRect();
+  // The finger lands inside the visible part of the surface even when the
+  // surface is narrower than the swipe; the swipe then travels past its edge.
+  const clamp = (value, low, high) => {
+    const min = Math.max(low, 1);
+    const max = Math.max(high - 1, min);
+    return Math.min(Math.max(value, min), max);
+  };
+  const y = clamp(rect.top + rect.height / 2, rect.top, Math.min(rect.bottom, window.innerHeight));
+  const startX = clamp(
+    rect.left + rect.width / 2 - ${sign} * ${SWIPE_DISTANCE / 2},
+    rect.left,
+    Math.min(rect.right, window.innerWidth),
+  );
+  const hit = document.elementFromPoint(startX, y);
+  const target = hit && presentation.contains(hit) ? hit : presentation;
+  window.__andSceneSwipe = { target, startX, y };` : `const swipe = window.__andSceneSwipe;
+  if (!swipe) return false;
+  const { target, startX, y } = swipe;`}
+  const touch = new Touch({
+    identifier: 1,
+    target,
+    clientX: startX + ${sign * SWIPE_DISTANCE * progress},
+    clientY: y,
+    radiusX: 10,
+    radiusY: 10,
+    force: 1,
+  });
+  ${end ? 'delete window.__andSceneSwipe;' : ''}
+  target.dispatchEvent(new TouchEvent(${JSON.stringify(type)}, {
+    touches: ${end ? '[]' : '[touch]'},
+    targetTouches: ${end ? '[]' : '[touch]'},
+    changedTouches: [touch],
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+  }));
+  ${end ? '' : `const frame = { rendered: false };
+  window.__andSceneSwipe.frame = frame;
+  requestAnimationFrame(() => { frame.rendered = true; });`}
+  return true;
+}`
+}
+
+// Waits, from the driving script, until the page has rendered the frame the
+// last touch event asked for. Polling a synchronous evaluation keeps the
+// driver independent of whether an adapter build awaits a page promise.
+function swipeFrameWaitSource() {
+  return `{
+  const deadline = Date.now() + ${SWIPE_FRAME_TIMEOUT_MS};
+  while (!(await page.eval(() => Boolean(window.__andSceneSwipe?.frame?.rendered)))) {
+    if (Date.now() >= deadline) {
+      throw new Error('the page rendered no animation frame between swipe touch events');
+    }
+    ${sleepSource(5)}
+  }
+}`
+}
+
 function waitForSelectorSource(selector, timeout) {
   const probe = JSON.stringify(`!!document.querySelector(${JSON.stringify(selector)})`)
   return `{
@@ -850,25 +931,29 @@ console.log(JSON.stringify(true));
 `)
     },
 
+    // A finger's swipe spans many frames, so a page sees its touchstart, then
+    // its touchmoves, then its touchend, each in its own task. A presentation
+    // that records the touch start in state committed after a render, as
+    // React's setState does, only sees it when the probe yields between them.
     async swipe(direction) {
-      const left = direction === 'left'
-      await run(`
-const dispatched = await page.eval(() => {
-  const target = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)}) || document.body;
-  const startX = ${left ? 200 : 20};
-  const endX = ${left ? 20 : 200};
-  const touch = (x) => new Touch({ identifier: 1, target, clientX: x, clientY: 100 });
-  target.dispatchEvent(new TouchEvent('touchstart', {
-    touches: [touch(startX)],
-    changedTouches: [touch(startX)],
-    bubbles: true,
-  }));
-  target.dispatchEvent(new TouchEvent('touchend', { changedTouches: [touch(endX)], bubbles: true }));
-  return true;
-});
+      if (!['left', 'right'].includes(direction)) {
+        throw new BrowserDriverError(`unsupported swipe direction: ${direction}`)
+      }
+      const sign = direction === 'left' ? -1 : 1
+      const phases = [
+        swipeEventSource('touchstart', sign, 0),
+        ...Array.from({ length: SWIPE_MOVES }, (_, move) => (
+          swipeEventSource('touchmove', sign, (move + 1) / (SWIPE_MOVES + 1))
+        )),
+        swipeEventSource('touchend', sign, 1),
+      ]
+      const dispatched = await run(`
+let dispatched = true;
+${phases.map((phase) => `dispatched = (await page.eval(${phase})) && dispatched;`).join(`\n${swipeFrameWaitSource()}\n`)}
 ${sleepSource(100)}
 console.log(JSON.stringify(dispatched));
 `)
+      return dispatched === true
     },
 
     // A presentation owns its own mode affordance. Reach for the key only when

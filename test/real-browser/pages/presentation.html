@@ -25,7 +25,7 @@
   </nav>
 </div>
 <script>
-// One page, twelve behaviours. The server injects VARIANT and STEPS; nothing here
+// One page, fifteen behaviours. The server injects VARIANT and STEPS; nothing here
 // is a candidate. Each variant isolates one judgment the evaluator must make.
 const variant = window.VARIANT
 const steps = window.STEPS
@@ -186,14 +186,26 @@ if (variant === 'e') {
 for (const [id, delta] of [['prev', -1], ['next', 1]]) {
   document.getElementById(id).addEventListener('click', () => { keysDead ||= variant === 'b'; go(index + delta) })
 }
+// (m) keeps the touch start in state that is only committed after the next
+// frame, as React's setState is: a touchend delivered in the same task as its
+// touchstart still sees no start. A real finger's swipe spans many frames.
+// (n) has no swipe support at all. (o) listens for touches on its stage only,
+// as a real candidate did, so only a touch landing on the stage reaches it.
 let touchStart = null
-root.addEventListener('touchstart', (event) => { touchStart = event.touches[0].clientX })
-root.addEventListener('touchend', (event) => {
-  if (touchStart === null) return
-  const delta = event.changedTouches[0].clientX - touchStart
-  if (Math.abs(delta) > 40) go(index + (delta < 0 ? 1 : -1))
-  touchStart = null
-})
+const touchTarget = variant === 'o' ? document.getElementById('stage') : root
+if (variant !== 'n') {
+  touchTarget.addEventListener('touchstart', (event) => {
+    const x = event.touches[0].clientX
+    if (variant === 'm') requestAnimationFrame(() => { touchStart = x })
+    else touchStart = x
+  })
+  touchTarget.addEventListener('touchend', (event) => {
+    if (touchStart === null) return
+    const delta = event.changedTouches[0].clientX - touchStart
+    if (Math.abs(delta) > 40) go(index + (delta < 0 ? 1 : -1))
+    touchStart = null
+  })
+}
 render()
 </script>
 </body>

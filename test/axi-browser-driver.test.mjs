@@ -194,7 +194,7 @@ test('the AXI driver observes compatible stable presentation hooks without requi
   assert.match(calls[1].input, /target\.dispatchEvent/)
   assert.match(
     calls[1].input,
-    /TouchEvent\('touchstart',[\s\S]*touches: \[touch\(startX\)\],[\s\S]*changedTouches: \[touch\(startX\)\]/,
+    /TouchEvent\("touchstart", \{\s*touches: \[touch\],\s*targetTouches: \[touch\],\s*changedTouches: \[touch\]/,
   )
   assert.match(calls[1].input, /setTimeout\(resolve, 100\)/)
   assert.match(calls[2].input, /setTimeout\(resolve, 100\)/)
@@ -519,6 +519,63 @@ test('the AXI driver activates a control the way a pointer does', async () => {
   const source = await emitted((driver) => driver.activate('Next step'))
 
   assert.match(source, /target\.focus\(\);\s*\n?\s*target\.click\(\);/)
+})
+
+// The touch-event evaluations of one swipe, in order, from the script it emits,
+// each with the frame wait that follows it.
+function evaluations(source) {
+  return source.split('dispatched = (await page.eval(').slice(1)
+}
+
+test('the AXI driver delivers a swipe the way a finger does, one touch event per task', async () => {
+  // A presentation that keeps its touch start in state committed after a
+  // render, as React's setState does, ignores a touchend delivered in the
+  // same task as its touchstart. A finger's swipe spans many frames.
+  const source = await emitted((driver) => driver.swipe('left'))
+  const phases = evaluations(source)
+  const types = phases.map((phase) => phase.match(/new TouchEvent\("(touch\w+)"/)?.[1])
+
+  assert.deepEqual(types, ['touchstart', 'touchmove', 'touchmove', 'touchmove', 'touchmove', 'touchend'])
+  for (const phase of phases.slice(0, -1)) {
+    // Each event asks for the page's next frame, and the next event waits on it.
+    assert.match(phase, /requestAnimationFrame\(\(\) => \{ frame\.rendered = true; \}\);\s*return true;/)
+  }
+  const waits = source.match(/while \(!\(await page\.eval\(\(\) => Boolean\(window\.__andSceneSwipe\?\.frame\?\.rendered\)\)\)\)/g)
+  assert.equal(waits.length, phases.length - 1)
+  assert.match(source, /throw new Error\('the page rendered no animation frame between swipe touch events'\)/)
+  assert.doesNotMatch(phases.at(-1), /requestAnimationFrame|while \(!/)
+  assert.match(phases.at(-1), /touches: \[\],\s*targetTouches: \[\],\s*changedTouches: \[touch\]/)
+})
+
+test('the AXI driver lands a swipe on the element under the finger and keeps that target', async () => {
+  const [start, ...rest] = evaluations(await emitted((driver) => driver.swipe('left')))
+
+  assert.match(start, /data-presentation-stage/)
+  assert.match(start, /getBoundingClientRect\(\)/)
+  // A surface narrower than the swipe still receives the finger.
+  assert.match(start, /rect\.left,\s*Math\.min\(rect\.right, window\.innerWidth\),/)
+  assert.match(start, /document\.elementFromPoint\(startX, y\)/)
+  assert.match(start, /presentation\.contains\(hit\) \? hit : presentation/)
+  for (const phase of rest) {
+    assert.match(phase, /const \{ target, startX, y \} = swipe;/)
+    assert.doesNotMatch(phase, /elementFromPoint/)
+  }
+})
+
+test('the AXI driver moves a swipe horizontally in its direction and nowhere else', async () => {
+  const offsets = (source) => evaluations(source)
+    .map((phase) => Number(phase.match(/clientX: startX \+ (-?[\d.]+)/)[1]))
+  const left = offsets(await emitted((driver) => driver.swipe('left')))
+  const right = offsets(await emitted((driver) => driver.swipe('right')))
+
+  assert.deepEqual(left, [0, -40, -80, -120, -160, -200])
+  assert.deepEqual(right, [0, 40, 80, 120, 160, 200])
+  const source = await emitted((driver) => driver.swipe('left'))
+  assert.equal(source.match(/clientY: y,/g).length, 6)
+  await assert.rejects(
+    emitted((driver) => driver.swipe('up')),
+    (error) => error.code === 'browser-driver-failed',
+  )
 })
 
 test('the AXI driver waits without the adapter-specific wait helper', async () => {
