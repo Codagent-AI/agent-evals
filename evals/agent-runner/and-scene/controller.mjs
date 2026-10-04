@@ -58,6 +58,7 @@ import {
   writeResultArtifacts,
 } from './lib/result.mjs'
 import { createCodexJudgeInvoker } from './lib/judge-invoker.mjs'
+import { hideValidatorFromAgents } from './lib/validator-availability.mjs'
 import { runProductJudging } from './lib/judge-jobs.mjs'
 import {
   buildCandidateEvidenceManifest,
@@ -770,6 +771,19 @@ export async function runEvaluation({
     cwd: candidateWorktree,
     env: { ...process.env, HOME: home, AGENT_RUNNER_NO_TUI: '1' },
   }
+  // With every workflow-owned validator step skipped, Runner needs no
+  // validator and its agents must not reach one on their own.
+  let validatorUnavailable = null
+  if (mode === 'agent-runner' && !rescore && boundary.skip_validator === 'true') {
+    let hidden
+    try {
+      hidden = await hideValidatorFromAgents({ runDir, env: runnerSpawnOptions.env })
+    } catch (error) {
+      return failure([{ code: 'validator-unavailable', message: error.message }])
+    }
+    runnerSpawnOptions.env = hidden.env
+    validatorUnavailable = hidden.event
+  }
 
   async function persistRunnerState(state) {
     record.run = { run_id: state.run_id, session_dir: state.session_dir ?? null }
@@ -817,6 +831,8 @@ export async function runEvaluation({
         })
         return
       }
+
+      if (validatorUnavailable) record.events.push(validatorUnavailable)
 
       async function waitAfterClaudeQuota(timing, runId) {
         const failedState = await readState(runId ?? null)
