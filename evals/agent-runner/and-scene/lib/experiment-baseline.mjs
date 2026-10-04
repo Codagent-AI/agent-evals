@@ -159,7 +159,7 @@ export function applySet(record, items, { source, reason, allowMismatch, now }) 
   const errors = items.flatMap(item => item?.refusals ?? [])
   if (entries.length) {
     const identity = identityOf(entries[0])
-    for (const entry of entries.slice(1)) errors.push(...identityRefusals(identity, entry, allowMismatch, admissible[entries.indexOf(entry)]?.directory))
+    for (let i = 1; i < entries.length; i++) errors.push(...identityRefusals(identity, entries[i], allowMismatch, admissible[i]?.directory))
     for (let i = 0; i < entries.length; i++) for (let j = 0; j < i; j++) if (overlapping(entries[i], entries[j])) errors.push(duplicate({ ...entries[i], directory: admissible[i]?.directory }, entries[j]))
   }
   if (errors.length) return { refusals: errors }
