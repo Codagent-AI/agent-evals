@@ -60,13 +60,17 @@ export async function runExperimentsCommand({ argv, now = () => new Date(), stdo
   if (args.help) { stdout(usage); return { exitCode: 0, errors } }
   let record
   try { { const raw = await readJson(args.record, undefined); record = validateRecord(raw === undefined ? emptyRecord() : raw) } } catch (cause) { return error('invalid-record', cause.message, 2) }
-  if (args.command === 'show') { stdout(formatShow(record)); return { exitCode: 0, errors } }
+  if (args.command === 'show') {
+    try { stdout(formatShow(record)) } catch (cause) { return error('invalid-record', cause.message, 2) }
+    return { exitCode: 0, errors }
+  }
   const items = []
   if (args.command === 'set' || args.command === 'add-rep') {
     for (const directory of args.directories) {
       let result
       try { result = await readJson(join(directory, 'result.json')) }
       catch (cause) {
+        if (!(cause instanceof SyntaxError) && cause.code !== 'ENOENT') return error('io-error', `${directory}/result.json: ${cause.message}`, 2)
         const code = cause instanceof SyntaxError ? 'invalid-result' : 'missing-result'
         items.push({ entry: null, refusals: [{ directory, run_id: null, code, message: `${directory}/result.json: ${cause.message}` }] })
         continue
@@ -79,7 +83,7 @@ export async function runExperimentsCommand({ argv, now = () => new Date(), stdo
     if (args.command === 'set') applied = applySet(record, items, { source: args.source, reason: args.reason, allowMismatch: args.allowMismatch, now: now() })
     if (args.command === 'add-rep') applied = applyAddRep(record, items[0], { allowMismatch: args.allowMismatch, now: now() })
     if (args.command === 'anchor') applied = applyAnchor(record, { reason: args.reason, now: now() })
-  } catch (cause) { return error('io-error', cause.message, 2) }
+  } catch (cause) { return error('internal-error', cause.stack ?? cause.message, 2) }
   if (applied.refusals) {
     for (const item of applied.refusals) { errors.push(item); process.stderr.write(`${JSON.stringify(item)}\n`) }
     return { exitCode: 1, errors }

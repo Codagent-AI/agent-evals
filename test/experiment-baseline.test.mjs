@@ -151,6 +151,7 @@ test('command persistence is atomic and show is read-only', async () => {
       assert.equal(await readFile(record, 'utf8'), invalid)
     }
   }
+  assert.deepEqual(await readFile(defaultPath).catch(() => null), defaultBefore)
 })
 
 test('published results map without changing their bytes', async () => {
@@ -283,4 +284,38 @@ test('show without a record and anchor replacement', () => {
   assert.equal(replacement.history[0].record.anchor_reason, 'first')
   assert.equal(replacement.history[0].replacement_reason, 'second')
   assert.equal(frozen.anchor.anchor_reason, 'first')
+})
+
+
+test('show reports malformed stored metrics as invalid record', async () => {
+  const root = await temp(), record = join(root, 'record.json')
+  const valid = set(baseline.emptyRecord(), [extracted()]).record
+  for (const current of [
+    { ...valid.current, summary: { ...valid.current.summary, active_duration_ms: undefined } },
+    { ...valid.current, reps: [{ ...valid.current.reps[0], cost: undefined }] },
+  ]) {
+    const bytes = JSON.stringify({ ...valid, current })
+    await writeFile(record, bytes)
+    const outcome = await runExperimentsCommand({ argv: ['baseline', 'show', '--record', record] })
+    assert.equal(outcome.exitCode, 2)
+    assert.equal(outcome.errors[0].code, 'invalid-record')
+    assert.equal(await readFile(record, 'utf8'), bytes)
+  }
+})
+
+test('unexpected result read and apply errors keep exit code 2 with distinct codes', async () => {
+  const root = await temp(), record = join(root, 'record.json')
+  const directory = join(root, 'directory-result')
+  await mkdir(join(directory, 'result.json'), { recursive: true })
+  const readOutcome = await runExperimentsCommand({ argv: ['baseline', 'set', directory, '--source', 'manual', '--reason', 'test', '--record', record] })
+  assert.equal(readOutcome.exitCode, 2)
+  assert.equal(readOutcome.errors[0].code, 'io-error')
+  const current = set(baseline.emptyRecord(), [extracted()]).record.current
+  delete current.reps[0].tokens
+  await writeFile(record, JSON.stringify({ schema_version: 1, current, anchor: null, history: [] }))
+  const newDirectory = await resultDir(root, makeResult({ run_id: 'rep-2' }))
+  const applyOutcome = await runExperimentsCommand({ argv: ['baseline', 'add-rep', newDirectory, '--record', record] })
+  assert.equal(applyOutcome.exitCode, 2)
+  assert.equal(applyOutcome.errors[0].code, 'internal-error')
+  assert.match(applyOutcome.errors[0].message, /experiment-baseline/)
 })
