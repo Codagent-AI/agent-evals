@@ -15,8 +15,11 @@ const usage = `Usage: experiments.mjs baseline <command> [options]
   baseline --help
 `
 
+const VALUE_OPTIONS = ['--record', '--source', '--reason', '--allow-mismatch']
+
 export function parseArgs(argv) {
-  if (argv.includes('--help')) return { help: true }
+  // --help is a flag; a --help that follows a value option is that option's (missing) value.
+  if (argv.some((arg, i) => arg === '--help' && !VALUE_OPTIONS.includes(argv[i - 1]))) return { help: true }
   if (argv[0] !== 'baseline') throw Error('Expected baseline command')
   const command = argv[1]
   if (!['set', 'add-rep', 'anchor', 'show'].includes(command)) throw Error(`Unknown baseline command: ${command ?? '(missing)'}`)
@@ -24,7 +27,7 @@ export function parseArgs(argv) {
   const seen = new Set()
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i]
-    if (['--record', '--source', '--reason', '--allow-mismatch'].includes(arg)) {
+    if (VALUE_OPTIONS.includes(arg)) {
       if (seen.has(arg)) throw Error(`Duplicate option: ${arg}`)
       seen.add(arg)
       const next = argv[++i]

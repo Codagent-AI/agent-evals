@@ -353,3 +353,15 @@ test('the CLI runs through a symlinked entry point and top-level --help succeeds
   assert.equal(help.status, 0)
   assert.match(help.stdout, /Usage:/)
 })
+
+test('--help is a flag only, never an option value', async () => {
+  assert.deepEqual(parseArgs(['--help']), { help: true })
+  assert.deepEqual(parseArgs(['baseline', 'show', '--help']), { help: true })
+  assert.throws(() => parseArgs(['baseline', 'set', 'dir', '--source', 'manual', '--reason', '--help']), /Missing value for --reason/)
+  assert.throws(() => parseArgs(['baseline', 'add-rep', 'dir', '--allow-mismatch', '--help']), /Missing value for --allow-mismatch/)
+  const root = await temp(), record = join(root, 'record.json')
+  const result = spawnSync(process.execPath, [join(suite, 'experiments.mjs'), 'baseline', 'set', root, '--source', 'manual', '--reason', '--help', '--record', record], { encoding: 'utf8' })
+  assert.equal(result.status, 2)
+  assert.match(result.stderr, /invalid-arguments.*Missing value for --reason/)
+  await assert.rejects(stat(record))
+})
