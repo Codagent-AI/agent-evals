@@ -125,7 +125,7 @@ The canonical-content checks SHALL verify the registered demo route, the nine re
 
 The evolving-scene check SHALL derive a scene identity only from a candidate-declared scene identity. When no scene identity is declared, the evaluator SHALL record it as undeclared and SHALL judge the criterion on entity persistence alone, rather than comparing a substitute value with itself.
 
-The navigation checks SHALL exercise present and browse modes, mode changes, supported navigation inputs, direct controls, and end boundaries. When a check activates a navigation control, it SHALL activate it the way a pointer does, focusing the control before firing, so that a presentation which suppresses deck keys while its own control holds focus is observable rather than hidden by the probe. A check that needs a control SHALL establish whichever mode exposes one rather than skip itself when the mode it started in has none. Establishing a precondition SHALL remain neutral, so one defect is not charged to every criterion that happens to position the demo. The reliability and accessibility checks SHALL exercise step transitions and mode interactions, monitor browser failures, and inspect control semantics, current-state exposure, focus behavior, and keyboard operability.
+The navigation checks SHALL exercise present and browse modes, mode changes, supported navigation inputs, direct controls, and end boundaries. When a check activates a navigation control, it SHALL activate it the way a pointer does, focusing the control before firing, so that a presentation which suppresses deck keys while its own control holds focus is observable rather than hidden by the probe. When a check exercises touch navigation, it SHALL deliver a single-finger, predominantly horizontal swipe the way a finger does: a touchstart on the element under the finger within the presentation's stage (or the presentation when it has no stage), a series of touchmove events, and a touchend, all keeping that target, each delivered in its own page task with at least a frame's delay between consecutive events, so that a presentation which records the touch start in state committed after a render is observed swiping rather than having its touchend arrive before its touchstart is recorded. A check that needs a control SHALL establish whichever mode exposes one rather than skip itself when the mode it started in has none. Establishing a precondition SHALL remain neutral, so one defect is not charged to every criterion that happens to position the demo. The reliability and accessibility checks SHALL exercise step transitions and mode interactions, monitor browser failures, and inspect control semantics, current-state exposure, focus behavior, and keyboard operability.
 
 Every deterministic probe artifact SHALL retain a bounded observation of what the evaluator saw: the established viewport, mode, step index and count, active title and caption, chrome visibility, the discovered controls, and the selector or strategy that matched each navigation role. The retention bound SHALL cover a full traversal of every step in both modes, and a probe that exceeds it SHALL publish the number of observations it dropped rather than truncate silently. A deduction SHALL be adjudicable from the retained artifact without replaying the run.
 
@@ -141,6 +141,11 @@ Deterministic source facts supplied to an LLM source judge SHALL be treated as l
 - **WHEN** the built demo is available to the evaluator
 - **THEN** deterministic browser checks exercise every demo criterion assigned to them
 - **AND** the scorer applies the listed point allocations to their resolved pass/fail results
+
+#### Scenario: Swipe start is recorded after a render
+- **WHEN** a presentation records a touch start in state that only takes effect after the page renders, and navigates on a sufficiently long horizontal swipe
+- **THEN** the navigation check's swipe moves the presentation one step in the swipe's direction
+- **AND** a presentation with no swipe handling still records no step change from the swipe
 
 #### Scenario: Presentation opens in present mode
 - **WHEN** the presentation's initial mode is present
