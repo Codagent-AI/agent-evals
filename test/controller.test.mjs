@@ -536,6 +536,54 @@ test('--skip-validator launches the verified workflow by logical name without --
   assert.equal(written.delivery.final_validator.outcome, 'skipped')
 })
 
+test('--skip-validator hides Agent Validator from every Runner-launched agent', async () => {
+  const context = await environment()
+  const skippedHistory = [
+    { step: 'run-validator', outcome: 'skipped' },
+    ...history.slice(1),
+  ]
+
+  const result = await evaluate(context, ['--skip-validator', ...profiles], {
+    readRunnerState: () => runnerInvocations(context).length === 0
+      ? null
+      : {
+          run_id: 'runner-7',
+          session_dir: context.sessionDir,
+          workflow_name: 'implement-change',
+          workflow_completed: true,
+          history: skippedHistory,
+        },
+    verifyDelivery: async () => ({
+      ...delivery(context),
+      final_validator: skippedHistory[0],
+      workflow_history: skippedHistory,
+    }),
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const shimDir = join(context.runDir, '.runtime/validator-unavailable/bin')
+  for (const invocation of [...runnerInvocations(context), ...auditReplayInvocations(context)]) {
+    assert.ok(
+      invocation.options.env.PATH.startsWith(`${shimDir}:`),
+      `${invocation.args.join(' ')} must resolve agent-validator to the refusing shim`,
+    )
+  }
+  assert.ok(auditReplayInvocations(context).length > 0)
+  const shim = await readFile(join(shimDir, 'agent-validator'), 'utf8')
+  assert.match(shim, /exit 127/)
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.deepEqual(
+    written.workflow.events.filter(({ event }) => event === 'validator-unavailable'),
+    [{
+      event: 'validator-unavailable',
+      reason: 'skip-validator',
+      mechanism: 'path-shim',
+      commands: ['agent-validator', 'agent-validate'],
+      blocked_invocations_log: 'logs/blocked-validator-invocations.log',
+    }],
+  )
+})
+
 test('fixture planning preflight validates the selected change directory', async () => {
   const context = await environment()
 
@@ -641,6 +689,12 @@ test('task-level and final validation are included by default', async () => {
   assert.equal(written.workflow.final_validator, 'required')
   assert.equal(written.workflow.full_workflow, true)
   assert.equal(written.workflow.configured_stop_step, null)
+  assert.equal(runnerInvocations(context)[0].options.env.PATH, process.env.PATH)
+  assert.equal(
+    written.workflow.events.some(({ event }) => event === 'validator-unavailable'),
+    false,
+  )
+  await assert.rejects(readFile(join(context.runDir, '.runtime/validator-unavailable/bin/agent-validator')))
 })
 
 test('workflow preflight rejects missing required and declared prohibited steps before Runner starts', async () => {

@@ -140,6 +140,14 @@ acceptance-preparation, and handoff-verification steps. In skipped mode the
 harness requires an explicit skipped outcome for the final `run-validator`
 step; an absent, interrupted, or unexpectedly successful step is not accepted
 as proof of intentional skipping.
+Skipped mode also keeps Agent Validator away from the run's agents: the
+controller starts Agent Runner with a `PATH` whose first entry shadows
+`agent-validator` and `agent-validate` with a shim that exits 127. The shim
+appends each attempt to `logs/blocked-validator-invocations.log`, and the
+workflow events record a `validator-unavailable` entry. Runner needs no
+Validator when every Validator step is skipped. The sandbox is unprivileged,
+so the installed binary still exists; only name lookup is blocked. Validator-on
+runs are unchanged.
 The first complete benchmark candidate explicitly uses `--skip-validator`.
 The harness never queries CI and never permits merge, ready-for-review, close,
 archive, release, or candidate-branch deletion behavior.
