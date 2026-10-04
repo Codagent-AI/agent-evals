@@ -303,7 +303,7 @@ test('show reports malformed stored metrics as invalid record', async () => {
   }
 })
 
-test('unexpected result read and apply errors keep exit code 2 with distinct codes', async () => {
+test('unexpected result read and malformed stored repetition have distinct errors', async () => {
   const root = await temp(), record = join(root, 'record.json')
   const directory = join(root, 'directory-result')
   await mkdir(join(directory, 'result.json'), { recursive: true })
@@ -312,12 +312,16 @@ test('unexpected result read and apply errors keep exit code 2 with distinct cod
   assert.equal(readOutcome.errors[0].code, 'io-error')
   const current = set(baseline.emptyRecord(), [extracted()]).record.current
   delete current.reps[0].tokens
-  await writeFile(record, JSON.stringify({ schema_version: 1, current, anchor: null, history: [] }))
+  const bytes = JSON.stringify({ schema_version: 1, current, anchor: null, history: [] })
+  await writeFile(record, bytes)
   const newDirectory = await resultDir(root, makeResult({ run_id: 'rep-2' }))
-  const applyOutcome = await runExperimentsCommand({ argv: ['baseline', 'add-rep', newDirectory, '--record', record] })
-  assert.equal(applyOutcome.exitCode, 2)
-  assert.equal(applyOutcome.errors[0].code, 'internal-error')
-  assert.match(applyOutcome.errors[0].message, /experiment-baseline/)
+  for (const command of [['show'], ['add-rep', newDirectory]]) {
+    const outcome = await runExperimentsCommand({ argv: ['baseline', ...command, '--record', record] })
+    assert.equal(outcome.exitCode, 2)
+    assert.equal(outcome.errors[0].code, 'invalid-record')
+    assert.match(outcome.errors[0].message, /current\.reps\[0\]\.tokens/)
+    assert.equal(await readFile(record, 'utf8'), bytes)
+  }
 })
 
 test('add-rep without a current baseline names the directory and keeps its own refusals', async () => {

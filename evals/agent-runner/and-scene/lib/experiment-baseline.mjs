@@ -22,6 +22,8 @@ export function validateBaseline(baseline, path = 'current', anchor = path === '
   baseline.reps.forEach((rep, i) => {
     if (!object(rep) || typeof rep.run_id !== 'string' || !rep.run_id) fail(`reps[${i}].run_id`, 'must be a non-empty string')
     if (ids.has(rep.run_id)) fail(`reps[${i}].run_id`, 'duplicate repetition id')
+    for (const field of ['automated_score', 'tokens', 'cost', 'failure', 'outcome']) if (!object(rep[field])) fail(`reps[${i}].${field}`, 'must be an object')
+    if (!object(rep.tokens.by_provider)) fail(`reps[${i}].tokens.by_provider`, 'must be an object')
     ids.add(rep.run_id)
   })
   if (!object(baseline.identity)) fail('identity', 'must be an object')
