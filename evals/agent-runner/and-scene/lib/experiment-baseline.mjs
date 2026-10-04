@@ -109,6 +109,7 @@ export function compareIdentity(base, entry) {
 
 function overlapping(a, b) { return [a.run_id, a.rescored_from].filter(Boolean).some(id => id === b.run_id || id === b.rescored_from) }
 function duplicate(a, b) { return refusal(a, 'duplicate-run', `Repetitions ${a.run_id} and ${b.run_id} share an execution lineage.${a.rescored_from || b.rescored_from ? ' Rebuild with set using only the rescored directory.' : ''}`) }
+function archive(record, kind, date, reason) { record.history.push({ kind, replaced_at: date, replacement_reason: reason, record: structuredClone(record[kind]) }) }
 function identityRefusals(base, entry, allowMismatch, directory = null) {
   const differences = compareIdentity(base, entry), errors = []
   const runner = differences.find(x => x.field === 'runner_commit')
@@ -166,8 +167,8 @@ export function applySet(record, items, { source, reason, allowMismatch, now }) 
   const median = selectMedian(entries), index = entries.findIndex(x => x.run_id === median)
   if (!entries[index]?.outcome.human_review_complete) return { refusals: [refusal({ ...entries[index], directory: admissible[index]?.directory }, 'median-not-reviewed', `Median repetition ${median} requires a complete human review and numeric official score`)] }
   const result = structuredClone(record), date = timestamp(now)
-  if (result.current) result.history.push({ kind: 'current', replaced_at: date, replacement_reason: reason, record: structuredClone(result.current) })
-  if (source === 'profile-change' && result.anchor) { result.history.push({ kind: 'anchor', replaced_at: date, replacement_reason: reason, record: structuredClone(result.anchor) }); result.anchor = null }
+  if (result.current) archive(result, 'current', date, reason)
+  if (source === 'profile-change' && result.anchor) { archive(result, 'anchor', date, reason); result.anchor = null }
   result.current = { source, reason, set_at: date, identity: identityOf(entries[0]), reps: entries, median_rep: median, summary: summarize(entries), human_review: structuredClone(snapshotOf(admissible[index])) }
   return { record: result }
 }
@@ -193,7 +194,7 @@ export function applyAnchor(record, { reason, now }) {
   const current = record.current
   if (!current.human_review.is_current_median) return { refusals: [refusal(null, 'median-not-reviewed', `Current median ${current.median_rep} differs from reviewed repetition ${current.human_review.run_id}; use a fresh set including the new median's review`)] }
   const result = structuredClone(record), date = timestamp(now)
-  if (result.anchor) result.history.push({ kind: 'anchor', replaced_at: date, replacement_reason: reason, record: structuredClone(result.anchor) })
+  if (result.anchor) archive(result, 'anchor', date, reason)
   result.anchor = { ...structuredClone(result.current), anchored_at: date, anchor_reason: reason }
   return { record: result }
 }
