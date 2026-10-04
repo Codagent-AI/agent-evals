@@ -351,6 +351,46 @@ test('an unconfirmed interview leaves the review unfinished', async () => {
   assert.equal(result.state.complete, false)
 })
 
+test('an affirmative answer at the summary confirms the review', async () => {
+  const { io } = scriptedIo(interviewInputs({ ratings: Array(7).fill(5), tail: ['yes'] }))
+  const persisted = []
+  const result = await runInterview({
+    rubric,
+    state: createReviewState(provenance()),
+    candidateUrl: 'http://x/',
+    io,
+    persist: async (state) => { persisted.push(state) },
+  })
+
+  assert.equal(result.confirmed, true)
+  assert.equal(result.state.complete, true)
+  assert.equal(persisted.at(-1).complete, true)
+})
+
+test('an unrecognized answer at the summary reprompts instead of quitting', async () => {
+  const { io, written } = scriptedIo(interviewInputs({ ratings: Array(7).fill(5), tail: ['maybe', 'confirm'] }))
+  const result = await runInterview({
+    rubric, state: createReviewState(provenance()), candidateUrl: 'http://x/', io, persist: async () => {},
+  })
+
+  assert.equal(result.confirmed, true)
+  assert.ok(
+    written.some((line) => /answer confirm, revise, or quit/i.test(line)),
+    'the reviewer is told which answers the summary accepts',
+  )
+})
+
+test('an explicit quit at the summary leaves the review unfinished without interruption', async () => {
+  const { io } = scriptedIo(interviewInputs({ ratings: Array(7).fill(5), tail: [' Quit '] }))
+  const result = await runInterview({
+    rubric, state: createReviewState(provenance()), candidateUrl: 'http://x/', io, persist: async () => {},
+  })
+
+  assert.equal(result.confirmed, false)
+  assert.equal(result.interrupted, false)
+  assert.equal(result.state.complete, false)
+})
+
 test('a confirmed review records the full finalized artifact', async () => {
   const { io } = scriptedIo(interviewInputs({ ratings: Array(7).fill(4) }))
   const { state } = await runInterview({

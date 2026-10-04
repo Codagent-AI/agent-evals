@@ -39,7 +39,9 @@ The review is resumable: every accepted answer is saved immediately, and a later
 invocation against the same run directory restores the saved answers, presents
 the candidate URL and readiness confirmation again, and continues at the first
 unanswered question. Nothing is scored officially until the summary is
-explicitly confirmed.
+explicitly confirmed. A run whose review stopped on a resumable harness failure
+in the human-review phase is reopened the same way and continues as pending
+human review; any other non-pending run is refused.
 USAGE
 }
 

@@ -290,7 +290,8 @@ export async function runInterview({ rubric, state, candidateUrl, io, persist })
     }
     const answer = String(raw).trim().toLowerCase()
 
-    if (answer === 'confirm') {
+    // "yes" is how a reviewer confirms readiness, so it confirms here too.
+    if (answer === 'confirm' || AFFIRMATIVE.has(answer)) {
       current = {
         ...current,
         score,
@@ -300,10 +301,15 @@ export async function runInterview({ rubric, state, candidateUrl, io, persist })
       await persist(current)
       return { confirmed: true, interrupted: false, state: current, score }
     }
-    if (answer !== 'revise') {
-      // Anything but an explicit confirmation leaves the review unfinished, and
-      // the run stays pending human review.
+    if (answer === 'quit') {
+      // Only an explicit quit leaves the review unfinished, and the run stays
+      // pending human review.
       return { confirmed: false, interrupted: false, state: current, score }
+    }
+    if (answer !== 'revise') {
+      // A typo must never silently end a finished review.
+      io.write('Answer confirm, revise, or quit.')
+      continue
     }
 
     const chosen = await io.ask(`Which question? (1-${rubric.question_count}) `)
