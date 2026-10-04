@@ -10,6 +10,7 @@ import { isBrowserInfrastructureDiagnostic } from './browser-diagnostics.mjs'
 const MAX_OUTPUT_BYTES = 1024 * 1024
 const PRESENTATION_SELECTOR = '[data-presentation], [data-presentation-root]'
 const MODE_SELECTOR = '[data-presentation-mode]'
+const DECLARED_MODE_SELECTOR = '[data-mode]'
 const STAGE_SELECTOR = [
   '[data-presentation-stage]',
   '[data-presentation-chrome="stage"]',
@@ -121,6 +122,23 @@ const SCENE_ID_SELECTORS = [
   '[data-presentation-scene]',
 ]
 
+// The mode a presentation declares, or null. The data-presentation-mode hook
+// wins; a plain data-mode is the same declaration in a common spelling, but
+// only on the presentation's own chrome, the element carrying the step-count
+// hook or one containing it, so a per-mode button marked data-mode never
+// decides it. Only present or browse counts, so a data-mode naming a theme
+// never decides it either. Without a declaration the mode is inferred from
+// visible chrome, which can misread a present-mode title as a caption.
+export function declaredModeSource() {
+  return `[
+    ...[...document.querySelectorAll(${JSON.stringify(MODE_SELECTOR)})]
+      .map((element) => element.getAttribute('data-presentation-mode')),
+    ...[...document.querySelectorAll(${JSON.stringify(DECLARED_MODE_SELECTOR)})]
+      .filter((element) => element.matches('[data-step-count]') || element.querySelector('[data-step-count]'))
+      .map((element) => element.getAttribute('data-mode')),
+  ].find((mode) => mode === 'present' || mode === 'browse') || null`
+}
+
 // Where focus rests once a control lets go of it. No fixture requirement names
 // a root hook, so a presentation marked only by its mode is still its own
 // root, and a page with neither falls back to the document body.
@@ -205,9 +223,8 @@ function navigationDiscoverySource() {
     return named;
   };
   const readMode = () => {
-    const declared = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
-      ?.getAttribute('data-presentation-mode');
-    if (declared === 'present' || declared === 'browse') return declared;
+    const declared = ${declaredModeSource()};
+    if (declared) return declared;
     return [...document.querySelectorAll(${JSON.stringify(`${CAPTION_SELECTOR}, ${TOC_SELECTOR}`)})]
       .some(visible) ? 'browse' : 'present';
   };
@@ -432,9 +449,8 @@ console.log(JSON.stringify([...new Set(routes)]));
 const opened = await page.open(${JSON.stringify(routeUrl(route))});
 ${waitForSelectorSource('[data-step-count]', 30000)}
 const initialMode = await page.eval(() => {
-  const explicit = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
-    ?.getAttribute('data-presentation-mode');
-  if (explicit === 'present' || explicit === 'browse') return explicit;
+  const explicit = ${declaredModeSource()};
+  if (explicit) return explicit;
   const browsing = [...document.querySelectorAll(${JSON.stringify(`${CAPTION_SELECTOR}, ${TOC_SELECTOR}`)})]
     .some((element) => element.getClientRects().length > 0
       && getComputedStyle(element).display !== 'none'
@@ -457,9 +473,8 @@ console.log(JSON.stringify({
       return run(`
 const requiredMode = ${JSON.stringify(requiredMode)};
 const mode = await page.eval(() => {
-  const explicit = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
-    ?.getAttribute('data-presentation-mode');
-  if (explicit === 'present' || explicit === 'browse') return explicit;
+  const explicit = ${declaredModeSource()};
+  if (explicit) return explicit;
   const visible = (element) => Boolean(element && element.getClientRects().length > 0
     && getComputedStyle(element).display !== 'none'
     && getComputedStyle(element).visibility !== 'hidden');
@@ -655,8 +670,7 @@ console.log(JSON.stringify(geometry));
 const captured = await page.eval(() => {
   const progress = document.querySelector('[data-step-count]');
   const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
-  const explicitMode = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
-    ?.getAttribute('data-presentation-mode');
+  const explicitMode = ${declaredModeSource()};
 ${navigationDiscoverySource()}
   const title = firstVisibleMatch(${JSON.stringify(TITLE_SELECTORS)}, 'title');
   // Which element a presentation uses for the deck title and which for the

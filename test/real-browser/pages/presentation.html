@@ -25,7 +25,7 @@
   </nav>
 </div>
 <script>
-// One page, fifteen behaviours. The server injects VARIANT and STEPS; nothing here
+// One page, sixteen behaviours. The server injects VARIANT and STEPS; nothing here
 // is a candidate. Each variant isolates one judgment the evaluator must make.
 const variant = window.VARIANT
 const steps = window.STEPS
@@ -52,8 +52,12 @@ if (variant === 'g') root.removeAttribute('data-presentation')
 // shows a step-marker paragraph ("01 / 09 · era") and a hooked step-title
 // heading in both modes, with a caption paragraph only in browse mode. (l) is
 // (k) without the step-title heading: the marker must not stand in for it.
+// (p) is cc572181 rep 1's chrome: it declares its mode only as data-mode, shows
+// a header marker and the deck title in browse mode and the step title in
+// present mode, and in present mode shows the deck title as an otherwise
+// unhooked footer paragraph, where browse mode shows the caption.
 const marked = variant === 'k' || variant === 'l'
-const unhooked = variant === 'h' || variant === 'i' || variant === 'j' || marked
+const unhooked = variant === 'h' || variant === 'i' || variant === 'j' || marked || variant === 'p'
 let footer = null
 if (unhooked) {
   document.getElementById('title').remove()
@@ -83,6 +87,18 @@ function renderUnhooked() {
     footer.replaceChildren(...(mode === 'browse' ? [element('p', step.caption, { 'data-presentation-caption': '' })] : []))
     return
   }
+  if (variant === 'p') {
+    header.replaceChildren(
+      element('div', `the ask · ${marker}`, { 'data-presentation-marker': '' }),
+      mode === 'browse'
+        ? element('h1', 'How to Use This Skill to Make a Presentation', { 'data-presentation-title': '' })
+        : element('h1', step.title, { 'data-presentation-step-title': '' }),
+    )
+    footer.replaceChildren(...(mode === 'browse'
+      ? [element('h2', step.title, { 'data-presentation-step-title': '' }), element('p', step.caption, { 'data-presentation-caption': '' })]
+      : [element('p', 'How to Use This Skill to Make a Presentation', { 'data-presentation-live-title': '' })]))
+    return
+  }
   if (marked) {
     header.replaceChildren(...(mode === 'browse'
       ? [element('h1', 'How to Use This Skill to Make a Presentation', { 'data-presentation-title': '' })]
@@ -103,7 +119,7 @@ function renderUnhooked() {
 }
 
 function render() {
-  if (variant === 'i' || marked) {
+  if (variant === 'i' || marked || variant === 'p') {
     root.removeAttribute('data-presentation-mode')
     root.setAttribute('data-mode', mode)
   } else {

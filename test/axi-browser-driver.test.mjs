@@ -651,6 +651,49 @@ test('the AXI driver never reads a step-marker paragraph as a caption when infer
   }
 })
 
+test('the AXI driver reads a declared data-mode as the presentation mode before inferring it', async () => {
+  // A deck may declare its mode as data-mode="present" rather than through the
+  // data-presentation-mode hook. Inferring the mode instead reads any visible
+  // footer paragraph, such as a present-mode deck title, as a caption, so the
+  // deck looks like it is always browsing and present mode is never established.
+  const sources = [
+    await emitted((driver) => driver.open('how-to-make-a-presentation').catch(() => {})),
+    await emitted((driver) => driver.setMode('present')),
+    await emitted((driver) => driver.toggleMode()),
+    await emitted((driver) => driver.state()),
+  ]
+  for (const source of sources) {
+    assert.ok(source.includes(`querySelectorAll("[data-presentation-mode]")`), 'presentation mode hook is read')
+    assert.ok(source.includes(`querySelectorAll("[data-mode]")`), 'declared data-mode is read')
+    assert.ok(source.includes(`getAttribute('data-mode')`), 'declared data-mode value is read')
+    assert.doesNotMatch(source, /document\.querySelector\("\[data-presentation-mode\]"\)\s*\?\.getAttribute/)
+  }
+
+  const { declaredModeSource } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
+  // Each fake element lists its attributes; `chrome` marks one that carries or
+  // contains the step-count hook.
+  const declared = (elements) => new Function('document', `return ${declaredModeSource()}`)({
+    querySelectorAll: (selector) => {
+      const attribute = selector.slice(1, -1)
+      return elements
+        .filter((attributes) => attribute in attributes)
+        .map(({ chrome = false, ...attributes }) => ({
+          getAttribute: (name) => attributes[name] ?? null,
+          matches: () => chrome,
+          querySelector: () => null,
+        }))
+    },
+  })
+  assert.equal(declared([{ 'data-mode': 'present', chrome: true }]), 'present')
+  assert.equal(declared([{ 'data-mode': 'dark', chrome: true }, { 'data-mode': 'browse', chrome: true }]), 'browse')
+  assert.equal(declared([{ 'data-mode': 'browse', chrome: true }, { 'data-presentation-mode': 'present' }]), 'present')
+  // A per-mode button marked data-mode is not the presentation declaring its mode.
+  assert.equal(declared([{ 'data-mode': 'present' }, { 'data-mode': 'browse', chrome: true }]), 'browse')
+  assert.equal(declared([{ 'data-mode': 'present' }]), null)
+  assert.equal(declared([{ 'data-mode': 'dark', chrome: true }]), null)
+  assert.equal(declared([]), null)
+})
+
 test('the AXI driver reports every visible caption and title text a presentation exposes', async () => {
   const source = await emitted((driver) => driver.state())
 

@@ -116,6 +116,11 @@ test('(l) a footer step-marker paragraph does not stand in for a missing step ti
   assert.equal(result.gates.find((gate) => gate.id === 'verification-sample-outline').verdict, 'fail')
 })
 
+test('(p) a deck with only data-mode and a footer deck-title paragraph in present mode still enters present mode', { timeout: 600_000 }, async () => {
+  const result = await evaluate('p')
+  for (const id of TITLE_AND_MODE) assert.equal(criterion(result, id)?.verdict ?? result.gates.find((gate) => gate.id === id)?.verdict, 'pass', id)
+})
+
 const NAVIGATION = 'demo-supported-navigation'
 
 test('(m) a deck that commits its touch start only after a frame still swipes', { timeout: 600_000 }, async () => {
