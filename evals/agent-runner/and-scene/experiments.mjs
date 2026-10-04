@@ -1,7 +1,8 @@
 #!/usr/bin/env node
+import { realpathSync } from 'node:fs'
 import { mkdir, unlink } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { readJson, writeJsonAtomic } from './lib/persistence.mjs'
 import { SOURCES, emptyRecord, validateRecord, extractRepetition, applySet, applyAddRep, applyAnchor, formatShow } from './lib/experiment-baseline.mjs'
 
@@ -15,9 +16,9 @@ const usage = `Usage: experiments.mjs baseline <command> [options]
 `
 
 export function parseArgs(argv) {
+  if (argv.includes('--help')) return { help: true }
   if (argv[0] !== 'baseline') throw Error('Expected baseline command')
   const command = argv[1]
-  if (argv.includes('--help')) return { help: true }
   if (!['set', 'add-rep', 'anchor', 'show'].includes(command)) throw Error(`Unknown baseline command: ${command ?? '(missing)'}`)
   const options = { command, directories: [], record: defaultRecord }
   const seen = new Set()
@@ -72,7 +73,7 @@ export async function runExperimentsCommand({ argv, now = () => new Date(), stdo
       catch (cause) {
         if (!(cause instanceof SyntaxError) && cause.code !== 'ENOENT') return error('io-error', `${directory}/result.json: ${cause.message}`, 2)
         const code = cause instanceof SyntaxError ? 'invalid-result' : 'missing-result'
-        items.push({ entry: null, refusals: [{ directory, run_id: null, code, message: `${directory}/result.json: ${cause.message}` }] })
+        items.push({ entry: null, directory, refusals: [{ directory, run_id: null, code, message: `${directory}/result.json: ${cause.message}` }] })
         continue
       }
       items.push(extractRepetition(result, { directory, addedAt: now().toISOString(), addedBy: args.command }))
@@ -101,7 +102,13 @@ export async function runExperimentsCommand({ argv, now = () => new Date(), stdo
   return { exitCode: 0, errors }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Compare real paths so the command also runs when invoked through a symlink.
+function invokedDirectly() {
+  if (!process.argv[1]) return false
+  try { return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)) } catch { return false }
+}
+
+if (invokedDirectly()) {
   const outcome = await runExperimentsCommand({ argv: process.argv.slice(2) })
   process.exitCode = outcome.exitCode
 }

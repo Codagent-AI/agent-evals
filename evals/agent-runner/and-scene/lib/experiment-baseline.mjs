@@ -173,7 +173,8 @@ export function applySet(record, items, { source, reason, allowMismatch, now }) 
 }
 
 export function applyAddRep(record, item, { allowMismatch, now }) {
-  if (!record.current) return { refusals: [refusal(entryOf(item), 'no-current', 'Set a baseline first')] }
+  const directory = item?.directory ?? item?.refusals?.[0]?.directory ?? null
+  if (!record.current) return { refusals: [...(item?.refusals ?? []), refusal({ ...entryOf(item), directory }, 'no-current', 'Set a baseline first')] }
   const errors = [...(item?.refusals ?? [])], entry = structuredClone(entryOf(item))
   if (!entry) return { refusals: errors }
   errors.push(...identityRefusals(record.current.identity, entry, allowMismatch, item?.directory))

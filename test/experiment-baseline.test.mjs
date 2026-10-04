@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, writeFile, stat, readdir } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, writeFile, stat, readdir, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -318,4 +318,38 @@ test('unexpected result read and apply errors keep exit code 2 with distinct cod
   assert.equal(applyOutcome.exitCode, 2)
   assert.equal(applyOutcome.errors[0].code, 'internal-error')
   assert.match(applyOutcome.errors[0].message, /experiment-baseline/)
+})
+
+test('add-rep without a current baseline names the directory and keeps its own refusals', async () => {
+  const item = extracted({ run_id: 'lonely' }, 'add-rep')
+  const output = add(baseline.emptyRecord(), item)
+  refusal(output, 'no-current')
+  assert.ok(output.refusals.every(r => r.directory === '/tmp/lonely'), JSON.stringify(output))
+  const missing = { entry: null, directory: '/tmp/gone', refusals: [{ directory: '/tmp/gone', run_id: null, code: 'missing-result', message: 'gone' }] }
+  const both = add(baseline.emptyRecord(), missing)
+  refusal(both, 'missing-result')
+  refusal(both, 'no-current')
+  assert.ok(both.refusals.every(r => r.directory === '/tmp/gone'), JSON.stringify(both))
+
+  const root = await temp(), record = join(root, 'none.json'), dir = join(root, 'empty-dir')
+  await mkdir(dir)
+  const result = spawnSync(process.execPath, [join(suite, 'experiments.mjs'), 'baseline', 'add-rep', dir, '--record', record], { encoding: 'utf8' })
+  assert.equal(result.status, 1)
+  const lines = result.stderr.trim().split('\n').map(line => JSON.parse(line))
+  assert.deepEqual(lines.map(x => x.code).sort(), ['missing-result', 'no-current'])
+  assert.ok(lines.every(x => x.directory === dir), result.stderr)
+  await assert.rejects(stat(record))
+})
+
+test('the CLI runs through a symlinked entry point and top-level --help succeeds', async () => {
+  const root = await temp(), record = join(root, 'sym.json'), link = join(root, 'experiments-link.mjs')
+  await symlink(join(suite, 'experiments.mjs'), link)
+  const dir = await resultDir(root, makeResult({ run_id: 'via-link' }))
+  const linked = spawnSync(process.execPath, [link, 'baseline', 'set', dir, '--source', 'manual', '--reason', 'x', '--record', record], { encoding: 'utf8' })
+  assert.equal(linked.status, 0, linked.stderr)
+  assert.match(linked.stdout, /baseline set: 1 repetitions, median via-link/)
+  assert.equal(JSON.parse(await readFile(record)).current.median_rep, 'via-link')
+  const help = spawnSync(process.execPath, [join(suite, 'experiments.mjs'), '--help'], { encoding: 'utf8' })
+  assert.equal(help.status, 0)
+  assert.match(help.stdout, /Usage:/)
 })
