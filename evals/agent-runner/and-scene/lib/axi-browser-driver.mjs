@@ -304,9 +304,19 @@ function swipeEventSource(type, sign, progress) {
   ${begin ? `const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)}) || document.body;
   const surface = presentation.querySelector(${JSON.stringify(STAGE_SELECTOR)}) || presentation;
   const rect = surface.getBoundingClientRect();
-  const clamp = (value, max) => Math.min(Math.max(value, 1), Math.max(max - 1, 1));
-  const y = clamp(rect.top + rect.height / 2, window.innerHeight);
-  const startX = clamp(rect.left + rect.width / 2 - ${sign} * ${SWIPE_DISTANCE / 2}, window.innerWidth);
+  // The finger lands inside the visible part of the surface even when the
+  // surface is narrower than the swipe; the swipe then travels past its edge.
+  const clamp = (value, low, high) => {
+    const min = Math.max(low, 1);
+    const max = Math.max(high - 1, min);
+    return Math.min(Math.max(value, min), max);
+  };
+  const y = clamp(rect.top + rect.height / 2, rect.top, Math.min(rect.bottom, window.innerHeight));
+  const startX = clamp(
+    rect.left + rect.width / 2 - ${sign} * ${SWIPE_DISTANCE / 2},
+    rect.left,
+    Math.min(rect.right, window.innerWidth),
+  );
   const hit = document.elementFromPoint(startX, y);
   const target = hit && presentation.contains(hit) ? hit : presentation;
   window.__andSceneSwipe = { target, startX, y };` : `const swipe = window.__andSceneSwipe;

@@ -552,6 +552,8 @@ test('the AXI driver lands a swipe on the element under the finger and keeps tha
 
   assert.match(start, /data-presentation-stage/)
   assert.match(start, /getBoundingClientRect\(\)/)
+  // A surface narrower than the swipe still receives the finger.
+  assert.match(start, /rect\.left,\s*Math\.min\(rect\.right, window\.innerWidth\),/)
   assert.match(start, /document\.elementFromPoint\(startX, y\)/)
   assert.match(start, /presentation\.contains\(hit\) \? hit : presentation/)
   for (const phase of rest) {
