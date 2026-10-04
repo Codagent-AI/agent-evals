@@ -2,7 +2,7 @@
 
 Implement on the change's feature branch. The task must leave `npm run check` green.
 
-- [ ] [Experiment baseline record and `experiments.mjs baseline` CLI](tasks/01-experiment-baseline-record.md)
+- [x] [Experiment baseline record and `experiments.mjs baseline` CLI](tasks/01-experiment-baseline-record.md)
 
 These are not implementor tasks. They run after this task:
 
