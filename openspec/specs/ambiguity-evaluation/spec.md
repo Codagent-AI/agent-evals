@@ -139,6 +139,16 @@ The component SHALL have no independent score floor. For a reference-baseline ev
 - **WHEN** the candidate surfaces a genuine consequential specification gap, distinguishes it from repository facts, escalates proportionately, and preserves it actionably in the handoff
 - **THEN** the unresolved state does not by itself fail any assumption-handling criterion
 
+#### Scenario: Candor is never scored below silence
+- **WHEN** one workflow surfaces an unverified gap with its consequence and options, including the option to accept the limitation, and another workflow omits the same gap that its plan or evidence shows
+- **THEN** the surfacing workflow scores no lower on any assumption-handling criterion
+- **AND** the omitting workflow fails the surfaced-ambiguities criterion
+
+#### Scenario: Final handoff names decisions and points to the ledger
+- **WHEN** the handoff names each unresolved decision by identifier and subject and points to the ledger entry that holds its consequence and options
+- **THEN** it preserves those decisions
+- **AND** a handoff that gives only a count of open decisions and a pointer does not
+
 #### Scenario: No consequential ambiguity exists
 - **WHEN** required artifacts explicitly report no unresolved assumptions and verified evidence supports that conclusion
 - **THEN** the candidate remains eligible to pass all four assumption-handling criteria

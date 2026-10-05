@@ -42,6 +42,22 @@ const DEFAULT_KILL_GRACE_MS = 10 * 1000
 const MAX_ATTEMPTS = 2
 const DIAGNOSTIC_TAIL_CHARS = 64 * 1024
 const DEFAULT_MAX_STDOUT_BYTES = 16 * 1024 * 1024
+// A model-capacity rejection arrives before any work, so it is waited out
+// rather than spending one of the judge's limited attempts.
+const CAPACITY_RETRIES = 5
+const CAPACITY_BASE_DELAY_MS = 30 * 1000
+const CAPACITY_PATTERN = /at capacity/i
+
+// The turn.failed message when Codex rejected the turn before doing any work.
+function rejectedBeforeWork(result) {
+  if (result.usageLine || result.workSeen || !result.failedLine) return null
+  try {
+    const event = JSON.parse(result.failedLine)
+    return String(event?.error?.message ?? 'turn failed')
+  } catch {
+    return 'turn failed'
+  }
+}
 
 // Shell command output can carry any file the read-only sandbox can read, so
 // persisted events keep the command, status, and exit code but not its output.
@@ -92,6 +108,8 @@ function runAttempt({
   return new Promise((resolveAttempt) => {
     // Complete output is on disk; memory keeps only usage and a short tail.
     let usageLine = ''
+    let failedLine = ''
+    let workSeen = false
     let stdoutBytes = 0
     let outputLimitExceeded = false
     let stopping = false
@@ -147,6 +165,8 @@ function runAttempt({
       // A descendant may outlive a stopped Codex, so its SIGKILL stays armed.
       if (!stopping) clearTimeout(killTimer)
       if (pendingLine.includes('"turn.completed"')) usageLine = pendingLine
+      if (pendingLine.includes('"turn.failed"')) failedLine = pendingLine
+      if (/"type":"item\./.test(pendingLine)) workSeen = true
       if (pendingLine) writeEvents(persistableEventLine(pendingLine))
       await Promise.all([eventWrites, stderrWrites])
       resolveAttempt({
@@ -154,6 +174,8 @@ function runAttempt({
         signal,
         error,
         usageLine,
+        failedLine,
+        workSeen,
         stdout: stdoutTail,
         stderr: stderrTail,
         timedOut,
@@ -194,6 +216,8 @@ function runAttempt({
       if (lines.length === 0) return
       for (const line of lines) {
         if (line.includes('"turn.completed"')) usageLine = line
+        if (line.includes('"turn.failed"')) failedLine = line
+        if (/"type":"item\./.test(line)) workSeen = true
       }
       throttle(child.stdout, writeEvents(lines.map((line) => `${persistableEventLine(line)}\n`).join('')))
     })
@@ -226,7 +250,7 @@ function detail(result) {
   return (result.stderr || result.stdout || result.error?.message || 'no diagnostic output').trim()
 }
 
-function extractCodexUsage(stdout, { request, invocationId }) {
+function extractCodexUsage(stdout, { request, invocationId, rejected = null }) {
   let usage = null
   for (const line of String(stdout ?? '').split('\n')) {
     if (!line.trim()) continue
@@ -258,6 +282,19 @@ function extractCodexUsage(stdout, { request, invocationId }) {
     ? { input, output, total: input + output }
     : null
 
+  if (!usage && rejected !== null) {
+    return {
+      invocation_id: invocationId,
+      phase: request.job ?? null,
+      stage: request.usage_phase ?? null,
+      provider: 'openai',
+      model: request.authority?.model ?? null,
+      usage: { state: 'available', reason: `Codex turn rejected before any model output: ${rejected}`,
+        source: 'codex:turn.failed' },
+      tokens: { input: 0, cached_input: 0, output: 0, reasoning: 0 },
+      token_totals: { input: 0, output: 0, total: 0 },
+    }
+  }
   return {
     invocation_id: invocationId,
     phase: request.job ?? null,
@@ -286,6 +323,7 @@ export function createCodexJudgeInvoker({
   killGraceMs = DEFAULT_KILL_GRACE_MS,
   maxStdoutBytes = DEFAULT_MAX_STDOUT_BYTES,
   openFile = open,
+  sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms)),
 } = {}) {
   const runtimeDir = join(resolve(runDir), '.runtime', 'judge')
   const usagePath = join(resolve(runDir), 'phases', 'eval-owned-usage.jsonl')
@@ -337,6 +375,7 @@ export function createCodexJudgeInvoker({
     args.push('-')
 
     let result
+    let capacityWaits = 0
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
       await rm(outputPath, { force: true })
       const files = await openAttemptFiles(openFile, runtimeDir, stem)
@@ -356,9 +395,11 @@ export function createCodexJudgeInvoker({
       } finally {
         await Promise.all([files.events.close(), files.stderr.close()])
       }
+      const rejected = rejectedBeforeWork(result)
       const usageEntry = extractCodexUsage(result.usageLine, {
         request,
         invocationId: `${files.attemptStem}-${Date.now()}`,
+        rejected,
       })
       if (result.timedOut && usageEntry.usage.state !== 'available') {
         usageEntry.usage.reason = `Codex judge attempt timed out after ${timeoutMs} ms without turn.completed usage`
@@ -379,6 +420,12 @@ export function createCodexJudgeInvoker({
         throw new Error(
           `Codex judge ${request.job ?? 'job'} exceeded the ${maxStdoutBytes}-byte stdout limit`,
         )
+      }
+      if (rejected !== null && CAPACITY_PATTERN.test(rejected) && capacityWaits < CAPACITY_RETRIES) {
+        await sleep(CAPACITY_BASE_DELAY_MS * 2 ** capacityWaits)
+        capacityWaits += 1
+        attempt -= 1
+        continue
       }
       if (!result.timedOut) break
     }

@@ -333,7 +333,7 @@ test('a judge request excludes screenshots and forbids visual-taste judgments', 
 test('source judges must verify behavior and resolve deterministic-fact contradictions', () => {
   const expectations = {
     'demo-integration': [/public API inputs/i, /deterministic facts are leads/i],
-    'scene-kit': [/same settlement contract/i, /swipe to the left advances one step/i],
+    'scene-kit': [/entry delay/i, /swipe to the left advances one step/i],
     'presentation-skill': [/explicit SKILL\.md instruction/i, /skill-partial-scaffold/i],
     'verification-tooling': [/stale server/i, /executable warning/i],
   }
@@ -1196,7 +1196,7 @@ test('six jobs checkpoint independently and reuse a valid completed output', asy
   const sampleResults = JSON.parse(judgeOutput(sceneCriteria)).results
   const samples = [1, 2].map(() => ({ ok: true, results: sampleResults, attempts: [], audit_results: null, audit_attempts: [] }))
   const { results: sceneResults } = resolveJudgeSamples({ criteria: sceneCriteria, samples })
-  loaded.set('scene-kit', { protocol: JUDGING_PROTOCOL, results: sceneResults, samples, adjudication: null,
+  loaded.set('scene-kit', { protocol: JUDGING_PROTOCOL, results: sceneResults, samples, tiebreak: null,
     attempts: [{ attempt: 1, ok: true, error: null }] })
 
   const outcome = await runProductJudging({
@@ -1245,7 +1245,7 @@ test('product judging runs its jobs sequentially through one recorded authority'
 
 // Round-0 baseline audit: one judge sample swung criteria by whole points on
 // identical evidence. Each job now runs two independent samples; only a
-// criterion both samples pass skips adjudication, and an adjudicated pass must
+// criterion both samples agree on stands; a disagreement goes to a third sample whose pass must
 // quote validated source lines that a closed-world audit confirms.
 async function neutralTree(files) {
   const root = await mkdtemp(join(tmpdir(), 'and-scene-robust-judge-'))
@@ -1278,9 +1278,9 @@ function verdicts(map, citations = ['src/nav.ts']) {
   })) })
 }
 
-function adjudicated(map) {
+function lineCited(map) {
   return JSON.stringify({ results: Object.entries(map).map(([id, [verdict, citations = []]]) => ({
-    id, verdict, rationale: `adjudicated ${verdict}`, evidence: ['src/nav.ts'], citations,
+    id, verdict, rationale: `line-cited ${verdict}`, evidence: ['src/nav.ts'], citations,
   })) })
 }
 
@@ -1290,19 +1290,21 @@ const NAV_SOURCE = [
   'export const swipe = (dx) => (dx < 0 ? next() : prev())',
 ].join('\n')
 
-test('the protocol runs two independent samples per job', () => {
+test('the protocol runs two independent samples per job and a third only on disagreement', () => {
   assert.equal(JUDGE_SAMPLES, 2)
-  assert.match(JUDGING_PROTOCOL, /dual-sample-adjudicated/)
+  assert.match(JUDGING_PROTOCOL, /dual-sample-majority/)
 })
 
-test('a criterion both samples pass is a consensus pass and is never adjudicated', async () => {
+const stageOf = (request) => request.judge_stage ?? request.audit_stage ?? 'primary'
+
+test('a criterion both samples pass is a consensus pass and needs no third sample', async () => {
   const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
   const stages = []
   try {
     const outcome = await runRobustJudgeJob({
       request: tree.request(['navigation-touch-swipe']),
       invoke: async (request) => {
-        stages.push(`${request.judge_stage ?? request.audit_stage ?? 'primary'}:${request.judge_sample ?? '-'}`)
+        stages.push(`${stageOf(request)}:${request.judge_sample ?? '-'}`)
         return verdicts({ 'navigation-touch-swipe': 'pass' })
       },
     })
@@ -1311,13 +1313,35 @@ test('a criterion both samples pass is a consensus pass and is never adjudicated
     assert.equal(outcome.results[0].verdict, 'pass')
     assert.equal(outcome.consensus[0].basis, 'consensus-pass')
     assert.deepEqual(outcome.consensus[0].sample_verdicts, ['pass', 'pass'])
-    assert.equal(outcome.adjudication, null)
+    assert.equal(outcome.tiebreak, null)
   } finally {
     await rm(tree.root, { recursive: true, force: true })
   }
 })
 
-test('a sample disagreement is adjudicated and a pass needs validated spans and a confirming audit', async () => {
+// Round-1 audit: one adjudicator overturned fail+fail to pass on identical
+// evidence in one run and not another. A consensus fail now stands.
+test('a criterion both samples fail is a consensus fail that no single judge can overturn', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  const stages = []
+  try {
+    const outcome = await runRobustJudgeJob({
+      request: tree.request(['navigation-touch-swipe']),
+      invoke: async (request) => {
+        stages.push(stageOf(request))
+        return verdicts({ 'navigation-touch-swipe': 'fail' })
+      },
+    })
+    assert.equal(outcome.results[0].verdict, 'fail')
+    assert.equal(outcome.consensus[0].basis, 'consensus-fail')
+    assert.deepEqual(stages, ['primary', 'primary'])
+    assert.ok(outcome.results[0].evidence.some((item) => /both independent samples failed/.test(item)))
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+test('a disagreement is settled by an independent third sample whose pass needs confirmed line spans', async () => {
   const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
   const requests = []
   try {
@@ -1325,9 +1349,9 @@ test('a sample disagreement is adjudicated and a pass needs validated spans and 
       request: tree.request(['navigation-touch-swipe', 'navigation-direct-jump']),
       invoke: async (request) => {
         requests.push(request)
-        if (request.audit_stage === 'adjudication-span-audit') return auditOutput(['navigation-touch-swipe'])
-        if (request.judge_stage === 'adjudication') {
-          return adjudicated({ 'navigation-touch-swipe': ['pass', [{ path: 'src/nav.ts', start_line: 3, end_line: 3 }]] })
+        if (request.audit_stage === 'tiebreak-span-audit') return auditOutput(['navigation-touch-swipe'])
+        if (request.judge_stage === 'tiebreak') {
+          return lineCited({ 'navigation-touch-swipe': ['pass', [{ path: 'src/nav.ts', start_line: 3, end_line: 3 }]] })
         }
         return verdicts({
           'navigation-touch-swipe': request.judge_sample === 1 ? 'pass' : 'fail',
@@ -1336,55 +1360,37 @@ test('a sample disagreement is adjudicated and a pass needs validated spans and 
       },
     })
     assert.equal(outcome.ok, true)
-    const adjudication = requests.find(({ judge_stage: stage }) => stage === 'adjudication')
-    assert.deepEqual(adjudication.criteria, ['navigation-touch-swipe'])
-    assert.match(adjudication.prompt, /navigation-touch-swipe is pass/)
-    assert.match(adjudication.prompt, /navigation-touch-swipe is fail/)
-    const audit = requests.find(({ audit_stage: stage }) => stage === 'adjudication-span-audit')
+    const tiebreak = requests.find(({ judge_stage: stage }) => stage === 'tiebreak')
+    assert.deepEqual(tiebreak.criteria, ['navigation-touch-swipe'])
+    assert.equal(tiebreak.judge_sample, 3)
+    // Independent: the third sample never sees the first two verdicts.
+    assert.doesNotMatch(tiebreak.prompt, /navigation-touch-swipe is pass|navigation-touch-swipe is fail/)
+    const audit = requests.find(({ audit_stage: stage }) => stage === 'tiebreak-span-audit')
     assert.match(audit.prompt, /dx < 0 \? next\(\) : prev\(\)/)
+    assert.match(audit.prompt, /every clause of the criterion's requirement/)
     assert.equal(audit.input_roots, null)
     const swipe = outcome.results.find(({ id }) => id === 'navigation-touch-swipe')
     assert.equal(swipe.verdict, 'pass')
     assert.deepEqual(swipe.citations, ['src/nav.ts'])
     assert.ok(swipe.evidence.some((item) => item.includes('src/nav.ts:3-3')))
-    assert.equal(outcome.consensus.find(({ id }) => id === 'navigation-touch-swipe').basis, 'adjudicated-pass')
-    assert.equal(outcome.consensus.find(({ id }) => id === 'navigation-direct-jump').basis, 'consensus-pass')
+    assert.equal(outcome.consensus.find(({ id }) => id === 'navigation-touch-swipe').basis, 'majority-pass')
+    assert.deepEqual(outcome.consensus.find(({ id }) => id === 'navigation-touch-swipe').sample_verdicts, ['pass', 'fail', 'pass'])
   } finally {
     await rm(tree.root, { recursive: true, force: true })
   }
 })
 
-test('every consensus fail is adjudicated, so a false dead-constant fail can be overturned', async () => {
+test('a third-sample pass the span audit does not confirm is a majority fail with the audit reason', async () => {
   const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
   try {
     const outcome = await runRobustJudgeJob({
       request: tree.request(['navigation-touch-swipe']),
       invoke: async (request) => {
-        if (request.audit_stage === 'adjudication-span-audit') return auditOutput(['navigation-touch-swipe'])
-        if (request.judge_stage === 'adjudication') {
-          return adjudicated({ 'navigation-touch-swipe': ['pass', [{ path: 'src/nav.ts', start_line: 1, end_line: 2 }]] })
-        }
-        return verdicts({ 'navigation-touch-swipe': 'fail' })
-      },
-    })
-    assert.equal(outcome.results[0].verdict, 'pass')
-    assert.deepEqual(outcome.consensus[0].sample_verdicts, ['fail', 'fail'])
-  } finally {
-    await rm(tree.root, { recursive: true, force: true })
-  }
-})
-
-test('an adjudicated pass the span audit does not confirm is a fail that keeps the audit reason', async () => {
-  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
-  try {
-    const outcome = await runRobustJudgeJob({
-      request: tree.request(['navigation-touch-swipe']),
-      invoke: async (request) => {
-        if (request.audit_stage === 'adjudication-span-audit') {
+        if (request.audit_stage === 'tiebreak-span-audit') {
           return auditOutput(['navigation-touch-swipe'], { 'navigation-touch-swipe': 'insufficient' })
         }
-        if (request.judge_stage === 'adjudication') {
-          return adjudicated({ 'navigation-touch-swipe': ['pass', [{ path: 'src/nav.ts', start_line: 1, end_line: 1 }]] })
+        if (request.judge_stage === 'tiebreak') {
+          return lineCited({ 'navigation-touch-swipe': ['pass', [{ path: 'src/nav.ts', start_line: 1, end_line: 1 }]] })
         }
         return verdicts({ 'navigation-touch-swipe': request.judge_sample === 1 ? 'pass' : 'fail' })
       },
@@ -1392,65 +1398,66 @@ test('an adjudicated pass the span audit does not confirm is a fail that keeps t
     assert.equal(outcome.ok, true)
     assert.equal(outcome.results[0].verdict, 'fail')
     assert.match(outcome.results[0].rationale, /not confirmed/)
-    assert.equal(outcome.consensus[0].basis, 'adjudicated-fail')
+    assert.equal(outcome.consensus[0].basis, 'majority-fail')
   } finally {
     await rm(tree.root, { recursive: true, force: true })
   }
 })
 
-test('an adjudicated fail stands without line citations', async () => {
+test('a third-sample fail settles a disagreement without line citations', async () => {
   const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
   const stages = []
   try {
     const outcome = await runRobustJudgeJob({
       request: tree.request(['navigation-touch-swipe']),
       invoke: async (request) => {
-        stages.push(request.judge_stage ?? request.audit_stage ?? 'primary')
-        if (request.judge_stage === 'adjudication') return adjudicated({ 'navigation-touch-swipe': ['fail'] })
-        return verdicts({ 'navigation-touch-swipe': 'fail' })
+        stages.push(stageOf(request))
+        if (request.judge_stage === 'tiebreak') return lineCited({ 'navigation-touch-swipe': ['fail'] })
+        return verdicts({ 'navigation-touch-swipe': request.judge_sample === 1 ? 'pass' : 'fail' })
       },
     })
     assert.equal(outcome.results[0].verdict, 'fail')
-    assert.equal(stages.includes('adjudication-span-audit'), false)
+    assert.equal(outcome.consensus[0].basis, 'majority-fail')
+    assert.equal(stages.includes('tiebreak-span-audit'), false)
   } finally {
     await rm(tree.root, { recursive: true, force: true })
   }
 })
 
-test('an adjudicated pass citing lines outside the verified source is retried and then exhausts the job', async () => {
+test('a third-sample pass citing lines outside the verified source is retried and then exhausts the job', async () => {
   const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
-  let adjudications = 0
+  let tiebreaks = 0
   try {
     const outcome = await runRobustJudgeJob({
       request: tree.request(['navigation-touch-swipe']),
       invoke: async (request) => {
-        if (request.judge_stage === 'adjudication') {
-          adjudications += 1
-          return adjudicated({ 'navigation-touch-swipe': ['pass', [{ path: 'src/nav.ts', start_line: 2, end_line: 40 }]] })
+        if (request.judge_stage === 'tiebreak') {
+          tiebreaks += 1
+          return lineCited({ 'navigation-touch-swipe': ['pass', [{ path: 'src/nav.ts', start_line: 2, end_line: 40 }]] })
         }
-        return verdicts({ 'navigation-touch-swipe': 'fail' })
+        return verdicts({ 'navigation-touch-swipe': request.judge_sample === 1 ? 'pass' : 'fail' })
       },
     })
     assert.equal(outcome.ok, false)
     assert.equal(outcome.results, null)
-    assert.equal(adjudications, JUDGE_ATTEMPTS)
-    assert.match(outcome.adjudication.attempts.at(-1).error, /line range/)
+    assert.equal(tiebreaks, JUDGE_ATTEMPTS)
+    assert.match(outcome.tiebreak.attempts.at(-1).error, /line range/)
   } finally {
     await rm(tree.root, { recursive: true, force: true })
   }
 })
 
-test('an adjudicated pass without line citations is malformed', async () => {
+test('a third-sample pass without line citations is malformed', async () => {
   const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
   try {
     const outcome = await runRobustJudgeJob({
       request: tree.request(['navigation-touch-swipe']),
-      invoke: async (request) => (request.judge_stage === 'adjudication'
-        ? adjudicated({ 'navigation-touch-swipe': ['pass'] })
-        : verdicts({ 'navigation-touch-swipe': 'fail' })),
+      invoke: async (request) => (request.judge_stage === 'tiebreak'
+        ? lineCited({ 'navigation-touch-swipe': ['pass'] })
+        : verdicts({ 'navigation-touch-swipe': request.judge_sample === 1 ? 'pass' : 'fail' })),
     })
     assert.equal(outcome.ok, false)
-    assert.match(outcome.adjudication.attempts.at(-1).error, /cites no source lines/)
+    assert.match(outcome.tiebreak.attempts.at(-1).error, /cites no source lines/)
   } finally {
     await rm(tree.root, { recursive: true, force: true })
   }
@@ -1473,8 +1480,8 @@ test('a job is unresolved when either sample exhausts, never decided by one samp
   }
 })
 
-test('evidence-job adjudication validates its line citations against the evidence view', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-evidence-adjudication-'))
+test('an evidence-job third sample validates its line citations against the evidence view', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-evidence-tiebreak-'))
   await mkdir(join(root, 'candidate'), { recursive: true })
   await writeFile(join(root, 'index.json'), '{}\n')
   await writeFile(join(root, 'candidate/handoff.md'), '# Handoff\nU3 remains open: decide narrow readability.\n')
@@ -1487,14 +1494,12 @@ test('evidence-job adjudication validates its line citations against the evidenc
     const outcome = await runRobustJudgeJob({
       request,
       invoke: async (next) => {
-        if (next.audit_stage === 'adjudication-span-audit') return auditOutput([id])
-        if (next.judge_stage === 'adjudication') {
+        if (next.audit_stage === 'tiebreak-span-audit') return auditOutput([id])
+        if (next.judge_stage === 'tiebreak') {
           return JSON.stringify({ results: next.criteria.map((criterion) => ({
-            id: criterion,
-            verdict: criterion === id ? 'pass' : 'fail',
-            rationale: 'the tester handoff preserves U3',
+            id: criterion, verdict: 'pass', rationale: 'the tester handoff preserves U3',
             evidence: ['candidate/handoff.md'],
-            citations: criterion === id ? [{ path: 'candidate/handoff.md', start_line: 2, end_line: 2 }] : [],
+            citations: [{ path: 'candidate/handoff.md', start_line: 2, end_line: 2 }],
           })) })
         }
         return JSON.stringify({ results: next.criteria.map((criterion) => ({
@@ -1507,9 +1512,26 @@ test('evidence-job adjudication validates its line citations against the evidenc
     })
     assert.equal(outcome.ok, true)
     assert.equal(outcome.results.find((result) => result.id === id).verdict, 'pass')
+    assert.deepEqual(outcome.tiebreak.criteria, [id])
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+// Round-1 audit: source judges never saw the fixture scenario, so a judge
+// passed present mode without the marker the scenario requires.
+test('every judge prompt carries each criterion\'s fixture requirement', () => {
+  const request = buildJudgeRequest({ rubrics, job: 'scene-kit', authority, sources: ['src/a.ts'] })
+  assert.match(request.prompt, /mode-present-title-focused[\s\S]*Fixture requirement[^\n]*Present mode is title-focused[^\n]*shows its marker and one-line title/)
+  assert.match(request.rubric_slice, /WHEN the presentation is in present mode/)
+  assert.match(request.prompt, /every clause of the fixture requirement/i)
+  const evidence = buildJudgeRequest({ rubrics, job: 'assumption-handling', authority })
+  assert.match(evidence.rubric_slice, /Requirement \(eval-owned\): Judges implementation-workflow evidence/)
+})
+
+test('evidence judges compare the exploration plan with what was observed or disclosed', () => {
+  const request = buildJudgeRequest({ rubrics, job: 'testing-evidence', authority })
+  assert.match(request.prompt, /exploration plan[^.]*commits[\s\S]*observed or disclosed/i)
 })
 
 test('a cached single-sample judge output is not reused under the dual-sample protocol', async () => {
@@ -1543,7 +1565,7 @@ test('a cached record that does not reproduce from its samples is re-judged', as
   const outcome = await runProductJudging({
     rubrics, authority, evidence: [], sources: [],
     loadJob: async ({ id }) => (id === 'scene-kit'
-      ? { protocol: JUDGING_PROTOCOL, results: tampered, samples, adjudication: null, attempts: [] } : null),
+      ? { protocol: JUDGING_PROTOCOL, results: tampered, samples, tiebreak: null, attempts: [] } : null),
     invoke: async ({ criteria: asked }) => judgeOutput(asked),
   })
   assert.equal(outcome.reused_jobs.includes('scene-kit'), false)

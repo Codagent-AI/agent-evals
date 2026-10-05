@@ -1649,3 +1649,76 @@ test('a file a record merely references is supporting material, not a session au
   const skill = manifest.artifacts.find(({ origin }) => origin.relative_path === 'skills/presentation/SKILL.md')
   assert.equal(skill.role, 'referenced-material')
 })
+
+// Round-1 audit: per-round metadata kept beside the screenshots and named by
+// bare filename was never resolved, so its screenshots lost their metadata.
+test('a bare filename names a unique file in an output subdirectory and per-round metadata keeps its role', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'acceptance-handoff.md': [
+      '# Acceptance handoff',
+      `Current head SHA: ${FINAL_SHA}`,
+      '- Metadata: `round-1-screenshot-metadata.md` and `round-2-screenshot-metadata.md`',
+      '- Focus: keyboard-focus-round-1.png',
+      '- `acceptance-screenshots/step-2.png`: step 2 after ArrowRight.',
+    ].join('\n'),
+    'acceptance-screenshots/round-1-screenshot-metadata.md': `Round 1\nTested revision: ${FINAL_SHA}\n- keyboard-focus-round-1.png: focus ring on Next\n`,
+    'acceptance-screenshots/round-2-screenshot-metadata.md': `Round 2\nTested revision: ${FINAL_SHA}\n`,
+    'acceptance-screenshots/keyboard-focus-round-1.png': Buffer.from([137, 80, 78, 71, 2]),
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  const byName = (name) => manifest.artifacts.find(({ origin }) => origin.relative_path === `output/${name}`)
+  assert.equal(byName('acceptance-screenshots/round-1-screenshot-metadata.md').role, 'screenshot-metadata')
+  assert.equal(byName('acceptance-screenshots/round-2-screenshot-metadata.md').role, 'screenshot-metadata')
+  assert.deepEqual(
+    manifest.findings.filter(({ code }) => /-reference$/.test(code)).map(({ reference }) => reference),
+    [],
+  )
+})
+
+test('an ambiguous bare filename stays unresolved', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'acceptance-handoff.md': `# Acceptance handoff\nCurrent head SHA: ${FINAL_SHA}\nSee \`notes.md\` for details.\n`,
+    'round-1/notes.md': 'one\n',
+    'round-2/notes.md': 'two\n',
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  assert.ok(manifest.findings.some(({ code, reference }) => /-reference$/.test(code) && reference === 'notes.md'))
+  assert.equal(manifest.artifacts.some(({ origin }) => origin.relative_path.endsWith('notes.md')), false)
+})
+
+test('a Markdown metadata file describes only the screenshots it names', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'exploration-log.md': `# Exploration log\nTested revision: ${FINAL_SHA}\n- Keyboard: ArrowRight moved to step 2.\n`,
+    'acceptance-handoff.md': `# Acceptance handoff\nCurrent head SHA: ${FINAL_SHA}\nMetadata in \`round-1-screenshot-metadata.md\`.\n`,
+    'acceptance-screenshots/round-1-screenshot-metadata.md': `Tested revision: ${FINAL_SHA}\n- \`acceptance-screenshots/step-2.png\`: step 2 heading\n`,
+    'acceptance-screenshots/unnamed.png': Buffer.from([137, 80, 78, 71, 3]),
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  const byName = (name) => manifest.artifacts.find(({ origin }) => origin.relative_path === `output/${name}`)
+  assert.equal(byName('acceptance-screenshots/step-2.png').verification_state, 'verified')
+  assert.equal(byName('acceptance-screenshots/unnamed.png').verification_state, 'defective')
+})

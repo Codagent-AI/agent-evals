@@ -1904,9 +1904,6 @@ test('a failed outline fallback receives a follow-up opinion after the failed re
       if (request.audit_stage) return JSON.stringify({ results: request.criteria.map((id) => ({
         id, classification: 'confirmed', rationale: 'source supports the result', evidence: ['src/index.ts'],
       })) })
-      if (request.judge_stage === 'adjudication') return JSON.stringify({ results: request.criteria.map((id) => ({
-        id, verdict: 'fail', rationale: 'the adjudicator upholds the fallback fail', evidence: ['src/index.ts'],
-        citations: [{ path: 'src/index.ts', start_line: 1, end_line: 1 }] })) })
       return JSON.stringify({ results: request.criteria.map((id) => ({ id,
         verdict: id === 'demo-nine-step-content-and-order' ? 'fail' : 'pass',
         rationale: 'fixture source result', evidence: ['src/index.ts'], citations: ['src/index.ts'] })) })

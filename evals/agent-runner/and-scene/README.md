@@ -23,22 +23,33 @@ log audit.
 
 No single model sample decides a scored criterion. Each judge job runs two
 independent samples with identical inputs, concurrently; source-job samples
-each pass through their own closed-world source audit. A criterion both
-samples pass is a consensus pass. Every other criterion, a disagreement or a
-fail, goes to one adjudicating judge per job that sees both samples' claims.
-An adjudicated pass must cite line spans (`path`, `start_line`, `end_line`)
-that the harness validates exactly as the browser second opinion does: the
-path must be in the verified neutral source inventory (or the materialized
-evidence view for the testing-evidence and assumption-handling jobs), resolve
-inside it without a symbolic link, and the range must lie inside the file and
-span under 200 lines. The quoted lines go to a closed-world span audit, and
-only `confirmed` keeps the pass; otherwise the criterion fails with the audit
-reason. Invalid adjudication output is retried and, once exhausted, leaves the
-job unobserved, never failed. Each criterion's evidence records its judging
-basis, `phases/product-judging.json` keeps both samples, the adjudication, and
+each pass through their own closed-world source audit. A verdict both samples
+agree on stands, pass or fail. A criterion they disagree on goes to a third
+independent sample that gets the job's unchanged context and never sees the
+first two verdicts, so its vote is the majority. A majority pass must cite line
+spans (`path`, `start_line`, `end_line`) that the harness validates exactly as
+the browser second opinion does: the path must be in the verified neutral
+source inventory (or the materialized evidence view for the testing-evidence
+and assumption-handling jobs), resolve inside it without a symbolic link, and
+the range must lie inside the file and span under 200 lines. The quoted lines
+go to a closed-world span audit that confirms the pass only when they satisfy
+every clause of the criterion's requirement; otherwise the criterion fails
+with the audit reason. Invalid third-sample output is retried and, once
+exhausted, leaves the job unobserved, never failed.
+
+Every judge sees, beside each criterion, the requirement it traces to: the
+full fixture scenario from `fixture-snapshot/` for a fixture-owned criterion,
+or the eval-owned reason. Each criterion's evidence records its judging basis
+(`consensus-pass`, `consensus-fail`, `majority-pass`, `majority-fail`),
+`phases/product-judging.json` keeps every sample, the third-sample vote, and
 the per-criterion consensus, and `phases/eval-owned-usage.jsonl` records each
-call's `stage` (`<job>:sample-1`, `<job>:sample-2`, `<job>:adjudication`,
-`<job>:adjudication-audit`) so judging cost is measurable per stage.
+call's `stage` (`<job>:sample-1`, `<job>:sample-2`, `<job>:tiebreak`,
+`<job>:tiebreak-audit`). A Codex turn rejected as at capacity before any model
+output is waited out with backoff, without spending a judge attempt, and is
+recorded with zero tokens so judging usage stays complete.
+
+`rubric-history.json` records the content hash of every automated rubric
+version; a test fails when the rubric changes without a new version.
 
 ## Fixture traceability
 
@@ -490,13 +501,19 @@ filenames are:
 | Acceptance flow record (or an exploration log in its place) | `acceptance-flow-evidence.md`, `acceptance-test-results.md`, `acceptance-flow.md`, `acceptance-evidence.md`, `flow-evidence.md` |
 | Exploration log (satisfies the flow record) | `exploration-log.md`, `acceptance-exploration-log.md`, `acceptance-exploration.md` |
 | Screenshots | `.png`, `.jpg`, `.jpeg`, or `.webp` files referenced by the handoff or found in the recorded acceptance output, such as `acceptance-screenshots/` |
-| Screenshot metadata (optional) | `acceptance-test.md`, `capture-metadata.json`, `screenshot-metadata.json`, `screenshot-manifest.json`, `capture-manifest.json` |
+| Screenshot metadata (optional, one or more) | `acceptance-test.md`, `capture-metadata.json`, `screenshot-metadata.json`, `screenshot-manifest.json`, `capture-manifest.json`, and any `*-screenshot-metadata.md`/`.json` such as `round-1-screenshot-metadata.md` |
 | Findings and retest history | `findings-history.md`, `retest-history.md`, `acceptance-findings.md`, `findings.md`, `acceptance-retest.md` |
 | Final handoff | `acceptance-handoff.md`, `final-acceptance-handoff.md`, `acceptance-final-handoff.md`, `final-handoff.md`, `acceptance-handoff-tester.md` |
 | Acceptance gate notice (optional) | Agent Runner's generated `acceptance-handoff.md` starting `# Acceptance did not converge within`, when a tester handoff exists |
 | Assumptions ledger | `acceptance-assumptions.md`, `assumptions-ledger.md`, `acceptance-assumption-ledger.md`, `assumptions.md` |
 | Acceptance pass record (optional) | `exploration-plan.md`, `acceptance-exploration-plan.md`, and pass-numbered copies of acceptance records such as `acceptance-findings-pass1.md` |
 | Tested revision (optional) | `acceptance-tested-revision.txt` |
+
+A bare filename a record names, such as `round-1-screenshot-metadata.md`
+kept in `acceptance-screenshots/`, resolves to the one scanned output file with
+that name; an ambiguous name stays unresolved. Without usable JSON capture
+metadata, a screenshot is verified only when a verified record, including a
+Markdown metadata file, names it.
 
 When acceptance does not converge, Agent Runner's acceptance gate moves the
 tester's handoff to `acceptance-handoff-tester.md` and writes its own short
@@ -545,6 +562,16 @@ is judged against those user-visible behaviors, whatever testing approach the
 candidate took, never against a fixed test-plan case list. Each testing-evidence
 criterion's definition comes from `criterion_definitions` in the automated
 rubric and is shown to the judge beside its identifier.
+
+Automated rubric 9.0.0 settles the criteria the round-1 audit found judges
+splitting on: newcomer sequencing follows the design's entry delay, the
+present-mode marker, the uniform-fit reference viewports (1280×720 and
+390×844), preview ownership mechanisms, one representative browser-error test,
+the missing-sample failure phase, textless chrome in overlap detection,
+environment-impossible acceptance journeys, diff-scoped re-test exploration,
+exploration-plan commitments, candor in assumption handling, and decisions
+named in the final handoff. 8.0.0 was published with two contents; tell those
+results apart by their recorded rubric hash.
 
 Automated rubric 8.0.0 traces guidance to the fixture where 7.0.0 exceeded it:
 settled screenshots accept the configured settle interval, touch swipe no

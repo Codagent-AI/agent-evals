@@ -44,6 +44,12 @@ If the evaluated workflow fails to produce those required artifacts or identitie
 - **AND** the notice is retained under the `acceptance-gate-notice` role and shown to evidence judges as Runner-generated context
 - **AND** the notice fills the final-handoff role only when no candidate-written handoff exists
 
+#### Scenario: Per-round screenshot metadata is named by bare filename
+- **WHEN** a record names `round-1-screenshot-metadata.md`, which lives in `acceptance-screenshots/`
+- **THEN** the harness resolves the bare filename to the one scanned file with that name and keeps it as `screenshot-metadata`
+- **AND** an ambiguous bare filename stays unresolved
+- **AND** without usable JSON metadata a screenshot stays verified only when a verified record, including a Markdown metadata file, names it
+
 #### Scenario: A record references a file with no evidence role
 - **WHEN** a verified record references a file such as a skill or source file that matches no evidence role
 - **THEN** the file is retained as `referenced-material` rather than as a session audit
@@ -133,10 +139,10 @@ The evaluation SHALL score candidate testing-evidence quality out of four points
 
 | Criterion | Points | Required behavior |
 |---|---:|---|
-| Traceable coverage | 1 | Verified evidence shows the user-visible behaviors the approved specs add were exercised, by any testing approach; disclosed, reasoned omissions count proportionally and undisclosed omissions fully. |
+| Traceable coverage | 1 | Verified evidence shows the user-visible behaviors the approved specs add were exercised, by any testing approach; a disclosed environmental impediment does not count, other disclosed omissions count proportionally, and undisclosed omissions fully. |
 | Usable proof | 1 | Each claimed exercised behavior is backed by verified artifacts, such as logs, captures, transcripts, or recorded observations, in the bounded view. |
-| Final-revision applicability | 1 | The recorded last-tested revision is the final SHA, or every product change after it was explored by a verified diff-scoped pass. |
-| Complete and honest record | 1 | Gaps, limitations, warning dispositions, and unresolved findings are disclosed, and completion claims do not exceed the evidence. |
+| Final-revision applicability | 1 | The recorded last-tested revision is the final SHA, or every product file the last diff-scoped pass's diff lists was explored, meaning the pass exercised the behavior or ran the command that executes it. |
+| Complete and honest record | 1 | Gaps, limitations, warning dispositions, and unresolved findings are disclosed, completion claims do not exceed the evidence, and every behavior the exploration plan commits to is observed or disclosed as not exercised. |
 
 The rubric SHALL carry an explicit definition for each criterion, and the testing-evidence judge SHALL receive each definition beside its identifier together with the requirement and scenario headings of the approved specs as reference. Coverage SHALL NOT be measured against a fixed test-plan case inventory.
 

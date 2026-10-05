@@ -38,9 +38,11 @@ export const EVIDENCE_ROLE_REGISTRY = [
   {
     // Optional: the exploratory skill names no metadata file. Screenshots
     // without one are verified only when a verified record describes them.
+    // Per-round metadata (round-1-screenshot-metadata.md) is common, so each
+    // file keeps the role.
     role: 'screenshot-metadata',
     required: false,
-    multiple: false,
+    multiple: true,
     aliases: [
       'acceptance-test.md',
       'capture-metadata.json',
@@ -168,6 +170,7 @@ function missingRequiredRoles(presentRoles) {
 // Verified narrative records that can describe a screenshot in place of a
 // capture metadata file, by naming the file or a directory that holds it.
 const SCREENSHOT_DESCRIBING_ROLES = new Set([
+  'screenshot-metadata',
   'acceptance-flow-record',
   'exploration-log',
   'findings-history',
@@ -202,6 +205,7 @@ function missingRoleMessage(role) {
     : `candidate evidence does not include the expected ${role} role or an ${alternatives.join(' or ')} role in its place`
 }
 
+const SCREENSHOT_METADATA_RECORD = /(?:^|[-_])screenshots?[-_](?:metadata|manifest)(?:[-_][\w.-]*)?\.(?:md|json)$/
 const PRIOR_PASS_RECORD = /^(?:acceptance|exploration)-[\w.-]*?(?:pass|round)[-_]?\d+[\w.-]*\.(?:md|txt|json|log)$/
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp'])
 const TEXT_EXTENSIONS = new Set(['.md', '.txt', '.json', '.yaml', '.yml', '.log'])
@@ -245,6 +249,7 @@ function roleFor(path) {
     if (definition.role === 'screenshot' && IMAGE_EXTENSIONS.has(extension)) return definition.role
     if (definition.aliases.some((alias) => alias.toLowerCase() === name)) return definition.role
   }
+  if (SCREENSHOT_METADATA_RECORD.test(name)) return 'screenshot-metadata'
   if (PRIOR_PASS_RECORD.test(name)) return 'acceptance-pass-record'
   const normalized = path.split(sep).join('/').toLowerCase()
   if (/session-reports?\//.test(normalized) || /(?:session|assumption|context-gap)[-_]?audit/.test(name)) {
@@ -598,6 +603,14 @@ async function discoverCandidateFiles({ worktree, sessionDir }) {
 
   const findings = []
   const selected = new Map()
+  // A bare filename a record names may live in an output subdirectory such as
+  // acceptance-screenshots/. It resolves only when exactly one scanned file
+  // has that name.
+  const byBasename = new Map()
+  for (const path of scanned) {
+    const name = basename(path)
+    byBasename.set(name, [...(byBasename.get(name) ?? []), path])
+  }
   for (const path of scanned) {
     let role = roleFor(path)
     if (!role) continue
@@ -644,10 +657,13 @@ async function discoverCandidateFiles({ worktree, sessionDir }) {
       processed.add(sourceKey)
       const text = source.bytes.toString('utf8')
       for (const reference of extractReferences(text)) {
+        const unique = !/[\\/]/.test(reference) && byBasename.get(reference)?.length === 1
+          ? byBasename.get(reference) : []
         const candidates = [
           resolve(dirname(source.origin.absolute_path), reference),
           ...(sessionOutput ? [resolve(sessionOutput, reference)] : []),
           resolve(worktree, reference),
+          ...unique,
         ]
         let accepted = false
         for (const path of candidates) {
@@ -929,12 +945,12 @@ export async function buildCandidateEvidenceManifest({
         }
       }
     }
-  } else if (screenshotMetadataMalformed || !materializedRoles.has('screenshot-metadata')) {
+  } else {
     // JSON metadata that failed to parse is unusable: role presence alone must
-    // not leave screenshots unvalidated. With no metadata file at all, a
-    // screenshot stays verified only when a verified narrative record names it,
-    // so the judge can read what was inspected and observed there. Non-JSON
-    // metadata is a supported form and is covered by text extraction.
+    // not leave screenshots unvalidated. Without usable JSON metadata, a
+    // screenshot stays verified only when a verified record names it; a
+    // Markdown metadata file is such a record, so the judge can read what was
+    // inspected and observed there.
     const describing = screenshotMetadataMalformed
       ? []
       : artifacts.filter(({ role, verification_state: state }) => (
