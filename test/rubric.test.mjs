@@ -501,4 +501,8 @@ test('rubric 8.0 guidance traces to the fixture rather than exceeding it', async
   assert.match(guidance('demo-identity-and-grouping'), /single groupKey shared by all nine steps is the correct grouping/)
   assert.match(guidance('demo-code-boundaries'), /trace it through every use/)
   assert.match(guidance('scene-style-and-attribution'), /https:\/\/github\.com\/Codagent-AI\/and-scene/)
+  // "navigation keys drive that control": the mode shortcut is not a navigation key.
+  assert.match(guidance('scene-modes-and-navigation'), /mode-toggle shortcut is not part of this criterion/)
+  // "does not contain a default and-scene brand link": no brand slot is required.
+  assert.match(guidance('scene-style-and-attribution'), /does not require a kit brand slot/)
 })
