@@ -1687,9 +1687,11 @@ export async function runEvaluation({
     },
 
     'metrics-pricing': async () => {
-      if (rescore) {
+      if (rescore && Array.isArray(record.metrics?.attempts)) {
         refreshBillingTokens(record.metrics.attempts)
       } else {
+        // A source that failed before its metrics phase recorded none, so a
+        // rescore reads them from the Runner session it imported.
         record.metrics = await readRunnerMetrics({
           sessionDir: record.run?.session_dir ?? null,
           runId: record.run?.run_id ?? runId,

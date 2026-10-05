@@ -1540,6 +1540,24 @@ test('the controller releases the browser after browser evaluation and after rep
   assert.ok(result.exitCode === 0 || result.exitCode === 1)
 })
 
+// Agent-evals #78 rep 2 failed in product judging, before metrics were
+// recorded, so its result carries no implementation metrics to import.
+test('a rescore of a source without recorded metrics reads them from the Runner session', async () => {
+  const context = await environment()
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    controllerChangeName: null,
+    verifyDelivery: async () => {
+      throw new Error('rescore must not rediscover historical artifact paths')
+    },
+    loadRescoreSource: async () => ({ ...importedRescore(context), implementation_metrics: null, cost: null, pricing: null }),
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.outcome?.failure ?? result.errors))
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.notEqual(written.failed_phase, 'metrics-pricing')
+  assert.ok(written.implementation_metrics)
+})
+
 test('rescore checks browser failures while a reference baseline does not', async () => {
   const rescoreContext = await environment()
   const broken = () => {
