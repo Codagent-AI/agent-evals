@@ -50,6 +50,47 @@ test('malformed verifier output exhausts retries without silently upholding', as
     attempts: 2, invoke: async () => { calls += 1; return '{broken' } })
   assert.equal(calls, 2)
   assert.equal(outcome.ok, false)
+  assert.match(outcome.reason, /second-opinion output invalid:/)
+  assert.match(outcome.reason, /JSON|Unexpected|property/i)
+})
+
+test('malformed verifier and audit shapes retain their validation cause', async () => {
+  const malformed = await runSecondOpinion({
+    request: { target: { kind: 'criterion', id: 'demo-supported-navigation' } },
+    attempts: 1, invoke: async () => JSON.stringify({ ...uphold, rationale: '' }),
+  })
+  assert.match(malformed.reason, /malformed second-opinion answer/)
+  const root = await mkdtemp(join(tmpdir(), 'second-opinion-invalid-audit-'))
+  await writeFile(join(root, 'handler.js'), 'handler\n')
+  const request = { target: { kind: 'criterion', id: 'demo-supported-navigation' },
+    verified_source_paths: ['handler.js'], input_roots: { source: root }, audit_cwd: root,
+    failing_record: { verdict: 'fail' } }
+  const audit = await runSecondOpinion({ request, attempts: 1,
+    invoke: async (call) => JSON.stringify(call.audit_stage ? { results: [] } : {
+      ...uphold, decision: 'overturn', mismeasured_step: 'next', measurement_fault: 'missed key',
+      citations: [{ path: 'handler.js', start_line: 1, end_line: 1 }],
+    }),
+  })
+  assert.match(audit.reason, /second-opinion audit output invalid: malformed audit/)
+})
+
+test('browser replay classification follows the failing evidence source', async () => {
+  const rubrics = await loadRubrics()
+  const browser = { criteria: [{ id: 'demo-nine-step-content-and-order', verdict: null }],
+    probes: [{ id: 'demo-nine-step-content-and-order', result: { verdict: null, outcome: 'not-observed' } }],
+    gates: [{ id: 'verification-every-produced-step-renders', verdict: 'fail' },
+      { id: 'verification-clear-outcome', verdict: 'fail' }] }
+  const judging = { judges: { 'demo-integration': [{ id: 'demo-nine-step-content-and-order',
+    verdict: 'fail', rationale: 'missing outline', citations: ['src/demo.js'] }] } }
+  const neutral = { sources: ['src/demo.js'] }
+  const request = (target) => buildSecondOpinionRequest({ target, rubrics, browser, judging, neutral })
+  const fallback = request({ kind: 'criterion', id: 'demo-nine-step-content-and-order',
+    on_behalf_of: 'verification-sample-outline' })
+  assert.equal(fallback.browser_derived, false)
+  assert.equal(fallback.failing_record.verdict, 'fail')
+  assert.deepEqual(fallback.failing_record.citations, ['src/demo.js'])
+  assert.equal(request({ kind: 'gate', id: 'verification-every-produced-step-renders' }).browser_derived, true)
+  assert.equal(request({ kind: 'gate', id: 'verification-clear-outcome' }).browser_derived, false)
 })
 
 test('verifier invocation failure retries and keeps its cause when exhausted', async () => {

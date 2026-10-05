@@ -1783,7 +1783,8 @@ test('an inferred mode mismatch reaches fallback judging and the derived outline
 test('a failed outline fallback receives a follow-up opinion after the failed renders gate', async () => {
   const context = await environment()
   const driver = browserDemo()
-  driver.replay = async () => ({ passed: true, observations: [{ stepIndex: 1 }], trace: ['pressed'] })
+  let replayCalls = 0
+  driver.replay = async () => { replayCalls += 1; return { passed: true } }
   const originalState = driver.state.bind(driver)
   let focused = null
   let failureReads = 0
@@ -1791,6 +1792,7 @@ test('a failed outline fallback receives a follow-up opinion after the failed re
   driver.state = async () => ({ ...await originalState(), mode: 'browse', modeBasis: 'heuristic', focused })
   driver.failures = async () => (++failureReads === 1 ? ['console error'] : [])
   const calls = []
+  let fallbackRequest = null
   const result = await evaluate(context, profiles, {
     browserDriver: driver,
     verifyCandidate: async () => ({ build: { ok: true, log: 'built' },
@@ -1809,15 +1811,14 @@ test('a failed outline fallback receives a follow-up opinion after the failed re
         if (request.audit_stage) return JSON.stringify({ results: [{ id: request.criteria[0],
           classification: 'confirmed', rationale: 'source and fault agree', evidence: ['src/index.ts'] }] })
         calls.push(request.target)
+        if (request.target.kind === 'criterion') fallbackRequest = request
         return JSON.stringify(request.target.kind === 'gate'
           ? { decision: 'uphold', rationale: 'console failure remains', mismeasured_step: null,
             measurement_fault: null, citations: [], log_citations: [], replay: null }
           : { decision: 'overturn', rationale: 'outline title is in source',
             mismeasured_step: 'title reading', measurement_fault: 'mode was inferred',
             citations: [{ path: 'src/index.ts', start_line: 1, end_line: 1 }], log_citations: [],
-            replay: { actions: [{ type: 'navigate', path: '/how-to-make-a-presentation' },
-            { type: 'press', key: 'ArrowRight' }],
-              expect: { type: 'step-index-equals', value: 1 } } })
+            replay: null })
       }
       if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
       if (request.audit_stage) return JSON.stringify({ results: request.criteria.map((id) => ({
@@ -1832,6 +1833,9 @@ test('a failed outline fallback receives a follow-up opinion after the failed re
   assert.equal(calls[0].id, 'verification-every-produced-step-renders')
   assert.equal(calls[1].id, 'demo-nine-step-content-and-order')
   assert.equal(calls[1].on_behalf_of, 'verification-sample-outline')
+  assert.equal(fallbackRequest.browser_derived, false)
+  assert.equal(fallbackRequest.failing_record.verdict, 'fail')
+  assert.equal(replayCalls, 0)
   const written = await readJson(join(context.runDir, 'result.json'))
   assert.equal(written.score.gates.find(({ id }) => id === 'verification-sample-outline').verdict, 'pass')
   assert.equal(written.score.gates.find(({ id }) => id === 'verification-every-produced-step-renders').verdict, 'fail')

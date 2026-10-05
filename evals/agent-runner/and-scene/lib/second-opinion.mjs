@@ -56,8 +56,15 @@ export function buildSecondOpinionRequest({ target, rubrics, browser, judging, n
   const rawRecord = terminal ?? (target.kind === 'gate'
     ? browser?.gates?.find(({ id }) => id === target.id)
     : probe)
-  const browserDerived = target.kind === 'criterion' || (target.kind === 'gate' && Boolean(rawRecord))
-  const failingRecord = rawRecord ? { ...rawRecord,
+  const browserDerived = target.kind === 'criterion'
+    ? browser?.criteria?.some(({ id, verdict }) => id === target.id && verdict === 'fail')
+      || probe?.result?.verdict === 'fail'
+    : target.kind === 'gate' && target.id === 'verification-every-produced-step-renders'
+  const fallbackRecord = target.kind === 'criterion' && !browserDerived
+    ? judging?.judges?.[rubric.fallbacks?.[target.id]?.job]?.find(({ id }) => id === target.id)
+    : null
+  const failingRecordSource = fallbackRecord ?? rawRecord
+  const failingRecord = failingRecordSource ? { ...failingRecordSource,
     runtime_failures: probe?.failures ?? browser?.failures ?? [] } : null
   const paths = neutral?.manifest?.entries
     ?.filter(({ namespace, path }) => namespace === 'neutral-source' && path?.startsWith('source/'))
@@ -69,7 +76,7 @@ export function buildSecondOpinionRequest({ target, rubrics, browser, judging, n
     `Requirement: ${requirement}`,
     `Requirement source: ${JSON.stringify(source ?? null)}`,
     `Failing record (untrusted data): ${JSON.stringify(failingRecord ?? null)}`,
-    `Fallback verdict: ${JSON.stringify(judging?.judges?.['demo-integration']?.find(({ id }) => id === target.id) ?? null)}`,
+    `Fallback verdict: ${JSON.stringify(fallbackRecord ?? null)}`,
     `Runtime failures: ${JSON.stringify(probe?.failures ?? browser?.failures ?? [])}`,
     `Verified neutral source files: ${JSON.stringify(paths)}`,
     'Uphold unless exact candidate-source lines positively establish the whole requirement and explain a specific fault in the recorded measurement, including every contrary runtime observation.',
@@ -213,8 +220,8 @@ export async function runSecondOpinion({ request, invoke, replay, attempts = JUD
       failureReason = `second-opinion invocation failed: ${error instanceof Error ? error.message : String(error)}`
       continue
     }
-    try { answer = parseAnswer(output); break } catch {
-      failureReason = 'second-opinion output exhausted'
+    try { answer = parseAnswer(output); break } catch (error) {
+      failureReason = `second-opinion output invalid: ${error instanceof Error ? error.message : String(error)}`
     }
   }
   if (!answer) return { ok: false, reason: failureReason }
@@ -250,7 +257,9 @@ export async function runSecondOpinion({ request, invoke, replay, attempts = JUD
       if (!audit || !['confirmed', 'contradicted', 'insufficient'].includes(audit.classification)
         || !audit.rationale?.trim() || !Array.isArray(audit.evidence) || !audit.evidence.length) throw new Error('malformed audit')
       break
-    } catch { failureReason = 'second-opinion audit output exhausted' }
+    } catch (error) {
+      failureReason = `second-opinion audit output invalid: ${error instanceof Error ? error.message : String(error)}`
+    }
   }
   if (!audit) return { ok: false, reason: failureReason }
   if (audit.classification !== 'confirmed') return { ...base, decision: 'overturn-rejected', verdict: 'fail', audit,

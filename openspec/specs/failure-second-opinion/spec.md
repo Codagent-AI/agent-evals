@@ -13,6 +13,8 @@ The verifier SHALL be called once per failure. A criterion that failed under its
 
 `verification-sample-outline` SHALL have no verifier call of its own, because it is derived from the final verdicts of `demo-route-and-registration` and `demo-nine-step-content-and-order`. When the derived gate fails, each failing input criterion that has not already received a second opinion SHALL receive one on the gate's behalf; this includes an input that failed under its fallback judge. The gate SHALL then be derived again from the resulting final verdicts.
 
+An input that failed under its fallback judge is a non-browser failure for this follow-up. Its verifier and span audit SHALL receive the fallback judge's recorded `fail`, rationale, and source citations. It remains subject to source-citation validation and the span audit, but it SHALL NOT require browser replay. The harness SHALL re-derive the outline gate only after every required input verifier call and audit has completed. Missing judge output for any input SHALL leave that input unresolved and follow the resumable harness-failure path; one overturned input SHALL NOT make the gate pass while another input remains failed or unresolved.
+
 A build or serve failure that would end the run as a conclusive product failure SHALL receive its second opinion before that outcome is recorded, under the terminal-failure contract.
 
 The second opinion SHALL NOT run in a reference-baseline evaluation or in calibration. In those modes the raw verdicts are final and no second-opinion data is recorded.
@@ -34,6 +36,17 @@ The second opinion SHALL NOT run in a reference-baseline evaluation or in calibr
 - **WHEN** `demo-nine-step-content-and-order` is resolved as `fail` by its fallback judge and the derived `verification-sample-outline` gate therefore fails
 - **THEN** the harness makes one verifier call for `demo-nine-step-content-and-order` on the gate's behalf
 - **AND** the gate is derived again from the criterion's resulting final verdict
+
+#### Scenario: A fallback-judged outline input is overturned
+- **WHEN** the fallback judge recorded a failed outline input with source citations
+- **AND** its follow-up verifier cites valid source spans and the span audit confirms the overturn
+- **THEN** the input can pass without browser replay, and the audit includes the fallback verdict and citations
+
+#### Scenario: One outline input remains failed or unresolved
+- **WHEN** one failed outline input is overturned and the other remains `fail`
+- **THEN** the derived outline gate remains `fail`
+- **WHEN** a required input verifier or audit produces no valid output after retries
+- **THEN** the gate remains unresolved and the run follows the resumable harness-failure path
 
 #### Scenario: Both outline inputs were already checked
 - **WHEN** both outline input criteria failed in the browser and each received its own second opinion
@@ -60,7 +73,7 @@ For each failure, the verifier SHALL receive:
 - the recorded runtime evidence that bears on the failure, such as page errors, console failures, and build or serve logs;
 - read access to the candidate's verified neutral source.
 
-The verifier SHALL answer exactly one of `uphold` or `overturn`, with a rationale. An `overturn` SHALL also name the probe step or recorded observation it says was mismeasured, explain how the measurement went wrong, and cite candidate source.
+The verifier SHALL answer exactly one of `uphold` or `overturn`, with a rationale. An `overturn` SHALL also name the probe step or recorded observation it says was mismeasured, explain how the measurement went wrong, and cite candidate source. For a fallback-judged outline input, the relevant recorded observation is the fallback judge's verdict and cited source rather than a failed browser probe.
 
 For a browser-derived criterion or gate, the answer SHALL include a structured replay with 1–12 actions, starting with navigation to a candidate path, and one expected observation. Remaining actions are limited to clicking a selector, pressing a key, sending keys, swiping left or right by touch or pointer, and waiting up to 2000 ms. Expected observations are limited to a step index equaling a specified value, a changed step index or step count, a `present` or `browse` mode, selector visibility, or text present in a selector. A change or hide expectation compares the state after navigation with the state after the remaining actions. An uphold and a build or serve terminal answer MAY use `replay: null`.
 
@@ -81,9 +94,18 @@ An overturn asserts both that the raw `fail` was a measurement problem and that 
 2. it cites candidate source as one or more spans, each a path with a start line and an end line;
 3. every span is valid: its path is a regular file in the verified delivery's source inventory, inside the neutral source root and not a symbolic link; its start line is at least 1; its end line is not before its start line; and its end line is within the file;
 4. the source audit, shown exactly the cited spans together with the failing record (the probe's or gate's recorded verdict, rationale, observations, and reading basis) and every page or console failure recorded for it, confirms all of these: the spans establish that the requirement is met; the stated measurement fault matches the recorded failing observation; and every contrary runtime observation is accounted for as a measurement fault.
-5. for a deterministic browser criterion or a gate whose failing record came from browser evidence, a real-browser replay against the running candidate server completes and its observed result matches the expected observation.
+5. for a deterministic criterion whose browser evaluator recorded `fail`, or for `verification-every-produced-step-renders`, a real-browser replay against the running candidate server completes and its observed result matches the expected observation.
 
-The harness SHALL keep the candidate server running through product judging, including evaluator-only rescore. Missing, malformed, unavailable, or failed replay SHALL reject the overturn with a reason, leaving the raw fail standing. Build and serve terminal overturns and gates without browser evidence do not require replay. The recorded replay actions, expectation, observations, trace, and pass result SHALL be kept with the raw and second-opinion verdicts in the result and report.
+The hard gates use these replay rules:
+
+| Gate | Replay requirement |
+| --- | --- |
+| `verification-build-whole-app` | No replay for terminal install or build failure; use the terminal log and source audit. |
+| `verification-sample-outline` | No gate-level verifier. A failed input recorded by the browser requires replay; a fallback-judged failed input does not. |
+| `verification-every-produced-step-renders` | Replay required for an overturn of its browser-recorded runtime or console failure. |
+| `verification-clear-outcome` | No replay; its failure comes from verification output, not a browser probe. |
+
+The harness SHALL keep the candidate server running through product judging, including evaluator-only rescore. Missing, malformed, unavailable, or failed required replay SHALL reject the overturn with a reason, leaving the raw fail standing. Terminal serve overturns also require the terminal log and source audit, not replay. The recorded replay actions, expectation, observations, trace, and pass result SHALL be kept with the raw and second-opinion verdicts in the result and report.
 
 The standard for establishing the requirement SHALL be at least the standard a fallback judge's `pass` must meet. Showing only that the probe was unsound, without positive source evidence that the requirement is met, SHALL NOT be accepted as an overturn.
 
