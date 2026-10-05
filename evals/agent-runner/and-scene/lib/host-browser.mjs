@@ -45,6 +45,10 @@ export function createHostBrowser({
   fetchImpl = fetch,
   axi = defaultAxi,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  rmImpl = rm,
+  // Chrome leads its own process group, so its helpers stop with it.
+  killGroup = (pid, signal) => process.kill(-pid, signal),
+  log = (line) => console.error(line),
 } = {}) {
   let child = null
   let profile = null
@@ -61,7 +65,7 @@ export function createHostBrowser({
       `--js-flags=--max-old-space-size=${JS_HEAP_MB}`,
       ...HOST_CHROME_FLAGS,
       'about:blank',
-    ], { stdio: 'ignore' })
+    ], { stdio: 'ignore', detached: true })
     for (let attempt = 0; attempt < READY_ATTEMPTS; attempt += 1) {
       try {
         if ((await fetchImpl(`${url}/json/version`)).ok) {
@@ -79,6 +83,15 @@ export function createHostBrowser({
     })
   }
 
+  const signal = (running, name) => {
+    try {
+      killGroup(running.pid, name)
+    } catch {
+      running.kill(name)
+    }
+  }
+
+  // Releasing is cleanup: it never fails the browser phase that used Chrome.
   async function release() {
     const running = child
     child = null
@@ -88,16 +101,22 @@ export function createHostBrowser({
       await axi(['stop']).catch(() => {})
       if (running.exitCode === null) {
         const exited = new Promise((resolve) => running.once('exit', resolve))
-        running.kill('SIGTERM')
-        const timer = setTimeout(() => { if (running.exitCode === null) running.kill('SIGKILL') }, EXIT_GRACE_MS)
+        signal(running, 'SIGTERM')
+        const timer = setTimeout(() => { if (running.exitCode === null) signal(running, 'SIGKILL') }, EXIT_GRACE_MS)
         await exited
         clearTimeout(timer)
       }
       delete env.CHROME_DEVTOOLS_AXI_BROWSER_URL
     }
     if (profile) {
-      await rm(profile, { recursive: true, force: true })
+      const directory = profile
       profile = null
+      // Helpers may still flush into the profile for a moment after exit.
+      try {
+        await rmImpl(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+      } catch (error) {
+        log(`host-browser: could not remove ${directory}: ${error.message}`)
+      }
     }
   }
 
