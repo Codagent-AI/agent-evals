@@ -25,7 +25,7 @@
   </nav>
 </div>
 <script>
-// One page, fifteen behaviours. The server injects VARIANT and STEPS; nothing here
+// One page, several adversarial behaviours. The server injects VARIANT and STEPS; nothing here
 // is a candidate. Each variant isolates one judgment the evaluator must make.
 const variant = window.VARIANT
 const steps = window.STEPS
@@ -53,7 +53,7 @@ if (variant === 'g') root.removeAttribute('data-presentation')
 // heading in both modes, with a caption paragraph only in browse mode. (l) is
 // (k) without the step-title heading: the marker must not stand in for it.
 const marked = variant === 'k' || variant === 'l'
-const unhooked = variant === 'h' || variant === 'i' || variant === 'j' || marked
+const unhooked = variant === 'h' || variant === 'i' || variant === 'j' || variant === 'r' || marked
 let footer = null
 if (unhooked) {
   document.getElementById('title').remove()
@@ -99,13 +99,17 @@ function renderUnhooked() {
     : []))
   footer.replaceChildren(...(mode === 'browse'
     ? [element('p', step.title, { class: 'step-title' }), element('p', step.caption, { class: 'caption' })]
-    : [element('p', [element('span', marker), ` ${step.title}`], { 'data-presentation-present-title': '' })]))
+    : [element('p', [element('span', marker), ` ${step.title}`],
+      variant === 'r' ? {} : { 'data-presentation-present-title': '' })]))
 }
 
 function render() {
-  if (variant === 'i' || marked) {
+  if (variant === 'i' || marked || variant === 'p') {
     root.removeAttribute('data-presentation-mode')
     root.setAttribute('data-mode', mode)
+  } else if (variant === 'r') {
+    root.removeAttribute('data-presentation-mode')
+    root.removeAttribute('data-mode')
   } else {
     root.setAttribute('data-presentation-mode', mode)
   }
@@ -114,10 +118,31 @@ function render() {
     renderUnhooked()
   } else {
     const title = document.getElementById('title')
-    title.textContent = steps[index].title
+    title.textContent = variant === 't' ? '' : steps[index].title
     // (d) hides the one thing a reader must see in present mode.
     title.classList.toggle('hidden', variant === 'd' && mode === 'present')
-    document.getElementById('caption').textContent = steps[index].caption
+    const caption = document.getElementById('caption')
+    if (variant === 's') {
+      caption.removeAttribute('data-presentation-caption')
+      const middle = Math.floor(steps[index].caption.length / 2)
+      const left = document.createElement('span')
+      const right = document.createElement('span')
+      left.textContent = steps[index].caption.slice(0, middle)
+      right.textContent = steps[index].caption.slice(middle)
+      caption.replaceChildren(left, right)
+      caption.setAttribute('data-presentation-footer', '')
+    } else caption.textContent = steps[index].caption
+    if (variant === 't') {
+      let hidden = document.getElementById('hidden-title')
+      if (!hidden) {
+        hidden = document.createElement('span')
+        hidden.id = 'hidden-title'
+        hidden.className = 'hidden'
+        root.append(hidden)
+      }
+      hidden.textContent = steps[index].title
+      title.setAttribute('aria-labelledby', 'hidden-title')
+    }
   }
   const stage = document.getElementById('stage')
   stage.replaceChildren()
@@ -163,6 +188,8 @@ function render() {
 function go(next) {
   index = Math.max(0, Math.min(steps.length - 1, next))
   render()
+  // (u) renders every step but throws an uncaught error on reaching step 6.
+  if (variant === 'u' && index === 5) throw new Error('step 6 failed to render')
 }
 
 function onKey(event) {
@@ -171,7 +198,7 @@ function onKey(event) {
   if (event.target.closest('button')) return
   // (b) is the real defect: once a control was used, deck keys never come back.
   if (keysDead) return
-  if (['ArrowRight', 'PageDown', ' '].includes(event.key)) go(index + 1)
+  if (['ArrowRight', 'PageDown', ' '].includes(event.key)) go(variant === 'r' ? index : index + 1)
   if (['ArrowLeft', 'PageUp'].includes(event.key)) go(index - 1)
 }
 
@@ -184,7 +211,7 @@ if (variant === 'e') {
   document.addEventListener('keydown', onKey)
 }
 for (const [id, delta] of [['prev', -1], ['next', 1]]) {
-  document.getElementById(id).addEventListener('click', () => { keysDead ||= variant === 'b'; go(index + delta) })
+  document.getElementById(id).addEventListener('click', () => { keysDead ||= variant === 'b'; go(index + (variant === 'r' ? 0 : delta)) })
 }
 // (m) keeps the touch start in state that is only committed after the next
 // frame, as React's setState is: a touchend delivered in the same task as its
@@ -193,7 +220,7 @@ for (const [id, delta] of [['prev', -1], ['next', 1]]) {
 // as a real candidate did, so only a touch landing on the stage reaches it.
 let touchStart = null
 const touchTarget = variant === 'o' ? document.getElementById('stage') : root
-if (variant !== 'n') {
+if (variant !== 'n' && variant !== 'q') {
   touchTarget.addEventListener('touchstart', (event) => {
     const x = event.touches[0].clientX
     if (variant === 'm') requestAnimationFrame(() => { touchStart = x })
@@ -204,6 +231,27 @@ if (variant !== 'n') {
     const delta = event.changedTouches[0].clientX - touchStart
     if (Math.abs(delta) > 40) go(index + (delta < 0 ? 1 : -1))
     touchStart = null
+  })
+}
+if (variant === 'q') {
+  let pointerStart = null
+  root.addEventListener('pointerdown', (event) => { pointerStart = event.clientX })
+  root.addEventListener('pointerup', (event) => {
+    if (pointerStart === null) return
+    const delta = event.clientX - pointerStart
+    if (Math.abs(delta) > 40) go(index + (delta < 0 ? 1 : -1))
+    pointerStart = null
+  })
+}
+// (r) contains plausible navigation handlers in source, but no interaction advances.
+if (variant === 'r') {
+  let pointerStart = null
+  root.addEventListener('pointerdown', (event) => { pointerStart = event.clientX })
+  root.addEventListener('pointerup', (event) => {
+    if (pointerStart === null) return
+    const delta = event.clientX - pointerStart
+    if (Math.abs(delta) > 40) go(index)
+    pointerStart = null
   })
 }
 render()

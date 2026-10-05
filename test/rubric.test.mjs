@@ -87,6 +87,18 @@ test('deterministic browser and LLM source review own disjoint demo subcomponent
   )
 })
 
+test('every deterministic criterion has a declared fallback', async () => {
+  const rubric = await automatedRubric()
+  const deterministic = rubricCriteria(rubric).filter(({ evaluator }) => evaluator === 'deterministic-browser')
+  assert.equal(deterministic.length, 14)
+  for (const { id } of deterministic) {
+    assert.equal(rubric.fallbacks[id]?.job, 'demo-integration')
+    const copy = structuredClone(rubric)
+    delete copy.fallbacks[id]
+    assert.match(validateAutomatedRubric(copy).join('\n'), new RegExp(`criterion ${id} requires a fallback`))
+  }
+})
+
 test('source-reviewed robustness-sensitive rows carry explicit review guidance', async () => {
   const rubric = await automatedRubric()
   const required = new Set([
@@ -114,9 +126,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 6.0 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
+test('rubric 7.0 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '6.0.0')
+  assert.equal(rubric.version, '7.0.0')
   assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(

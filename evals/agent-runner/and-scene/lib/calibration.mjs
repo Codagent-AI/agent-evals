@@ -79,7 +79,7 @@ export function calibrationCases(rubric) {
     id: `${gate.id}-gate-regression`,
     description: `the ${gate.id} hard gate fails`,
     target: { kind: 'gate', id: gate.id },
-    fail_criteria: [],
+    fail_criteria: gate.id === 'verification-sample-outline' ? ['demo-route-and-registration'] : [],
     fail_gates: [gate.id],
     human: null,
     expected_official_pass: false,
@@ -262,7 +262,9 @@ function compareToReference({ reference, score, target }) {
 
   for (const component of score.components) {
     const referenceComponent = reference.components.find(({ id }) => id === component.id)
-    const intended = target.kind === 'component' && target.id === component.id
+    const intended = (target.kind === 'component' && target.id === component.id)
+      || (target.kind === 'gate' && target.id === 'verification-sample-outline'
+        && component.id === 'demo-technical-quality')
     if (intended) {
       if (!(component.points_awarded < referenceComponent.points_awarded)) {
         problems.push(
@@ -283,7 +285,9 @@ function compareToReference({ reference, score, target }) {
 
   for (const gate of score.gates) {
     const referenceGate = reference.gates.find(({ id }) => id === gate.id)
-    const intended = target.kind === 'gate' && target.id === gate.id
+    const intended = (target.kind === 'gate' && target.id === gate.id)
+      || (target.kind === 'component' && target.id === 'demo-technical-quality'
+        && gate.id === 'verification-sample-outline')
     if (intended) {
       if (gate.verdict !== 'fail') problems.push(`gate ${gate.id} was expected to fail but is ${gate.verdict}`)
       continue
@@ -404,6 +408,7 @@ async function runCase({ rubrics, definition, outDir, judgeInvoke }) {
     humanReview: { ratings: humanReview.responses.map(({ rating }) => rating), total: humanReview.score.total },
     harness: { judge_retries: judging.retries, failed_judge_jobs: judging.failed_jobs },
     mode: definition.score_mode ?? 'agent-runner',
+    recordSecondOpinions: false,
   })
 
   const reference = definition.score_mode === 'reference-baseline'

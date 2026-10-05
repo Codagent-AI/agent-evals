@@ -222,6 +222,35 @@ function notObserved(rationale, evidence = [], lookedFor = ENTITY_CONVENTIONS) {
   return { not_observed: true, rationale, evidence, looked_for: lookedFor }
 }
 
+class UnobservedPrecondition extends Error {
+  constructor(message) {
+    super(message)
+    this.not_observed = true
+    this.rationale = message
+    this.looked_for = ['data-presentation-mode', 'data-mode']
+    this.evidence = []
+  }
+}
+
+function decide({ pass, rationale, evidence = [], observations = {}, restsOn = [] }) {
+  if (!pass && restsOn.some(({ basis }) => basis === 'heuristic' || basis === 'unknown')) {
+    return { ...notObserved(rationale, evidence, restsOn.map(({ reading }) => reading)), observations }
+  }
+  return [pass, rationale, evidence, observations]
+}
+
+function textActiveAt(states, position, expected, legacyExposure) {
+  const readings = states.map((state) => state?.textPresence?.[expected])
+  if (readings.every((reading) => reading === undefined) && legacyExposure) {
+    return activeAt(states, position, expected, legacyExposure) ? 'active' : 'absent'
+  }
+  if (readings.some((reading) => !reading || reading.complete !== true)) return 'unknown'
+  const counts = readings.map(({ visibleElements = 0, accessibleNames = 0 }) => visibleElements + accessibleNames)
+  if (counts[position] === 0) return 'absent'
+  return counts.some((count, index) => index !== position && count < counts[position])
+    ? 'active' : 'persistent-only'
+}
+
 // A convention seen on some steps is not proof that another step lacks content,
 // so any step without a recognised scene object leaves the fact unobserved.
 function entitiesUnobserved(states) {
@@ -243,6 +272,7 @@ function notObservedCriterion(id, outcome, citation) {
     rationale: bounded(outcome.rationale),
     evidence: [...outcome.evidence, citation],
     observed: false,
+    ...(outcome.observations ? { observations: outcome.observations } : {}),
   }
 }
 
@@ -283,6 +313,10 @@ function summarizeState(state) {
   return {
     viewport: state?.viewport ?? null,
     mode: state?.mode ?? null,
+    mode_basis: state?.modeBasis ?? null,
+    title_basis: state?.titleBasis ?? null,
+    caption_basis: state?.captionBasis ?? null,
+    text_presence: state?.textPresence ?? null,
     step_index: state?.stepIndex ?? null,
     step_count: state?.stepCount ?? null,
     title: normalizeEvidence(state?.title ?? ''),
@@ -343,8 +377,10 @@ export async function runBrowserEvaluation({
   // artifact carries the observations its verdict was derived from.
   const driver = {
     ...baseDriver,
-    async state() {
-      return record('state', await baseDriver.state())
+    async state(options) {
+      return record('state', await baseDriver.state(options ?? {
+        presenceOf: [...contract.step_titles, ...contract.step_captions],
+      }))
     },
     async routes() {
       const routes = await baseDriver.routes()
@@ -393,17 +429,21 @@ export async function runBrowserEvaluation({
       : { settled: true, strategy: 'driver-state-read' }
     const established = await driver.state()
     assertReadableState(established)
+    currentProbeSessions.push({
+      initial_state: initialState,
+      established_state: { mode: established.mode, position: established.stepIndex,
+        mode_basis: established.modeBasis ?? null },
+      settled_state: settled,
+    })
+    if (established.mode !== mode && established.modeBasis === 'heuristic') {
+      throw new UnobservedPrecondition(`mode ${mode} could not be established from a declaration`)
+    }
     if (established.mode !== mode || established.stepIndex !== position) {
       throw new Error(
         `probe state could not be established: required ${mode} at ${position}, `
         + `observed ${bounded(established.mode)} at ${bounded(established.stepIndex)}`,
       )
     }
-    currentProbeSessions.push({
-      initial_state: initialState,
-      established_state: { mode: established.mode, position: established.stepIndex },
-      settled_state: settled,
-    })
     // The same rule holds for every later read in the probe, not only the one
     // that establishes it: a read that returns no mode or no step index did not
     // answer, so it can never be compared with an expected step and deducted.
@@ -434,12 +474,12 @@ export async function runBrowserEvaluation({
   // Walk from the first step to the last, recording the state at each one.
   async function walk() {
     const states = []
-    let state = await driver.state()
+    let state = await driver.state({ presenceOf: [...contract.step_titles, ...contract.step_captions] })
     const count = await stepCountOf(state)
     states.push(state)
     for (let position = 1; position < count; position += 1) {
       await driver.press('ArrowRight')
-      state = await driver.state()
+      state = await driver.state({ presenceOf: [...contract.step_titles, ...contract.step_captions] })
       states.push(state)
     }
     return states
@@ -498,6 +538,13 @@ export async function runBrowserEvaluation({
           && !activeAt(presentStates, position, title, titleExposure)
       ))
       if (mismatch !== -1) {
+        const title = contract.step_titles[mismatch]
+        const basis = [browseStates, presentStates]
+          .map((states) => textActiveAt(states, mismatch, title, titleExposure))
+        if (basis.includes('active') || basis.includes('unknown')) {
+          return notObserved('the active title was not established by a declared title selector', [],
+            ['declared step title selector', 'visible and accessible title text'])
+        }
         return [
           false,
           `step ${mismatch + 1} title does not match the required outline`,
@@ -518,6 +565,11 @@ export async function runBrowserEvaluation({
         (_state, position) => !activeAt(states, position, contract.step_captions[position], captionExposure),
       )
       if (mismatch !== -1) {
+        const textBasis = textActiveAt(states, mismatch, contract.step_captions[mismatch], captionExposure)
+        if (states[mismatch]?.modeBasis === 'heuristic' || ['active', 'unknown'].includes(textBasis)) {
+          return notObserved('the caption or browse mode was not established by a declaration', [],
+            ['declared browse mode', 'declared caption selector', 'visible and accessible caption text'])
+        }
         return [
           false,
           `step ${mismatch + 1} does not expose its normative caption or scene content`,
@@ -581,7 +633,17 @@ export async function runBrowserEvaluation({
       await session(PROBE_REQUIREMENTS['quality-captions-and-navigation'])
       const states = await walk()
       const missingCaption = states.findIndex((state) => !state.caption?.trim())
-      if (missingCaption !== -1) return [false, `step ${missingCaption + 1} exposes no caption`, []]
+      if (missingCaption !== -1) {
+        const status = textActiveAt(states, missingCaption, contract.step_captions[missingCaption], captionExposure)
+        if (status !== 'absent' || states[missingCaption].modeBasis === 'heuristic') return notObserved(`step ${missingCaption + 1} has no declared caption`, [],
+          ['declared caption selector', 'visible and accessible caption text'])
+        return [false, `step ${missingCaption + 1} exposes no caption`, []]
+      }
+      const heuristicCaption = states.findIndex((state, index) => state.captionBasis === 'heuristic'
+        && state.caption?.trim() !== contract.step_captions[index]
+        && textActiveAt(states, index, contract.step_captions[index], captionExposure) !== 'absent')
+      if (heuristicCaption !== -1) return notObserved(`step ${heuristicCaption + 1} caption was chosen by layout`, [],
+        ['declared caption selector', 'visible and accessible caption text'])
       const controls = states[0]?.controls ?? []
       if (controls.length !== states.length) {
         return [false, `navigation exposes ${controls.length} controls for ${states.length} steps`, []]
@@ -596,11 +658,18 @@ export async function runBrowserEvaluation({
       const page = await session(PROBE_REQUIREMENTS['demo-present-mode-behavior'])
       const state = await page.state()
       const activeTitle = exposesTitle(state, contract.step_titles[state.stepIndex])
-      return [
-        state.mode === 'present' && activeTitle,
-        `present mode reports mode ${bounded(state.mode)} with the active step title ${activeTitle}`,
-        [],
-      ]
+      const textStatus = activeTitle ? 'active'
+        : textActiveAt(await walk(), state.stepIndex, contract.step_titles[state.stepIndex], titleExposure)
+      const titleBasis = !activeTitle && ['active', 'unknown'].includes(textStatus)
+        ? 'heuristic' : 'declared'
+      return decide({
+        pass: state.mode === 'present' && activeTitle,
+        rationale: `present mode reports mode ${bounded(state.mode)} with the active step title ${activeTitle}`,
+        restsOn: [
+          { reading: 'declared presentation mode', basis: state.modeBasis },
+          { reading: 'declared active title', basis: activeTitle ? 'declared' : titleBasis },
+        ],
+      })
     },
 
     // Mechanical facts only: browse mode is entered, the active step's caption
@@ -650,14 +719,26 @@ export async function runBrowserEvaluation({
         reachable = advanced && coversEveryStep([0, ...visited], count)
         if (!reachable) attempts.push(`forward traversal reached ${visited.join(',') || '(none)'}`)
       }
+      const captionStatus = state.textPresence
+        ? ((state.textPresence[contract.step_captions[state.stepIndex]]?.visibleElements ?? 0)
+          + (state.textPresence[contract.step_captions[state.stepIndex]]?.accessibleNames ?? 0) > 0
+            ? 'active' : (state.textPresence[contract.step_captions[state.stepIndex]]?.complete ? 'absent' : 'unknown'))
+        : (state.captionVisible ? 'active' : 'absent')
+      const captionMatches = sameText(state.caption, contract.step_captions[state.stepIndex])
       const complete = state.mode === 'browse'
         && state.captionVisible === true
+        && captionMatches
         && reachable
-      return [
-        complete,
-        `browse mode ${bounded(state.mode)} at viewport ${bounded(state.viewport?.width)}×${bounded(state.viewport?.height)}; caption ${state.captionVisible}; controls ${controls.length}/${count}; every step reached ${reachable}${attempts.length > 0 ? ` (${bounded(attempts.join('; '))})` : ''}; previous/next ${state.previousVisible}/${state.nextVisible}; toc ${state.tocVisible}; progress ${state.progressVisible}`,
-        [],
-      ]
+      return decide({
+        pass: complete,
+        rationale: `browse mode ${bounded(state.mode)} at viewport ${bounded(state.viewport?.width)}×${bounded(state.viewport?.height)}; caption ${state.captionVisible}; controls ${controls.length}/${count}; every step reached ${reachable}${attempts.length > 0 ? ` (${bounded(attempts.join('; '))})` : ''}; previous/next ${state.previousVisible}/${state.nextVisible}; toc ${state.tocVisible}; progress ${state.progressVisible}`,
+        restsOn: reachable ? [
+          { reading: 'declared browse mode', basis: state.modeBasis },
+          { reading: 'declared caption selector', basis:
+            (!state.captionVisible || !captionMatches) && captionStatus !== 'absent'
+              ? 'heuristic' : (captionStatus === 'unknown' ? 'unknown' : 'declared') },
+        ] : [],
+      })
     },
 
     'demo-mode-position-preservation': async () => {
@@ -680,21 +761,40 @@ export async function runBrowserEvaluation({
       const forward = (await page.state()).stepIndex
       await page.press('ArrowLeft')
       const back = (await page.state()).stepIndex
-      await page.swipe('left')
-      const swiped = (await page.state()).stepIndex
-      await page.swipe('right')
-      const swipedBack = (await page.state()).stepIndex
+      await page.swipe('left', { input: 'touch' })
+      let swiped = (await page.state()).stepIndex
+      const touchLeft = swiped
+      let pointerLeft = null
+      if (swiped === 0) {
+        await page.swipe('left', { input: 'pointer' })
+        swiped = (await page.state()).stepIndex
+        pointerLeft = swiped
+      }
+      await page.swipe('right', { input: 'touch' })
+      let swipedBack = (await page.state()).stepIndex
+      const touchRight = swipedBack
+      let pointerRight = null
+      if (swipedBack === swiped) {
+        await page.swipe('right', { input: 'pointer' })
+        swipedBack = (await page.state()).stepIndex
+        pointerRight = swipedBack
+      }
       const browsePage = await session({ mode: 'browse', position: 0 })
       const controls = (await browsePage.state()).controls ?? []
       const target = controls[4]
       if (target) await browsePage.activate(target.name)
       const jumped = (await browsePage.state()).stepIndex
       const ok = forward === 1 && back === 0 && swiped === 1 && swipedBack === 0 && jumped === 4
-      return [
-        ok,
-        `keyboard ${forward}/${back}, swipe ${swiped}/${swipedBack}, direct jump ${jumped}`,
-        [],
-      ]
+      return decide({
+        pass: ok,
+        rationale: `keyboard ${forward}/${back}, swipe ${swiped}/${swipedBack}, direct jump ${jumped}`,
+        observations: { swipe: { touch: { left: touchLeft, right: touchRight },
+          pointer: pointerLeft === null && pointerRight === null ? null : { left: pointerLeft, right: pointerRight } } },
+        restsOn: [{ reading: 'touch and pointer swipe', basis:
+          forward === 1 && back === 0 && jumped === 4 && (swiped !== 1 || swipedBack !== 0)
+            && ((touchLeft === 0 && pointerLeft === 0) || (touchRight === swiped && pointerRight === swiped))
+            ? 'heuristic' : 'declared' }],
+      })
     },
 
     'demo-navigation-boundaries-and-control-keys': async () => {
@@ -882,6 +982,9 @@ export async function runBrowserEvaluation({
       }
     } catch (error) {
       if (error?.owner === 'evaluation-harness') throw error
+      if (error?.not_observed) {
+        criterion = notObservedCriterion(id, error, probeCitation(id))
+      } else {
       // A driver or page error is a real observation about the demo, so it
       // fails its own criterion instead of aborting the whole evaluation and
       // discarding every other criterion's evidence.
@@ -891,6 +994,7 @@ export async function runBrowserEvaluation({
         `browser evaluation failed: ${error.message}`,
         [probeCitation(id)],
       )
+      }
     }
     const probeFailures = []
     let probeFailureReportingAvailable = true
@@ -918,12 +1022,15 @@ export async function runBrowserEvaluation({
       established_state: { mode: requirement.mode, position: requirement.position },
       settled_state: { settled: false, strategy: 'probe-failed-before-settle' },
     }
+    const readingBasis = currentProbeObservations.filter(({ kind }) => kind === 'state')
+      .map(({ mode_basis, title_basis, caption_basis }) => ({ mode: mode_basis, title: title_basis, caption: caption_basis }))
     const outputs = {
       initial_state: firstSession.initial_state,
       established_state: firstSession.established_state,
       settled_state: firstSession.settled_state,
       sessions: currentProbeSessions,
       probe_observations: currentProbeObservations,
+      reading_basis: readingBasis,
       probe_observations_dropped: currentProbeObservationsDropped,
       result: criterion,
       failures: probeFailures,
@@ -942,6 +1049,7 @@ export async function runBrowserEvaluation({
       settled_state: firstSession.settled_state,
       sessions: currentProbeSessions,
       probe_observations: currentProbeObservations,
+      reading_basis: readingBasis,
       probe_observations_dropped: currentProbeObservationsDropped,
       input_sha256: inputSha256,
       result: criterion,
@@ -971,15 +1079,16 @@ export async function runBrowserEvaluation({
           : `the build did not succeed: ${bounded(build.log ?? 'no build log')}`,
         [verificationCitation, ...(build.log ? [build.log] : [])],
       ),
-    verdict(
-      'verification-sample-outline',
-      passed('demo-route-and-registration') && passed('demo-nine-step-content-and-order'),
-      'the canonical nine-step sample must be registered, reachable, and match its outline',
-      [
-        probeCitation('demo-route-and-registration'),
-        probeCitation('demo-nine-step-content-and-order'),
-      ],
-    ),
+    (() => {
+      const inputs = ['demo-route-and-registration', 'demo-nine-step-content-and-order']
+      const citations = inputs.map(probeCitation)
+      const rationale = 'the canonical nine-step sample must be registered, reachable, and match its outline'
+      if (inputs.some((id) => criteria.find((entry) => entry.id === id)?.verdict === 'fail')) {
+        return verdict('verification-sample-outline', false, rationale, citations)
+      }
+      if (inputs.every(passed)) return verdict('verification-sample-outline', true, rationale, citations)
+      return unobserved('verification-sample-outline', rationale, citations)
+    })(),
     failureReportingAvailable
       ? verdict(
         'verification-every-produced-step-renders',

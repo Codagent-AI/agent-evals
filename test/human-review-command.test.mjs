@@ -216,6 +216,30 @@ test('a confirmed review finalizes the official score without rerunning automate
   assert.equal(runState.outcome.product_verdict, result.product_verdict)
 })
 
+test('finalizing human review preserves an overturned deterministic failure', async () => {
+  const directory = await root()
+  const run = await pendingRun({ root: directory })
+  const browserPath = join(run.runDir, 'phases/browser-evaluation.json')
+  const browser = await readJson(browserPath)
+  const criterion = browser.criteria.find(({ id }) => id === 'demo-supported-navigation')
+  criterion.verdict = 'fail'
+  criterion.rationale = 'raw navigation failure'
+  await writeJsonAtomic(browserPath, browser)
+  await writeJsonAtomic(join(run.runDir, 'phases/second-opinions.json'), {
+    checked: [{ kind: 'criterion', id: criterion.id }], pending: [],
+    outcomes: { [criterion.id]: { ok: true, decision: 'overturn', verdict: 'pass',
+      raw_verdict: 'fail', rationale: 'replay confirmed navigation', replay: { passed: true } } },
+  })
+  const outcome = await runHumanReview({ argv: ['--run-dir', run.runDir],
+    io: scriptedIo(answers()).io, ...servers() })
+  assert.equal(outcome.exitCode, 0, JSON.stringify(outcome.errors))
+  const result = await readJson(join(run.runDir, 'result.json'))
+  const entry = result.second_opinions.entries.find(({ id }) => id === criterion.id)
+  assert.equal(result.second_opinions.checked, 1)
+  assert.equal(entry.verdict, 'pass')
+  assert.equal(entry.raw_verdict, 'fail')
+})
+
 test('a confirmed review cannot turn incomplete automated scoring into a product failure', async () => {
   const directory = await root()
   const run = await pendingRun({ root: directory })

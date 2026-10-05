@@ -20,7 +20,8 @@ async function out() {
 }
 
 test('the known-good reference scores all 62 applicable automated points and opens every gate', async () => {
-  const ledger = await runCalibration({ rubrics, outDir: await out() })
+  const outDir = await out()
+  const ledger = await runCalibration({ rubrics, outDir })
 
   assert.equal(ledger.passed, true, JSON.stringify(ledger.failures, null, 2))
   const reference = ledger.cases.find(({ id }) => id === 'reference')
@@ -32,10 +33,13 @@ test('the known-good reference scores all 62 applicable automated points and ope
   assert.equal(reference.official_score, 92)
   assert.equal(reference.score_denominator, 92)
   assert.equal(reference.evaluation_status, 'complete')
+  const result = await readJson(join(outDir, 'cases/reference/result.json'))
+  assert.equal('second_opinions' in result, false)
 })
 
 test('reference runs four applicable jobs while candidate calibration runs all six', async () => {
-  const ledger = await runCalibration({ rubrics, outDir: await out() })
+  const outDir = await out()
+  const ledger = await runCalibration({ rubrics, outDir })
 
   const reference = ledger.cases.find(({ id }) => id === 'reference')
   assert.deepEqual(
@@ -52,6 +56,8 @@ test('reference runs four applicable jobs while candidate calibration runs all s
       'scene-kit', 'testing-evidence', 'verification-tooling',
     ],
   )
+  const result = await readJson(join(outDir, 'cases/testing-evidence-quality-regression/result.json'))
+  assert.equal('second_opinions' in result, false)
 })
 
 test('calibration covers a reproduced defect misclassified as environmental hardening', () => {

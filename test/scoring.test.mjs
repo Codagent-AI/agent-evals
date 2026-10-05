@@ -124,8 +124,8 @@ test('an automated subtotal of exactly 40 remains eligible for human review', ()
 
   assert.equal(result.automated_subtotal.points, 40)
   assert.equal(component(result, 'demo-technical-quality').points_awarded, 16)
-  assert.equal(result.automated_pass, true)
-  assert.deepEqual(result.automated_failures, [])
+  assert.equal(result.automated_pass, false)
+  assert.ok(result.automated_failures.some(({ id }) => id === 'verification-sample-outline'))
 })
 
 test('a complete automated subtotal below 40 fails before human review', () => {
@@ -145,7 +145,7 @@ test('a complete automated subtotal below 40 fails before human review', () => {
   assert.ok(component(result, 'demo-technical-quality').points_awarded >= 15)
   assert.ok(component(result, 'scene-kit-correctness').points_awarded >= 15)
   assert.equal(result.automated_pass, false)
-  assert.deepEqual(result.automated_failures, [{
+  assert.deepEqual(result.automated_failures.filter(({ rule }) => rule !== 'hard-gate'), [{
     rule: 'automated-total',
     id: null,
     value: result.automated_subtotal.points,
@@ -255,13 +255,31 @@ test('any individual human rating of one fails the official verdict', () => {
 })
 
 test('each hard gate blocks an official pass while preserving the numerical score', () => {
-  for (const gate of GATE_IDS) {
+  for (const gate of GATE_IDS.filter((id) => id !== 'verification-sample-outline')) {
     const result = scoreProduct(inputs({ gateFailures: [gate], humanReview: fullHumanReview }))
     assert.equal(result.official_pass, false, gate)
     assert.ok(result.pass_failures.some((entry) => entry.rule === 'hard-gate' && entry.id === gate), gate)
     assert.equal(result.official_score, 100, gate)
     assert.equal(result.automated_subtotal.points, 70, gate)
   }
+  const outline = scoreProduct(inputs({ gateFailures: ['verification-sample-outline'], humanReview: fullHumanReview }))
+  assert.equal(outline.gates.find(({ id }) => id === 'verification-sample-outline').verdict, 'pass')
+})
+
+test('an audited second opinion awards points while retaining the raw failed verdict', () => {
+  const id = 'demo-supported-navigation'
+  const data = inputs({ failures: [id], gateFailures: ['verification-every-produced-step-renders'] })
+  const raw = scoreProduct(data)
+  const opinion = { raw_verdict: 'fail', verdict: 'pass', decision: 'overturn', rationale: 'input misread' }
+  const scored = scoreProduct({ ...data, secondOpinions: {
+    [id]: opinion, 'verification-every-produced-step-renders': opinion,
+  } })
+  const row = scored.components.flatMap(({ subcomponents }) => subcomponents.flatMap(({ criteria }) => criteria))
+    .find((criterion) => criterion.id === id)
+  assert.equal(row.verdict, 'pass')
+  assert.equal(row.second_opinion.raw_verdict, 'fail')
+  assert.ok(scored.automated_subtotal.points > raw.automated_subtotal.points)
+  assert.equal(scored.gates.find(({ id: gate }) => gate === 'verification-every-produced-step-renders').verdict, 'pass')
 })
 
 test('scored criteria never include the four hard gates', () => {

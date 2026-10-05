@@ -6,6 +6,7 @@
 import { spawnSync } from 'node:child_process'
 
 import { isBrowserInfrastructureDiagnostic } from './browser-diagnostics.mjs'
+import { validReplay } from './second-opinion.mjs'
 
 const MAX_OUTPUT_BYTES = 1024 * 1024
 const PRESENTATION_SELECTOR = '[data-presentation], [data-presentation-root]'
@@ -69,6 +70,33 @@ const CAPTION_SELECTORS = [
     + ':not([data-presentation-node="step-title"])',
 ]
 const CAPTION_SELECTOR = CAPTION_SELECTORS.join(', ')
+const DECLARED_TITLE_SELECTORS = TITLE_SELECTORS.filter((selector) => !selector.includes(' h'))
+const DECLARED_CAPTION_SELECTORS = CAPTION_SELECTORS.slice(0, 2)
+
+function modeReadingSource() {
+  return `const modeReading = () => {
+    const declaredModeSource = () => {
+      for (const element of document.querySelectorAll('[data-presentation-mode]')) {
+        const value = element.getAttribute('data-presentation-mode');
+        if (value === 'present' || value === 'browse') return value;
+      }
+      for (const element of document.querySelectorAll('[data-mode]')) {
+        if (!element.matches('[data-step-count]') && !element.querySelector('[data-step-count]')) continue;
+        const value = element.getAttribute('data-mode');
+        if (value === 'present' || value === 'browse') return value;
+      }
+      return null;
+    };
+    const declared = declaredModeSource();
+    if (declared) return { mode: declared, basis: 'declared' };
+    const visible = (element) => Boolean(element && element.getClientRects().length > 0
+      && getComputedStyle(element).display !== 'none'
+      && getComputedStyle(element).visibility !== 'hidden');
+    const browsing = [...document.querySelectorAll(${JSON.stringify(`${CAPTION_SELECTOR}, ${TOC_SELECTOR}`)})]
+      .some(visible);
+    return { mode: browsing ? 'browse' : 'present', basis: 'heuristic' };
+  };`
+}
 const TOC_SELECTORS = [
   '[data-presentation-toc]',
   '[data-presentation-chrome="toc"]',
@@ -204,13 +232,8 @@ function navigationDiscoverySource() {
     if (role) matchedSelectors[role] = named.length > 0 ? 'accessible-directional-name' : null;
     return named;
   };
-  const readMode = () => {
-    const declared = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
-      ?.getAttribute('data-presentation-mode');
-    if (declared === 'present' || declared === 'browse') return declared;
-    return [...document.querySelectorAll(${JSON.stringify(`${CAPTION_SELECTOR}, ${TOC_SELECTOR}`)})]
-      .some(visible) ? 'browse' : 'present';
-  };
+  ${modeReadingSource()}
+  const readMode = () => modeReading().mode;
   // A presentation may expose one control that flips the mode, or a separate
   // control per mode. Picking the first visible match would click "Present
   // mode" when browse mode was required, so the mode being asked for takes
@@ -289,19 +312,8 @@ const SWIPE_DISTANCE = 200
 const SWIPE_MOVES = 4
 const SWIPE_FRAME_TIMEOUT_MS = 2000
 
-// One touch event of a single-finger horizontal swipe, as a page callback.
-// The finger lands on whatever element is under it at the vertical middle of
-// the stage (or the presentation when it has no stage), just as a real touch
-// targets the element it lands on, and every later event of the gesture keeps
-// that target. Every event but the last asks the page for its next animation
-// frame, which the driving script waits on before the next event. Every value
-// is embedded at its use site: the callback must not read the driving script's
-// scope.
-function swipeEventSource(type, sign, progress) {
-  const begin = type === 'touchstart'
-  const end = type === 'touchend'
-  return `() => {
-  ${begin ? `const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)}) || document.body;
+function swipeTargetSource(sign) {
+  return `const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)}) || document.body;
   const surface = presentation.querySelector(${JSON.stringify(STAGE_SELECTOR)}) || presentation;
   const rect = surface.getBoundingClientRect();
   // The finger lands inside the visible part of the surface even when the
@@ -319,7 +331,22 @@ function swipeEventSource(type, sign, progress) {
   );
   const hit = document.elementFromPoint(startX, y);
   const target = hit && presentation.contains(hit) ? hit : presentation;
-  window.__andSceneSwipe = { target, startX, y };` : `const swipe = window.__andSceneSwipe;
+  window.__andSceneSwipe = { target, startX, y };`
+}
+
+// One touch event of a single-finger horizontal swipe, as a page callback.
+// The finger lands on whatever element is under it at the vertical middle of
+// the stage (or the presentation when it has no stage), just as a real touch
+// targets the element it lands on, and every later event of the gesture keeps
+// that target. Every event but the last asks the page for its next animation
+// frame, which the driving script waits on before the next event. Every value
+// is embedded at its use site: the callback must not read the driving script's
+// scope.
+function swipeEventSource(type, sign, progress) {
+  const begin = type === 'touchstart'
+  const end = type === 'touchend'
+  return `() => {
+  ${begin ? swipeTargetSource(sign) : `const swipe = window.__andSceneSwipe;
   if (!swipe) return false;
   const { target, startX, y } = swipe;`}
   const touch = new Touch({
@@ -341,6 +368,31 @@ function swipeEventSource(type, sign, progress) {
     composed: true,
   }));
   ${end ? '' : `const frame = { rendered: false };
+  window.__andSceneSwipe.frame = frame;
+  requestAnimationFrame(() => { frame.rendered = true; });`}
+  return true;
+}`
+}
+
+function pointerSwipeEventSource(type, sign, progress) {
+  const begin = type === 'pointerdown'
+  const end = type === 'pointerup'
+  return `() => {
+  ${begin ? swipeTargetSource(sign) : `const swipe = window.__andSceneSwipe;
+  if (!swipe) return false;
+  const { target, startX, y } = swipe;`}
+  target.dispatchEvent(new PointerEvent(${JSON.stringify(type)}, {
+    pointerId: 1,
+    pointerType: 'touch',
+    isPrimary: true,
+    clientX: startX + ${sign * SWIPE_DISTANCE * progress},
+    clientY: y,
+    buttons: ${end ? 0 : 1},
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+  }));
+  ${end ? 'delete window.__andSceneSwipe;' : `const frame = { rendered: false };
   window.__andSceneSwipe.frame = frame;
   requestAnimationFrame(() => { frame.rendered = true; });`}
   return true;
@@ -395,12 +447,111 @@ export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {
     }
   }
 
+  async function readFailures() {
+    const output = await invoke(['console', '--type', 'error'])
+    if (isBrowserInfrastructureDiagnostic(output)) {
+      throw new BrowserDriverError(`browser adapter failed: ${output.trim()}`)
+    }
+    if (output.includes('<no console messages found>')) return []
+    return output.split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('console:') && !line.startsWith('help['))
+  }
+
   function routeUrl(route) {
     const relative = String(route ?? '').replace(/^\/+/, '')
     return new URL(relative, base).href
   }
 
   return {
+    async replay(actions, expect) {
+      if (!validReplay({ actions, expect })) throw new BrowserDriverError('invalid replay contract')
+      // validReplay checks the path's shape; URL parsing can still turn a
+      // shaped path into another host (it drops tabs and newlines). An escape
+      // is a property of the proposed plan, not a harness fault.
+      for (const action of actions) {
+        if (action.type === 'navigate' && new URL(routeUrl(action.path)).origin !== base.origin) {
+          throw new Error('replay navigation leaves the candidate origin')
+        }
+      }
+      const observe = `page.eval(() => {
+        ${modeReadingSource()}
+        const progress = document.querySelector('[data-step-count]');
+        const selected = ${JSON.stringify(expect.selector ?? null)};
+        const node = selected ? document.querySelector(selected) : null;
+        const visible = Boolean(node && node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden');
+        const mode = modeReading();
+        return { stepIndex: Number(progress?.getAttribute('data-step-index')),
+          stepCount: Number(progress?.getAttribute('data-step-count')),
+          mode: mode.mode, modeBasis: mode.basis, visible, text: (node?.textContent ?? '').slice(0, 1000),
+          origin: location.origin };
+      })`
+      const actionSource = (action) => {
+        switch (action.type) {
+          case 'navigate': return `await page.open(${JSON.stringify(routeUrl(action.path))});`
+          // A missing click target is what the candidate page did, so it ends
+          // the replay as product evidence instead of failing the adapter.
+          case 'click': return `if (!(await page.eval(() => {
+            const node = document.querySelector(${JSON.stringify(action.selector)});
+            if (!node) return false;
+            node.click(); return true;
+          }))) { productFailure = 'replay click target was not found'; break replay; }`
+          case 'press': return `await page.press(${JSON.stringify(action.key)});`
+          case 'keys': return `await page.type(${JSON.stringify(action.text)});`
+          case 'wait': return sleepSource(action.ms)
+          case 'swipe': {
+            const sign = action.direction === 'left' ? -1 : 1
+            const source = action.input === 'pointer' ? pointerSwipeEventSource : swipeEventSource
+            const names = action.input === 'pointer'
+              ? ['pointerdown', 'pointermove', 'pointerup'] : ['touchstart', 'touchmove', 'touchend']
+            const phases = [source(names[0], sign, 0),
+              ...Array.from({ length: SWIPE_MOVES }, (_, index) =>
+                source(names[1], sign, (index + 1) / (SWIPE_MOVES + 1))), source(names[2], sign, 1)]
+            return phases.map((phase) => `await page.eval(${phase});`).join(`\n${swipeFrameWaitSource()}\n`)
+          }
+        }
+      }
+      const script = `await page.open(${JSON.stringify(base.href)});
+const observations = [await ${observe}];
+const trace = [];
+let productFailure = null;
+replay: {
+${actions.map((action) => `${actionSource(action)}\n${sleepSource(50)}\ntrace.push(${JSON.stringify(action)}); observations.push(await ${observe});`).join('\n')}
+}
+console.log(JSON.stringify({ observations, trace, product_failure: productFailure }));`
+      const result = await run(script)
+      const productFailure = typeof result?.product_failure === 'string' && result.product_failure
+        ? result.product_failure : null
+      if (!Array.isArray(result?.observations) || (productFailure
+        ? result.observations.length < 1 || result.observations.length > actions.length
+        : result.observations.length !== actions.length + 1)) {
+        throw new BrowserDriverError('browser replay returned invalid observations')
+      }
+      // Runtime and console failures are read exactly as probes read them, so a
+      // replay cannot confirm clean rendering that the console contradicts.
+      const errors = await readFailures()
+      const left = result.observations.some((entry) => entry?.origin && entry.origin !== base.origin)
+      if (productFailure || left) {
+        return { passed: false, product_failure: productFailure ?? 'replay left the candidate origin',
+          observations: result.observations, trace: result.trace ?? [], errors }
+      }
+      // The root landing page may have no presentation. Compare changes with
+      // the first observation after navigating to the proposed demo route.
+      const first = result.observations[1]
+      const last = result.observations.at(-1)
+      const passed = {
+        'step-index-equals': () => last.stepIndex === expect.value,
+        'step-index-changes': () => Number.isInteger(first.stepIndex)
+          && Number.isInteger(last.stepIndex) && last.stepIndex !== first.stepIndex,
+        'step-count-changes': () => Number.isInteger(first.stepCount)
+          && Number.isInteger(last.stepCount) && last.stepCount !== first.stepCount,
+        'mode-equals': () => last.modeBasis === 'declared' && last.mode === expect.value,
+        'selector-visible': () => last.visible === true,
+        'selector-hidden': () => first.visible === true && last.visible === false,
+        'text-present': () => last.visible === true && last.text.includes(expect.text),
+      }[expect.type]()
+      return { passed, observations: result.observations, trace: result.trace, errors }
+    },
     async resize(width, height) {
       if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) {
         throw new BrowserDriverError(`invalid viewport size: ${width}×${height}`)
@@ -432,14 +583,8 @@ console.log(JSON.stringify([...new Set(routes)]));
 const opened = await page.open(${JSON.stringify(routeUrl(route))});
 ${waitForSelectorSource('[data-step-count]', 30000)}
 const initialMode = await page.eval(() => {
-  const explicit = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
-    ?.getAttribute('data-presentation-mode');
-  if (explicit === 'present' || explicit === 'browse') return explicit;
-  const browsing = [...document.querySelectorAll(${JSON.stringify(`${CAPTION_SELECTOR}, ${TOC_SELECTOR}`)})]
-    .some((element) => element.getClientRects().length > 0
-      && getComputedStyle(element).display !== 'none'
-      && getComputedStyle(element).visibility !== 'hidden');
-  return browsing ? 'browse' : 'present';
+  ${modeReadingSource()}
+  return modeReading().mode;
 });
 const progress = await page.eval(() => document.querySelector('[data-step-count]')?.getAttribute('data-step-index'));
 console.log(JSON.stringify({
@@ -457,15 +602,8 @@ console.log(JSON.stringify({
       return run(`
 const requiredMode = ${JSON.stringify(requiredMode)};
 const mode = await page.eval(() => {
-  const explicit = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
-    ?.getAttribute('data-presentation-mode');
-  if (explicit === 'present' || explicit === 'browse') return explicit;
-  const visible = (element) => Boolean(element && element.getClientRects().length > 0
-    && getComputedStyle(element).display !== 'none'
-    && getComputedStyle(element).visibility !== 'hidden');
-  const browsing = [...document.querySelectorAll(${JSON.stringify(`${CAPTION_SELECTOR}, ${TOC_SELECTOR}`)})]
-    .some(visible);
-  return browsing ? 'browse' : 'present';
+  ${modeReadingSource()}
+  return modeReading().mode;
 });
 if (mode !== requiredMode) {
   const outcome = await page.eval(() => {
@@ -650,15 +788,16 @@ console.log(JSON.stringify(geometry));
 `)
     },
 
-    async state() {
+    async state({ presenceOf = [] } = {}) {
       const captured = await run(`
 const captured = await page.eval(() => {
   const progress = document.querySelector('[data-step-count]');
   const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
-  const explicitMode = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
-    ?.getAttribute('data-presentation-mode');
 ${navigationDiscoverySource()}
+  const currentMode = modeReading();
   const title = firstVisibleMatch(${JSON.stringify(TITLE_SELECTORS)}, 'title');
+  const titleBasis = !title ? 'none'
+    : (${JSON.stringify(DECLARED_TITLE_SELECTORS)}.includes(matchedSelectors.title) ? 'declared' : 'heuristic');
   // Which element a presentation uses for the deck title and which for the
   // active step title is its own choice, so report every visible title-bearing
   // text and let the probe ask whether the step title is exposed at all.
@@ -702,6 +841,8 @@ ${navigationDiscoverySource()}
   const titleTexts = titleExposure.texts;
   const titleOccurrences = titleExposure.occurrences;
   const caption = firstVisibleMatch(${JSON.stringify(CAPTION_SELECTORS)}, 'caption');
+  const captionBasis = !caption ? 'none'
+    : (${JSON.stringify(DECLARED_CAPTION_SELECTORS)}.includes(matchedSelectors.caption) ? 'declared' : 'heuristic');
   // The same holds for captions: which caption-bearing element comes first is
   // the presentation's choice, so every visible one is reported.
   const captionExposure = exposedTexts(
@@ -721,7 +862,38 @@ ${navigationDiscoverySource()}
     ...(previousMatches.length > 1 ? ['multiple visible previous controls'] : []),
     ...(nextMatches.length > 1 ? ['multiple visible next controls'] : []),
   ];
-  const browsing = visible(caption) || visible(toc);
+  const textPresence = {};
+  const normalize = (value) => String(value || '').normalize('NFKC')
+    .replace(/[\\u2018-\\u201b\\u2032]/g, "'")
+    .replace(/[\\u201c-\\u201f\\u2033]/g, '"')
+    .replace(/[\\u2010-\\u2015\\u2212]/g, '-')
+    .replace(/\\u2026/g, '...').replace(/\\s+/g, ' ').trim();
+  try {
+    const elements = [...scope.querySelectorAll('*')];
+    const complete = elements.length <= 20000;
+    const walked = elements.slice(0, 20000);
+    for (const expected of ${JSON.stringify(presenceOf)}) {
+      const needle = normalize(expected);
+      let visibleElements = 0;
+      let accessibleNames = 0;
+      for (const element of walked) {
+        if (visible(element) && normalize(element.innerText).includes(needle)
+          && ![...element.children].some((child) => visible(child) && normalize(child.innerText).includes(needle))) {
+          visibleElements += 1;
+        }
+        if (!visible(element)) continue;
+        const ids = (element.getAttribute('aria-labelledby') || '').split(/\\s+/).filter(Boolean);
+        const name = ids.length ? ids.map((id) => document.getElementById(id)?.textContent || '').join(' ')
+          : (element.getAttribute('aria-label') || element.getAttribute('alt') || element.getAttribute('title') || '');
+        if (normalize(name).includes(needle)) accessibleNames += 1;
+      }
+      textPresence[expected] = { visibleElements, accessibleNames, complete };
+    }
+  } catch {
+    for (const expected of ${JSON.stringify(presenceOf)}) {
+      textPresence[expected] = { visibleElements: 0, accessibleNames: 0, complete: false };
+    }
+  }
   const controlStates = controls.map((control) => ({
     name: accessibleName(control),
     role: control.getAttribute('role') || control.tagName.toLowerCase(),
@@ -795,9 +967,11 @@ ${navigationDiscoverySource()}
     entityIds,
     entityConventions: entitySelectors,
     titleProminent: visible(title),
-    mode: explicitMode === 'present' || explicitMode === 'browse'
-      ? explicitMode
-      : (browsing ? 'browse' : 'present'),
+    mode: currentMode.mode,
+    modeBasis: currentMode.basis,
+    titleBasis,
+    captionBasis,
+    textPresence,
     captionVisible: visible(caption) && Boolean(caption?.textContent?.trim()),
     tocVisible: visible(toc),
     progressVisible: visible(progressChrome),
@@ -935,17 +1109,24 @@ console.log(JSON.stringify(true));
     // its touchmoves, then its touchend, each in its own task. A presentation
     // that records the touch start in state committed after a render, as
     // React's setState does, only sees it when the probe yields between them.
-    async swipe(direction) {
+    async swipe(direction, { input = 'touch' } = {}) {
       if (!['left', 'right'].includes(direction)) {
         throw new BrowserDriverError(`unsupported swipe direction: ${direction}`)
       }
+      if (!['touch', 'pointer'].includes(input)) {
+        throw new BrowserDriverError(`unsupported swipe input: ${input}`)
+      }
       const sign = direction === 'left' ? -1 : 1
+      const eventSource = input === 'pointer' ? pointerSwipeEventSource : swipeEventSource
+      const names = input === 'pointer'
+        ? ['pointerdown', 'pointermove', 'pointerup']
+        : ['touchstart', 'touchmove', 'touchend']
       const phases = [
-        swipeEventSource('touchstart', sign, 0),
+        eventSource(names[0], sign, 0),
         ...Array.from({ length: SWIPE_MOVES }, (_, move) => (
-          swipeEventSource('touchmove', sign, (move + 1) / (SWIPE_MOVES + 1))
+          eventSource(names[1], sign, (move + 1) / (SWIPE_MOVES + 1))
         )),
-        swipeEventSource('touchend', sign, 1),
+        eventSource(names[2], sign, 1),
       ]
       const dispatched = await run(`
 let dispatched = true;
@@ -979,15 +1160,6 @@ console.log(JSON.stringify(usedControl));
 `)
     },
 
-    async failures() {
-      const output = await invoke(['console', '--type', 'error'])
-      if (isBrowserInfrastructureDiagnostic(output)) {
-        throw new BrowserDriverError(`browser adapter failed: ${output.trim()}`)
-      }
-      if (output.includes('<no console messages found>')) return []
-      return output.split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line && !line.startsWith('console:') && !line.startsWith('help['))
-    },
+    failures: readFailures,
   }
 }

@@ -203,6 +203,7 @@ async function openRun({ runDir, rubrics }) {
       state: saved ? { ...saved, readiness_confirmed: false } : createReviewState(provenance),
       browser: await readJson(join(runDir, 'phases/browser-evaluation.json'), null),
       judging: await readJson(join(runDir, 'phases/product-judging.json'), null),
+      secondOpinions: await readJson(join(runDir, 'phases/second-opinions.json'), null),
     },
   }
 }
@@ -215,6 +216,10 @@ function rescore({ rubrics, run, humanReview }) {
     deterministic: run.browser?.criteria ?? null,
     judges: run.judging?.judges ?? {},
     gates: run.browser?.gates ?? null,
+    ...(run.mode === 'reference-baseline' ? {} : {
+      secondOpinions: run.secondOpinions?.outcomes ?? {},
+      pendingSecondOpinions: run.secondOpinions?.pending ?? [],
+    }),
     humanReview: humanReview?.complete
       ? { ratings: humanReview.responses.map(({ rating }) => rating), total: humanReview.score.total }
       : null,
@@ -239,6 +244,11 @@ function buildResult({ run, outcome, rubrics, score, humanReview, baseline, cand
     browser: run.browser,
     sourceEvidence: previous.source_evidence ?? null,
     judging: run.judging,
+    terminalSecondOpinion: previous.terminal_failure?.second_opinion
+      ?? previous.second_opinions?.entries?.find(({ kind }) => kind === 'terminal') ?? null,
+    terminalSecondOpinionGate: previous.terminal_failure?.gate
+      ?? previous.second_opinions?.entries?.find(({ kind }) => kind === 'terminal')?.id ?? null,
+    terminalFailure: previous.terminal_failure ?? null,
     workflow: previous.workflow ?? null,
     metrics: previous.implementation_metrics === 'not-applicable' ? null : previous.implementation_metrics,
     cost: previous.cost === 'not-applicable' ? null : previous.cost,
