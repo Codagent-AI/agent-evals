@@ -50,6 +50,7 @@ import {
 } from './lib/timing.mjs'
 import { collectSourceEvidence } from './deterministic-checks.mjs'
 import { runBrowserEvaluation } from './lib/browser-eval.mjs'
+import { createHostBrowser } from './lib/host-browser.mjs'
 import { createAxiBrowserDriver } from './lib/axi-browser-driver.mjs'
 import { ensureCandidateServer, stopCandidateServer } from './lib/candidate-server.mjs'
 import {
@@ -313,6 +314,9 @@ export async function runEvaluation({
   // absent leaves its component unobserved rather than failing the candidate.
   browserDriver = null,
   browserDriverFactory = null,
+  // Releases a host-managed browser after each browser phase; see
+  // lib/host-browser.mjs. The next phase that needs a driver starts it again.
+  releaseBrowser = null,
   judgeInvoke = null,
   // The candidate-server adapter. Without one the suite still reaches a durable
   // pending result; it simply has no server to hand the reviewer, and says so
@@ -1602,11 +1606,15 @@ export async function runEvaluation({
             else pendingSecondOpinions.push(target)
           }
         }
-        await runOpinions(secondOpinionTargets({ deterministic: record.browser.criteria,
-          gates: record.browser.gates, mode }))
-        const resolutions = resolveDeterministic({ rubrics, deterministic: record.browser.criteria,
-          judges: record.judging?.judges ?? {}, secondOpinions, pendingSecondOpinions })
-        await runOpinions(outlineFollowUpTargets({ resolutions, checked }))
+        try {
+          await runOpinions(secondOpinionTargets({ deterministic: record.browser.criteria,
+            gates: record.browser.gates, mode }))
+          const resolutions = resolveDeterministic({ rubrics, deterministic: record.browser.criteria,
+            judges: record.judging?.judges ?? {}, secondOpinions, pendingSecondOpinions })
+          await runOpinions(outlineFollowUpTargets({ resolutions, checked }))
+        } finally {
+          await releaseBrowser?.()
+        }
         await writeJsonAtomic(join(runDir, 'phases/second-opinions.json'), {
           checked, outcomes: secondOpinions, pending: pendingSecondOpinions,
         })
@@ -1734,6 +1742,7 @@ export async function runEvaluation({
 
     cleanup: async (context) => {
       context.serverRunning = false
+      await releaseBrowser?.()
       if (!candidateServer) return
       const outcome = await stopCandidateServer({
         recorded: record.candidateServer,
@@ -1752,6 +1761,16 @@ export async function runEvaluation({
     'cleanup-result': async (context) => { await writeResult(context.outcome) },
 
     ...handlerOverrides,
+  }
+  // The browser is needed only while the live demo is evaluated; holding it
+  // through source judging costs a small host gigabytes for nothing.
+  const evaluateInBrowser = handlers['browser-evaluation']
+  handlers['browser-evaluation'] = async (...args) => {
+    try {
+      return await evaluateInBrowser(...args)
+    } finally {
+      await releaseBrowser?.()
+    }
   }
 
   // The pending result, its report, and the artifact manifest are written from
@@ -2015,6 +2034,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const candidateWorktree = productionRunDir
     ? join(resolve(productionRunDir), '.runtime/candidate-worktree')
     : null
+  // run.sh --host hands the controller a Chrome binary to manage per phase.
+  const hostBrowser = process.env.AND_SCENE_HOST_CHROME
+    ? createHostBrowser({
+        chromePath: process.env.AND_SCENE_HOST_CHROME,
+        port: Number(process.env.AND_SCENE_HOST_DEVTOOLS_PORT || 9333),
+      })
+    : null
   const result = await runEvaluation({
     argv,
     home: process.env.HOME ?? null,
@@ -2025,8 +2051,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       ? createHostCandidateServer({ runDir: productionRunDir })
       : null,
     browserDriverFactory: productionRunDir
-      ? ({ baseUrl }) => createAxiBrowserDriver({ baseUrl })
+      ? async ({ baseUrl }) => {
+          await hostBrowser?.ensure()
+          return createAxiBrowserDriver({ baseUrl })
+        }
       : null,
+    releaseBrowser: hostBrowser ? () => hostBrowser.release() : null,
     judgeInvoke: productionRunDir
       ? createCodexJudgeInvoker({
           runDir: productionRunDir,
@@ -2044,6 +2074,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       : null,
     log: (line) => console.error(line),
   })
+  await hostBrowser?.release()
   for (const error of result.errors ?? []) console.error(JSON.stringify(error))
   process.exit(result.exitCode)
 }

@@ -269,15 +269,24 @@ evals/agent-runner/and-scene/run.sh \
   --artifact-dir artifacts/evals/and-scene/<rescore-run-id>
 ```
 
-Host mode needs `node`, `npm`, `curl`, `chrome-devtools-axi`, and `codex` on
-`PATH` (or `AND_SCENE_CODEX_COMMAND`), plus either a DevTools endpoint in
-`CHROME_DEVTOOLS_AXI_BROWSER_URL` or a Chrome or Chromium binary
-(`CHROME_PATH`, the macOS Google Chrome app, `chromium`, or `google-chrome`)
-that it starts headless on `AND_SCENE_HOST_DEVTOOLS_PORT` (default 9333). Set
-`CHROME_DEVTOOLS_AXI_SESSION` and `CHROME_DEVTOOLS_AXI_PORT` to run several
-host rescores side by side. Judges still run in Codex's read-only sandbox
-against the run's neutral inputs. A rescore never starts or reads Agent
-Runner, so it leaves the home's `~/.agent-runner/projects` untouched.
+Host mode needs `node`, `npm`, `chrome-devtools-axi`, and `codex` on `PATH`
+(or `AND_SCENE_CODEX_COMMAND`), plus either a DevTools endpoint in
+`CHROME_DEVTOOLS_AXI_BROWSER_URL` or a Chrome or Chromium binary (`CHROME_PATH`,
+the macOS Google Chrome app, `chromium`, or `google-chrome`). With a binary, the
+controller starts headless Chrome on `AND_SCENE_HOST_DEVTOOLS_PORT` (default
+9333) only for the browser evaluation and for second-opinion replays, with
+flags that disable the GPU, extensions, background networking, site isolation,
+and caches, cap renderer processes at two, and cap the JavaScript heap; it
+stops Chrome and removes its profile as soon as each of those phases ends, so
+no browser runs during source judging (`lib/host-browser.mjs`).
+
+**Run host rescores one at a time on a small machine.** A long-lived headless
+Chrome reached about 9 GB on a 16 GB Mac, and two parallel rescores exhausted
+it. Start the next rescore only after the previous one exits, and check that no
+earlier `controller.mjs`, `serve-candidate.mjs`, or host Chrome is still
+running. Judges still run in Codex's read-only sandbox against the run's
+neutral inputs. A rescore never starts or reads Agent Runner, so it leaves the
+home's `~/.agent-runner/projects` untouched.
 
 Evaluate an existing candidate as a reference baseline without invoking Agent
 Runner. Role profiles are neither required nor applicable:

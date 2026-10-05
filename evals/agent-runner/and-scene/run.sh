@@ -498,7 +498,7 @@ if [[ "$HOST" == 1 ]]; then
     printf '\n'
     exit 0
   fi
-  for tool in node npm chrome-devtools-axi curl; do
+  for tool in node npm chrome-devtools-axi; do
     if ! command -v "$tool" >/dev/null 2>&1; then
       echo "Host rescore requires $tool on PATH." >&2
       exit 2
@@ -508,16 +508,9 @@ if [[ "$HOST" == 1 ]]; then
     echo "Host rescore requires codex on PATH or AND_SCENE_CODEX_COMMAND." >&2
     exit 2
   fi
-  host_chrome_pid=""
-  host_profile=""
-  cleanup_host() {
-    if [[ -n "$host_chrome_pid" ]]; then
-      kill "$host_chrome_pid" 2>/dev/null || true
-      wait "$host_chrome_pid" 2>/dev/null || true
-    fi
-    if [[ -n "$host_profile" ]]; then rm -rf "$host_profile" "$host_profile.log" 2>/dev/null || true; fi
-  }
-  trap cleanup_host EXIT
+  # The controller starts this Chrome only for browser phases, with
+  # memory-limiting flags, and stops it between them (lib/host-browser.mjs).
+  # An externally supplied CHROME_DEVTOOLS_AXI_BROWSER_URL is used as is.
   if [[ -z "${CHROME_DEVTOOLS_AXI_BROWSER_URL:-}" ]]; then
     host_chrome="${CHROME_PATH:-}"
     if [[ -z "$host_chrome" ]]; then
@@ -530,21 +523,8 @@ if [[ "$HOST" == 1 ]]; then
       echo "Host rescore needs CHROME_DEVTOOLS_AXI_BROWSER_URL or a Chrome/Chromium binary (CHROME_PATH)." >&2
       exit 2
     fi
-    host_port="${AND_SCENE_HOST_DEVTOOLS_PORT:-9333}"
-    host_profile="$(mktemp -d "${TMPDIR:-/tmp}/and-scene-host-chrome.XXXXXX")"
-    "$host_chrome" --headless=new --disable-gpu --remote-debugging-address=127.0.0.1 \
-      --remote-debugging-port="$host_port" --user-data-dir="$host_profile" \
-      >"$host_profile.log" 2>&1 &
-    host_chrome_pid=$!
-    export CHROME_DEVTOOLS_AXI_BROWSER_URL="http://127.0.0.1:$host_port"
-    for _ in {1..100}; do
-      if curl -fsS "$CHROME_DEVTOOLS_AXI_BROWSER_URL/json/version" >/dev/null 2>&1; then break; fi
-      sleep 0.1
-    done
-    if ! curl -fsS "$CHROME_DEVTOOLS_AXI_BROWSER_URL/json/version" >/dev/null 2>&1; then
-      echo "Host Chrome did not expose its DevTools endpoint at $CHROME_DEVTOOLS_AXI_BROWSER_URL." >&2
-      exit 1
-    fi
+    export AND_SCENE_HOST_CHROME="$host_chrome"
+    export AND_SCENE_HOST_DEVTOOLS_PORT="${AND_SCENE_HOST_DEVTOOLS_PORT:-9333}"
   fi
   mkdir -p "$ARTIFACT_DIR"
   export AND_SCENE_CODEX_COMMAND="$host_codex" AGENT_RUNNER_NO_TUI=1

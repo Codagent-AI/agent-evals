@@ -203,3 +203,60 @@ test('the real server refuses to start without a build directory', async () => {
   await assert.rejects(adapter.start({ candidate: 'candidate-abc' }), /no built candidate to serve/)
   await assert.rejects(readFile(join(dir, '.runtime/candidate-server-url'), 'utf8'), { code: 'ENOENT' })
 })
+
+// Host rescores on a 16 GB machine: an idle headless Chrome held through the
+// whole run grew to about 9 GB. The host browser now starts on demand with
+// memory-limiting flags and is released after each browser phase.
+test('the host browser starts lean on demand and releases its process and profile', async () => {
+  const { createHostBrowser, HOST_CHROME_FLAGS } = await import('../evals/agent-runner/and-scene/lib/host-browser.mjs')
+  const { EventEmitter } = await import('node:events')
+  const { access } = await import('node:fs/promises')
+  const launched = []
+  const signals = []
+  const axi = []
+  const env = {}
+  const browser = createHostBrowser({
+    chromePath: '/fake/chrome',
+    port: 9555,
+    env,
+    spawnImpl: (command, args) => {
+      const child = new EventEmitter()
+      child.pid = 4242 + launched.length
+      child.exitCode = null
+      launched.push({ command, args })
+      child.kill = (signal) => {
+        signals.push(signal)
+        child.exitCode = 0
+        setImmediate(() => child.emit('exit', 0, signal))
+        return true
+      }
+      return child
+    },
+    fetchImpl: async () => ({ ok: true }),
+    axi: async (args) => { axi.push(args.join(' ')) },
+  })
+
+  await browser.ensure()
+  await browser.ensure()
+  assert.equal(launched.length, 1)
+  assert.equal(env.CHROME_DEVTOOLS_AXI_BROWSER_URL, 'http://127.0.0.1:9555')
+  const args = launched[0].args
+  for (const flag of HOST_CHROME_FLAGS) assert.ok(args.includes(flag), flag)
+  assert.ok(args.includes('--headless=new'))
+  assert.ok(args.includes('--remote-debugging-port=9555'))
+  assert.ok(args.some((arg) => arg.startsWith('--js-flags=--max-old-space-size=')))
+  const profile = args.find((arg) => arg.startsWith('--user-data-dir=')).slice('--user-data-dir='.length)
+
+  await browser.release()
+  assert.deepEqual(signals, ['SIGTERM'])
+  assert.deepEqual(axi, ['stop'])
+  assert.equal(env.CHROME_DEVTOOLS_AXI_BROWSER_URL, undefined)
+  await assert.rejects(() => access(profile))
+  await browser.release()
+  assert.deepEqual(signals, ['SIGTERM'])
+
+  // A later browser phase, such as a second-opinion replay, starts it again.
+  await browser.ensure()
+  assert.equal(launched.length, 2)
+  await browser.release()
+})

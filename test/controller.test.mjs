@@ -1514,6 +1514,32 @@ test('a host rescore leaves an existing Agent Runner projects store in the home 
   assert.ok(projects.isDirectory())
 })
 
+test('the controller releases the browser after browser evaluation and after replays', async () => {
+  const context = await environment()
+  const events = []
+  const result = await evaluate(context, profiles, {
+    isProcessAlive: () => true,
+    verifyCandidate: async () => ({ build: { ok: true, log: 'built' },
+      verification: { machine_readable: true, passed: true }, timings: [] }),
+    browserDriverFactory: async () => { events.push('driver'); return browserDemo() },
+    releaseBrowser: async () => { events.push('release') },
+    candidateServer: (() => {
+      let servedIdentity = null
+      return {
+        probe: async () => ({ ok: true, candidate_identity: servedIdentity }),
+        start: async ({ candidate }) => {
+          servedIdentity = candidate
+          return { pid: 9876, url: 'http://127.0.0.1:4319/' }
+        },
+        stop: async () => {},
+      }
+    })(),
+  })
+  assert.ok(events.indexOf('release') > events.indexOf('driver'), JSON.stringify(events))
+  assert.equal(events.at(-1), 'release')
+  assert.ok(result.exitCode === 0 || result.exitCode === 1)
+})
+
 test('rescore checks browser failures while a reference baseline does not', async () => {
   const rescoreContext = await environment()
   const broken = () => {

@@ -329,6 +329,11 @@ An evaluator-only rescore SHALL import a completed candidate run read-only and S
 - **THEN** the controller runs on the host with the host Codex CLI and a headless Chrome DevTools endpoint
 - **AND** it neither claims nor modifies the home's Agent Runner projects store
 
+#### Scenario: Host rescore keeps the browser short-lived
+- **WHEN** a host rescore manages its own headless Chrome
+- **THEN** the controller starts it with memory-limiting flags only for the browser evaluation and second-opinion replays
+- **AND** stops it and removes its profile as soon as each of those phases ends, so no browser runs during source judging
+
 ### Requirement: Workflow contract regression detection
 The suite's automated checks SHALL verify the pinned workflow contract against a real Agent Runner checkout when one is available, and SHALL skip that verification with an explicit message naming the resolved path when no checkout is available. The check SHALL NOT require network access, a built Agent Runner binary, or a running workflow.
 
