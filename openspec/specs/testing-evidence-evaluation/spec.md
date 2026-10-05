@@ -38,6 +38,16 @@ If the evaluated workflow fails to produce those required artifacts or identitie
 - **THEN** the harness reports no missing evidence role
 - **AND** it verifies the named screenshots against the records that describe them
 
+#### Scenario: Acceptance did not converge
+- **WHEN** Agent Runner's acceptance gate replaced `acceptance-handoff.md` with its generated non-convergence notice and kept the tester's handoff as `acceptance-handoff-tester.md`
+- **THEN** the tester handoff fills the final-handoff role
+- **AND** the notice is retained under the `acceptance-gate-notice` role and shown to evidence judges as Runner-generated context
+- **AND** the notice fills the final-handoff role only when no candidate-written handoff exists
+
+#### Scenario: A record references a file with no evidence role
+- **WHEN** a verified record references a file such as a skill or source file that matches no evidence role
+- **THEN** the file is retained as `referenced-material` rather than as a session audit
+
 #### Scenario: Required candidate evidence is missing
 - **WHEN** the completed workflow omits a required acceptance artifact
 - **THEN** the evaluation reports `implementation-workflow-failed`

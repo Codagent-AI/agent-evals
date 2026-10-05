@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { lstat, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
@@ -1474,6 +1474,44 @@ test('an evaluator-only rescore imports a completed candidate and never starts A
   assert.equal(written.delivery.final_sha, context.commit)
   assert.equal(written.workflow.run_id, 'runner-complete')
   assert.equal(written.workflow.events[0].event, 'imported-completed-run')
+})
+
+test('a rescore restores a missing Runner session under the run directory and records it', async () => {
+  const context = await environment()
+  let staging = null
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    controllerChangeName: null,
+    verifyDelivery: async () => {
+      throw new Error('rescore must not rediscover historical artifact paths')
+    },
+    loadRescoreSource: async ({ stagingDir }) => {
+      staging = stagingDir
+      return { ...importedRescore(context), session_reconstruction: { source: 'evidence/candidate/artifacts', files: 3 } }
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.equal(staging, join(context.runDir, '.runtime/rescore-session'))
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.deepEqual(written.workflow.events[0].session_reconstruction,
+    { source: 'evidence/candidate/artifacts', files: 3 })
+})
+
+test('a host rescore leaves an existing Agent Runner projects store in the home untouched', async () => {
+  const context = await environment()
+  await mkdir(join(context.home, '.agent-runner/projects/someone-else'), { recursive: true })
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    controllerChangeName: null,
+    verifyDelivery: async () => {
+      throw new Error('rescore must not rediscover historical artifact paths')
+    },
+    loadRescoreSource: async () => importedRescore(context),
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const projects = await lstat(join(context.home, '.agent-runner/projects'))
+  assert.equal(projects.isSymbolicLink(), false)
+  assert.ok(projects.isDirectory())
 })
 
 test('rescore checks browser failures while a reference baseline does not', async () => {

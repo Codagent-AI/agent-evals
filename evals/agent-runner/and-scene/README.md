@@ -19,6 +19,27 @@ and resumable; only what the candidate page did can reject an overturn. Build
 and serve terminal failures cannot be replayed and use the existing span and
 log audit.
 
+## Robust judging
+
+No single model sample decides a scored criterion. Each judge job runs two
+independent samples with identical inputs, concurrently; source-job samples
+each pass through their own closed-world source audit. A criterion both
+samples pass is a consensus pass. Every other criterion, a disagreement or a
+fail, goes to one adjudicating judge per job that sees both samples' claims.
+An adjudicated pass must cite line spans (`path`, `start_line`, `end_line`)
+that the harness validates exactly as the browser second opinion does: the
+path must be in the verified neutral source inventory (or the materialized
+evidence view for the testing-evidence and assumption-handling jobs), resolve
+inside it without a symbolic link, and the range must lie inside the file and
+span under 200 lines. The quoted lines go to a closed-world span audit, and
+only `confirmed` keeps the pass; otherwise the criterion fails with the audit
+reason. Invalid adjudication output is retried and, once exhausted, leaves the
+job unobserved, never failed. Each criterion's evidence records its judging
+basis, `phases/product-judging.json` keeps both samples, the adjudication, and
+the per-criterion consensus, and `phases/eval-owned-usage.jsonl` records each
+call's `stage` (`<job>:sample-1`, `<job>:sample-2`, `<job>:adjudication`,
+`<job>:adjudication-audit`) so judging cost is measurable per stage.
+
 ## Fixture traceability
 
 Every automated criterion and gate has a `criterion_sources` entry in
@@ -219,6 +240,33 @@ The source is mounted read-only. The harness verifies its workflow, evidence,
 branch, draft PR, and final SHA, then runs only evaluator-owned phases. It does
 not invoke Agent Runner, repeat acceptance, create or push a branch, or modify
 the candidate.
+
+A factory artifact may no longer hold `.runtime/agent-runner-projects`, where
+the recorded Runner session lived. The rescore then restores the session's
+acceptance evidence from `evidence/candidate/artifacts` into
+`<rescore-run>/.runtime/rescore-session`, after checking the retained manifest
+against the manifest hash the source recorded and every retained copy against
+the recorded acceptance hashes. Any mismatch refuses the source. The
+`imported-completed-run` event records the reconstruction.
+
+Without Docker, add `--host` to run the same controller on this machine:
+
+```bash
+evals/agent-runner/and-scene/run.sh \
+  --run-agent --host \
+  --rescore-from artifacts/evals/and-scene/<completed-run-id> \
+  --artifact-dir artifacts/evals/and-scene/<rescore-run-id>
+```
+
+Host mode needs `node`, `npm`, `curl`, `chrome-devtools-axi`, and `codex` on
+`PATH` (or `AND_SCENE_CODEX_COMMAND`), plus either a DevTools endpoint in
+`CHROME_DEVTOOLS_AXI_BROWSER_URL` or a Chrome or Chromium binary
+(`CHROME_PATH`, the macOS Google Chrome app, `chromium`, or `google-chrome`)
+that it starts headless on `AND_SCENE_HOST_DEVTOOLS_PORT` (default 9333). Set
+`CHROME_DEVTOOLS_AXI_SESSION` and `CHROME_DEVTOOLS_AXI_PORT` to run several
+host rescores side by side. Judges still run in Codex's read-only sandbox
+against the run's neutral inputs. A rescore never starts or reads Agent
+Runner, so it leaves the home's `~/.agent-runner/projects` untouched.
 
 Evaluate an existing candidate as a reference baseline without invoking Agent
 Runner. Role profiles are neither required nor applicable:
@@ -444,13 +492,19 @@ filenames are:
 | Screenshots | `.png`, `.jpg`, `.jpeg`, or `.webp` files referenced by the handoff or found in the recorded acceptance output, such as `acceptance-screenshots/` |
 | Screenshot metadata (optional) | `acceptance-test.md`, `capture-metadata.json`, `screenshot-metadata.json`, `screenshot-manifest.json`, `capture-manifest.json` |
 | Findings and retest history | `findings-history.md`, `retest-history.md`, `acceptance-findings.md`, `findings.md`, `acceptance-retest.md` |
-| Final handoff | `acceptance-handoff.md`, `final-acceptance-handoff.md`, `acceptance-final-handoff.md`, `final-handoff.md` |
+| Final handoff | `acceptance-handoff.md`, `final-acceptance-handoff.md`, `acceptance-final-handoff.md`, `final-handoff.md`, `acceptance-handoff-tester.md` |
+| Acceptance gate notice (optional) | Agent Runner's generated `acceptance-handoff.md` starting `# Acceptance did not converge within`, when a tester handoff exists |
 | Assumptions ledger | `acceptance-assumptions.md`, `assumptions-ledger.md`, `acceptance-assumption-ledger.md`, `assumptions.md` |
 | Acceptance pass record (optional) | `exploration-plan.md`, `acceptance-exploration-plan.md`, and pass-numbered copies of acceptance records such as `acceptance-findings-pass1.md` |
 | Tested revision (optional) | `acceptance-tested-revision.txt` |
 
-Referenced session reports and assumption/context-gap audits are retained when
-present. A record that names a revision Git resolves to an ancestor of the
+When acceptance does not converge, Agent Runner's acceptance gate moves the
+tester's handoff to `acceptance-handoff-tester.md` and writes its own short
+notice to `acceptance-handoff.md`. The tester handoff is then the final handoff
+and the notice keeps the `acceptance-gate-notice` role; the notice is the final
+handoff only when the tester wrote none. Referenced session reports and
+assumption/context-gap audits are retained when present; any other file a
+record references is retained as `referenced-material`. A record that names a revision Git resolves to an ancestor of the
 final SHA is verified as a record of that earlier revision
 (`revision_relation: ancestor-of-final`); one naming a revision that does not
 resolve or lies off the final history stays defective. A well-formed tested-revision SHA off the final history is still recorded for lineage diagnosis as `recorded-off-history`; it never establishes final-revision support.
@@ -491,6 +545,16 @@ is judged against those user-visible behaviors, whatever testing approach the
 candidate took, never against a fixed test-plan case list. Each testing-evidence
 criterion's definition comes from `criterion_definitions` in the automated
 rubric and is shown to the judge beside its identifier.
+
+Automated rubric 8.0.0 traces guidance to the fixture where 7.0.0 exceeded it:
+settled screenshots accept the configured settle interval, touch swipe no
+longer requires vertical or multi-touch rejection, overlap and allow-overlap
+follow the fixture scenarios, and five scaffold branches plus template path
+resolution are judged from explicit `SKILL.md` instructions. It also states
+that an on-screen step number must be rendered text and that the default
+attribution must link to `https://github.com/Codagent-AI/and-scene`. Scores
+for those criteria are not comparable with 7.0.0; re-judge an earlier run with
+`--rescore-from`.
 
 Automated rubric 6.0.0 redefined the four testing-evidence criteria and the
 final-revision rule. Testing-evidence scores from 6.0.0 are not comparable with

@@ -372,7 +372,9 @@ Deterministic source facts supplied to an LLM source judge SHALL be treated as l
 ### Requirement: Scene kit correctness
 The evaluation SHALL score the reusable scene kit out of 24 using LLM review of delivered source and structured browser evidence. The judge SHALL assess implementation of the technical contracts rather than the aesthetic quality of the demo that uses them.
 
-For transition sequencing, the judge SHALL require persisting motion and newcomer delay to share one settlement contract or executable proof that newcomers wait until continuing entities settle; the presence of timing constants or named primitives alone SHALL NOT earn credit. Sharing or importing a timing value SHALL be insufficient unless persistent motion consumes that exact configuration, or newcomer admission waits on an observable completion signal from persistent motion. Touch navigation SHALL distinguish predominantly horizontal single-touch swipes from vertical scrolling and multi-touch gestures.
+For transition sequencing, the judge SHALL require persisting motion and newcomer delay to share one settlement contract or executable proof that newcomers wait until continuing entities settle; the presence of timing constants or named primitives alone SHALL NOT earn credit. Sharing or importing a timing value SHALL be insufficient unless persistent motion consumes that exact configuration, or newcomer admission waits on an observable completion signal from persistent motion. Touch navigation SHALL be judged against the fixture scenario only: a horizontal swipe to the left advances one step and a swipe to the right goes back one step. The judge SHALL NOT require rejection of vertical scrolling or multi-touch gestures, which the fixture does not state.
+
+The step number SHALL count as on screen only when it is rendered visibly; an `aria-label`, other attribute, or visually hidden text SHALL NOT satisfy `scene-order-derived-numbering`. The default attribution SHALL link to the and-scene GitHub repository, `https://github.com/Codagent-AI/and-scene`; a link to another owner or repository path SHALL fail `attribution-default-link`. The deterministic attribution fact SHALL report the GitHub targets the source contains so the judge sees a wrong target by name. No network request decides the link; a reachability probe would make identical evidence score differently.
 
 | Subcomponent | Points | Criteria |
 |---|---:|---|
@@ -396,9 +398,18 @@ For transition sequencing, the judge SHALL require persisting motion and newcome
 - **WHEN** the kit delays newcomers using a duration that is not applied to persistent layout motion and supplies no executable settlement proof
 - **THEN** `entity-newcomer-after-settle` fails
 
-#### Scenario: Vertical gesture has horizontal drift
-- **WHEN** a touch gesture moves primarily vertically while also exceeding the horizontal distance threshold
-- **THEN** the kit does not navigate
+#### Scenario: Horizontal swipe navigation is credited
+- **WHEN** the kit maps a left swipe to the next step and a right swipe to the previous step through its navigation
+- **THEN** `navigation-touch-swipe` passes
+- **AND** the absence of vertical-scroll or multi-touch rejection does not fail it
+
+#### Scenario: Step number exists only as an accessible name
+- **WHEN** the position-derived step number appears only in an `aria-label`
+- **THEN** `scene-order-derived-numbering` fails
+
+#### Scenario: Attribution links to a guessed repository
+- **WHEN** the default attribution links to a GitHub path other than `https://github.com/Codagent-AI/and-scene`
+- **THEN** `attribution-default-link` fails
 
 ### Requirement: Presentation skill correctness
 The evaluation SHALL score the delivered presentation skill out of seven points using LLM review of the skill, its templates, delivered source, and workflow evidence.
@@ -412,7 +423,7 @@ The evaluation SHALL score the delivered presentation skill out of seven points 
 
 Visual-composition inspection and visual-warning review SHALL NOT receive presentation-skill points. The candidate's observable proof that those activities occurred and were handled SHALL be evaluated by the testing-evidence component.
 
-For scaffold scenarios that can be exercised deterministically, prose instructions alone SHALL NOT establish correctness. The judge SHALL require focused executable tests or verified workflow evidence covering empty, already-scaffolded, partial-scaffold, monorepo, standalone, and ambiguous nonempty targets, including template resolution and dependency handling from the resolved target. Acceptable proof SHALL include either a temporary-directory driver that materializes the target state and verifies resulting files and dependencies, or a revision-bound workflow transcript recording the inputs, user choice when interactive confirmation is required, mutations, and observed outcome. An interactive branch SHALL NOT require a live human in a unit test, but prose that merely directs an agent to ask SHALL NOT prove the branch.
+The fixture design makes `SKILL.md` the agent procedure for scaffold detection, target resolution, and confirmation, and its test plan verifies those branches through agent acceptance runs rather than unit tests. For `skill-already-scaffolded`, `skill-partial-scaffold`, `skill-monorepo-target`, `skill-standalone-target`, `skill-nonempty-confirmation`, and `skill-template-path-resolution`, an explicit `SKILL.md` instruction that states the branch's detection condition and required action SHALL earn credit without an executable test, driver, or transcript. A missing, ambiguous, or contradictory instruction, or a delivered helper or template that implements the branch differently, SHALL fail the criterion. `skill-empty-directory-scaffold` SHALL additionally require a complete bootstrap template and a test that materializes it in a fresh temporary location and builds it, as the fixture's integration test plan describes; any materialization pattern SHALL count. `skill-scaffold-style-neutral` SHALL be judged from the bootstrap template's dependencies and styles.
 
 #### Scenario: Skill contracts are scored
 - **WHEN** the LLM judge evaluates the presentation skill
@@ -429,18 +440,22 @@ For scaffold scenarios that can be exercised deterministically, prose instructio
 - **THEN** that record is evaluated under testing-evidence quality
 - **AND** it does not award presentation-skill points
 
-#### Scenario: Scaffold edge cases exist only as instructions
-- **WHEN** the skill describes partial-scaffold and monorepo behavior without executable tests or verified workflow evidence for those cases
-- **THEN** the affected scaffold criteria fail
+#### Scenario: Scaffold branches are explicit instructions
+- **WHEN** `SKILL.md` states the partial-scaffold and monorepo detection conditions and their required actions, with no executable test for those branches
+- **THEN** `skill-partial-scaffold` and `skill-monorepo-target` pass
 
-#### Scenario: Interactive scaffold confirmation is exercised
-- **WHEN** a test driver or revision-bound workflow record supplies the ambiguous nonempty target, records the simulated or actual user choice, and verifies the resulting mutations
-- **THEN** that evidence is eligible for `skill-nonempty-confirmation`
+#### Scenario: A scaffold branch is only implied
+- **WHEN** `SKILL.md` says only to scaffold if needed
+- **THEN** the branch-specific scaffold criteria fail
+
+#### Scenario: Empty-directory scaffold is materialized by a test
+- **WHEN** a test creates a temporary directory, copies the bootstrap template into a new app path inside it, and builds it
+- **THEN** that test satisfies the executable part of `skill-empty-directory-scaffold`
 
 ### Requirement: Verification tool correctness
 The evaluation SHALL score the delivered verification tooling out of seven points using LLM review of its source, executable behavior, and produced artifacts. The four hard-gate criteria SHALL remain outside this point allocation.
 
-The verifier SHALL prove that browser checks connect to the preview process it started and SHALL fail if that process exits; an unrelated stale process on a fixed port SHALL NOT satisfy readiness. This behavior SHALL be scored only under `verification-preview-process-ownership`; `verification-ipv4-loopback` SHALL score only consistent use of `127.0.0.1` for preview binding, readiness probes, and browser URLs. Screenshot settlement SHALL observe animation completion or consume the exact transition configuration used by persistent scene motion; a duplicated fixed delay or an imported value that persistent motion does not consume SHALL NOT satisfy settlement. Warning criteria SHALL require executable regression or verified browser evidence that each warning fires and that intentional-overlap suppression does not hide unrelated collisions; token presence alone SHALL NOT earn credit. Evidence from an earlier revision MAY satisfy a warning criterion only when verified lineage establishes it as an ancestor of the final SHA, hashes show the relevant warning implementation is unchanged, and retained raw executable output demonstrates the behavior; a narrative assertion about an earlier pass SHALL NOT suffice.
+The verifier SHALL prove that browser checks connect to the preview process it started and SHALL fail if that process exits; an unrelated stale process on a fixed port SHALL NOT satisfy readiness. This behavior SHALL be scored only under `verification-preview-process-ownership`; `verification-ipv4-loopback` SHALL score only consistent use of `127.0.0.1` for preview binding, readiness probes, and browser URLs. Screenshot settlement SHALL be satisfied by a configured settle interval applied after each step advance and before each capture, as the fixture scenario states, or by an observed completion condition; the interval SHALL NOT be required to derive from the runtime motion configuration. Step capture SHALL require a test that runs the helper or its capture loop and asserts one screenshot per step; asserting the expected files SHALL suffice. Warning criteria SHALL require executable regression or verified browser evidence that each warning fires; token presence alone SHALL NOT earn credit. Overlap detection SHALL be judged on overlapping visible text or chrome elements, and skipping every pair with at least one element inside an allow-overlap subtree SHALL satisfy `visual-helper-allow-overlap`. Evidence from an earlier revision MAY satisfy a warning criterion only when verified lineage establishes it as an ancestor of the final SHA, hashes show the relevant warning implementation is unchanged, and retained raw executable output demonstrates the behavior; a narrative assertion about an earlier pass SHALL NOT suffice.
 
 | Subcomponent | Points | Criteria |
 |---|---:|---|
@@ -462,6 +477,10 @@ The verifier SHALL prove that browser checks connect to the preview process it s
 - **WHEN** the verifier's own preview process exits because its port is occupied while another server responds on that port
 - **THEN** `verification-preview-process-ownership` fails
 - **AND** `verification-ipv4-loopback` remains independently scored from consistent loopback addressing
+
+#### Scenario: Screenshots wait for a configured interval
+- **WHEN** the helper waits a configured settle interval after each step advance before capturing
+- **THEN** `visual-helper-settled-screenshots` passes without a transition contract shared with runtime motion
 
 #### Scenario: Warning implementation is not exercised
 - **WHEN** warning-related tokens or helper functions exist but no executable regression or verified browser evidence demonstrates the warning behavior
@@ -646,6 +665,31 @@ The automated product rubric and human-review rubric SHALL have distinct explici
 - **WHEN** an evaluation result is written
 - **THEN** it records distinct version identifiers and SHA-256 hashes for the automated and human-review rubrics
 - **AND** it records component applicability and the score denominator
+
+### Requirement: Robust judge verdicts
+Every scored judge job SHALL be judged by two independent samples with identical inputs, run concurrently, and no single model sample SHALL decide a criterion. A criterion that both samples pass, each after its own closed-world source audit for source jobs, SHALL pass. Every other criterion, whether the samples disagree or both fail, SHALL go to one adjudicating judge per job that sees both samples' claims and the job's full context. An adjudicated pass SHALL cite between one and twelve line spans, each under 200 lines, whose paths are in the verified neutral source inventory for a source job or the materialized evidence view for an evidence job, resolve inside that root without a symbolic link, and lie inside the file; the harness SHALL quote those lines to a closed-world span audit, and only a `confirmed` classification SHALL keep the pass. An unconfirmed adjudicated pass SHALL become a fail whose rationale carries the audit reason. An adjudicated fail SHALL need a rationale and MAY cite counterexample lines. Invalid adjudication output, including an invalid span, SHALL be retried and, once exhausted, SHALL leave the job unobserved as a harness failure, as SHALL an exhausted sample.
+
+Each criterion result SHALL record its judging basis (`consensus-pass`, `adjudicated-pass`, or `adjudicated-fail`) and both sample verdicts, and the eval-owned usage ledger SHALL record each call's stage. A cached judge job SHALL be reused only under the same judging protocol and only when its results reproduce from its recorded samples and adjudication.
+
+Source judges SHALL trace a constant, member, prop, or input through every use before calling it dead, and SHALL treat shown, visible, or on-screen content as rendered content, not an `aria-label`, attribute, or visually hidden text. Judges SHALL NOT add requirements that the criterion and its review guidance do not state.
+
+#### Scenario: Both samples pass
+- **WHEN** both independent samples pass a criterion
+- **THEN** the criterion passes without adjudication
+
+#### Scenario: Samples disagree
+- **WHEN** one sample passes and the other fails a criterion
+- **THEN** the adjudicating judge decides it
+- **AND** its pass counts only with validated line spans that the span audit confirms
+
+#### Scenario: A consensus fail is wrong
+- **WHEN** both samples fail a criterion because they miss a consumer of a constant
+- **AND** the adjudicator quotes the consuming lines and the span audit confirms them
+- **THEN** the criterion passes
+
+#### Scenario: Adjudicated span is invalid
+- **WHEN** the adjudicator cites a path outside the verified inventory or a range outside the file
+- **THEN** the output is retried and, if every attempt is invalid, the job is unobserved rather than failed
 
 ### Requirement: Deterministic criteria fail only on positive evidence
 A scored deterministic browser criterion SHALL have exactly three outcomes: `pass`, `fail`, and not observed. The evaluator SHALL record `fail` only when it holds positive evidence that the candidate violates the requirement the criterion enforces, such as visible text that differs from the normative text, an input that lands on the wrong step, or a browser failure raised by the page. The evaluator SHALL NOT record `fail` because it could not locate the thing it needed to inspect.

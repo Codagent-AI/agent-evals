@@ -315,6 +315,20 @@ Agent Runner records each executed step as a path whose segments identify the en
 - **WHEN** a recorded step path contains a `sub:` segment whose workflow name declares a prohibited effect
 - **THEN** the harness matches that segment with its `sub:` prefix removed and reports `workflow-side-effect-violation`
 
+### Requirement: Evaluator-only rescore sources
+An evaluator-only rescore SHALL import a completed candidate run read-only and SHALL verify every recorded acceptance artifact against its recorded hash. When the recorded Runner session directory is gone but the run retains its candidate evidence under `evidence/candidate/artifacts`, the rescore SHALL accept the retained manifest only when it reproduces the manifest hash the source recorded, SHALL accept each retained copy only when its bytes match both the manifest and the recorded acceptance hash, and SHALL restore the session's evidence into the new run's private runtime before evidence discovery. It SHALL record that reconstruction with the imported-run event. A rescore SHALL never start or read Agent Runner, so it SHALL NOT claim the home's Agent Runner projects store. `run.sh --run-agent --rescore-from PATH --host` SHALL run the same controller on the host, without Docker, with the host Codex CLI and a headless Chrome DevTools endpoint.
+
+#### Scenario: Rescore source lost its Runner session
+- **WHEN** a completed run retains its acceptance evidence under `evidence/candidate/artifacts` but no longer has its recorded Runner session directory
+- **THEN** the rescore verifies the retained evidence manifest against the manifest hash the source recorded and every retained copy against the recorded acceptance hashes
+- **AND** it restores the session's evidence into the new run's private runtime, records the reconstruction, and never writes to the source
+- **AND** any mismatch refuses the source
+
+#### Scenario: Rescore runs without Docker
+- **WHEN** an operator runs an evaluator-only rescore with `--host`
+- **THEN** the controller runs on the host with the host Codex CLI and a headless Chrome DevTools endpoint
+- **AND** it neither claims nor modifies the home's Agent Runner projects store
+
 ### Requirement: Workflow contract regression detection
 The suite's automated checks SHALL verify the pinned workflow contract against a real Agent Runner checkout when one is available, and SHALL skip that verification with an explicit message naming the resolved path when no checkout is available. The check SHALL NOT require network access, a built Agent Runner binary, or a running workflow.
 

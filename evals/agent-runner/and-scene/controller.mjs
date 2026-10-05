@@ -354,7 +354,12 @@ export async function runEvaluation({
   let importedRun = null
   if (rescore) {
     try {
-      importedRun = await loadRescoreSource({ sourceDir: options.rescoreFrom })
+      // A source whose Runner session was not retained is restored from its
+      // hash-verified candidate evidence into this run's private runtime.
+      importedRun = await loadRescoreSource({
+        sourceDir: options.rescoreFrom,
+        stagingDir: join(runDir, '.runtime/rescore-session'),
+      })
     } catch (error) {
       return failure([{ code: 'invalid-rescore-source', message: error.message }])
     }
@@ -726,6 +731,8 @@ export async function runEvaluation({
           event: 'imported-completed-run',
           source_run_id: importedRun.source_run_id,
           provenance_sha256: importedRun.provenance_sha256,
+          ...(importedRun.session_reconstruction
+            ? { session_reconstruction: importedRun.session_reconstruction } : {}),
         }]
       : [],
     run: checkpoint.agent_runner,
@@ -768,7 +775,11 @@ export async function runEvaluation({
   // Link the persistent run store into the container home so Agent Runner
   // writes where the controller reads, then read from whichever store is
   // actually in effect.
-  const projectsDir = await resolveProjectsDir({ runDir, home })
+  // An evaluator-only rescore never starts or reads Agent Runner, so it must
+  // not claim the home's projects store; on a host that store is the user's.
+  const projectsDir = rescore
+    ? join(runDir, '.runtime/agent-runner-projects')
+    : await resolveProjectsDir({ runDir, home })
   const readState = readRunnerState ?? ((runIdentifier) => readPersistedRunnerState(projectsDir, runIdentifier))
   const readSteps = observedSteps ?? ((state) => state?.history ?? state?.steps ?? [])
   // Agent Runner must run in the candidate worktree so it discovers the
@@ -2020,6 +2031,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       ? createCodexJudgeInvoker({
           runDir: productionRunDir,
           candidateWorktree,
+          // run.sh --host points this at the host CLI; the sandbox default
+          // bypasses the implementation agents' yolo wrapper.
+          ...(process.env.AND_SCENE_CODEX_COMMAND ? { command: process.env.AND_SCENE_CODEX_COMMAND } : {}),
           defaultCwd: join(resolve(productionRunDir), '.runtime/judge-workspace'),
           allowedRoots: [
             join(resolve(productionRunDir), '.runtime/judge-workspace'),
