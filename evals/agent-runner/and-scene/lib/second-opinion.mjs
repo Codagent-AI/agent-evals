@@ -414,13 +414,44 @@ export function buildSpanAuditRequest({ request, answer, spans, logSpans, replay
   }
 }
 
+// Invocation errors can contain the raw Codex stdout tail, including shell
+// output. Reasons survive in published failure history, so retain only a
+// provider failure event's message; never copy the rest of an event stream.
+function invocationFailureMessage(error) {
+  const message = error instanceof Error ? error.message : String(error)
+  const exit = /^Codex judge [^\n:]+ exited -?\d+: /.exec(message)
+  let eventOutput = Boolean(exit) || message.includes('"aggregated_output"') || /^\s*\{/.test(message)
+  let providerMessage
+  for (const line of message.split('\n')) {
+    const start = line.indexOf('{')
+    if (start < 0) continue
+    try {
+      const event = JSON.parse(line.slice(start))
+      if (typeof event?.type === 'string') eventOutput = true
+      const failure = event?.type === 'turn.failed' ? event.error?.message
+        : event?.type === 'error' ? event.message : null
+      if (typeof failure === 'string' && failure.trim()) providerMessage = failure
+    } catch {
+      // A bounded stdout tail may start or end partway through a JSON event.
+    }
+  }
+  const detail = providerMessage ?? (eventOutput
+    ? `${exit?.[0] ?? ''}diagnostic output omitted; see private judge logs` : message)
+  const bounded = detail.replace(/\s+/g, ' ').trim()
+  // Preserve the deterministic rejection code even if its surrounding raw
+  // diagnostics are omitted or it would fall beyond the length limit.
+  const summary = message.includes('invalid_json_schema') && !bounded.slice(0, 512).includes('invalid_json_schema')
+    ? `invalid_json_schema: ${bounded}` : bounded
+  return summary.length > 512 ? `${summary.slice(0, 509)}...` : summary
+}
+
 export async function runSecondOpinion({ request, invoke, replay, attempts = JUDGE_ATTEMPTS }) {
   let answer
   let failureReason = 'second-opinion output exhausted'
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     let output
     try { output = await invoke(request) } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = invocationFailureMessage(error)
       if (message.includes('invalid_json_schema')) {
         failureReason = `second-opinion schema rejected by provider (invalid_json_schema): ${message}`
         break
@@ -490,7 +521,7 @@ export async function runSecondOpinion({ request, invoke, replay, attempts = JUD
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     let output
     try { output = await invoke(auditRequest) } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = invocationFailureMessage(error)
       if (message.includes('invalid_json_schema')) {
         failureReason = `second-opinion audit schema rejected by provider (invalid_json_schema): ${message}`
         break

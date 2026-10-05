@@ -1804,6 +1804,43 @@ test('provider schema rejection in a second opinion leaves the failed criterion 
   assert.equal(row.points_awarded, null)
 })
 
+test('second opinion raw command output is omitted from published failure history', async () => {
+  const context = await environment()
+  const driver = browserDemo()
+  driver.activate = async () => {}
+  const secret = 'PRIVATE_COMMAND_OUTPUT'
+  const events = [
+    { type: 'item.completed', item: { type: 'command_execution',
+      aggregated_output: secret.repeat(3000) } },
+    { type: 'turn.failed', error: { message: 'invalid_json_schema: actions.items must be closed ' + 'detail '.repeat(1000) } },
+  ].map((event) => JSON.stringify(event)).join('\n')
+  const result = await evaluate(context, profiles, {
+    browserDriver: driver,
+    verifyCandidate: async () => ({ build: { ok: true, log: 'built' },
+      verification: { machine_readable: true, passed: true }, timings: [] }),
+    judgeInvoke: async (request) => {
+      if (request.job === 'second-opinion') throw new Error('Codex judge second-opinion exited 1: ' + events)
+      if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
+        rationale: 'fixture source supports this criterion', evidence: ['src/index.ts'] })) })
+    },
+  })
+  assert.equal(result.outcome.evaluation_status, 'evaluation-harness-failed')
+  assert.equal(result.outcome.failure.code, 'judge-output')
+  assert.equal(result.outcome.product_verdict, 'unavailable')
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.match(written.failure.reason, /second-opinion:demo-supported-navigation: second-opinion schema rejected by provider/)
+  assert.match(written.failure.reason, /invalid_json_schema: actions.items must be closed/)
+  assert.equal(JSON.stringify(written).includes(secret), false)
+  assert.equal(JSON.stringify(written).includes('aggregated_output'), false)
+  assert.ok(written.failure.reason.length <= 4096, written.failure.reason.length)
+  const scored = await readJson(join(context.runDir, 'phases/score.json'))
+  const row = scored.components.flatMap(({ subcomponents }) => subcomponents.flatMap(({ criteria }) => criteria))
+    .find(({ id }) => id === 'demo-supported-navigation')
+  assert.equal(row.verdict, null)
+  assert.equal(row.points_awarded, null)
+})
+
 test('an inferred mode mismatch reaches fallback judging and the derived outline gate', async () => {
   const context = await environment()
   const driver = browserDemo()

@@ -443,3 +443,66 @@ for (const [message, expectedCalls] of [
     if (expectedCalls === 1) assert.match(result.reason, /schema rejected by provider/)
   })
 }
+
+test('second opinion failure reports only the bounded provider message from raw event output', async () => {
+  const secret = 'PRIVATE_COMMAND_OUTPUT'
+  const providerMessage = 'invalid_json_schema: actions.items must be closed ' + 'detail '.repeat(1000)
+  const events = [
+    { type: 'item.completed', item: { type: 'command_execution',
+      aggregated_output: secret.repeat(3000) } },
+    { type: 'turn.failed', error: { message: providerMessage } },
+  ].map((event) => JSON.stringify(event)).join('\n')
+  let calls = 0
+  const outcome = await runSecondOpinion({ request: {}, invoke: async () => {
+    calls += 1
+    throw new Error('Codex judge second-opinion exited 1: ' + events)
+  } })
+  assert.equal(outcome.ok, false)
+  assert.equal(calls, 1)
+  assert.match(outcome.reason, /schema rejected by provider.*invalid_json_schema: actions.items must be closed/)
+  assert.equal(outcome.reason.includes(secret), false)
+  assert.equal(outcome.reason.includes('aggregated_output'), false)
+  assert.ok(outcome.reason.length <= 600, outcome.reason.length)
+})
+
+test('second opinion omits an event stream without a provider failure message', async () => {
+  const secret = 'PRIVATE_COMMAND_OUTPUT'
+  for (const events of [
+    JSON.stringify({ type: 'item.completed', item: { aggregated_output: secret } }),
+    '"aggregated_output":"' + secret + '"}', // A tail beginning partway through a command event.
+  ]) {
+    const outcome = await runSecondOpinion({ request: {}, invoke: async () => {
+      throw new Error('Codex judge second-opinion exited 1: ' + events)
+    } })
+    assert.equal(outcome.ok, false)
+    assert.equal(outcome.reason.includes(secret), false)
+    assert.match(outcome.reason, /diagnostic output omitted/)
+  }
+})
+
+test('second opinion keeps a top-level provider error while omitting a truncated stdout tail', async () => {
+  const message = 'Codex judge second-opinion exited 1: PRIVATE_COMMAND_OUTPUT partial JSON\n'
+    + JSON.stringify({ type: 'error', message: 'provider stream dropped' })
+  const outcome = await runSecondOpinion({ request: {}, invoke: async () => { throw new Error(message) } })
+  assert.match(outcome.reason, /provider stream dropped/)
+  assert.equal(outcome.reason.includes('PRIVATE_COMMAND_OUTPUT'), false)
+})
+
+test('second opinion bounds plain invocation diagnostics', async () => {
+  const outcome = await runSecondOpinion({ request: {}, invoke: async () => {
+    throw new Error('transport unavailable ' + 'detail '.repeat(1000))
+  } })
+  assert.match(outcome.reason, /transport unavailable/)
+  assert.ok(outcome.reason.length <= 600, outcome.reason.length)
+})
+
+test('second opinion retains schema rejection classification when raw diagnostics are omitted', async () => {
+  let calls = 0
+  const outcome = await runSecondOpinion({ request: {}, invoke: async () => {
+    calls += 1
+    throw new Error('Codex judge second-opinion exited 1: PRIVATE_COMMAND_OUTPUT invalid_json_schema')
+  } })
+  assert.equal(calls, 1)
+  assert.match(outcome.reason, /schema rejected by provider.*invalid_json_schema/)
+  assert.equal(outcome.reason.includes('PRIVATE_COMMAND_OUTPUT'), false)
+})
