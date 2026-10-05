@@ -58,7 +58,7 @@ import {
   readEvidenceProjectionInputs,
   writeResultArtifacts,
 } from './lib/result.mjs'
-import { createCodexJudgeInvoker } from './lib/judge-invoker.mjs'
+import { JUDGE_REASONING_EFFORT, createCodexJudgeInvoker } from './lib/judge-invoker.mjs'
 import { hideValidatorFromAgents } from './lib/validator-availability.mjs'
 import { runProductJudging } from './lib/judge-jobs.mjs'
 import {
@@ -769,7 +769,7 @@ export async function runEvaluation({
 
   // Pricing and ambiguity are eval-owned judge jobs and reuse the single
   // recorded Codex authority rather than selecting one of their own.
-  const judgeAuthority = { cli: 'codex', model: options.judgeModel }
+  const judgeAuthority = { cli: 'codex', model: options.judgeModel, effort: JUDGE_REASONING_EFFORT }
 
   // Each execution session gets its own label so the reported total reads as a
   // sum of recorded machine sessions rather than one uninterrupted stretch.
@@ -858,7 +858,7 @@ export async function runEvaluation({
       audit_root: candidateWorktree, sources: sourceFiles }
     const target = { kind: 'terminal', id: gate }
     const request = buildSecondOpinionRequest({ target, rubrics, browser: null, judging: null,
-      neutral, authority: { cli: 'codex', model: options.judgeModel },
+      neutral, authority: { cli: 'codex', model: options.judgeModel, effort: JUDGE_REASONING_EFFORT },
       terminal: { stage, reason, evidence, log_root: runDir, log_artifact: logArtifact } })
     const unit = `second-opinion:terminal:${gate}`
     const inputs = { input_hash: hashJson({ request, evidence_sha256: hashString(evidence),
@@ -1502,7 +1502,7 @@ export async function runEvaluation({
       } else {
         record.judging = await runProductJudging({
           rubrics,
-          authority: { cli: 'codex', model: options.judgeModel },
+          authority: { cli: 'codex', model: options.judgeModel, effort: JUDGE_REASONING_EFFORT },
           evidence: [
             ...record.sourceEvidence.evidence,
             ...(record.browser?.criteria ?? []),
@@ -1569,7 +1569,7 @@ export async function runEvaluation({
           for (const target of targets) {
             checked.push(target)
             const request = buildSecondOpinionRequest({ target, rubrics, browser: record.browser,
-              judging: record.judging, neutral, authority: { cli: 'codex', model: options.judgeModel } })
+              judging: record.judging, neutral, authority: { cli: 'codex', model: options.judgeModel, effort: JUDGE_REASONING_EFFORT } })
             const id = `second-opinion:${target.kind}:${target.id}`
             const inputHash = hashJson({ request, probe: record.browser.probes?.find((entry) => entry.id === target.id)?.output_sha256,
               audit_contract: 'closed-world-spans-replay-allowlist-v2' })

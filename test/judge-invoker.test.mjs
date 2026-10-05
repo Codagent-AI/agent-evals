@@ -705,3 +705,16 @@ test('an invalid_json_schema rejection fails fast as a non-retryable harness err
   assert.equal(error.owner, 'evaluation-harness')
   assert.match(error.message, /invalid_json_schema/)
 })
+
+test('the judge reasoning effort is pinned explicitly rather than left to the CLI default', async () => {
+  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const spawnImpl = fakeSpawn((child, { args }) => {
+    writeFinalOutput(args, '{}')
+    child.exit(0)
+  })
+  const invoke = createCodexJudgeInvoker({ runDir, candidateWorktree: join(runDir, 'c'), spawnImpl })
+  await invoke({ job: 'scene-kit', authority: { model: 'm', effort: 'medium' }, schema: {}, prompt: 'x' })
+  await invoke({ job: 'scene-kit', authority: { model: 'm' }, schema: {}, prompt: 'y' })
+  assert.ok(spawnImpl.calls[0].args.includes('model_reasoning_effort="medium"'))
+  assert.ok(spawnImpl.calls[1].args.includes('model_reasoning_effort="medium"'))
+})

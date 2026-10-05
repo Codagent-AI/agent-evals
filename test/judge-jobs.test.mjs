@@ -977,71 +977,70 @@ test('an insufficient primary fail is re-judged instead of charged to the candid
   }
 })
 
-test('progressive insufficient audits may use more than three focused source cycles', async () => {
+// Round-2 audit: rep 1 spent 12 citation retries and 46 calls on audits that
+// never contradicted anything. A sample now re-cites once; an audit that still
+// cannot decide leaves the sample's own verdict as its vote.
+test('a sample re-cites once and a verdict still unproven after that stands as its vote', async () => {
   const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
   await mkdir(join(sourceRoot, 'src'), { recursive: true })
   await writeFile(join(sourceRoot, 'src/scene.ts'), 'export const stableIdentity = true\n')
   await writeFile(join(sourceRoot, 'src/node.ts'), 'export const layoutMotion = true\n')
-  await writeFile(join(sourceRoot, 'src/node.test.ts'), 'export const morphTest = true\n')
-  await writeFile(join(sourceRoot, 'src/integration.test.ts'), 'export const integrationTest = true\n')
   const ids = ['entity-persisting-morph']
-  const primary = (citations, rationale) => JSON.stringify({
-    results: [{
-      id: ids[0],
-      verdict: 'pass',
-      rationale,
-      evidence: citations,
-      citations,
-    }],
-  })
+  const primary = (citations) => JSON.stringify({ results: [{
+    id: ids[0], verdict: 'pass', rationale: 'stable identity uses layout motion', evidence: citations, citations,
+  }] })
   const responses = [
-    primary(['src/scene.ts'], 'stable identity exists'),
+    primary(['src/scene.ts']),
     auditOutput(ids, { [ids[0]]: 'insufficient' }),
-    primary(['src/node.ts'], 'stable identity uses layout motion'),
+    primary(['src/node.ts']),
     auditOutput(ids, { [ids[0]]: 'insufficient' }),
-    primary(
-      ['src/node.test.ts'],
-      'stable identity uses tested layout motion',
-    ),
-    auditOutput(ids, { [ids[0]]: 'insufficient' }),
-    primary(
-      ['src/integration.test.ts'],
-      'integration proves stable identity and layout motion',
-    ),
-    auditOutput(ids),
   ]
   const requests = []
-
   try {
     const result = await runJudgeJob({
       request: {
-        job: 'scene-kit',
-        criteria: ids,
-        authority,
-        cwd: root,
-        audit_cwd: join(root, 'audit'),
-        input_roots: { source: sourceRoot },
-        input_permissions: { neutral_source: true },
-        source_audit: true,
-        prompt: 'primary rubric prompt',
+        job: 'scene-kit', criteria: ids, authority, cwd: root, audit_cwd: join(root, 'audit'),
+        input_roots: { source: sourceRoot }, input_permissions: { neutral_source: true },
+        source_audit: true, prompt: 'primary rubric prompt',
       },
       invoke: async (request) => {
         requests.push(request)
         return responses.shift()
       },
     })
-
     assert.equal(result.ok, true)
+    assert.equal(requests.length, 4)
     assert.equal(result.results[0].verdict, 'pass')
-    assert.equal(result.attempts.length, 4)
-    assert.equal(result.audit_attempts.length, 4)
-    assert.match(requests[4].prompt, /previous source audit found insufficient citations/i)
-    assert.match(requests[3].prompt, /stableIdentity/)
-    assert.match(requests[3].prompt, /layoutMotion/)
-    assert.match(requests[5].prompt, /stableIdentity/)
-    assert.match(requests[5].prompt, /layoutMotion/)
-    assert.match(requests[5].prompt, /morphTest/)
+    assert.ok(result.results[0].evidence.some((item) => /source audit could not decide/.test(item)))
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('a browser-fallback pass the source audit cannot confirm after a re-cite is a fail', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const sourceRoot = join(root, 'source')
+  await mkdir(join(sourceRoot, 'src'), { recursive: true })
+  await writeFile(join(sourceRoot, 'src/demo.tsx'), 'export const demo = true\n')
+  const ids = ['demo-evolving-scene-structure']
+  const primary = JSON.stringify({ results: [{
+    id: ids[0], verdict: 'pass', rationale: 'scene evolves', evidence: ['src/demo.tsx'], citations: ['src/demo.tsx'],
+  }] })
+  const responses = [primary, auditOutput(ids, { [ids[0]]: 'insufficient' }), primary,
+    auditOutput(ids, { [ids[0]]: 'insufficient' })]
+  try {
+    const result = await runJudgeJob({
+      request: {
+        job: 'demo-integration', criteria: ids, authority, cwd: root, audit_cwd: join(root, 'audit'),
+        input_roots: { source: sourceRoot }, input_permissions: { neutral_source: true },
+        source_audit: true, prompt: 'primary', requireSourceCitationsFor: ids, verified_source_paths: ['src/demo.tsx'],
+      },
+      invoke: async () => responses.shift(),
+    })
+    assert.equal(result.ok, true)
+    assert.equal(result.results[0].verdict, 'fail')
+    assert.match(result.results[0].rationale, /browser could not observe/i)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -1105,54 +1104,6 @@ test('a focused citation retry preserves already contradicted criteria', async (
       { id: 'navigation-touch-swipe', verdict: 'fail' },
       { id: 'navigation-direct-jump', verdict: 'pass' },
     ])
-  } finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
-test('unchanged insufficient citations stop early as a no-progress protocol failure', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
-  const sourceRoot = join(root, 'source')
-  await mkdir(join(sourceRoot, 'src'), { recursive: true })
-  await writeFile(join(sourceRoot, 'src/nav.ts'), 'export const horizontal = true\n')
-  const ids = ['navigation-touch-swipe']
-  const primary = JSON.stringify({
-    results: [{
-      id: ids[0],
-      verdict: 'pass',
-      rationale: 'horizontal swipe exists',
-      evidence: ['src/nav.ts'],
-      citations: ['src/nav.ts'],
-    }],
-  })
-  const responses = [
-    primary,
-    auditOutput(ids, { [ids[0]]: 'insufficient' }),
-    primary,
-    auditOutput(ids, { [ids[0]]: 'insufficient' }),
-  ]
-
-  try {
-    const result = await runJudgeJob({
-      request: {
-        job: 'scene-kit',
-        criteria: ids,
-        authority,
-        cwd: root,
-        audit_cwd: join(root, 'audit'),
-        input_roots: { source: sourceRoot },
-        input_permissions: { neutral_source: true },
-        source_audit: true,
-        prompt: 'primary rubric prompt',
-      },
-      invoke: async () => responses.shift(),
-    })
-
-    assert.equal(result.ok, false)
-    assert.equal(result.results, null)
-    assert.equal(result.attempts.length, 2)
-    assert.equal(result.audit_attempts.length, 2)
-    assert.match(result.audit_attempts.at(-1).error, /no source-evidence progress/i)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -1380,25 +1331,85 @@ test('a disagreement is settled by an independent third sample whose pass needs 
   }
 })
 
-test('a third-sample pass the span audit does not confirm is a majority fail with the audit reason', async () => {
+// Round-2 audit: one unreplicated span audit vetoed 2-of-3 passes, so the
+// same evidence scored differently across runs. An undecided audit now asks
+// the third sample to re-cite once and otherwise leaves the majority standing;
+// only two independent audits that both find a contradiction flip it.
+function tiebreakScenario({ audits, recite = null }) {
+  return async (request) => {
+    if (request.audit_stage === 'tiebreak-span-audit') {
+      return auditOutput(['navigation-touch-swipe'], { 'navigation-touch-swipe': audits.shift() })
+    }
+    if (request.judge_stage === 'tiebreak-recite') {
+      return lineCited({ 'navigation-touch-swipe': ['pass', recite] })
+    }
+    if (request.judge_stage === 'tiebreak') {
+      return lineCited({ 'navigation-touch-swipe': ['pass', [{ path: 'src/nav.ts', start_line: 1, end_line: 1 }]] })
+    }
+    return verdicts({ 'navigation-touch-swipe': request.judge_sample === 1 ? 'pass' : 'fail' })
+  }
+}
+
+test('an undecided span audit triggers one re-cite and a confirmed re-cite keeps the majority pass', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  const stages = []
+  try {
+    const invoke = tiebreakScenario({ audits: ['insufficient', 'confirmed'],
+      recite: [{ path: 'src/nav.ts', start_line: 1, end_line: 3 }] })
+    const outcome = await runRobustJudgeJob({
+      request: tree.request(['navigation-touch-swipe']),
+      invoke: async (request) => { stages.push(stageOf(request)); return invoke(request) },
+    })
+    assert.equal(outcome.results[0].verdict, 'pass')
+    assert.equal(outcome.consensus[0].basis, 'majority-pass')
+    assert.deepEqual(stages.filter((stage) => stage !== 'primary'),
+      ['tiebreak', 'tiebreak-span-audit', 'tiebreak-recite', 'tiebreak-span-audit'])
+    assert.ok(outcome.results[0].evidence.some((item) => item.includes('src/nav.ts:1-3')))
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+test('a span audit still undecided after the re-cite leaves the majority pass standing', async () => {
   const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
   try {
     const outcome = await runRobustJudgeJob({
       request: tree.request(['navigation-touch-swipe']),
-      invoke: async (request) => {
-        if (request.audit_stage === 'tiebreak-span-audit') {
-          return auditOutput(['navigation-touch-swipe'], { 'navigation-touch-swipe': 'insufficient' })
-        }
-        if (request.judge_stage === 'tiebreak') {
-          return lineCited({ 'navigation-touch-swipe': ['pass', [{ path: 'src/nav.ts', start_line: 1, end_line: 1 }]] })
-        }
-        return verdicts({ 'navigation-touch-swipe': request.judge_sample === 1 ? 'pass' : 'fail' })
-      },
+      invoke: tiebreakScenario({ audits: ['insufficient', 'insufficient'],
+        recite: [{ path: 'src/nav.ts', start_line: 1, end_line: 2 }] }),
     })
-    assert.equal(outcome.ok, true)
+    assert.equal(outcome.results[0].verdict, 'pass')
+    assert.equal(outcome.consensus[0].basis, 'majority-pass')
+    assert.ok(outcome.results[0].evidence.some((item) => /could not confirm/.test(item)))
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+test('one contradicting span audit cannot flip a majority pass', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  try {
+    const outcome = await runRobustJudgeJob({
+      request: tree.request(['navigation-touch-swipe']),
+      invoke: tiebreakScenario({ audits: ['contradicted', 'confirmed'] }),
+    })
+    assert.equal(outcome.results[0].verdict, 'pass')
+    assert.equal(outcome.tiebreak.audit_results.length, 2)
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+test('two independent contradicting span audits turn the majority pass into a fail', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  try {
+    const outcome = await runRobustJudgeJob({
+      request: tree.request(['navigation-touch-swipe']),
+      invoke: tiebreakScenario({ audits: ['contradicted', 'contradicted'] }),
+    })
     assert.equal(outcome.results[0].verdict, 'fail')
-    assert.match(outcome.results[0].rationale, /not confirmed/)
     assert.equal(outcome.consensus[0].basis, 'majority-fail')
+    assert.match(outcome.results[0].rationale, /two independent span audits/)
   } finally {
     await rm(tree.root, { recursive: true, force: true })
   }

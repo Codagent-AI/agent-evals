@@ -37,6 +37,8 @@ function safeJobName(value) {
   return String(value ?? 'judge').replace(/[^a-zA-Z0-9_-]+/g, '-').slice(0, 80) || 'judge'
 }
 
+// The effort every eval-owned judge call runs at, recorded with its authority.
+export const JUDGE_REASONING_EFFORT = 'medium'
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
 const DEFAULT_KILL_GRACE_MS = 10 * 1000
 const MAX_ATTEMPTS = 2
@@ -372,6 +374,8 @@ export function createCodexJudgeInvoker({
     ]
     const model = request.authority?.model
     if (model && model !== 'codex-default') args.push('--model', model)
+    // Pinned so a change in the CLI's default effort cannot shift verdicts.
+    args.push('--config', `model_reasoning_effort="${request.authority?.effort ?? JUDGE_REASONING_EFFORT}"`)
     args.push('-')
 
     let result
