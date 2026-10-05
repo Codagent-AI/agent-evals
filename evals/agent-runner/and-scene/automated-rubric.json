@@ -570,7 +570,7 @@
     },
     "demo-nine-step-content-and-order": {
       "job": "demo-integration",
-      "requirement": "The demo follows the required step outline in order.",
+      "requirement": "The demo has exactly the nine required steps in their specified order, and each step exposes its normative title.",
       "guidance": ["Cite delivered source implementing this behavior; treat the browser observation as a lead."]
     },
     "quality-captions-and-navigation": {
