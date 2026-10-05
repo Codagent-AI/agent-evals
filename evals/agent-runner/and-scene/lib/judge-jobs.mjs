@@ -817,6 +817,7 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
           attemptRequest = buildMissingCriteriaRequest(activeRequest, missing)
         } else {
           history.push({ cycle, attempt, ok: false, error: error.message })
+          if (error.message?.includes('invalid_json_schema')) break
           partialResults.clear()
           attemptRequest = activeRequest
         }
@@ -852,6 +853,7 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
         break
       } catch (error) {
         auditHistory.push({ cycle, attempt, ok: false, error: error.message })
+        if (error.message?.includes('invalid_json_schema')) break
       }
     }
     if (!auditResults) {

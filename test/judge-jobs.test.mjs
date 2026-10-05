@@ -1228,3 +1228,46 @@ test('product judging runs its jobs sequentially through one recorded authority'
   assert.deepEqual(outcome.authority, authority)
   assert.deepEqual(outcome.failed_jobs, [])
 })
+
+for (const [message, expectedCalls] of [
+  ['HTTP 400 invalid_json_schema: properties must be closed', 1],
+  ['temporary invocation failure', JUDGE_ATTEMPTS],
+]) {
+  test(`judge invocation handles ${message}`, async () => {
+    let calls = 0
+    const result = await runJudgeJob({
+      request: buildJudgeRequest({ rubrics, job: 'scene-kit', authority, evidence: [], sources: [] }),
+      invoke: async () => { calls += 1; throw new Error(message) },
+    })
+    assert.equal(calls, expectedCalls)
+    assert.equal(result.ok, false)
+    assert.equal(result.attempts.at(-1).error, message)
+  })
+}
+
+test('a source audit schema rejection stops after one call and retains the provider cause', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-audit-schema-'))
+  const sourceRoot = join(root, 'source')
+  await mkdir(join(sourceRoot, 'src/presentation-kit'), { recursive: true })
+  await writeFile(join(sourceRoot, 'src/presentation-kit/Scene.tsx'), 'export function Scene() {}')
+  const message = 'invalid_json_schema: audit properties must be closed'
+  let calls = 0
+  try {
+    const result = await runJudgeJob({
+      request: buildJudgeRequest({ rubrics, job: 'scene-kit', authority, evidence: [],
+        sources: ['src/presentation-kit/Scene.tsx'],
+        neutral: { root, source_root: sourceRoot, requirements_root: join(root, 'requirements') } }),
+      invoke: async (request) => {
+        calls += 1
+        if (request.audit_stage) throw new Error(message)
+        return judgeOutput(request.criteria)
+      },
+    })
+    assert.equal(calls, 2, 'one primary invocation and one audit invocation')
+    assert.equal(result.ok, false)
+    assert.equal(result.audit_attempts.length, 1)
+    assert.equal(result.audit_attempts[0].error, message)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})

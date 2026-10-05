@@ -14,8 +14,10 @@ import {
   SOURCE_JUDGE_RESULT_SCHEMA,
 } from '../evals/agent-runner/and-scene/lib/judge-jobs.mjs'
 import { PRICING_FINDING_SCHEMA } from '../evals/agent-runner/and-scene/lib/pricing.mjs'
+import { SECOND_OPINION_SCHEMA, validReplay } from '../evals/agent-runner/and-scene/lib/second-opinion.mjs'
 
 const CODEX_JUDGE_SCHEMAS = {
+  SECOND_OPINION_SCHEMA,
   AMBIGUITY_RESULT_SCHEMA,
   JUDGE_RESULT_SCHEMA,
   SOURCE_JUDGE_RESULT_SCHEMA,
@@ -33,6 +35,12 @@ function strictViolations(node, path) {
   if (!node || typeof node !== 'object') return []
   const violations = []
   if (isObjectSchema(node)) {
+    if (!node.properties || typeof node.properties !== 'object' || Array.isArray(node.properties)) {
+      violations.push(`${path}: properties must be an object`)
+    }
+    if (!Array.isArray(node.required)) {
+      violations.push(`${path}: required must be an array`)
+    }
     if (node.additionalProperties !== false) {
       violations.push(`${path}: additionalProperties must be false`)
     }
@@ -87,4 +95,28 @@ test('ambiguity parser accepts the strict nullable form of optional fields', () 
   }))
   assert.equal(omitted.findings[0].id, finding.id)
   assert.deepEqual(parsed.proposals, [])
+})
+
+test('every replay schema variant uses exactly the keys accepted by validReplay', () => {
+  const replay = SECOND_OPINION_SCHEMA.properties.replay.properties
+  const actions = replay.actions.items.anyOf
+  const expectations = replay.expect.anyOf
+  assert.ok(Array.isArray(actions))
+  assert.ok(Array.isArray(expectations))
+  assert.deepEqual(actions.map((variant) => variant.properties.type.enum[0]).sort(),
+    ['navigate', 'click', 'press', 'keys', 'swipe', 'wait'].sort())
+  assert.deepEqual(expectations.map((variant) => variant.properties.type.enum[0]).sort(),
+    ['step-index-equals', 'step-index-changes', 'step-count-changes', 'mode-equals',
+      'selector-visible', 'selector-hidden', 'text-present'].sort())
+  const sample = (variant) => Object.fromEntries(variant.required.map((key) => {
+    const field = variant.properties[key]
+    return [key, field.enum?.[0] ?? (field.type === 'integer' ? 0 : key === 'path' ? '/demo' : 'sample')]
+  }))
+  for (const action of actions.map(sample)) {
+    for (const expect of expectations.map(sample)) {
+      assert.equal(validReplay({ actions: action.type === 'navigate' ? [action]
+        : [{ type: 'navigate', path: '/demo' }, action], expect }), true,
+      JSON.stringify({ action, expect }))
+    }
+  }
 })

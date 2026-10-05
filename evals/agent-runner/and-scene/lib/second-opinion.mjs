@@ -25,8 +25,37 @@ export const SECOND_OPINION_SCHEMA = {
     } },
     replay: { type: ['object', 'null'], additionalProperties: false,
       required: ['actions', 'expect'], properties: {
-        actions: { type: 'array', minItems: 1, maxItems: 12, items: { type: 'object' } },
-        expect: { type: 'object' },
+        actions: { type: 'array', minItems: 1, maxItems: 12, items: { anyOf: [
+          { type: 'object', required: ['type', 'path'], additionalProperties: false,
+            properties: { type: { enum: ['navigate'] }, path: { type: 'string' } } },
+          { type: 'object', required: ['type', 'selector'], additionalProperties: false,
+            properties: { type: { enum: ['click'] }, selector: { type: 'string' } } },
+          { type: 'object', required: ['type', 'key'], additionalProperties: false,
+            properties: { type: { enum: ['press'] }, key: { type: 'string' } } },
+          { type: 'object', required: ['type', 'text'], additionalProperties: false,
+            properties: { type: { enum: ['keys'] }, text: { type: 'string' } } },
+          { type: 'object', required: ['type', 'direction', 'input'], additionalProperties: false,
+            properties: { type: { enum: ['swipe'] }, direction: { enum: ['left', 'right'] },
+              input: { enum: ['touch', 'pointer'] } } },
+          { type: 'object', required: ['type', 'ms'], additionalProperties: false,
+            properties: { type: { enum: ['wait'] }, ms: { type: 'integer' } } },
+        ] } },
+        expect: { anyOf: [
+          { type: 'object', required: ['type', 'value'], additionalProperties: false,
+            properties: { type: { enum: ['step-index-equals'] }, value: { type: 'integer' } } },
+          { type: 'object', required: ['type'], additionalProperties: false,
+            properties: { type: { enum: ['step-index-changes'] } } },
+          { type: 'object', required: ['type'], additionalProperties: false,
+            properties: { type: { enum: ['step-count-changes'] } } },
+          { type: 'object', required: ['type', 'value'], additionalProperties: false,
+            properties: { type: { enum: ['mode-equals'] }, value: { enum: ['present', 'browse'] } } },
+          { type: 'object', required: ['type', 'selector'], additionalProperties: false,
+            properties: { type: { enum: ['selector-visible'] }, selector: { type: 'string' } } },
+          { type: 'object', required: ['type', 'selector'], additionalProperties: false,
+            properties: { type: { enum: ['selector-hidden'] }, selector: { type: 'string' } } },
+          { type: 'object', required: ['type', 'selector', 'text'], additionalProperties: false,
+            properties: { type: { enum: ['text-present'] }, selector: { type: 'string' }, text: { type: 'string' } } },
+        ] },
       } },
   },
 }
@@ -391,7 +420,12 @@ export async function runSecondOpinion({ request, invoke, replay, attempts = JUD
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     let output
     try { output = await invoke(request) } catch (error) {
-      failureReason = `second-opinion invocation failed: ${error instanceof Error ? error.message : String(error)}`
+      const message = error instanceof Error ? error.message : String(error)
+      if (message.includes('invalid_json_schema')) {
+        failureReason = `second-opinion schema rejected by provider (invalid_json_schema): ${message}`
+        break
+      }
+      failureReason = `second-opinion invocation failed: ${message}`
       continue
     }
     try { answer = parseAnswer(output); break } catch (error) {
@@ -456,7 +490,12 @@ export async function runSecondOpinion({ request, invoke, replay, attempts = JUD
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     let output
     try { output = await invoke(auditRequest) } catch (error) {
-      failureReason = `second-opinion audit invocation failed: ${error instanceof Error ? error.message : String(error)}`
+      const message = error instanceof Error ? error.message : String(error)
+      if (message.includes('invalid_json_schema')) {
+        failureReason = `second-opinion audit schema rejected by provider (invalid_json_schema): ${message}`
+        break
+      }
+      failureReason = `second-opinion audit invocation failed: ${message}`
       continue
     }
     try {

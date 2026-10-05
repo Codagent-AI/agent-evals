@@ -1588,7 +1588,7 @@ export async function runEvaluation({
               await saveCheckpoint(checkpointPath, checkpoint)
             }
             if (outcome.ok) secondOpinions[target.id] = outcome
-            else pendingSecondOpinions.push(target)
+            else pendingSecondOpinions.push({ ...target, reason: outcome.reason })
           }
         }
         await runOpinions(secondOpinionTargets({ deterministic: record.browser.criteria,
@@ -1624,7 +1624,7 @@ export async function runEvaluation({
         const error = new Error(
           `required judge output exhausted: ${[
             ...(record.judging?.failed_jobs ?? []),
-            ...pendingSecondOpinions.map(({ id }) => `second-opinion:${id}`),
+            ...pendingSecondOpinions.map(({ id, reason }) => `second-opinion:${id}: ${reason}`),
           ].join(', ')}`,
         )
         error.code = 'judge-output'

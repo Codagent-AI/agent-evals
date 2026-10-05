@@ -8,6 +8,7 @@ import { loadRubrics } from '../evals/agent-runner/and-scene/lib/rubric.mjs'
 import {
   buildSecondOpinionRequest, outlineFollowUpTargets, runSecondOpinion, secondOpinionTargets, validReplay,
 } from '../evals/agent-runner/and-scene/lib/second-opinion.mjs'
+import { JUDGE_ATTEMPTS } from '../evals/agent-runner/and-scene/lib/judge-jobs.mjs'
 
 const uphold = { decision: 'uphold', rationale: 'the recorded failure stands', mismeasured_step: null,
   measurement_fault: null, citations: [], log_citations: [], replay: null }
@@ -119,6 +120,25 @@ test('audit invocation failure retries and keeps its cause when exhausted', asyn
   assert.equal(calls, 4)
   assert.equal(outcome.ok, false)
   assert.match(outcome.reason, /audit transport closed/)
+})
+
+test('audit schema rejection stops after one call and keeps the provider cause', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'second-opinion-audit-error-'))
+  await writeFile(join(root, 'handler.js'), 'pointer handler\n')
+  const request = { target: { kind: 'criterion', id: 'demo-supported-navigation' }, browser_derived: false,
+    verified_source_paths: ['handler.js'], input_roots: { source: root }, audit_cwd: root,
+    failing_record: { result: { verdict: 'fail' } } }
+  const answer = { ...uphold, decision: 'overturn', mismeasured_step: 'swipe',
+    measurement_fault: 'touch input mismatch', citations: [{ path: 'handler.js', start_line: 1, end_line: 1 }] }
+  let calls = 0
+  const outcome = await runSecondOpinion({ request, attempts: 3, invoke: async (call) => {
+    calls += 1
+    if (call.audit_stage) throw new Error('invalid_json_schema: audit properties must be closed')
+    return JSON.stringify(answer)
+  } })
+  assert.equal(calls, 2)
+  assert.equal(outcome.ok, false)
+  assert.match(outcome.reason, /audit schema rejected by provider.*invalid_json_schema: audit properties must be closed/)
 })
 
 test('an audited exact source span can overturn and invalid line ranges cannot', async () => {
@@ -406,3 +426,20 @@ test('replay navigation cannot leave the candidate origin through backslashes', 
   assert.equal(validReplay({ actions: [{ type: 'navigate', path: '/demo\\x' }], expect }), false)
   assert.equal(validReplay({ actions: [{ type: 'navigate', path: DEMO_PATH }], expect }), true)
 })
+
+for (const [message, expectedCalls] of [
+  ['HTTP 400 invalid_json_schema: actions.items must be closed', 1],
+  ['temporary invocation failure', JUDGE_ATTEMPTS],
+]) {
+  test(`second opinion invocation handles ${message}`, async () => {
+    let calls = 0
+    const result = await runSecondOpinion({ request: {}, invoke: async () => {
+      calls += 1
+      throw new Error(message)
+    } })
+    assert.equal(calls, expectedCalls)
+    assert.equal(result.ok, false)
+    assert.ok(result.reason.includes(message))
+    if (expectedCalls === 1) assert.match(result.reason, /schema rejected by provider/)
+  })
+}
