@@ -9,6 +9,7 @@ test('browser replay validates actions and checks a fresh-page observation', asy
     command: async (args, input) => {
       scripts.push(input)
       if (args[0] === 'resize') return { status: 0, stdout: '' }
+      if (args[0] === 'console') return { status: 0, stdout: '<no console messages found>\n' }
       return { status: 0, stdout: `${JSON.stringify({ observations: [null, 0, 0].map((stepIndex) => ({
         stepIndex, stepCount: 9, mode: 'present', visible: true, text: '',
       })), trace: ['navigate', 'press'] })}\n` }
@@ -27,13 +28,60 @@ test('browser replay validates actions and checks a fresh-page observation', asy
     { type: 'press', key: 'ArrowRight' }], { type: 'step-index-changes' })
   assert.equal(unchanged.passed, false)
   const missingHook = createAxiBrowserDriver({ baseUrl: 'http://127.0.0.1:4319/',
-    command: async () => ({ status: 0, stdout: `${JSON.stringify({ observations: [
-      { stepIndex: null }, { stepIndex: null }, { stepIndex: 0 },
-    ], trace: [] })}\n` }) })
+    command: async (args) => (args[0] === 'console' ? { status: 0, stdout: '<no console messages found>\n' }
+      : { status: 0, stdout: `${JSON.stringify({ observations: [
+        { stepIndex: null }, { stepIndex: null }, { stepIndex: 0 },
+      ], trace: [] })}\n` }) })
   assert.equal((await missingHook.replay([{ type: 'navigate', path: '/' },
     { type: 'press', key: 'ArrowRight' }], { type: 'step-index-changes' })).passed, false)
   assert.ok(scripts.some((script) => script?.includes('page.open(')))
   assert.ok(scripts.some((script) => script?.includes('page.press("ArrowRight")')))
+})
+
+test('browser replay records runtime failures and separates product evidence from harness faults', async () => {
+  const { createAxiBrowserDriver, BrowserDriverError } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
+  const origin = 'http://127.0.0.1:4319'
+  const driverWith = ({ observations, product_failure = null, consoleOut = '<no console messages found>\n', consoleStatus = 0 }) => {
+    const calls = []
+    return { calls, driver: createAxiBrowserDriver({ baseUrl: `${origin}/`, command: async (args, input) => {
+      calls.push({ args, input })
+      if (args[0] === 'console') return { status: consoleStatus, stdout: consoleOut, stderr: 'axi console unavailable' }
+      return { status: 0, stdout: `${JSON.stringify({ observations, trace: [], product_failure })}\n` }
+    } }) }
+  }
+  const step = (stepIndex, extra = {}) => ({ stepIndex, stepCount: 9, mode: 'present', visible: false, text: '', origin, ...extra })
+  const plan = [{ type: 'navigate', path: '/how-to-make-a-presentation' }, { type: 'press', key: 'ArrowRight' }]
+
+  const erroring = driverWith({ observations: [step(null), step(0), step(1)],
+    consoleOut: 'Uncaught TypeError: boom at step 2\n' })
+  const withErrors = await erroring.driver.replay(plan, { type: 'step-index-changes' })
+  assert.deepEqual(withErrors.errors, ['Uncaught TypeError: boom at step 2'])
+  assert.ok(erroring.calls.some(({ args }) => args.join(' ') === 'console --type error'))
+
+  const consoleDown = driverWith({ observations: [step(null), step(0), step(1)], consoleStatus: 1 })
+  await assert.rejects(consoleDown.driver.replay(plan, { type: 'step-index-changes' }),
+    (error) => error instanceof BrowserDriverError && error.resumable === true)
+
+  const clickPlan = [{ type: 'navigate', path: '/how-to-make-a-presentation' }, { type: 'click', selector: '#missing' }]
+  const missing = driverWith({ observations: [step(null), step(0)], product_failure: 'replay click target was not found' })
+  const absent = await missing.driver.replay(clickPlan, { type: 'step-index-changes' })
+  assert.equal(absent.passed, false)
+  assert.equal(absent.product_failure, 'replay click target was not found')
+  assert.match(missing.calls.find(({ args }) => args[0] === 'run').input, /break replay/)
+
+  const escaped = driverWith({ observations: [step(null), step(0), step(1, { origin: 'http://example.com' })] })
+  const left = await escaped.driver.replay(plan, { type: 'step-index-changes' })
+  assert.equal(left.passed, false)
+  assert.match(left.product_failure, /origin/)
+
+  // These paths pass the shape check but resolve to another host once the
+  // route is made relative. The driver refuses them before opening anything.
+  for (const path of ['/https://example.com/x', '/\t/\t/example.com/x']) {
+    const escaping = driverWith({ observations: [] })
+    await assert.rejects(escaping.driver.replay([{ type: 'navigate', path }],
+      { type: 'step-index-changes' }), (error) => /origin/.test(error.message) && error.resumable !== true, path)
+    assert.equal(escaping.calls.length, 0, path)
+  }
 })
 
 test('the AXI driver reads eligible declared modes before inferring them', async () => {

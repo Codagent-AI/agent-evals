@@ -1522,6 +1522,13 @@ test('rescore checks browser failures while a reference baseline does not', asyn
   assert.equal('second_opinions' in written, false)
 })
 
+// browserDemo with an inert activate fails only the direct jump, so the
+// harness allowlist admits only a control click that moves the step.
+const DIRECT_JUMP_REPLAY = { actions: [{ type: 'navigate', path: '/how-to-make-a-presentation' },
+  { type: 'click', selector: '[data-step="5"]' }], expect: { type: 'step-index-equals', value: 4 } }
+const directJumpObserved = () => ({ passed: true, errors: [], trace: DIRECT_JUMP_REPLAY.actions,
+  observations: [{ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 4 }] })
+
 test('rescore starts the candidate server and confirms a browser overturn by replay', async () => {
   const context = await environment()
   const driver = browserDemo()
@@ -1529,8 +1536,7 @@ test('rescore starts the candidate server and confirms a browser overturn by rep
   let started = 0
   let replayed = 0
   let servedIdentity = null
-  driver.replay = async () => { replayed += 1; return { passed: true,
-    observations: [{ stepIndex: 1 }], trace: ['pressed'] } }
+  driver.replay = async () => { replayed += 1; return directJumpObserved() }
   const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
     controllerChangeName: null,
     loadRescoreSource: async () => importedRescore(context),
@@ -1551,9 +1557,7 @@ test('rescore starts the candidate server and confirms a browser overturn by rep
         : { decision: 'overturn', rationale: 'probe missed navigation',
           mismeasured_step: 'next', measurement_fault: 'input mismatch',
           citations: [{ path: 'src/index.ts', start_line: 1, end_line: 1 }], log_citations: [],
-          replay: { actions: [{ type: 'navigate', path: '/how-to-make-a-presentation' },
-            { type: 'press', key: 'ArrowRight' }],
-            expect: { type: 'step-index-equals', value: 1 } } })
+          replay: DIRECT_JUMP_REPLAY })
       if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
       return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
         rationale: 'fixture evidence', evidence: ['src/index.ts'] })) })
@@ -1664,7 +1668,7 @@ test('a browser failure receives a checkpointed audited second opinion before sc
   const context = await environment()
   const driver = browserDemo()
   driver.activate = async () => {}
-  driver.replay = async () => ({ passed: true, observations: [{ stepIndex: 1 }], trace: ['pressed'] })
+  driver.replay = async () => directJumpObserved()
   const requests = []
   const dependencies = {
     browserDriver: driver,
@@ -1679,9 +1683,7 @@ test('a browser failure receives a checkpointed audited second opinion before sc
         return JSON.stringify({ decision: 'overturn', rationale: 'the swipe probe misread input',
           mismeasured_step: 'swipe', measurement_fault: 'input dispatch mismatch',
           citations: [{ path: 'src/index.ts', start_line: 1, end_line: 1 }], log_citations: [],
-          replay: { actions: [{ type: 'navigate', path: '/how-to-make-a-presentation' },
-            { type: 'press', key: 'ArrowRight' }],
-            expect: { type: 'step-index-equals', value: 1 } } })
+          replay: DIRECT_JUMP_REPLAY })
       }
       if (request.job === 'ambiguity-diagnostics') {
         return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
@@ -1707,6 +1709,46 @@ test('a browser failure receives a checkpointed audited second opinion before sc
   const resumed = await evaluate(context, ['--resume', ...profiles], dependencies)
   assert.equal(resumed.exitCode, 0, JSON.stringify(resumed.outcome))
   assert.equal(requests.length, calls, 'completed verifier units are reused on resume')
+})
+
+test('a browser fault during replay leaves the second opinion pending and resumable', async () => {
+  const context = await environment()
+  const driver = browserDemo()
+  driver.activate = async () => {}
+  driver.replay = async () => {
+    throw Object.assign(new Error('browser adapter failed: Chrome exited'),
+      { owner: 'evaluation-harness', code: 'browser-driver-failed', resumable: true })
+  }
+  const result = await evaluate(context, profiles, {
+    browserDriver: driver,
+    verifyCandidate: async () => ({ build: { ok: true, log: 'built' },
+      verification: { machine_readable: true, passed: true }, timings: [] }),
+    judgeInvoke: async (request) => {
+      if (request.job === 'second-opinion') {
+        if (request.audit_stage) return JSON.stringify({ results: [{ id: request.criteria[0],
+          classification: 'confirmed', rationale: 'source and fault agree', evidence: ['src/index.ts:1'] }] })
+        return JSON.stringify(request.target.id === 'demo-supported-navigation'
+          ? { decision: 'overturn', rationale: 'the direct jump probe misread input',
+            mismeasured_step: 'direct jump', measurement_fault: 'input dispatch mismatch',
+            citations: [{ path: 'src/index.ts', start_line: 1, end_line: 1 }], log_citations: [],
+            replay: DIRECT_JUMP_REPLAY }
+          : { decision: 'uphold', rationale: 'failure stands', mismeasured_step: null,
+            measurement_fault: null, citations: [], log_citations: [], replay: null })
+      }
+      if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
+        rationale: 'fixture source supports this criterion', evidence: ['src/index.ts'] })) })
+    },
+  })
+  assert.equal(result.outcome.evaluation_status, 'evaluation-harness-failed')
+  assert.equal(result.outcome.failure.code, 'judge-output')
+  const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
+  const unit = state.phases['product-judging'].units['second-opinion:criterion:demo-supported-navigation']
+  assert.notEqual(unit.state, 'complete')
+  assert.match(JSON.stringify(unit), /Chrome exited/)
+  const opinions = await readJson(join(context.runDir, 'phases/second-opinions.json'))
+  assert.equal('demo-supported-navigation' in opinions.outcomes, false)
+  assert.ok(opinions.pending.some(({ id }) => id === 'demo-supported-navigation'))
 })
 
 test('exhausted second-opinion output leaves the failed criterion unresolved', async () => {

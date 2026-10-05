@@ -1557,7 +1557,7 @@ export async function runEvaluation({
               judging: record.judging, neutral, authority: { cli: 'codex', model: options.judgeModel } })
             const id = `second-opinion:${target.kind}:${target.id}`
             const inputHash = hashJson({ request, probe: record.browser.probes?.find((entry) => entry.id === target.id)?.output_sha256,
-              audit_contract: 'closed-world-spans-replay-v1' })
+              audit_contract: 'closed-world-spans-replay-allowlist-v2' })
             const inputs = { input_hash: inputHash }
             const artifact = join(directory, `${target.id}.json`)
             const reused = await verifyUnit(checkpoint, { phase: 'product-judging', unit: id,
@@ -1571,7 +1571,10 @@ export async function runEvaluation({
                 replay: async ({ actions, expect }) => {
                   const driver = browserDriver ?? (browserDriverFactory && record.candidateServer?.url
                     ? await browserDriverFactory({ baseUrl: record.candidateServer.url, runDir }) : null)
-                  if (!driver?.replay) throw new Error('candidate browser replay driver is unavailable')
+                  if (!driver?.replay) {
+                    throw Object.assign(new Error('candidate browser replay driver is unavailable'), {
+                      owner: 'evaluation-harness', code: 'browser-driver-failed', resumable: true })
+                  }
                   return driver.replay(actions, expect)
                 } })
               if (outcome.ok) {

@@ -6,11 +6,18 @@ Failed deterministic browser criteria and failed hard gates receive a verifier
 opinion. An overturn requires validated source spans and a confirming span audit.
 For browser-derived failures, the verifier also proposes a bounded interaction
 replay. The harness runs it through `chrome-devtools-axi` against the candidate
-server, including during evaluator-only rescore. The replay must show the
-expected step, mode, visibility, or text observation before the fail can be
-overturned. Its actions, observations, trace, and pass result are retained in
-`phases/second-opinions.json`, the result, and the report. Build and serve
-terminal failures cannot be replayed and use the existing span and log audit.
+server, including during evaluator-only rescore. The harness decides which
+replays count: `replayPolicy` in `lib/second-opinion.mjs` admits, per failing
+target, only the input kind that failed and an observation that contradicts the
+failure (a step change, a declared mode change, or normative text on the active
+step). A target without a policy cannot be overturned by replay. The replay runs
+before the span audit, collects page and console failures, and its plan and
+observation go into the audit packet. Its actions, observations, errors, trace,
+and pass result are retained in `phases/second-opinions.json`, the result, and
+the report. A browser or driver fault during replay leaves the opinion pending
+and resumable; only what the candidate page did can reject an overturn. Build
+and serve terminal failures cannot be replayed and use the existing span and
+log audit.
 
 ## Fixture traceability
 

@@ -75,7 +75,7 @@ For each failure, the verifier SHALL receive:
 
 The verifier SHALL answer exactly one of `uphold` or `overturn`, with a rationale. An `overturn` SHALL also name the probe step or recorded observation it says was mismeasured, explain how the measurement went wrong, and cite candidate source. For a fallback-judged outline input, the relevant recorded observation is the fallback judge's verdict and cited source rather than a failed browser probe.
 
-For a browser-derived criterion or gate, the answer SHALL include a structured replay with 1–12 actions, starting with navigation to a candidate path, and one expected observation. Remaining actions are limited to clicking a selector, pressing a key, sending keys, swiping left or right by touch or pointer, and waiting up to 2000 ms. Expected observations are limited to a step index equaling a specified value, a changed step index or step count, a `present` or `browse` mode, selector visibility, or text present in a selector. A change or hide expectation compares the state after navigation with the state after the remaining actions. An uphold and a build or serve terminal answer MAY use `replay: null`.
+For a browser-derived criterion or gate, the answer SHALL include a structured replay with 1–12 actions, starting with navigation to a candidate path, and one expected observation. A navigation path SHALL begin with one `/` and SHALL NOT contain `//` at its start, `..`, or a backslash, and the harness SHALL refuse any navigation whose resolved URL, or any replay observation whose page origin, differs from the candidate server's origin. Remaining actions are limited to clicking a selector, pressing a key, sending keys, swiping left or right by touch or pointer, and waiting up to 2000 ms. Expected observations are limited to a step index equaling a specified value, a changed step index or step count, a `present` or `browse` mode, selector visibility, or text present in a selector. A change or hide expectation compares the state after navigation with the state after the remaining actions. An uphold and a build or serve terminal answer MAY use `replay: null`.
 
 The verifier SHALL use the same judge authority and invocation path as the other product judges, including the configured judge model, the bounded retry budget, and checkpointed reuse of completed calls. A completed verifier call SHALL be reused on resume when its inputs are unchanged, and SHALL be re-run when they changed.
 
@@ -93,8 +93,23 @@ An overturn asserts both that the raw `fail` was a measurement problem and that 
 1. it names the mismeasured probe step or observation and explains the measurement fault;
 2. it cites candidate source as one or more spans, each a path with a start line and an end line;
 3. every span is valid: its path is a regular file in the verified delivery's source inventory, inside the neutral source root and not a symbolic link; its start line is at least 1; its end line is not before its start line; and its end line is within the file;
-4. the source audit, shown exactly the cited spans together with the failing record (the probe's or gate's recorded verdict, rationale, observations, and reading basis) and every page or console failure recorded for it, confirms all of these: the spans establish that the requirement is met; the stated measurement fault matches the recorded failing observation; and every contrary runtime observation is accounted for as a measurement fault.
-5. for a deterministic criterion whose browser evaluator recorded `fail`, or for `verification-every-produced-step-renders`, a real-browser replay against the running candidate server completes and its observed result matches the expected observation.
+4. the source audit, shown exactly the cited spans together with the failing record (the probe's or gate's recorded verdict, rationale, observations, and reading basis), every page or console failure recorded for it, and, for a browser-derived failure, the replay plan and the harness's observation of it, confirms all of these: the spans establish that the requirement is met; the stated measurement fault matches the recorded failing observation; and every contrary runtime observation is accounted for as a measurement fault.
+5. for a deterministic criterion whose browser evaluator recorded `fail`, or for `verification-every-produced-step-renders`, the replay lies inside the harness's replay allowlist for that target, and a real-browser replay against the running candidate server completes, its observed result matches the expected observation, and its observations satisfy the allowlist. The harness runs the replay before the source audit.
+
+The harness, not the verifier, decides which replay can confirm a browser-derived failure. The allowlist is keyed by the failing target and its recorded failure; a target or recorded failure with no allowlist entry SHALL NOT be overturned by replay, and its failure stands. Outside its first navigation, which SHALL open the demo route, a replay may use only `wait` and the input actions its entry names, and SHALL use at least one of them:
+
+| Target and recorded failure | Admitted inputs | Admitted expectation and harness check |
+| --- | --- | --- |
+| `demo-supported-navigation`, when exactly one of keyboard, swipe, or direct jump failed | `press` of `ArrowRight` or `ArrowLeft` for keyboard; `swipe` for swipe; `click` for direct jump | `step-index-changes`, or `step-index-equals` with a value different from the step before the first admitted input; the final step SHALL differ from that step |
+| `demo-focus-and-keyboard-accessibility`, when keyboard navigation did not move | `press` of `ArrowRight` or `ArrowLeft` | as above |
+| `demo-step-and-transition-reliability`, when a transition stalled | `press` of `ArrowRight` or `ArrowLeft` | as above, and no runtime or console failure during replay |
+| `demo-mode-interaction-reliability`, when a toggle left an unreadable state | `press` or `click` | `mode-equals`; the final mode SHALL be declared and differ from the mode before the first mode action, with no runtime or console failure |
+| `demo-present-mode-behavior` | `press` or `click` | `text-present` whose text is the normative title of the final step, shown in declared `present` mode |
+| `demo-nine-step-content-and-order`, when a named step's title mismatched | `press` or `click` | `text-present` whose text is that step's normative title, on that step |
+| `demo-required-scene-content` or `quality-captions-and-navigation`, when a named step's caption was missing | `press` or `click` | `text-present` whose text is that step's normative caption, on that step in declared `browse` mode |
+| `verification-every-produced-step-renders` | `press`, `swipe`, or `click` | `step-index-changes`; the replay SHALL visit every produced step and report no runtime or console failure |
+
+For every `text-present` entry, the selected element's text SHALL equal the normative text, and the same element SHALL show different text on another step observed during the replay, so a persistent list of every title or caption cannot confirm it. The harness SHALL collect page and console failures during replay the same way the deterministic probes do. A replay outside the allowlist SHALL be refused before it reaches the browser, or rejected after it when its observations do not satisfy the check, and the overturn SHALL be recorded as rejected with that reason.
 
 The hard gates use these replay rules:
 
@@ -105,7 +120,7 @@ The hard gates use these replay rules:
 | `verification-every-produced-step-renders` | Replay required for an overturn of its browser-recorded runtime or console failure. |
 | `verification-clear-outcome` | No replay; its failure comes from verification output, not a browser probe. |
 
-The harness SHALL keep the candidate server running through product judging, including evaluator-only rescore. Missing, malformed, unavailable, or failed required replay SHALL reject the overturn with a reason, leaving the raw fail standing. Terminal serve overturns also require the terminal log and source audit, not replay. The recorded replay actions, expectation, observations, trace, and pass result SHALL be kept with the raw and second-opinion verdicts in the result and report.
+The harness SHALL keep the candidate server running through product judging, including evaluator-only rescore. A missing, malformed, or refused replay, or a replay whose candidate page produced contrary evidence (for example a click target that was not found, an observation that does not match, or a runtime failure), SHALL reject the overturn with a reason, leaving the raw fail standing. A harness fault during replay, such as no available browser driver, a browser adapter or Chrome failure, or an invalid replay result, is not evidence about the candidate: it SHALL leave the second opinion pending and resumable, following the missing-judge-output path, and SHALL NOT be recorded as a lasting rejection. Terminal serve overturns also require the terminal log and source audit, not replay. The recorded replay actions, expectation, observations, trace, and pass result SHALL be kept with the raw and second-opinion verdicts in the result and report.
 
 The standard for establishing the requirement SHALL be at least the standard a fallback judge's `pass` must meet. Showing only that the probe was unsound, without positive source evidence that the requirement is met, SHALL NOT be accepted as an overturn.
 
@@ -128,9 +143,23 @@ An overturn SHALL cite at most 12 source spans, each fewer than 200 lines, and a
 - **AND** the proposed replay leaves the presentation on its original step
 - **THEN** the overturn is rejected, with the replay observations recorded beside the raw failure
 
-#### Scenario: Browser replay is missing or unavailable
-- **WHEN** a browser-derived failure has confirmed source spans but no valid replay or no running browser driver
+#### Scenario: Browser replay is missing
+- **WHEN** a browser-derived failure has valid source spans but no valid replay
 - **THEN** the overturn is rejected with a replay reason and the failure remains `fail`
+
+#### Scenario: A trivial replay cannot confirm a navigation failure
+- **WHEN** the verifier proposes, for a failed keyboard navigation, a replay that only opens the demo and expects the first step, or one that clicks a control or swipes instead of pressing a key
+- **THEN** the harness refuses the replay as outside its allowlist without running it
+- **AND** the overturn is rejected and the failure remains `fail`
+
+#### Scenario: A renders-gate replay meets a runtime error
+- **WHEN** the verifier proposes a replay for a failed `verification-every-produced-step-renders` that steps through every produced step
+- **AND** the page raises a runtime or console error during the replay
+- **THEN** the overturn is rejected and the gate remains failed
+
+#### Scenario: The browser fails during replay
+- **WHEN** no browser driver is available, or the browser adapter or Chrome fails while a replay runs
+- **THEN** the second opinion is left pending and resumable with the fault as its reason, and is not recorded as a rejected overturn
 
 #### Scenario: An overturn without citations is rejected
 - **WHEN** the verifier answers `overturn` but cites no source span

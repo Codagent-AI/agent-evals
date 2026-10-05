@@ -188,6 +188,8 @@ function render() {
 function go(next) {
   index = Math.max(0, Math.min(steps.length - 1, next))
   render()
+  // (u) renders every step but throws an uncaught error on reaching step 6.
+  if (variant === 'u' && index === 5) throw new Error('step 6 failed to render')
 }
 
 function onKey(event) {

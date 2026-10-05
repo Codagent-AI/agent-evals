@@ -447,6 +447,17 @@ export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {
     }
   }
 
+  async function readFailures() {
+    const output = await invoke(['console', '--type', 'error'])
+    if (isBrowserInfrastructureDiagnostic(output)) {
+      throw new BrowserDriverError(`browser adapter failed: ${output.trim()}`)
+    }
+    if (output.includes('<no console messages found>')) return []
+    return output.split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('console:') && !line.startsWith('help['))
+  }
+
   function routeUrl(route) {
     const relative = String(route ?? '').replace(/^\/+/, '')
     return new URL(relative, base).href
@@ -455,6 +466,14 @@ export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {
   return {
     async replay(actions, expect) {
       if (!validReplay({ actions, expect })) throw new BrowserDriverError('invalid replay contract')
+      // validReplay checks the path's shape; URL parsing can still turn a
+      // shaped path into another host (it drops tabs and newlines). An escape
+      // is a property of the proposed plan, not a harness fault.
+      for (const action of actions) {
+        if (action.type === 'navigate' && new URL(routeUrl(action.path)).origin !== base.origin) {
+          throw new Error('replay navigation leaves the candidate origin')
+        }
+      }
       const observe = `page.eval(() => {
         ${modeReadingSource()}
         const progress = document.querySelector('[data-step-count]');
@@ -464,16 +483,19 @@ export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {
         const mode = modeReading();
         return { stepIndex: Number(progress?.getAttribute('data-step-index')),
           stepCount: Number(progress?.getAttribute('data-step-count')),
-          mode: mode.mode, modeBasis: mode.basis, visible, text: node?.textContent ?? '' };
+          mode: mode.mode, modeBasis: mode.basis, visible, text: (node?.textContent ?? '').slice(0, 1000),
+          origin: location.origin };
       })`
       const actionSource = (action) => {
         switch (action.type) {
           case 'navigate': return `await page.open(${JSON.stringify(routeUrl(action.path))});`
+          // A missing click target is what the candidate page did, so it ends
+          // the replay as product evidence instead of failing the adapter.
           case 'click': return `if (!(await page.eval(() => {
             const node = document.querySelector(${JSON.stringify(action.selector)});
             if (!node) return false;
             node.click(); return true;
-          }))) throw new Error('replay click target was not found');`
+          }))) { productFailure = 'replay click target was not found'; break replay; }`
           case 'press': return `await page.press(${JSON.stringify(action.key)});`
           case 'keys': return `await page.type(${JSON.stringify(action.text)});`
           case 'wait': return sleepSource(action.ms)
@@ -492,11 +514,26 @@ export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {
       const script = `await page.open(${JSON.stringify(base.href)});
 const observations = [await ${observe}];
 const trace = [];
+let productFailure = null;
+replay: {
 ${actions.map((action) => `${actionSource(action)}\n${sleepSource(50)}\ntrace.push(${JSON.stringify(action)}); observations.push(await ${observe});`).join('\n')}
-console.log(JSON.stringify({ observations, trace }));`
+}
+console.log(JSON.stringify({ observations, trace, product_failure: productFailure }));`
       const result = await run(script)
-      if (!Array.isArray(result?.observations) || result.observations.length !== actions.length + 1) {
+      const productFailure = typeof result?.product_failure === 'string' && result.product_failure
+        ? result.product_failure : null
+      if (!Array.isArray(result?.observations) || (productFailure
+        ? result.observations.length < 1 || result.observations.length > actions.length
+        : result.observations.length !== actions.length + 1)) {
         throw new BrowserDriverError('browser replay returned invalid observations')
+      }
+      // Runtime and console failures are read exactly as probes read them, so a
+      // replay cannot confirm clean rendering that the console contradicts.
+      const errors = await readFailures()
+      const left = result.observations.some((entry) => entry?.origin && entry.origin !== base.origin)
+      if (productFailure || left) {
+        return { passed: false, product_failure: productFailure ?? 'replay left the candidate origin',
+          observations: result.observations, trace: result.trace ?? [], errors }
       }
       // The root landing page may have no presentation. Compare changes with
       // the first observation after navigating to the proposed demo route.
@@ -513,7 +550,7 @@ console.log(JSON.stringify({ observations, trace }));`
         'selector-hidden': () => first.visible === true && last.visible === false,
         'text-present': () => last.visible === true && last.text.includes(expect.text),
       }[expect.type]()
-      return { passed, observations: result.observations, trace: result.trace }
+      return { passed, observations: result.observations, trace: result.trace, errors }
     },
     async resize(width, height) {
       if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) {
@@ -1123,15 +1160,6 @@ console.log(JSON.stringify(usedControl));
 `)
     },
 
-    async failures() {
-      const output = await invoke(['console', '--type', 'error'])
-      if (isBrowserInfrastructureDiagnostic(output)) {
-        throw new BrowserDriverError(`browser adapter failed: ${output.trim()}`)
-      }
-      if (output.includes('<no console messages found>')) return []
-      return output.split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line && !line.startsWith('console:') && !line.startsWith('help['))
-    },
+    failures: readFailures,
   }
 }
