@@ -261,6 +261,7 @@ function extractCodexUsage(stdout, { request, invocationId }) {
   return {
     invocation_id: invocationId,
     phase: request.job ?? null,
+    stage: request.usage_phase ?? null,
     provider: 'openai',
     model: request.authority?.model ?? null,
     usage: usage

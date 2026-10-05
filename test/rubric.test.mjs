@@ -126,9 +126,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 7.0 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
+test('rubric 8.0 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '7.0.0')
+  assert.equal(rubric.version, '8.0.0')
   assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(
@@ -143,18 +143,18 @@ test('rubric 7.0 defines pre-human automated eligibility and distinguishes proof
   assert.match(guidance('verification-addressing-and-errors'), /score preview ownership only/i)
   assert.match(guidance('verification-addressing-and-errors'), /IPv4 loopback/i)
   assert.match(guidance('scene-entity-transitions'), /shared timing (?:value|constant).*insufficient/i)
-  assert.match(guidance('skill-scaffolding'), /interactive confirmation/i)
+  assert.match(guidance('skill-scaffolding'), /interactive confirmation needs no live human/i)
   assert.match(guidance('verification-warnings'), /earlier revision/i)
   assert.match(guidance('verification-warnings'), /raw executable/i)
   assert.match(guidance('demo-code-boundaries'), /exactly once/i)
   assert.match(guidance('demo-code-boundaries'), /title.*consum/i)
   assert.match(guidance('scene-entity-transitions'), /plain conditional|opt-in wrapper/i)
-  assert.match(guidance('scene-modes-and-navigation'), /both.*horizontal.*vertical/i)
+  assert.match(guidance('scene-modes-and-navigation'), /swipe to the left advances one step and a swipe to the right goes back/i)
   assert.match(guidance('scene-fixed-canvas-uniform-fit'), /one factor on both axes.*inside its available bounds/i)
   assert.match(guidance('scene-fixed-canvas'), /880×380/)
   assert.match(guidance('skill-scaffolding'), /test name|filename/i)
   assert.match(guidance('verification-addressing-and-errors'), /strictPort.*insufficient/i)
-  assert.match(guidance('verification-capture'), /fixed.*delay.*insufficient/i)
+  assert.match(guidance('verification-capture'), /fixed configured interval satisfies the criterion/i)
   assert.match(guidance('verification-warnings'), /assert.*warning output/i)
   assert.match(guidance('demo-scene-kit-integration'), /shared Scene.*boundar/i)
   assert.match(guidance('demo-identity-and-grouping'), /every step module/i)
@@ -472,4 +472,33 @@ test('rubric validation rejects incomplete, unknown, and missing criterion defin
   const missing = structuredClone(rubric)
   delete testingRow(missing).criterion_definitions
   assert.match(validateAutomatedRubric(missing).join('\n'), /must define every testing-evidence criterion/)
+})
+
+// Round-0 baseline audit: guidance that exceeded or contradicted the fixture
+// cost every repetition points the fixture never asked for.
+test('rubric 8.0 guidance traces to the fixture rather than exceeding it', async () => {
+  const rubric = await automatedRubric()
+  const guidance = (id) => rubric.components
+    .flatMap(({ subcomponents }) => subcomponents)
+    .find((row) => row.id === id)
+    .review_guidance.join('\n')
+
+  // "waits for the configured settle interval before capturing"
+  assert.doesNotMatch(guidance('verification-capture'), /fixed settlement delay is insufficient/i)
+  assert.match(guidance('verification-capture'), /configured settle interval/)
+  // "swiping left advances and swiping right goes back": nothing about multi-touch.
+  assert.match(guidance('scene-modes-and-navigation'), /do not require rejection of vertical scrolling or multi-touch/i)
+  assert.doesNotMatch(guidance('scene-modes-and-navigation'), /require focused assertions for predominantly vertical/i)
+  // "elements inside that subtree": a marked member exempts the pair.
+  assert.match(guidance('verification-warnings'), /at least one element is inside a marked subtree is a correct reading/i)
+  assert.doesNotMatch(guidance('verification-warnings'), /nested text\/chrome/i)
+  // Scaffold branches are SKILL.md procedure verified by agent acceptance.
+  assert.match(guidance('skill-scaffolding'), /Do not require an executable test, driver, or transcript for these branches/)
+  assert.match(guidance('skill-scaffolding'), /copying the template into a new app path/)
+  // Judge errors the audit found.
+  assert.match(guidance('scene-step-model'), /aria-label[^.]*is not on screen/)
+  assert.match(guidance('demo-identity-and-grouping'), /trace every use[^.]*arrow or connector counts/i)
+  assert.match(guidance('demo-identity-and-grouping'), /single groupKey shared by all nine steps is the correct grouping/)
+  assert.match(guidance('demo-code-boundaries'), /trace it through every use/)
+  assert.match(guidance('scene-style-and-attribution'), /https:\/\/github\.com\/Codagent-AI\/and-scene/)
 })

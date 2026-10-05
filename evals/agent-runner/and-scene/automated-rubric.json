@@ -553,10 +553,18 @@
     {
       "value": "aria-current",
       "reason": "ARIA standard attribute accepted as an eval-owned implementation spelling."
+    },
+    {
+      "value": "aria-label",
+      "reason": "ARIA attribute named only to say that accessible-name text is not the on-screen number the fixture requires."
+    },
+    {
+      "value": "https://github.com/Codagent-AI/and-scene",
+      "reason": "The fixture requires the default attribution to link to the and-scene GitHub repository; this is that repository, the fixture's own origin."
     }
   ],
   "rubric_id": "and-scene-automated-product",
-  "version": "7.0.0",
+  "version": "8.0.0",
   "total_points": 100,
   "automated_points": 70,
   "human_points": 30,
@@ -707,7 +715,9 @@
           "review_guidance": [
             "An all-nine-step identity or grouping claim MUST cite every step module plus the shared Scene mechanism, or cite a focused executable test together with every imported implementation needed to evaluate its setup and assertions. A beginning/middle/end sample is insufficient.",
             "For the delivered grouped-scene path, prove grouping by tracing each step's groupKey through Stage, and prove stable entity identity by tracing the presentation-owned ENTITY constants through Scene layoutId props to the node consumers. Cite every file used by that proof chain.",
-            "Do not claim that groupKey itself derives entity identity: groupKey preserves the grouped Scene mount, while the separate presentation-owned layoutId values preserve entity identity."
+            "Do not claim that groupKey itself derives entity identity: groupKey preserves the grouped Scene mount, while the separate presentation-owned layoutId values preserve entity identity.",
+            "Before calling a presentation-owned ENTITY constant or member unused, trace every use of it across the delivered source, including member access passed as an id, layoutId, or key prop of any rendered element (an arrow or connector counts). A member that any rendered element consumes is used and is not a dead constant.",
+            "The canonical sample is one continuously evolving scene, so a single groupKey shared by all nine steps is the correct grouping for it; do not fail grouping because every step shares one groupKey."
           ]
         },
         {
@@ -722,6 +732,7 @@
             "demo-scope-discipline"
           ],
           "review_guidance": [
+            "Before calling a constant, member, or public input dead, trace it through every use in the delivered source, including member access and values forwarded as id, layoutId, or key props; a fail for a dead contract must name the declaration and the files searched. A member that any rendered element consumes is used.",
             "Confirm that public API inputs and shared constants consumed by the delivered demo are actually used. Score a dead or misleading contract under demo-clear-code-boundaries exactly once, even when its declaration lives in shared scene-kit source; do not duplicate that deduction in another component.",
             "For demo-clear-code-boundaries, trace the required presentation title input through the delivered demo and fail when the public title contract is ignored rather than consumed.",
             "Accept any semantic current-state attribute paired with a stable presentation-owned active-state hook; do not require one hard-coded hook spelling.",
@@ -747,6 +758,9 @@
             "scene-step-narration-and-identity",
             "scene-order-derived-numbering",
             "scene-typed-payload-boundary"
+          ],
+          "review_guidance": [
+            "For scene-order-derived-numbering, the step number must be rendered as visible on-screen text derived from the step's position in the step array. An aria-label, title or data attribute, or visually hidden text is not on screen; fail when the position-derived number appears only there."
           ]
         },
         {
@@ -793,8 +807,8 @@
             "navigation-clamp-end"
           ],
           "review_guidance": [
-            "A touch swipe must be demonstrably predominantly horizontal and must not treat vertical scrolling or multi-touch gestures as navigation.",
-            "For navigation-touch-swipe, inspect whether the implementation records both horizontal and vertical coordinates and the touch count, and require focused assertions for predominantly vertical and multi-touch rejection. Horizontal distance alone fails.",
+            "For navigation-touch-swipe, the fixture requires that a horizontal swipe navigates: a swipe to the left advances one step and a swipe to the right goes back one step. Credit a touch or pointer handler that compares start and end horizontal positions, maps the direction exactly that way, and calls the presentation's next or previous navigation. Any reasonable distance threshold is acceptable.",
+            "For navigation-touch-swipe, do not require rejection of vertical scrolling or multi-touch gestures, or focused tests of that rejection: the fixture spec, design, and test plan do not state it. Fail only when swipe navigation is absent, inverted, not wired to navigation, or moves by other than one step.",
             "Equivalent semantic current-state attributes and stable active hooks satisfy the active-state contract; judge behavior rather than exact token spelling.",
             "For mode-browse-reading-focused, require the active step's title, multi-line caption, wide-viewport table of contents, previous/next controls, and progress indicators exactly as specified.",
             "Browse mode does not require rendering all steps at once or a separate full-deck reading stack; fail only when the required active-step reading chrome is absent.",
@@ -840,6 +854,7 @@
             "attribution-top-left-opt-in"
           ],
           "review_guidance": [
+            "For attribution-default-link, the default link target must be the and-scene GitHub repository, https://github.com/Codagent-AI/and-scene, the fixture's own repository. A link to another owner or repository path, such as a guessed organization, does not point to the and-scene repository and fails. The deterministic attribution-default-link fact reports which GitHub targets the source contains.",
             "For attribution-default-link, the scene kit itself must place the default link in the bottom-right corner, through the kit's own markup, layout, or positioning styles. A link that sits bottom-right only because sample-, presentation-, or host-owned CSS positions it does not satisfy the default and fails; cite where its position comes from. Positioning is not one of the fallback visual treatments the unstyled-output rule forbids.",
             "For attribution-styling-hook, a stable class or data hook targetable by presentation-owned or host-owned CSS satisfies the contract. It does not require a caller-provided className or style prop.",
             "For attribution-top-left-opt-in, verify that no default top-left and-scene brand is rendered and that the host can explicitly supply branding. This is a top-left brand rule, not an attribution placement option; the default attribution remains bottom-right."
@@ -886,10 +901,12 @@
             "skill-nonempty-confirmation"
           ],
           "review_guidance": [
-            "Prose instructions alone are insufficient for full scaffold credit when behavior can be exercised; require focused executable tests or verified workflow evidence for empty, existing, partial scaffold, monorepo, standalone, and ambiguous nonempty targets.",
-            "Confirm template path resolution and dependency installation from the resolved target rather than crediting their mention.",
-            "Accepted proof may be a temporary-directory driver that materializes the target state and verifies resulting files and dependencies, or a revision-bound workflow transcript with the inputs, user choice, mutations, and outcome. Interactive confirmation does not require a live human in a unit test, but prose that merely says to ask is not evidence that the branch behaves correctly.",
-            "A test name, filename, shared helper, or empty-directory happy path does not prove the other scaffold branches. For each criterion, inspect the test setup and assertions and require that they construct that exact target state and verify its specific outcome."
+            "The fixture design makes SKILL.md the agent procedure for scaffold detection, target resolution, and confirmation, and its test plan verifies those agent branches through agent acceptance runs rather than unit tests. For skill-already-scaffolded, skill-partial-scaffold, skill-monorepo-target, skill-standalone-target, and skill-nonempty-confirmation, credit an explicit SKILL.md instruction that states that branch's detection condition and its required action. Do not require an executable test, driver, or transcript for these branches.",
+            "For skill-nonempty-confirmation, the instruction must say to state the target location and to wait for the user's confirmation before writing into a non-empty project that lacks the scene kit or presentation index; interactive confirmation needs no live human or test.",
+            "Fail an instruction-governed scaffold criterion when its instruction is missing, ambiguous, or contradicts the scenario, or when a delivered helper script or template implements that branch differently. A generic instruction such as scaffold if needed does not state a branch.",
+            "For skill-template-path-resolution, credit an explicit instruction or helper that resolves template paths from the directory containing SKILL.md rather than from the caller's working directory.",
+            "For skill-empty-directory-scaffold, require that the bootstrap template contains the build setup, scene kit, and presentation index with the required dependency set, that SKILL.md directs a full scaffold and dependency installation for an empty or unscaffolded target, and a test that materializes the bootstrap template in a fresh temporary location and builds it, as the fixture test plan's integration coverage describes. Any materialization pattern counts, including creating a temporary directory and copying the template into a new app path inside it; a test name or filename alone is not that test.",
+            "For skill-scaffold-style-neutral, inspect the bootstrap template's dependencies and styles: credit a scaffold that adds no styling framework and defines no default presentation colors, fonts, spacing scale, card or button styles, borders, shadows, or theme tokens."
           ]
         },
         {
@@ -975,9 +992,9 @@
             "visual-helper-settled-screenshots"
           ],
           "review_guidance": [
-            "Settlement must observe animation completion or consume the exact transition configuration that persistent scene motion uses. Merely duplicating a numeric delay or importing a value that persistent motion does not consume is insufficient.",
-            "A fixed settlement delay is insufficient even when it is longer than named animation durations; require an observed completion condition or a transition contract consumed by both runtime motion and capture.",
-            "Require executable evidence that every produced step is captured from the intended preview.",
+            "For visual-helper-settled-screenshots, the fixture requires that after advancing a step the helper waits for the configured settle interval before capturing. Credit a helper that applies a configured settle interval (a named constant or an option) after each step advance and before each capture, or that waits on an observed completion condition. A fixed configured interval satisfies the criterion; do not require it to be derived from or consumed by the runtime motion configuration.",
+            "Fail visual-helper-settled-screenshots when the capture runs immediately after advancing, when the wait happens only once rather than before each capture, or when no settle interval is applied.",
+            "For visual-helper-captures-steps, require that the helper enumerates every produced step of a registered presentation, captures each at one standard desktop viewport, and writes each image under a predictable project-local artifact directory, plus a test that runs the helper or its capture loop and asserts one screenshot per step by count, file names, or file contents. Asserting the expected files is sufficient; the test need not compare pixels.",
             "The project-local screenshot helper is a separate inspection command from the build and render verifier. For quality-project-local-screenshot-helper, credit an implemented project-local helper that the skill can invoke; this criterion does not require the build or render verifier itself to invoke that helper."
           ]
         },
@@ -998,7 +1015,8 @@
             "Evidence from an earlier revision may count only when verified lineage establishes that revision as an ancestor of the final SHA, hashes prove the relevant warning implementation is unchanged, and retained raw executable output demonstrates the behavior. A narrative claim that an earlier pass verified it is insufficient.",
             "A passing warning criterion must cite a focused test whose setup triggers that exact warning and whose assertions verify the warning output or retained raw executable evidence. A generic alignment test filename or source inspection alone is insufficient.",
             "Active-state comparison may use aria-current or any stable active-state hook, but it must compare rendered active and inactive styles.",
-            "Overlap detection must inspect representative nested text/chrome and prove intentional-overlap suppression without hiding unrelated collisions."
+            "For visual-helper-overlap-warning, require that the helper compares visible text and presentation-chrome elements on each step and prints an advisory warning naming the step and the overlapping elements, with a focused test whose setup creates an unmarked collision and asserts that warning. Do not require detection of nested elements or of any collision beyond overlapping visible text or chrome elements.",
+            "For visual-helper-allow-overlap, the fixture exempts elements inside a subtree marked as allowing overlap. Skipping every pair in which at least one element is inside a marked subtree is a correct reading; do not require the helper to keep reporting collisions between a marked element and an unmarked one. Require a focused test whose setup marks an overlapping subtree and asserts that no overlap warning is reported for it."
           ]
         }
       ]

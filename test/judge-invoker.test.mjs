@@ -602,3 +602,24 @@ test('Codex judge invoker stops a call that exceeds its stdout limit', async () 
   )
   assert.equal((await invoke.readUsageEntries()).length, 1)
 })
+
+test('eval-owned usage records the judging stage so sample and adjudication cost is measurable', async () => {
+  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const candidateWorktree = join(runDir, 'candidate')
+  const invoke = createCodexJudgeInvoker({
+    runDir,
+    candidateWorktree,
+    spawnImpl: fakeSpawn((child, { args }) => {
+      writeFinalOutput(args, '{}')
+      child.stdout.write(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 10, output_tokens: 2 } }))
+      child.exit(0)
+    }),
+  })
+  await invoke({ job: 'scene-kit', usage_phase: 'scene-kit:adjudication', authority: { model: 'gpt-5.2' }, schema: {}, prompt: 'x' })
+  await invoke({ job: 'scene-kit', authority: { model: 'gpt-5.2' }, schema: {}, prompt: 'y' })
+
+  const usage = await invoke.readUsageEntries()
+  assert.equal(usage[0].phase, 'scene-kit')
+  assert.equal(usage[0].stage, 'scene-kit:adjudication')
+  assert.equal(usage[1].stage, null)
+})
