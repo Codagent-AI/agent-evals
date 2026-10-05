@@ -556,13 +556,73 @@
     }
   ],
   "rubric_id": "and-scene-automated-product",
-  "version": "6.0.0",
+  "version": "7.0.0",
   "total_points": 100,
   "automated_points": 70,
   "human_points": 30,
   "pass_threshold": 70,
   "automated_pass_threshold": 40,
   "fallbacks": {
+    "demo-route-and-registration": {
+      "job": "demo-integration",
+      "requirement": "The committed demo route is registered and reachable.",
+      "guidance": ["Cite delivered source implementing this behavior; treat the browser observation as a lead."]
+    },
+    "demo-nine-step-content-and-order": {
+      "job": "demo-integration",
+      "requirement": "The demo follows the required step outline in order.",
+      "guidance": ["Cite delivered source implementing this behavior; treat the browser observation as a lead."]
+    },
+    "quality-captions-and-navigation": {
+      "job": "demo-integration",
+      "requirement": "Each step has a caption and a navigation control.",
+      "guidance": ["Cite delivered source implementing this behavior; treat the browser observation as a lead."]
+    },
+    "demo-present-mode-behavior": {
+      "job": "demo-integration",
+      "requirement": "Present mode exposes the active step title.",
+      "guidance": ["Cite delivered source implementing this behavior; treat the browser observation as a lead."]
+    },
+    "demo-browse-mode-behavior": {
+      "job": "demo-integration",
+      "requirement": "Browse mode exposes the active caption and reaches every step through navigation.",
+      "guidance": ["Cite delivered source implementing this behavior; treat the browser observation as a lead."]
+    },
+    "demo-mode-position-preservation": {
+      "job": "demo-integration",
+      "requirement": "Changing presentation mode preserves the current step.",
+      "guidance": ["Cite delivered source implementing this behavior; treat the browser observation as a lead."]
+    },
+    "demo-supported-navigation": {
+      "job": "demo-integration",
+      "requirement": "Keyboard, swipe, and direct navigation reach the intended steps.",
+      "guidance": ["Cite delivered source implementing this behavior; treat the browser observation as a lead."]
+    },
+    "demo-navigation-boundaries-and-control-keys": {
+      "job": "demo-integration",
+      "requirement": "Navigation respects step boundaries and keyboard controls remain operable.",
+      "guidance": ["Cite delivered source implementing this behavior; treat the browser observation as a lead."]
+    },
+    "demo-step-and-transition-reliability": {
+      "job": "demo-integration",
+      "requirement": "Every step advances and reverses without runtime errors.",
+      "guidance": ["Cite delivered source implementing this behavior; treat the browser observation as a lead."]
+    },
+    "demo-mode-interaction-reliability": {
+      "job": "demo-integration",
+      "requirement": "Repeated mode changes leave the presentation operable.",
+      "guidance": ["Cite delivered source implementing this behavior; treat the browser observation as a lead."]
+    },
+    "demo-control-semantics": {
+      "job": "demo-integration",
+      "requirement": "Navigation controls expose roles, names, and the current step.",
+      "guidance": ["Cite delivered source implementing this behavior; treat the browser observation as a lead."]
+    },
+    "demo-focus-and-keyboard-accessibility": {
+      "job": "demo-integration",
+      "requirement": "Navigation controls accept focus and keyboard navigation works.",
+      "guidance": ["Cite delivered source implementing this behavior; treat the browser observation as a lead."]
+    },
     "demo-required-scene-content": {
       "job": "demo-integration",
       "requirement": "Every step renders the scene content the fixture requires for it.",

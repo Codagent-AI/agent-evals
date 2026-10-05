@@ -438,6 +438,15 @@ test('the canonical outline fails when no visible element in either mode exposes
   assert.match(criterion.rationale, /step 1 title does not match the required outline/)
 })
 
+test('an undeclared mode mismatch remains unobserved and does not fail the outline gate', async () => {
+  const demo = createDemo()
+  const originalState = demo.state.bind(demo)
+  demo.state = async () => ({ ...await originalState(), mode: 'browse', modeBasis: 'heuristic' })
+  const result = await evaluate({}, { driver: demo })
+  assert.equal(result.criteria.find(({ id }) => id === 'demo-present-mode-behavior').outcome, 'not-observed')
+  assert.notEqual(verdictOf(result, 'verification-sample-outline'), 'fail')
+})
+
 test('step content accepts the normative caption from any caption-bearing element', async () => {
   // An unhooked step-title paragraph precedes the caption paragraph, so the
   // ranked caption lookup reports the title. The caption is still exposed.
@@ -774,7 +783,6 @@ test('each broken demo behaviour fails its own criterion', async () => {
       nextVisibleInBrowse: false,
     }],
     ['demo-mode-position-preservation', { preservePositionAcrossModes: false }],
-    ['demo-supported-navigation', { swipeWorks: false }],
     ['demo-supported-navigation', { directJumpWorks: false }],
     ['demo-navigation-boundaries-and-control-keys', { clampStart: false }],
     ['demo-navigation-boundaries-and-control-keys', { clampEnd: false }],
@@ -789,6 +797,14 @@ test('each broken demo behaviour fails its own criterion', async () => {
     const result = await evaluate(knobs)
     assert.equal(verdictOf(result, criterion), 'fail', `${criterion} ${JSON.stringify(knobs)}`)
   }
+})
+
+test('a demo with neither swipe input is not observed for supported navigation', async () => {
+  const result = await evaluate({ swipeWorks: false })
+  const navigation = result.criteria.find(({ id }) => id === 'demo-supported-navigation')
+  assert.equal(navigation.outcome, 'not-observed')
+  assert.equal(navigation.observations.swipe.touch.left, 0)
+  assert.equal(navigation.observations.swipe.pointer.left, 0)
 })
 
 test('runtime failures fail the every-step-renders gate', async () => {

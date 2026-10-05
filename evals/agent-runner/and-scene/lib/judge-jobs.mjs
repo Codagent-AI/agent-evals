@@ -29,7 +29,7 @@ const MAX_SOURCE_PATHS = 200
 const MAX_RATIONALE_CHARS = 4000
 const MAX_SOURCE_CITATIONS = 24
 const MAX_SOURCE_PATH_CHARS = 500
-const MAX_AUDIT_PACKET_CHARS = 300_000
+export const MAX_AUDIT_PACKET_CHARS = 300_000
 
 export const PRODUCT_JUDGE_JOB_IDS = [
   'demo-integration',
@@ -500,7 +500,7 @@ function containedBy(root, target) {
   return offset === '' || (!offset.startsWith(`..${sep}`) && offset !== '..' && !isAbsolute(offset))
 }
 
-async function citationTarget(sourceRoot, citation) {
+export async function citationTarget(sourceRoot, citation) {
   if (isAbsolute(citation)) {
     throw new JudgeOutputError(`source citation is outside neutral source root: ${citation}`)
   }

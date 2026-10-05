@@ -73,6 +73,13 @@ import { applyOutcomeEvent, createOutcome } from './lib/outcomes.mjs'
 import { applyRunStateEvent } from './lib/state-machine.mjs'
 import { loadRubrics, rubricProvenance } from './lib/rubric.mjs'
 import { scoreProduct } from './lib/scorer.mjs'
+import { resolveDeterministic } from './lib/scorer.mjs'
+import {
+  buildSecondOpinionRequest,
+  outlineFollowUpTargets,
+  runSecondOpinion,
+  secondOpinionTargets,
+} from './lib/second-opinion.mjs'
 import { AUTOMATED_PHASES, runPhases } from './lib/phases.mjs'
 import { hashFile, hashJson, hashString, readJson, writeJsonAtomic } from './lib/persistence.mjs'
 import {
@@ -798,6 +805,76 @@ export async function runEvaluation({
     await saveCheckpoint(checkpointPath, checkpoint)
   }
 
+  async function runTerminalSecondOpinion({ gate, stage, reason, verified = null, phase }) {
+    if (mode === 'reference-baseline') return null
+    record.terminalFailure = { gate, stage, reason }
+    if (!judgeInvoke) {
+      throw Object.assign(new Error('terminal failure has no second-opinion invoker'), {
+        owner: 'evaluation-harness', code: 'judge-output', resumable: true,
+      })
+    }
+    const evidenceDirectory = join(runDir, 'phases/terminal-evidence')
+    await mkdir(evidenceDirectory, { recursive: true })
+    const logArtifact = `phases/terminal-evidence/${gate}.log`
+    const evidence = [
+      `stage: ${stage}`,
+      `reason: ${reason}`,
+      ...await Promise.all((verified?.command_output ?? [])
+        .filter((item) => item.stage === stage)
+        .map(async (item) => `attempt ${item.attempt}; output_truncated: ${item.output_truncated}\n${await readFile(join(runDir, item.artifact), 'utf8')}`)),
+      ...(verified?.command_output?.length ? [] : (verified?.timings ?? [])
+        .filter((item) => item.label?.includes(stage))
+        .map((item) => `=== stdout ===\n${item.stdout ?? ''}\n=== stderr ===\n${item.stderr ?? ''}`)),
+    ].join('\n')
+    await writeFile(join(runDir, logArtifact), evidence)
+    const sourceFiles = record.neutral ? null : (await collectSourceEvidence(candidateWorktree)).files
+    const neutral = record.neutral ? {
+      root: join(runDir, record.neutral.judge?.root ?? 'neutral/judge'),
+      source_root: join(runDir, record.neutral.source.root),
+      requirements_root: join(runDir, record.neutral.requirements.root),
+      audit_root: join(runDir, '.runtime/judge-workspace'),
+      manifest: record.neutral.manifest,
+    } : { root: candidateWorktree, source_root: candidateWorktree,
+      audit_root: candidateWorktree, sources: sourceFiles }
+    const target = { kind: 'terminal', id: gate }
+    const request = buildSecondOpinionRequest({ target, rubrics, browser: null, judging: null,
+      neutral, authority: { cli: 'codex', model: options.judgeModel },
+      terminal: { stage, reason, evidence, log_root: runDir, log_artifact: logArtifact } })
+    const unit = `second-opinion:terminal:${gate}`
+    const inputs = { input_hash: hashJson({ request, evidence_sha256: hashString(evidence),
+      audit_contract: 'closed-world-spans-v1' }) }
+    const dependencies = { rubric: provenanceOfRubrics.automated,
+      neutral_manifest: record.neutral?.manifest_sha256 ?? null }
+    const directory = join(runDir, 'phases/second-opinions')
+    const artifact = join(directory, `${gate}.json`)
+    await mkdir(directory, { recursive: true })
+    const reusable = await verifyUnit(checkpoint, { phase, unit, inputs, dependencies })
+    let opinion = reusable.reusable ? await readJson(artifact, null) : null
+    if (!opinion) {
+      checkpoint = beginUnit(checkpoint, { phase, unit, inputs, dependencies })
+      await saveCheckpoint(checkpointPath, checkpoint)
+      opinion = await runSecondOpinion({ request, invoke: judgeInvoke })
+      if (opinion.ok) {
+        await writeJsonAtomic(artifact, opinion)
+        checkpoint = await completeUnit(checkpoint, { phase, unit, inputs, dependencies, outputs: [artifact] })
+      } else checkpoint = failUnit(checkpoint, { phase, unit, error: opinion.reason })
+      await saveCheckpoint(checkpointPath, checkpoint)
+    }
+    record.terminalSecondOpinion = opinion
+    record.terminalSecondOpinionGate = gate
+    if (!opinion.ok) {
+      throw Object.assign(new Error(opinion.reason), {
+        owner: 'evaluation-harness', code: 'judge-output', resumable: true,
+      })
+    }
+    if (opinion.decision === 'overturn') {
+      throw Object.assign(new Error('terminal product failure was overturned by audited evidence'), {
+        owner: 'evaluation-harness', code: 'terminal-failure-overturned', resumable: true,
+      })
+    }
+    return opinion
+  }
+
   const handlers = {
     preflight: async () => {
       // All preflight work has completed before phase scheduling so failures
@@ -1206,6 +1283,12 @@ export async function runEvaluation({
       buildResult = verified.build
       verificationResult = verified.verification
       record.timings.push(...(verified.timings ?? []))
+      if (verified.product_failure) {
+        verified.product_failure.second_opinion = await runTerminalSecondOpinion({
+          gate: verified.product_failure.gate, stage: verified.product_failure.stage,
+          reason: verified.product_failure.reason, verified, phase: 'verification',
+        })
+      }
       await writeJsonAtomic(join(runDir, 'phases/verification.json'), verified)
       if (verified.product_failure) {
         return [{
@@ -1213,6 +1296,7 @@ export async function runEvaluation({
           phase: 'verification',
           reason: verified.product_failure.reason,
           gate: verified.product_failure.gate,
+          second_opinion: verified.product_failure.second_opinion,
         }]
       }
     },
@@ -1233,11 +1317,15 @@ export async function runEvaluation({
         })
       } catch (error) {
         if (error?.owner !== 'product') throw error
+        const gate = error.gate ?? 'verification-every-produced-step-renders'
+        const opinion = await runTerminalSecondOpinion({ gate, stage: 'serve', reason: error.message,
+          phase: 'candidate-server' })
         return [{
           type: 'conclusive-product-failure',
           phase: 'candidate-server',
           reason: error.message,
-          gate: error.gate ?? 'verification-every-produced-step-renders',
+          gate,
+          second_opinion: opinion,
         }]
       }
       record.candidateServer = outcome.server
@@ -1455,6 +1543,62 @@ export async function runEvaluation({
         await writeJsonAtomic(join(runDir, 'phases/product-judging.json'), record.judging)
       }
 
+      const secondOpinions = {}
+      const pendingSecondOpinions = []
+      if (mode !== 'reference-baseline' && record.browser) {
+        const directory = join(runDir, 'phases/second-opinions')
+        await mkdir(directory, { recursive: true })
+        const neutral = record.neutral ? {
+          root: join(runDir, record.neutral.judge?.root ?? 'neutral/judge'),
+          source_root: join(runDir, record.neutral.source.root),
+          requirements_root: join(runDir, record.neutral.requirements.root),
+          audit_root: join(runDir, '.runtime/judge-workspace'),
+          manifest: record.neutral.manifest,
+        } : { root: sourceRoot, source_root: sourceRoot, audit_root: sourceRoot,
+          sources: record.sourceEvidence.files }
+        const checked = []
+        const runOpinions = async (targets) => {
+          for (const target of targets) {
+            checked.push(target)
+            const request = buildSecondOpinionRequest({ target, rubrics, browser: record.browser,
+              judging: record.judging, neutral, authority: { cli: 'codex', model: options.judgeModel } })
+            const id = `second-opinion:${target.kind}:${target.id}`
+            const inputHash = hashJson({ request, probe: record.browser.probes?.find((entry) => entry.id === target.id)?.output_sha256,
+              audit_contract: 'closed-world-spans-v1' })
+            const inputs = { input_hash: inputHash }
+            const artifact = join(directory, `${target.id}.json`)
+            const reused = await verifyUnit(checkpoint, { phase: 'product-judging', unit: id,
+              inputs, dependencies: judgeDependencies })
+            let outcome = reused.reusable ? await readJson(artifact, null) : null
+            if (!outcome) {
+              checkpoint = beginUnit(checkpoint, { phase: 'product-judging', unit: id,
+                inputs, dependencies: judgeDependencies })
+              await saveCheckpoint(checkpointPath, checkpoint)
+              outcome = await runSecondOpinion({ request, invoke: judgeInvoke })
+              if (outcome.ok) {
+                await writeJsonAtomic(artifact, outcome)
+                checkpoint = await completeUnit(checkpoint, { phase: 'product-judging', unit: id,
+                  inputs, dependencies: judgeDependencies, outputs: [artifact] })
+              } else {
+                checkpoint = failUnit(checkpoint, { phase: 'product-judging', unit: id,
+                  error: outcome.reason })
+              }
+              await saveCheckpoint(checkpointPath, checkpoint)
+            }
+            if (outcome.ok) secondOpinions[target.id] = outcome
+            else pendingSecondOpinions.push(target)
+          }
+        }
+        await runOpinions(secondOpinionTargets({ deterministic: record.browser.criteria,
+          gates: record.browser.gates, mode }))
+        const resolutions = resolveDeterministic({ rubrics, deterministic: record.browser.criteria,
+          judges: record.judging?.judges ?? {}, secondOpinions, pendingSecondOpinions })
+        await runOpinions(outlineFollowUpTargets({ resolutions, checked }))
+        await writeJsonAtomic(join(runDir, 'phases/second-opinions.json'), {
+          checked, outcomes: secondOpinions, pending: pendingSecondOpinions,
+        })
+      }
+
       record.score = scoreProduct({
         rubrics,
         deterministic: record.browser?.criteria ?? null,
@@ -1470,11 +1614,16 @@ export async function runEvaluation({
           source_scan_budget_exceeded: record.sourceEvidence?.budget_exceeded ?? [],
         },
         mode,
+        secondOpinions,
+        pendingSecondOpinions,
       })
       await writeJsonAtomic(join(runDir, 'phases/score.json'), record.score)
-      if ((record.judging?.failed_jobs ?? []).length > 0) {
+      if ((record.judging?.failed_jobs ?? []).length > 0 || pendingSecondOpinions.length > 0) {
         const error = new Error(
-          `required judge output exhausted: ${record.judging.failed_jobs.join(', ')}`,
+          `required judge output exhausted: ${[
+            ...(record.judging?.failed_jobs ?? []),
+            ...pendingSecondOpinions.map(({ id }) => `second-opinion:${id}`),
+          ].join(', ')}`,
         )
         error.code = 'judge-output'
         throw error
@@ -1609,6 +1758,9 @@ export async function runEvaluation({
         browser: record.browser,
         sourceEvidence: record.sourceEvidence,
         judging: record.judging,
+        terminalSecondOpinion: record.terminalSecondOpinion ?? outcome.product_failure?.second_opinion,
+        terminalSecondOpinionGate: record.terminalSecondOpinionGate ?? outcome.product_failure?.gate,
+        terminalFailure: record.terminalFailure,
         workflow: {
           workflow: boundary.workflow,
           workflow_path: boundary.workflow_path,
@@ -1700,6 +1852,8 @@ export async function runEvaluation({
       buildResult = value.build
       verificationResult = value.verification
       record.timings.push(...(value.timings ?? []))
+      record.terminalSecondOpinion ??= value.product_failure?.second_opinion ?? null
+      record.terminalSecondOpinionGate ??= value.product_failure?.gate ?? null
     }],
     ['browser-evaluation', (value) => { record.browser = value }],
     ['source-evidence', (value) => { record.sourceEvidence = value }],
@@ -1852,7 +2006,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     argv,
     home: process.env.HOME ?? null,
     verifyCandidate: productionRunDir
-      ? ({ worktree, exec }) => runCandidateVerification({ worktree, exec })
+      ? ({ worktree, exec, runDir }) => runCandidateVerification({ worktree, exec, runDir })
       : null,
     candidateServer: productionRunDir
       ? createHostCandidateServer({ runDir: productionRunDir })

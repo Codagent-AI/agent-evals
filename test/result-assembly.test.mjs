@@ -92,6 +92,23 @@ test('a complete result carries the official score, breakdown, and source detail
   assert.deepEqual(result.available_component_scores, [])
 })
 
+test('the result preserves raw and second-opinion verdicts for an overturned criterion', () => {
+  const opinion = { ok: true, raw_verdict: 'fail', verdict: 'pass', decision: 'overturn',
+    rationale: 'measurement fault', measurement_fault: 'pointer input was missed',
+    citations: [{ path: 'src/demo.tsx', start_line: 3, end_line: 9 }] }
+  const scored = score()
+  scored.components[0].subcomponents = [{ id: 'navigation', criteria: [{
+    id: 'demo-supported-navigation', verdict: 'pass', rationale: 'raw browser failure',
+    second_opinion: opinion,
+  }] }]
+  scored.second_opinions = { checked: 1, overturned: 1, overturned_points: 1 }
+  const result = assemble({ score: scored })
+  assert.equal(result.schema_version, 9)
+  assert.equal(result.second_opinions.entries[0].raw_verdict, 'fail')
+  assert.equal(result.second_opinions.entries[0].verdict, 'pass')
+  assert.equal(result.second_opinions.overturned, 1)
+})
+
 test('a pending review carries the automated subtotal out of 70 and no official score', () => {
   const result = assemble({
     outcome: applyOutcomeEvent(createOutcome(), { type: 'automated-scoring-complete', automated_subtotal: 60 }),

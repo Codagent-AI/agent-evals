@@ -69,6 +69,26 @@ const CAPTION_SELECTORS = [
     + ':not([data-presentation-node="step-title"])',
 ]
 const CAPTION_SELECTOR = CAPTION_SELECTORS.join(', ')
+const DECLARED_TITLE_SELECTORS = TITLE_SELECTORS.filter((selector) => !selector.includes(' h'))
+const DECLARED_CAPTION_SELECTORS = CAPTION_SELECTORS.slice(0, 2)
+
+function modeReadingSource() {
+  return `const modeReading = () => {
+    const declared = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
+      ?.getAttribute('data-presentation-mode');
+    if (declared === 'present' || declared === 'browse') return { mode: declared, basis: 'declared' };
+    const progress = document.querySelector('[data-step-count]');
+    const dataMode = progress?.closest('[data-mode]')?.getAttribute('data-mode')
+      || progress?.querySelector('[data-mode]')?.getAttribute('data-mode');
+    if (dataMode === 'present' || dataMode === 'browse') return { mode: dataMode, basis: 'declared' };
+    const visible = (element) => Boolean(element && element.getClientRects().length > 0
+      && getComputedStyle(element).display !== 'none'
+      && getComputedStyle(element).visibility !== 'hidden');
+    const browsing = [...document.querySelectorAll(${JSON.stringify(`${CAPTION_SELECTOR}, ${TOC_SELECTOR}`)})]
+      .some(visible);
+    return { mode: browsing ? 'browse' : 'present', basis: 'heuristic' };
+  };`
+}
 const TOC_SELECTORS = [
   '[data-presentation-toc]',
   '[data-presentation-chrome="toc"]',
@@ -204,13 +224,8 @@ function navigationDiscoverySource() {
     if (role) matchedSelectors[role] = named.length > 0 ? 'accessible-directional-name' : null;
     return named;
   };
-  const readMode = () => {
-    const declared = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
-      ?.getAttribute('data-presentation-mode');
-    if (declared === 'present' || declared === 'browse') return declared;
-    return [...document.querySelectorAll(${JSON.stringify(`${CAPTION_SELECTOR}, ${TOC_SELECTOR}`)})]
-      .some(visible) ? 'browse' : 'present';
-  };
+  ${modeReadingSource()}
+  const readMode = () => modeReading().mode;
   // A presentation may expose one control that flips the mode, or a separate
   // control per mode. Picking the first visible match would click "Present
   // mode" when browse mode was required, so the mode being asked for takes
@@ -347,6 +362,44 @@ function swipeEventSource(type, sign, progress) {
 }`
 }
 
+function pointerSwipeEventSource(type, sign, progress) {
+  const begin = type === 'pointerdown'
+  const end = type === 'pointerup'
+  return `() => {
+  ${begin ? `const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)}) || document.body;
+  const surface = presentation.querySelector(${JSON.stringify(STAGE_SELECTOR)}) || presentation;
+  const rect = surface.getBoundingClientRect();
+  const clamp = (value, low, high) => {
+    const min = Math.max(low, 1);
+    const max = Math.max(high - 1, min);
+    return Math.min(Math.max(value, min), max);
+  };
+  const y = clamp(rect.top + rect.height / 2, rect.top, Math.min(rect.bottom, window.innerHeight));
+  const startX = clamp(rect.left + rect.width / 2 - ${sign} * ${SWIPE_DISTANCE / 2},
+    rect.left, Math.min(rect.right, window.innerWidth));
+  const hit = document.elementFromPoint(startX, y);
+  const target = hit && presentation.contains(hit) ? hit : presentation;
+  window.__andSceneSwipe = { target, startX, y };` : `const swipe = window.__andSceneSwipe;
+  if (!swipe) return false;
+  const { target, startX, y } = swipe;`}
+  target.dispatchEvent(new PointerEvent(${JSON.stringify(type)}, {
+    pointerId: 1,
+    pointerType: 'touch',
+    isPrimary: true,
+    clientX: startX + ${sign * SWIPE_DISTANCE * progress},
+    clientY: y,
+    buttons: ${end ? 0 : 1},
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+  }));
+  ${end ? 'delete window.__andSceneSwipe;' : `const frame = { rendered: false };
+  window.__andSceneSwipe.frame = frame;
+  requestAnimationFrame(() => { frame.rendered = true; });`}
+  return true;
+}`
+}
+
 // Waits, from the driving script, until the page has rendered the frame the
 // last touch event asked for. Polling a synchronous evaluation keeps the
 // driver independent of whether an adapter build awaits a page promise.
@@ -432,14 +485,8 @@ console.log(JSON.stringify([...new Set(routes)]));
 const opened = await page.open(${JSON.stringify(routeUrl(route))});
 ${waitForSelectorSource('[data-step-count]', 30000)}
 const initialMode = await page.eval(() => {
-  const explicit = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
-    ?.getAttribute('data-presentation-mode');
-  if (explicit === 'present' || explicit === 'browse') return explicit;
-  const browsing = [...document.querySelectorAll(${JSON.stringify(`${CAPTION_SELECTOR}, ${TOC_SELECTOR}`)})]
-    .some((element) => element.getClientRects().length > 0
-      && getComputedStyle(element).display !== 'none'
-      && getComputedStyle(element).visibility !== 'hidden');
-  return browsing ? 'browse' : 'present';
+  ${modeReadingSource()}
+  return modeReading().mode;
 });
 const progress = await page.eval(() => document.querySelector('[data-step-count]')?.getAttribute('data-step-index'));
 console.log(JSON.stringify({
@@ -457,15 +504,8 @@ console.log(JSON.stringify({
       return run(`
 const requiredMode = ${JSON.stringify(requiredMode)};
 const mode = await page.eval(() => {
-  const explicit = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
-    ?.getAttribute('data-presentation-mode');
-  if (explicit === 'present' || explicit === 'browse') return explicit;
-  const visible = (element) => Boolean(element && element.getClientRects().length > 0
-    && getComputedStyle(element).display !== 'none'
-    && getComputedStyle(element).visibility !== 'hidden');
-  const browsing = [...document.querySelectorAll(${JSON.stringify(`${CAPTION_SELECTOR}, ${TOC_SELECTOR}`)})]
-    .some(visible);
-  return browsing ? 'browse' : 'present';
+  ${modeReadingSource()}
+  return modeReading().mode;
 });
 if (mode !== requiredMode) {
   const outcome = await page.eval(() => {
@@ -650,15 +690,16 @@ console.log(JSON.stringify(geometry));
 `)
     },
 
-    async state() {
+    async state({ presenceOf = [] } = {}) {
       const captured = await run(`
 const captured = await page.eval(() => {
   const progress = document.querySelector('[data-step-count]');
   const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
-  const explicitMode = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
-    ?.getAttribute('data-presentation-mode');
 ${navigationDiscoverySource()}
+  const currentMode = modeReading();
   const title = firstVisibleMatch(${JSON.stringify(TITLE_SELECTORS)}, 'title');
+  const titleBasis = !title ? 'none'
+    : (${JSON.stringify(DECLARED_TITLE_SELECTORS)}.includes(matchedSelectors.title) ? 'declared' : 'heuristic');
   // Which element a presentation uses for the deck title and which for the
   // active step title is its own choice, so report every visible title-bearing
   // text and let the probe ask whether the step title is exposed at all.
@@ -702,6 +743,8 @@ ${navigationDiscoverySource()}
   const titleTexts = titleExposure.texts;
   const titleOccurrences = titleExposure.occurrences;
   const caption = firstVisibleMatch(${JSON.stringify(CAPTION_SELECTORS)}, 'caption');
+  const captionBasis = !caption ? 'none'
+    : (${JSON.stringify(DECLARED_CAPTION_SELECTORS)}.includes(matchedSelectors.caption) ? 'declared' : 'heuristic');
   // The same holds for captions: which caption-bearing element comes first is
   // the presentation's choice, so every visible one is reported.
   const captionExposure = exposedTexts(
@@ -721,7 +764,38 @@ ${navigationDiscoverySource()}
     ...(previousMatches.length > 1 ? ['multiple visible previous controls'] : []),
     ...(nextMatches.length > 1 ? ['multiple visible next controls'] : []),
   ];
-  const browsing = visible(caption) || visible(toc);
+  const textPresence = {};
+  const normalize = (value) => String(value || '').normalize('NFKC')
+    .replace(/[\\u2018-\\u201b\\u2032]/g, "'")
+    .replace(/[\\u201c-\\u201f\\u2033]/g, '"')
+    .replace(/[\\u2010-\\u2015\\u2212]/g, '-')
+    .replace(/\\u2026/g, '...').replace(/\\s+/g, ' ').trim();
+  try {
+    const elements = [...scope.querySelectorAll('*')];
+    const complete = elements.length <= 20000;
+    const walked = elements.slice(0, 20000);
+    for (const expected of ${JSON.stringify(presenceOf)}) {
+      const needle = normalize(expected);
+      let visibleElements = 0;
+      let accessibleNames = 0;
+      for (const element of walked) {
+        if (visible(element) && normalize(element.innerText).includes(needle)
+          && ![...element.children].some((child) => visible(child) && normalize(child.innerText).includes(needle))) {
+          visibleElements += 1;
+        }
+        if (!visible(element)) continue;
+        const ids = (element.getAttribute('aria-labelledby') || '').split(/\\s+/).filter(Boolean);
+        const name = ids.length ? ids.map((id) => document.getElementById(id)?.textContent || '').join(' ')
+          : (element.getAttribute('aria-label') || element.getAttribute('alt') || element.getAttribute('title') || '');
+        if (normalize(name).includes(needle)) accessibleNames += 1;
+      }
+      textPresence[expected] = { visibleElements, accessibleNames, complete };
+    }
+  } catch {
+    for (const expected of ${JSON.stringify(presenceOf)}) {
+      textPresence[expected] = { visibleElements: 0, accessibleNames: 0, complete: false };
+    }
+  }
   const controlStates = controls.map((control) => ({
     name: accessibleName(control),
     role: control.getAttribute('role') || control.tagName.toLowerCase(),
@@ -795,9 +869,11 @@ ${navigationDiscoverySource()}
     entityIds,
     entityConventions: entitySelectors,
     titleProminent: visible(title),
-    mode: explicitMode === 'present' || explicitMode === 'browse'
-      ? explicitMode
-      : (browsing ? 'browse' : 'present'),
+    mode: currentMode.mode,
+    modeBasis: currentMode.basis,
+    titleBasis,
+    captionBasis,
+    textPresence,
     captionVisible: visible(caption) && Boolean(caption?.textContent?.trim()),
     tocVisible: visible(toc),
     progressVisible: visible(progressChrome),
@@ -935,17 +1011,24 @@ console.log(JSON.stringify(true));
     // its touchmoves, then its touchend, each in its own task. A presentation
     // that records the touch start in state committed after a render, as
     // React's setState does, only sees it when the probe yields between them.
-    async swipe(direction) {
+    async swipe(direction, { input = 'touch' } = {}) {
       if (!['left', 'right'].includes(direction)) {
         throw new BrowserDriverError(`unsupported swipe direction: ${direction}`)
       }
+      if (!['touch', 'pointer'].includes(input)) {
+        throw new BrowserDriverError(`unsupported swipe input: ${input}`)
+      }
       const sign = direction === 'left' ? -1 : 1
+      const eventSource = input === 'pointer' ? pointerSwipeEventSource : swipeEventSource
+      const names = input === 'pointer'
+        ? ['pointerdown', 'pointermove', 'pointerup']
+        : ['touchstart', 'touchmove', 'touchend']
       const phases = [
-        swipeEventSource('touchstart', sign, 0),
+        eventSource(names[0], sign, 0),
         ...Array.from({ length: SWIPE_MOVES }, (_, move) => (
-          swipeEventSource('touchmove', sign, (move + 1) / (SWIPE_MOVES + 1))
+          eventSource(names[1], sign, (move + 1) / (SWIPE_MOVES + 1))
         )),
-        swipeEventSource('touchend', sign, 1),
+        eventSource(names[2], sign, 1),
       ]
       const dispatched = await run(`
 let dispatched = true;

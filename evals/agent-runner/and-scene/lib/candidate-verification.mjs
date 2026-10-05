@@ -3,10 +3,21 @@
 // hard gates decide the verdict. Failure to launch npm at all is a harness
 // failure because no claim about the candidate can be supported in that case.
 import { spawnSync } from 'node:child_process'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 
 import { runTimed } from './subprocess.mjs'
 
 const MAX_LOG_CHARS = 4000
+const MAX_STREAM_BYTES = 1024 * 1024
+
+function retainedStream(value) {
+  const bytes = Buffer.from(String(value ?? ''))
+  if (bytes.length <= MAX_STREAM_BYTES) return { text: bytes.toString('utf8'), truncated: false }
+  const omitted = bytes.length - MAX_STREAM_BYTES
+  return { text: `${bytes.subarray(0, 256 * 1024).toString('utf8')}\n[… ${omitted} bytes omitted …]\n${bytes.subarray(bytes.length - 768 * 1024).toString('utf8')}`,
+    truncated: true }
+}
 
 function outputOf(timing) {
   const text = [timing.stdout, timing.stderr].filter(Boolean).join('\n').trim()
@@ -23,6 +34,7 @@ function commandResult(timing) {
     ok: timing.ok,
     status: timing.status,
     log: outputOf(timing),
+    output_truncated: retainedStream(timing.stdout).truncated || retainedStream(timing.stderr).truncated,
   }
 }
 
@@ -78,6 +90,7 @@ function throwInfrastructureFailure(attempts, stage) {
 export async function runCandidateVerification({
   worktree,
   exec = spawnSync,
+  runDir = null,
 } = {}) {
   const timings = []
   const installAttempts = [invoke('install', ['ci'], { worktree, exec })]
@@ -150,6 +163,22 @@ export async function runCandidateVerification({
     ? 'install'
     : (buildAttempts.length > 0 && buildAttempts.every((attempt) => !attempt.ok) ? 'build' : null)
 
+  const commandOutput = []
+  if (runDir) {
+    const directory = join(runDir, 'phases/command-output')
+    await mkdir(directory, { recursive: true })
+    for (const [stage, attempts] of [['install', installAttempts], ['build', buildAttempts]]) {
+      for (const [index, attempt] of attempts.entries()) {
+        const stdout = retainedStream(attempt.stdout)
+        const stderr = retainedStream(attempt.stderr)
+        const artifact = `phases/command-output/${stage}-${index + 1}.log`
+        await writeFile(join(runDir, artifact), `=== stdout ===\n${stdout.text}\n=== stderr ===\n${stderr.text}\n`)
+        commandOutput.push({ stage, attempt: index + 1, artifact,
+          output_truncated: stdout.truncated || stderr.truncated })
+      }
+    }
+  }
+
   return {
     commands: {
       install: installCommand,
@@ -182,5 +211,6 @@ export async function runCandidateVerification({
         }
       : null,
     timings,
+    command_output: commandOutput,
   }
 }

@@ -578,6 +578,14 @@ test('the AXI driver moves a swipe horizontally in its direction and nowhere els
   )
 })
 
+test('the AXI driver can dispatch a pointer swipe with touch pointer type', async () => {
+  const source = await emitted((driver) => driver.swipe('left', { input: 'pointer' }))
+  assert.match(source, /new PointerEvent\("pointerdown"/)
+  assert.match(source, /new PointerEvent\("pointermove"/)
+  assert.match(source, /new PointerEvent\("pointerup"/)
+  assert.match(source, /pointerType: 'touch'/)
+})
+
 test('the AXI driver waits without the adapter-specific wait helper', async () => {
   // `page.wait` is not implemented the same way across chrome-devtools-axi
   // builds, and a script that calls it can fail wholesale. Waiting through

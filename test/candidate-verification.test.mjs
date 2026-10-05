@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp } from 'node:fs/promises'
+import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -56,6 +56,39 @@ test('a candidate command failure is an explicit failed product result, not a th
   ])
   assert.equal(result.commands.verification.state, 'skipped')
   assert.equal(result.product_failure.reproducible, true)
+})
+
+test('failed build attempts retain complete output beyond the summary limit', async () => {
+  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-verification-'))
+  const stdout = `${'progress '.repeat(600)}\nwrong harness command\n`
+  let calls = 0
+  const result = await runCandidateVerification({ worktree: runDir, runDir,
+    exec: () => {
+      calls += 1
+      return calls === 1 ? { status: 0, stdout: '', stderr: '' }
+        : { status: 2, stdout, stderr: '' }
+    } })
+  assert.equal(result.build.ok, false)
+  assert.ok(result.build.log.length <= 4000)
+  const artifact = result.command_output.find(({ stage }) => stage === 'build').artifact
+  assert.match(await readFile(join(runDir, artifact), 'utf8'), /wrong harness command/)
+})
+
+test('oversized command streams retain their head and tail with an omission marker', async () => {
+  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-verification-'))
+  const stdout = `start\n${'x'.repeat(1024 * 1024)}\ndecisive tail\n`
+  let calls = 0
+  const result = await runCandidateVerification({ worktree: runDir, runDir,
+    exec: () => (++calls === 1
+      ? { status: 0, stdout: '', stderr: '' }
+      : { status: 2, stdout, stderr: '' }) })
+  const attempt = result.command_output.find(({ stage }) => stage === 'build')
+  const log = await readFile(join(runDir, attempt.artifact), 'utf8')
+  assert.equal(attempt.output_truncated, true)
+  assert.match(log, /start/)
+  assert.match(log, /bytes omitted/)
+  assert.match(log, /decisive tail/)
+  assert.equal(result.commands.build.attempts[0].output_truncated, true)
 })
 
 test('a verifier exit status is retained as its machine-readable product result', async () => {

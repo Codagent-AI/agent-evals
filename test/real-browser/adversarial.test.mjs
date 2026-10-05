@@ -124,9 +124,9 @@ test('(m) a deck that commits its touch start only after a frame still swipes', 
   assert.match(navigation.rationale, /swipe 1\/0/)
 })
 
-test('(n) a deck with no swipe support still fails swipe navigation', { timeout: 600_000 }, async () => {
+test('(n) a deck with no swipe support is not observed for swipe navigation', { timeout: 600_000 }, async () => {
   const navigation = criterion(await evaluate('n'), NAVIGATION)
-  assert.equal(navigation.verdict, 'fail', navigation.rationale)
+  assert.equal(navigation.outcome, 'not-observed', navigation.rationale)
   assert.match(navigation.rationale, /keyboard 1\/0, swipe 0\/0, direct jump 4/)
 })
 
@@ -134,4 +134,39 @@ test('(o) a deck that listens for touches on its stage swipes when the finger la
   const navigation = criterion(await evaluate('o'), NAVIGATION)
   assert.equal(navigation.verdict, 'pass', navigation.rationale)
   assert.match(navigation.rationale, /swipe 1\/0/)
+})
+
+test('(p) a declared data-mode establishes mode', { timeout: 600_000 }, async () => {
+  const result = await evaluate('p')
+  assert.equal(criterion(result, 'demo-present-mode-behavior').verdict, 'pass')
+  assert.ok(result.probes.some(({ reading_basis }) => reading_basis?.some(({ mode }) => mode === 'declared')))
+})
+
+test('(q) a pointer-only swipe passes after touch leaves the step unchanged', { timeout: 600_000 }, async () => {
+  const navigation = criterion(await evaluate('q'), NAVIGATION)
+  assert.equal(navigation.verdict, 'pass', navigation.rationale)
+  assert.equal(navigation.observations.swipe.touch.left, 0)
+  assert.equal(navigation.observations.swipe.pointer.left, 1)
+})
+
+test('(r) an undeclared mode inferred from a footer never fails mode or outline', { timeout: 600_000 }, async () => {
+  const result = await evaluate('r')
+  for (const id of TITLE_AND_MODE) {
+    const row = criterion(result, id) ?? result.gates.find((gate) => gate.id === id)
+    assert.notEqual(row.verdict, 'fail', id)
+  }
+})
+
+test('(s) a caption split across nested spans is present by text basis', { timeout: 600_000 }, async () => {
+  const result = await evaluate('s')
+  assert.notEqual(criterion(result, 'demo-required-scene-content').verdict, 'fail')
+  assert.ok(result.probes.some(({ probe_observations }) => probe_observations.some(({ text_presence }) =>
+    text_presence && Object.values(text_presence).some(({ visibleElements, complete }) => complete && visibleElements > 0))))
+})
+
+test('(t) a hidden labelledby title is present by accessible-name basis', { timeout: 600_000 }, async () => {
+  const result = await evaluate('t')
+  assert.notEqual(criterion(result, 'demo-present-mode-behavior').verdict, 'fail')
+  assert.ok(result.probes.some(({ probe_observations }) => probe_observations.some(({ text_presence }) =>
+    text_presence && Object.values(text_presence).some(({ accessibleNames, complete }) => complete && accessibleNames > 0))))
 })
