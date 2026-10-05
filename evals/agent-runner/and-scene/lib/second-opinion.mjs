@@ -438,9 +438,9 @@ function invocationFailureMessage(error) {
   const detail = providerMessage ?? (eventOutput
     ? `${exit?.[0] ?? ''}diagnostic output omitted; see private judge logs` : message)
   const bounded = detail.replace(/\s+/g, ' ').trim()
-  // Preserve the deterministic rejection code even if its surrounding raw
-  // diagnostics are omitted or it would fall beyond the length limit.
-  const summary = message.includes('invalid_json_schema') && !bounded.slice(0, 512).includes('invalid_json_schema')
+  // Preserve a provider rejection code beyond the length limit. Command
+  // output in the discarded raw diagnostics cannot classify the failure.
+  const summary = detail.includes('invalid_json_schema') && !bounded.slice(0, 512).includes('invalid_json_schema')
     ? `invalid_json_schema: ${bounded}` : bounded
   return summary.length > 512 ? `${summary.slice(0, 509)}...` : summary
 }

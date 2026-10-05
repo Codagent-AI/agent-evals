@@ -496,13 +496,44 @@ test('second opinion bounds plain invocation diagnostics', async () => {
   assert.ok(outcome.reason.length <= 600, outcome.reason.length)
 })
 
-test('second opinion retains schema rejection classification when raw diagnostics are omitted', async () => {
+test('second opinion does not classify omitted raw diagnostics as a schema rejection', async () => {
   let calls = 0
   const outcome = await runSecondOpinion({ request: {}, invoke: async () => {
     calls += 1
     throw new Error('Codex judge second-opinion exited 1: PRIVATE_COMMAND_OUTPUT invalid_json_schema')
   } })
+  assert.equal(calls, JUDGE_ATTEMPTS)
+  assert.match(outcome.reason, /invocation failed:.*diagnostic output omitted/)
+  assert.equal(outcome.reason.includes('invalid_json_schema'), false)
+  assert.equal(outcome.reason.includes('PRIVATE_COMMAND_OUTPUT'), false)
+})
+
+test('schema text in command output does not stop retries of a provider transport failure', async () => {
+  const events = [
+    { type: 'item.completed', item: { type: 'command_execution',
+      aggregated_output: 'source mentions invalid_json_schema' } },
+    { type: 'turn.failed', error: { message: 'provider stream dropped' } },
+  ].map((event) => JSON.stringify(event)).join('\n')
+  let calls = 0
+  const outcome = await runSecondOpinion({ request: {}, invoke: async () => {
+    calls += 1
+    throw new Error('Codex judge second-opinion exited 1: ' + events)
+  } })
+  assert.equal(calls, JUDGE_ATTEMPTS)
+  assert.match(outcome.reason, /invocation failed: provider stream dropped/)
+  assert.equal(outcome.reason.includes('invalid_json_schema'), false)
+})
+
+test('a provider schema rejection beyond the diagnostic cap still stops retries', async () => {
+  const events = JSON.stringify({ type: 'turn.failed', error: {
+    message: 'detail '.repeat(1000) + 'invalid_json_schema: properties must be closed',
+  } })
+  let calls = 0
+  const outcome = await runSecondOpinion({ request: {}, invoke: async () => {
+    calls += 1
+    throw new Error('Codex judge second-opinion exited 1: ' + events)
+  } })
   assert.equal(calls, 1)
   assert.match(outcome.reason, /schema rejected by provider.*invalid_json_schema/)
-  assert.equal(outcome.reason.includes('PRIVATE_COMMAND_OUTPUT'), false)
+  assert.ok(outcome.reason.length <= 600, outcome.reason.length)
 })
