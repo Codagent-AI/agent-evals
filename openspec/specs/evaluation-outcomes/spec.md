@@ -6,7 +6,7 @@ Define evaluation statuses that distinguish product verdicts, implementation-wor
 ### Requirement: Separate evaluation status and product verdict
 The evaluation SHALL report execution status independently from candidate product quality. `evaluation_status` SHALL be exactly one of `complete`, `pending-human-review`, `implementation-workflow-failed`, or `evaluation-harness-failed`. `product_verdict` SHALL be exactly one of `pass`, `fail`, `unavailable`, or `not-applicable`.
 
-A candidate product verdict SHALL be `pass` only after all required automated scoring, human scoring, and product gates have been completed from sufficient evidence. A candidate product verdict SHALL ordinarily be `fail` only after the same inputs establish that the pass contract was missed. Complete automated evidence SHALL also be sufficient for a conclusive `fail` without human review when the candidate scores below 40 out of 70, misses either automated component floor, or fails any required hard gate, because no human result can satisfy the official pass contract. As a further narrow exception, deterministic evidence that reproducible product behavior prevents the frozen final candidate from installing, building, or serving SHALL be sufficient for a conclusive `fail` verdict without an official score or fabricated human ratings. A completed local reference SHALL use `product_verdict=not-applicable` because the candidate pass contract does not apply. The evaluation SHALL NOT infer product failure from incomplete automated evidence, a failed workflow, failed harness, unfinished eligible human review, or candidate-reported CI state.
+A candidate product verdict SHALL be `pass` only after all required automated scoring, human scoring, and product gates have been completed from sufficient evidence. A candidate product verdict SHALL ordinarily be `fail` only after the same inputs establish that the pass contract was missed. Complete automated evidence SHALL also be sufficient for a conclusive `fail` without human review when the candidate scores below 40 out of 70, misses either automated component floor, or fails any required hard gate, because no human result can satisfy the official pass contract. As a further narrow exception, deterministic evidence that reproducible product behavior prevents the frozen final candidate from installing, building, or serving, once its second opinion upholds it, SHALL be sufficient for a conclusive `fail` verdict without an official score or fabricated human ratings. A completed local reference SHALL use `product_verdict=not-applicable` because the candidate pass contract does not apply. The evaluation SHALL NOT infer product failure from incomplete automated evidence, a failed workflow, failed harness, unfinished eligible human review, or candidate-reported CI state.
 
 #### Scenario: Complete product passes
 - **WHEN** all required candidate evaluation work completes and the official score and product gates satisfy the pass rules
@@ -18,6 +18,7 @@ A candidate product verdict SHALL be `pass` only after all required automated sc
 
 #### Scenario: Conclusive product failure prevents full scoring
 - **WHEN** deterministic verification establishes that reproducible product behavior prevents the frozen final candidate from installing, building, or serving
+- **AND** the failure's second opinion upholds it
 - **THEN** `evaluation_status` is `complete` and `product_verdict` is `fail`
 - **AND** `official_score` and human ratings remain unavailable while completed component and hard-gate evidence is preserved
 
@@ -101,7 +102,7 @@ The result SHALL identify the failed workflow step, attempt or session when avai
 - **THEN** it does not misclassify that failure as an evaluation-harness failure
 
 ### Requirement: Evaluation-harness failure outcome
-The evaluation SHALL use `evaluation-harness-failed` when eval-owned setup, candidate-identity verification, non-CI evidence verification, candidate-server management, browser evaluation, evidence processing, scored judging, human-review persistence, scoring, result persistence, report generation, or cleanup fails in a way that prevents required evaluation work or finalization. A candidate-server failure established to result from reproducible product behavior SHALL follow the conclusive product-failure rule rather than this harness-failure rule.
+The evaluation SHALL use `evaluation-harness-failed` when eval-owned setup, candidate-identity verification, non-CI evidence verification, candidate-server management, browser evaluation, evidence processing, scored judging, human-review persistence, scoring, result persistence, report generation, or cleanup fails in a way that prevents required evaluation work or finalization. A candidate-server failure established to result from reproducible product behavior SHALL follow the conclusive product-failure rule rather than this harness-failure rule, unless its second opinion overturns it. An install, build, or serve failure whose second-opinion overturn is accepted SHALL be reported as a resumable `evaluation-harness-failed` outcome owned by the phase that recorded the failure. The result SHALL record the raw product-owned failure, the accepted overturn, its rationale, and its log and source citations. A missing or invalid second opinion SHALL be treated as missing required judge output.
 
 The result SHALL identify the failed eval phase, observed error, completed checkpoints, and whether the phase can be resumed. A harness failure SHALL NOT be reported as a product defect or implementation-workflow defect.
 
@@ -111,6 +112,7 @@ The result SHALL identify the failed eval phase, observed error, completed check
 
 #### Scenario: Candidate installation, build, or server failure is product-owned
 - **WHEN** the harness operates correctly but reproducible product behavior prevents the frozen final candidate from installing, building, or serving
+- **AND** the failure's second opinion upholds it
 - **THEN** the evaluation applies the conclusive product-failure outcome
 - **AND** it does not report `evaluation-harness-failed`
 
@@ -131,6 +133,16 @@ The result SHALL identify the failed eval phase, observed error, completed check
 #### Scenario: Required finalization cleanup fails
 - **WHEN** the separate human-review command cannot complete its required candidate-server cleanup during finalization
 - **THEN** `evaluation_status` is `evaluation-harness-failed` and the result records the cleanup error
+
+#### Scenario: A terminal failure is overturned
+- **WHEN** a build or serve failure was recorded as product-owned and its second-opinion overturn is accepted
+- **THEN** `evaluation_status` is `evaluation-harness-failed`, `product_verdict` is `unavailable`, and the failed phase is resumable
+- **AND** the result shows the raw failure, the accepted overturn, and its citations
+
+#### Scenario: A failed criterion's second opinion is missing
+- **WHEN** a verifier call required for a criterion or hard gate fails within its retry budget
+- **THEN** `evaluation_status` is `evaluation-harness-failed`
+- **AND** the unchecked failure is not used to issue a product verdict
 
 ### Requirement: Preserve a durable product verdict across later harness failure
 Once an official candidate score and product verdict have been computed from complete required scoring inputs and durably recorded, a later harness failure SHALL NOT erase or alter them. The evaluation SHALL change `evaluation_status` to `evaluation-harness-failed`, preserve `product_verdict` as `pass` or `fail`, and present the harness failure alongside the valid candidate result.
@@ -207,3 +219,4 @@ When a harness failure coexists with a valid candidate verdict or complete refer
 #### Scenario: Report and result disagree
 - **WHEN** report generation detects that its rendered outcome, applicability, or denominator would differ from the current `result.json`
 - **THEN** the harness fails report generation rather than publishing contradictory outcome information
+
