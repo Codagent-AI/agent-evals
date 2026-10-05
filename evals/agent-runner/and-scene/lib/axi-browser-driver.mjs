@@ -304,19 +304,8 @@ const SWIPE_DISTANCE = 200
 const SWIPE_MOVES = 4
 const SWIPE_FRAME_TIMEOUT_MS = 2000
 
-// One touch event of a single-finger horizontal swipe, as a page callback.
-// The finger lands on whatever element is under it at the vertical middle of
-// the stage (or the presentation when it has no stage), just as a real touch
-// targets the element it lands on, and every later event of the gesture keeps
-// that target. Every event but the last asks the page for its next animation
-// frame, which the driving script waits on before the next event. Every value
-// is embedded at its use site: the callback must not read the driving script's
-// scope.
-function swipeEventSource(type, sign, progress) {
-  const begin = type === 'touchstart'
-  const end = type === 'touchend'
-  return `() => {
-  ${begin ? `const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)}) || document.body;
+function swipeTargetSource(sign) {
+  return `const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)}) || document.body;
   const surface = presentation.querySelector(${JSON.stringify(STAGE_SELECTOR)}) || presentation;
   const rect = surface.getBoundingClientRect();
   // The finger lands inside the visible part of the surface even when the
@@ -334,7 +323,22 @@ function swipeEventSource(type, sign, progress) {
   );
   const hit = document.elementFromPoint(startX, y);
   const target = hit && presentation.contains(hit) ? hit : presentation;
-  window.__andSceneSwipe = { target, startX, y };` : `const swipe = window.__andSceneSwipe;
+  window.__andSceneSwipe = { target, startX, y };`
+}
+
+// One touch event of a single-finger horizontal swipe, as a page callback.
+// The finger lands on whatever element is under it at the vertical middle of
+// the stage (or the presentation when it has no stage), just as a real touch
+// targets the element it lands on, and every later event of the gesture keeps
+// that target. Every event but the last asks the page for its next animation
+// frame, which the driving script waits on before the next event. Every value
+// is embedded at its use site: the callback must not read the driving script's
+// scope.
+function swipeEventSource(type, sign, progress) {
+  const begin = type === 'touchstart'
+  const end = type === 'touchend'
+  return `() => {
+  ${begin ? swipeTargetSource(sign) : `const swipe = window.__andSceneSwipe;
   if (!swipe) return false;
   const { target, startX, y } = swipe;`}
   const touch = new Touch({
@@ -366,20 +370,7 @@ function pointerSwipeEventSource(type, sign, progress) {
   const begin = type === 'pointerdown'
   const end = type === 'pointerup'
   return `() => {
-  ${begin ? `const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)}) || document.body;
-  const surface = presentation.querySelector(${JSON.stringify(STAGE_SELECTOR)}) || presentation;
-  const rect = surface.getBoundingClientRect();
-  const clamp = (value, low, high) => {
-    const min = Math.max(low, 1);
-    const max = Math.max(high - 1, min);
-    return Math.min(Math.max(value, min), max);
-  };
-  const y = clamp(rect.top + rect.height / 2, rect.top, Math.min(rect.bottom, window.innerHeight));
-  const startX = clamp(rect.left + rect.width / 2 - ${sign} * ${SWIPE_DISTANCE / 2},
-    rect.left, Math.min(rect.right, window.innerWidth));
-  const hit = document.elementFromPoint(startX, y);
-  const target = hit && presentation.contains(hit) ? hit : presentation;
-  window.__andSceneSwipe = { target, startX, y };` : `const swipe = window.__andSceneSwipe;
+  ${begin ? swipeTargetSource(sign) : `const swipe = window.__andSceneSwipe;
   if (!swipe) return false;
   const { target, startX, y } = swipe;`}
   target.dispatchEvent(new PointerEvent(${JSON.stringify(type)}, {
