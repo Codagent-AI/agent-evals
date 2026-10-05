@@ -507,11 +507,16 @@ function overturnedFailuresSection(result) {
   if (!opinions.checked) return ''
   return section('Overturned failures', entries.length === 0
     ? '<p>No failures were overturned.</p>'
-    : table(['Failure', 'Raw rationale', 'Measurement fault', 'Cited spans'], entries.map((entry) => [
+    : table(['Failure', 'Raw verdict', 'Second-opinion verdict', 'Raw rationale', 'Measurement fault', 'Cited spans', 'Browser replay'], entries.map((entry) => [
       entry.id,
+      entry.raw_verdict ?? 'fail',
+      entry.verdict ?? 'pass',
       entry.raw_rationale ?? '',
       entry.measurement_fault ?? '',
       (entry.citations ?? []).map(({ path, start_line, end_line }) => `${path}:${start_line}-${end_line}`).join(' | '),
+      entry.replay ? JSON.stringify({ passed: entry.replay.passed, actions: entry.replay.actions,
+        expect: entry.replay.expect, observations: entry.replay.observations,
+        trace: entry.replay.trace }) : '—',
     ])))
 }
 

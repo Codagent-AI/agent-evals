@@ -9,9 +9,11 @@ import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
+import { dirname } from 'node:path'
 
 import { createAxiBrowserDriver } from '../../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs'
 import { runBrowserEvaluation } from '../../evals/agent-runner/and-scene/lib/browser-eval.mjs'
+import { runSecondOpinion } from '../../evals/agent-runner/and-scene/lib/second-opinion.mjs'
 
 function serve(variant) {
   const child = spawn(process.execPath, [fileURLToPath(new URL('./serve-page.mjs', import.meta.url)), variant], { stdio: ['ignore', 'pipe', 'inherit'] })
@@ -38,6 +40,36 @@ async function evaluate(variant) {
 
 const criterion = (result, id) => result.criteria.find((entry) => entry.id === id)
 const KEYS = 'demo-navigation-boundaries-and-control-keys'
+
+test('(r) source-plausible navigation is not overturned when browser replay stays on the step',
+  { timeout: 600_000 }, async () => {
+    const { baseUrl, close } = await serve('r')
+    try {
+      const driver = createAxiBrowserDriver({ baseUrl })
+      const sourceRoot = dirname(fileURLToPath(new URL('./pages/presentation.html', import.meta.url)))
+      const request = { target: { kind: 'criterion', id: 'demo-supported-navigation' },
+        browser_derived: true, verified_source_paths: ['presentation.html'],
+        input_roots: { source: sourceRoot }, audit_cwd: sourceRoot,
+        failing_record: { verdict: 'fail', rationale: 'navigation did not advance' } }
+      const proposed = { decision: 'overturn', rationale: 'source has navigation handlers',
+        mismeasured_step: 'next', measurement_fault: 'probe input mismatch',
+        citations: [{ path: 'presentation.html', start_line: 188, end_line: 191 }],
+        log_citations: [], replay: { actions: [
+          { type: 'navigate', path: '/how-to-make-a-presentation' },
+          { type: 'click', selector: '#next' },
+        ], expect: { type: 'step-index-equals', value: 1 } } }
+      const outcome = await runSecondOpinion({ request,
+        invoke: async (call) => JSON.stringify(call.audit_stage
+          ? { results: [{ id: request.target.id, classification: 'confirmed',
+            rationale: 'cited handler appears to advance', evidence: ['presentation.html:188'] }] }
+          : proposed),
+        replay: ({ actions, expect }) => driver.replay(actions, expect),
+      })
+      assert.equal(outcome.decision, 'overturn-rejected')
+      assert.equal(outcome.replay.passed, false)
+      assert.equal(outcome.replay.observations.at(-1).stepIndex, 0)
+    } finally { await close() }
+  })
 
 test('(a) a deck that ignores deck keys while a button holds focus is not deducted', { timeout: 600_000 }, async () => {
   const keys = criterion(await evaluate('a'), KEYS)

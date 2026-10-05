@@ -1,5 +1,62 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { runInNewContext } from 'node:vm'
+
+test('browser replay validates actions and checks a fresh-page observation', async () => {
+  const { createAxiBrowserDriver } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
+  const scripts = []
+  const driver = createAxiBrowserDriver({ baseUrl: 'http://127.0.0.1:4319/',
+    command: async (args, input) => {
+      scripts.push(input)
+      if (args[0] === 'resize') return { status: 0, stdout: '' }
+      return { status: 0, stdout: `${JSON.stringify({ observations: [null, 0, 0].map((stepIndex) => ({
+        stepIndex, stepCount: 9, mode: 'present', visible: true, text: '',
+      })), trace: ['navigate', 'press'] })}\n` }
+    } })
+  await assert.rejects(driver.replay([{ type: 'script', code: 'alert(1)' }],
+    { type: 'step-index-equals', value: 1 }), /invalid replay/i)
+  await assert.rejects(driver.replay([{ type: 'press', key: 'ArrowRight' }],
+    { type: 'step-index-changes' }), /invalid replay/i)
+  await assert.rejects(driver.replay([{ type: 'navigate', path: '/' },
+    { type: 'navigate', path: '/other' }], { type: 'step-index-changes' }), /invalid replay/i)
+  const outcome = await driver.replay([{ type: 'navigate', path: '/' },
+    { type: 'press', key: 'ArrowRight' }], { type: 'step-index-equals', value: 1 })
+  assert.equal(outcome.passed, false)
+  assert.equal(outcome.observations.at(-1).stepIndex, 0)
+  const unchanged = await driver.replay([{ type: 'navigate', path: '/' },
+    { type: 'press', key: 'ArrowRight' }], { type: 'step-index-changes' })
+  assert.equal(unchanged.passed, false)
+  const missingHook = createAxiBrowserDriver({ baseUrl: 'http://127.0.0.1:4319/',
+    command: async () => ({ status: 0, stdout: `${JSON.stringify({ observations: [
+      { stepIndex: null }, { stepIndex: null }, { stepIndex: 0 },
+    ], trace: [] })}\n` }) })
+  assert.equal((await missingHook.replay([{ type: 'navigate', path: '/' },
+    { type: 'press', key: 'ArrowRight' }], { type: 'step-index-changes' })).passed, false)
+  assert.ok(scripts.some((script) => script?.includes('page.open(')))
+  assert.ok(scripts.some((script) => script?.includes('page.press("ArrowRight")')))
+})
+
+test('the AXI driver reads eligible declared modes before inferring them', async () => {
+  const { createAxiBrowserDriver } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
+  let script = ''
+  const driver = createAxiBrowserDriver({ baseUrl: 'http://127.0.0.1:4319/',
+    command: async (_args, input) => { script = input; return { status: 0, stdout: 'true\n' } } })
+  await driver.setMode('browse')
+  const source = script.slice(script.indexOf('const modeReading = () => {'), script.indexOf('\n  };', script.indexOf('const modeReading = () => {')) + 5)
+  const read = (presentationModes, dataModes) => runInNewContext(`${source}\nmodeReading()`, {
+    document: { querySelector: () => null, querySelectorAll: (selector) => selector === '[data-presentation-mode]'
+      ? presentationModes.map((value) => ({ getAttribute: () => value }))
+      : selector === '[data-mode]' ? dataModes.map(({ value, ownsProgress }) => ({
+        getAttribute: () => value, matches: () => ownsProgress === 'self',
+        querySelector: () => ownsProgress === 'ancestor' ? {} : null,
+      })) : [],
+    },
+  })
+  assert.equal(read([], [{ value: 'present', ownsProgress: 'descendant' }]).basis, 'heuristic')
+  assert.equal(read([], [{ value: 'dark', ownsProgress: 'ancestor' },
+    { value: 'browse', ownsProgress: 'ancestor' }]).mode, 'browse')
+  assert.equal(read(['dark', 'present'], []).mode, 'present')
+})
 
 test('the AXI driver opens the candidate route and returns structured browser state', async () => {
   let module = null

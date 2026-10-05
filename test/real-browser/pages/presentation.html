@@ -25,7 +25,7 @@
   </nav>
 </div>
 <script>
-// One page, fifteen behaviours. The server injects VARIANT and STEPS; nothing here
+// One page, several adversarial behaviours. The server injects VARIANT and STEPS; nothing here
 // is a candidate. Each variant isolates one judgment the evaluator must make.
 const variant = window.VARIANT
 const steps = window.STEPS
@@ -196,7 +196,7 @@ function onKey(event) {
   if (event.target.closest('button')) return
   // (b) is the real defect: once a control was used, deck keys never come back.
   if (keysDead) return
-  if (['ArrowRight', 'PageDown', ' '].includes(event.key)) go(index + 1)
+  if (['ArrowRight', 'PageDown', ' '].includes(event.key)) go(variant === 'r' ? index : index + 1)
   if (['ArrowLeft', 'PageUp'].includes(event.key)) go(index - 1)
 }
 
@@ -209,7 +209,7 @@ if (variant === 'e') {
   document.addEventListener('keydown', onKey)
 }
 for (const [id, delta] of [['prev', -1], ['next', 1]]) {
-  document.getElementById(id).addEventListener('click', () => { keysDead ||= variant === 'b'; go(index + delta) })
+  document.getElementById(id).addEventListener('click', () => { keysDead ||= variant === 'b'; go(index + (variant === 'r' ? 0 : delta)) })
 }
 // (m) keeps the touch start in state that is only committed after the next
 // frame, as React's setState is: a touchend delivered in the same task as its
@@ -238,6 +238,17 @@ if (variant === 'q') {
     if (pointerStart === null) return
     const delta = event.clientX - pointerStart
     if (Math.abs(delta) > 40) go(index + (delta < 0 ? 1 : -1))
+    pointerStart = null
+  })
+}
+// (r) contains plausible navigation handlers in source, but no interaction advances.
+if (variant === 'r') {
+  let pointerStart = null
+  root.addEventListener('pointerdown', (event) => { pointerStart = event.clientX })
+  root.addEventListener('pointerup', (event) => {
+    if (pointerStart === null) return
+    const delta = event.clientX - pointerStart
+    if (Math.abs(delta) > 40) go(index)
     pointerStart = null
   })
 }

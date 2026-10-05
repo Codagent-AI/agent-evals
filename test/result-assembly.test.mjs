@@ -95,6 +95,9 @@ test('a complete result carries the official score, breakdown, and source detail
 test('the result preserves raw and second-opinion verdicts for an overturned criterion', () => {
   const opinion = { ok: true, raw_verdict: 'fail', verdict: 'pass', decision: 'overturn',
     rationale: 'measurement fault', measurement_fault: 'pointer input was missed',
+    replay: { actions: [{ type: 'navigate', path: '/how-to-make-a-presentation' },
+            { type: 'press', key: 'ArrowRight' }], expect: { type: 'step-index-equals', value: 1 },
+      passed: true, observations: [{ stepIndex: 1 }], trace: ['pressed'] },
     citations: [{ path: 'src/demo.tsx', start_line: 3, end_line: 9 }] }
   const scored = score()
   scored.components[0].subcomponents = [{ id: 'navigation', criteria: [{
@@ -106,6 +109,7 @@ test('the result preserves raw and second-opinion verdicts for an overturned cri
   assert.equal(result.schema_version, 9)
   assert.equal(result.second_opinions.entries[0].raw_verdict, 'fail')
   assert.equal(result.second_opinions.entries[0].verdict, 'pass')
+  assert.equal(result.second_opinions.entries[0].replay.observations[0].stepIndex, 1)
   assert.equal(result.second_opinions.overturned, 1)
 })
 

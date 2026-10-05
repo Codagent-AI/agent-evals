@@ -1,5 +1,17 @@
 # and-scene eval
 
+## Second opinions on failures
+
+Failed deterministic browser criteria and failed hard gates receive a verifier
+opinion. An overturn requires validated source spans and a confirming span audit.
+For browser-derived failures, the verifier also proposes a bounded interaction
+replay. The harness runs it through `chrome-devtools-axi` against the candidate
+server, including during evaluator-only rescore. The replay must show the
+expected step, mode, visibility, or text observation before the fail can be
+overturned. Its actions, observations, trace, and pass result are retained in
+`phases/second-opinions.json`, the result, and the report. Build and serve
+terminal failures cannot be replayed and use the existing span and log audit.
+
 ## Fixture traceability
 
 Every automated criterion and gate has a `criterion_sources` entry in

@@ -362,7 +362,7 @@ async function evaluate(context, extra = [], overrides = {}) {
     verifyResumeDelivery: async () => ({ verified: true }),
     judgeInvoke: async (request) => {
       if (request.job === 'second-opinion') return JSON.stringify({ decision: 'uphold', rationale: 'the recorded failure stands',
-        mismeasured_step: null, measurement_fault: null, citations: [], log_citations: [] })
+        mismeasured_step: null, measurement_fault: null, citations: [], log_citations: [], replay: null })
       if (Array.isArray(request.criteria)) {
         return JSON.stringify({
           results: request.criteria.map((id) => ({
@@ -465,7 +465,7 @@ test('a complete below-minimum automated score finishes without human review', a
     browserDriver: browserDemo(),
     judgeInvoke: async (request) => {
       if (request.job === 'second-opinion') return JSON.stringify({ decision: 'uphold', rationale: 'the recorded failure stands',
-        mismeasured_step: null, measurement_fault: null, citations: [], log_citations: [] })
+        mismeasured_step: null, measurement_fault: null, citations: [], log_citations: [], replay: null })
       if (Array.isArray(request.criteria)) {
         return JSON.stringify({
           results: request.criteria.map((id) => ({
@@ -1494,7 +1494,7 @@ test('rescore checks browser failures while a reference baseline does not', asyn
       if (request.job === 'second-opinion') {
         rescoreChecks += 1
         return JSON.stringify({ decision: 'uphold', rationale: 'failure stands',
-          mismeasured_step: null, measurement_fault: null, citations: [], log_citations: [] })
+          mismeasured_step: null, measurement_fault: null, citations: [], log_citations: [], replay: null })
       }
       if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
       return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
@@ -1520,6 +1520,48 @@ test('rescore checks browser failures while a reference baseline does not', asyn
   assert.equal(referenceChecks, 0)
   const written = await readJson(join(referenceContext.runDir, 'result.json'))
   assert.equal('second_opinions' in written, false)
+})
+
+test('rescore starts the candidate server and confirms a browser overturn by replay', async () => {
+  const context = await environment()
+  const driver = browserDemo()
+  driver.activate = async () => {}
+  let started = 0
+  let replayed = 0
+  let servedIdentity = null
+  driver.replay = async () => { replayed += 1; return { passed: true,
+    observations: [{ stepIndex: 1 }], trace: ['pressed'] } }
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    controllerChangeName: null,
+    loadRescoreSource: async () => importedRescore(context),
+    browserDriver: driver,
+    isProcessAlive: () => true,
+    candidateServer: {
+      probe: async () => ({ ok: true, candidate_identity: servedIdentity }),
+      start: async ({ candidate }) => { started += 1; servedIdentity = candidate;
+        return { pid: 9876, url: 'http://127.0.0.1:4319/' } },
+      stop: async () => {},
+    },
+    verifyCandidate: async () => ({ build: { ok: true, log: 'built' },
+      verification: { machine_readable: true, passed: true }, timings: [] }),
+    judgeInvoke: async (request) => {
+      if (request.job === 'second-opinion') return JSON.stringify(request.audit_stage
+        ? { results: [{ id: request.criteria[0], classification: 'confirmed',
+          rationale: 'source proves navigation', evidence: ['src/index.ts:1'] }] }
+        : { decision: 'overturn', rationale: 'probe missed navigation',
+          mismeasured_step: 'next', measurement_fault: 'input mismatch',
+          citations: [{ path: 'src/index.ts', start_line: 1, end_line: 1 }], log_citations: [],
+          replay: { actions: [{ type: 'navigate', path: '/how-to-make-a-presentation' },
+            { type: 'press', key: 'ArrowRight' }],
+            expect: { type: 'step-index-equals', value: 1 } } })
+      if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
+        rationale: 'fixture evidence', evidence: ['src/index.ts'] })) })
+    },
+  })
+  assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
+  assert.equal(started, 1)
+  assert.ok(replayed > 0)
 })
 
 test('an evaluator-only rescore accepts a historical reviewer profile as tester', async () => {
@@ -1622,6 +1664,7 @@ test('a browser failure receives a checkpointed audited second opinion before sc
   const context = await environment()
   const driver = browserDemo()
   driver.activate = async () => {}
+  driver.replay = async () => ({ passed: true, observations: [{ stepIndex: 1 }], trace: ['pressed'] })
   const requests = []
   const dependencies = {
     browserDriver: driver,
@@ -1635,7 +1678,10 @@ test('a browser failure receives a checkpointed audited second opinion before sc
           evidence: ['src/index.ts:1'] }] })
         return JSON.stringify({ decision: 'overturn', rationale: 'the swipe probe misread input',
           mismeasured_step: 'swipe', measurement_fault: 'input dispatch mismatch',
-          citations: [{ path: 'src/index.ts', start_line: 1, end_line: 1 }], log_citations: [] })
+          citations: [{ path: 'src/index.ts', start_line: 1, end_line: 1 }], log_citations: [],
+          replay: { actions: [{ type: 'navigate', path: '/how-to-make-a-presentation' },
+            { type: 'press', key: 'ArrowRight' }],
+            expect: { type: 'step-index-equals', value: 1 } } })
       }
       if (request.job === 'ambiguity-diagnostics') {
         return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
@@ -1737,6 +1783,7 @@ test('an inferred mode mismatch reaches fallback judging and the derived outline
 test('a failed outline fallback receives a follow-up opinion after the failed renders gate', async () => {
   const context = await environment()
   const driver = browserDemo()
+  driver.replay = async () => ({ passed: true, observations: [{ stepIndex: 1 }], trace: ['pressed'] })
   const originalState = driver.state.bind(driver)
   let focused = null
   let failureReads = 0
@@ -1764,10 +1811,13 @@ test('a failed outline fallback receives a follow-up opinion after the failed re
         calls.push(request.target)
         return JSON.stringify(request.target.kind === 'gate'
           ? { decision: 'uphold', rationale: 'console failure remains', mismeasured_step: null,
-            measurement_fault: null, citations: [], log_citations: [] }
+            measurement_fault: null, citations: [], log_citations: [], replay: null }
           : { decision: 'overturn', rationale: 'outline title is in source',
             mismeasured_step: 'title reading', measurement_fault: 'mode was inferred',
-            citations: [{ path: 'src/index.ts', start_line: 1, end_line: 1 }], log_citations: [] })
+            citations: [{ path: 'src/index.ts', start_line: 1, end_line: 1 }], log_citations: [],
+            replay: { actions: [{ type: 'navigate', path: '/how-to-make-a-presentation' },
+            { type: 'press', key: 'ArrowRight' }],
+              expect: { type: 'step-index-equals', value: 1 } } })
       }
       if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
       if (request.audit_stage) return JSON.stringify({ results: request.criteria.map((id) => ({
@@ -1833,7 +1883,7 @@ test('a terminal build failure is checked before becoming a product failure', as
       assert.equal(request.job, 'second-opinion')
       assert.match(request.prompt, /harness invoked wrong command/)
       return JSON.stringify({ decision: 'uphold', rationale: 'the build failure stands',
-        mismeasured_step: null, measurement_fault: null, citations: [], log_citations: [] })
+        mismeasured_step: null, measurement_fault: null, citations: [], log_citations: [], replay: null })
     },
   })
   assert.equal(result.outcome.product_verdict, 'fail')
@@ -1858,7 +1908,7 @@ test('an audited terminal overturn leaves a resumable harness failure and no pro
       return JSON.stringify({ decision: 'overturn', rationale: 'the harness ran the wrong command',
         mismeasured_step: 'build invocation', measurement_fault: 'wrong command',
         citations: [{ path: 'src/index.ts', start_line: 1, end_line: 1 }],
-        log_citations: [{ artifact: request.log_artifact, start_line: 5, end_line: 5 }] })
+        log_citations: [{ artifact: request.log_artifact, start_line: 5, end_line: 5 }], replay: null })
     },
   })
   assert.equal(result.outcome.evaluation_status, 'evaluation-harness-failed')

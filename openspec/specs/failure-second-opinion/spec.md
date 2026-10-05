@@ -62,6 +62,8 @@ For each failure, the verifier SHALL receive:
 
 The verifier SHALL answer exactly one of `uphold` or `overturn`, with a rationale. An `overturn` SHALL also name the probe step or recorded observation it says was mismeasured, explain how the measurement went wrong, and cite candidate source.
 
+For a browser-derived criterion or gate, the answer SHALL include a structured replay with 1–12 actions, starting with navigation to a candidate path, and one expected observation. Remaining actions are limited to clicking a selector, pressing a key, sending keys, swiping left or right by touch or pointer, and waiting up to 2000 ms. Expected observations are limited to a step index equaling a specified value, a changed step index or step count, a `present` or `browse` mode, selector visibility, or text present in a selector. A change or hide expectation compares the state after navigation with the state after the remaining actions. An uphold and a build or serve terminal answer MAY use `replay: null`.
+
 The verifier SHALL use the same judge authority and invocation path as the other product judges, including the configured judge model, the bounded retry budget, and checkpointed reuse of completed calls. A completed verifier call SHALL be reused on resume when its inputs are unchanged, and SHALL be re-run when they changed.
 
 #### Scenario: The verifier is given the failure's evidence
@@ -79,6 +81,9 @@ An overturn asserts both that the raw `fail` was a measurement problem and that 
 2. it cites candidate source as one or more spans, each a path with a start line and an end line;
 3. every span is valid: its path is a regular file in the verified delivery's source inventory, inside the neutral source root and not a symbolic link; its start line is at least 1; its end line is not before its start line; and its end line is within the file;
 4. the source audit, shown exactly the cited spans together with the failing record (the probe's or gate's recorded verdict, rationale, observations, and reading basis) and every page or console failure recorded for it, confirms all of these: the spans establish that the requirement is met; the stated measurement fault matches the recorded failing observation; and every contrary runtime observation is accounted for as a measurement fault.
+5. for a deterministic browser criterion or a gate whose failing record came from browser evidence, a real-browser replay against the running candidate server completes and its observed result matches the expected observation.
+
+The harness SHALL keep the candidate server running through product judging, including evaluator-only rescore. Missing, malformed, unavailable, or failed replay SHALL reject the overturn with a reason, leaving the raw fail standing. Build and serve terminal overturns and gates without browser evidence do not require replay. The recorded replay actions, expectation, observations, trace, and pass result SHALL be kept with the raw and second-opinion verdicts in the result and report.
 
 The standard for establishing the requirement SHALL be at least the standard a fallback judge's `pass` must meet. Showing only that the probe was unsound, without positive source evidence that the requirement is met, SHALL NOT be accepted as an overturn.
 
@@ -93,7 +98,17 @@ An overturn SHALL cite at most 12 source spans, each fewer than 200 lines, and a
 - **WHEN** the verifier overturns a `demo-supported-navigation` fail, explaining that the probe sent only touch events while the candidate handles swipes with pointer events
 - **AND** it cites the source lines of the pointer-event swipe handler
 - **AND** the spans are valid and the source audit confirms them
+- **AND** a real-browser replay demonstrates the passing navigation
 - **THEN** the overturn is accepted and the criterion's final verdict is `pass`
+
+#### Scenario: Source looks right but the browser does not advance
+- **WHEN** a verifier cites a plausible navigation handler and the span audit confirms it
+- **AND** the proposed replay leaves the presentation on its original step
+- **THEN** the overturn is rejected, with the replay observations recorded beside the raw failure
+
+#### Scenario: Browser replay is missing or unavailable
+- **WHEN** a browser-derived failure has confirmed source spans but no valid replay or no running browser driver
+- **THEN** the overturn is rejected with a replay reason and the failure remains `fail`
 
 #### Scenario: An overturn without citations is rejected
 - **WHEN** the verifier answers `overturn` but cites no source span
@@ -196,4 +211,3 @@ A verifier call that produces no well-formed `uphold` or `overturn` answer withi
 - **WHEN** every attempt of a verifier call returns malformed output
 - **THEN** `evaluation_status` is `evaluation-harness-failed` and the failed phase is resumable
 - **AND** no product verdict is issued from the unchecked failure
-

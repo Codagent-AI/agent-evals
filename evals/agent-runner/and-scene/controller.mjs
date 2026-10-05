@@ -847,7 +847,7 @@ export async function runEvaluation({
       terminal: { stage, reason, evidence, log_root: runDir, log_artifact: logArtifact } })
     const unit = `second-opinion:terminal:${gate}`
     const inputs = { input_hash: hashJson({ request, evidence_sha256: hashString(evidence),
-      audit_contract: 'closed-world-spans-v1' }) }
+      audit_contract: 'closed-world-spans-replay-v1' }) }
     const dependencies = { rubric: provenanceOfRubrics.automated,
       neutral_manifest: record.neutral?.manifest_sha256 ?? null }
     const directory = join(runDir, 'phases/second-opinions')
@@ -1557,7 +1557,7 @@ export async function runEvaluation({
               judging: record.judging, neutral, authority: { cli: 'codex', model: options.judgeModel } })
             const id = `second-opinion:${target.kind}:${target.id}`
             const inputHash = hashJson({ request, probe: record.browser.probes?.find((entry) => entry.id === target.id)?.output_sha256,
-              audit_contract: 'closed-world-spans-v1' })
+              audit_contract: 'closed-world-spans-replay-v1' })
             const inputs = { input_hash: inputHash }
             const artifact = join(directory, `${target.id}.json`)
             const reused = await verifyUnit(checkpoint, { phase: 'product-judging', unit: id,
@@ -1567,7 +1567,13 @@ export async function runEvaluation({
               checkpoint = beginUnit(checkpoint, { phase: 'product-judging', unit: id,
                 inputs, dependencies: judgeDependencies })
               await saveCheckpoint(checkpointPath, checkpoint)
-              outcome = await runSecondOpinion({ request, invoke: judgeInvoke })
+              outcome = await runSecondOpinion({ request, invoke: judgeInvoke,
+                replay: async ({ actions, expect }) => {
+                  const driver = browserDriver ?? (browserDriverFactory && record.candidateServer?.url
+                    ? await browserDriverFactory({ baseUrl: record.candidateServer.url, runDir }) : null)
+                  if (!driver?.replay) throw new Error('candidate browser replay driver is unavailable')
+                  return driver.replay(actions, expect)
+                } })
               if (outcome.ok) {
                 await writeJsonAtomic(artifact, outcome)
                 checkpoint = await completeUnit(checkpoint, { phase: 'product-judging', unit: id,

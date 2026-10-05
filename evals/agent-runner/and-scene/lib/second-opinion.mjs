@@ -7,7 +7,7 @@ import { rubricCriteria } from './rubric.mjs'
 
 export const SECOND_OPINION_SCHEMA = {
   type: 'object',
-  required: ['decision', 'rationale', 'mismeasured_step', 'measurement_fault', 'citations', 'log_citations'],
+  required: ['decision', 'rationale', 'mismeasured_step', 'measurement_fault', 'citations', 'log_citations', 'replay'],
   additionalProperties: false,
   properties: {
     decision: { enum: ['uphold', 'overturn'] },
@@ -22,6 +22,11 @@ export const SECOND_OPINION_SCHEMA = {
       type: 'object', required: ['artifact', 'start_line', 'end_line'], additionalProperties: false,
       properties: { artifact: { type: 'string' }, start_line: { type: 'integer' }, end_line: { type: 'integer' } },
     } },
+    replay: { type: ['object', 'null'], additionalProperties: false,
+      required: ['actions', 'expect'], properties: {
+        actions: { type: 'array', minItems: 1, maxItems: 12, items: { type: 'object' } },
+        expect: { type: 'object' },
+      } },
   },
 }
 
@@ -51,6 +56,7 @@ export function buildSecondOpinionRequest({ target, rubrics, browser, judging, n
   const rawRecord = terminal ?? (target.kind === 'gate'
     ? browser?.gates?.find(({ id }) => id === target.id)
     : probe)
+  const browserDerived = target.kind === 'criterion' || (target.kind === 'gate' && Boolean(rawRecord))
   const failingRecord = rawRecord ? { ...rawRecord,
     runtime_failures: probe?.failures ?? browser?.failures ?? [] } : null
   const paths = neutral?.manifest?.entries
@@ -68,6 +74,7 @@ export function buildSecondOpinionRequest({ target, rubrics, browser, judging, n
     `Verified neutral source files: ${JSON.stringify(paths)}`,
     'Uphold unless exact candidate-source lines positively establish the whole requirement and explain a specific fault in the recorded measurement, including every contrary runtime observation.',
     'For a terminal overturn, cite both source lines and exact recorded log lines showing the harness fault.',
+    ...(browserDerived ? ['For an overturn, propose replay.actions (1-12 navigate, click, press, keys, swipe, wait actions) and replay.expect (step-index-equals, step-index-changes, step-count-changes, mode-equals, selector-visible, selector-hidden, text-present). The harness checks it in a real browser.'] : []),
   ].join('\n')
   return {
     job: 'second-opinion', criteria: [target.id], target, schema: SECOND_OPINION_SCHEMA,
@@ -75,14 +82,53 @@ export function buildSecondOpinionRequest({ target, rubrics, browser, judging, n
     input_permissions: { ...JUDGE_INPUT_POLICIES['demo-integration'] },
     input_roots: { source: neutral?.source_root, requirements: neutral?.requirements_root },
     verified_source_paths: paths, failing_record: failingRecord,
+    browser_derived: browserDerived,
     requirement, requirement_source: source ?? null,
     log_root: terminal?.log_root, log_artifact: terminal?.log_artifact,
     rubric_version: rubrics.automated.version, rubric_sha256: rubrics.automated.sha256,
   }
 }
 
+export function validReplay(replay) {
+  if (!replay || typeof replay !== 'object' || Array.isArray(replay)
+    || Object.keys(replay).sort().join(',') !== 'actions,expect'
+    || !Array.isArray(replay.actions) || replay.actions.length < 1 || replay.actions.length > 12
+    || replay.actions[0]?.type !== 'navigate'
+    || replay.actions.slice(1).some((action) => action?.type === 'navigate')) return false
+  const shapes = {
+    navigate: ['path'], click: ['selector'], press: ['key'], keys: ['text'],
+    swipe: ['direction', 'input'], wait: ['ms'],
+  }
+  if (replay.actions.some((action) => {
+    const fields = shapes[action?.type]
+    if (!fields || Object.keys(action).sort().join(',') !== ['type', ...fields].sort().join(',')) return true
+    if (action.type === 'wait') return !Number.isInteger(action.ms) || action.ms < 0 || action.ms > 2000
+    if (action.type === 'swipe') return !['left', 'right'].includes(action.direction)
+      || !['touch', 'pointer'].includes(action.input)
+    if (action.type === 'navigate') return typeof action.path !== 'string' || !action.path.startsWith('/')
+      || action.path.startsWith('//') || action.path.includes('..')
+    return typeof action[fields[0]] !== 'string' || !action[fields[0]].trim()
+  })) return false
+  const expect = replay.expect
+  if (!expect || typeof expect !== 'object' || Array.isArray(expect)) return false
+  const fields = { 'step-index-equals': 'value', 'step-index-changes': null,
+    'step-count-changes': null, 'mode-equals': 'value',
+    'selector-visible': 'selector', 'selector-hidden': 'selector', 'text-present': 'selector,text' }
+  if (!Object.hasOwn(fields, expect.type)) return false
+  const names = fields[expect.type]?.split(',') ?? []
+  if (Object.keys(expect).sort().join(',') !== ['type', ...names].sort().join(',')) return false
+  if (expect.type === 'step-index-equals') return Number.isInteger(expect.value) && expect.value >= 0
+  if (expect.type === 'mode-equals') return ['present', 'browse'].includes(expect.value)
+  return names.every((name) => typeof expect[name] === 'string' && expect[name].trim())
+}
+
 function parseAnswer(text) {
   const answer = JSON.parse(text)
+  // A verifier that omits the replay cannot earn an overturn. Normalize that
+  // one omission into a rejected claim instead of leaving the fail unresolved.
+  if (answer && typeof answer === 'object' && !Array.isArray(answer) && !('replay' in answer)) {
+    answer.replay = null
+  }
   const keys = Object.keys(SECOND_OPINION_SCHEMA.properties)
   if (!answer || typeof answer !== 'object' || Array.isArray(answer)
     || Object.keys(answer).some((key) => !keys.includes(key))
@@ -158,7 +204,7 @@ export function buildSpanAuditRequest({ request, answer, spans, logSpans }) {
   }
 }
 
-export async function runSecondOpinion({ request, invoke, attempts = JUDGE_ATTEMPTS }) {
+export async function runSecondOpinion({ request, invoke, replay, attempts = JUDGE_ATTEMPTS }) {
   let answer
   let failureReason = 'second-opinion output exhausted'
   for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -175,8 +221,11 @@ export async function runSecondOpinion({ request, invoke, attempts = JUDGE_ATTEM
   const base = { ok: true, raw_verdict: 'fail', rationale: answer.rationale,
     mismeasured_step: answer.mismeasured_step, measurement_fault: answer.measurement_fault,
     citations: answer.citations, log_citations: answer.log_citations,
+    replay: answer.replay,
     on_behalf_of: request.target.on_behalf_of ?? null }
   if (answer.decision === 'uphold') return { ...base, decision: 'uphold', verdict: 'fail' }
+  if (answer.replay !== null && !validReplay(answer.replay)) return { ...base,
+    decision: 'overturn-rejected', verdict: 'fail', rejection_reason: 'browser replay is malformed' }
   let spans
   let logSpans
   try { ({ spans, logSpans } = await validatedSpans(answer, request)) } catch (error) {
@@ -204,7 +253,23 @@ export async function runSecondOpinion({ request, invoke, attempts = JUDGE_ATTEM
     } catch { failureReason = 'second-opinion audit output exhausted' }
   }
   if (!audit) return { ok: false, reason: failureReason }
-  return audit.classification === 'confirmed'
-    ? { ...base, decision: 'overturn', verdict: 'pass', audit }
-    : { ...base, decision: 'overturn-rejected', verdict: 'fail', audit, rejection_reason: audit.rationale }
+  if (audit.classification !== 'confirmed') return { ...base, decision: 'overturn-rejected', verdict: 'fail', audit,
+    rejection_reason: audit.rationale }
+  if (request.browser_derived ?? request.target.kind === 'criterion') {
+    if (!answer.replay || !replay) return { ...base, decision: 'overturn-rejected', verdict: 'fail', audit,
+      rejection_reason: 'browser replay is missing or unavailable' }
+    let observed
+    try { observed = await replay(answer.replay) } catch (error) {
+      return { ...base, decision: 'overturn-rejected', verdict: 'fail', audit,
+        rejection_reason: `browser replay failed: ${error.message}` }
+    }
+    if (!observed || typeof observed.passed !== 'boolean') return { ...base, decision: 'overturn-rejected',
+      verdict: 'fail', audit, rejection_reason: 'browser replay returned an invalid result' }
+    const replayRecord = { ...answer.replay, ...observed }
+    return observed.passed
+      ? { ...base, replay: replayRecord, decision: 'overturn', verdict: 'pass', audit }
+      : { ...base, replay: replayRecord, decision: 'overturn-rejected', verdict: 'fail', audit,
+        rejection_reason: 'browser replay did not confirm the passing behavior' }
+  }
+  return { ...base, decision: 'overturn', verdict: 'pass', audit }
 }

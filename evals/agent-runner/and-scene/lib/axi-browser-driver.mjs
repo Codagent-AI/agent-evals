@@ -6,6 +6,7 @@
 import { spawnSync } from 'node:child_process'
 
 import { isBrowserInfrastructureDiagnostic } from './browser-diagnostics.mjs'
+import { validReplay } from './second-opinion.mjs'
 
 const MAX_OUTPUT_BYTES = 1024 * 1024
 const PRESENTATION_SELECTOR = '[data-presentation], [data-presentation-root]'
@@ -74,13 +75,20 @@ const DECLARED_CAPTION_SELECTORS = CAPTION_SELECTORS.slice(0, 2)
 
 function modeReadingSource() {
   return `const modeReading = () => {
-    const declared = document.querySelector(${JSON.stringify(MODE_SELECTOR)})
-      ?.getAttribute('data-presentation-mode');
-    if (declared === 'present' || declared === 'browse') return { mode: declared, basis: 'declared' };
-    const progress = document.querySelector('[data-step-count]');
-    const dataMode = progress?.closest('[data-mode]')?.getAttribute('data-mode')
-      || progress?.querySelector('[data-mode]')?.getAttribute('data-mode');
-    if (dataMode === 'present' || dataMode === 'browse') return { mode: dataMode, basis: 'declared' };
+    const declaredModeSource = () => {
+      for (const element of document.querySelectorAll('[data-presentation-mode]')) {
+        const value = element.getAttribute('data-presentation-mode');
+        if (value === 'present' || value === 'browse') return value;
+      }
+      for (const element of document.querySelectorAll('[data-mode]')) {
+        if (!element.matches('[data-step-count]') && !element.querySelector('[data-step-count]')) continue;
+        const value = element.getAttribute('data-mode');
+        if (value === 'present' || value === 'browse') return value;
+      }
+      return null;
+    };
+    const declared = declaredModeSource();
+    if (declared) return { mode: declared, basis: 'declared' };
     const visible = (element) => Boolean(element && element.getClientRects().length > 0
       && getComputedStyle(element).display !== 'none'
       && getComputedStyle(element).visibility !== 'hidden');
@@ -445,6 +453,68 @@ export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {
   }
 
   return {
+    async replay(actions, expect) {
+      if (!validReplay({ actions, expect })) throw new BrowserDriverError('invalid replay contract')
+      const observe = `page.eval(() => {
+        ${modeReadingSource()}
+        const progress = document.querySelector('[data-step-count]');
+        const selected = ${JSON.stringify(expect.selector ?? null)};
+        const node = selected ? document.querySelector(selected) : null;
+        const visible = Boolean(node && node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden');
+        const mode = modeReading();
+        return { stepIndex: Number(progress?.getAttribute('data-step-index')),
+          stepCount: Number(progress?.getAttribute('data-step-count')),
+          mode: mode.mode, modeBasis: mode.basis, visible, text: node?.textContent ?? '' };
+      })`
+      const actionSource = (action) => {
+        switch (action.type) {
+          case 'navigate': return `await page.open(${JSON.stringify(routeUrl(action.path))});`
+          case 'click': return `if (!(await page.eval(() => {
+            const node = document.querySelector(${JSON.stringify(action.selector)});
+            if (!node) return false;
+            node.click(); return true;
+          }))) throw new Error('replay click target was not found');`
+          case 'press': return `await page.press(${JSON.stringify(action.key)});`
+          case 'keys': return `await page.type(${JSON.stringify(action.text)});`
+          case 'wait': return sleepSource(action.ms)
+          case 'swipe': {
+            const sign = action.direction === 'left' ? -1 : 1
+            const source = action.input === 'pointer' ? pointerSwipeEventSource : swipeEventSource
+            const names = action.input === 'pointer'
+              ? ['pointerdown', 'pointermove', 'pointerup'] : ['touchstart', 'touchmove', 'touchend']
+            const phases = [source(names[0], sign, 0),
+              ...Array.from({ length: SWIPE_MOVES }, (_, index) =>
+                source(names[1], sign, (index + 1) / (SWIPE_MOVES + 1))), source(names[2], sign, 1)]
+            return phases.map((phase) => `await page.eval(${phase});`).join(`\n${swipeFrameWaitSource()}\n`)
+          }
+        }
+      }
+      const script = `await page.open(${JSON.stringify(base.href)});
+const observations = [await ${observe}];
+const trace = [];
+${actions.map((action) => `${actionSource(action)}\n${sleepSource(50)}\ntrace.push(${JSON.stringify(action)}); observations.push(await ${observe});`).join('\n')}
+console.log(JSON.stringify({ observations, trace }));`
+      const result = await run(script)
+      if (!Array.isArray(result?.observations) || result.observations.length !== actions.length + 1) {
+        throw new BrowserDriverError('browser replay returned invalid observations')
+      }
+      // The root landing page may have no presentation. Compare changes with
+      // the first observation after navigating to the proposed demo route.
+      const first = result.observations[1]
+      const last = result.observations.at(-1)
+      const passed = {
+        'step-index-equals': () => last.stepIndex === expect.value,
+        'step-index-changes': () => Number.isInteger(first.stepIndex)
+          && Number.isInteger(last.stepIndex) && last.stepIndex !== first.stepIndex,
+        'step-count-changes': () => Number.isInteger(first.stepCount)
+          && Number.isInteger(last.stepCount) && last.stepCount !== first.stepCount,
+        'mode-equals': () => last.modeBasis === 'declared' && last.mode === expect.value,
+        'selector-visible': () => last.visible === true,
+        'selector-hidden': () => first.visible === true && last.visible === false,
+        'text-present': () => last.visible === true && last.text.includes(expect.text),
+      }[expect.type]()
+      return { passed, observations: result.observations, trace: result.trace }
+    },
     async resize(width, height) {
       if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) {
         throw new BrowserDriverError(`invalid viewport size: ${width}×${height}`)

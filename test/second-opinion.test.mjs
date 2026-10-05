@@ -10,7 +10,7 @@ import {
 } from '../evals/agent-runner/and-scene/lib/second-opinion.mjs'
 
 const uphold = { decision: 'uphold', rationale: 'the recorded failure stands', mismeasured_step: null,
-  measurement_fault: null, citations: [], log_citations: [] }
+  measurement_fault: null, citations: [], log_citations: [], replay: null }
 
 test('second opinions target owner failures and failed gates once, excluding reference baselines', () => {
   const args = { deterministic: [{ id: 'demo-supported-navigation', verdict: 'fail' },
@@ -91,9 +91,12 @@ test('an audited exact source span can overturn and invalid line ranges cannot',
       reading_basis: [{ mode: 'declared' }], failures: [] }] }, neutral, authority: { model: 'test' } })
   const answer = { ...uphold, decision: 'overturn', mismeasured_step: 'swipe',
     measurement_fault: 'touch dispatched but source handles pointer',
-    citations: [{ path: 'src/demo.js', start_line: 1, end_line: 1 }] }
+    citations: [{ path: 'src/demo.js', start_line: 1, end_line: 1 }],
+    replay: { actions: [{ type: 'navigate', path: '/demo' }, { type: 'press', key: 'ArrowRight' }],
+      expect: { type: 'step-index-equals', value: 1 } } }
   let calls = 0
-  const result = await runSecondOpinion({ request, invoke: async (r) => {
+  const result = await runSecondOpinion({ request, replay: async () => ({ passed: true,
+    observations: [{ stepIndex: 1 }], trace: ['navigated', 'pressed'] }), invoke: async (r) => {
     calls += 1
     if (r.audit_stage) {
       assert.match(r.prompt, /pointer handler/)
@@ -105,10 +108,59 @@ test('an audited exact source span can overturn and invalid line ranges cannot',
   } })
   assert.equal(calls, 2)
   assert.equal(result.verdict, 'pass')
+  assert.equal(result.replay.passed, true)
   const invalid = await runSecondOpinion({ request, invoke: async () => JSON.stringify({
     ...answer, citations: [{ path: 'src/demo.js', start_line: 9, end_line: 9 }],
   }) })
   assert.equal(invalid.decision, 'overturn-rejected')
+})
+
+test('a confirmed browser overturn requires a passing replay', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'second-opinion-replay-'))
+  await writeFile(join(root, 'handler.js'), 'pointer handler\n')
+  const request = { target: { kind: 'criterion', id: 'demo-supported-navigation' }, browser_derived: true,
+    verified_source_paths: ['handler.js'], input_roots: { source: root }, audit_cwd: root,
+    failing_record: { verdict: 'fail' } }
+  const answer = { ...uphold, decision: 'overturn', mismeasured_step: 'swipe',
+    measurement_fault: 'touch mismatch', citations: [{ path: 'handler.js', start_line: 1, end_line: 1 }],
+    replay: { actions: [{ type: 'navigate', path: '/' }, { type: 'press', key: 'ArrowRight' }],
+      expect: { type: 'step-index-equals', value: 1 } } }
+  const invoke = async (call) => JSON.stringify(call.audit_stage
+    ? { results: [{ id: request.target.id, classification: 'confirmed', rationale: 'confirmed', evidence: ['handler.js:1'] }] }
+    : answer)
+  const failed = await runSecondOpinion({ request, invoke, replay: async () => ({ passed: false,
+    observations: [{ stepIndex: 0 }], trace: ['pressed'] }) })
+  assert.equal(failed.decision, 'overturn-rejected')
+  assert.equal(failed.replay.passed, false)
+  const unavailable = await runSecondOpinion({ request, invoke })
+  assert.equal(unavailable.decision, 'overturn-rejected')
+  assert.match(unavailable.rejection_reason, /replay/i)
+  const missing = await runSecondOpinion({ request, invoke: async (call) => JSON.stringify(call.audit_stage
+    ? { results: [{ id: request.target.id, classification: 'confirmed', rationale: 'confirmed', evidence: ['handler.js:1'] }] }
+    : { ...answer, replay: null }), replay: async () => ({ passed: true }) })
+  assert.equal(missing.decision, 'overturn-rejected')
+  const malformed = await runSecondOpinion({ request, invoke: async () => JSON.stringify({
+    ...answer, replay: { actions: [{ type: 'script', code: 'window.go(1)' }],
+      expect: { type: 'step-index-equals', value: 1 } },
+  }), replay: async () => ({ passed: true }) })
+  assert.equal(malformed.decision, 'overturn-rejected')
+  assert.match(malformed.rejection_reason, /replay/i)
+  const arrayReplay = await runSecondOpinion({ request, invoke: async () => JSON.stringify({
+    ...answer, replay: [],
+  }) })
+  assert.equal(arrayReplay.decision, 'overturn-rejected')
+  const omitted = await runSecondOpinion({ request, invoke: async (call) => JSON.stringify(call.audit_stage
+    ? { results: [{ id: request.target.id, classification: 'confirmed',
+      rationale: 'confirmed', evidence: ['handler.js:1'] }] }
+    : Object.fromEntries(Object.entries(answer).filter(([key]) => key !== 'replay'))),
+  replay: async () => ({ passed: true }) })
+  assert.equal(omitted.decision, 'overturn-rejected')
+  const gateRequest = { ...request, target: { kind: 'gate', id: 'verification-every-produced-step-renders' } }
+  const gate = await runSecondOpinion({ request: gateRequest, invoke: async (call) => JSON.stringify(call.audit_stage
+    ? { results: [{ id: gateRequest.target.id, classification: 'confirmed',
+      rationale: 'confirmed', evidence: ['handler.js:1'] }] }
+    : answer), replay: async () => ({ passed: false, observations: [{ stepIndex: 0 }], trace: [] }) })
+  assert.equal(gate.decision, 'overturn-rejected')
 })
 
 test('a terminal overturn without recorded log lines is rejected', async () => {
