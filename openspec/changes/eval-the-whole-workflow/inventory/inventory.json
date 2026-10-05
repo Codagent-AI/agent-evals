@@ -1,0 +1,4685 @@
+{
+  "inventory_version": 1,
+  "source": {
+    "repository": "https://github.com/Codagent-AI/and-scene.git",
+    "commit": "ad667a965a0e1ea0b028c36c04d57bf0411d30d9",
+    "change": "create-and-scene"
+  },
+  "inputs": {
+    "starting_prompt": {
+      "path": "starting-prompt.md",
+      "sha256": "b38a2a7a955e36fb3f6251f9c6f8b9cd19db1404b20dca06597a11fe6328a30d"
+    },
+    "items": {
+      "path": "items.json",
+      "sha256": "48f7cb75920a2d45a20b1770b967df81b3293e342712e930eccde82714f3bcfd"
+    },
+    "brief": {
+      "path": "labelling-brief.md",
+      "version": 1,
+      "sha256": "7a8ca8b44048fb6cff6db181cc41ffdd67b4664ac858589620b54d6d72ffd296"
+    },
+    "labels": [
+      {
+        "labeller": "opus",
+        "model": "claude-opus-5-5[1m]",
+        "path": "labels-opus.json",
+        "sha256": "afa2e6abcabe9540db212fd46ee853ae2a43d33f5a1bede06d7c0a5b4d0ddaa3"
+      },
+      {
+        "labeller": "codex",
+        "model": "gpt-6",
+        "path": "labels-codex.json",
+        "sha256": "a83b4f3a19c50dd76ffe1d8c42e51b3ab53c3bf327420ccaa0de9a2daa46d0cb"
+      }
+    ]
+  },
+  "reconciliation": {
+    "by": "maintainer",
+    "date": "2026-10-03",
+    "rules": {
+      "R1": "An item whose need is required but which names a mechanism a sound alternative could do differently is acceptable-alternative; mandatory is kept for items with no incidental detail."
+    }
+  },
+  "counts": {
+    "mandatory": 24,
+    "acceptable-alternative": 48,
+    "preference": 48
+  },
+  "items": [
+    {
+      "id": "INV-001",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "One evolving scene, not slides",
+      "statement": "A presentation is a single evolving diagrammatic scene rendered through an ordered list of named steps (states), rather than a deck of independent slides.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Requirement: Scene step model",
+          "quote": "A presentation SHALL be one scene rendered through an ordered list of named steps."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/proposal.md",
+          "heading": "What Changes",
+          "quote": "Model presentations as one evolving diagrammatic scene, not as independent"
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-002",
+      "area": "evolving-scene-presentations",
+      "kind": "constraint",
+      "title": "Step identity, section label, and diagram state",
+      "statement": "Each step has a stable identity (id), a section/era label that places it in a section of the presentation, and the diagram state that is shown while that step is active.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Requirement: Scene step model",
+          "quote": "Each step SHALL have a stable identity, a section/era label"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Step carries narration and identity",
+          "quote": "that step has a stable id, a section/era label, a presenter title, a browse caption, and the diagram state shown while it is active"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Each step is individually identifiable and defines the diagram state shown while it is active.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-003",
+      "area": "evolving-scene-presentations",
+      "kind": "constraint",
+      "title": "Two narration texts per step",
+      "statement": "Each step carries two separate narration texts: a one-line presenter title and a paragraph-length browse caption.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Requirement: Scene step model",
+          "quote": "a presenter title (one-liner), a browse caption (paragraph)"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Provide narration for every step that remains useful for both live presenting and independent browsing.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-004",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Order-derived step numbering",
+      "statement": "A step's on-screen number is derived from its position in the step order, so inserting, removing, or reordering steps requires no manual renumbering.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Order-derived numbering",
+          "quote": "each step's on-screen number is derived from its position so no manual renumbering is required"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "The prompt never asks for visible step numbers, so how they are kept correct cannot be a requirement."
+    },
+    {
+      "id": "INV-005",
+      "area": "evolving-scene-presentations",
+      "kind": "constraint",
+      "title": "Typed step payloads without casts",
+      "statement": "Steps of a grouped scene that use a strongly typed payload can be passed to the presentation host component as a typed step array without any type casts at the presentation boundary.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Typed payloads reach presentation boundary",
+          "quote": "the presentation host accepts that typed step array without requiring casts at the `<Presentation>` boundary"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Scene kit (the engine)",
+          "quote": "`SceneProps<TPayload>` types preserve strongly typed grouped payloads through"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-006",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Persisting entities morph in place",
+      "statement": "An entity with the same identity in two consecutive steps keeps that identity and, when navigating between the steps, animates in place from its old state (position, size, label, emphasis) to its new state rather than disappearing and reappearing.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Requirement: Stable entities morph across steps",
+          "quote": "Entities that persist between steps SHALL keep a stable identity and animate their change in place rather than disappearing and reappearing."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Persisting entity morphs",
+          "quote": "navigating between them animates that entity from its old state (position, size, label, emphasis) to its new state in place"
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-007",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Newcomers enter after persisting entities settle",
+      "statement": "An entity introduced by a step animates in, and does so only after the persisting entities have finished moving to their new positions.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Requirement: Stable entities morph across steps",
+          "quote": "Entities present in only one of two adjacent steps SHALL animate in or out."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: New entity enters after others settle",
+          "quote": "it animates in after the persisting entities have moved to their new positions"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Scene kit (the engine)",
+          "quote": "`Appear` sequences newcomers only after persisting entities settle;"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Introduce new entities in a visually coherent transition while maintaining continuity of existing entities.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-008",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Departing entities animate out",
+      "statement": "An entity present in one step but not in the next step animates out on that transition.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Departing entity exits",
+          "quote": "it animates out on that transition"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "When a later diagram state omits an entity, remove it coherently without leaving stale content visible.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+    },
+    {
+      "id": "INV-009",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Grouped steps update one persistent scene",
+      "statement": "Adjacent steps that are successive states of the same diagram can share a scene group; navigating between grouped steps updates the existing scene instance with the new step data instead of remounting the scene.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Requirement: Persistent grouped scenes",
+          "quote": "Adjacent steps that represent successive states of the same evolving diagram SHALL be able to share a scene group so that the scene component persists while only the active step data changes."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Grouped steps update in place",
+          "quote": "navigating between those steps updates the existing scene instance with the new step state rather than remounting separate scenes"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Scene kit (the engine)",
+          "quote": "share a `groupKey` (and `Scene`) are not remounted between navigations — the"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Successive states of the same diagram keep scene continuity so entities morph rather than the scene being torn down and rebuilt between steps.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-010",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Continuing grouped entities are not faded in",
+      "statement": "Within grouped steps, an entity that continues with the same stable identity morphs through layout projection and is not given newcomer fade-in behavior.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Continuing entities are not faded as newcomers",
+          "quote": "it morphs through layout projection without being wrapped in newcomer fade-in behavior"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Treat continuing entities as the same entities through a transition rather than presenting them as newly introduced content.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-011",
+      "area": "evolving-scene-presentations",
+      "kind": "constraint",
+      "title": "Intentional overlap/stacking preserved",
+      "statement": "When a grouped scene intentionally overlaps or stacks entities, that composition is preserved while morphs stay clean; entities are not flattened or spread apart merely to satisfy an implementation pattern.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Intentional composition is preserved",
+          "quote": "the implementation preserves that composition while maintaining clean morphs, rather than flattening or spreading entities only to satisfy an implementation pattern"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "A fine detail inside a hinted area (brief rule 5); readable composition is graded by INV-070."
+    },
+    {
+      "id": "INV-012",
+      "area": "evolving-scene-presentations",
+      "kind": "constraint",
+      "title": "Scene kit has zero styling defaults",
+      "statement": "The reusable scene kit has zero visual styling defaults: it imposes no palette, font, color, border treatment, glow, card appearance, button style, spacing scale, or CSS theme tokens, and when used without presentation-owned CSS it supplies no fallback colors, fonts, borders, shadows, card treatments, or button treatments. Default geometry for the fixed canvas or chrome placement counts as layout behavior, not styling.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Requirement: Style ownership boundary",
+          "quote": "The scene kit SHALL have zero styling defaults."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Requirement: Style ownership boundary",
+          "quote": "it SHALL NOT impose a palette, font, color, border treatment, glow, card appearance, button style, spacing scale, CSS theme tokens, or styling-framework dependency"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Unstyled kit output",
+          "quote": "the kit does not supply fallback colors, fonts, borders, shadows, card treatments, or button treatments"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Styling",
+          "quote": "It has zero visual defaults and no styling-framework dependency."
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-013",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Kit exposes stable styling hooks",
+      "statement": "Scene kit primitives and chrome render stable DOM hooks (class/data attributes) that presentation-owned CSS can target; visual choices such as color, typography, spacing scale, borders, and shadows come from the presentation or host app.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Requirement: Style ownership boundary",
+          "quote": "stable DOM hooks for authors to style"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Kit primitives expose style hooks",
+          "quote": "the rendered markup exposes stable hooks that presentation-owned CSS can target"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Kit primitives expose style hooks",
+          "quote": "visual choices such as color, typography, spacing scale, borders, and shadows come from the presentation or host app"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Individual presentations can customize the visual appearance of kit-rendered elements and chrome.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-014",
+      "area": "evolving-scene-presentations",
+      "kind": "constraint",
+      "title": "No styling-framework dependency in kit",
+      "statement": "The scene kit does not depend on any styling framework; if a presentation author wants Tailwind or another styling framework, it is configured by the presentation or host app, not required by the kit.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Optional styling frameworks remain optional",
+          "quote": "that framework is configured by the presentation or host app, not required by the reusable scene kit"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-015",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Coordinate-heavy diagrams supported",
+      "statement": "Diagrams that need literal per-step coordinates are supported: kit primitives expose class/style hooks, and authors may use raw motion elements with stable layout ids where a kit primitive is not the right shape.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Coordinate-heavy diagrams are supported",
+          "quote": "kit primitives expose class/style hooks, and authors MAY use raw motion elements with stable `layoutId`s when a primitive is not the right shape"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Authors can position elements precisely per step and can go beyond the provided primitives when they do not fit a diagram's shape.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-016",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Default bottom-right attribution link",
+      "statement": "Unless attribution options are overridden, every presentation shows an attribution link in the bottom-right corner that points to the and-scene GitHub repository.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Requirement: Kit attribution",
+          "quote": "The scene kit SHALL include a default attribution link reading \"made by and-scene\" in the bottom-right corner, linking to the and-scene GitHub repository."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Default attribution is shown",
+          "quote": "it shows a bottom-right link labeled \"made by and-scene\" pointing to the and-scene GitHub repository"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Scene kit (the engine)",
+          "quote": "Bottom-right attribution defaults to a `made by and-scene` GitHub link with a"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-017",
+      "area": "evolving-scene-presentations",
+      "kind": "value",
+      "title": "Attribution label text",
+      "statement": "The default attribution link's label text is \"made by and-scene\".",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Default attribution is shown",
+          "quote": "a bottom-right link labeled \"made by and-scene\""
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-018",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Attribution styling hook",
+      "statement": "The default attribution exposes a stable hook that presentation-owned or host CSS can target to style it (for example, to make it legible).",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Requirement: Kit attribution",
+          "quote": "The kit SHALL expose a stable hook so presentation-owned CSS can make the attribution legible and intentional."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Attribution exposes a styling hook",
+          "quote": "it exposes a stable presentation hook that the presentation or host app can target for local styling"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-019",
+      "area": "evolving-scene-presentations",
+      "kind": "constraint",
+      "title": "No default top-left brand",
+      "statement": "The scene kit adds no default top-left \"and-scene\" brand link in the header; a top-left brand appears only when the host application provides one explicitly.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Requirement: Kit attribution",
+          "quote": "The kit SHALL NOT add a default top-left \"and-scene\" brand link; host applications MAY provide their own header brand explicitly."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Top-left brand is opt-in",
+          "quote": "the top-left header slot does not contain a default and-scene brand link"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-020",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Present and browse modes switchable at runtime",
+      "statement": "A presentation supports a present mode for live delivery and a browse mode for self-guided reading, and the viewer can switch between them at runtime.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Requirement: Present and browse modes",
+          "quote": "A presentation SHALL support a present mode for live delivery and a browse mode for self-guided reading, switchable at runtime"
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-021",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Declared initial mode",
+      "statement": "A presentation can declare which mode (present or browse) it opens in.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Requirement: Present and browse modes",
+          "quote": "MAY declare which mode it opens in"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Scene kit (the engine)",
+          "quote": "A presentation may declare `initialMode`."
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-022",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Present mode is title-focused",
+      "statement": "In present mode the active step shows its marker and one-line title, and the caption, table of contents, and prev/next controls are hidden.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Present mode is title-focused",
+          "quote": "the active step shows its marker and one-line title, with the caption, table of contents, and prev/next controls hidden"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Provide a mode suited to live delivery with clear step narration and a diagram-focused presentation.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-023",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Browse mode is reading-focused",
+      "statement": "In browse mode the active step shows its title, its multi-line caption, prev/next controls, step progress indicators, and, on wide viewports, a table of contents.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Browse mode is reading-focused",
+          "quote": "the active step shows its title, multi-line caption, a table of contents on wide viewports, prev/next controls, and step progress indicators"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Provide a mode for independent reading in which step narration and usable navigation are available.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-024",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Mode toggle keeps the current step",
+      "statement": "Toggling between present and browse mode keeps the presentation on the current step.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Mode toggle preserves position",
+          "quote": "the presentation switches between present and browse while staying on the current step"
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-025",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Keyboard navigation keys",
+      "statement": "Keyboard navigation: Right arrow, Space, or PageDown advances one step; Left arrow or PageUp goes back one step.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Requirement: Step navigation",
+          "quote": "A presentation SHALL let the viewer move between steps via keyboard, touch, and on-screen controls"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Keyboard navigation",
+          "quote": "the presentation advances one step; and WHEN the user presses Left or PageUp THEN it goes back one step"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Viewers can advance and go back one step from the keyboard using conventional presentation keys.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-026",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Touch swipe navigation",
+      "statement": "Horizontal touch swipes navigate between steps: swiping left advances and swiping right goes back.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Touch swipe",
+          "quote": "swiping left advances and swiping right goes back"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "\"Different screen sizes\" is about layout, not input; tappable controls already let phone users navigate."
+    },
+    {
+      "id": "INV-027",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Jump via progress indicator",
+      "statement": "Activating a step progress indicator jumps directly to that step.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Requirement: Step navigation",
+          "quote": "SHALL allow jumping directly to a step or section"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Direct jump",
+          "quote": "the presentation jumps directly to that step"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "The browse mode the prompt asks for already gives non-linear access; jumping from the indicator is extra convenience."
+    },
+    {
+      "id": "INV-028",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Table-of-contents jumps to section start",
+      "statement": "The table of contents is organized by section (era); activating a table-of-contents entry jumps to the first step of that entry's section.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Direct jump",
+          "quote": "or to the first step of that section's era for a table-of-contents entry"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Repository layout",
+          "quote": "era-based table of contents"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-029",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Active navigation state exposed",
+      "statement": "The progress indicator and table-of-contents entry that represent the active step expose semantic current-step state and a stable active-state hook for presentation-owned styling.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Active navigation state is exposed",
+          "quote": "it exposes semantic current-step state and a stable active-state hook for presentation-owned styling"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Make the current position understandable to viewers and expose current-state semantics for any applicable navigation controls.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-030",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Focused controls keep their keys",
+      "statement": "When focus is on an interactive control, navigation keys operate that control and do not also move the presentation.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Controls keep their keys",
+          "quote": "navigation keys drive that control rather than also advancing the deck"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Scene kit (the engine)",
+          "quote": "keys do not hijack focused controls."
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-031",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Navigation clamps at both ends",
+      "statement": "Navigation clamps at both ends with no wrap-around: going back on the first step stays on the first step, and advancing on the last step stays on the last step.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Requirement: Boundary behavior",
+          "quote": "Navigation SHALL clamp at both ends with no wrap-around."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Clamp at start",
+          "quote": "it stays on the first step"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Clamp at end",
+          "quote": "it stays on the last step"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Navigating past the first or last step behaves predictably and never goes out of range or errors.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-032",
+      "area": "evolving-scene-presentations",
+      "kind": "behavior",
+      "title": "Fixed canvas scaled uniformly to fit",
+      "statement": "The diagram is composed on a fixed design canvas and scaled uniformly to fit the available viewport, so its internal composition does not reflow when the viewport size changes and entity morphs stay clean across viewport sizes.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Requirement: Fixed-canvas fit scaling",
+          "quote": "The diagram SHALL be composed in a fixed design canvas and scaled uniformly to fit the available viewport, so the composition does not reflow and entity morphs stay clean across viewport sizes."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Uniform scaling on resize",
+          "quote": "the diagram scales uniformly to fit without reflowing its internal composition"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Keep the diagram readable, compositionally coherent, and capable of clean entity transitions across screen sizes.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-033",
+      "area": "evolving-scene-presentations",
+      "kind": "value",
+      "title": "Default canvas 880 × 380",
+      "statement": "The default design canvas is 880 × 380 (width × height), used whenever a presentation does not override the canvas dimensions.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Requirement: Fixed-canvas fit scaling",
+          "quote": "The default design canvas SHALL be 880 × 380"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Scenario: Default canvas dimensions",
+          "quote": "it uses the default dimensions of 880 × 380"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-034",
+      "area": "evolving-scene-presentations",
+      "kind": "constraint",
+      "title": "Per-mode fit geometry",
+      "statement": "Fit scaling uses separate fit geometry for the browse layout and for the present layout.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+          "heading": "Requirement: Fixed-canvas fit scaling",
+          "quote": "with per-mode fit geometry for the browse and present layouts"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Fit the scene appropriately within the available space in both presenting and browsing modes.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-035",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Questions asked one at a time",
+      "statement": "The skill gathers presentation details by asking the user clarifying questions one at a time.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Interactive requirement gathering",
+          "quote": "The skill SHALL gather presentation details by asking the user clarifying questions one at a time"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Prompt is missing details",
+          "quote": "the skill asks for the missing information one question at a time rather than assuming it"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-036",
+      "area": "presentation-skill",
+      "kind": "constraint",
+      "title": "Gathering covers topic, style, and each step",
+      "statement": "The gathering covers the presentation topic, its visual style, and the content and visual description of each step.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Interactive requirement gathering",
+          "quote": "covering the topic, the visual style, and the content and visual description of each step"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "The skill establishes the topic, the visual style, and the content of each step, whether from the user or by deriving them.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "low"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "low"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-037",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Missing details are asked, not assumed",
+      "statement": "When the invoking prompt omits the topic, visual style, or per-step descriptions, the skill asks for the missing information rather than assuming details the user can still provide.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Interactive requirement gathering",
+          "quote": "the skill SHALL NOT assume details the user can still provide"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Prompt is missing details",
+          "quote": "the skill is invoked with a prompt that omits the topic, visual style, or per-step descriptions"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "low"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-038",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "User may proceed with partial detail",
+      "statement": "The user controls how much detail to give: the user can choose to build after providing only some details, and the skill then generates a presentation from what was captured, without a hard completeness gate, and allows further iteration.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Interactive requirement gathering",
+          "quote": "The user controls how much to specify"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Interactive requirement gathering",
+          "quote": "SHALL allow the user to proceed with partial detail and iterate"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: User proceeds with partial detail",
+          "quote": "the skill generates a presentation from what was captured without blocking on a hard completeness gate"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Skill (`skills/presentation/SKILL.md`)",
+          "quote": "The human controls depth and may build with partial detail."
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "The skill can produce a presentation without requiring the user to specify every detail up front, and supports iterating afterward.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+    },
+    {
+      "id": "INV-039",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Complete prompt needs no questions",
+      "statement": "When the prompt already contains the topic, style, and all step details, the skill may proceed to build without asking further questions.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Prompt already complete",
+          "quote": "the skill may proceed to build without further questions"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-040",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "ASCII mockups for key or complex steps",
+      "statement": "At its discretion, the skill may present an ASCII mockup of a key or complex step's visual layout to the user to confirm it before building, without doing so for every step.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Interactive requirement gathering",
+          "quote": "The skill MAY, at its discretion, draw ASCII mockups to represent key or complex steps when doing so helps confirm the intended visual layout."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: ASCII mockup for a complex step",
+          "quote": "the skill may present an ASCII mockup of that step to the user to confirm the layout before building, without doing so for every step"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-041",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Self-bootstrapping before create/modify",
+      "statement": "Before creating or modifying a presentation, the skill checks whether the project provides the infrastructure a generated presentation depends on, resolves where that infrastructure belongs, and scaffolds whatever is missing.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Self-bootstrapping scaffold",
+          "quote": "Before creating or modifying a presentation, the skill SHALL ensure the project provides the infrastructure a generated presentation depends on, SHALL resolve where that infrastructure belongs, and SHALL scaffold whatever is missing"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/proposal.md",
+          "heading": "What Changes",
+          "quote": "Make the skill self-bootstrapping: when the presentation scaffold (build setup,"
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-042",
+      "area": "presentation-skill",
+      "kind": "constraint",
+      "title": "Anchor: build setup",
+      "statement": "One of the three required infrastructure anchors is a build setup: a Vite + React + TypeScript app with a working `npm run build`.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Self-bootstrapping scaffold",
+          "quote": "**Build setup** — a Vite + React + TypeScript app with a working `npm run build`."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/proposal.md",
+          "heading": "Technical Approach",
+          "quote": "And Scene will remain a small Vite, React, and TypeScript app."
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Provide a working application build setup capable of producing the generated browser presentation.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-043",
+      "area": "presentation-skill",
+      "kind": "constraint",
+      "title": "Anchor: scene kit",
+      "statement": "One of the three required infrastructure anchors is the scene kit: a reusable, presentation-agnostic engine providing the step/scene contract, a stage that mounts the active step and runs entity morphs, present/browse navigation, chrome (captions, table of contents), and the fit-scaled canvas.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Self-bootstrapping scaffold",
+          "quote": "**Scene kit** — the reusable, presentation-agnostic engine: the `Step`/`Scene` step contract, the stage/host that mounts the active step and runs entity morphs, the present/browse navigation, and the chrome (captions, table of contents) and fit-scale canvas."
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Provide reusable, topic-independent scene infrastructure for step states, evolving entities, captions, navigation, viewing modes, and responsive rendering.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+    },
+    {
+      "id": "INV-044",
+      "area": "presentation-skill",
+      "kind": "constraint",
+      "title": "Anchor: presentation index",
+      "statement": "One of the three required infrastructure anchors is a presentation index: a registry that maps each presentation to its own route so that multiple presentations coexist.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Self-bootstrapping scaffold",
+          "quote": "**Presentation index** — the registry that maps each presentation to its own route so that multiple presentations coexist."
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Multiple presentations (including the sample) can coexist in one project, each individually reachable.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "The repository holds the sample and the skill generates more, so a presentation that overwrites or hides another is a real defect whatever the mechanism."
+    },
+    {
+      "id": "INV-045",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Contract-level anchor detection",
+      "statement": "Anchor detection is contract-level, keyed on whether each anchor is present rather than on a byte-identical scaffold, so cosmetic differences such as file naming, formatting, or extra dependencies do not trigger re-scaffolding.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Self-bootstrapping scaffold",
+          "quote": "Detection is contract-level, keyed on the presence of these anchors rather than a byte-identical scaffold, so cosmetic differences (file naming, formatting, extra dependencies) do not trigger re-scaffolding."
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Detection of existing infrastructure is robust to cosmetic differences, so working setups are not needlessly re-scaffolded or overwritten.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+    },
+    {
+      "id": "INV-046",
+      "area": "presentation-skill",
+      "kind": "constraint",
+      "title": "Scaffold installs the full dependency set",
+      "statement": "When scaffolding, the skill does not assume any required dependency is already installed; it installs the runtime and build dependencies needed for React, Vite, TypeScript, Motion, Lucide icons, linting, and browser render verification (Playwright).",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Self-bootstrapping scaffold",
+          "quote": "When scaffolding, the skill SHALL NOT assume the required dependencies are already installed."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Self-bootstrapping scaffold",
+          "quote": "It SHALL install the runtime and build dependencies needed for React, Vite, TypeScript, Motion, Lucide icons, linting, and render verification"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Skill (`skills/presentation/SKILL.md`)",
+          "quote": "- Runtime: `react`, `react-dom`, `motion`, `lucide-react`."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Skill (`skills/presentation/SKILL.md`)",
+          "quote": "`@types/react-dom` + `@types/node`, the eslint stack, and `playwright` (for the"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Ensure all runtime, build, and verification dependencies required by the chosen implementation are available when bootstrapping.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-047",
+      "area": "presentation-skill",
+      "kind": "constraint",
+      "title": "Scaffold imposes no style system",
+      "statement": "The scaffold is styling-framework-neutral and ships zero presentation styling defaults: the scaffolded app builds without Tailwind, a Tailwind Vite plugin, or any other styling framework, and defines no default colors, fonts, spacing scale, card or button styles, borders, shadows, CSS theme, or theme tokens. Authors or host projects may add a styling system after scaffolding.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Self-bootstrapping scaffold",
+          "quote": "The scaffold SHALL be styling-framework-neutral and SHALL ship with zero presentation styling defaults."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Self-bootstrapping scaffold",
+          "quote": "it SHALL NOT require Tailwind, a Tailwind Vite plugin, a default CSS theme, default colors, default fonts, default card styles, default button styles, or any other styling framework"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Self-bootstrapping scaffold",
+          "quote": "Styling systems MAY be added by the presentation author or host project after scaffolding."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Scaffold does not impose a style system",
+          "quote": "the generated app can build without Tailwind or another styling framework"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Scaffold does not impose a style system",
+          "quote": "the scaffold does not define default presentation colors, fonts, spacing scale, card styles, button styles, borders, shadows, or CSS theme tokens"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-048",
+      "area": "presentation-skill",
+      "kind": "constraint",
+      "title": "Templates resolve from the skill directory",
+      "statement": "The skill locates its bootstrap and presentation templates relative to the directory of its own skill file, so locating them does not depend on the user's current working directory.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Self-bootstrapping scaffold",
+          "quote": "The skill SHALL resolve scaffold templates relative to the skill file that declares them, so agents do not depend on the user's current working directory"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Templates resolve from skill directory",
+          "quote": "it resolves those paths relative to the skill's own `SKILL.md` directory"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Locate required bootstrap and authoring resources reliably regardless of the invocation working directory.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-049",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Full scaffold when nothing is present",
+      "statement": "In an empty directory, or a project with none of the three anchors, the skill performs a full scaffold (build setup, scene kit, and presentation index) and installs the required dependencies before creating the presentation.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Empty or fully unscaffolded directory",
+          "quote": "it performs a full scaffold (build setup, scene kit, and presentation index) and installs the required dependencies before creating the presentation"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "In an unprepared project, supply everything needed to build, run, and verify a generated presentation before declaring it ready.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+    },
+    {
+      "id": "INV-050",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Skip scaffolding when fully scaffolded",
+      "statement": "When all three anchors are already present, the skill skips scaffolding and proceeds directly to creating or modifying the presentation.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Already scaffolded",
+          "quote": "the skill skips scaffolding and proceeds directly to creating or modifying the presentation"
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-051",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Scaffold only missing anchors",
+      "statement": "When some but not all anchors are present, the skill scaffolds only the missing anchors (and their dependencies) and leaves the anchors already present undisturbed.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Partial scaffold",
+          "quote": "the skill scaffolds only the missing anchors (and their dependencies) without disturbing the ones already present"
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-052",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Monorepo target is a presentations/ app",
+      "statement": "When run inside a monorepo, the skill scaffolds the presentation app as its own self-contained app in a `presentations/` directory rather than at the repository root.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Monorepo target",
+          "quote": "it scaffolds the presentation app into a `presentations/` directory as its own self-contained app rather than at the repository root"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Skill (`skills/presentation/SKILL.md`)",
+          "quote": "- **Monorepo** detected (`workspaces` in `package.json`, `pnpm-workspace.yaml`, or"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "The prompt names a project without the components set up, not a monorepo; monorepo handling is a scenario the reference chose to add."
+    },
+    {
+      "id": "INV-053",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Standalone target is the repository root",
+      "statement": "When scaffolding in an empty or standalone (non-monorepo) project, the skill scaffolds the presentation app at the repository root.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Standalone project target",
+          "quote": "it scaffolds the presentation app at the repository root"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-054",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Confirm target before writing into a non-empty project",
+      "statement": "When the project is non-empty but lacks the scene kit or presentation index, the skill states the target location it will scaffold into and proceeds only after the user confirms.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Non-empty project missing scaffolding",
+          "quote": "the skill states the target location it will scaffold into and proceeds only after the user confirms"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Skill (`skills/presentation/SKILL.md`)",
+          "quote": "In a non-empty project, state the target and confirm"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Risks / Trade-offs",
+          "quote": "confirms before writing in any non-empty project, so a wrong guess is caught by"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Choose a safe scaffold target in an existing project and resolve material target ambiguity before making disruptive changes.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-055",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "New presentation is self-contained, routed, registered",
+      "statement": "A newly created presentation is written as its own self-contained folder, is reachable at its own route, and is registered in the presentation index so multiple presentations coexist.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Create a new presentation",
+          "quote": "The skill SHALL generate a new presentation as a self-contained unit reachable at its own route and registered so that multiple presentations coexist."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: New presentation is self-contained and routed",
+          "quote": "it is written as its own folder, reachable at its own route, and registered in the presentation index"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Each new presentation is separately reachable and added without interfering with other presentations.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-056",
+      "area": "presentation-skill",
+      "kind": "constraint",
+      "title": "Presentation-owned visual style",
+      "statement": "A generated presentation's designed visual look is implemented in files owned by that presentation or by the host app, not in the reusable scene kit.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Presentation owns its visual style",
+          "quote": "the styling is added in files owned by that presentation or by the host app rather than in the reusable scene kit"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Keep presentation-specific visual choices configurable without making reusable scene infrastructure depend on one presentation's design.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "Reusable components that carry one presentation's look are not reusable; consistent with INV-072, which both labelled acceptable-alternative."
+    },
+    {
+      "id": "INV-057",
+      "area": "presentation-skill",
+      "kind": "constraint",
+      "title": "Plain CSS by default",
+      "statement": "Plain CSS is the default styling approach for a generated presentation; Tailwind or another styling framework is used only when the host project already uses one or the user explicitly requests it.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Presentation owns its visual style",
+          "quote": "plain CSS is the default styling approach unless the host project already uses a styling framework or the user explicitly requests one"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Skill (`skills/presentation/SKILL.md`)",
+          "quote": "Tailwind or another framework is added only when the host already"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Styling",
+          "quote": "presentation owns its designed look in presentation-local plain CSS unless the"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-058",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Existing presentations preserved",
+      "statement": "Creating a new presentation when other presentations already exist leaves the existing presentations intact and reachable.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Existing presentations are preserved",
+          "quote": "the existing presentations remain intact and reachable"
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-059",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Modify an existing presentation",
+      "statement": "Besides creating new presentations, the skill supports modifying an existing presentation (its steps, entities, or style).",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Modify an existing presentation",
+          "quote": "The skill SHALL support modifying an existing presentation, identifying the target first and asking only about the requested changes."
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "low"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "low"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-060",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Ambiguous modify target is resolved first",
+      "statement": "When asked to modify a presentation without a clear target, the skill lists the existing presentations and asks which one to modify before changing anything.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Target unspecified or ambiguous",
+          "quote": "it lists the existing presentations and asks which to modify before changing anything"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "low"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "Both labelled the modify flow itself (INV-059) preference, so a detail of that ungraded flow is not graded."
+    },
+    {
+      "id": "INV-061",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Scoped modification",
+      "statement": "Once the target presentation is identified, the skill asks only about the requested changes (steps, entities, or style) and edits that presentation without re-walking the full creation flow.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Scoped modification",
+          "quote": "the skill asks only about the requested changes (steps, entities, or style) and edits that presentation without re-walking the full create flow"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "low"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-062",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Self-verification before reporting completion",
+      "statement": "Before reporting that a create or modify is complete, the skill runs the build, at least a render check of the first step (no runtime or console errors), and a browser-based visual composition check.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Self-verify before reporting completion",
+          "quote": "Before reporting success, the skill SHALL confirm that the generated or modified presentation builds, renders without errors, and is visually coherent in a browser, fixing any failures itself."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Self-verify before reporting completion",
+          "quote": "The render check SHALL at minimum render the presentation's first step without runtime or console errors"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Checks run before done",
+          "quote": "it runs the build, at least a first-step render check, and a browser visual composition check before reporting completion"
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-063",
+      "area": "presentation-skill",
+      "kind": "constraint",
+      "title": "Which views the visual check inspects",
+      "statement": "The visual composition check inspects screenshots or an equivalent browser view of the first step, the last step, and any dense or key steps; presentations whose layout is responsive-sensitive are also checked at a narrow viewport.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Self-verify before reporting completion",
+          "quote": "The visual composition check SHALL inspect screenshots or an equivalent browser view of the first step, the last step, and any dense/key steps; responsive-sensitive presentations SHALL also be checked at a narrow viewport."
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Inspect enough rendered steps and viewport sizes to establish visual coherence and catch significant layout and responsive defects.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-064",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Failures fixed and re-checked",
+      "statement": "If the build, render, or visual composition check fails, the skill fixes the issues itself and re-checks, and does not report success while a check fails.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Failures are fixed, not reported as success",
+          "quote": "the skill fixes the issues and re-checks rather than reporting success"
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-065",
+      "area": "presentation-skill",
+      "kind": "constraint",
+      "title": "Project-local screenshot tooling",
+      "statement": "For screenshots, the skill prefers the scaffolded project-local screenshot helper when available (so browser tooling resolves from the project's local dependencies, screenshots are taken after animations settle, and advisory warnings can be reviewed); otherwise it writes any temporary Playwright helper under the project root rather than outside the project tree.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Self-verify before reporting completion",
+          "quote": "When a project-local screenshot helper is available, the skill SHALL prefer it over ad hoc scripts outside the project tree"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Screenshot helper is project-local",
+          "quote": "it uses the scaffolded project-local helper when available, or otherwise writes any temporary Playwright helper under the project root"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "The need for renders that are actually checked is graded by INV-070 and INV-073; what remains is where the scripts live."
+    },
+    {
+      "id": "INV-066",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Generated presentation builds clean",
+      "statement": "Every generated presentation builds via `npm run build` with no type errors.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Generated presentation quality bar",
+          "quote": "Every generated presentation SHALL build with no type errors"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Builds clean",
+          "quote": "`npm run build` completes with no type errors"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Ensure generated presentation code builds successfully without compilation or applicable type-checking errors.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+    },
+    {
+      "id": "INV-067",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Generated presentation renders its first step cleanly",
+      "statement": "Opening a generated presentation's route renders its first step with no runtime or console errors.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Renders without errors",
+          "quote": "it renders its first step with no runtime or console errors"
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-068",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Captions and next/previous navigation in every generated presentation",
+      "statement": "In every generated presentation, each step shows a caption and the viewer can navigate to the next and previous steps.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Generated presentation quality bar",
+          "quote": "present a caption per step, support next/previous navigation"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Captions and navigation present",
+          "quote": "each step shows a caption and the user can navigate to the next and previous steps"
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-069",
+      "area": "presentation-skill",
+      "kind": "constraint",
+      "title": "Generated presentations follow the evolving-scene model",
+      "statement": "Every generated presentation conforms to the evolving-scene presentation model (one scene of stable entities moving through named steps) rather than independent slides.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Generated presentation quality bar",
+          "quote": "conform to the evolving-scene model"
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-070",
+      "area": "presentation-skill",
+      "kind": "constraint",
+      "title": "Visual composition criteria",
+      "statement": "The visual composition check of a generated or modified presentation confirms that important scene content fits the fixed canvas, intentional overlaps remain readable, and content does not collide with chrome such as captions, progress indicators, the table of contents, or navigation controls.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Generated presentation quality bar",
+          "quote": "pass a visual composition check"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Visual composition is inspected",
+          "quote": "key browser screenshots or equivalent browser views show that important scene content fits the fixed canvas, intentional overlaps remain readable, and content does not collide with chrome such as captions, progress indicators, table of contents, or navigation controls"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Ensure important diagram content and presentation controls remain readable, fit the available display area, and avoid accidental obstructive collisions.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+    },
+    {
+      "id": "INV-071",
+      "area": "presentation-skill",
+      "kind": "behavior",
+      "title": "Visual warnings are reviewed and resolved",
+      "statement": "When the screenshot helper emits overlap or chrome-polish warnings, the skill reviews the referenced steps, fixes accidental collisions and indistinct current-step chrome, and marks as allowed only overlaps that are intentional and readable.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Visual warnings are reviewed",
+          "quote": "the skill reviews the referenced steps, fixes accidental collisions or indistinct current-step chrome, and marks only intentional readable overlaps as allowed"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "When automated checks flag possible visual problems, the skill investigates them, fixes genuine problems, and only accepts flagged items that are intentional and acceptable.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "low"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-072",
+      "area": "presentation-skill",
+      "kind": "constraint",
+      "title": "Active chrome and attribution styled by the presentation",
+      "statement": "A generated presentation styles its table-of-contents, progress, navigation, and attribution chrome in presentation-owned or host CSS so the active step is visibly distinct and the attribution is legible, while the reusable scene kit stays free of default colors, fonts, borders, button styles, and theme tokens.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Active chrome and attribution are styled locally",
+          "quote": "presentation-owned or host-owned CSS makes the active step visibly distinct and the attribution legible"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Active chrome and attribution are styled locally",
+          "quote": "the reusable scene kit remains free of default colors, fonts, borders, button styles, and theme tokens"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Generated presentations make the current step visibly distinct in their navigation chrome.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-073",
+      "area": "presentation-verification",
+      "kind": "behavior",
+      "title": "Whole-app build verification",
+      "statement": "Verification builds the whole application (all presentations plus the index) and fails if `npm run build` reports any type or build error.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Build verification",
+          "quote": "Verification SHALL build the whole application — all presentations plus the index — and fail if the build does not succeed."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Scenario: Build must succeed",
+          "quote": "it builds the whole app and fails if `npm run build` reports any type or build error"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Verify the complete generated application build and fail on errors in any included presentation or required application infrastructure.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+    },
+    {
+      "id": "INV-074",
+      "area": "presentation-verification",
+      "kind": "behavior",
+      "title": "Committed reference sample",
+      "statement": "A sample presentation is committed in the repository as a known-good reference example and is registered and reachable like any other presentation.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Committed reference sample",
+          "quote": "A generated sample presentation SHALL be committed in the repository as a known-good example, registered and reachable like any other presentation."
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Include a working sample in the repository that users can access as a reference presentation.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+    },
+    {
+      "id": "INV-075",
+      "area": "presentation-verification",
+      "kind": "behavior",
+      "title": "Sample is produced by the skill",
+      "statement": "The reference sample is generated by the presentation skill itself (it is the skill's own output), not hand-built through a separate process.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Committed reference sample",
+          "quote": "a presentation, built by the skill, about building presentations with the skill"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/proposal.md",
+          "heading": "What Changes",
+          "quote": "Add a verification flow that invokes the skill on a sample topic and confirms"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/tasks/03-reference-sample-verification.md",
+          "heading": "Goal",
+          "quote": "by loading and following the presentation skill's own procedure"
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-076",
+      "area": "presentation-verification",
+      "kind": "value",
+      "title": "Sample topic and self-referential reveal",
+      "statement": "The reference sample is titled \"How to Use This Skill to Make a Presentation\": a self-referential presentation about building presentations with the skill, whose closing beat reveals that the viewer is looking at an example of the skill's own output.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Committed reference sample",
+          "quote": "The sample is the self-referential talk **\"How to Use This Skill to Make a Presentation\"**"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Committed reference sample",
+          "quote": "Its closing beat reveals that the viewer is looking at an example of the skill's own output."
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "The sample explains how to use the skill to make a presentation.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-077",
+      "area": "presentation-verification",
+      "kind": "constraint",
+      "title": "Sample is one accumulating scene",
+      "statement": "The reference sample is one continuously evolving scene: a conversation row (\"you\" ↔ \"skill\") anchors the top, a tray of step cards accumulates below it, and later steps draw connections and a final reveal frame around what is already on screen. Entities accumulate and are never rearranged or redrawn.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Committed reference sample",
+          "quote": "The sample is one continuously evolving scene: a conversation row (**you** ↔ **skill**) anchors the top, a tray of step cards accumulates below it, and later beats draw connections and a final reveal frame around what is already on screen. Entities accumulate; they are never rearranged or redrawn."
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "The sample is one continuously evolving scene that builds on what is already on screen rather than switching to unrelated compositions.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-078",
+      "area": "presentation-verification",
+      "kind": "value",
+      "title": "Sample has nine steps in five eras",
+      "statement": "The reference sample has exactly nine steps grouped into five eras, in order: \"the ask\" (steps 1–2), \"the gathering\" (steps 3–5), \"the build\" (steps 6–7), \"the loop\" (step 8), and \"the reveal\" (step 9). The steps' titles, captions, and scene intent are normative.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Committed reference sample",
+          "quote": "The sample SHALL implement the following steps (titles, captions, and scene intent are normative; the per-step visual design is deferred to design):"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Committed reference sample",
+          "quote": "| # | Era | Title (present) | Caption (browse) | Scene content |"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-079",
+      "area": "presentation-verification",
+      "kind": "value",
+      "title": "Sample step 1: You have a topic",
+      "statement": "Reference sample step 1 (era \"the ask\") has the present-mode title \"You have a topic\", the browse caption \"It starts with you, a topic, and mild overconfidence.\", and scene content in which a \"you\" entity and a \"prompt\" bubble appear.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Committed reference sample",
+          "quote": "| 1 | the ask | \"You have a topic\" | It starts with you, a topic, and mild overconfidence. | A **you** entity and a **prompt** bubble appear. |"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-080",
+      "area": "presentation-verification",
+      "kind": "value",
+      "title": "Sample step 2: The skill interviews you",
+      "statement": "Reference sample step 2 (era \"the ask\") has the present-mode title \"The skill interviews you\", the browse caption \"One question at a time: the topic, the look, then each beat of the story.\", and scene content in which a \"skill\" node appears, and a two-way arrow connects you ↔ skill with a \"question chip\" above it.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Committed reference sample",
+          "quote": "| 2 | the ask | \"The skill interviews you\" | One question at a time: the topic, the look, then each beat of the story. | A **skill** node appears; a two-way arrow connects you↔skill with a **question chip** above it. |"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-081",
+      "area": "presentation-verification",
+      "kind": "value",
+      "title": "Sample step 3: Answers become steps",
+      "statement": "Reference sample step 3 (era \"the gathering\") has the present-mode title \"Answers become steps\", the browse caption \"Each answer lands as a step card — title, caption, visual — plus what morphs from one step into the next.\", and scene content in which a tray appears under the conversation and the first step card lands in it, showing the parts every step carries (title, caption, visual); what morphs is drawn on the link between consecutive cards, not inside them.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Committed reference sample",
+          "quote": "| 3 | the gathering | \"Answers become steps\" | Each answer lands as a step card — title, caption, visual — plus what morphs from one step into the next. | A tray appears under the conversation; the first **step-card** lands in it, showing the parts every step carries (title, caption, visual). What morphs is drawn on the link between consecutive cards, not inside them. |"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-082",
+      "area": "presentation-verification",
+      "kind": "value",
+      "title": "Sample step 4: The deck grows",
+      "statement": "Reference sample step 4 (era \"the gathering\") has the present-mode title \"The deck grows\", the browse caption \"Same shapes, new beats. Every answer extends the story without redrawing it.\", and scene content in which more step cards land in the tray while everything already on screen stays put.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Committed reference sample",
+          "quote": "| 4 | the gathering | \"The deck grows\" | Same shapes, new beats. Every answer extends the story without redrawing it. | More step-cards land in the tray; everything already on screen stays put. |"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-083",
+      "area": "presentation-verification",
+      "kind": "value",
+      "title": "Sample step 5: You set the depth",
+      "statement": "Reference sample step 5 (era \"the gathering\") has the present-mode title \"You set the depth\", the browse caption \"Spell out every step, or sketch a few and see how it looks. You hold the gate.\", and scene content in which a dashed \"ghost card\" marks unspecified steps, and a partial ↔ full control docks on \"you\".",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Committed reference sample",
+          "quote": "| 5 | the gathering | \"You set the depth\" | Spell out every step, or sketch a few and see how it looks. You hold the gate. | A dashed **ghost card** marks unspecified steps; a partial↔full control docks on **you**. |"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-084",
+      "area": "presentation-verification",
+      "kind": "value",
+      "title": "Sample step 6: It assembles the scene",
+      "statement": "Reference sample step 6 (era \"the build\") has the present-mode title \"It assembles the scene\", the browse caption \"Your steps are wired into one evolving scene, drawn with a shared scene kit — ready-made boxes, arrows, and motion that make entities morph.\", and scene content in which a \"scene-kit\" socket plugs into the bottom edge of the assembled tray of step cards (the tray itself is not framed), and its label names the shared kit the scene is drawn with.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Committed reference sample",
+          "quote": "| 6 | the build | \"It assembles the scene\" | Your steps are wired into one evolving scene, drawn with a shared scene kit — ready-made boxes, arrows, and motion that make entities morph. | The **scene-kit** socket plugs into the bottom edge of the assembled tray of step cards (the tray is not framed); its label names the shared kit the scene is drawn with. |"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-085",
+      "area": "presentation-verification",
+      "kind": "value",
+      "title": "Sample step 7: It checks its own work",
+      "statement": "Reference sample step 7 (era \"the build\") has the present-mode title \"It checks its own work\", the browse caption \"Before saying done, it builds and renders every step — and fixes what breaks.\", and scene content in which a \"verify\" node is chained after the step cards in the same tray row (verification is part of the skill's own pipeline), and build + render checks resolve to a green pass check on it.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Committed reference sample",
+          "quote": "| 7 | the build | \"It checks its own work\" | Before saying done, it builds and renders every step — and fixes what breaks. | A **verify** node is chained after the step cards in the same tray row (verification is part of the skill's own pipeline); build + render checks resolve to a green pass check on it. |"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-086",
+      "area": "presentation-verification",
+      "kind": "value",
+      "title": "Sample step 8: Changed your mind? Loop it.",
+      "statement": "Reference sample step 8 (era \"the loop\") has the present-mode title \"Changed your mind? Loop it.\", the browse caption \"Point at a step and ask. The skill edits the scene in place — nothing is redrawn from scratch.\", and scene content in which a \"modify\" arc reaches from the conversation down into the route, and the edited card is flagged.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Committed reference sample",
+          "quote": "| 8 | the loop | \"Changed your mind? Loop it.\" | Point at a step and ask. The skill edits the scene in place — nothing is redrawn from scratch. | A **modify** arc reaches from the conversation down into the route; the edited card is flagged. |"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-087",
+      "area": "presentation-verification",
+      "kind": "value",
+      "title": "Sample step 9: You're looking at one",
+      "statement": "Reference sample step 9 (era \"the reveal\") has the present-mode title \"You're looking at one\", the browse caption \"This presentation was built exactly this way. Thanks for watching.\", and scene content in which an outer frame draws around the whole diagram, labeled, as the self-reference reveal.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Committed reference sample",
+          "quote": "| 9 | the reveal | \"You're looking at one\" | This presentation was built exactly this way. Thanks for watching. | An outer frame draws around the whole diagram, labeled — self-reference reveal. |"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-088",
+      "area": "presentation-verification",
+      "kind": "behavior",
+      "title": "Verification checks the sample against the outline",
+      "statement": "Verification confirms that the committed reference sample exists, is registered and reachable, and implements the nine canonical steps in order, with every normative title and caption in order.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Scenario: Sample exists and matches the outline",
+          "quote": "it confirms the committed reference sample presentation exists, is registered/reachable, and implements the nine steps above in order"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Verification (`npm run verify` → `scripts/verify.mjs`)",
+          "quote": "with every normative title and caption in order."
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Verification confirms the committed sample presentation is present, reachable, and contains its expected steps.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "low"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-089",
+      "area": "presentation-verification",
+      "kind": "behavior",
+      "title": "Missing sample fails verification",
+      "statement": "Verification fails when the reference sample is absent.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Scenario: Missing sample fails",
+          "quote": "the reference sample is absent"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Verification does not silently pass when a presentation it is meant to check is missing.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+    },
+    {
+      "id": "INV-090",
+      "area": "presentation-verification",
+      "kind": "behavior",
+      "title": "Every sample step rendered in a real browser",
+      "statement": "Verification runs the reference sample in a real browser against a production preview build, steps through every step, and asserts that each step renders without runtime or console errors.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Render verification",
+          "quote": "The render check runs the sample in a real browser against a production preview and steps through every step."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Scenario: Every step renders cleanly",
+          "quote": "it steps through every step and asserts each renders without runtime or console errors"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Automated verification renders every step of the checked presentation(s) in an environment faithful to real viewing and fails on runtime or console errors.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-091",
+      "area": "presentation-verification",
+      "kind": "constraint",
+      "title": "IPv4 loopback for preview and browser",
+      "statement": "The production preview server host, its readiness probe, and the browser navigation URLs all consistently use the IPv4 loopback address `127.0.0.1`, so verification does not depend on how `localhost` resolves in the environment.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Render verification",
+          "quote": "The preview server and browser navigation SHALL use a deterministic IPv4 loopback address (`127.0.0.1`) so verification does not depend on how `localhost` resolves in the runtime environment."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Scenario: Preview uses IPv4 loopback",
+          "quote": "the preview host, readiness probe, and browser URLs use `127.0.0.1` consistently"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "low"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "Fixes an environment problem the reference encountered; working verification is graded by INV-073."
+    },
+    {
+      "id": "INV-092",
+      "area": "presentation-verification",
+      "kind": "behavior",
+      "title": "Browser errors fail verification and name the step",
+      "statement": "A console error, an uncaught page error, an error while rendering a step, or a step transition that fails makes verification fail and identifies the failing step.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Render verification",
+          "quote": "fail if any step produces a runtime or console error"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Scenario: Console or page error fails verification",
+          "quote": "verification fails and identifies the failing step"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Scenario: Step error fails verification",
+          "quote": "any step errors during render"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Verification (`npm run verify` → `scripts/verify.mjs`)",
+          "quote": "4. Any `console.error`, `pageerror` (uncaught exception), or failed step"
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-093",
+      "area": "presentation-verification",
+      "kind": "behavior",
+      "title": "Unambiguous pass/fail outcome",
+      "statement": "Verification produces an unambiguous pass/fail outcome suitable for automated checks: it reports a clear pass or fail, exits with a non-zero status on failure, and identifies which check failed.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Pass/fail reporting",
+          "quote": "Verification SHALL produce an unambiguous pass/fail outcome suitable for automated checks."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Scenario: Clear outcome",
+          "quote": "it reports a clear pass or fail (non-zero exit on failure) identifying which check failed"
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-094",
+      "area": "presentation-verification",
+      "kind": "behavior",
+      "title": "Preview processes cleaned up",
+      "statement": "Verification cleans up the preview server processes it starts after each run, including runs that fail.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/test-plan.md",
+          "heading": "E2E-002: Verification failures are actionable",
+          "quote": "preview subprocesses are cleaned up after each run"
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-095",
+      "area": "presentation-verification",
+      "kind": "behavior",
+      "title": "Project-local per-step screenshot helper",
+      "statement": "Scaffolded projects include a project-local helper that, for a registered presentation, captures a screenshot of each step from a production preview at a standard desktop viewport and writes the images to a predictable project-local artifact directory.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Visual inspection artifacts",
+          "quote": "Scaffolded projects SHALL provide a project-local helper that captures per-step screenshots from a production preview for human visual review."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Scenario: Capture step screenshots",
+          "quote": "it captures each step at a standard desktop viewport and writes the images under a predictable project-local artifact directory"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Visual review is supported by a repeatable way to capture views of each step of a presentation.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "low"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "low"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-096",
+      "area": "presentation-verification",
+      "kind": "behavior",
+      "title": "Screenshots taken after transitions settle",
+      "statement": "After advancing to each step, the screenshot helper waits for a configured settle interval so the screenshot is captured after step transition animations finish.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Visual inspection artifacts",
+          "quote": "The helper SHALL wait for step transition animations to settle before each screenshot"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Scenario: Screenshots are settled",
+          "quote": "it waits for the configured settle interval before capturing the next screenshot"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Visual captures reflect each step's settled state, not mid-transition frames.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-097",
+      "area": "presentation-verification",
+      "kind": "behavior",
+      "title": "Overlap warnings",
+      "statement": "When visible text or presentation chrome overlaps another visible text or chrome element without an explicit allow-overlap marker, the screenshot helper prints an advisory warning identifying the step and the overlapping elements.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Scenario: Suspicious overlap is reported",
+          "quote": "the helper prints an advisory warning identifying the step and overlapping elements"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "low"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-098",
+      "area": "presentation-verification",
+      "kind": "behavior",
+      "title": "Allow-overlap marker exempts a subtree",
+      "statement": "A presentation can mark a subtree as allowing overlap, and the screenshot helper reports no overlap warnings for elements inside that subtree.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Scenario: Intentional overlap can be marked",
+          "quote": "the helper does not report overlap warnings for elements inside that subtree"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-099",
+      "area": "presentation-verification",
+      "kind": "behavior",
+      "title": "Indistinct active-chrome warnings",
+      "statement": "When the active progress indicator or active table-of-contents entry is visually indistinguishable from inactive controls, the screenshot helper prints an advisory warning identifying the affected chrome.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Scenario: Indistinct active chrome is reported",
+          "quote": "the helper prints an advisory warning identifying the affected chrome"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-100",
+      "area": "presentation-verification",
+      "kind": "behavior",
+      "title": "Unpolished attribution warnings",
+      "statement": "When the attribution link is missing, too small, or browser-default in appearance, the screenshot helper prints an advisory warning that points authors to the attribution styling hook.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Scenario: Unpolished attribution is reported",
+          "quote": "the helper prints an advisory warning pointing authors to the attribution styling hook"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Verification (`npm run verify` → `scripts/verify.mjs`)",
+          "quote": "and missing, browser-default, or undersized attribution"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-101",
+      "area": "presentation-verification",
+      "kind": "constraint",
+      "title": "Screenshot output is advisory",
+      "statement": "The screenshot helper's screenshots and warnings are inspection artifacts that support visual review; they are not automated pass/fail evidence.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Visual inspection artifacts",
+          "quote": "its screenshots and warnings are inspection artifacts rather than automated pass/fail evidence"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-102",
+      "area": "scope",
+      "kind": "scope-inclusion",
+      "title": "Agent skill that creates presentations from a topic",
+      "statement": "The change includes an agent skill that creates browser-based presentations from a topic.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/proposal.md",
+          "heading": "What Changes",
+          "quote": "Add a hybrid agent skill that creates browser-based presentations from a topic."
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-103",
+      "area": "scope",
+      "kind": "scope-inclusion",
+      "title": "Reusable components, templates, and scripts",
+      "statement": "The change includes reusable React components, templates, and scripts that the skill uses when creating a new presentation.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/proposal.md",
+          "heading": "What Changes",
+          "quote": "Add reusable React components, templates, and scripts that the skill can use"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Supply reusable scene-building resources that the skill uses to generate presentations across topics and projects.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+    },
+    {
+      "id": "INV-104",
+      "area": "scope",
+      "kind": "scope-inclusion",
+      "title": "Verification flow",
+      "statement": "The change includes a verification flow that confirms the generated sample presentation builds and renders.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/proposal.md",
+          "heading": "What Changes",
+          "quote": "Add a verification flow that invokes the skill on a sample topic and confirms"
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-105",
+      "area": "scope",
+      "kind": "scope-exclusion",
+      "title": "No export formats",
+      "statement": "Exporting presentations to PowerPoint, Keynote, PDF, or images is out of scope.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/proposal.md",
+          "heading": "Out of Scope",
+          "quote": "PowerPoint, Keynote, PDF, or image export."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Goals / Non-Goals",
+          "quote": "Export (PPT/Keynote/PDF/image), a visual editor, hosting/publishing."
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "Export is a sizeable unrequested feature that pulls against \"browser-based\"; consistent with INV-106 and INV-107, which both labelled mandatory."
+    },
+    {
+      "id": "INV-106",
+      "area": "scope",
+      "kind": "scope-exclusion",
+      "title": "No visual editor",
+      "statement": "A general-purpose visual editor for presentations is out of scope.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/proposal.md",
+          "heading": "Out of Scope",
+          "quote": "A general-purpose visual editor."
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-107",
+      "area": "scope",
+      "kind": "scope-exclusion",
+      "title": "No hosting or publishing workflow",
+      "statement": "A production hosting or publishing workflow for presentations is out of scope.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/proposal.md",
+          "heading": "Out of Scope",
+          "quote": "A production hosting or publishing workflow."
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-108",
+      "area": "scope",
+      "kind": "scope-exclusion",
+      "title": "No subjective taste scoring as primary verification",
+      "statement": "Subjective scoring of visual taste is out of scope as the primary verification mechanism.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/proposal.md",
+          "heading": "Out of Scope",
+          "quote": "Subjective scoring of visual taste as the primary verification mechanism."
+        }
+      ],
+      "class": "mandatory",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "mandatory",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-109",
+      "area": "design",
+      "kind": "decision",
+      "title": "Hybrid skill rather than prompt-only",
+      "statement": "The skill is hybrid rather than prompt-only: a skill document provides the agent procedure and quality bar, while reusable templates, scripts, and components keep generated output consistent across presentations.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/proposal.md",
+          "heading": "Technical Approach",
+          "quote": "The skill should be hybrid rather than prompt-only. The skill document provides"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Skill (`skills/presentation/SKILL.md`)",
+          "quote": "Hybrid: the SKILL.md drives the agent procedure; `templates/` and the kit keep"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Provide an agent procedure that uses reusable scene infrastructure and includes checks for generated output quality.",
+      "intent_source": "codex",
+      "labels": {
+        "opus": {
+          "class": "mandatory",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "reconciled",
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+    },
+    {
+      "id": "INV-110",
+      "area": "design",
+      "kind": "decision",
+      "title": "Single verify command",
+      "statement": "Verification runs from a single entry point, `npm run verify`, which builds the whole app and renders the sample through every step in a real browser.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Goals / Non-Goals",
+          "quote": "A **verification** entry point (`npm run verify`) that builds the whole app and"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "Automatic verification is available from a single, documented entry point that runs the build and the render checks.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-111",
+      "area": "design",
+      "kind": "decision",
+      "title": "Real-browser render check via Playwright",
+      "statement": "The render check uses Playwright driving Chromium against a `vite preview` production preview (a real browser that faithfully runs layout animation), rather than a jsdom-based per-step component mount.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Decisions",
+          "quote": "4. **Render check = Playwright over `vite preview`** — real browser stepping the"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Requirement: Render verification",
+          "quote": "(Mechanism settled in design: `vite preview` + a Playwright/Chromium driver that enumerates steps via the chrome's step-count hook.)"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "The render check runs in an environment that faithfully executes the presentation, including layout and animation, rather than a superficial component mount.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-112",
+      "area": "design",
+      "kind": "decision",
+      "title": "Step-count and step-index hooks",
+      "statement": "The presentation chrome exposes the total step count and the current step index as stable hooks (`data-step-count`, `data-step-index`) so external tooling can enumerate and track steps without depending on DOM structure.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Verification (`npm run verify` → `scripts/verify.mjs`)",
+          "quote": "The chrome exposes `data-step-count` and `data-step-index` test hooks so the"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/tasks/01-scene-kit-app-shell.md",
+          "heading": "Implementation",
+          "quote": "Expose `data-step-count` and `data-step-index` so external verification can"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "External tooling can enumerate the steps and observe the current step without depending on fragile DOM structure.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-113",
+      "area": "design",
+      "kind": "decision",
+      "title": "Landing page and per-slug routes",
+      "statement": "The app root (`/`) is a landing page that lists every registered presentation and links to each; each presentation is served at `/<slug>`, and unknown paths fall back to the landing page or a simple not-found page.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Routing + registry",
+          "quote": "- `Landing.tsx` enumerates the registry (replaces the placeholder `App.tsx`)."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Routing + registry",
+          "quote": "`Landing` (or a simple not-found)."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/tasks/01-scene-kit-app-shell.md",
+          "heading": "Implementation",
+          "quote": "that enumerates registered presentations."
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-114",
+      "area": "design",
+      "kind": "decision",
+      "title": "Explicit presentation registry",
+      "statement": "Presentations are registered in an explicit, hand-maintained registry list (slug, title, lazy loader) rather than auto-discovered, so adding a presentation means a new folder plus one registry line, and registration is deterministic and reviewable in diffs.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Routing + registry",
+          "quote": "new folder + one registry line. Chosen over `import.meta.glob` so registration"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Routing + registry",
+          "quote": "is deterministic and diffable in review."
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-115",
+      "area": "design",
+      "kind": "decision",
+      "title": "No routing-library dependency",
+      "statement": "Routing is a minimal pathname switch that adds no routing-library dependency (such as react-router).",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Decisions",
+          "quote": "3. **Zero-dep pathname router + explicit registry** — minimal `main.tsx` switch +"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Decisions",
+          "quote": "`presentations/index.ts`. Deterministic, diffable, no new dep."
+        },
+        {
+          "document": "openspec/changes/create-and-scene/tasks/01-scene-kit-app-shell.md",
+          "heading": "Goal",
+          "quote": "a zero-dependency"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-116",
+      "area": "design",
+      "kind": "decision",
+      "title": "Generic, topic-agnostic node primitives",
+      "statement": "The scene kit ships generic, topic-agnostic node primitives (box, label, arrow, frame, emphasis, symbol chip) parameterized by stable identity and styling hooks, rather than presentation-specific node components.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Decisions",
+          "quote": "2. **Generic node primitives** — ship `Box/Label/Arrow/Frame/Emphasis/SymbolChip`"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Scene kit (the engine)",
+          "quote": "- **Generic node primitives**: reusable, topic-agnostic building blocks instead"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "The reusable components are topic-agnostic building blocks that presentations on any topic can compose.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-117",
+      "area": "design",
+      "kind": "decision",
+      "title": "Lucide icons as components",
+      "statement": "Icons come from lucide-react using an icon-as-component pattern, so adding a glyph is a single import with no SVG authoring.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Decisions",
+          "quote": "7. **`glyphs = lucide-react`** — already a dependency here; the scaffold adds it"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Decisions",
+          "quote": "so adding art is one import, no SVG authoring."
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-118",
+      "area": "design",
+      "kind": "decision",
+      "title": "Bootstrap templates snapshot the canonical kit",
+      "statement": "The canonical scene kit lives in the app's source, and the skill's bootstrap templates carry a snapshot of it that is used only to bootstrap fresh projects and is kept in parity with the canonical kit (drift is caught by verification/tests).",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Decisions",
+          "quote": "5. **Skill carries a template snapshot; canonical kit lives in `src/`** — the"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Risks / Trade-offs",
+          "quote": "- **Template ↔ `src/presentation-kit` drift** → Treat `templates/` as a release"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/test-plan.md",
+          "heading": "INT-001: Materialized bootstrap is complete and style-neutral",
+          "quote": "canonical and template kit files remain aligned"
+        }
+      ],
+      "class": "acceptable-alternative",
+      "intent": "The components the skill bootstraps into new projects match the repository's reusable components and cannot silently diverge from them.",
+      "intent_source": "opus",
+      "labels": {
+        "opus": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        },
+        "codex": {
+          "class": "acceptable-alternative",
+          "confidence": "medium"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-119",
+      "area": "design",
+      "kind": "decision",
+      "title": "P key toggles mode",
+      "statement": "Pressing the `P` key toggles between present and browse mode.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Scene kit (the engine)",
+          "quote": "toggles mode, horizontal swipe = next/prev"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    },
+    {
+      "id": "INV-120",
+      "area": "design",
+      "kind": "decision",
+      "title": "Sample opens in browse mode",
+      "statement": "The committed reference sample declares browse mode as its initial mode.",
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Repository layout",
+          "quote": "<Presentation steps={STEPS} title=… initialMode=\"browse\" />"
+        }
+      ],
+      "class": "preference",
+      "intent": null,
+      "intent_source": null,
+      "labels": {
+        "opus": {
+          "class": "preference",
+          "confidence": "high"
+        },
+        "codex": {
+          "class": "preference",
+          "confidence": "high"
+        }
+      },
+      "resolution": "agreed"
+    }
+  ],
+  "coverage": [
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Scene step model",
+      "scenario": null,
+      "items": [
+        "INV-001",
+        "INV-002",
+        "INV-003"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Scene step model",
+      "scenario": "Scenario: Step carries narration and identity",
+      "items": [
+        "INV-002",
+        "INV-003"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Scene step model",
+      "scenario": "Scenario: Order-derived numbering",
+      "items": [
+        "INV-004"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Scene step model",
+      "scenario": "Scenario: Typed payloads reach presentation boundary",
+      "items": [
+        "INV-005"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Stable entities morph across steps",
+      "scenario": null,
+      "items": [
+        "INV-006",
+        "INV-007",
+        "INV-008"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Stable entities morph across steps",
+      "scenario": "Scenario: Persisting entity morphs",
+      "items": [
+        "INV-006"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Stable entities morph across steps",
+      "scenario": "Scenario: New entity enters after others settle",
+      "items": [
+        "INV-007"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Stable entities morph across steps",
+      "scenario": "Scenario: Departing entity exits",
+      "items": [
+        "INV-008"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Persistent grouped scenes",
+      "scenario": null,
+      "items": [
+        "INV-009",
+        "INV-010"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Persistent grouped scenes",
+      "scenario": "Scenario: Grouped steps update in place",
+      "items": [
+        "INV-009"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Persistent grouped scenes",
+      "scenario": "Scenario: Continuing entities are not faded as newcomers",
+      "items": [
+        "INV-010"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Persistent grouped scenes",
+      "scenario": "Scenario: Intentional composition is preserved",
+      "items": [
+        "INV-011"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Style ownership boundary",
+      "scenario": null,
+      "items": [
+        "INV-012",
+        "INV-013",
+        "INV-014"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Style ownership boundary",
+      "scenario": "Scenario: Kit primitives expose style hooks",
+      "items": [
+        "INV-013"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Style ownership boundary",
+      "scenario": "Scenario: Unstyled kit output",
+      "items": [
+        "INV-012"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Style ownership boundary",
+      "scenario": "Scenario: Optional styling frameworks remain optional",
+      "items": [
+        "INV-014"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Style ownership boundary",
+      "scenario": "Scenario: Coordinate-heavy diagrams are supported",
+      "items": [
+        "INV-015"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Kit attribution",
+      "scenario": null,
+      "items": [
+        "INV-016",
+        "INV-017",
+        "INV-018",
+        "INV-019"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Kit attribution",
+      "scenario": "Scenario: Default attribution is shown",
+      "items": [
+        "INV-016",
+        "INV-017"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Kit attribution",
+      "scenario": "Scenario: Attribution exposes a styling hook",
+      "items": [
+        "INV-018"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Kit attribution",
+      "scenario": "Scenario: Top-left brand is opt-in",
+      "items": [
+        "INV-019"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Present and browse modes",
+      "scenario": null,
+      "items": [
+        "INV-020",
+        "INV-021"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Present and browse modes",
+      "scenario": "Scenario: Present mode is title-focused",
+      "items": [
+        "INV-022"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Present and browse modes",
+      "scenario": "Scenario: Browse mode is reading-focused",
+      "items": [
+        "INV-023"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Present and browse modes",
+      "scenario": "Scenario: Mode toggle preserves position",
+      "items": [
+        "INV-024"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Step navigation",
+      "scenario": null,
+      "items": [
+        "INV-025",
+        "INV-026",
+        "INV-023",
+        "INV-027",
+        "INV-028"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Step navigation",
+      "scenario": "Scenario: Keyboard navigation",
+      "items": [
+        "INV-025"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Step navigation",
+      "scenario": "Scenario: Touch swipe",
+      "items": [
+        "INV-026"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Step navigation",
+      "scenario": "Scenario: Direct jump",
+      "items": [
+        "INV-027",
+        "INV-028"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Step navigation",
+      "scenario": "Scenario: Active navigation state is exposed",
+      "items": [
+        "INV-029"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Step navigation",
+      "scenario": "Scenario: Controls keep their keys",
+      "items": [
+        "INV-030"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Boundary behavior",
+      "scenario": null,
+      "items": [
+        "INV-031"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Boundary behavior",
+      "scenario": "Scenario: Clamp at start",
+      "items": [
+        "INV-031"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Boundary behavior",
+      "scenario": "Scenario: Clamp at end",
+      "items": [
+        "INV-031"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Fixed-canvas fit scaling",
+      "scenario": null,
+      "items": [
+        "INV-032",
+        "INV-033",
+        "INV-034"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Fixed-canvas fit scaling",
+      "scenario": "Scenario: Uniform scaling on resize",
+      "items": [
+        "INV-032"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "requirement": "Requirement: Fixed-canvas fit scaling",
+      "scenario": "Scenario: Default canvas dimensions",
+      "items": [
+        "INV-033"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Interactive requirement gathering",
+      "scenario": null,
+      "items": [
+        "INV-035",
+        "INV-036",
+        "INV-037",
+        "INV-038",
+        "INV-040"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Interactive requirement gathering",
+      "scenario": "Scenario: Prompt is missing details",
+      "items": [
+        "INV-037",
+        "INV-035"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Interactive requirement gathering",
+      "scenario": "Scenario: User proceeds with partial detail",
+      "items": [
+        "INV-038"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Interactive requirement gathering",
+      "scenario": "Scenario: Prompt already complete",
+      "items": [
+        "INV-039"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Interactive requirement gathering",
+      "scenario": "Scenario: ASCII mockup for a complex step",
+      "items": [
+        "INV-040"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Self-bootstrapping scaffold",
+      "scenario": null,
+      "items": [
+        "INV-041",
+        "INV-042",
+        "INV-043",
+        "INV-044",
+        "INV-045",
+        "INV-046",
+        "INV-047",
+        "INV-048"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Self-bootstrapping scaffold",
+      "scenario": "Scenario: Empty or fully unscaffolded directory",
+      "items": [
+        "INV-049"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Self-bootstrapping scaffold",
+      "scenario": "Scenario: Already scaffolded",
+      "items": [
+        "INV-050"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Self-bootstrapping scaffold",
+      "scenario": "Scenario: Partial scaffold",
+      "items": [
+        "INV-051"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Self-bootstrapping scaffold",
+      "scenario": "Scenario: Scaffold does not impose a style system",
+      "items": [
+        "INV-047"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Self-bootstrapping scaffold",
+      "scenario": "Scenario: Templates resolve from skill directory",
+      "items": [
+        "INV-048"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Self-bootstrapping scaffold",
+      "scenario": "Scenario: Monorepo target",
+      "items": [
+        "INV-052"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Self-bootstrapping scaffold",
+      "scenario": "Scenario: Standalone project target",
+      "items": [
+        "INV-053"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Self-bootstrapping scaffold",
+      "scenario": "Scenario: Non-empty project missing scaffolding",
+      "items": [
+        "INV-054"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Create a new presentation",
+      "scenario": null,
+      "items": [
+        "INV-055"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Create a new presentation",
+      "scenario": "Scenario: New presentation is self-contained and routed",
+      "items": [
+        "INV-055"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Create a new presentation",
+      "scenario": "Scenario: Presentation owns its visual style",
+      "items": [
+        "INV-056",
+        "INV-057"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Create a new presentation",
+      "scenario": "Scenario: Existing presentations are preserved",
+      "items": [
+        "INV-058"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Modify an existing presentation",
+      "scenario": null,
+      "items": [
+        "INV-059",
+        "INV-060",
+        "INV-061"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Modify an existing presentation",
+      "scenario": "Scenario: Target unspecified or ambiguous",
+      "items": [
+        "INV-060"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Modify an existing presentation",
+      "scenario": "Scenario: Scoped modification",
+      "items": [
+        "INV-061"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Self-verify before reporting completion",
+      "scenario": null,
+      "items": [
+        "INV-062",
+        "INV-063",
+        "INV-064",
+        "INV-065"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Self-verify before reporting completion",
+      "scenario": "Scenario: Checks run before done",
+      "items": [
+        "INV-062"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Self-verify before reporting completion",
+      "scenario": "Scenario: Failures are fixed, not reported as success",
+      "items": [
+        "INV-064"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Generated presentation quality bar",
+      "scenario": null,
+      "items": [
+        "INV-066",
+        "INV-067",
+        "INV-068",
+        "INV-070",
+        "INV-069"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Generated presentation quality bar",
+      "scenario": "Scenario: Builds clean",
+      "items": [
+        "INV-066"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Generated presentation quality bar",
+      "scenario": "Scenario: Renders without errors",
+      "items": [
+        "INV-067"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Generated presentation quality bar",
+      "scenario": "Scenario: Captions and navigation present",
+      "items": [
+        "INV-068"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Generated presentation quality bar",
+      "scenario": "Scenario: Visual composition is inspected",
+      "items": [
+        "INV-070"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Generated presentation quality bar",
+      "scenario": "Scenario: Screenshot helper is project-local",
+      "items": [
+        "INV-065"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Generated presentation quality bar",
+      "scenario": "Scenario: Visual warnings are reviewed",
+      "items": [
+        "INV-071"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "requirement": "Requirement: Generated presentation quality bar",
+      "scenario": "Scenario: Active chrome and attribution are styled locally",
+      "items": [
+        "INV-072"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "requirement": "Requirement: Build verification",
+      "scenario": null,
+      "items": [
+        "INV-073"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "requirement": "Requirement: Build verification",
+      "scenario": "Scenario: Build must succeed",
+      "items": [
+        "INV-073"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "requirement": "Requirement: Committed reference sample",
+      "scenario": null,
+      "items": [
+        "INV-074",
+        "INV-075",
+        "INV-076",
+        "INV-077",
+        "INV-078",
+        "INV-079",
+        "INV-080",
+        "INV-081",
+        "INV-082",
+        "INV-083",
+        "INV-084",
+        "INV-085",
+        "INV-086",
+        "INV-087"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "requirement": "Requirement: Committed reference sample",
+      "scenario": "Scenario: Sample exists and matches the outline",
+      "items": [
+        "INV-088"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "requirement": "Requirement: Committed reference sample",
+      "scenario": "Scenario: Missing sample fails",
+      "items": [
+        "INV-089"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "requirement": "Requirement: Render verification",
+      "scenario": null,
+      "items": [
+        "INV-090",
+        "INV-091",
+        "INV-111",
+        "INV-112"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "requirement": "Requirement: Render verification",
+      "scenario": "Scenario: Every step renders cleanly",
+      "items": [
+        "INV-090"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "requirement": "Requirement: Render verification",
+      "scenario": "Scenario: Preview uses IPv4 loopback",
+      "items": [
+        "INV-091"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "requirement": "Requirement: Render verification",
+      "scenario": "Scenario: Console or page error fails verification",
+      "items": [
+        "INV-092"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "requirement": "Requirement: Render verification",
+      "scenario": "Scenario: Step error fails verification",
+      "items": [
+        "INV-092"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "requirement": "Requirement: Pass/fail reporting",
+      "scenario": null,
+      "items": [
+        "INV-093"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "requirement": "Requirement: Pass/fail reporting",
+      "scenario": "Scenario: Clear outcome",
+      "items": [
+        "INV-093"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "requirement": "Requirement: Visual inspection artifacts",
+      "scenario": null,
+      "items": [
+        "INV-095",
+        "INV-096",
+        "INV-097",
+        "INV-099",
+        "INV-100",
+        "INV-101"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "requirement": "Requirement: Visual inspection artifacts",
+      "scenario": "Scenario: Capture step screenshots",
+      "items": [
+        "INV-095"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "requirement": "Requirement: Visual inspection artifacts",
+      "scenario": "Scenario: Screenshots are settled",
+      "items": [
+        "INV-096"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "requirement": "Requirement: Visual inspection artifacts",
+      "scenario": "Scenario: Suspicious overlap is reported",
+      "items": [
+        "INV-097"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "requirement": "Requirement: Visual inspection artifacts",
+      "scenario": "Scenario: Intentional overlap can be marked",
+      "items": [
+        "INV-098"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "requirement": "Requirement: Visual inspection artifacts",
+      "scenario": "Scenario: Indistinct active chrome is reported",
+      "items": [
+        "INV-099"
+      ]
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "requirement": "Requirement: Visual inspection artifacts",
+      "scenario": "Scenario: Unpolished attribution is reported",
+      "items": [
+        "INV-100"
+      ]
+    }
+  ],
+  "excluded": [
+    {
+      "document": "openspec/changes/create-and-scene/proposal.md",
+      "heading": "Why",
+      "reason": "Motivation only; the obligation it motivates (one evolving diagram rather than slides) is itemized from the spec and What Changes."
+    },
+    {
+      "document": "openspec/changes/create-and-scene/proposal.md",
+      "heading": "Capabilities",
+      "reason": "Names and one-line summaries of the three capabilities; every obligation is itemized from the corresponding spec file."
+    },
+    {
+      "document": "openspec/changes/create-and-scene/proposal.md",
+      "heading": "Technical Approach",
+      "reason": "Partially excluded: the terminology note (\"presentation\" is canonical, \"talk\" an informal synonym, the `Talk.tsx` entry filename is incidental) and the topic → outline → scene-state → route → verification flow sketch describe vocabulary and internal structure with no separately observable obligation. The hybrid-skill decision and the Vite/React/TypeScript stack from this section are itemized."
+    },
+    {
+      "document": "openspec/changes/create-and-scene/proposal.md",
+      "heading": "Impact",
+      "reason": "Restates What Changes (skill definition, kit code, verification scripts); no new obligation."
+    },
+    {
+      "document": "openspec/changes/create-and-scene/design.md",
+      "heading": "Context",
+      "reason": "Describes the starting scaffold state and runtime implementation techniques (motion layoutId, AnimatePresence); observable behaviors are itemized from the specs."
+    },
+    {
+      "document": "openspec/changes/create-and-scene/design.md",
+      "heading": "Repository layout",
+      "reason": "Partially excluded: file and module layout (presentation-kit/*, chrome/*, nodes/*, entities.ts, steps/*.tsx, nine Step objects, scripts/verify.mjs) is implementation detail not made a contract by any spec. Items drawn from this section: era-based table of contents and the sample opening in browse mode."
+    },
+    {
+      "document": "openspec/changes/create-and-scene/design.md",
+      "heading": "Risks / Trade-offs",
+      "reason": "Partially excluded: StrictMode/motion double-invoke watch item and Playwright-in-CI cost are implementation notes; the permission to run a lighter build plus single-route render before the full verify is already bounded by the spec self-verify minimum. Target confirmation and template drift are itemized."
+    },
+    {
+      "document": "openspec/changes/create-and-scene/design.md",
+      "heading": "Migration Plan",
+      "reason": "Implementation sequencing and rollback for a greenfield change; no product obligation."
+    },
+    {
+      "document": "openspec/changes/create-and-scene/design.md",
+      "heading": "Open Questions",
+      "reason": "Leaves the skill name (default `presentation`) and the exact monorepo-detection signal set to implementation; the design states the scaffold-into-presentations/ behavior is fixed, which is itemized from the spec."
+    },
+    {
+      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "heading": "Requirement: Committed reference sample",
+      "reason": "Partially excluded: the deferred-to-design note (per-step entity shapes, layout coordinates, layoutId namespace, colors, and motion timing) is explicitly non-normative. The sample's title, steps, captions, eras, and scene intent are itemized."
+    },
+    {
+      "document": "openspec/changes/create-and-scene/tasks.md",
+      "heading": "Tasks: create-and-scene",
+      "reason": "Task ordering and dependencies between implementation tasks; no product obligation."
+    },
+    {
+      "document": "openspec/changes/create-and-scene/test-plan.md",
+      "heading": "Coverage Strategy",
+      "reason": "Describes test-layer allocation and acceptance-test safety constraints (disposable copies, no publication); not product obligations."
+    },
+    {
+      "document": "openspec/changes/create-and-scene/test-plan.md",
+      "heading": "Agent Acceptance Tests",
+      "reason": "AT-001 through AT-004 exercise obligations already itemized from the specs; they add no new product obligation."
+    }
+  ]
+}
