@@ -160,10 +160,18 @@ export function buildSpanAuditRequest({ request, answer, spans, logSpans }) {
 
 export async function runSecondOpinion({ request, invoke, attempts = JUDGE_ATTEMPTS }) {
   let answer
+  let failureReason = 'second-opinion output exhausted'
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    try { answer = parseAnswer(await invoke(request)); break } catch { /* malformed output is retried */ }
+    let output
+    try { output = await invoke(request) } catch (error) {
+      failureReason = `second-opinion invocation failed: ${error instanceof Error ? error.message : String(error)}`
+      continue
+    }
+    try { answer = parseAnswer(output); break } catch {
+      failureReason = 'second-opinion output exhausted'
+    }
   }
-  if (!answer) return { ok: false, reason: 'second-opinion output exhausted' }
+  if (!answer) return { ok: false, reason: failureReason }
   const base = { ok: true, raw_verdict: 'fail', rationale: answer.rationale,
     mismeasured_step: answer.mismeasured_step, measurement_fault: answer.measurement_fault,
     citations: answer.citations, log_citations: answer.log_citations,
@@ -179,17 +187,23 @@ export async function runSecondOpinion({ request, invoke, attempts = JUDGE_ATTEM
     return { ...base, decision: 'overturn-rejected', verdict: 'fail', rejection_reason: error.message }
   }
   let audit
+  failureReason = 'second-opinion audit output exhausted'
   for (let attempt = 0; attempt < attempts; attempt += 1) {
+    let output
+    try { output = await invoke(auditRequest) } catch (error) {
+      failureReason = `second-opinion audit invocation failed: ${error instanceof Error ? error.message : String(error)}`
+      continue
+    }
     try {
-      const parsed = JSON.parse(await invoke(auditRequest))
+      const parsed = JSON.parse(output)
       if (!Array.isArray(parsed?.results) || parsed.results.length !== 1) throw new Error('malformed audit')
       audit = parsed.results.find(({ id }) => id === request.target.id)
       if (!audit || !['confirmed', 'contradicted', 'insufficient'].includes(audit.classification)
         || !audit.rationale?.trim() || !Array.isArray(audit.evidence) || !audit.evidence.length) throw new Error('malformed audit')
       break
-    } catch { /* malformed audit is retried */ }
+    } catch { failureReason = 'second-opinion audit output exhausted' }
   }
-  if (!audit) return { ok: false, reason: 'second-opinion audit output exhausted' }
+  if (!audit) return { ok: false, reason: failureReason }
   return audit.classification === 'confirmed'
     ? { ...base, decision: 'overturn', verdict: 'pass', audit }
     : { ...base, decision: 'overturn-rejected', verdict: 'fail', audit, rejection_reason: audit.rationale }

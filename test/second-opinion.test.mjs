@@ -52,6 +52,34 @@ test('malformed verifier output exhausts retries without silently upholding', as
   assert.equal(outcome.ok, false)
 })
 
+test('verifier invocation failure retries and keeps its cause when exhausted', async () => {
+  let calls = 0
+  const outcome = await runSecondOpinion({ request: { target: { kind: 'criterion', id: 'demo-supported-navigation' } },
+    attempts: 3, invoke: async () => { calls += 1; throw new Error('judge transport closed') } })
+  assert.equal(calls, 3)
+  assert.equal(outcome.ok, false)
+  assert.match(outcome.reason, /judge transport closed/)
+})
+
+test('audit invocation failure retries and keeps its cause when exhausted', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'second-opinion-audit-error-'))
+  await writeFile(join(root, 'handler.js'), 'pointer handler\n')
+  const request = { target: { kind: 'criterion', id: 'demo-supported-navigation' },
+    verified_source_paths: ['handler.js'], input_roots: { source: root }, audit_cwd: root,
+    failing_record: { result: { verdict: 'fail' } } }
+  const answer = { ...uphold, decision: 'overturn', mismeasured_step: 'swipe',
+    measurement_fault: 'touch input mismatch', citations: [{ path: 'handler.js', start_line: 1, end_line: 1 }] }
+  let calls = 0
+  const outcome = await runSecondOpinion({ request, attempts: 3, invoke: async (call) => {
+    calls += 1
+    if (call.audit_stage) throw 'audit transport closed'
+    return JSON.stringify(answer)
+  } })
+  assert.equal(calls, 4)
+  assert.equal(outcome.ok, false)
+  assert.match(outcome.reason, /audit transport closed/)
+})
+
 test('an audited exact source span can overturn and invalid line ranges cannot', async () => {
   const root = await mkdtemp(join(tmpdir(), 'second-opinion-'))
   await mkdir(join(root, 'src'))
