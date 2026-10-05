@@ -877,6 +877,7 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
           history.push({ cycle, attempt, ok: false, error: error.message })
           partialResults.clear()
           attemptRequest = activeRequest
+          if (error?.retryable === false) break
         }
       }
     }
@@ -910,6 +911,7 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
         break
       } catch (error) {
         auditHistory.push({ cycle, attempt, ok: false, error: error.message })
+        if (error?.retryable === false) break
       }
     }
     if (!auditResults) {
@@ -1462,6 +1464,7 @@ export async function runTiebreak({ request, criteria, invoke, attempts = JUDGE_
       break
     } catch (error) {
       history.push({ attempt, ok: false, error: error instanceof Error ? error.message : String(error) })
+      if (error?.retryable === false) break
     }
   }
   const record = { criteria, inventory_kind: inventory.kind, attempts: history, results,
@@ -1485,6 +1488,7 @@ export async function runTiebreak({ request, criteria, invoke, attempts = JUDGE_
         break
       } catch (error) {
         record.audit_attempts.push({ attempt, ok: false, error: error instanceof Error ? error.message : String(error) })
+        if (error?.retryable === false) break
       }
     }
     if (!record.audit_results) return { ok: false, ...record }

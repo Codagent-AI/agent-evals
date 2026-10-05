@@ -406,3 +406,18 @@ test('replay navigation cannot leave the candidate origin through backslashes', 
   assert.equal(validReplay({ actions: [{ type: 'navigate', path: '/demo\\x' }], expect }), false)
   assert.equal(validReplay({ actions: [{ type: 'navigate', path: DEMO_PATH }], expect }), true)
 })
+
+test('a non-retryable verifier error is not retried', async () => {
+  const { runSecondOpinion } = await import('../evals/agent-runner/and-scene/lib/second-opinion.mjs')
+  let calls = 0
+  const outcome = await runSecondOpinion({
+    request: { target: { kind: 'criterion', id: 'x' }, criteria: ['x'] },
+    invoke: async () => {
+      calls += 1
+      throw Object.assign(new Error('invalid_json_schema'), { retryable: false })
+    },
+  })
+  assert.equal(outcome.ok, false)
+  assert.equal(calls, 1)
+  assert.match(outcome.reason, /invalid_json_schema/)
+})

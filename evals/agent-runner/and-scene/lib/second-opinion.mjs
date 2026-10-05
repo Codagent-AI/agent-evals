@@ -6,6 +6,33 @@ import { JUDGE_ATTEMPTS, MAX_AUDIT_PACKET_CHARS, SOURCE_AUDIT_RESULT_SCHEMA, cit
 import { JUDGE_INPUT_POLICIES } from './neutral-source.mjs'
 import { rubricCriteria } from './rubric.mjs'
 
+// OpenAI strict structured output (agent-evals #79) rejects open objects: each
+// replay action and expectation is a closed variant that lists every field.
+const closedVariant = (type, fields) => ({
+  type: 'object',
+  additionalProperties: false,
+  required: ['type', ...Object.keys(fields)],
+  properties: { type: { type: 'string', enum: [type] }, ...fields },
+})
+const REPLAY_ACTION_SCHEMAS = [
+  closedVariant('navigate', { path: { type: 'string' } }),
+  closedVariant('click', { selector: { type: 'string' } }),
+  closedVariant('press', { key: { type: 'string' } }),
+  closedVariant('keys', { text: { type: 'string' } }),
+  closedVariant('swipe', { direction: { type: 'string', enum: ['left', 'right'] },
+    input: { type: 'string', enum: ['touch', 'pointer'] } }),
+  closedVariant('wait', { ms: { type: 'integer' } }),
+]
+const REPLAY_EXPECT_SCHEMAS = [
+  closedVariant('step-index-equals', { value: { type: 'integer' } }),
+  closedVariant('step-index-changes', {}),
+  closedVariant('step-count-changes', {}),
+  closedVariant('mode-equals', { value: { type: 'string', enum: ['present', 'browse'] } }),
+  closedVariant('selector-visible', { selector: { type: 'string' } }),
+  closedVariant('selector-hidden', { selector: { type: 'string' } }),
+  closedVariant('text-present', { selector: { type: 'string' }, text: { type: 'string' } }),
+]
+
 export const SECOND_OPINION_SCHEMA = {
   type: 'object',
   required: ['decision', 'rationale', 'mismeasured_step', 'measurement_fault', 'citations', 'log_citations', 'replay'],
@@ -23,11 +50,11 @@ export const SECOND_OPINION_SCHEMA = {
       type: 'object', required: ['artifact', 'start_line', 'end_line'], additionalProperties: false,
       properties: { artifact: { type: 'string' }, start_line: { type: 'integer' }, end_line: { type: 'integer' } },
     } },
-    replay: { type: ['object', 'null'], additionalProperties: false,
+    replay: { anyOf: [{ type: 'null' }, { type: 'object', additionalProperties: false,
       required: ['actions', 'expect'], properties: {
-        actions: { type: 'array', minItems: 1, maxItems: 12, items: { type: 'object' } },
-        expect: { type: 'object' },
-      } },
+        actions: { type: 'array', minItems: 1, maxItems: 12, items: { anyOf: REPLAY_ACTION_SCHEMAS } },
+        expect: { anyOf: REPLAY_EXPECT_SCHEMAS },
+      } }] },
   },
 }
 
@@ -392,6 +419,7 @@ export async function runSecondOpinion({ request, invoke, replay, attempts = JUD
     let output
     try { output = await invoke(request) } catch (error) {
       failureReason = `second-opinion invocation failed: ${error instanceof Error ? error.message : String(error)}`
+      if (error?.retryable === false) break
       continue
     }
     try { answer = parseAnswer(output); break } catch (error) {
@@ -457,6 +485,7 @@ export async function runSecondOpinion({ request, invoke, replay, attempts = JUD
     let output
     try { output = await invoke(auditRequest) } catch (error) {
       failureReason = `second-opinion audit invocation failed: ${error instanceof Error ? error.message : String(error)}`
+      if (error?.retryable === false) break
       continue
     }
     try {

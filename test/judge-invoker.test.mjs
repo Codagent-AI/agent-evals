@@ -680,3 +680,28 @@ test('a capacity rejection that never clears still fails the call', async () => 
   )
   assert.ok(spawnImpl.calls.length > 1)
 })
+
+// Agent-evals #79: a schema OpenAI rejects fails identically on every retry.
+test('an invalid_json_schema rejection fails fast as a non-retryable harness error', async () => {
+  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const message = JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', code: 'invalid_json_schema',
+    message: "Invalid schema for response_format 'codex_output_schema'" }, status: 400 })
+  const spawnImpl = fakeSpawn((child) => {
+    child.stdout.write([
+      JSON.stringify({ type: 'thread.started', thread_id: 't' }),
+      JSON.stringify({ type: 'turn.started' }),
+      JSON.stringify({ type: 'error', message }),
+      JSON.stringify({ type: 'turn.failed', error: { message } }),
+    ].join('\n') + '\n')
+    child.exit(1)
+  })
+  const invoke = createCodexJudgeInvoker({ runDir, candidateWorktree: join(runDir, 'c'), spawnImpl, sleep: async () => {} })
+
+  const error = await invoke({ job: 'second-opinion', authority: { model: 'm' }, schema: {}, prompt: 'x' }).catch((caught) => caught)
+
+  assert.equal(spawnImpl.calls.length, 1)
+  assert.equal(error.code, 'judge-schema-invalid')
+  assert.equal(error.retryable, false)
+  assert.equal(error.owner, 'evaluation-harness')
+  assert.match(error.message, /invalid_json_schema/)
+})

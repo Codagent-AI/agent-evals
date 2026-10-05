@@ -396,6 +396,9 @@ export function createCodexJudgeInvoker({
         await Promise.all([files.events.close(), files.stderr.close()])
       }
       const rejected = rejectedBeforeWork(result)
+      // A response format OpenAI rejects is rejected identically on every
+      // retry (agent-evals #79), so it fails fast as a harness defect.
+      const schemaRejection = /invalid_json_schema/.test(`${rejected ?? ''}\n${result.stdout ?? ''}`)
       const usageEntry = extractCodexUsage(result.usageLine, {
         request,
         invocationId: `${files.attemptStem}-${Date.now()}`,
@@ -420,6 +423,11 @@ export function createCodexJudgeInvoker({
         throw new Error(
           `Codex judge ${request.job ?? 'job'} exceeded the ${maxStdoutBytes}-byte stdout limit`,
         )
+      }
+      if (schemaRejection) {
+        throw Object.assign(new Error(
+          `Codex judge ${request.job ?? 'job'} output schema was rejected (invalid_json_schema): ${rejected ?? detail(result)}`,
+        ), { code: 'judge-schema-invalid', retryable: false, owner: 'evaluation-harness', resumable: false })
       }
       if (rejected !== null && CAPACITY_PATTERN.test(rejected) && capacityWaits < CAPACITY_RETRIES) {
         await sleep(CAPACITY_BASE_DELAY_MS * 2 ** capacityWaits)
