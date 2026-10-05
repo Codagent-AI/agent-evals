@@ -805,6 +805,17 @@ export async function runEvaluation({
     await saveCheckpoint(checkpointPath, checkpoint)
   }
 
+  function neutralJudgeInputs() {
+    if (!record.neutral) return null
+    return {
+      root: join(runDir, record.neutral.judge?.root ?? 'neutral/judge'),
+      source_root: join(runDir, record.neutral.source.root),
+      requirements_root: join(runDir, record.neutral.requirements.root),
+      audit_root: join(runDir, '.runtime/judge-workspace'),
+      manifest: record.neutral.manifest,
+    }
+  }
+
   async function runTerminalSecondOpinion({ gate, stage, reason, verified = null, phase }) {
     if (mode === 'reference-baseline') return null
     record.terminalFailure = { gate, stage, reason }
@@ -828,13 +839,7 @@ export async function runEvaluation({
     ].join('\n')
     await writeFile(join(runDir, logArtifact), evidence)
     const sourceFiles = record.neutral ? null : (await collectSourceEvidence(candidateWorktree)).files
-    const neutral = record.neutral ? {
-      root: join(runDir, record.neutral.judge?.root ?? 'neutral/judge'),
-      source_root: join(runDir, record.neutral.source.root),
-      requirements_root: join(runDir, record.neutral.requirements.root),
-      audit_root: join(runDir, '.runtime/judge-workspace'),
-      manifest: record.neutral.manifest,
-    } : { root: candidateWorktree, source_root: candidateWorktree,
+    const neutral = neutralJudgeInputs() ?? { root: candidateWorktree, source_root: candidateWorktree,
       audit_root: candidateWorktree, sources: sourceFiles }
     const target = { kind: 'terminal', id: gate }
     const request = buildSecondOpinionRequest({ target, rubrics, browser: null, judging: null,
@@ -1489,13 +1494,7 @@ export async function runEvaluation({
             ...(record.browser?.gates ?? []),
           ],
           sources: record.sourceEvidence.files,
-          neutral: record.neutral ? {
-            root: join(runDir, record.neutral.judge?.root ?? 'neutral/judge'),
-            source_root: join(runDir, record.neutral.source.root),
-            requirements_root: join(runDir, record.neutral.requirements.root),
-            audit_root: join(runDir, '.runtime/judge-workspace'),
-            manifest: record.neutral.manifest,
-          } : null,
+          neutral: neutralJudgeInputs(),
           evidenceViews,
           notObserved: (record.browser?.criteria ?? []).filter(({ outcome }) => outcome === 'not-observed'),
           mode,
@@ -1548,13 +1547,7 @@ export async function runEvaluation({
       if (mode !== 'reference-baseline' && record.browser) {
         const directory = join(runDir, 'phases/second-opinions')
         await mkdir(directory, { recursive: true })
-        const neutral = record.neutral ? {
-          root: join(runDir, record.neutral.judge?.root ?? 'neutral/judge'),
-          source_root: join(runDir, record.neutral.source.root),
-          requirements_root: join(runDir, record.neutral.requirements.root),
-          audit_root: join(runDir, '.runtime/judge-workspace'),
-          manifest: record.neutral.manifest,
-        } : { root: sourceRoot, source_root: sourceRoot, audit_root: sourceRoot,
+        const neutral = neutralJudgeInputs() ?? { root: sourceRoot, source_root: sourceRoot, audit_root: sourceRoot,
           sources: record.sourceEvidence.files }
         const checked = []
         const runOpinions = async (targets) => {
