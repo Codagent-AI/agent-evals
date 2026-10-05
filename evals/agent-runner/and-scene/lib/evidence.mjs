@@ -65,12 +65,24 @@ export const EVIDENCE_ROLE_REGISTRY = [
     role: 'final-handoff',
     required: true,
     multiple: false,
+    // Agent Runner's acceptance gate keeps a tester-written handoff as
+    // acceptance-handoff-tester.md when acceptance does not converge, and
+    // writes its own short notice to acceptance-handoff.md.
     aliases: [
       'acceptance-handoff.md',
       'final-acceptance-handoff.md',
       'acceptance-final-handoff.md',
       'final-handoff.md',
+      'acceptance-handoff-tester.md',
     ],
+  },
+  {
+    // The Runner-generated non-convergence notice. It is the final handoff only
+    // when no candidate-written handoff exists; it is never matched by name.
+    role: 'acceptance-gate-notice',
+    required: false,
+    multiple: false,
+    aliases: [],
   },
   {
     role: 'assumptions-ledger',
@@ -125,7 +137,24 @@ export const EVIDENCE_ROLE_REGISTRY = [
       'context-gap-audit.md',
     ],
   },
+  {
+    // Any other file a verified record references, such as product source or
+    // a skill file the tester reviewed. Retained as supporting material under
+    // its own role rather than mislabelled as a session audit.
+    role: 'referenced-material',
+    required: false,
+    multiple: true,
+    aliases: [],
+  },
 ]
+
+// The first line Agent Runner's acceptance gate writes into its own
+// non-convergence notice (workflows/core/acceptance-gate.sh).
+const RUNNER_GATE_NOTICE_HEADING = '# Acceptance did not converge within'
+
+function isRunnerGateNotice(bytes) {
+  return bytes.toString('utf8').replace(/^\uFEFF/, '').startsWith(RUNNER_GATE_NOTICE_HEADING)
+}
 
 // A required role is present when it or any role declared to satisfy it is.
 function missingRequiredRoles(presentRoles) {
@@ -570,22 +599,33 @@ async function discoverCandidateFiles({ worktree, sessionDir }) {
   const findings = []
   const selected = new Map()
   for (const path of scanned) {
-    const role = roleFor(path)
+    let role = roleFor(path)
     if (!role) continue
     const origin = await safeOrigin(path, roots)
     if (!origin) {
       findings.push(finding('unsafe-artifact', `refused evidence outside an approved root: ${path}`))
       continue
     }
+    let bytes = null
+    if (role === 'final-handoff') {
+      bytes = await readFile(path)
+      if (bytes.length === 0) continue
+      if (isRunnerGateNotice(bytes)) role = 'acceptance-gate-notice'
+    }
     const definition = EVIDENCE_ROLE_REGISTRY.find((entry) => entry.role === role)
     if (!definition.multiple && selected.has(role)) continue
-    const bytes = await readFile(path)
+    bytes ??= await readFile(path)
     if (bytes.length === 0) continue
     selected.set(definition.multiple ? `${role}:${origin.namespace}:${origin.relative_path}` : role, {
       role,
       origin,
       bytes,
     })
+  }
+  // The notice stands in for the handoff only when the candidate wrote none.
+  if (!selected.has('final-handoff') && selected.has('acceptance-gate-notice')) {
+    selected.set('final-handoff', { ...selected.get('acceptance-gate-notice'), role: 'final-handoff' })
+    selected.delete('acceptance-gate-notice')
   }
 
   const handoff = [...selected.values()].find(({ role }) => role === 'final-handoff')
@@ -616,7 +656,7 @@ async function discoverCandidateFiles({ worktree, sessionDir }) {
           const bytes = await readFile(path)
           if (bytes.length === 0) continue
           accepted = true
-          const role = roleFor(path) ?? 'session-audit'
+          const role = roleFor(path) ?? 'referenced-material'
           const definition = EVIDENCE_ROLE_REGISTRY.find((entry) => entry.role === role)
           const key = definition?.multiple === false ? role : `${role}:${origin.namespace}:${origin.relative_path}`
           if (!selected.has(key)) {
@@ -1420,12 +1460,14 @@ const TESTING_PACKET_ROLES = [
   'acceptance-flow-record',
   'exploration-log',
   'final-handoff',
+  'acceptance-gate-notice',
   'findings-history',
   'assumptions-ledger',
   'screenshot-metadata',
   'tested-revision',
   'acceptance-pass-record',
   'session-audit',
+  'referenced-material',
 ]
 
 // The requirement and scenario headings of the approved specs, so the testing
@@ -1549,18 +1591,23 @@ export async function materializeEvidenceJudgeViews({
 
   // Pass records reached this view as referenced session material before they
   // had a role of their own, so they stay here.
+  // Packet order under the character budget: the decision records first.
   const assumptionRoles = [
-    'acceptance-pass-record',
     'assumptions-ledger',
-    'exploration-log',
     'final-handoff',
+    'acceptance-gate-notice',
     'findings-history',
+    'exploration-log',
+    'acceptance-pass-record',
     'session-audit',
+    'referenced-material',
   ]
   const assumptionArtifacts = await copyViewArtifacts({
     runDir,
     root: assumptionRoot,
-    artifacts: (candidate?.artifacts ?? []).filter(({ role }) => assumptionRoles.includes(role)),
+    artifacts: (candidate?.artifacts ?? [])
+      .filter(({ role }) => assumptionRoles.includes(role))
+      .sort((left, right) => assumptionRoles.indexOf(left.role) - assumptionRoles.indexOf(right.role)),
   })
   const assumptionIndex = {
     ownership_boundary: 'untrusted candidate ambiguity sources',

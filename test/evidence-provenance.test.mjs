@@ -998,8 +998,8 @@ test('testing and assumption judges receive bounded, distinct evidence views', a
   assert.match(views['testing-evidence'].packet, /Full flow: passed/)
   assert.ok(views['testing-evidence'].packet.length <= 220_000)
   assert.deepEqual(views['assumption-handling'].roles, [
-    'acceptance-pass-record', 'assumptions-ledger', 'exploration-log', 'final-handoff', 'findings-history',
-    'session-audit',
+    'assumptions-ledger', 'final-handoff', 'acceptance-gate-notice', 'findings-history', 'exploration-log',
+    'acceptance-pass-record', 'session-audit', 'referenced-material',
   ])
   const testingIndex = JSON.parse(await readFile(
     join(context.runDir, views['testing-evidence'].index),
@@ -1553,4 +1553,99 @@ test('an absolute output path describes only that screenshot, not its path suffi
   ))
   assert.equal(screenshot('other/flow-b/step.png').verification_state, 'verified')
   assert.equal(screenshot('flow-b/step.png').verification_state, 'defective')
+})
+
+// Agent Runner's acceptance gate replaces a non-converged acceptance-handoff.md
+// with a short generated notice and keeps the tester's own handoff as
+// acceptance-handoff-tester.md. Round-0 baseline repetition 2 was judged on
+// the notice, which omits the decisions the tester handoff preserves.
+const RUNNER_NOTICE = [
+  '# Acceptance did not converge within 3 rounds',
+  '',
+  `Local HEAD: ${FINAL_SHA}`,
+  '',
+  'Reasons:',
+  '',
+  `- the tester's round status is 'NOT_READY', not 'READY ${FINAL_SHA}'`,
+  '',
+  'Open findings: /workspace/session/output/acceptance-findings.md',
+  'Unresolved assumptions: /workspace/session/output/acceptance-assumptions.md',
+  'Tester handoff: /workspace/session/output/acceptance-handoff-tester.md',
+].join('\n')
+
+test('the tester handoff, not the Runner non-convergence notice, is the final handoff', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'acceptance-handoff.md': RUNNER_NOTICE,
+    'acceptance-handoff-tester.md': [
+      '# Acceptance handoff',
+      `Current head SHA: ${FINAL_SHA}`,
+      '**Status: NOT READY.** U3 still needs a product decision on narrow readability.',
+      '- `acceptance-screenshots/step-2.png`: step 2 after ArrowRight.',
+    ].join('\n'),
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  const byName = (name) => manifest.artifacts.find(({ origin }) => origin.relative_path === `output/${name}`)
+  assert.equal(byName('acceptance-handoff-tester.md').role, 'final-handoff')
+  assert.equal(byName('acceptance-handoff.md').role, 'acceptance-gate-notice')
+  assert.deepEqual(manifest.missing_roles, [])
+
+  const views = await materializeEvidenceJudgeViews({
+    runDir: context.runDir,
+    candidate: manifest,
+    evaluator: null,
+    contradictions: { items: [] },
+    lineage: { final_sha: FINAL_SHA, accepted: true },
+  })
+  for (const view of ['testing-evidence', 'assumption-handling']) {
+    const packet = views[view].packet
+    assert.match(packet, /U3 still needs a product decision/, view)
+    assert.ok(packet.indexOf('(final-handoff)') < packet.indexOf('(acceptance-gate-notice)'), view)
+  }
+})
+
+test('a Runner non-convergence notice with no tester handoff remains the final handoff', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, { 'acceptance-handoff.md': RUNNER_NOTICE })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  const handoff = manifest.artifacts.find(({ origin }) => origin.relative_path === 'output/acceptance-handoff.md')
+  assert.equal(handoff.role, 'final-handoff')
+})
+
+test('a file a record merely references is supporting material, not a session audit', async () => {
+  const context = await fixture()
+  await mkdir(join(context.worktree, 'skills/presentation'), { recursive: true })
+  await writeFile(join(context.worktree, 'skills/presentation/SKILL.md'), '# Presentation skill\n')
+  await writeExploratoryArtifacts(context, {
+    'acceptance-handoff.md': [
+      '# Acceptance handoff',
+      `Current head SHA: ${FINAL_SHA}`,
+      '- Reviewed `skills/presentation/SKILL.md` for the live flows.',
+      '- `acceptance-screenshots/step-2.png`: step 2 after ArrowRight.',
+    ].join('\n'),
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  const skill = manifest.artifacts.find(({ origin }) => origin.relative_path === 'skills/presentation/SKILL.md')
+  assert.equal(skill.role, 'referenced-material')
 })
