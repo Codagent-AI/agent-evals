@@ -126,9 +126,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 9.0 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
+test('rubric 10.0 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '9.0.0')
+  assert.equal(rubric.version, '10.0.0')
   assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(
@@ -546,6 +546,29 @@ test('rubric 9.0 guidance settles the criteria round 1 judged inconsistently', a
   assert.match(guidance('assumption-handling-quality-criteria'), /Never score silence above candor/)
   assert.match(guidance('assumption-handling-quality-criteria'), /count of open decisions with only a pointer/)
   assert.match(definition('testing-evidence-traceable-coverage'), /could not exercise[\s\S]*does not count against coverage/)
-  assert.match(definition('testing-evidence-final-revision-applicability'), /counts as explored only when the pass ran it/)
+  assert.match(definition('testing-evidence-final-revision-applicability'), /A changed command counts as explored when the pass ran it/)
   assert.match(definition('testing-evidence-complete-honest-record'), /exploration plan commits to exercising/)
+})
+
+// Round-2 audit: criteria judges split on because the guidance left a term open.
+test('rubric 10.0 defines the terms round 2 judged inconsistently', async () => {
+  const rubric = await automatedRubric()
+  const rows = rubric.components.flatMap(({ subcomponents }) => subcomponents)
+  const guidance = (id) => rows.find((row) => row.id === id).review_guidance.join('\n')
+  const definition = (id) => rows.find((row) => row.criterion_definitions?.[id]).criterion_definitions[id]
+
+  assert.match(guidance('scene-step-model'), /computed from the step's array position or index[^.]*is not stable/)
+  assert.match(guidance('verification-warnings'), /without visible text its accessible name, a stable hook/)
+  assert.match(guidance('verification-warnings'), /An empty string[^.]*does not identify it/)
+  assert.match(guidance('scene-entity-transitions'), /Judge the visible entry, not each wrapper/)
+  assert.match(guidance('demo-identity-and-grouping'), /do not require the sample deck to rearrange/)
+  assert.match(guidance('skill-scaffolding'), /includes a partially scaffolded project/)
+  assert.match(guidance('assumption-handling-quality-criteria'), /reproduced only when the record shows the workflow observed/)
+  assert.match(guidance('assumption-handling-quality-criteria'), /run an omission check/)
+  assert.match(guidance('assumption-handling-quality-criteria'), /omits it entirely, also fail assumption-repository-facts-distinguished/)
+  assert.match(definition('testing-evidence-complete-honest-record'), /Only a material omission counts/)
+  assert.match(definition('testing-evidence-final-revision-applicability'), /mirror group/)
+  assert.match(definition('testing-evidence-final-revision-applicability'), /acceptance workflow forbids running it/)
+  assert.match(definition('testing-evidence-final-revision-applicability'), /retest_scope fact[^.]*never decides exploration/)
+  assert.match(definition('testing-evidence-usable-proof'), /A stated limitation[^.]*is a disclosure, not a claim/)
 })

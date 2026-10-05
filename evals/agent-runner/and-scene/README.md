@@ -21,32 +21,48 @@ log audit.
 
 ## Robust judging
 
-No single model sample decides a scored criterion. Each judge job runs two
-independent samples with identical inputs, concurrently; source-job samples
-each pass through their own closed-world source audit. A verdict both samples
-agree on stands, pass or fail. A criterion they disagree on goes to a third
-independent sample that gets the job's unchanged context and never sees the
-first two verdicts, so its vote is the majority. A majority pass must cite line
-spans (`path`, `start_line`, `end_line`) that the harness validates exactly as
-the browser second opinion does: the path must be in the verified neutral
-source inventory (or the materialized evidence view for the testing-evidence
-and assumption-handling jobs), resolve inside it without a symbolic link, and
-the range must lie inside the file and span under 200 lines. The quoted lines
-go to a closed-world span audit that confirms the pass only when they satisfy
-every clause of the criterion's requirement; otherwise the criterion fails
-with the audit reason. Invalid third-sample output is retried and, once
-exhausted, leaves the job unobserved, never failed.
+No single model call decides a scored criterion. Each judge job runs two
+independent samples with identical inputs, concurrently, at a pinned reasoning
+effort (`medium`, the judge model's default). Each source-job sample passes
+through its own closed-world source audit: a contradiction corrects that
+sample's vote, an undecided audit gets one focused re-cite, and a verdict still
+undecided after that stands as the sample's vote rather than spending more
+citation cycles (a browser-fallback pass, which must be proven from source,
+fails instead). A verdict both samples agree on stands, pass or fail. A
+criterion they disagree on goes to a third independent sample that gets the
+job's unchanged context and never sees the first two verdicts, so its vote is
+the majority.
+
+A majority pass must cite line spans (`path`, `start_line`, `end_line`) that
+the harness validates mechanically, exactly as the browser second opinion
+does: the path must be in the verified neutral source inventory (or the
+materialized evidence view for the testing-evidence and assumption-handling
+jobs), resolve inside it without a symbolic link, and the range must lie inside
+the file and span under 200 lines. A closed-world span audit then checks the
+quoted lines against every clause of the criterion's requirement. Only
+`confirmed` is recorded as confirmed; `insufficient` asks the same third sample
+to re-cite once, and if the audit still cannot decide, the majority stands with
+that noted; `contradicted` is replicated by a second independent audit, and the
+majority pass is withdrawn only when both audits find a contradiction. So a
+split is decided by votes, and an audit can overturn a vote only when two
+audits agree. Invalid third-sample output is retried and, once exhausted,
+leaves the job unobserved, never failed.
 
 Every judge sees, beside each criterion, the requirement it traces to: the
 full fixture scenario from `fixture-snapshot/` for a fixture-owned criterion,
-or the eval-owned reason. Each criterion's evidence records its judging basis
-(`consensus-pass`, `consensus-fail`, `majority-pass`, `majority-fail`),
-`phases/product-judging.json` keeps every sample, the third-sample vote, and
-the per-criterion consensus, and `phases/eval-owned-usage.jsonl` records each
+or the eval-owned reason. The assumption-handling view also carries the full
+approved requirements as reference, so its judge can run the omission check.
+Each criterion's evidence records its judging basis (`consensus-pass`,
+`consensus-fail`, `majority-pass`, `majority-fail`), `phases/product-judging.json`
+keeps every sample, the third-sample vote with its audits, and the
+per-criterion consensus, and `phases/eval-owned-usage.jsonl` records each
 call's `stage` (`<job>:sample-1`, `<job>:sample-2`, `<job>:tiebreak`,
-`<job>:tiebreak-audit`). A Codex turn rejected as at capacity before any model
-output is waited out with backoff, without spending a judge attempt, and is
-recorded with zero tokens so judging usage stays complete.
+`<job>:tiebreak-recite`, `<job>:tiebreak-audit`). A Codex turn rejected as at
+capacity before any model output is waited out with backoff, without spending
+a judge attempt, and is recorded with zero tokens. A response schema OpenAI
+rejects (`invalid_json_schema`) fails fast as a harness error; every schema the
+harness sends is checked against strict structured-output rules in
+`test/codex-judge-schemas.test.mjs`.
 
 `rubric-history.json` records the content hash of every automated rubric
 version; a test fails when the rubric changes without a new version.
@@ -540,7 +556,7 @@ final-revision criterion: the SHA on the last non-empty line of the verified tes
 relation to the final SHA, and the files changed since, split into product,
 test-only, and harness-owned paths. Each verified pass record that declares a
 `Diff base:` also gets the files between that base and the revision it tested,
-so the judge can check that a diff-scoped re-test explored them. If the record does not identify an accepted tested revision, the diff base has null `tested_revision` and `changes_to_tested_revision`, with `retest_coverage: not-established`. A tested
+so the judge can check that a diff-scoped re-test explored them; `retest_scope: files-listed` says only that those files are known, never that they were explored, and `mirrors` groups changed product files that are byte-identical at the tested revision, such as a kit file and its bootstrap-template copy. If the record does not identify an accepted tested revision, the diff base has null `tested_revision` and `changes_to_tested_revision`, with `retest_scope: not-established`. A tested
 revision equal to the final SHA, or an ancestor with no later product changes,
 establishes final-revision support without a full re-run. Missing expected roles make candidate-evidence coverage incomplete but
 do not stop independent scored judging. The exploratory `codagent:prepare-acceptance`
@@ -571,6 +587,16 @@ is judged against those user-visible behaviors, whatever testing approach the
 candidate took, never against a fixed test-plan case list. Each testing-evidence
 criterion's definition comes from `criterion_definitions` in the automated
 rubric and is shown to the judge beside its identifier.
+
+Automated rubric 10.0.0 defines the terms the round-2 audit found judges
+splitting on: a stable step id survives insertion and reordering, a warning
+identifies an element by text, accessible name, hook, or selector, the visible
+newcomer entry is judged rather than each wrapper, demo identity needs no
+rearrangement, non-empty confirmation covers partial scaffolds, assumption
+handling distinguishes reproduced violations and runs an explicit omission
+check, complete-honest-record counts only material omissions, usable proof
+treats a stated limitation as a disclosure, and final-revision applicability
+credits mirrors and commands the acceptance workflow forbids.
 
 Automated rubric 9.0.0 settles the criteria the round-1 audit found judges
 splitting on: newcomer sequencing follows the design's entry delay, the

@@ -1602,3 +1602,9 @@ test('a non-retryable judge error is not retried', async () => {
   assert.equal(result.ok, false)
   assert.equal(calls, 1)
 })
+
+test('the assumption judge is told to run the omission check', () => {
+  const request = buildJudgeRequest({ rubrics, job: 'assumption-handling', authority })
+  assert.match(request.prompt, /run the omission check/)
+  assert.match(request.prompt, /surfaces a gap must never score lower/)
+})

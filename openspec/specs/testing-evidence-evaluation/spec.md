@@ -140,9 +140,9 @@ The evaluation SHALL score candidate testing-evidence quality out of four points
 | Criterion | Points | Required behavior |
 |---|---:|---|
 | Traceable coverage | 1 | Verified evidence shows the user-visible behaviors the approved specs add were exercised, by any testing approach; a disclosed environmental impediment does not count, other disclosed omissions count proportionally, and undisclosed omissions fully. |
-| Usable proof | 1 | Each claimed exercised behavior is backed by verified artifacts, such as logs, captures, transcripts, or recorded observations, in the bounded view. |
-| Final-revision applicability | 1 | The recorded last-tested revision is the final SHA, or every product file the last diff-scoped pass's diff lists was explored, meaning the pass exercised the behavior or ran the command that executes it. |
-| Complete and honest record | 1 | Gaps, limitations, warning dispositions, and unresolved findings are disclosed, completion claims do not exceed the evidence, and every behavior the exploration plan commits to is observed or disclosed as not exercised. |
+| Usable proof | 1 | Each claimed exercised behavior is backed by verified artifacts, such as logs, captures, transcripts, or recorded observations, in the bounded view; a stated limitation is a disclosure and needs no proof. |
+| Final-revision applicability | 1 | The recorded last-tested revision is the final SHA, or every product file the last diff-scoped pass's diff lists was explored, meaning the pass exercised the behavior or ran the command that executes it; a byte-identical mirror of an explored file and a command the acceptance workflow forbids running count as explored. |
+| Complete and honest record | 1 | Gaps, limitations, warning dispositions, and unresolved findings are disclosed, completion claims do not exceed the evidence, and every material plan commitment, one about an added user-visible requirement whose scenario nothing observed, is observed or disclosed. |
 
 The rubric SHALL carry an explicit definition for each criterion, and the testing-evidence judge SHALL receive each definition beside its identifier together with the requirement and scenario headings of the approved specs as reference. Coverage SHALL NOT be measured against a fixed test-plan case inventory.
 

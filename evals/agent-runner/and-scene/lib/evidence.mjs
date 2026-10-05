@@ -1075,17 +1075,38 @@ function changedPaths({ worktree, from, to, exec }) {
     else if (testOnlyChange(path)) groups.test_only.push(path)
     else groups.product.push(path)
   }
-  return Object.fromEntries(Object.entries(groups).map(([group, list]) => [group, {
-    count: list.length,
-    paths: list.slice(0, MAX_CHANGED_PATHS),
-    truncated: list.length > MAX_CHANGED_PATHS,
-  }]))
+  return {
+    ...Object.fromEntries(Object.entries(groups).map(([group, list]) => [group, {
+      count: list.length,
+      paths: list.slice(0, MAX_CHANGED_PATHS),
+      truncated: list.length > MAX_CHANGED_PATHS,
+    }])),
+    mirrors: mirrorGroups({ worktree, revision: to, paths: groups.product.slice(0, MAX_CHANGED_PATHS), exec }),
+  }
+}
+
+// Changed product files whose content is byte-identical at a revision, such
+// as a scene-kit file and its copy in the bootstrap template. Exploring one
+// member of a group explores the same code in every member.
+function mirrorGroups({ worktree, revision, paths, exec }) {
+  if (paths.length < 2) return []
+  const listing = exec('git', ['-C', worktree, 'ls-tree', '-r', '-z', revision, '--', ...paths], { encoding: 'utf8' })
+  if (listing?.status !== 0 || listing.error) return []
+  const byBlob = new Map()
+  for (const entry of String(listing.stdout ?? '').split('\0').filter(Boolean)) {
+    const match = entry.match(/^\d+ blob ([0-9a-z-]+)\t(.+)$/)
+    if (!match) continue
+    byBlob.set(match[1], [...(byBlob.get(match[1]) ?? []), match[2]])
+  }
+  return [...byBlob.values()].filter((group) => group.length > 1).map((group) => group.sort())
+    .sort((left, right) => left[0].localeCompare(right[0]))
 }
 
 const NO_CHANGES = Object.freeze({
   product: { count: 0, paths: [], truncated: false },
   test_only: { count: 0, paths: [], truncated: false },
   harness: { count: 0, paths: [], truncated: false },
+  mirrors: [],
 })
 
 // Deterministic facts for the final-revision criterion. The candidate records
@@ -1139,7 +1160,9 @@ export function testedRevisionFacts({ finalSha, worktree, manifest, exec = defau
       sha: base.sha,
       relation: base.relation,
       tested_revision: tested,
-      retest_coverage: tested ? 'established' : 'not-established',
+      // Only whether the files this pass was responsible for are known; the
+      // judge decides from verified records whether the pass explored them.
+      retest_scope: tested ? 'files-listed' : 'not-established',
       changes_to_tested_revision: !tested
         ? null
         : base.sha === tested
@@ -1514,6 +1537,25 @@ async function approvedRequirementInventory(requirementsRoot) {
   return documents.length > 0 ? documents : null
 }
 
+// The full approved requirement documents, for the assumption judge's omission
+// check: it must see what a requirement demands to notice a deviation the
+// candidate's own log shows but never surfaces.
+async function approvedRequirementTexts(requirementsRoot) {
+  if (!requirementsRoot) return null
+  let names
+  try {
+    names = (await readdir(requirementsRoot)).filter((name) => name.endsWith('.md')).sort()
+  } catch (error) {
+    if (error.code === 'ENOENT') return null
+    throw error
+  }
+  const documents = []
+  for (const name of names) {
+    documents.push({ document: name, text: (await readFile(join(requirementsRoot, name), 'utf8')).slice(0, 40_000) })
+  }
+  return documents.length > 0 ? documents : null
+}
+
 async function evidenceJudgePacket({ runDir, index, artifacts }) {
   let packet = [
     '# BEGIN VERIFIED INDEX',
@@ -1625,13 +1667,22 @@ export async function materializeEvidenceJudgeViews({
       .filter(({ role }) => assumptionRoles.includes(role))
       .sort((left, right) => assumptionRoles.indexOf(left.role) - assumptionRoles.indexOf(right.role)),
   })
+  const requirementTexts = await approvedRequirementTexts(requirementsRoot)
   const assumptionIndex = {
     ownership_boundary: 'untrusted candidate ambiguity sources',
     permissions: {
       candidate_evidence: 'assumption-sources-only',
       evaluator_evidence: false,
       revision_provenance: true,
+      approved_requirements: requirementTexts ? 'reference-only' : false,
     },
+    ...(requirementTexts ? {
+      approved_requirements: {
+        ownership: 'evaluator-supplied reference',
+        scoring_effect: 'what the approved requirements demand, for the omission check; never evidence of candidate behavior',
+        documents: requirementTexts,
+      },
+    } : {}),
     candidate: {
       ownership: 'candidate-produced',
       artifacts: assumptionArtifacts,

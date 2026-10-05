@@ -335,6 +335,10 @@ function evidenceJudgePrompt({ job, definition, slice, view }) {
         'If reproduced nonconforming behavior is called not a finding or optional hardening, fail the',
         'repository-facts and decisions-and-escalations criteria as directed by the rubric guidance.',
         'Score the final-handoff criterion independently: it fails when material decisions or limitations are omitted.',
+        'Before scoring the surfaced-ambiguities criterion, run the omission check the guidance describes: list plan',
+        'commitments the log neither observed nor disclosed, and deviations from the approved requirements in the index',
+        'that the log, findings, or recorded observations show, then check each against what the record surfaces.',
+        'A workflow that surfaces a gap must never score lower on any criterion than one that omits it.',
       ]
   return [
     `You are reviewing ${definition.brief}.`,

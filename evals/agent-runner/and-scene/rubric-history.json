@@ -1,11 +1,18 @@
 {
   "note": "Every automated-rubric.json content gets its own version. A guidance change without a version bump fails test/rubric.test.mjs. 8.0.0 was published with two contents before this record existed; results citing 8.0.0 must be told apart by their recorded rubric hash.",
   "versions": {
-    "7.0.0": ["756fca6dac929d6c1d95d08a9f4a840d72877423ee3ce10d740f6e48f5dc1c4a"],
+    "7.0.0": [
+      "756fca6dac929d6c1d95d08a9f4a840d72877423ee3ce10d740f6e48f5dc1c4a"
+    ],
     "8.0.0": [
       "be190e9127676c24e99d04fbbba8063cdbcf58b6d0a64324aea1ac2afaa19bf7",
       "f22a1d88a938ed67a80f827ff580fdb15f78bac74873dadf9e992f9c70725eb4"
     ],
-    "9.0.0": ["3becf26232a2531b9747a1a842f1b479e70336477975a0d86e6fdddf6ea41e2d"]
+    "9.0.0": [
+      "3becf26232a2531b9747a1a842f1b479e70336477975a0d86e6fdddf6ea41e2d"
+    ],
+    "10.0.0": [
+      "e2a08bbbbe1fd65f40abee848ce5fc04278018fc7c1d48934bb7d6715bd70bf9"
+    ]
   }
 }

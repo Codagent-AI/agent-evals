@@ -144,6 +144,15 @@ The component SHALL have no independent score floor. For a reference-baseline ev
 - **THEN** the surfacing workflow scores no lower on any assumption-handling criterion
 - **AND** the omitting workflow fails the surfaced-ambiguities criterion
 
+#### Scenario: An unreproduced gap is surfaced as a decision
+- **WHEN** the workflow surfaces a gap it found by reading code but did not reproduce, framed as a decision with options and the consequence of accepting it
+- **THEN** the repository-facts and decisions criteria do not fail for that framing
+
+#### Scenario: A reproduced violation is omitted
+- **WHEN** the record shows the workflow observed a requirement violation in a run and never surfaces it
+- **THEN** the surfaced-ambiguities, repository-facts, and decisions criteria fail
+- **AND** the assumption judge finds it through the omission check against the plan and the approved requirements
+
 #### Scenario: Final handoff names decisions and points to the ledger
 - **WHEN** the handoff names each unresolved decision by identifier and subject and points to the ledger entry that holds its consequence and options
 - **THEN** it preserves those decisions

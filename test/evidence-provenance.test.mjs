@@ -1043,7 +1043,7 @@ const STRAY_SHA = 'c'.repeat(40)
 
 // A Git stand-in for one history: PRIOR_SHA is an ancestor of FINAL_SHA,
 // STRAY_SHA resolves but is not, and `diffs` maps "from..to" to changed paths.
-function fakeGit(diffs = {}) {
+function fakeGit(diffs = {}, blobs = {}) {
   const known = [PRIOR_SHA, FINAL_SHA, STRAY_SHA, BASELINE_SHA]
   return (command, args) => {
     const verb = args[2]
@@ -1056,6 +1056,10 @@ function fakeGit(diffs = {}) {
     if (verb === 'diff') {
       const [from, to] = [args[5], args[6]]
       return { status: 0, stdout: (diffs[`${from}..${to}`] ?? []).map((path) => `${path}\0`).join('') }
+    }
+    if (verb === 'ls-tree') {
+      const paths = args.slice(args.indexOf('--') + 1)
+      return { status: 0, stdout: paths.map((path) => `100644 blob ${blobs[path] ?? `blob-${path}`}\t${path}\0`).join('') }
     }
     return { status: 1, stdout: '' }
   }
@@ -1232,13 +1236,36 @@ test('a diff-scoped pass is given the files between its declared diff base and t
     sha: PRIOR_SHA,
     relation: 'ancestor-of-final',
     tested_revision: FINAL_SHA,
-    retest_coverage: 'established',
+    retest_scope: 'files-listed',
     changes_to_tested_revision: {
       product: { count: 1, paths: ['scripts/verify.mjs'], truncated: false },
       test_only: { count: 1, paths: ['scripts/verify.test.mjs'], truncated: false },
       harness: { count: 0, paths: [], truncated: false },
+      mirrors: [],
     },
   }])
+})
+
+// Round-2 audit: a byte-identical template copy of an explored kit file was
+// counted as an unexplored product change.
+test('changed product files with identical content at the tested revision are listed as mirrors', () => {
+  const facts = testedRevisionFacts({
+    finalSha: FINAL_SHA,
+    worktree: '/candidate',
+    manifest: testedRevisionManifest(FINAL_SHA, [{
+      id: 'pass-2-log', role: 'acceptance-pass-record', verification_state: 'verified',
+      claimed_revision: FINAL_SHA, revision_relation: 'final', declared_diff_base: PRIOR_SHA,
+    }]),
+    exec: fakeGit({ [`${PRIOR_SHA}..${FINAL_SHA}`]: [
+      'src/presentation-kit/Nav.tsx', 'skills/presentation/templates/bootstrap/src/presentation-kit/Nav.tsx', 'src/other.ts',
+    ] }, {
+      'src/presentation-kit/Nav.tsx': 'aaa',
+      'skills/presentation/templates/bootstrap/src/presentation-kit/Nav.tsx': 'aaa',
+    }),
+  })
+  assert.deepEqual(facts.diff_bases[0].changes_to_tested_revision.mirrors, [[
+    'skills/presentation/templates/bootstrap/src/presentation-kit/Nav.tsx', 'src/presentation-kit/Nav.tsx',
+  ]])
 })
 
 test('the testing judge view carries the approved requirement inventory as reference only', async () => {
@@ -1283,7 +1310,8 @@ test('the testing judge view carries the approved requirement inventory as refer
   }])
   assert.match(views['testing-evidence'].packet, /Keyboard navigation/)
   assert.doesNotMatch(views['testing-evidence'].packet, /SHALL advance on Right/)
-  assert.equal(views['assumption-handling'].packet.includes('Keyboard navigation'), false)
+  // The assumption judge gets the full text for its omission check.
+  assert.equal(views['assumption-handling'].packet.includes('SHALL advance on Right'), true)
 })
 
 test('a tested-revision file is read for its SHA, and one without a SHA is malformed', async () => {
@@ -1357,7 +1385,7 @@ test('a diff base without an accepted tested revision does not establish retest 
   })
   assert.equal(facts.diff_bases[0].tested_revision, null)
   assert.equal(facts.diff_bases[0].changes_to_tested_revision, null)
-  assert.equal(facts.diff_bases[0].retest_coverage, 'not-established')
+  assert.equal(facts.diff_bases[0].retest_scope, 'not-established')
 })
 
 test('the last non-empty SHA line is the tested revision claim', async () => {
@@ -1721,4 +1749,31 @@ test('a Markdown metadata file describes only the screenshots it names', async (
   const byName = (name) => manifest.artifacts.find(({ origin }) => origin.relative_path === `output/${name}`)
   assert.equal(byName('acceptance-screenshots/step-2.png').verification_state, 'verified')
   assert.equal(byName('acceptance-screenshots/unnamed.png').verification_state, 'defective')
+})
+
+// Round-2 audit: the assumption judge could not see that a log showed a
+// missing required element, because it never saw the approved requirements.
+test('the assumption judge view carries the full approved requirements as reference only', async () => {
+  const context = await fixture()
+  await writeRequiredArtifacts(context)
+  const requirementsRoot = join(context.root, 'requirements')
+  await mkdir(requirementsRoot, { recursive: true })
+  await writeFile(join(requirementsRoot, 'requirement-001.md'),
+    '#### Scenario: Present mode is title-focused\n- **THEN** the active step shows its marker and one-line title\n')
+  const candidate = await buildCandidateEvidenceManifest({
+    worktree: context.worktree, sessionDir: context.sessionDir, runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  const views = await materializeEvidenceJudgeViews({
+    runDir: context.runDir, candidate, evaluator: null, contradictions: { items: [] },
+    lineage: { final_sha: FINAL_SHA, accepted: true }, requirementsRoot,
+  })
+
+  const view = views['assumption-handling']
+  assert.equal(view.permissions.approved_requirements, 'reference-only')
+  const index = JSON.parse(await readFile(join(context.runDir, view.index), 'utf8'))
+  assert.equal(index.approved_requirements.ownership, 'evaluator-supplied reference')
+  assert.match(view.packet, /shows its marker and one-line title/)
+  assert.ok(view.packet.indexOf('shows its marker') < view.packet.indexOf('BEGIN UNTRUSTED CANDIDATE ARTIFACT'))
 })
