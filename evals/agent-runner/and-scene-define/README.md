@@ -227,7 +227,7 @@ invocation is `evals/agent-runner/and-scene-define/run.sh --calibrate`.
 
 ## Definition judging and calibration prerequisites
 
-Inventory version 2 drafts `met`, `partial`, and `missing` anchors for all 72
+Inventory version 3 drafts `met`, `partial`, and `missing` anchors for all 72
 graded items. `anchors_review` is deliberately null. A maintainer must complete
 **HT-003 (anchor review)** before calibration and record `{ reviewer, date,
 inventory_version }` for the reviewed version, updating the inventory pin using

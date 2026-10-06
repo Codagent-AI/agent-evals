@@ -27,7 +27,7 @@ function members(votes, deciderVote = null, check = 'confirmed', calls = []) {
 }
 test('anchors and generated rubric are pinned; preflight refuses review and calibration gaps', async () => {
   assert.equal(inventory.anchors_review, null)
-  assert.equal(inventory.inventory_version, 2)
+  assert.equal(inventory.inventory_version, 3)
   assert.deepEqual(await checkInventory(), [])
   const broken = structuredClone(inventory); delete broken.items.find(x => x.class === 'mandatory').anchors
   assert.ok((await checkInventory({ inventory: broken })).some(x => /anchors/.test(x)))
@@ -38,7 +38,7 @@ test('anchors and generated rubric are pinned; preflight refuses review and cali
   const stale = structuredClone(rubric); stale.coverage[0].anchors.met = 'changed'
   assert.ok(checkRubric(stale, inventory).length)
   assert.throws(() => verifyJudgingInputs({ inventory, rubric }), /anchors need review/)
-  const reviewed = { ...inventory, anchors_review: { reviewer: 'maintainer', date: '2026-10-06', inventory_version: 2 } }
+  const reviewed = { ...inventory, anchors_review: { reviewer: 'maintainer', date: '2026-10-06', inventory_version: 3 } }
   assert.throws(() => verifyJudgingInputs({ inventory: reviewed, rubric }), /calibration must set/)
   assert.throws(() => verifyJudgingInputs({ inventory: reviewed, rubric: { ...rubric, inventory_version: 1 } }), /inventory version/)
 })
@@ -56,7 +56,7 @@ for (const [votes, ruling, classification, expected, basis, extra] of [
   assert.equal(outcome.results[0].verdict, expected)
   assert.ok(outcome.results[0].basis.startsWith(basis))
   assert.equal(calls.length, 3 + extra)
-  for (const call of calls) { assertStrictSchema(call.schema); assert.match(call.prompt, /Judge only/); assert.ok(call.prompt.includes(item.anchors.met)); assert.ok(call.prompt.includes(item.sources[0].quote)) }
+  for (const call of calls) { assertStrictSchema(call.schema); assert.match(call.prompt, /Judge only/); assert.ok(call.prompt.includes(JSON.stringify(item.anchors.met).slice(1, -1))); assert.ok(call.prompt.includes(JSON.stringify(item.sources[0].quote).slice(1, -1))) }
   if (basis === 'decider') {
     const prompt = calls.at(-1).prompt.split('# Untrusted panel votes')[1]
     assert.match(prompt, /"label":"A"/); assert.ok(!prompt.includes('stub'))

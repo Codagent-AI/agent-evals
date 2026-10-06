@@ -1,6 +1,6 @@
 {
-  "rubric_version": 4,
-  "inventory_version": 2,
+  "rubric_version": 5,
+  "inventory_version": 3,
   "provisional": true,
   "components": {
     "coverage": 60,
@@ -24,9 +24,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: A presentation is a single evolving diagrammatic scene rendered through an ordered list of named steps (states), rather than a deck of independent slides.",
-        "partial": "Commits to one evolving scene with ordered steps, but leaves step naming unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: A presentation is a single evolving diagrammatic scene rendered through an ordered list of named steps (states), rather than a deck of independent slides."
+        "met": "A spec requirement or scenario, design decision, or proposal scope statement commits that a presentation is one diagram/scene that evolves through an ordered sequence of named or titled steps (states), explicitly as opposed to a deck of independent slides. The contrast with slides may be implied by the model (one scene, many states) rather than stated, and the steps need not be called \"steps\"; a test-plan-only or passing mention does not count.",
+        "partial": "The artifacts commit to one evolving scene moving through ordered states, but the steps have no name, title, or other per-step label, or the single-scene model is hedged (for example, \"usually\" one scene, or slides with some shared elements).",
+        "missing": "No artifact defines the single-evolving-scene model, or it appears only as an open question, in the test plan, or in a passing mention. Contradiction example: each step is defined as its own slide that renders its own independent diagram."
       }
     },
     {
@@ -35,9 +35,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Each step is individually identifiable and defines the diagram state shown while it is active. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Defines the active diagram state per step, but leaves how steps are individually identified unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Each step is individually identifiable and defines the diagram state shown while it is active."
+        "met": "A requirement, scenario, or design decision defines each step as individually identifiable (a stable id, key, name, or equivalent) and as defining the diagram state shown while that step is active. Any identification mechanism that achieves this is met (for example, a unique slug per step used for jumping and keys), and a section/era label is not required; a near-miss that does not qualify is identifying steps only by array index while saying nothing about the per-step diagram state.",
+        "partial": "Each step defines the diagram state shown while it is active, but how steps are individually identified is left unclear, or identity is given only as a mutable position that changes on reordering.",
+        "missing": "No artifact says what a step contains, or it appears only as an open question or test-plan detail. Contradiction example: steps carry only narration text and the diagram is computed independently of which step is active."
       }
     },
     {
@@ -46,9 +46,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Provide narration for every step that remains useful for both live presenting and independent browsing. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Provides step narration for both uses, but leaves one use less fully explained.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Provide narration for every step that remains useful for both live presenting and independent browsing."
+        "met": "A requirement, scenario, or design decision gives every step narration suited to both live presenting and independent browsing, such as a short presenter title plus a longer reader caption. Any mechanism serving both uses is met (for example, one heading field shown when presenting plus a body paragraph shown when browsing, or speaker-facing and reader-facing text fields); a near-miss that does not qualify is a single one-line title per step used unchanged in both modes.",
+        "partial": "Every step has narration and both uses are acknowledged, but one use is underspecified, such as a browse caption with no stated length or content expectation, or narration that is optional for some steps.",
+        "missing": "No artifact defines per-step narration, or it appears only as an open question, in the test plan, or in passing. Contradiction example: steps carry no text and narration is left entirely to the live speaker."
       }
     },
     {
@@ -57,9 +57,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: An entity with the same identity in two consecutive steps keeps that identity and, when navigating between the steps, animates in place from its old state (position, size, label, emphasis) to its new state rather than disappearing and reappearing.",
-        "partial": "Keeps entity identity and animates in place, but leaves some of position, size, label, or emphasis transitions unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: An entity with the same identity in two consecutive steps keeps that identity and, when navigating between the steps, animates in place from its old state (position, size, label, emphasis) to its new state rather than disappearing and reappearing."
+        "met": "A requirement, scenario, or design decision commits that an entity with the same identity in two consecutive steps keeps that identity and animates in place from its old state to its new state, rather than disappearing and reappearing. Either an explicit list of changes (position, size, label, emphasis) or a general statement that any visual state change of a persisting entity animates in place is met; the animation library and identity mechanism need not match any particular implementation.",
+        "partial": "Persisting entities keep identity and animate in place, but only some kinds of change are covered (for example, position only, with size, label, or emphasis changes left unspecified or allowed to snap).",
+        "missing": "Persisting-entity morphing is absent, only an open question, test-plan only, or a passing mention. Contradiction example: each step transition cross-fades the whole diagram out and the next one in, so persisting entities disappear and reappear."
       }
     },
     {
@@ -68,9 +68,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Introduce new entities in a visually coherent transition while maintaining continuity of existing entities. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Introduces entities coherently, but leaves continuity of existing entities during introduction underspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Introduce new entities in a visually coherent transition while maintaining continuity of existing entities."
+        "met": "A requirement, scenario, or design decision specifies that entities introduced by a step animate in with a coherent, defined entrance that does not disrupt the continuity of persisting entities, such as newcomers entering only after persisting entities settle. Another mechanism achieving that intent is met (for example, newcomers fading in on a defined stagger overlapping the tail of the morph while persisting entities keep morphing uninterrupted); a near-miss that does not qualify is newcomers popping in instantly or the whole scene re-rendering so existing entities flash.",
+        "partial": "New entities have an animated entrance, but its relation to the persisting entities' movement is left unspecified, or continuity of existing entities during the introduction is not addressed.",
+        "missing": "Entrance behavior for new entities is absent, only an open question, test-plan only, or a passing mention. Contradiction example: new entities appear instantly at their final positions before the persisting entities have moved, overlapping them."
       }
     },
     {
@@ -79,9 +79,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: When a later diagram state omits an entity, remove it coherently without leaving stale content visible. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Removes omitted entities, but leaves the coherence of their exit underspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: When a later diagram state omits an entity, remove it coherently without leaving stale content visible."
+        "met": "A requirement, scenario, or design decision specifies that an entity present in one step but not the next is removed on that transition with a defined exit (for example, it animates out). Another mechanism achieving coherent removal with no stale content is met (for example, departing entities fade or scale out before newcomers enter); a near-miss that does not qualify is a departing entity that stays visible, dimmed, or lingering into the next step.",
+        "partial": "Departing entities are removed on the transition, but the exit itself is unspecified (for example, \"entities not in the next step are not rendered\" with no word on how they leave).",
+        "missing": "Removal of departing entities is absent, only an open question, test-plan only, or a passing mention. Contradiction example: entities accumulate across steps and are never removed when a later step omits them."
       }
     },
     {
@@ -90,9 +90,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Successive states of the same diagram keep scene continuity so entities morph rather than the scene being torn down and rebuilt between steps. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Keeps diagram continuity, but leaves how entities morph across some state changes unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Successive states of the same diagram keep scene continuity so entities morph rather than the scene being torn down and rebuilt between steps."
+        "met": "A requirement, scenario, or design decision lets successive states of the same diagram keep one persistent scene, so moving between them updates the existing scene with new step data and entities morph rather than the scene being torn down and rebuilt. Another mechanism achieving that continuity is met (for example, a \"chapter\" or scene component that owns several states and receives the active state as a prop, or a single scene for the whole presentation); a near-miss that does not qualify is mounting a fresh scene component per step and cross-fading between them.",
+        "partial": "Continuity between successive states of a diagram is stated, but how the scene persists or how entities morph across those state changes is left unclear (for example, \"steps should feel continuous\" with no persistence or update model).",
+        "missing": "Scene persistence across successive states is absent, only an open question, test-plan only, or a passing mention. Contradiction example: every step navigation unmounts and remounts the scene component, even between states of the same diagram."
       }
     },
     {
@@ -101,9 +101,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Treat continuing entities as the same entities through a transition rather than presenting them as newly introduced content. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Treats continuing entities as the same entities, but leaves part of the transition behavior unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Treat continuing entities as the same entities through a transition rather than presenting them as newly introduced content."
+        "met": "A requirement, scenario, or design decision states that an entity continuing across successive states is treated as the same entity and morphs through the transition rather than receiving a newcomer entrance (fade-in or similar). Another mechanism achieving that intent is met (for example, entrance animations applied only to entities absent from the previous state, computed by diffing identities); a near-miss that does not qualify is a stagger or fade-in applied to every entity on each step change.",
+        "partial": "Continuing entities are treated as the same entities, but part of the transition is unclear, such as whether they are excluded from entrance effects or how they morph.",
+        "missing": "Treatment of continuing entities is absent, only an open question, test-plan only, or a passing mention. Contradiction example: each step wraps all of its entities in an entrance animation, so continuing entities fade in again on every navigation."
       }
     },
     {
@@ -112,9 +112,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Individual presentations can customize the visual appearance of kit-rendered elements and chrome. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Allows visual customization of kit elements, but leaves chrome customization unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Individual presentations can customize the visual appearance of kit-rendered elements and chrome."
+        "met": "A requirement, scenario, or design decision lets each presentation customize the visual appearance of both kit-rendered diagram elements and presentation chrome (navigation, captions, controls), for example through stable class or data attributes that presentation-owned CSS targets. Another customization mechanism is met (for example, className/style props on every primitive and chrome slot, or CSS custom properties the presentation sets); a near-miss that does not qualify is a fixed built-in theme the presentation can only switch between light and dark.",
+        "partial": "Kit diagram elements are customizable per presentation, but chrome customization is unspecified, or the hooks are named without saying presentation-owned styling can target them.",
+        "missing": "Per-presentation visual customization is absent, only an open question, test-plan only, or a passing mention. Contradiction example: the kit hard-codes colors and fonts that presentations cannot override."
       }
     },
     {
@@ -123,9 +123,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Authors can position elements precisely per step and can go beyond the provided primitives when they do not fit a diagram's shape. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Supports precise positioning, but leaves the extension path beyond provided primitives unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Authors can position elements precisely per step and can go beyond the provided primitives when they do not fit a diagram's shape."
+        "met": "A requirement, scenario, or design decision lets authors place diagram elements at precise per-step positions and provides a way to go beyond the provided primitives when they do not fit a diagram (for example, raw motion elements with stable identities participating in morphs). Another mechanism is met (for example, primitives accepting explicit x/y/size per step plus support for custom author components that take a stable identity); a near-miss that does not qualify is an automatic layout engine that positions all entities with no author-specified coordinates.",
+        "partial": "Precise per-step positioning is supported, but the extension path beyond the provided primitives is unclear, or custom elements are allowed without saying they keep identity across steps.",
+        "missing": "Neither precise positioning nor extension beyond primitives is addressed, or only as an open question, test-plan item, or passing mention. Contradiction example: presentations may compose only the kit's fixed primitive set in an auto-laid-out arrangement."
       }
     },
     {
@@ -134,9 +134,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: A presentation supports a present mode for live delivery and a browse mode for self-guided reading, and the viewer can switch between them at runtime.",
-        "partial": "Commits to present and browse modes, but leaves runtime switching unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: A presentation supports a present mode for live delivery and a browse mode for self-guided reading, and the viewer can switch between them at runtime."
+        "met": "A requirement, scenario, or design decision commits that a presentation supports both a present mode for live delivery and a browse mode for self-guided reading, and that the viewer can switch between them at runtime (for example, a toggle control or key). The mode names, the toggle mechanism, and the default mode need not match any particular choice.",
+        "partial": "Both modes are committed, but switching at runtime is unspecified or only possible by reloading with a different URL or setting.",
+        "missing": "Two modes are absent, only an open question, test-plan only, or a passing mention. Contradiction example: a presentation has a single fixed mode chosen at authoring time."
       }
     },
     {
@@ -145,9 +145,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Provide a mode suited to live delivery with clear step narration and a diagram-focused presentation. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Provides a live-delivery mode focused on the diagram, but leaves step narration unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Provide a mode suited to live delivery with clear step narration and a diagram-focused presentation."
+        "met": "A requirement, scenario, or design decision defines a live-delivery mode that keeps the diagram the focus while still showing clear per-step narration, such as a step marker and one-line title with caption, table of contents, and prev/next controls hidden. Another mechanism achieving the intent is met (for example, a short title overlay plus a minimal progress indicator, with reading-oriented chrome hidden); a near-miss that does not qualify is a present mode that is merely browse mode in fullscreen with the full caption and controls still shown.",
+        "partial": "A diagram-focused live mode is defined, but step narration in it is unclear or removed entirely (for example, diagram only with no title).",
+        "missing": "No live-delivery mode content is defined, or only as an open question, test-plan item, or passing mention. Contradiction example: present mode shows the full multi-line caption, table of contents, and navigation buttons alongside the diagram."
       }
     },
     {
@@ -156,9 +156,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Provide a mode for independent reading in which step narration and usable navigation are available. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Provides independent reading with narration, but leaves part of usable navigation unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Provide a mode for independent reading in which step narration and usable navigation are available."
+        "met": "A requirement, scenario, or design decision defines a self-guided reading mode that shows each step's narration (title and fuller caption) together with usable navigation, such as prev/next controls, progress indicators, and a table of contents on wide viewports. Another mechanism achieving the intent is met (for example, a scroll-driven layout where each step's caption is a section and a sidebar step list allows jumping); a near-miss that does not qualify is a reading mode that shows captions but offers keyboard-only navigation with no visible controls or position indicator.",
+        "partial": "The reading mode shows narration, but part of usable navigation is unclear or missing (for example, no progress indicator or no way to jump between steps or sections).",
+        "missing": "A reading-oriented mode with narration and navigation is absent, only an open question, test-plan only, or a passing mention. Contradiction example: browse mode shows only the one-line title with no caption."
       }
     },
     {
@@ -167,9 +167,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Toggling between present and browse mode keeps the presentation on the current step.",
-        "partial": "Commits to preserving the current step on a mode toggle, but leaves one direction unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Toggling between present and browse mode keeps the presentation on the current step."
+        "met": "A requirement, scenario, or design decision commits that switching between present and browse mode, in either direction, leaves the presentation on the step it was on. A general statement that mode is independent of the current step is met; the toggle mechanism need not be specified here.",
+        "partial": "Preservation of the current step is stated for only one direction, or hedged (for example, \"should try to keep\" the position).",
+        "missing": "Step preservation on mode toggle is absent, only an open question, test-plan only, or a passing mention. Contradiction example: toggling the mode restarts the presentation at the first step or reloads the page."
       }
     },
     {
@@ -178,9 +178,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Viewers can advance and go back one step from the keyboard using conventional presentation keys. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Provides forward and backward keyboard navigation, but leaves conventional key choices unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Viewers can advance and go back one step from the keyboard using conventional presentation keys."
+        "met": "A requirement, scenario, or design decision specifies keyboard navigation that advances and goes back one step using conventional presentation keys, such as Right arrow, Space, or PageDown to advance and Left arrow or PageUp to go back. Another conventional key set is met (for example, Right/Left arrows plus Enter and Backspace); a near-miss that does not qualify is forward/back bound only to unconventional letter keys such as N and B.",
+        "partial": "Forward and backward keyboard navigation is committed, but the keys are not named, or only one direction's keys are given.",
+        "missing": "Keyboard step navigation is absent, only an open question, test-plan only, or a passing mention. Contradiction example: navigation is available only through on-screen buttons or touch."
       }
     },
     {
@@ -189,9 +189,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Make the current position understandable to viewers and expose current-state semantics for any applicable navigation controls. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Makes current position understandable, but leaves current-state semantics on applicable controls unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Make the current position understandable to viewers and expose current-state semantics for any applicable navigation controls."
+        "met": "A requirement, scenario, or design decision makes the current step understandable to viewers and gives applicable navigation controls (progress indicators, table-of-contents entries) semantic current-state markup, such as aria-current, plus a stable active-state hook. Another mechanism achieving the intent is met (for example, aria-selected within a tab-list pattern, or a visible \"step 3 of 12\" label plus a current-state attribute on the active control); a near-miss that does not qualify is marking the active indicator only with a CSS class or color.",
+        "partial": "The current position is shown to viewers, but semantic current-state markup on the navigation controls is unspecified, or covers only one of the applicable controls.",
+        "missing": "Exposure of the active navigation state is absent, only an open question, test-plan only, or a passing mention. Contradiction example: progress indicators are decorative and carry no current-step state."
       }
     },
     {
@@ -200,9 +200,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: When focus is on an interactive control, navigation keys operate that control and do not also move the presentation.",
-        "partial": "Protects interactive controls from presentation navigation, but leaves some navigation keys unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: When focus is on an interactive control, navigation keys operate that control and do not also move the presentation."
+        "met": "A requirement, scenario, or design decision commits that when focus is on an interactive control (button, input, link, select, or similar), navigation keys operate that control and do not also move the presentation. A general rule covering all navigation keys and all interactive controls is met; the detection mechanism need not be specified.",
+        "partial": "Focused controls are protected from presentation navigation, but only for some keys (for example, Space but not arrows) or some control types (for example, text inputs but not buttons).",
+        "missing": "Focus protection is absent, only an open question, test-plan only, or a passing mention. Contradiction example: a global key handler advances the presentation on Space or arrow keys regardless of what element has focus."
       }
     },
     {
@@ -211,9 +211,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Navigating past the first or last step behaves predictably and never goes out of range or errors. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Keeps navigation in range, but leaves boundary behavior at one end unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Navigating past the first or last step behaves predictably and never goes out of range or errors."
+        "met": "A requirement, scenario, or design decision defines predictable navigation at both ends that never goes out of range or errors, such as clamping so going back on the first step and advancing on the last step stay put. Another mechanism achieving the intent is met (for example, disabling the prev/next controls at the ends and ignoring navigation keys there); a near-miss that does not qualify is a statement only that the final step shows an end card, with no defined behavior for advancing past it or going back from the first step.",
+        "partial": "In-range navigation is defined at one end only, or the artifacts say navigation stays in range without saying what happens at the boundaries.",
+        "missing": "Boundary behavior is absent, only an open question, test-plan only, or a passing mention. Contradiction example: advancing past the last step moves to an empty or undefined step index."
       }
     },
     {
@@ -222,9 +222,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Keep the diagram readable, compositionally coherent, and capable of clean entity transitions across screen sizes. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Commits to responsive scene readability and coherent composition, but leaves transition behavior across sizes unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Keep the diagram readable, compositionally coherent, and capable of clean entity transitions across screen sizes."
+        "met": "A requirement, scenario, or design decision keeps the diagram readable and compositionally coherent across screen sizes with clean entity transitions, such as composing it on a fixed design canvas scaled uniformly to fit the viewport so its internal layout does not reflow. Another mechanism achieving the intent is met (for example, an SVG with a fixed viewBox scaled to its container); a near-miss that does not qualify is a responsive flex or grid layout where entities reposition as the viewport changes.",
+        "partial": "The diagram is stated to fit or scale to the viewport while keeping its composition, but the effect on entity transitions across sizes is unclear, or the scaling is not stated to be uniform (aspect may distort).",
+        "missing": "Viewport fit of the diagram is absent, only an open question, test-plan only, or a passing mention. Contradiction example: the diagram has fixed pixel dimensions and overflows or scrolls on smaller screens."
       }
     },
     {
@@ -233,9 +233,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Fit the scene appropriately within the available space in both presenting and browsing modes. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Fits the scene to available space, but leaves fitting in one viewing mode underspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Fit the scene appropriately within the available space in both presenting and browsing modes."
+        "met": "A requirement, scenario, or design decision fits the scene to the space actually available in both the presenting and browsing layouts, such as separate fit geometry per mode. Another mechanism achieving the intent is met (for example, measuring the stage container left over by each mode's chrome and fitting to it); a near-miss that does not qualify is one fit computed against the full window so browse-mode chrome overlaps or crops the diagram.",
+        "partial": "Fitting to available space is defined, but only one viewing mode's layout is addressed, or the effect of mode-specific chrome on the available space is not addressed.",
+        "missing": "Per-mode fitting is absent, only an open question, test-plan only, or a passing mention. Contradiction example: the canvas is fitted once at the present-mode size and browse-mode captions and controls are laid over it."
       }
     },
     {
@@ -244,9 +244,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: The skill establishes the topic, the visual style, and the content of each step, whether from the user or by deriving them. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Establishes topic and step content, but leaves how visual style is established unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: The skill establishes the topic, the visual style, and the content of each step, whether from the user or by deriving them."
+        "met": "A spec requirement or scenario, design decision, or proposal scope statement says the skill establishes all three of the topic, the visual style, and the content of each step before generating, whether it asks the user or derives them. Asking one question at a time, an ASCII mockup, or a per-step visual description is not required. Another mechanism counts, for example drafting an outline and a style from the topic and having the user confirm or edit it; a near miss is a skill that takes only a topic and generates steps, with nothing saying how the visual style is chosen.",
+        "partial": "The skill establishes the topic and each step's content, but the visual style is left unaddressed or fixed by a template with no way to choose it. Also partial: style and topic are covered, but steps are generated with no stated way to plan or confirm what each step shows.",
+        "missing": "Nothing says how the topic, style, and step content are established, or this appears only in the test plan or in passing. Contradiction example: the skill builds straight from the topic string with one fixed template and explicitly does not gather or vary style or per-step content."
       }
     },
     {
@@ -255,9 +255,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: The skill can produce a presentation without requiring the user to specify every detail up front, and supports iterating afterward. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Supports creating without every detail up front, but leaves subsequent iteration unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: The skill can produce a presentation without requiring the user to specify every detail up front, and supports iterating afterward."
+        "met": "A spec requirement or scenario, or a design decision, lets the skill build a presentation when the user has given only some of the details, with no hard completeness gate, and says the user can refine the result afterward. A modify flow, follow-up edits, or re-running the skill on the generated presentation all count as refinement. Another mechanism counts, for example filling gaps with stated defaults and inviting revisions after the first build; a near miss is a skill that lets the user skip questions but then has no way to revise the generated presentation.",
+        "partial": "The skill can build from incomplete input, but nothing says the user can iterate or refine afterward. Also partial: iteration is supported, but whether the skill can build before every detail is supplied is hedged or unclear.",
+        "missing": "Nothing addresses building from partial input, or it appears only in the test plan or as a passing remark. Contradiction example: the skill refuses to generate until the topic, style, and every step's content and visuals have all been provided."
       }
     },
     {
@@ -266,9 +266,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Before creating or modifying a presentation, the skill checks whether the project provides the infrastructure a generated presentation depends on, resolves where that infrastructure belongs, and scaffolds whatever is missing.",
-        "partial": "Checks and supplies missing infrastructure, but leaves how its location is resolved unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Before creating or modifying a presentation, the skill checks whether the project provides the infrastructure a generated presentation depends on, resolves where that infrastructure belongs, and scaffolds whatever is missing."
+        "met": "A spec requirement or scenario, or a design decision, says that before creating (and before modifying) a presentation, the skill checks whether the project has the infrastructure presentations need, decides where that infrastructure belongs, and scaffolds whatever is missing. The infrastructure may be split and named differently. A separate setup command or script counts if the skill runs it itself.",
+        "partial": "The skill detects and scaffolds missing infrastructure, but never says how it decides where to put it. Also partial: bootstrapping runs only on create and not on modify, or detection is left implicit, such as always scaffolding when a single file is missing.",
+        "missing": "The skill assumes the infrastructure already exists, or setup is a manual step for the user, or bootstrapping appears only in the test plan. Contradiction example: the skill stops with an error telling the user to install the scene kit first."
       }
     },
     {
@@ -277,9 +277,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Provide a working application build setup capable of producing the generated browser presentation. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Provides an application build setup, but leaves how it produces the browser presentation underspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Provide a working application build setup capable of producing the generated browser presentation."
+        "met": "The infrastructure the skill checks for and scaffolds when it is missing includes an application build setup with a working build command that produces the browser presentation, stated in a spec requirement or scenario, design decision, or proposal scope statement. Vite, React, and TypeScript are not required. Another toolchain counts, for example a Next.js or Vite plus Preact app whose build command succeeds; a near miss is copying presentation source files into a project and assuming its existing build will handle them.",
+        "partial": "A build toolchain is named as part of the stack, but nothing says the skill ensures it is present or that a working build command is part of what it scaffolds. Also partial: the build setup is scaffolded, but how it produces a runnable browser presentation is left unclear.",
+        "missing": "No build setup is part of the infrastructure the skill ensures, or it appears only in the test plan. Contradiction example: generated presentations are said to need no build step and are just source files the user wires up."
       }
     },
     {
@@ -288,9 +288,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Provide reusable, topic-independent scene infrastructure for step states, evolving entities, captions, navigation, viewing modes, and responsive rendering. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Provides topic-independent scene infrastructure, but leaves one of captions, navigation, modes, or responsive rendering unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Provide reusable, topic-independent scene infrastructure for step states, evolving entities, captions, navigation, viewing modes, and responsive rendering."
+        "met": "The infrastructure the skill ensures includes a reusable, topic-independent scene layer that generated presentations use for step states, entity continuity or morphs between steps, captions, step navigation, present and browse modes, and responsive or fit-to-viewport rendering. These capabilities may be specified in a separate runtime spec that this layer implements. Another form counts, for example a shared npm package or a vendored components directory instead of copied templates; a near miss is each generated presentation getting its own inline copy of navigation and animation code with no reusable layer.",
+        "partial": "A reusable, topic-independent scene layer exists, but one of captions, navigation, viewing modes, or responsive rendering is left out of it. Also partial: the layer exists only in this repository, and nothing says the skill supplies it to a project that lacks it.",
+        "missing": "No reusable scene layer is defined, each presentation implements its own engine, or the layer appears only in the test plan. Contradiction example: the scene components are written specifically for the sample topic, and the skill tells authors to copy and edit that sample."
       }
     },
     {
@@ -299,9 +299,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Multiple presentations (including the sample) can coexist in one project, each individually reachable. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Supports multiple coexisting presentations, but leaves how each is reached unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Multiple presentations (including the sample) can coexist in one project, each individually reachable."
+        "met": "A spec requirement or scenario, or a design decision, gives the project a way for several presentations, including the sample, to exist side by side, each reachable on its own. Another mechanism counts, for example file-based routes, auto-discovery with a glob, a separate HTML entry per presentation, or a query parameter. A near miss is an app that renders one presentation at its root, so generating another replaces it.",
+        "partial": "Multiple presentations are said to coexist in the project, but how a viewer reaches a particular one is unspecified.",
+        "missing": "There is no way for multiple presentations to coexist, or it appears only in the test plan or in passing. Contradiction example: generating a presentation overwrites the app's single entry component."
       }
     },
     {
@@ -310,9 +310,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Detection of existing infrastructure is robust to cosmetic differences, so working setups are not needlessly re-scaffolded or overwritten. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Reuses working infrastructure, but leaves robustness to cosmetic differences underspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Detection of existing infrastructure is robust to cosmetic differences, so working setups are not needlessly re-scaffolded or overwritten."
+        "met": "A spec requirement or scenario, or a design decision, says existing infrastructure is detected by what it provides rather than by exact files, so differences in naming, formatting, or extra dependencies do not trigger re-scaffolding or overwriting. Another mechanism counts, for example checking that the project exports the step contract and has a working build script and a presentation registry wherever they live, or treating any working setup as present and only adding what is missing. A near miss is checking for template files at fixed paths and re-copying them when they are not found.",
+        "partial": "The skill says it reuses existing infrastructure, but detection is described only by fixed file names or paths, or how cosmetic differences are tolerated is unstated.",
+        "missing": "Detection is not described, or it appears only in the test plan. Contradiction example: the skill compares project files to its templates and overwrites any that differ, or always re-copies the templates."
       }
     },
     {
@@ -321,9 +321,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Ensure all runtime, build, and verification dependencies required by the chosen implementation are available when bootstrapping. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Supplies runtime and build dependencies, but leaves required verification dependencies unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Ensure all runtime, build, and verification dependencies required by the chosen implementation are available when bootstrapping."
+        "met": "A spec requirement or scenario, or a design decision, says bootstrapping installs, rather than assumes, every dependency the chosen stack needs at runtime, at build time, and for the skill's own verification, including the browser automation tool and browser when verification uses one. The exact packages may differ. Another mechanism counts, for example a scaffolded manifest listing all of them followed by a package-manager install; a near miss is installing React and the bundler while the browser render check depends on a tool that is never installed.",
+        "partial": "Runtime and build dependencies are installed, but the verification dependencies, such as the headless browser, are left out or unclear. Also partial: dependencies are listed but the skill only tells the user to install them.",
+        "missing": "Nothing says the skill installs dependencies, or this appears only in the test plan. Contradiction example: the skill assumes React and the bundler are already present in the target project."
       }
     },
     {
@@ -332,9 +332,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Locate required bootstrap and authoring resources reliably regardless of the invocation working directory. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Locates authoring resources independently of working directory, but leaves bootstrap resource lookup unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Locate required bootstrap and authoring resources reliably regardless of the invocation working directory."
+        "met": "A spec requirement or scenario, or a design decision, says the skill finds its bootstrap and presentation templates or resources in a way that does not depend on the working directory it was run from. Another mechanism counts, for example paths relative to the skill file's own location, templates embedded in the skill instructions, or a generator package called by name; a near miss is referring to the templates by a repository-relative path such as `skills/<name>/templates/`, which only works from the repository root.",
+        "partial": "Independence from the working directory is stated for only one of bootstrap resources and authoring templates. Also partial: the resources are said to ship with the skill, but how the skill finds them is not stated.",
+        "missing": "Nothing says how the skill finds its resources, or this appears only in the test plan. Contradiction example: the procedure tells the agent to copy from `./templates` in the current directory."
       }
     },
     {
@@ -343,9 +343,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: In an unprepared project, supply everything needed to build, run, and verify a generated presentation before declaring it ready. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Bootstraps an unprepared project to build and run, but leaves verification readiness unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: In an unprepared project, supply everything needed to build, run, and verify a generated presentation before declaring it ready."
+        "met": "A spec requirement or scenario, or a design decision, says that in an empty or unprepared project the skill supplies everything needed (build setup, scene layer, presentation registration or routing, and installed dependencies, including verification tooling) before it creates the presentation or calls it ready. Another mechanism counts, for example running an app generator and then adding the scene layer; a near miss is writing source files and leaving the dependency install or app setup to the user.",
+        "partial": "The unprepared project is bootstrapped to build and run, but nothing says the skill's verification tooling is available there. Also partial: one infrastructure piece, such as presentation routing, is left out of the full scaffold.",
+        "missing": "The empty or unprepared case is not addressed, or it appears only in the test plan. Contradiction example: the skill requires an existing app and refuses to run in an empty directory."
       }
     },
     {
@@ -354,9 +354,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: When all three anchors are already present, the skill skips scaffolding and proceeds directly to creating or modifying the presentation.",
-        "partial": "Skips scaffolding when all anchors are present, but leaves proceeding directly to create or modify unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: When all three anchors are already present, the skill skips scaffolding and proceeds directly to creating or modifying the presentation."
+        "met": "A spec scenario or design decision says that when all required infrastructure is already present, the skill does not scaffold or re-copy anything and goes straight to creating or modifying the presentation. A rule that scaffolding happens only for missing pieces counts when it plainly covers the case where nothing is missing.",
+        "partial": "The skill is said to skip scaffolding when infrastructure exists, but hedged, for example it 'may refresh' templates, or nothing says it then goes straight to create or modify.",
+        "missing": "The fully scaffolded case is not addressed, or it appears only in the test plan. Contradiction example: every run re-copies the scene kit templates into the project."
       }
     },
     {
@@ -365,9 +365,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: When some but not all anchors are present, the skill scaffolds only the missing anchors (and their dependencies) and leaves the anchors already present undisturbed.",
-        "partial": "Scaffolds only missing anchors, but leaves dependencies of those anchors unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: When some but not all anchors are present, the skill scaffolds only the missing anchors (and their dependencies) and leaves the anchors already present undisturbed."
+        "met": "A spec scenario or design decision says that when some but not all infrastructure is present, the skill adds only the missing pieces and their dependencies, and leaves the existing pieces untouched.",
+        "partial": "The skill adds only the missing pieces, but nothing says the existing pieces are left undisturbed, or the missing pieces' dependencies are not mentioned.",
+        "missing": "The partly scaffolded case is not addressed, or it appears only in the test plan. Contradiction example: if any piece is missing, the skill re-runs the full scaffold over the project."
       }
     },
     {
@@ -376,9 +376,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Choose a safe scaffold target in an existing project and resolve material target ambiguity before making disruptive changes. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Chooses a safe scaffold target, but leaves how material ambiguity is resolved unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Choose a safe scaffold target in an existing project and resolve material target ambiguity before making disruptive changes."
+        "met": "A spec requirement or scenario, or a design decision, says that in an existing non-empty project the skill picks a safe place to scaffold and settles any real ambiguity about it before making disruptive changes, for example by stating the target and waiting for the user to confirm. Another mechanism counts, for example always scaffolding into a new dedicated subdirectory that touches no existing files, and asking only when the choice is unclear. A near miss is scaffolding at the root of whatever project the skill runs in and rewriting its package manifest without asking.",
+        "partial": "A safe target is chosen, for example a subdirectory in a monorepo, but nothing says what happens when the target is ambiguous or that the user is consulted before existing files change.",
+        "missing": "Choosing a target in a non-empty project is not addressed, or it appears only in the test plan. Contradiction example: the skill always writes the scaffold at the current directory, overwriting existing configuration files."
       }
     },
     {
@@ -387,9 +387,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Each new presentation is separately reachable and added without interfering with other presentations. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Adds separate presentation reachability, but leaves protection of other presentations underspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Each new presentation is separately reachable and added without interfering with other presentations."
+        "met": "A spec requirement or scenario, or a design decision, says each new presentation is added as its own unit (a folder, module, or package), is reachable on its own, and is registered or discovered without interfering with other presentations. Another mechanism counts, for example file-based routing that discovers the new folder with no registry edit; a near miss is adding the new presentation's steps to a shared steps file or replacing the app's root content.",
+        "partial": "The new presentation is reachable on its own, but nothing says it is isolated from other presentations, for example it is not written as its own unit.",
+        "missing": "Where a new presentation goes and how it is reached are not addressed, or this appears only in the test plan. Contradiction example: the skill writes each new presentation into the single app entry, replacing the previous one."
       }
     },
     {
@@ -398,9 +398,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Keep presentation-specific visual choices configurable without making reusable scene infrastructure depend on one presentation's design. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Keeps presentation-specific choices configurable, but leaves independence of reusable infrastructure unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Keep presentation-specific visual choices configurable without making reusable scene infrastructure depend on one presentation's design."
+        "met": "A spec requirement or scenario, or a design decision, says a presentation's visual look lives in files or configuration the presentation or host app owns, and that the reusable scene infrastructure does not depend on any one presentation's design. Another mechanism counts, for example each presentation passing a theme object or CSS variables to the kit. A near miss is the skill writing a new presentation's colors and fonts into the shared kit stylesheet.",
+        "partial": "Presentation-specific styling is configurable per presentation, but nothing says the reusable infrastructure stays free of a particular presentation's design.",
+        "missing": "Where styling lives is not addressed, or this appears only in the test plan. Contradiction example: all presentations' styles are kept in the scene kit, which is edited for each new design."
       }
     },
     {
@@ -409,9 +409,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Creating a new presentation when other presentations already exist leaves the existing presentations intact and reachable.",
-        "partial": "Leaves existing presentations intact, but leaves their continued reachability unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Creating a new presentation when other presentations already exist leaves the existing presentations intact and reachable."
+        "met": "A spec scenario or design decision says creating a new presentation leaves existing presentations unchanged and still reachable. An additive registration design counts when it plainly leaves existing entries and files alone, for example 'adding a presentation is a new folder plus one new registry entry'.",
+        "partial": "Only one half is covered: existing presentations' files are said to be untouched but nothing says they stay reachable, or coexistence is stated without saying creation leaves existing files unchanged.",
+        "missing": "Existing presentations are not addressed, or this appears only in the test plan. Contradiction example: the new presentation takes over the root route, or rebuilding the registry drops earlier entries."
       }
     },
     {
@@ -420,9 +420,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Before reporting that a create or modify is complete, the skill runs the build, at least a render check of the first step (no runtime or console errors), and a browser-based visual composition check.",
-        "partial": "Requires build and first-step render checks before completion, but leaves visual composition checking underspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Before reporting that a create or modify is complete, the skill runs the build, at least a render check of the first step (no runtime or console errors), and a browser-based visual composition check."
+        "met": "A spec requirement or scenario, or a design decision, says that before the skill reports a create or modify as complete, it runs the build, renders at least the first step in a browser with no runtime or console errors, and checks the visual composition in a browser. The checks may be combined in one script. The full multi-step verification suite is not required for this item.",
+        "partial": "The skill self-verifies before reporting completion, but one or two checks are missing or weakened, for example no visual composition check, or a render check that does not catch console errors or does not run in a browser.",
+        "missing": "The skill does not verify its own output before reporting done; verification exists only as a separate repository script, CI job, or test-plan item. Contradiction example: the skill reports completion after writing files and tells the user to run the build."
       }
     },
     {
@@ -431,9 +431,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Inspect enough rendered steps and viewport sizes to establish visual coherence and catch significant layout and responsive defects. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Reviews rendered steps and sizes for coherence, but leaves the responsive review breadth unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Inspect enough rendered steps and viewport sizes to establish visual coherence and catch significant layout and responsive defects."
+        "met": "A spec requirement or scenario, or a design decision, says the visual check looks at enough rendered steps to judge the whole presentation (beyond the first, such as the last and the dense or key steps, or every step) and at more than one viewport size, at least a narrow one where layout is responsive. Another selection counts, for example screenshots of every step at desktop and mobile widths; a near miss is one screenshot of the first step at one size.",
+        "partial": "Several steps are inspected, but only at one viewport size, or several sizes are inspected for the first step only.",
+        "missing": "Which views the visual check covers is not specified, it covers only a single step at a single size, or this appears only in the test plan. Contradiction example: the visual check is defined as a single screenshot of the opening step."
       }
     },
     {
@@ -442,9 +442,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: If the build, render, or visual composition check fails, the skill fixes the issues itself and re-checks, and does not report success while a check fails.",
-        "partial": "Requires fixes and re-checking before success, but leaves one of build, render, or composition failures unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: If the build, render, or visual composition check fails, the skill fixes the issues itself and re-checks, and does not report success while a check fails."
+        "met": "A spec requirement or scenario, or a design decision, says that when the build, render, or visual composition check fails, the skill fixes the problem itself and runs the checks again, and never reports success while any check is failing.",
+        "partial": "Fix-and-recheck covers only some of the checks, for example build failures but not visual ones. Also partial: the skill must not report success on a failure but is not required to fix it itself, or it fixes without re-running the check.",
+        "missing": "Check failures are not addressed, or this appears only in the test plan. Contradiction example: the skill reports completion with a list of failed checks for the user to fix."
       }
     },
     {
@@ -453,9 +453,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Ensure generated presentation code builds successfully without compilation or applicable type-checking errors. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Requires successful compilation, but leaves applicable type checking unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Ensure generated presentation code builds successfully without compilation or applicable type-checking errors."
+        "met": "A spec requirement or scenario, or a design decision, says every generated presentation must build successfully with no compile or type-check errors in the stack used. A self-verification rule that requires a passing build, including type checking, before completion counts. Another mechanism counts, for example a separate type-check command plus a bundler build that must both pass; a near miss is a rule that the build is run, with nothing saying it must pass.",
+        "partial": "A successful build is required, but in a typed stack type checking is not required to pass, for example only the bundler build must succeed.",
+        "missing": "No build success requirement for generated presentations, or it appears only in the test plan. Contradiction example: type errors are treated as warnings that do not block completion."
       }
     },
     {
@@ -464,9 +464,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Opening a generated presentation's route renders its first step with no runtime or console errors.",
-        "partial": "Requires the route to render the first step, but leaves console-error checking unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Opening a generated presentation's route renders its first step with no runtime or console errors."
+        "met": "A spec requirement or scenario, or a design decision, says that opening a generated presentation's route or page renders its first step with no runtime errors and no console errors. Either a quality-bar requirement or a verification check that enforces it counts.",
+        "partial": "The route must render the first step, but console errors are not covered, for example only uncaught exceptions or a successful page load are checked.",
+        "missing": "Clean rendering of generated presentations is not required, or this appears only in the test plan. Contradiction example: console errors are logged as advisory and do not fail the presentation."
       }
     },
     {
@@ -475,9 +475,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: In every generated presentation, each step shows a caption and the viewer can navigate to the next and previous steps.",
-        "partial": "Provides captions and navigation, but leaves previous-step navigation or captions on some steps unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: In every generated presentation, each step shows a caption and the viewer can navigate to the next and previous steps."
+        "met": "A spec requirement or scenario, or a design decision, says every generated presentation shows a caption for each step and lets the viewer go to the next and the previous step. It counts when the shared scene runtime that all generated presentations must use is specified to provide both. Showing captions only in a browse or reading mode still counts.",
+        "partial": "Captions and navigation are present, but one is weakened: captions are optional for some steps, or only forward navigation is specified.",
+        "missing": "Per-step captions or step navigation are not required of generated presentations, or this appears only in the test plan. Contradiction example: steps advance on a timer with no previous control, or captions are left out by design."
       }
     },
     {
@@ -486,9 +486,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Every generated presentation conforms to the evolving-scene presentation model (one scene of stable entities moving through named steps) rather than independent slides.",
-        "partial": "Commits to one scene of stable entities through named steps, but leaves the continuity of their motion underspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Every generated presentation conforms to the evolving-scene presentation model (one scene of stable entities moving through named steps) rather than independent slides."
+        "met": "A spec requirement or scenario, or a design decision, says every generated presentation is one scene whose entities keep a stable identity across a sequence of named or ordered steps, changing in place, rather than a series of independent slides. It counts when the skill's output must target a separately specified evolving-scene model.",
+        "partial": "Generated presentations are steps over one diagram, but nothing says entities keep their identity or move continuously between steps. For example, each step re-draws its diagram from scratch.",
+        "missing": "The presentation model for generated output is not stated, or this appears only in the test plan. Contradiction example: the skill generates a deck of independent slides, each with its own layout."
       }
     },
     {
@@ -497,9 +497,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Ensure important diagram content and presentation controls remain readable, fit the available display area, and avoid accidental obstructive collisions. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Protects readable content and controls, but leaves fitting or accidental collision handling underspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Ensure important diagram content and presentation controls remain readable, fit the available display area, and avoid accidental obstructive collisions."
+        "met": "A spec requirement or scenario, or a design decision, gives the visual check criteria that cover important content fitting the canvas or viewport, readability where overlaps are intentional, and no accidental collisions between content and controls such as captions, progress, table of contents, or navigation. Another mechanism counts, for example automated bounding-box overlap and overflow checks; a near miss is a visual check whose only criterion is that the presentation 'looks right' or 'is coherent'.",
+        "partial": "Some criteria are given, but fitting the display area or collisions with presentation controls is left out.",
+        "missing": "The visual check has no stated criteria, or they appear only in the test plan. Contradiction example: overlapping or clipped content is explicitly accepted as long as the build and render pass."
       }
     },
     {
@@ -508,9 +508,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: When automated checks flag possible visual problems, the skill investigates them, fixes genuine problems, and only accepts flagged items that are intentional and acceptable. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Investigates flagged visual problems and fixes genuine ones, but leaves the standard for accepting intentional overlaps unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: When automated checks flag possible visual problems, the skill investigates them, fixes genuine problems, and only accepts flagged items that are intentional and acceptable."
+        "met": "A spec requirement or scenario, or a design decision, says that when the automated visual checks flag possible problems, the skill reviews them, fixes the real ones, and accepts a flag only when the flagged item is intentional and acceptable, for example through an explicit allow marker or a recorded reason. Another mechanism counts, for example a check that fails on any flagged overlap until it is fixed or marked intentional; a near miss is warnings that are printed and may be ignored without review.",
+        "partial": "Flags are investigated and real problems fixed, but the standard for accepting a flagged item is missing or loose, for example anything the agent decides is fine can be dismissed.",
+        "missing": "Nothing says how flagged visual problems are handled, there is no automated flagging, or this appears only in the test plan. Contradiction example: visual warnings are informational and never block completion or require review."
       }
     },
     {
@@ -519,9 +519,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Generated presentations make the current step visibly distinct in their navigation chrome. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Distinguishes the current step visually, but leaves the distinction on some navigation chrome underspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Generated presentations make the current step visibly distinct in their navigation chrome."
+        "met": "A spec requirement or scenario, or a design decision, says generated presentations make the current step visibly distinct in their navigation chrome, such as the table of contents, progress indicator, or step controls. Another mechanism counts, for example the kit marking the active item and presentation CSS required to style it, or a kit default highlight. Whether the kit stays free of styling is not graded here; a near miss is the chrome only exposing an active-state attribute that nothing is required to style visibly.",
+        "partial": "The current step is visibly distinct in some navigation chrome but not in others that the presentation includes, for example the progress dots but not the table of contents.",
+        "missing": "Highlighting the current step is not addressed, or this appears only in the test plan. Contradiction example: navigation entries are explicitly styled the same regardless of which step is active."
       }
     },
     {
@@ -530,9 +530,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Verify the complete generated application build and fail on errors in any included presentation or required application infrastructure. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Requires an application build and failure on errors, but leaves inclusion of all presentations unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Verify the complete generated application build and fail on errors in any included presentation or required application infrastructure."
+        "met": "A specification requirement, design section, or concrete test-plan gate commits verification to build the complete application (every registered presentation plus the index or landing page and shared app code) and to fail when that build reports any type or build error. Any mechanism that achieves this counts, for example a verify script that runs `tsc --noEmit` and then `vite build` over all entries; the exact `npm run build` command is not required. A near-miss that does not qualify: building or type-checking only the sample presentation's route in isolation.",
+        "partial": "Verification builds the application and fails on errors, but its scope is unclear or narrower than the whole app, for example it is described as \"build the sample\" with no statement that other presentations and the index are included, or it checks build errors but not type errors.",
+        "missing": "No build step is part of verification, or a build is mentioned only in passing (for example a task step to run `npm run build` with no failure condition). Contradiction example: verification only renders the sample through a dev server and never runs a production build or type check."
       }
     },
     {
@@ -541,9 +541,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Include a working sample in the repository that users can access as a reference presentation. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Includes a working sample, but leaves user access to it unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Include a working sample in the repository that users can access as a reference presentation."
+        "met": "A specification requirement, design section, or proposal scope statement commits a working sample presentation to be checked into the repository and reachable by users the same way as any other presentation (for example registered so it appears on the landing page and has its own route). Another access mechanism that achieves this counts, for example a documented `examples/` route opened by a named npm script; registration through the same registry is not required. A near-miss that does not qualify: a sample generated in a temporary directory during verification and then discarded.",
+        "partial": "The sample is committed to the repository, but how a user opens or reaches it is unspecified (no registration, route, listing, or documented command), or it is reachable only through a special-case path unlike other presentations.",
+        "missing": "No committed sample exists in the artifacts, or one appears only as a test fixture or passing mention. Contradiction example: the sample is produced on demand by verification and never committed."
       }
     },
     {
@@ -552,9 +552,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: The reference sample is generated by the presentation skill itself (it is the skill's own output), not hand-built through a separate process.",
-        "partial": "Requires the skill to generate the reference sample, but leaves evidence that the committed sample is that output unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: The reference sample is generated by the presentation skill itself (it is the skill's own output), not hand-built through a separate process."
+        "met": "The artifacts commit that the committed sample is produced by running the presentation skill itself (the skill's own procedure invoked on the sample topic), so the sample is the skill's output rather than a separately hand-built example. A specification requirement, design section, proposal statement, or task that says the sample is created by following the skill counts; exact wording such as \"built by the skill\" is not required, and minor fixes made through the skill's own modify flow do not break this.",
+        "partial": "The artifacts connect the sample to the skill but weakly, for example verification invokes the skill on a sample topic while the committed sample is not stated to be that output, or the sample is described only as \"built with the skill's kit and templates\" without saying the skill procedure produced it.",
+        "missing": "The artifacts are silent about how the sample is produced, or mention the skill only in passing. Contradiction example: the sample is hand-authored by the implementer as a fixture independently of the skill."
       }
     },
     {
@@ -563,9 +563,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: The sample explains how to use the skill to make a presentation. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Makes the sample about using the skill, but leaves explanation of how to make a presentation incomplete.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: The sample explains how to use the skill to make a presentation."
+        "met": "The committed sample's subject is how to use the skill to make a presentation: its content walks the viewer through the skill's workflow (for example starting from a topic, being interviewed, generating steps, and checking the result). Any title or storyline that achieves this counts, for example \"Building a Talk with the Presentation Skill\"; the exact title and a closing reveal that the sample is itself the skill's output are not required. A near-miss that does not qualify: a sample on an unrelated technical topic offered only as a demonstration of the kit.",
+        "partial": "The sample is about the skill, but it does not explain how to make a presentation with it, for example it lists the skill's features or architecture without showing the path from a topic to a finished presentation.",
+        "missing": "The sample's topic is unspecified, or the skill as subject is mentioned only in passing. Contradiction example: the sample is defined as a talk about an unrelated subject such as how HTTP caching works."
       }
     },
     {
@@ -574,9 +574,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: The sample is one continuously evolving scene that builds on what is already on screen rather than switching to unrelated compositions. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Builds one continuously evolving sample scene, but leaves how later states build on existing content underspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: The sample is one continuously evolving scene that builds on what is already on screen rather than switching to unrelated compositions."
+        "met": "A specification requirement or design section commits the sample to be one continuously evolving scene in which later steps build on entities already on screen (they persist, gain connections or framing) rather than switching to unrelated compositions. Any composition that achieves this counts, for example a pipeline diagram that grows left to right with each step adding a stage; the specific conversation row, card tray, and reveal frame are not required. A near-miss that does not qualify: a sequence of independently laid-out views that merely share a visual theme.",
+        "partial": "The sample is called one evolving scene, but how later steps relate to existing content is left open, for example nothing says existing entities persist in place, or the artifacts allow steps to redraw or rearrange the whole diagram.",
+        "missing": "The sample's scene structure is not defined beyond the general presentation model, or it is mentioned only in a test plan. Contradiction example: each step of the sample is specified as a fresh slide with its own unrelated diagram."
       }
     },
     {
@@ -585,9 +585,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Verification confirms the committed sample presentation is present, reachable, and contains its expected steps. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Checks sample presence and reachability, but leaves verification of its expected steps incomplete.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Verification confirms the committed sample presentation is present, reachable, and contains its expected steps."
+        "met": "A specification scenario, design section, or concrete test-plan gate commits verification to confirm that the committed sample is present, is reachable (registered or routed), and contains its expected steps by identity (for example matching step titles or ids in order against the defined outline). Any mechanism achieving this counts, for example comparing the rendered step titles against a fixture list; checking every caption verbatim is not required. A near-miss that does not qualify: verification only loads the sample route and checks that it responds.",
+        "partial": "Verification checks that the sample exists and is reachable, but checks its steps only weakly, for example only that the step count is nine, or only that some steps render, without confirming the expected steps or their order.",
+        "missing": "Verification does not check the sample's presence, reachability, or content, or this appears only as a passing mention. Contradiction example: verification renders whatever presentations are registered with no expectation about the sample or its steps."
       }
     },
     {
@@ -596,9 +596,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Verification does not silently pass when a presentation it is meant to check is missing. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Requires a missing checked presentation to fail verification, but leaves the failure diagnostic unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Verification does not silently pass when a presentation it is meant to check is missing."
+        "met": "A specification scenario, design section, or concrete test-plan case commits verification to fail when the sample it is meant to check is absent (missing files, missing registration, or unreachable route). Any mechanism achieving this counts, for example verification asserts the sample's registry entry and route exist before rendering and exits non-zero otherwise; a specific diagnostic message is not required. A near-miss that does not qualify: verification iterates over registered presentations, so an empty or sample-less registry passes vacuously.",
+        "partial": "Absence is detected but its consequence is weakened or incomplete, for example a missing sample is reported only as a warning, or only one form of absence is covered (missing registration but not missing files, or the reverse).",
+        "missing": "Nothing says what verification does when the sample is missing, or it is a passing mention. Contradiction example: verification skips the render check and passes when no sample is found."
       }
     },
     {
@@ -607,9 +607,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Automated verification renders every step of the checked presentation(s) in an environment faithful to real viewing and fails on runtime or console errors. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Renders every checked step faithfully, but leaves runtime or console-error detection incomplete.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Automated verification renders every step of the checked presentation(s) in an environment faithful to real viewing and fails on runtime or console errors."
+        "met": "A specification requirement, design section, or concrete test-plan gate commits automated verification to load the sample in a real browser (against a built or served app) and advance through every step, failing on runtime or console errors. Any faithful environment counts, for example Puppeteer driving headless Chrome against the production build; Playwright and `vite preview` specifically are not required. A near-miss that does not qualify: mounting each step component in jsdom or happy-dom, or rendering only the first step in a browser.",
+        "partial": "Every step is rendered in a real browser, but error detection is incomplete, for example uncaught exceptions fail the run while console errors are ignored, or errors are only logged; or error detection is complete but coverage of steps is limited to a subset.",
+        "missing": "No automated multi-step render check exists, or it is mentioned only in passing. Contradiction example: render verification is defined as a manual visual walk-through or a jsdom component smoke test."
       }
     },
     {
@@ -618,9 +618,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: A console error, an uncaught page error, an error while rendering a step, or a step transition that fails makes verification fail and identifies the failing step.",
-        "partial": "Requires rendering errors to fail and identify the step, but leaves console, page, or transition errors unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: A console error, an uncaught page error, an error while rendering a step, or a step transition that fails makes verification fail and identifies the failing step."
+        "met": "A specification scenario, design section, or concrete test-plan case commits that each of these makes verification fail and identifies the failing step (by index, title, or equivalent): a console error, an uncaught page error, an error while rendering a step, and a step transition that does not complete or advance. The browser event names and output format are not required.",
+        "partial": "Errors fail verification but one element is missing, for example the failing step is not identified, or failed step transitions (the step index not advancing) are not treated as failures while runtime and console errors are.",
+        "missing": "The artifacts do not say browser errors fail verification, or they say it only in passing. Contradiction example: console errors are collected into a report but do not fail the run."
       }
     },
     {
@@ -629,9 +629,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Verification produces an unambiguous pass/fail outcome suitable for automated checks: it reports a clear pass or fail, exits with a non-zero status on failure, and identifies which check failed.",
-        "partial": "Reports clear pass/fail with non-zero failure exit, but leaves identification of the failed check unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Verification produces an unambiguous pass/fail outcome suitable for automated checks: it reports a clear pass or fail, exits with a non-zero status on failure, and identifies which check failed."
+        "met": "The artifacts commit verification to an unambiguous outcome usable by automation: a clear pass or fail result, a non-zero exit status on failure, and identification of which check (for example build, sample presence, or render) failed. A specification scenario, design section, or concrete test-plan assertion counts; a particular output format is not required.",
+        "partial": "Two of the three elements are present, for example a non-zero exit on failure without naming the failed check, or a readable report naming the failure with no exit-status commitment.",
+        "missing": "The outcome of verification is not defined, or it is mentioned only in passing. Contradiction example: verification produces a report for a human to read and always exits zero."
       }
     },
     {
@@ -640,9 +640,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Verification cleans up the preview server processes it starts after each run, including runs that fail.",
-        "partial": "Cleans up started preview processes, but leaves cleanup on failed runs unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Verification cleans up the preview server processes it starts after each run, including runs that fail."
+        "met": "The artifacts commit verification to stop the preview or server processes it starts after every run, including runs that fail partway. A test-plan assertion is an appropriate place for this commitment, as is a specification scenario or design step; the cleanup mechanism is not required.",
+        "partial": "Cleanup is stated only for the normal path (for example \"stop the preview server at the end\") with nothing covering failed or aborted runs.",
+        "missing": "Nothing addresses cleanup of started processes. Contradiction example: the preview server is deliberately left running after a failure so the developer can inspect it."
       }
     },
     {
@@ -651,9 +651,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Visual review is supported by a repeatable way to capture views of each step of a presentation. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Provides repeatable step capture, but leaves capture of some steps unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Visual review is supported by a repeatable way to capture views of each step of a presentation."
+        "met": "A specification requirement, design section, or proposal scope commits scaffolded projects to a repeatable, scripted way to capture an image of each step of a presentation for visual review, written to a predictable location. Any mechanism counts, for example an `npm run screenshots -- <slug>` script using any browser automation; a standard desktop viewport and a production preview are not required. A near-miss that does not qualify: instructing the agent to take ad hoc screenshots with an external browser tool, with no shipped helper.",
+        "partial": "A repeatable capture helper exists but covers only some steps (for example the first and last), or where its output goes is unspecified.",
+        "missing": "No capture helper is defined, or one appears only in a test plan or a passing mention. Contradiction example: visual review relies solely on a human opening the presentation in a browser."
       }
     },
     {
@@ -662,9 +662,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Visual captures reflect each step's settled state, not mid-transition frames. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Requires settled visual captures, but leaves how completion of transitions is determined unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Visual captures reflect each step's settled state, not mid-transition frames."
+        "met": "The artifacts commit that per-step captures show each step's settled state after transitions finish, by any mechanism, for example a configured settle delay after each advance, waiting for animation-complete signals, or disabling motion before capture. The specific mechanism is not required. A near-miss that does not qualify: capturing immediately after sending the next-step key.",
+        "partial": "Captures are said to wait before shooting, but the wait is not tied to transition completion (for example a short fixed pause described only as waiting for page load), or settling applies only to some steps.",
+        "missing": "Capture timing is not addressed, or it appears only as a passing mention. Contradiction example: the helper captures each step as soon as navigation is triggered to keep runs fast."
       }
     },
     {
@@ -673,9 +673,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: The change includes an agent skill that creates browser-based presentations from a topic.",
-        "partial": "Includes a presentation-creating agent skill, but leaves generation from a topic underspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: The change includes an agent skill that creates browser-based presentations from a topic."
+        "met": "The proposal or specifications commit the change to deliver an agent skill (an agent-followed procedure) that takes a topic and produces a working browser-based presentation. The skill's name, file layout, and whether it is described as hybrid are not required.",
+        "partial": "An agent skill for presentations is included, but generating a new presentation from a topic is underspecified, for example the skill only edits existing presentations, or produces an outline without a runnable browser presentation.",
+        "missing": "No agent skill is included, or it is mentioned only in passing. Contradiction example: presentations are created by a standalone CLI generator or by hand, with no agent skill."
       }
     },
     {
@@ -684,9 +684,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Supply reusable scene-building resources that the skill uses to generate presentations across topics and projects. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Supplies reusable scene-building resources, but leaves how the skill uses them across projects unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Supply reusable scene-building resources that the skill uses to generate presentations across topics and projects."
+        "met": "The artifacts commit to reusable scene-building resources (components, templates, and/or scripts) that the skill uses to generate presentations on any topic and in new projects. Any packaging that achieves this counts, for example a shared presentation library plus a generator script the skill calls; the React/templates/scripts split is not required. A near-miss that does not qualify: the skill writes every presentation's code from scratch by prompt, or the only components live inside the sample.",
+        "partial": "Reusable resources are supplied, but how the skill uses them is unclear, for example the components exist in the repository but nothing says the skill uses them in new or other projects.",
+        "missing": "No reusable resources are part of the change, or they are mentioned only in passing. Contradiction example: each generated presentation contains its own copy of bespoke components with no shared kit."
       }
     },
     {
@@ -695,9 +695,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: The change includes a verification flow that confirms the generated sample presentation builds and renders.",
-        "partial": "Includes sample verification, but leaves one of build or render confirmation incomplete.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: The change includes a verification flow that confirms the generated sample presentation builds and renders."
+        "met": "The proposal, specifications, or design include a verification flow as a deliverable that confirms the sample presentation both builds and renders. A concrete test-plan gate that builds and renders the committed sample on every change also establishes this; the command name is not required.",
+        "partial": "A verification flow is included but confirms only one of build or render, or the render part is limited to loading the page without exercising the presentation.",
+        "missing": "No verification flow is in scope, or it appears only as a passing mention. Contradiction example: correctness of generated presentations is left to manual review with no build or render check."
       }
     },
     {
@@ -706,9 +706,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "The definition does not include the excluded scope; an explicit exclusion statement is not required. Exporting presentations to PowerPoint, Keynote, PDF, or images is out of scope.",
-        "partial": "Excludes presentation export generally, but leaves whether one of PowerPoint, Keynote, PDF, or image export is excluded unclear.",
-        "missing": "Includes the excluded scope or commits to behavior that contradicts this exclusion: Exporting presentations to PowerPoint, Keynote, PDF, or images is out of scope."
+        "met": "The definition does not add any export of presentations to PowerPoint, Keynote, PDF, or image files; an explicit exclusion statement is not required. Screenshots captured for review or verification are not export.",
+        "partial": "No general export feature is added, but a limited export-like capability is proposed with an unresolved boundary, for example \"optionally save steps as images for sharing\" without saying whether that is a user-facing export.",
+        "missing": "The artifacts add the excluded scope. Contradiction example: a requirement to export a presentation as a PDF or a PowerPoint deck."
       }
     },
     {
@@ -717,9 +717,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "The definition does not include the excluded scope; an explicit exclusion statement is not required. A general-purpose visual editor for presentations is out of scope.",
-        "partial": "Excludes a general-purpose visual editor, but proposes limited editing whose boundary with that scope is unresolved.",
-        "missing": "Includes the excluded scope or commits to behavior that contradicts this exclusion: A general-purpose visual editor for presentations is out of scope."
+        "met": "The definition does not add a general-purpose visual editor for presentations; an explicit exclusion statement is not required. Modifying presentations through the skill's conversational flow is not a visual editor.",
+        "partial": "No general editor is added, but limited in-browser editing is proposed with an unresolved boundary, for example a panel for tweaking captions or nudging entity positions.",
+        "missing": "The artifacts add the excluded scope. Contradiction example: a drag-and-drop editor for placing and connecting scene entities."
       }
     },
     {
@@ -728,9 +728,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "The definition does not include the excluded scope; an explicit exclusion statement is not required. A production hosting or publishing workflow for presentations is out of scope.",
-        "partial": "Excludes production hosting or publishing generally, but leaves the boundary of a proposed deployment feature unresolved.",
-        "missing": "Includes the excluded scope or commits to behavior that contradicts this exclusion: A production hosting or publishing workflow for presentations is out of scope."
+        "met": "The definition does not add a production hosting or publishing workflow; an explicit exclusion statement is not required. A local dev server, a local production preview used for verification, and static build output are not hosting.",
+        "partial": "No hosting workflow is committed, but a deployment feature is proposed with an unresolved boundary, for example \"optionally deploy to a static host\" without saying whether the change delivers it.",
+        "missing": "The artifacts add the excluded scope. Contradiction example: a requirement or task to publish presentations to GitHub Pages or another host as part of the workflow."
       }
     },
     {
@@ -739,9 +739,9 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "The definition does not include the excluded scope; an explicit exclusion statement is not required. Subjective scoring of visual taste is out of scope as the primary verification mechanism.",
-        "partial": "Keeps automated verification primary, but leaves whether visual-taste scoring can override it unresolved.",
-        "missing": "Includes the excluded scope or commits to behavior that contradicts this exclusion: Subjective scoring of visual taste is out of scope as the primary verification mechanism."
+        "met": "The definition does not make subjective scoring of visual taste the primary pass/fail verification; objective checks such as build and render remain the gate. An explicit exclusion statement is not required, and advisory visual review (screenshots, warnings, or the agent's own composition check) is compatible with this.",
+        "partial": "Objective checks remain primary, but a taste score's role is unresolved, for example a model-rated aesthetic score is computed and may block completion without saying whether it overrides the objective checks.",
+        "missing": "The artifacts add the excluded scope. Contradiction example: verification passes only when a model judge rates the presentation's visual quality above a threshold."
       }
     },
     {
@@ -750,9 +750,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Provide an agent procedure that uses reusable scene infrastructure and includes checks for generated output quality. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Provides an agent procedure using reusable infrastructure, but leaves output-quality checks underspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Provide an agent procedure that uses reusable scene infrastructure and includes checks for generated output quality."
+        "met": "The artifacts commit to an agent procedure that relies on reusable scene infrastructure (not prompt-only generation) and includes checks of the generated output's quality. Any arrangement achieving this counts, for example a skill document that calls a shared component package and a generator script and then runs lint, build, and render checks; the word \"hybrid\" and a templates directory are not required. A near-miss that does not qualify: a prompt-only skill that writes all presentation code fresh each time, even if it ends by running the build.",
+        "partial": "The procedure uses reusable infrastructure, but checks of generated output quality are absent or vague (for example \"make sure it looks good\" with no defined check or quality bar).",
+        "missing": "The skill's structure is not defined, or it appears only in passing. Contradiction example: the skill is defined as a single prompt with no shared components, templates, or scripts."
       }
     },
     {
@@ -761,9 +761,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Automatic verification is available from a single, documented entry point that runs the build and the render checks. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Provides a single verification entry point, but leaves documentation or inclusion of one check unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Automatic verification is available from a single, documented entry point that runs the build and the render checks."
+        "met": "The artifacts commit to one documented entry point that runs both the whole-app build check and the render check. Any single command counts, for example `make verify` or an `npm test` script that runs both; the name `npm run verify` is not required. A near-miss that does not qualify: separate build and end-to-end commands the user must run in sequence.",
+        "partial": "A single entry point is defined, but it runs only one of the checks, or it is not named or documented so a user or CI could not find it.",
+        "missing": "No verification entry point is defined, or it appears only in passing. Contradiction example: the build and the render check are run by separate commands with nothing combining them."
       }
     },
     {
@@ -772,9 +772,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: The render check runs in an environment that faithfully executes the presentation, including layout and animation, rather than a superficial component mount. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Uses a faithful presentation execution environment, but leaves fidelity of layout or animation unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: The render check runs in an environment that faithfully executes the presentation, including layout and animation, rather than a superficial component mount."
+        "met": "A design decision or specification commits the render check to an environment that really executes the presentation, including layout and animation, such as a real browser against built output. Any such tool counts, for example Puppeteer driving Chrome or WebdriverIO with Firefox; Playwright, Chromium, and `vite preview` are not required. A near-miss that does not qualify: a jsdom or happy-dom per-step component mount, or server-rendered HTML snapshots.",
+        "partial": "The render check uses a browser-like environment, but its fidelity is unclear, for example \"a headless environment\" with no statement that it runs real layout and animation, or animations are stubbed out for the check.",
+        "missing": "The render environment is not specified, or it appears only in a test plan or in passing. Contradiction example: the design chooses a jsdom unit-test mount of each step as the render check."
       }
     },
     {
@@ -783,9 +783,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: External tooling can enumerate the steps and observe the current step without depending on fragile DOM structure. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Provides tooling access to the current step, but leaves step enumeration or independence from DOM structure unclear.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: External tooling can enumerate the steps and observe the current step without depending on fragile DOM structure."
+        "met": "The design or specifications commit the presentation chrome to expose both the total step count and the current step index through a stable interface that external tooling can read, independent of DOM structure. Any stable interface counts, for example a `window.presentation` object with `stepCount` and `stepIndex`, or a URL step parameter plus a count attribute; the `data-step-count` and `data-step-index` names are not required. A near-miss that does not qualify: tooling counts progress dots or reads caption text via CSS selectors.",
+        "partial": "A stable hook exposes the current step but not the total (or the reverse), or the hooks are named but nothing says tooling uses them instead of DOM structure.",
+        "missing": "No tooling-facing step interface is defined, or it appears only in passing. Contradiction example: verification determines the number of steps by querying the navigation markup."
       }
     },
     {
@@ -794,9 +794,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: The reusable components are topic-agnostic building blocks that presentations on any topic can compose. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Provides topic-independent building blocks, but leaves composability across topics underspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: The reusable components are topic-agnostic building blocks that presentations on any topic can compose."
+        "met": "The design commits the reusable kit to topic-agnostic building blocks (for example boxes, labels, arrows, frames) that presentations on any topic compose, with presentation-specific entities kept in each presentation. Any primitive set achieving this counts, for example Node, Edge, Group, and Callout; the exact six primitives and their names are not required. A near-miss that does not qualify: a kit that ships components named for the sample's content, such as a skill node or step card.",
+        "partial": "Generic primitives are listed, but composability across topics is undercut or unclear, for example the kit also includes sample-specific components, or primitives take no identity or styling parameters so presentations cannot adapt them.",
+        "missing": "The kit's components are not characterized, or this is a passing mention. Contradiction example: each presentation's node components are added to the shared kit."
       }
     },
     {
@@ -805,9 +805,9 @@
       "class": "acceptable-alternative",
       "weight": 1,
       "anchors": {
-        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: The components the skill bootstraps into new projects match the repository's reusable components and cannot silently diverge from them. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
-        "partial": "Requires bootstrapped components to match repository components, but leaves enforcement against silent drift unspecified.",
-        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: The components the skill bootstraps into new projects match the repository's reusable components and cannot silently diverge from them."
+        "met": "The artifacts commit that what the skill bootstraps into new projects matches the repository's reusable components and cannot drift silently. Any mechanism achieving this counts, for example the skill copies from the canonical source at bootstrap time, or both consume one published package, or a snapshot plus a test that fails on divergence; a `templates/` snapshot is not required. A near-miss that does not qualify: a separate template copy with only a note to keep it in sync.",
+        "partial": "The artifacts maintain a copy and say it should match the canonical components, but no check or single source enforces it, or the enforcing check is described too vaguely to catch divergence.",
+        "missing": "The relationship between bootstrapped and repository components is not addressed, or it is mentioned only in passing. Contradiction example: bootstrap templates are an independent implementation of the kit maintained separately."
       }
     }
   ],
