@@ -82,7 +82,10 @@ export function validateFinding(r, job) {
   }
   if (job.kind === 'fidelity') {
     if (r.verdict === 'partial') bad('fidelity verdict is binary')
-    if (r.subject_id !== null && !job.inputs.items.some(x => x.id === r.subject_id)) bad('graded or unknown item cannot receive a fidelity deduction')
+    // A graded (coverage-owned) subject is valid output that normalizeFidelity
+    // turns into no deduction; only ids outside the inventory are invalid.
+    if (r.subject_id !== null && !job.inputs.items.some(x => x.id === r.subject_id) && !gradedSubject(r, job)) bad('unknown item cannot receive a fidelity deduction')
+    if (gradedSubject(r, job)) return true
     if (r.verdict === 'met' && (!kinds.includes('span') || !r.citations.some(c => c.exchange === r.id.slice('fidelity:'.length)))) bad('fidelity deduction must cite artifact and the matching exchange')
   }
   if (job.kind === 'disclosure') {
@@ -92,6 +95,16 @@ export function validateFinding(r, job) {
   }
   if (job.kind === 'discovery' && r.asked && !kinds.includes('exchange')) bad('asked decision needs an exchange citation')
   return true
+}
+const gradedSubject = (r, job) => r.subject_id !== null && (job.inputs.coverage_owned_matters ?? []).some(x => x.id === r.subject_id)
+// Contradictions of graded items are scored only under coverage. A fidelity
+// finding naming one is recorded for the report and normalized to no deduction.
+export function normalizeFidelity(results, job) {
+  if (job.kind !== 'fidelity') return results
+  return results.map(r => gradedSubject(r, job) ? { ...r, verdict: 'missing', excluded_graded_contradiction: { subject_id: r.subject_id, judged_verdict: r.verdict } } : r)
+}
+export function excludedGradedContradictions(record) {
+  return (record.votes ?? []).filter(v => v.excluded_graded_contradiction).map(v => ({ criterion: v.id, subject_id: v.excluded_graded_contradiction.subject_id, judged_verdict: v.excluded_graded_contradiction.judged_verdict, panel_index: v.panel_index, family: v.family, rationale: v.rationale, citations: v.citations }))
 }
 export function parseJobOutput(text, job, criteria = job.criteria) {
   let payload
@@ -122,8 +135,9 @@ export async function runDefinitionPanel({ job, panel, decider }) {
   // loop never accepts an invalid panel vote. This is not a per-judge audit.
   const guard = member => ({ ...member, invoke: async req => {
     const text = await member.invoke(req)
-    if (!req.audit_stage) parseJobOutput(text, job, req.criteria)
-    return text
+    if (req.audit_stage) return text
+    const results = parseJobOutput(text, job, req.criteria)
+    return job.kind === 'fidelity' ? JSON.stringify({ results: normalizeFidelity(results, job) }) : text
   } })
   return runPanelJob({ job: job.name, criteria: job.criteria, verdicts: ['met', 'partial', 'missing'], order: ['met', 'partial', 'missing'],
     panel: panel.map(guard), decider: guard(decider), schema: judgeSchema(job.criteria),

@@ -95,15 +95,29 @@ test('deterministic score excludes leaks, charges fidelity once, gates fail and 
   assert.deepEqual(scoreDefinition({ rubric, coverage, quality, fidelity, leaked, gates: [{ passed: false }], discovery: ledger }), scored)
   assert.equal(scoreDefinition({ rubric, coverage, quality, fidelity: [], leaked: [], gates: [] }).definition_verdict, 'pass')
 })
-test('quality inputs contain no hidden material; fidelity excludes graded subjects and requires matching exchange', async () => {
+test('quality inputs contain no hidden material; fidelity excludes graded subjects without failing and requires matching exchange', async () => {
   const exchange = { step: 'define.specs', step_id: 'specs', attempt: 1, turn: 1, agent_message: 'Style?', reply: 'Blue', reply_type: 'answer' }
   const jobs = makeJobs({ inventory, rubric: buildRubric(inventory), artifacts: inputs.artifacts, conversation: [exchange], gates: [] })
   const quality = jobs.find(x => x.kind === 'quality')
   assert.ok(!JSON.stringify(quality.inputs).includes('INV-'))
   const fidelity = jobs.find(x => x.kind === 'fidelity')
   const judges = members(['met','met','met'])
-  for (const judge of judges.panel) judge.invoke = async req => JSON.stringify({ results: req.criteria.map(id => ({ ...result(id, 'met', [citation, { ...citation, path: null, start_line: null, end_line: null, exchange: exchangeIdentity(exchange) }]), subject_id: item.id })) })
+  const deduction = subject_id => async req => JSON.stringify({ results: req.criteria.map(id => ({ ...result(id, 'met', [citation, { ...citation, path: null, start_line: null, end_line: null, exchange: exchangeIdentity(exchange) }]), subject_id })) })
+  // A graded subject is coverage-owned: a valid output, normalized to no deduction.
+  for (const judge of judges.panel) judge.invoke = deduction(item.id)
+  const graded = await runDefinitionPanel({ job: fidelity, ...judges })
+  assert.equal(graded.ok, true, JSON.stringify(graded.failure))
+  assert.equal(graded.results[0].verdict, 'missing')
+  assert.ok(graded.record.votes.every(v => v.verdict === 'missing' && v.excluded_graded_contradiction?.subject_id === item.id && v.excluded_graded_contradiction.judged_verdict === 'met'))
+  assert.equal(graded.record.attempts.filter(x => !x.ok).length, 0)
+  // An id outside the inventory remains invalid and is never scored.
+  for (const judge of judges.panel) judge.invoke = deduction('INV-999')
   assert.equal((await runDefinitionPanel({ job: fidelity, ...judges })).ok, false)
+  const preference = inventory.items.find(x => x.class === 'preference')
+  for (const judge of judges.panel) judge.invoke = deduction(preference.id)
+  const deducted = await runDefinitionPanel({ job: fidelity, ...judges })
+  assert.equal(deducted.results[0].verdict, 'met')
+  assert.ok(deducted.record.votes.every(v => v.excluded_graded_contradiction === undefined))
   for (const judge of judges.panel) judge.invoke = async req => JSON.stringify({ results: req.criteria.map(id => result(id, 'met', [citation, { ...citation, path: null, start_line: null, end_line: null, exchange: 'wrong' }])) })
   assert.equal((await runDefinitionPanel({ job: fidelity, ...judges })).ok, false)
   assertStrictSchema(judgeSchema([item.id]))
@@ -123,7 +137,12 @@ async function phaseFixture(t) {
   const rubric = { ...buildRubric(subset), pass_threshold: 70 }
   let checkpoint = createCheckpoint({ run_id: 'test', identity: { series_identity: { fixture: 'test' } } })
   const calls = []; let failure = false
+  let override = null
   const invoke = index => async req => {
+    if (override) return override(req, base(index))
+    return base(index)(req)
+  }
+  const base = index => async req => {
     calls.push({ index, job: req.job, stage: req.audit_stage })
     if (failure && req.job === 'artifact-quality') throw new Error('rejected stub call')
     if (req.audit_stage) return JSON.stringify({ results: req.criteria.map(id => ({ id, classification: 'confirmed', rationale: 'Flag matches the exchange.', evidence: ['exchange'] })) })
@@ -153,7 +172,7 @@ async function phaseFixture(t) {
       return { status: 1, stdout: '', stderr: 'missing design' }
     },
   })
-  return { runDir, phases, calls, setFailure: value => { failure = value }, checkpoint: () => checkpoint, subset }
+  return { runDir, phases, calls, setFailure: value => { failure = value }, override: value => { override = value }, checkpoint: () => checkpoint, subset }
 }
 test('INT-003 lifecycle neutralizes settled leaks, records flags and scores absent artifacts as complete/fail', async t => {
   const f = await phaseFixture(t)
@@ -282,4 +301,28 @@ test('recorded calibrated settings round-trip while coverage criteria stay gener
     const bad = structuredClone(rubric); change(bad)
     assert.ok(checkRubric(bad, inventory).some(x => pattern.test(x)), String(pattern))
   }
+})
+
+test('a definition contradicting a stated mandatory item is scored only under coverage and the run completes', async t => {
+  const f = await phaseFixture(t)
+  const mandatory = f.subset.items.find(x => x.class === 'mandatory')
+  const contradiction = [citation, exchangeCitation]
+  const fidelityVote = id => ({ ...result(id, 'met', contradiction), rationale: 'The proposal contradicts the answer the user gave about this requirement.', subject_id: mandatory.id })
+  f.override((req, fallback) => {
+    if (req.audit_stage) return fallback(req)
+    if (req.job === 'fidelity') return JSON.stringify({ results: req.criteria.map(fidelityVote) })
+    if (req.job === 'disclosure-audit') return JSON.stringify({ results: req.criteria.map(id => result(id, 'missing', [])) })
+    if (req.job.startsWith('coverage:')) return JSON.stringify({ results: req.criteria.map(id => result(id, 'missing', [{ ...citation, start_line: null, end_line: null }])) })
+    return fallback(req)
+  })
+  await f.phases['disclosure-audit'](); await f.phases['gates-and-judging'](); await f.phases.discovery()
+  const scored = JSON.parse(await readFile(join(f.runDir, 'judges/score.json'), 'utf8'))
+  assert.equal(scored.evaluation_status, 'complete')
+  assert.equal(scored.coverage.find(x => x.id === mandatory.id).verdict, 'missing')
+  assert.equal(scored.components.fidelity.score, 15)
+  assert.ok(scored.fidelity.every(x => x.verdict === 'missing'))
+  assert.ok(scored.excluded_graded_contradictions.length >= 1)
+  assert.ok(scored.excluded_graded_contradictions.every(x => x.subject_id === mandatory.id && x.criterion === `fidelity:${exchangeIdentity(exchange)}` && x.judged_verdict === 'met'))
+  assert.equal(f.checkpoint().phases['gates-and-judging'].units.fidelity.state, 'complete')
+  assert.ok(JSON.parse(await readFile(join(f.runDir, 'discovery/ledger.json'), 'utf8')).counts)
 })

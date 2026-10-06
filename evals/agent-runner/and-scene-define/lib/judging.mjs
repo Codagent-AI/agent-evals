@@ -4,7 +4,7 @@ import { join, relative } from 'node:path'
 import { filesUnder, SUITE_ROOT, sha256 } from './files.mjs'
 import { readJson, writeJsonAtomic, hashJson } from './persistence.mjs'
 import { verifyUnit, beginUnit, completeUnit, failUnit } from './checkpoint.mjs'
-import { makeJobs, runDefinitionPanel, runDiscovery, PANEL_PROTOCOL, JUDGE_PROFILE } from './judge-jobs.mjs'
+import { makeJobs, runDefinitionPanel, runDiscovery, excludedGradedContradictions, PANEL_PROTOCOL, JUDGE_PROFILE } from './judge-jobs.mjs'
 import { createDefinitionJudges } from './judge-invoker.mjs'
 import { runGates } from './gates.mjs'
 import { scoreDefinition, discoveryLedger } from './scoring.mjs'
@@ -85,7 +85,8 @@ export function createJudgingPhases({ runDir, suiteRoot = SUITE_ROOT, getCheckpo
       const fidelity = records.find(x => x.kind === 'fidelity')?.record.results ?? []
       const scopeFindings = records.filter(x => x.kind === 'fidelity').flatMap(x => x.record.votes.flatMap(v => v.added_scope ?? []))
       const added_scope = [...new Map(scopeFindings.map(x => [hashJson(x), x])).values()]
-      const scored = { ...scoreDefinition({ rubric: data.rubric, coverage, quality, fidelity, leaked: audit.leaked_items, gates: gateRecord.gates }), judge_authority: JUDGE_PROFILE, panel_protocol: PANEL_PROTOCOL, panel_records: records, disclosure_audit: audit, added_scope }
+      const excluded_graded_contradictions = records.filter(x => x.kind === 'fidelity').flatMap(x => excludedGradedContradictions(x.record))
+      const scored = { ...scoreDefinition({ rubric: data.rubric, coverage, quality, fidelity, leaked: audit.leaked_items, gates: gateRecord.gates }), judge_authority: JUDGE_PROFILE, panel_protocol: PANEL_PROTOCOL, panel_records: records, disclosure_audit: audit, added_scope, excluded_graded_contradictions }
       const target = join(runDir, 'judges/score.json'); await writeJsonAtomic(target, scored)
       setCheckpoint({ ...getCheckpoint(), definition_verdict: scored.definition_verdict }); await persist()
       return [...outputs, target]

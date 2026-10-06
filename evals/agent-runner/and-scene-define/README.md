@@ -255,7 +255,14 @@ E2E-003 evidence and maintainer approval (HT-002). Extra keys in `calibration`
 calibrated settings, edit those fields, bump `rubric_version` and
 `versions.json`, and run the builder. `--check` still refuses any coverage
 criterion, anchor, or item weight that diverges from the inventory and the
-recorded class weights, and any inconsistent settings. Candidate preflight
+recorded class weights, and any inconsistent settings.
+
+Fidelity deducts only for contradicted preference or outside-inventory answers.
+A fidelity finding whose `subject_id` names a graded item is not invalid judge
+output: that contradiction is scored only under coverage, so the finding is
+normalized to no deduction and listed in the score's
+`excluded_graded_contradictions` (criterion, subject id, judged verdict, judge
+and rationale). A `subject_id` outside the inventory remains invalid output. Candidate preflight
 refuses unreviewed anchors, rubric/inventory mismatches, and a null threshold.
 Dry runs verify rubric consistency without requiring review or calibration.
 Scoring itself does not need a threshold: with a null threshold (as during
