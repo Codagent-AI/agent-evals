@@ -110,3 +110,39 @@ test('materialization rejects forbidden paths and altered snapshot content befor
   await assert.rejects(materialize(join(root, 'stage'), { suiteRoot: customSuite }), /content hash mismatch/)
   assert(!(await readdir(root)).includes('stage'))
 })
+
+test('starting tree ignores host excludes and forcibly stages every allowlisted file', async t => {
+  const root = await temporary(t)
+  const xdg = join(root, 'xdg')
+  await mkdir(join(xdg, 'git'), { recursive: true })
+  await writeFile(join(xdg, 'git/ignore'), '.npmrc\n.validator/\n')
+  const module = new URL('../evals/agent-runner/and-scene-define/lib/starting-repo.mjs', import.meta.url).href
+  const script = `import { materialize } from ${JSON.stringify(module)}; console.log(JSON.stringify(await materialize(process.argv[1])))`
+  const first = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', script, join(root, 'stage')], { encoding: 'utf8', env: { ...process.env, XDG_CONFIG_HOME: xdg } }))
+  const manifest = JSON.parse(await readFile(join(suiteRoot, 'starting-repo/manifest.json')))
+  assert.deepEqual(git(first.repoDir, 'ls-files').split('\n'), manifest.allowlist)
+  assert.equal(first.treeHash, manifest.tree_hash)
+  const repo = join(root, 'force')
+  await mkdir(repo)
+  await writeFile(join(repo, '.gitignore'), 'required.txt\n')
+  await writeFile(join(repo, 'required.txt'), 'Required scaffold file\n')
+  const { initializeTree } = await import('../evals/agent-runner/and-scene-define/lib/starting-repo.mjs')
+  await initializeTree(repo, 2)
+  assert.deepEqual(git(repo, 'ls-files').split('\n'), ['.gitignore', 'required.txt'])
+  await assert.rejects(initializeTree(repo, 3), /file count.*expected 3.*found 2/)
+})
+
+for (const packed of [false, true]) {
+  test(`canary scan detects unreachable ${packed ? 'packed' : 'loose'} Git blobs`, async t => {
+    const root = await temporary(t)
+    const stage = await materialize(join(root, 'stage'))
+    const oid = execFileSync('git', ['-C', stage.repoDir, 'hash-object', '-w', '--stdin'], { input: 'Codagent-AI/and-scene\n', encoding: 'utf8' }).trim()
+    assert(!git(stage.repoDir, 'rev-list', '--objects', '--all').includes(oid))
+    if (packed) {
+      execFileSync('git', ['-C', stage.repoDir, 'pack-objects', join(stage.repoDir, '.git/objects/pack/pack')], { input: `${oid}\n`, stdio: ['pipe', 'pipe', 'pipe'] })
+      await rm(join(stage.repoDir, '.git/objects', oid.slice(0, 2), oid.slice(2)))
+    }
+    const matches = await scanCanaries({ stagedDir: join(root, 'stage') })
+    assert(matches.some(match => match.file.includes(oid) && match.pattern === 'fixture-repository'))
+  })
+}

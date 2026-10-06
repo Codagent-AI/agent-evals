@@ -13,10 +13,16 @@ const environment = {
 }
 // Inherited Git variables must not redirect the repository or inject config.
 for (const name of Object.keys(environment)) if (name.startsWith('GIT_') && !['GIT_CONFIG_NOSYSTEM', 'GIT_CONFIG_GLOBAL', 'GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL', 'GIT_AUTHOR_DATE', 'GIT_COMMITTER_DATE'].includes(name)) delete environment[name]
-export const repoGit = (cwd, args) => execFileSync('git', ['-C', cwd, '-c', 'core.autocrlf=false', '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', ...args], { env: environment, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
-export async function initializeTree(repoDir) {
+export function repoGit(cwd, args, options = {}) {
+  const output = execFileSync('git', ['-C', cwd, '-c', 'core.autocrlf=false', '-c', 'core.excludesFile=/dev/null', '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', ...args], { env: environment, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...options })
+  return typeof output === 'string' ? output.trim() : output
+}
+export async function initializeTree(repoDir, expectedFileCount) {
+  if (!Number.isInteger(expectedFileCount) || expectedFileCount < 1) throw new Error('expected snapshot file count is required')
   repoGit(repoDir, ['init', '--template=', '--object-format=sha1', '--initial-branch=main'])
-  repoGit(repoDir, ['add', '--all'])
+  repoGit(repoDir, ['add', '--all', '--force'])
+  const count = repoGit(repoDir, ['ls-files', '-z']).split('\0').filter(Boolean).length
+  if (count !== expectedFileCount) throw new Error(`staged file count mismatch: expected ${expectedFileCount}, found ${count}`)
   return repoGit(repoDir, ['write-tree'])
 }
 export async function snapshotFiles({ suiteRoot = SUITE_ROOT } = {}) {
@@ -50,7 +56,7 @@ export async function verifySnapshot(options = {}) {
   const temporary = await mkdtemp(join(tmpdir(), 'define-tree-'))
   try {
     await copyTree(temporary, files)
-    const hash = await initializeTree(temporary)
+    const hash = await initializeTree(temporary, manifest.files.length)
     if (hash !== manifest.tree_hash) throw new Error(`snapshot tree hash mismatch: ${hash}`)
     return hash
   } finally { await rm(temporary, { recursive: true, force: true }) }
@@ -64,7 +70,7 @@ export async function materialize(outDir, options = {}) {
   const repoDir = join(outDir, 'repository')
   try {
     await copyTree(repoDir, files)
-    const treeHash = await initializeTree(repoDir)
+    const treeHash = await initializeTree(repoDir, manifest.files.length)
     if (treeHash !== manifest.tree_hash) throw new Error('materialized tree differs from pinned tree hash')
     repoGit(repoDir, ['commit', '-m', 'chore: initialize project scaffold'])
     const commit = repoGit(repoDir, ['rev-parse', 'HEAD'])

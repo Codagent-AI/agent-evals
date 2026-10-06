@@ -51,7 +51,7 @@ export async function buildStartingSnapshot({ checkout, output = join(SUITE_ROOT
         files.push({ path, mode: '100644', sha256: sha256(content), source_sha256: sha256(original), source_path: path === 'CLAUDE.md' ? 'AGENTS.md' : path })
         if (reason) rewrites.push({ path, reason, sha256: sha256(content) })
       }
-      const manifest = { snapshot_version: 1, source: FIXTURE, change_name: CHANGE_NAME, allowlist: ALLOWLIST, rewrites, files, tree_hash: await initializeTree(hashDir) }
+      const manifest = { snapshot_version: 1, source: FIXTURE, change_name: CHANGE_NAME, allowlist: ALLOWLIST, rewrites, files, tree_hash: await initializeTree(hashDir, files.length) }
       await writeJson(join(temporary, 'manifest.json'), manifest)
       await rm(output, { recursive: true, force: true })
       await rename(temporary, output)

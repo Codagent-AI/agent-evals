@@ -72,6 +72,8 @@ operations are responsibilities of the later sandbox invocation.
 For a content change, bump the input's version, retain its old hashes, and append
 the new hash. JSON inputs carry their own version field; the starting prompt's
 version lives in the ledger. The check also compares Git's committed ledger to
-catch changing a recorded hash without a version bump. Once the rubric and
+catch changing a recorded hash without a version bump. Git or baseline lookup
+failures reject the check; incomplete shallow history must be fetched before
+preflight. Only a genuinely new, uncommitted ledger needs no baseline. Once the rubric and
 simulated-user policy exist, add each to `VERSIONED_INPUTS` with one line and
 record its initial version/hash in the ledger.

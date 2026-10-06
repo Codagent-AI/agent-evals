@@ -32,12 +32,21 @@ export async function scanCanaries({ stagedDir, skillsDir, credentialFiles = [],
     for (const pattern of patterns) if (pattern.matches(text)) matches.set(`${file}\0${pattern.id}`, { file, pattern: pattern.id, kind: pattern.kind })
   }
   const scanGitObjects = (repo, label) => {
-    const objects = repoGit(repo, ['rev-list', '--objects', '--all']).split('\n')
-    for (const object of objects) {
-      const [oid, ...name] = object.split(' ')
-      if (!oid) continue
-      const type = repoGit(repo, ['cat-file', '-t', oid])
-      if (['blob', 'commit', 'tag'].includes(type)) scan(`${label}::${name.join(' ') || oid}`, repoGit(repo, ['cat-file', type, oid]))
+    // --batch-all-objects includes unreachable loose and packed objects. The
+    // batch framing uses byte lengths, so binary blobs cannot split records.
+    const output = repoGit(repo, ['cat-file', '--batch-all-objects', '--batch'], { encoding: null, maxBuffer: 64 * 1024 * 1024 })
+    let offset = 0
+    while (offset < output.length) {
+      const headerEnd = output.indexOf(10, offset)
+      if (headerEnd < 0) throw new Error(`truncated Git object header: ${label}`)
+      const header = output.subarray(offset, headerEnd).toString('ascii').match(/^([a-f0-9]+) (blob|tree|commit|tag) (\d+)$/)
+      if (!header) throw new Error(`invalid Git object header: ${label}`)
+      const size = Number(header[3])
+      const bodyStart = headerEnd + 1
+      const bodyEnd = bodyStart + size
+      if (!Number.isSafeInteger(size) || bodyEnd >= output.length || output[bodyEnd] !== 10) throw new Error(`truncated Git object: ${label}::${header[1]}`)
+      scan(`${label}::${header[1]}`, output.subarray(bodyStart, bodyEnd))
+      offset = bodyEnd + 1
     }
   }
   if (stagedDir) {

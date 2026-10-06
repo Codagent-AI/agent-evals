@@ -134,3 +134,77 @@ test('version checker rejects changed file content and self-consistent hash rewr
   await writeFile(join(root, 'versions.json'), JSON.stringify({ inputs }))
   assert.deepEqual(await checkVersions({ suiteRoot: root, previous }), [])
 })
+
+async function versionRepository(t) {
+  const { cp } = await import('node:fs/promises')
+  const { execFileSync } = await import('node:child_process')
+  const root = await mkdtemp(join(tmpdir(), 'define-history-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  await mkdir(join(root, 'hidden'))
+  for (const path of ['versions.json', 'contamination-patterns.json', 'hidden/inventory.json', 'hidden/starting-prompt.md']) await cp(join(suite, path), join(root, path))
+  const git = (...args) => execFileSync('git', ['-C', root, '-c', 'core.hooksPath=/dev/null', '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+  git('init')
+  return { root, git }
+}
+
+test('version history allows a genuinely uncommitted ledger and its first introduction', async t => {
+  const { root, git } = await versionRepository(t)
+  assert.deepEqual(await checkVersions({ suiteRoot: root }), [])
+  await writeFile(join(root, 'scaffold.txt'), 'Scaffold')
+  git('add', 'scaffold.txt')
+  git('commit', '-m', 'scaffold')
+  assert.deepEqual(await checkVersions({ suiteRoot: root }), [])
+  git('add', '.')
+  git('commit', '-m', 'introduce ledger')
+  assert.deepEqual(await checkVersions({ suiteRoot: root }), [])
+})
+
+test('version history catches a committed hash rewrite without a bump', async t => {
+  const { root, git } = await versionRepository(t)
+  git('add', '.')
+  git('commit', '-m', 'introduce ledger')
+  const ledger = JSON.parse(await readFile(join(root, 'versions.json')))
+  await writeFile(join(root, 'hidden/starting-prompt.md'), 'Changed prompt')
+  ledger.inputs['starting-prompt'].hashes[1] = sha256('Changed prompt')
+  await writeFile(join(root, 'versions.json'), JSON.stringify(ledger))
+  git('add', '.')
+  git('commit', '-m', 'rewrite hash')
+  assert.match((await checkVersions({ suiteRoot: root })).join('\n'), /starting-prompt.*version 1/)
+})
+
+test('version history fails closed outside Git, without Git, and with incomplete shallow history', async t => {
+  const { root, git } = await versionRepository(t)
+  const { execFileSync } = await import('node:child_process')
+  git('add', '.')
+  git('commit', '-m', 'introduce ledger')
+  await writeFile(join(root, 'scaffold.txt'), 'Scaffold')
+  git('add', '.')
+  git('commit', '-m', 'next commit')
+  const shallow = join(root, 'shallow')
+  execFileSync('git', ['clone', '--depth=1', `file://${root}`, shallow], { stdio: 'pipe' })
+  assert.match((await checkVersions({ suiteRoot: shallow })).join('\n'), /baseline unavailable/)
+  const module = new URL('../evals/agent-runner/and-scene-define/lib/versions.mjs', import.meta.url).href
+  const script = `import { checkVersions } from ${JSON.stringify(module)}; console.log(JSON.stringify(await checkVersions({suiteRoot:process.argv[1]})))`
+  const noGit = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', script, root], { encoding: 'utf8', env: { ...process.env, PATH: join(root, 'no-bin') } }))
+  assert.match(noGit.join('\n'), /baseline unavailable.*git.*unavailable/)
+  await rm(join(root, '.git'), { recursive: true })
+  assert.match((await checkVersions({ suiteRoot: root })).join('\n'), /baseline unavailable/)
+})
+
+test('version history surfaces git log and git show failures instead of omitting baselines', async t => {
+  const { root, git } = await versionRepository(t)
+  const { execFileSync } = await import('node:child_process')
+  git('add', '.')
+  git('commit', '-m', 'introduce ledger')
+  const bin = join(root, 'bin')
+  await mkdir(bin)
+  await writeFile(join(bin, 'git'), '#!/bin/sh\nfor argument do\n  if [ "$argument" = "$DEFINE_TEST_FAIL" ]; then exit 2; fi\ndone\nexec "$DEFINE_TEST_GIT" "$@"\n', { mode: 0o755 })
+  const realGit = execFileSync('/bin/sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim()
+  const module = new URL('../evals/agent-runner/and-scene-define/lib/versions.mjs', import.meta.url).href
+  const script = `import { checkVersions } from ${JSON.stringify(module)}; console.log(JSON.stringify(await checkVersions({suiteRoot:process.argv[1]})))`
+  for (const command of ['log', 'show']) {
+    const errors = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', script, root], { encoding: 'utf8', env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, DEFINE_TEST_GIT: realGit, DEFINE_TEST_FAIL: command } }))
+    assert.match(errors.join('\n'), /baseline unavailable/)
+    assert.match(errors.join('\n'), new RegExp(` ${command} `))
+  }
+})
