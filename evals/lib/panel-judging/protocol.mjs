@@ -29,6 +29,9 @@ export const JUDGE_SCOPE_RULE = [
 // whether a cited fact is accurate can confirm it and uphold a verdict the
 // requirement never depended on; this keeps every call on the requirement.
 export const REQUIREMENT_QUESTION_RULE = 'Every verdict answers one question: is the criterion\'s quoted requirement met? An accurate observation, measurement, or citation decides nothing by itself. A fail must name the part of the requirement that is unmet and the evidence that it is unmet; a fact the requirement does not depend on (which elements a check counted, a state or layout it assumed, a scenario the guidance does not name) never makes a fail.'
+// Cited material the harness could not supply is marked rather than dropped.
+// It shows nothing, so it can neither refute nor uphold a stated reason.
+export const OMITTED_MATERIAL_RULE = 'Material marked [omitted: path — reason] was cited but could not be supplied, so it shows nothing either way. A stated reason that depends on omitted material is insufficient: never contradicted because the omitted material does not show it, and never confirmed from it.'
 export const JUDGING_PROTOCOL = 'dual-sample-majority-v4'
 const MAX_LINE_CITATIONS = 12
 const MAX_SPAN_LINES = 200
@@ -1034,6 +1037,7 @@ export function buildContradictionCheckRequest({ request, claims }) {
       '  it, or because the rubric contract, its guidance, or its definition says the cited fact does not defeat',
       '  the verdict.',
       '- insufficient: the material cannot settle the stated reason.',
+      OMITTED_MATERIAL_RULE,
       JUDGE_SCOPE_RULE,
       REQUIREMENT_QUESTION_RULE,
       '',
@@ -1336,18 +1340,43 @@ export async function sourceMaterial(request, results) {
   const sourceRoot = request.input_roots?.source
   if (!sourceRoot) return []
   const files = []
+  const omit = (path, reason) => files.push({ path, omitted: `[omitted: ${path} — ${reason}]` })
   let chars = 0
+  let full = false
   for (const path of [...new Set(results.flatMap((result) => result.citations ?? []))].sort()) {
-    try {
-      const content = await readFile(await citationTarget(sourceRoot, path), 'utf8')
-      chars += content.length
-      if (chars > MAX_AUDIT_PACKET_CHARS / 2) break
-      files.push({ path, content })
-    } catch {
-      // An unreadable citation is simply absent from the check's material.
+    if (full) {
+      omit(path, OMITTED_FOR_SIZE)
+      continue
     }
+    let content
+    try {
+      content = await readFile(await citationTarget(sourceRoot, path), 'utf8')
+    } catch (error) {
+      // The check must know what it was not shown, so an unreadable citation
+      // is marked rather than silently dropped.
+      omit(path, omissionReason(error))
+      continue
+    }
+    chars += content.length
+    if (chars > MAX_AUDIT_PACKET_CHARS / 2) {
+      full = true
+      omit(path, OMITTED_FOR_SIZE)
+      continue
+    }
+    files.push({ path, content })
   }
   return files
+}
+
+const OMITTED_FOR_SIZE = 'exceeds the contradiction-check packet size limit'
+
+// System error messages carry host paths, so only the leading description and
+// the error code reach the model's packet.
+function omissionReason(error) {
+  if (!(error instanceof JudgeOutputError)) return `source citation cannot be read (${error?.code ?? 'error'})`
+  const code = /\b(E[A-Z]{2,})\b/.exec(error.message)?.[1]
+  const description = error.message.split(': ')[0]
+  return code ? `${description} (${code})` : description
 }
 
 function sampleRecord(outcome) {

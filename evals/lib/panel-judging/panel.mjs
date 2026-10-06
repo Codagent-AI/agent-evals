@@ -1,7 +1,7 @@
 // Cross-family settlement. Suites own prompts, scales, citations and optional audits.
 import { hashJson } from './hash.mjs'
 import { JUDGE_ATTEMPTS, JudgeOutputError, SOURCE_AUDIT_RESULT_SCHEMA, judgeResultSchemaFor,
-  parseSourceAuditOutput, buildContradictionCheckRequest, sourceMaterial, runTiebreak, resolveLineCitedRecord, JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE } from './protocol.mjs'
+  parseSourceAuditOutput, buildContradictionCheckRequest, sourceMaterial, runTiebreak, resolveLineCitedRecord, JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE, OMITTED_MATERIAL_RULE } from './protocol.mjs'
 
 export const PANEL_PROTOCOL = 'cross-family-panel-v1'
 
@@ -67,7 +67,7 @@ function dissentCheckPrompt({ request, scopeRule, id, original, material }) {
       'it must show a clause of the requirement unmet; for a higher verdict, every clause the verdict credits met.',
       'Contradicted when the material does not show it, or when the fact is accurate but the requirement does not',
       'depend on it (an assumption, scenario, or element the requirement and its review guidance do not name).',
-      'Insufficient when the material cannot settle it.'].join(' '),
+      'Insufficient when the material cannot settle it.', OMITTED_MATERIAL_RULE].join(' '),
     'Return confirmed if it holds, contradicted if refuted, insufficient if undecided.',
     '# BEGIN UNTRUSTED DISSENT', JSON.stringify({ id, rationale: original.rationale, citations: original.citations, material, evidence: request.input_roots?.evidence ? request.prompt_body ?? request.prompt : null }), '# END UNTRUSTED DISSENT', '# Response', `Reply with JSON matching this schema: ${JSON.stringify(schema)}`].join('\n')
 }
