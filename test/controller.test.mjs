@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { lstat, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
@@ -361,6 +361,8 @@ async function evaluate(context, extra = [], overrides = {}) {
     verifyDelivery: async () => delivery(context),
     verifyResumeDelivery: async () => ({ verified: true }),
     judgeInvoke: async (request) => {
+      if (request.job === 'second-opinion') return JSON.stringify({ decision: 'uphold', rationale: 'the recorded failure stands',
+        mismeasured_step: null, measurement_fault: null, citations: [], log_citations: [], replay: null })
       if (Array.isArray(request.criteria)) {
         return JSON.stringify({
           results: request.criteria.map((id) => ({
@@ -462,6 +464,8 @@ test('a complete below-minimum automated score finishes without human review', a
     candidateServer,
     browserDriver: browserDemo(),
     judgeInvoke: async (request) => {
+      if (request.job === 'second-opinion') return JSON.stringify({ decision: 'uphold', rationale: 'the recorded failure stands',
+        mismeasured_step: null, measurement_fault: null, citations: [], log_citations: [], replay: null })
       if (Array.isArray(request.criteria)) {
         return JSON.stringify({
           results: request.criteria.map((id) => ({
@@ -534,6 +538,54 @@ test('--skip-validator launches the verified workflow by logical name without --
   assert.equal(written.workflow.history_complete, true)
   assert.deepEqual(written.workflow.invalid_outcomes, [])
   assert.equal(written.delivery.final_validator.outcome, 'skipped')
+})
+
+test('--skip-validator hides Agent Validator from every Runner-launched agent', async () => {
+  const context = await environment()
+  const skippedHistory = [
+    { step: 'run-validator', outcome: 'skipped' },
+    ...history.slice(1),
+  ]
+
+  const result = await evaluate(context, ['--skip-validator', ...profiles], {
+    readRunnerState: () => runnerInvocations(context).length === 0
+      ? null
+      : {
+          run_id: 'runner-7',
+          session_dir: context.sessionDir,
+          workflow_name: 'implement-change',
+          workflow_completed: true,
+          history: skippedHistory,
+        },
+    verifyDelivery: async () => ({
+      ...delivery(context),
+      final_validator: skippedHistory[0],
+      workflow_history: skippedHistory,
+    }),
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const shimDir = join(context.runDir, '.runtime/validator-unavailable/bin')
+  for (const invocation of [...runnerInvocations(context), ...auditReplayInvocations(context)]) {
+    assert.ok(
+      invocation.options.env.PATH.startsWith(`${shimDir}:`),
+      `${invocation.args.join(' ')} must resolve agent-validator to the refusing shim`,
+    )
+  }
+  assert.ok(auditReplayInvocations(context).length > 0)
+  const shim = await readFile(join(shimDir, 'agent-validator'), 'utf8')
+  assert.match(shim, /exit 127/)
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.deepEqual(
+    written.workflow.events.filter(({ event }) => event === 'validator-unavailable'),
+    [{
+      event: 'validator-unavailable',
+      reason: 'skip-validator',
+      mechanism: 'path-shim',
+      commands: ['agent-validator', 'agent-validate'],
+      blocked_invocations_log: 'logs/blocked-validator-invocations.log',
+    }],
+  )
 })
 
 test('fixture planning preflight validates the selected change directory', async () => {
@@ -641,6 +693,12 @@ test('task-level and final validation are included by default', async () => {
   assert.equal(written.workflow.final_validator, 'required')
   assert.equal(written.workflow.full_workflow, true)
   assert.equal(written.workflow.configured_stop_step, null)
+  assert.equal(runnerInvocations(context)[0].options.env.PATH, process.env.PATH)
+  assert.equal(
+    written.workflow.events.some(({ event }) => event === 'validator-unavailable'),
+    false,
+  )
+  await assert.rejects(readFile(join(context.runDir, '.runtime/validator-unavailable/bin/agent-validator')))
 })
 
 test('workflow preflight rejects missing required and declared prohibited steps before Runner starts', async () => {
@@ -1418,6 +1476,194 @@ test('an evaluator-only rescore imports a completed candidate and never starts A
   assert.equal(written.workflow.events[0].event, 'imported-completed-run')
 })
 
+test('a rescore restores a missing Runner session under the run directory and records it', async () => {
+  const context = await environment()
+  let staging = null
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    controllerChangeName: null,
+    verifyDelivery: async () => {
+      throw new Error('rescore must not rediscover historical artifact paths')
+    },
+    loadRescoreSource: async ({ stagingDir }) => {
+      staging = stagingDir
+      return { ...importedRescore(context), session_reconstruction: { source: 'evidence/candidate/artifacts', files: 3 } }
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.equal(staging, join(context.runDir, '.runtime/rescore-session'))
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.deepEqual(written.workflow.events[0].session_reconstruction,
+    { source: 'evidence/candidate/artifacts', files: 3 })
+})
+
+test('a host rescore leaves an existing Agent Runner projects store in the home untouched', async () => {
+  const context = await environment()
+  await mkdir(join(context.home, '.agent-runner/projects/someone-else'), { recursive: true })
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    controllerChangeName: null,
+    verifyDelivery: async () => {
+      throw new Error('rescore must not rediscover historical artifact paths')
+    },
+    loadRescoreSource: async () => importedRescore(context),
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const projects = await lstat(join(context.home, '.agent-runner/projects'))
+  assert.equal(projects.isSymbolicLink(), false)
+  assert.ok(projects.isDirectory())
+})
+
+test('the controller releases the browser after browser evaluation and after replays', async () => {
+  const context = await environment()
+  const events = []
+  const result = await evaluate(context, profiles, {
+    isProcessAlive: () => true,
+    verifyCandidate: async () => ({ build: { ok: true, log: 'built' },
+      verification: { machine_readable: true, passed: true }, timings: [] }),
+    browserDriverFactory: async () => { events.push('driver'); return browserDemo() },
+    releaseBrowser: async () => { events.push('release') },
+    candidateServer: (() => {
+      let servedIdentity = null
+      return {
+        probe: async () => ({ ok: true, candidate_identity: servedIdentity }),
+        start: async ({ candidate }) => {
+          servedIdentity = candidate
+          return { pid: 9876, url: 'http://127.0.0.1:4319/' }
+        },
+        stop: async () => {},
+      }
+    })(),
+  })
+  assert.ok(events.indexOf('release') > events.indexOf('driver'), JSON.stringify(events))
+  assert.equal(events.at(-1), 'release')
+  assert.ok(result.exitCode === 0 || result.exitCode === 1)
+})
+
+// Agent-evals #78 rep 2 failed in product judging, before metrics were
+// recorded, so its result carries no implementation metrics to import.
+test('a rescore of a source without recorded metrics reads them from the Runner session', async () => {
+  const context = await environment()
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    controllerChangeName: null,
+    verifyDelivery: async () => {
+      throw new Error('rescore must not rediscover historical artifact paths')
+    },
+    loadRescoreSource: async () => ({ ...importedRescore(context), implementation_metrics: null, cost: null, pricing: null }),
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.outcome?.failure ?? result.errors))
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.notEqual(written.failed_phase, 'metrics-pricing')
+  assert.ok(written.implementation_metrics)
+})
+
+test('rescore checks browser failures while a reference baseline does not', async () => {
+  const rescoreContext = await environment()
+  const broken = () => {
+    const driver = browserDemo()
+    driver.activate = async () => {}
+    return driver
+  }
+  let rescoreChecks = 0
+  const rescore = await evaluate(rescoreContext, ['--rescore-from', '/rescore-source'], {
+    controllerChangeName: null,
+    loadRescoreSource: async () => importedRescore(rescoreContext),
+    browserDriver: broken(),
+    verifyCandidate: async () => ({ build: { ok: true, log: 'built' },
+      verification: { machine_readable: true, passed: true }, timings: [] }),
+    judgeInvoke: async (request) => {
+      if (request.job === 'second-opinion') {
+        rescoreChecks += 1
+        return JSON.stringify({ decision: 'uphold', rationale: 'failure stands',
+          mismeasured_step: null, measurement_fault: null, citations: [], log_citations: [], replay: null })
+      }
+      if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
+        rationale: 'fixture source supports this criterion', evidence: ['src/index.ts'] })) })
+    },
+  })
+  assert.equal(rescore.exitCode, 0, JSON.stringify(rescore.outcome))
+  assert.ok(rescoreChecks > 0)
+  const referenceContext = await environment()
+  let referenceChecks = 0
+  const reference = await evaluate(referenceContext, ['--reference-baseline'], {
+    browserDriver: broken(),
+    verifyCandidate: async () => ({ build: { ok: true, log: 'built' },
+      verification: { machine_readable: true, passed: true }, timings: [] }),
+    judgeInvoke: async (request) => {
+      if (request.job === 'second-opinion') referenceChecks += 1
+      if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
+        rationale: 'fixture source supports this criterion', evidence: ['src/index.ts'] })) })
+    },
+  })
+  assert.equal(reference.exitCode, 0, JSON.stringify(reference.outcome))
+  assert.equal(referenceChecks, 0)
+  const written = await readJson(join(referenceContext.runDir, 'result.json'))
+  assert.equal('second_opinions' in written, false)
+})
+
+// browserDemo with an inert activate fails only the direct jump, so the
+// harness allowlist admits only a control click that moves the step.
+const DIRECT_JUMP_REPLAY = { actions: [{ type: 'navigate', path: '/how-to-make-a-presentation' },
+  { type: 'click', selector: '[data-step="5"]' }], expect: { type: 'step-index-equals', value: 4 } }
+const directJumpObserved = () => ({ passed: true, errors: [], trace: DIRECT_JUMP_REPLAY.actions,
+  observations: [{ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 4 }] })
+
+test('rescore starts the candidate server and confirms a browser overturn by replay', async () => {
+  const context = await environment()
+  const driver = browserDemo()
+  driver.activate = async () => {}
+  let started = 0
+  let replayed = 0
+  let servedIdentity = null
+  const lifecycle = []
+  driver.replay = async () => { replayed += 1; lifecycle.push('replay'); return directJumpObserved() }
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    controllerChangeName: null,
+    loadRescoreSource: async () => importedRescore(context),
+    browserDriver: driver,
+    releaseBrowser: async () => { lifecycle.push('release') },
+    isProcessAlive: () => true,
+    candidateServer: {
+      probe: async () => ({ ok: true, candidate_identity: servedIdentity }),
+      start: async ({ candidate }) => { started += 1; servedIdentity = candidate;
+        return { pid: 9876, url: 'http://127.0.0.1:4319/' } },
+      stop: async () => {},
+    },
+    verifyCandidate: async () => ({ build: { ok: true, log: 'built' },
+      verification: { machine_readable: true, passed: true }, timings: [] }),
+    judgeInvoke: async (request) => {
+      if (request.job === 'second-opinion') return JSON.stringify(request.audit_stage
+        ? { results: [{ id: request.criteria[0], classification: 'confirmed',
+          rationale: 'source proves navigation', evidence: ['src/index.ts:1'] }] }
+        : { decision: 'overturn', rationale: 'probe missed navigation',
+          mismeasured_step: 'next', measurement_fault: 'input mismatch',
+          citations: [{ path: 'src/index.ts', start_line: 1, end_line: 1 }], log_citations: [],
+          replay: DIRECT_JUMP_REPLAY })
+      if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
+        rationale: 'fixture evidence', evidence: ['src/index.ts'] })) })
+    },
+  })
+  assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
+  assert.equal(started, 1)
+  assert.ok(replayed > 0)
+  // The overturn is recorded end to end: verdict, replay plan, and observation.
+  const written = await readJson(join(context.runDir, 'result.json'))
+  const criterion = written.score.components.flatMap(({ subcomponents }) => subcomponents)
+    .flatMap(({ criteria }) => criteria).find(({ id }) => id === 'demo-supported-navigation')
+  assert.equal(criterion.verdict, 'pass')
+  assert.equal(criterion.second_opinion.decision, 'overturn')
+  assert.deepEqual(criterion.second_opinion.replay.actions, DIRECT_JUMP_REPLAY.actions)
+  assert.equal(criterion.second_opinion.replay.observations.at(-1).stepIndex, 4)
+  const opinions = await readJson(join(context.runDir, 'phases/second-opinions.json'))
+  assert.equal(opinions.outcomes['demo-supported-navigation'].replay.passed, true)
+  // The host browser is released after the replay rather than held through scoring.
+  assert.ok(lifecycle.lastIndexOf('release') > lifecycle.lastIndexOf('replay'), lifecycle.join(' '))
+})
+
 test('an evaluator-only rescore accepts a historical reviewer profile as tester', async () => {
   const context = await environment()
 
@@ -1514,6 +1760,230 @@ test('browser probes are durable hashed evaluator-owned work units even when a p
   assert.equal(failed.result.verdict, 'fail')
 })
 
+test('a browser failure receives a checkpointed audited second opinion before scoring', async () => {
+  const context = await environment()
+  const driver = browserDemo()
+  driver.activate = async () => {}
+  driver.replay = async () => directJumpObserved()
+  const requests = []
+  const dependencies = {
+    browserDriver: driver,
+    verifyCandidate: async () => ({ build: { ok: true, log: 'built' },
+      verification: { machine_readable: true, passed: true }, timings: [] }),
+    judgeInvoke: async (request) => {
+      if (request.job === 'second-opinion') {
+        requests.push(request)
+        if (request.audit_stage) return JSON.stringify({ results: [{ id: request.criteria[0],
+          classification: 'confirmed', rationale: 'the source and observed fault agree',
+          evidence: ['src/index.ts:1'] }] })
+        return JSON.stringify({ decision: 'overturn', rationale: 'the swipe probe misread input',
+          mismeasured_step: 'swipe', measurement_fault: 'input dispatch mismatch',
+          citations: [{ path: 'src/index.ts', start_line: 1, end_line: 1 }], log_citations: [],
+          replay: DIRECT_JUMP_REPLAY })
+      }
+      if (request.job === 'ambiguity-diagnostics') {
+        return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
+      }
+      if (request.audit_stage) return JSON.stringify({ results: request.criteria.map((id) => ({
+        id, classification: 'confirmed', rationale: 'source confirms the behavior', evidence: ['src/index.ts'],
+      })) })
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
+        rationale: 'controller fixture evidence supports this criterion', evidence: ['src/index.ts'],
+        citations: ['src/index.ts'] })) })
+    },
+  }
+  const result = await evaluate(context, profiles, dependencies)
+  assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.ok(requests.some((request) => !request.audit_stage))
+  // Two verifier samples; the admitted real-browser replay decides without a model audit.
+  const verifierSamples = requests.filter((request) => !request.audit_stage).map(({ verifier_sample: sample }) => sample)
+  assert.deepEqual([...new Set(verifierSamples)].sort(), [1, 2])
+  assert.equal(verifierSamples.filter((sample) => sample === 1).length, verifierSamples.filter((sample) => sample === 2).length)
+  assert.equal(requests.some((request) => request.audit_stage), false)
+  const entry = written.second_opinions.entries.find(({ id }) => id === 'demo-supported-navigation')
+  assert.equal(entry?.raw_verdict, 'fail')
+  assert.equal(entry?.verdict, 'pass')
+  assert.match(await readFile(join(context.runDir, 'report.html'), 'utf8'), /Overturned failures/)
+  const calls = requests.length
+  const resumed = await evaluate(context, ['--resume', ...profiles], dependencies)
+  assert.equal(resumed.exitCode, 0, JSON.stringify(resumed.outcome))
+  assert.equal(requests.length, calls, 'completed verifier units are reused on resume')
+})
+
+test('a browser fault during replay leaves the second opinion pending and resumable', async () => {
+  const context = await environment()
+  const driver = browserDemo()
+  driver.activate = async () => {}
+  driver.replay = async () => {
+    throw Object.assign(new Error('browser adapter failed: Chrome exited'),
+      { owner: 'evaluation-harness', code: 'browser-driver-failed', resumable: true })
+  }
+  const result = await evaluate(context, profiles, {
+    browserDriver: driver,
+    verifyCandidate: async () => ({ build: { ok: true, log: 'built' },
+      verification: { machine_readable: true, passed: true }, timings: [] }),
+    judgeInvoke: async (request) => {
+      if (request.job === 'second-opinion') {
+        if (request.audit_stage) return JSON.stringify({ results: [{ id: request.criteria[0],
+          classification: 'confirmed', rationale: 'source and fault agree', evidence: ['src/index.ts:1'] }] })
+        return JSON.stringify(request.target.id === 'demo-supported-navigation'
+          ? { decision: 'overturn', rationale: 'the direct jump probe misread input',
+            mismeasured_step: 'direct jump', measurement_fault: 'input dispatch mismatch',
+            citations: [{ path: 'src/index.ts', start_line: 1, end_line: 1 }], log_citations: [],
+            replay: DIRECT_JUMP_REPLAY }
+          : { decision: 'uphold', rationale: 'failure stands', mismeasured_step: null,
+            measurement_fault: null, citations: [], log_citations: [], replay: null })
+      }
+      if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
+        rationale: 'fixture source supports this criterion', evidence: ['src/index.ts'] })) })
+    },
+  })
+  assert.equal(result.outcome.evaluation_status, 'evaluation-harness-failed')
+  assert.equal(result.outcome.failure.code, 'judge-output')
+  const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
+  const unit = state.phases['product-judging'].units['second-opinion:criterion:demo-supported-navigation']
+  assert.notEqual(unit.state, 'complete')
+  assert.match(JSON.stringify(unit), /Chrome exited/)
+  const opinions = await readJson(join(context.runDir, 'phases/second-opinions.json'))
+  assert.equal('demo-supported-navigation' in opinions.outcomes, false)
+  assert.ok(opinions.pending.some(({ id }) => id === 'demo-supported-navigation'))
+})
+
+test('exhausted second-opinion output leaves the failed criterion unresolved', async () => {
+  const context = await environment()
+  const driver = browserDemo()
+  driver.activate = async () => {}
+  const result = await evaluate(context, profiles, {
+    browserDriver: driver,
+    verifyCandidate: async () => ({ build: { ok: true, log: 'built' },
+      verification: { machine_readable: true, passed: true }, timings: [] }),
+    judgeInvoke: async (request) => {
+      if (request.job === 'second-opinion') return '{broken'
+      if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
+        rationale: 'fixture source supports this criterion', evidence: ['src/index.ts'] })) })
+    },
+  })
+  assert.equal(result.outcome.evaluation_status, 'evaluation-harness-failed')
+  assert.equal(result.outcome.failure.code, 'judge-output')
+  assert.equal(result.outcome.product_verdict, 'unavailable')
+  const scored = await readJson(join(context.runDir, 'phases/score.json'))
+  const row = scored.components.flatMap(({ subcomponents }) => subcomponents.flatMap(({ criteria }) => criteria))
+    .find(({ id }) => id === 'demo-supported-navigation')
+  assert.equal(row.verdict, null)
+  assert.equal(row.points_awarded, null)
+})
+
+test('an inferred mode mismatch reaches fallback judging and the derived outline gate', async () => {
+  const context = await environment()
+  const driver = browserDemo()
+  const originalState = driver.state.bind(driver)
+  let focused = null
+  driver.focus = async (name) => { focused = name }
+  driver.state = async () => ({ ...await originalState(), mode: 'browse', modeBasis: 'heuristic', focused })
+  const judgeCriteria = []
+  let secondOpinionCalls = 0
+  const result = await evaluate(context, profiles, {
+    browserDriver: driver,
+    verifyCandidate: async () => ({ build: { ok: true, log: 'built' },
+      verification: { machine_readable: true, passed: true }, timings: [] }),
+    materializeNeutral: async ({ runDir }) => {
+      await mkdir(join(runDir, 'neutral/source/src'), { recursive: true })
+      await mkdir(join(runDir, 'neutral/judge'), { recursive: true })
+      await mkdir(join(runDir, 'neutral/requirements'), { recursive: true })
+      await writeFile(join(runDir, 'neutral/source/src/index.ts'), 'export const fixture = true\n')
+      return { source: { root: 'neutral/source' }, judge: { root: 'neutral/judge' },
+        requirements: { root: 'neutral/requirements' }, manifest_sha256: 'n'.repeat(64),
+        manifest: { entries: [{ namespace: 'neutral-source', path: 'source/src/index.ts' }] } }
+    },
+    judgeInvoke: async (request) => {
+      if (request.job === 'second-opinion') { secondOpinionCalls += 1; throw new Error('unexpected verifier call') }
+      if (request.job === 'ambiguity-diagnostics') {
+        return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
+      }
+      if (request.audit_stage) return JSON.stringify({ results: request.criteria.map((id) => ({
+        id, classification: 'confirmed', rationale: 'source supports this criterion', evidence: ['src/index.ts'],
+      })) })
+      if (request.job === 'demo-integration') judgeCriteria.push(...request.criteria)
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
+        rationale: 'source supports this criterion', evidence: ['src/index.ts'],
+        citations: ['src/index.ts'] })) })
+    },
+  })
+  assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
+  const written = await readJson(join(context.runDir, 'result.json'))
+  const outline = written.score.gates.find(({ id }) => id === 'verification-sample-outline')
+  assert.equal(outline.raw_browser_gate.verdict, null)
+  assert.equal(outline.verdict, 'pass')
+  assert.equal(secondOpinionCalls, 0)
+  assert.ok(judgeCriteria.includes('demo-nine-step-content-and-order'))
+  assert.equal(written.second_opinions.checked, 0)
+})
+
+test('a failed outline fallback receives a follow-up opinion after the failed renders gate', async () => {
+  const context = await environment()
+  const driver = browserDemo()
+  let replayCalls = 0
+  driver.replay = async () => { replayCalls += 1; return { passed: true } }
+  const originalState = driver.state.bind(driver)
+  let focused = null
+  let failureReads = 0
+  driver.focus = async (name) => { focused = name }
+  driver.state = async () => ({ ...await originalState(), mode: 'browse', modeBasis: 'heuristic', focused })
+  driver.failures = async () => (++failureReads === 1 ? ['console error'] : [])
+  const calls = []
+  let fallbackRequest = null
+  const result = await evaluate(context, profiles, {
+    browserDriver: driver,
+    verifyCandidate: async () => ({ build: { ok: true, log: 'built' },
+      verification: { machine_readable: true, passed: true }, timings: [] }),
+    materializeNeutral: async ({ runDir }) => {
+      await mkdir(join(runDir, 'neutral/source/src'), { recursive: true })
+      await mkdir(join(runDir, 'neutral/judge'), { recursive: true })
+      await mkdir(join(runDir, 'neutral/requirements'), { recursive: true })
+      await writeFile(join(runDir, 'neutral/source/src/index.ts'), 'export const fixture = true\n')
+      return { source: { root: 'neutral/source' }, judge: { root: 'neutral/judge' },
+        requirements: { root: 'neutral/requirements' }, manifest_sha256: 'n'.repeat(64),
+        manifest: { entries: [{ namespace: 'neutral-source', path: 'source/src/index.ts' }] } }
+    },
+    judgeInvoke: async (request) => {
+      if (request.job === 'second-opinion') {
+        if (request.audit_stage) return JSON.stringify({ results: [{ id: request.criteria[0],
+          classification: 'confirmed', rationale: 'source and fault agree', evidence: ['src/index.ts'] }] })
+        calls.push(request.target)
+        if (request.target.kind === 'criterion') fallbackRequest = request
+        return JSON.stringify(request.target.kind === 'gate'
+          ? { decision: 'uphold', rationale: 'console failure remains', mismeasured_step: null,
+            measurement_fault: null, citations: [], log_citations: [], replay: null }
+          : { decision: 'overturn', rationale: 'outline title is in source',
+            mismeasured_step: 'title reading', measurement_fault: 'mode was inferred',
+            citations: [{ path: 'src/index.ts', start_line: 1, end_line: 1 }], log_citations: [],
+            replay: null })
+      }
+      if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
+      if (request.audit_stage) return JSON.stringify({ results: request.criteria.map((id) => ({
+        id, classification: 'confirmed', rationale: 'source supports the result', evidence: ['src/index.ts'],
+      })) })
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id,
+        verdict: id === 'demo-nine-step-content-and-order' ? 'fail' : 'pass',
+        rationale: 'fixture source result', evidence: ['src/index.ts'], citations: ['src/index.ts'] })) })
+    },
+  })
+  assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
+  // Each target gets two verifier samples, in target order.
+  assert.deepEqual([...new Set(calls.map(({ id }) => id))],
+    ['verification-every-produced-step-renders', 'demo-nine-step-content-and-order'])
+  assert.equal(calls.find(({ id }) => id === 'demo-nine-step-content-and-order').on_behalf_of, 'verification-sample-outline')
+  assert.equal(fallbackRequest.browser_derived, false)
+  assert.equal(fallbackRequest.failing_record.verdict, 'fail')
+  assert.equal(replayCalls, 0)
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(written.score.gates.find(({ id }) => id === 'verification-sample-outline').verdict, 'pass')
+  assert.equal(written.score.gates.find(({ id }) => id === 'verification-every-produced-step-renders').verdict, 'fail')
+})
+
 test('the controller converts product-owned serve failure into a conclusive unscored fail', async () => {
   const context = await environment()
   let browserOpened = false
@@ -1547,6 +2017,67 @@ test('the controller converts product-owned serve failure into a conclusive unsc
   assert.equal(result.outcome.official_score, null)
   assert.equal(result.outcome.product_failure.gate, 'verification-every-produced-step-renders')
   assert.equal(browserOpened, false)
+})
+
+test('a terminal build failure is checked before becoming a product failure', async () => {
+  const context = await environment()
+  const output = `${'build output '.repeat(400)}\nharness invoked wrong command\n`
+  const result = await evaluate(context, profiles, {
+    verifyCandidate: async () => ({ build: { ok: false, log: output.slice(0, 4000) },
+      verification: { machine_readable: false, passed: null }, timings: [{ label: 'build', stdout: output, stderr: '' }],
+      product_failure: { stage: 'build', gate: 'verification-build-whole-app', reason: 'build failed' } }),
+    judgeInvoke: async (request) => {
+      assert.equal(request.job, 'second-opinion')
+      assert.match(request.prompt, /harness invoked wrong command/)
+      return JSON.stringify({ decision: 'uphold', rationale: 'the build failure stands',
+        mismeasured_step: null, measurement_fault: null, citations: [], log_citations: [], replay: null })
+    },
+  })
+  assert.equal(result.outcome.product_verdict, 'fail')
+  assert.equal(result.outcome.product_failure.second_opinion.decision, 'uphold')
+  const evidence = await readFile(join(context.runDir,
+    'phases/terminal-evidence/verification-build-whole-app.log'), 'utf8')
+  assert.match(evidence, /harness invoked wrong command/)
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(written.second_opinions.checked, 1)
+})
+
+test('an audited terminal overturn leaves a resumable harness failure and no product verdict', async () => {
+  const context = await environment()
+  const result = await evaluate(context, profiles, {
+    verifyCandidate: async () => ({ build: { ok: false, log: 'wrong command' },
+      verification: { machine_readable: false, passed: null },
+      timings: [{ label: 'build', stdout: 'wrong command', stderr: '' }],
+      product_failure: { stage: 'build', gate: 'verification-build-whole-app', reason: 'build failed' } }),
+    judgeInvoke: async (request) => {
+      if (request.audit_stage) return JSON.stringify({ results: [{ id: 'verification-build-whole-app',
+        classification: 'confirmed', rationale: 'the command was wrong', evidence: ['log and source'] }] })
+      return JSON.stringify({ decision: 'overturn', rationale: 'the harness ran the wrong command',
+        mismeasured_step: 'build invocation', measurement_fault: 'wrong command',
+        citations: [{ path: 'src/index.ts', start_line: 1, end_line: 1 }],
+        log_citations: [{ artifact: request.log_artifact, start_line: 5, end_line: 5 }], replay: null })
+    },
+  })
+  assert.equal(result.outcome.evaluation_status, 'evaluation-harness-failed')
+  assert.equal(result.outcome.failure.code, 'terminal-failure-overturned')
+  assert.equal(result.outcome.product_verdict, 'unavailable')
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(written.second_opinions.overturned, 1)
+  assert.equal(written.terminal_failure.reason, 'build failed')
+  assert.equal(written.terminal_failure.second_opinion.decision, 'overturn')
+})
+
+test('a terminal build failure without a verifier invoker is a judge-output harness failure', async () => {
+  const context = await environment()
+  const result = await evaluate(context, profiles, {
+    verifyCandidate: async () => ({ build: { ok: false, log: 'build failed' },
+      verification: { machine_readable: false, passed: null }, timings: [],
+      product_failure: { stage: 'build', gate: 'verification-build-whole-app', reason: 'build failed' } }),
+    judgeInvoke: null,
+  })
+  assert.equal(result.outcome.evaluation_status, 'evaluation-harness-failed')
+  assert.equal(result.outcome.failure.code, 'judge-output')
+  assert.equal(result.outcome.product_verdict, 'unavailable')
 })
 
 test('evaluator-only rescore refreshes retained Codex usage and pricing', async () => {

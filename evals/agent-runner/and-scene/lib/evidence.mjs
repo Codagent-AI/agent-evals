@@ -38,9 +38,11 @@ export const EVIDENCE_ROLE_REGISTRY = [
   {
     // Optional: the exploratory skill names no metadata file. Screenshots
     // without one are verified only when a verified record describes them.
+    // Per-round metadata (round-1-screenshot-metadata.md) is common, so each
+    // file keeps the role.
     role: 'screenshot-metadata',
     required: false,
-    multiple: false,
+    multiple: true,
     aliases: [
       'acceptance-test.md',
       'capture-metadata.json',
@@ -65,12 +67,24 @@ export const EVIDENCE_ROLE_REGISTRY = [
     role: 'final-handoff',
     required: true,
     multiple: false,
+    // Agent Runner's acceptance gate keeps a tester-written handoff as
+    // acceptance-handoff-tester.md when acceptance does not converge, and
+    // writes its own short notice to acceptance-handoff.md.
     aliases: [
       'acceptance-handoff.md',
       'final-acceptance-handoff.md',
       'acceptance-final-handoff.md',
       'final-handoff.md',
+      'acceptance-handoff-tester.md',
     ],
+  },
+  {
+    // The Runner-generated non-convergence notice. It is the final handoff only
+    // when no candidate-written handoff exists; it is never matched by name.
+    role: 'acceptance-gate-notice',
+    required: false,
+    multiple: false,
+    aliases: [],
   },
   {
     role: 'assumptions-ledger',
@@ -125,7 +139,24 @@ export const EVIDENCE_ROLE_REGISTRY = [
       'context-gap-audit.md',
     ],
   },
+  {
+    // Any other file a verified record references, such as product source or
+    // a skill file the tester reviewed. Retained as supporting material under
+    // its own role rather than mislabelled as a session audit.
+    role: 'referenced-material',
+    required: false,
+    multiple: true,
+    aliases: [],
+  },
 ]
+
+// The first line Agent Runner's acceptance gate writes into its own
+// non-convergence notice (workflows/core/acceptance-gate.sh).
+const RUNNER_GATE_NOTICE_HEADING = '# Acceptance did not converge within'
+
+function isRunnerGateNotice(bytes) {
+  return bytes.toString('utf8').replace(/^\uFEFF/, '').startsWith(RUNNER_GATE_NOTICE_HEADING)
+}
 
 // A required role is present when it or any role declared to satisfy it is.
 function missingRequiredRoles(presentRoles) {
@@ -139,6 +170,7 @@ function missingRequiredRoles(presentRoles) {
 // Verified narrative records that can describe a screenshot in place of a
 // capture metadata file, by naming the file or a directory that holds it.
 const SCREENSHOT_DESCRIBING_ROLES = new Set([
+  'screenshot-metadata',
   'acceptance-flow-record',
   'exploration-log',
   'findings-history',
@@ -173,6 +205,7 @@ function missingRoleMessage(role) {
     : `candidate evidence does not include the expected ${role} role or an ${alternatives.join(' or ')} role in its place`
 }
 
+const SCREENSHOT_METADATA_RECORD = /(?:^|[-_])screenshots?[-_](?:metadata|manifest)(?:[-_][\w.-]*)?\.(?:md|json)$/
 const PRIOR_PASS_RECORD = /^(?:acceptance|exploration)-[\w.-]*?(?:pass|round)[-_]?\d+[\w.-]*\.(?:md|txt|json|log)$/
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp'])
 const TEXT_EXTENSIONS = new Set(['.md', '.txt', '.json', '.yaml', '.yml', '.log'])
@@ -216,6 +249,7 @@ function roleFor(path) {
     if (definition.role === 'screenshot' && IMAGE_EXTENSIONS.has(extension)) return definition.role
     if (definition.aliases.some((alias) => alias.toLowerCase() === name)) return definition.role
   }
+  if (SCREENSHOT_METADATA_RECORD.test(name)) return 'screenshot-metadata'
   if (PRIOR_PASS_RECORD.test(name)) return 'acceptance-pass-record'
   const normalized = path.split(sep).join('/').toLowerCase()
   if (/session-reports?\//.test(normalized) || /(?:session|assumption|context-gap)[-_]?audit/.test(name)) {
@@ -569,23 +603,42 @@ async function discoverCandidateFiles({ worktree, sessionDir }) {
 
   const findings = []
   const selected = new Map()
+  // A bare filename a record names may live in an output subdirectory such as
+  // acceptance-screenshots/. It resolves only when exactly one scanned file
+  // has that name.
+  const byBasename = new Map()
   for (const path of scanned) {
-    const role = roleFor(path)
+    const name = basename(path)
+    byBasename.set(name, [...(byBasename.get(name) ?? []), path])
+  }
+  for (const path of scanned) {
+    let role = roleFor(path)
     if (!role) continue
     const origin = await safeOrigin(path, roots)
     if (!origin) {
       findings.push(finding('unsafe-artifact', `refused evidence outside an approved root: ${path}`))
       continue
     }
+    let bytes = null
+    if (role === 'final-handoff') {
+      bytes = await readFile(path)
+      if (bytes.length === 0) continue
+      if (isRunnerGateNotice(bytes)) role = 'acceptance-gate-notice'
+    }
     const definition = EVIDENCE_ROLE_REGISTRY.find((entry) => entry.role === role)
     if (!definition.multiple && selected.has(role)) continue
-    const bytes = await readFile(path)
+    bytes ??= await readFile(path)
     if (bytes.length === 0) continue
     selected.set(definition.multiple ? `${role}:${origin.namespace}:${origin.relative_path}` : role, {
       role,
       origin,
       bytes,
     })
+  }
+  // The notice stands in for the handoff only when the candidate wrote none.
+  if (!selected.has('final-handoff') && selected.has('acceptance-gate-notice')) {
+    selected.set('final-handoff', { ...selected.get('acceptance-gate-notice'), role: 'final-handoff' })
+    selected.delete('acceptance-gate-notice')
   }
 
   const handoff = [...selected.values()].find(({ role }) => role === 'final-handoff')
@@ -604,10 +657,13 @@ async function discoverCandidateFiles({ worktree, sessionDir }) {
       processed.add(sourceKey)
       const text = source.bytes.toString('utf8')
       for (const reference of extractReferences(text)) {
+        const unique = !/[\\/]/.test(reference) && byBasename.get(reference)?.length === 1
+          ? byBasename.get(reference) : []
         const candidates = [
           resolve(dirname(source.origin.absolute_path), reference),
           ...(sessionOutput ? [resolve(sessionOutput, reference)] : []),
           resolve(worktree, reference),
+          ...unique,
         ]
         let accepted = false
         for (const path of candidates) {
@@ -616,7 +672,7 @@ async function discoverCandidateFiles({ worktree, sessionDir }) {
           const bytes = await readFile(path)
           if (bytes.length === 0) continue
           accepted = true
-          const role = roleFor(path) ?? 'session-audit'
+          const role = roleFor(path) ?? 'referenced-material'
           const definition = EVIDENCE_ROLE_REGISTRY.find((entry) => entry.role === role)
           const key = definition?.multiple === false ? role : `${role}:${origin.namespace}:${origin.relative_path}`
           if (!selected.has(key)) {
@@ -889,12 +945,12 @@ export async function buildCandidateEvidenceManifest({
         }
       }
     }
-  } else if (screenshotMetadataMalformed || !materializedRoles.has('screenshot-metadata')) {
+  } else {
     // JSON metadata that failed to parse is unusable: role presence alone must
-    // not leave screenshots unvalidated. With no metadata file at all, a
-    // screenshot stays verified only when a verified narrative record names it,
-    // so the judge can read what was inspected and observed there. Non-JSON
-    // metadata is a supported form and is covered by text extraction.
+    // not leave screenshots unvalidated. Without usable JSON metadata, a
+    // screenshot stays verified only when a verified record names it; a
+    // Markdown metadata file is such a record, so the judge can read what was
+    // inspected and observed there.
     const describing = screenshotMetadataMalformed
       ? []
       : artifacts.filter(({ role, verification_state: state }) => (
@@ -1019,17 +1075,38 @@ function changedPaths({ worktree, from, to, exec }) {
     else if (testOnlyChange(path)) groups.test_only.push(path)
     else groups.product.push(path)
   }
-  return Object.fromEntries(Object.entries(groups).map(([group, list]) => [group, {
-    count: list.length,
-    paths: list.slice(0, MAX_CHANGED_PATHS),
-    truncated: list.length > MAX_CHANGED_PATHS,
-  }]))
+  return {
+    ...Object.fromEntries(Object.entries(groups).map(([group, list]) => [group, {
+      count: list.length,
+      paths: list.slice(0, MAX_CHANGED_PATHS),
+      truncated: list.length > MAX_CHANGED_PATHS,
+    }])),
+    mirrors: mirrorGroups({ worktree, revision: to, paths: groups.product.slice(0, MAX_CHANGED_PATHS), exec }),
+  }
+}
+
+// Changed product files whose content is byte-identical at a revision, such
+// as a scene-kit file and its copy in the bootstrap template. Exploring one
+// member of a group explores the same code in every member.
+function mirrorGroups({ worktree, revision, paths, exec }) {
+  if (paths.length < 2) return []
+  const listing = exec('git', ['-C', worktree, 'ls-tree', '-r', '-z', revision, '--', ...paths], { encoding: 'utf8' })
+  if (listing?.status !== 0 || listing.error) return []
+  const byBlob = new Map()
+  for (const entry of String(listing.stdout ?? '').split('\0').filter(Boolean)) {
+    const match = entry.match(/^\d+ blob ([0-9a-z-]+)\t(.+)$/)
+    if (!match) continue
+    byBlob.set(match[1], [...(byBlob.get(match[1]) ?? []), match[2]])
+  }
+  return [...byBlob.values()].filter((group) => group.length > 1).map((group) => group.sort())
+    .sort((left, right) => left[0].localeCompare(right[0]))
 }
 
 const NO_CHANGES = Object.freeze({
   product: { count: 0, paths: [], truncated: false },
   test_only: { count: 0, paths: [], truncated: false },
   harness: { count: 0, paths: [], truncated: false },
+  mirrors: [],
 })
 
 // Deterministic facts for the final-revision criterion. The candidate records
@@ -1083,7 +1160,9 @@ export function testedRevisionFacts({ finalSha, worktree, manifest, exec = defau
       sha: base.sha,
       relation: base.relation,
       tested_revision: tested,
-      retest_coverage: tested ? 'established' : 'not-established',
+      // Only whether the files this pass was responsible for are known; the
+      // judge decides from verified records whether the pass explored them.
+      retest_scope: tested ? 'files-listed' : 'not-established',
       changes_to_tested_revision: !tested
         ? null
         : base.sha === tested
@@ -1420,12 +1499,14 @@ const TESTING_PACKET_ROLES = [
   'acceptance-flow-record',
   'exploration-log',
   'final-handoff',
+  'acceptance-gate-notice',
   'findings-history',
   'assumptions-ledger',
   'screenshot-metadata',
   'tested-revision',
   'acceptance-pass-record',
   'session-audit',
+  'referenced-material',
 ]
 
 // The requirement and scenario headings of the approved specs, so the testing
@@ -1452,6 +1533,25 @@ async function approvedRequirementInventory(requirementsRoot) {
       else if (scenario && requirements.length > 0) requirements.at(-1).scenarios.push(scenario[1])
     }
     if (requirements.length > 0) documents.push({ document: name, requirements })
+  }
+  return documents.length > 0 ? documents : null
+}
+
+// The full approved requirement documents, for the assumption judge's omission
+// check: it must see what a requirement demands to notice a deviation the
+// candidate's own log shows but never surfaces.
+async function approvedRequirementTexts(requirementsRoot) {
+  if (!requirementsRoot) return null
+  let names
+  try {
+    names = (await readdir(requirementsRoot)).filter((name) => name.endsWith('.md')).sort()
+  } catch (error) {
+    if (error.code === 'ENOENT') return null
+    throw error
+  }
+  const documents = []
+  for (const name of names) {
+    documents.push({ document: name, text: (await readFile(join(requirementsRoot, name), 'utf8')).slice(0, 40_000) })
   }
   return documents.length > 0 ? documents : null
 }
@@ -1549,26 +1649,40 @@ export async function materializeEvidenceJudgeViews({
 
   // Pass records reached this view as referenced session material before they
   // had a role of their own, so they stay here.
+  // Packet order under the character budget: the decision records first.
   const assumptionRoles = [
-    'acceptance-pass-record',
     'assumptions-ledger',
-    'exploration-log',
     'final-handoff',
+    'acceptance-gate-notice',
     'findings-history',
+    'exploration-log',
+    'acceptance-pass-record',
     'session-audit',
+    'referenced-material',
   ]
   const assumptionArtifacts = await copyViewArtifacts({
     runDir,
     root: assumptionRoot,
-    artifacts: (candidate?.artifacts ?? []).filter(({ role }) => assumptionRoles.includes(role)),
+    artifacts: (candidate?.artifacts ?? [])
+      .filter(({ role }) => assumptionRoles.includes(role))
+      .sort((left, right) => assumptionRoles.indexOf(left.role) - assumptionRoles.indexOf(right.role)),
   })
+  const requirementTexts = await approvedRequirementTexts(requirementsRoot)
   const assumptionIndex = {
     ownership_boundary: 'untrusted candidate ambiguity sources',
     permissions: {
       candidate_evidence: 'assumption-sources-only',
       evaluator_evidence: false,
       revision_provenance: true,
+      approved_requirements: requirementTexts ? 'reference-only' : false,
     },
+    ...(requirementTexts ? {
+      approved_requirements: {
+        ownership: 'evaluator-supplied reference',
+        scoring_effect: 'what the approved requirements demand, for the omission check; never evidence of candidate behavior',
+        documents: requirementTexts,
+      },
+    } : {}),
     candidate: {
       ownership: 'candidate-produced',
       artifacts: assumptionArtifacts,

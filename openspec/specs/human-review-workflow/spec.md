@@ -167,6 +167,13 @@ The human-review command SHALL durably save each valid response immediately afte
 
 The finalized `human-review.json` artifact SHALL record the evaluated candidate identity, human-review rubric version and SHA-256 hash, all question identifiers and text, ratings, rationales, dimension subtotals, final score, component-gate result, and completion state.
 
+Finalization SHALL rescore from the durable second-opinion outcomes and pending list for candidate runs and preserve terminal second-opinion evidence and failure context in the result.
+
+#### Scenario: Finalization keeps an automated overturn
+- **WHEN** a failed deterministic browser criterion was overturned before human review
+- **AND** the reviewer finalizes the run
+- **THEN** the official result retains the second-opinion `pass`, the raw `fail`, and the checked second-opinion count
+
 #### Scenario: Review resumes after interruption
 - **WHEN** `human-review.sh` resumes a pending review with matching candidate and rubric provenance
 - **THEN** it restores all saved valid responses and continues at the first unanswered question

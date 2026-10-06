@@ -139,6 +139,30 @@ The component SHALL have no independent score floor. For a reference-baseline ev
 - **WHEN** the candidate surfaces a genuine consequential specification gap, distinguishes it from repository facts, escalates proportionately, and preserves it actionably in the handoff
 - **THEN** the unresolved state does not by itself fail any assumption-handling criterion
 
+#### Scenario: Candor is never scored below silence
+- **WHEN** one workflow surfaces an unverified gap with its consequence and options, including the option to accept the limitation, and another workflow omits the same gap that its plan or evidence shows
+- **THEN** the surfacing workflow scores no lower on any assumption-handling criterion
+- **AND** the omitting workflow fails the surfaced-ambiguities criterion
+
+#### Scenario: An unreproduced gap is surfaced as a decision
+- **WHEN** the workflow surfaces a gap it found by reading code but did not reproduce, framed as a decision with options and the consequence of accepting it
+- **THEN** the repository-facts and decisions criteria do not fail for that framing
+
+#### Scenario: A reproduced violation is omitted
+- **WHEN** the record shows the workflow observed a requirement violation in a run and never surfaces it
+- **THEN** the surfaced-ambiguities, repository-facts, and decisions criteria fail
+- **AND** the assumption judge finds it through the omission check against the approved requirements
+
+#### Scenario: A plan commitment is neither observed nor disclosed
+- **WHEN** the exploration plan commits to a behavior the log neither observed nor disclosed and no requirement deviation is shown
+- **THEN** the surfaced-ambiguities criterion does not fail for it
+- **AND** its materiality is scored once, under testing-evidence complete-honest-record
+
+#### Scenario: Final handoff names decisions and points to the ledger
+- **WHEN** the handoff names each unresolved decision by identifier and subject and points to the ledger entry that holds its consequence and options
+- **THEN** it preserves those decisions
+- **AND** a handoff that gives only a count of open decisions and a pointer does not
+
 #### Scenario: No consequential ambiguity exists
 - **WHEN** required artifacts explicitly report no unresolved assumptions and verified evidence supports that conclusion
 - **THEN** the candidate remains eligible to pass all four assumption-handling criteria

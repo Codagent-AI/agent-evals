@@ -38,6 +38,22 @@ If the evaluated workflow fails to produce those required artifacts or identitie
 - **THEN** the harness reports no missing evidence role
 - **AND** it verifies the named screenshots against the records that describe them
 
+#### Scenario: Acceptance did not converge
+- **WHEN** Agent Runner's acceptance gate replaced `acceptance-handoff.md` with its generated non-convergence notice and kept the tester's handoff as `acceptance-handoff-tester.md`
+- **THEN** the tester handoff fills the final-handoff role
+- **AND** the notice is retained under the `acceptance-gate-notice` role and shown to evidence judges as Runner-generated context
+- **AND** the notice fills the final-handoff role only when no candidate-written handoff exists
+
+#### Scenario: Per-round screenshot metadata is named by bare filename
+- **WHEN** a record names `round-1-screenshot-metadata.md`, which lives in `acceptance-screenshots/`
+- **THEN** the harness resolves the bare filename to the one scanned file with that name and keeps it as `screenshot-metadata`
+- **AND** an ambiguous bare filename stays unresolved
+- **AND** without usable JSON metadata a screenshot stays verified only when a verified record, including a Markdown metadata file, names it
+
+#### Scenario: A record references a file with no evidence role
+- **WHEN** a verified record references a file such as a skill or source file that matches no evidence role
+- **THEN** the file is retained as `referenced-material` rather than as a session audit
+
 #### Scenario: Required candidate evidence is missing
 - **WHEN** the completed workflow omits a required acceptance artifact
 - **THEN** the evaluation reports `implementation-workflow-failed`
@@ -123,10 +139,10 @@ The evaluation SHALL score candidate testing-evidence quality out of four points
 
 | Criterion | Points | Required behavior |
 |---|---:|---|
-| Traceable coverage | 1 | Verified evidence shows the user-visible behaviors the approved specs add were exercised, by any testing approach; disclosed, reasoned omissions count proportionally and undisclosed omissions fully. |
-| Usable proof | 1 | Each claimed exercised behavior is backed by verified artifacts, such as logs, captures, transcripts, or recorded observations, in the bounded view. |
-| Final-revision applicability | 1 | The recorded last-tested revision is the final SHA, or every product change after it was explored by a verified diff-scoped pass. |
-| Complete and honest record | 1 | Gaps, limitations, warning dispositions, and unresolved findings are disclosed, and completion claims do not exceed the evidence. |
+| Traceable coverage | 1 | Verified evidence shows the user-visible behaviors the approved specs add were exercised, by any testing approach; a disclosed environmental impediment does not count, other disclosed omissions count proportionally, and undisclosed omissions fully. |
+| Usable proof | 1 | Each claimed exercised behavior is backed by verified artifacts, such as logs, captures, transcripts, or recorded observations, in the bounded view; a stated limitation is a disclosure and needs no proof. |
+| Final-revision applicability | 1 | The recorded last-tested revision is the final SHA, or every product file the last diff-scoped pass's diff lists was explored, meaning the pass exercised the behavior or ran the command that executes it; a byte-identical mirror of an explored file and a command the acceptance workflow forbids running count as explored. |
+| Complete and honest record | 1 | Gaps, limitations, warning dispositions, and unresolved findings are disclosed, completion claims do not exceed the evidence, and every material plan commitment, one about an added user-visible requirement whose scenario nothing observed, is observed or disclosed. |
 
 The rubric SHALL carry an explicit definition for each criterion, and the testing-evidence judge SHALL receive each definition beside its identifier together with the requirement and scenario headings of the approved specs as reference. Coverage SHALL NOT be measured against a fixed test-plan case inventory.
 

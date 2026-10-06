@@ -24,7 +24,7 @@ import { summarizeEvidenceManifest } from './evidence.mjs'
 import { hashFile, readJson, writeJsonAtomic, writeTextAtomic } from './persistence.mjs'
 import { renderReport } from './report.mjs'
 
-export const RESULT_SCHEMA_VERSION = 8
+export const RESULT_SCHEMA_VERSION = 9
 export const ARTIFACT_MANIFEST_SCHEMA_VERSION = 2
 
 // Runtime scratch: candidate worktrees, linked run stores, and anything else a
@@ -260,6 +260,9 @@ export function assembleResult({
   browser = null,
   sourceEvidence = null,
   judging = null,
+  terminalSecondOpinion = null,
+  terminalSecondOpinionGate = null,
+  terminalFailure = null,
   workflow = null,
   metrics = null,
   cost = null,
@@ -280,6 +283,8 @@ export function assembleResult({
   const components = score?.components ?? []
   const automatedComplete = components.length > 0 && components.every(({ complete }) => complete)
   const evidenceSummary = summarizeEvidence(evidence)
+  const terminalRecord = terminalFailure
+    ?? (outcome.product_failure?.second_opinion ? outcome.product_failure : null)
   const officialScore = outcome.verdict_durable
     ? (outcome.official_score ?? score?.official_score ?? null)
     : null
@@ -302,6 +307,24 @@ export function assembleResult({
     // reads like a worse product.
     automated_subtotal: automatedComplete ? (score?.automated_subtotal ?? null) : null,
     fallback: score?.fallback ?? { criteria: 0, points: 0 },
+    ...(['reference-baseline', 'calibration'].includes(mode) ? {} : { second_opinions: {
+      checked: (score?.second_opinions?.checked ?? 0) + (terminalSecondOpinion?.ok ? 1 : 0),
+      overturned: (score?.second_opinions?.overturned ?? 0) + (terminalSecondOpinion?.decision === 'overturn' ? 1 : 0),
+      overturned_points: score?.second_opinions?.overturned_points ?? 0,
+      entries: [
+        ...(score?.components ?? []).flatMap(({ subcomponents }) => subcomponents.flatMap(({ criteria }) => criteria))
+          .filter(({ second_opinion }) => second_opinion)
+          .map(({ id, rationale, second_opinion }) => ({ kind: 'criterion', id, raw_rationale: rationale,
+            ...second_opinion })),
+        ...(score?.gates ?? []).filter(({ second_opinion }) => second_opinion)
+          .map(({ id, rationale, second_opinion }) => ({ kind: 'gate', id, raw_rationale: rationale,
+            ...second_opinion })),
+        ...(terminalSecondOpinion?.ok ? [{ kind: 'terminal', id: terminalSecondOpinionGate,
+          raw_rationale: terminalRecord?.reason ?? '',
+          stage: terminalRecord?.stage ?? null,
+          ...terminalSecondOpinion }] : []),
+      ],
+    } }),
     // Preserved as evidence, deliberately never summed.
     available_component_scores: automatedComplete
       ? []
@@ -315,6 +338,9 @@ export function assembleResult({
     failed_phase: outcome.failed_phase,
     failure: outcome.failure,
     product_failure: outcome.product_failure,
+    ...(terminalRecord ? { terminal_failure: {
+      ...terminalRecord, second_opinion: terminalSecondOpinion,
+    } } : {}),
     resumable: outcome.resumable,
     cleanup: outcome.cleanup,
     history: outcome.history,

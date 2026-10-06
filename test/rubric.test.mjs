@@ -87,6 +87,18 @@ test('deterministic browser and LLM source review own disjoint demo subcomponent
   )
 })
 
+test('every deterministic criterion has a declared fallback', async () => {
+  const rubric = await automatedRubric()
+  const deterministic = rubricCriteria(rubric).filter(({ evaluator }) => evaluator === 'deterministic-browser')
+  assert.equal(deterministic.length, 14)
+  for (const { id } of deterministic) {
+    assert.equal(rubric.fallbacks[id]?.job, 'demo-integration')
+    const copy = structuredClone(rubric)
+    delete copy.fallbacks[id]
+    assert.match(validateAutomatedRubric(copy).join('\n'), new RegExp(`criterion ${id} requires a fallback`))
+  }
+})
+
 test('source-reviewed robustness-sensitive rows carry explicit review guidance', async () => {
   const rubric = await automatedRubric()
   const required = new Set([
@@ -114,9 +126,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 6.0 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
+test('rubric 12.3 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '6.0.0')
+  assert.equal(rubric.version, '12.3.0')
   assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(
@@ -130,19 +142,19 @@ test('rubric 6.0 defines pre-human automated eligibility and distinguishes proof
   const guidance = (id) => rows.get(id).review_guidance.join('\n')
   assert.match(guidance('verification-addressing-and-errors'), /score preview ownership only/i)
   assert.match(guidance('verification-addressing-and-errors'), /IPv4 loopback/i)
-  assert.match(guidance('scene-entity-transitions'), /shared timing (?:value|constant).*insufficient/i)
-  assert.match(guidance('skill-scaffolding'), /interactive confirmation/i)
+  assert.match(guidance('scene-entity-transitions'), /delay[^.]*at least as long as the continuing entities' layout transition/i)
+  assert.match(guidance('skill-scaffolding'), /interactive confirmation needs no live human/i)
   assert.match(guidance('verification-warnings'), /earlier revision/i)
   assert.match(guidance('verification-warnings'), /raw executable/i)
   assert.match(guidance('demo-code-boundaries'), /exactly once/i)
   assert.match(guidance('demo-code-boundaries'), /title.*consum/i)
   assert.match(guidance('scene-entity-transitions'), /plain conditional|opt-in wrapper/i)
-  assert.match(guidance('scene-modes-and-navigation'), /both.*horizontal.*vertical/i)
+  assert.match(guidance('scene-modes-and-navigation'), /swipe to the left advances one step and a swipe to the right goes back/i)
   assert.match(guidance('scene-fixed-canvas-uniform-fit'), /one factor on both axes.*inside its available bounds/i)
   assert.match(guidance('scene-fixed-canvas'), /880×380/)
   assert.match(guidance('skill-scaffolding'), /test name|filename/i)
-  assert.match(guidance('verification-addressing-and-errors'), /strictPort.*insufficient/i)
-  assert.match(guidance('verification-capture'), /fixed.*delay.*insufficient/i)
+  assert.match(guidance('verification-addressing-and-errors'), /A strict port alone is likewise insufficient/)
+  assert.match(guidance('verification-capture'), /fixed configured interval satisfies the criterion/i)
   assert.match(guidance('verification-warnings'), /assert.*warning output/i)
   assert.match(guidance('demo-scene-kit-integration'), /shared Scene.*boundar/i)
   assert.match(guidance('demo-identity-and-grouping'), /every step module/i)
@@ -165,8 +177,8 @@ test('rubric 6.0 defines pre-human automated eligibility and distinguishes proof
   assert.match(guidance('skill-requirement-gathering'), /does not require.*interaction driver/i)
   assert.match(guidance('skill-presentation-lifecycle'), /normative skill instructions.*implementation/i)
   assert.match(guidance('skill-self-verification'), /normative skill instructions.*implementation/i)
-  assert.match(guidance('verification-missing-sample'), /explicit.*failure branch/i)
-  assert.match(guidance('verification-missing-sample'), /does not require.*dedicated.*test/i)
+  assert.match(guidance('verification-missing-sample'), /check that reports the sample as missing/i)
+  assert.match(guidance('verification-missing-sample'), /dedicated missing-sample regression test is not required/i)
   assert.match(guidance('verification-capture'), /project-local screenshot helper.*separate inspection command/i)
   assert.match(guidance('verification-capture'), /does not require.*build.*render verifier.*invoke/i)
 })
@@ -435,7 +447,7 @@ test('every testing-evidence criterion carries the definition its judge applies'
   // A diff-scoped re-test is enough; a full re-run is not demanded.
   assert.match(definition('testing-evidence-final-revision-applicability'), /tested_revision/)
   assert.match(definition('testing-evidence-final-revision-applicability'), /full re-run of earlier passes and bounded-impact lineage are not required/)
-  assert.match(definition('testing-evidence-final-revision-applicability'), /product changes after the last recorded tested revision that no verified pass explored/)
+  assert.match(definition('testing-evidence-final-revision-applicability'), /Fail when any listed product file is unexplored/)
   assert.match(definition('testing-evidence-complete-honest-record'), /no completion or coverage claim exceeds/)
 })
 
@@ -460,4 +472,157 @@ test('rubric validation rejects incomplete, unknown, and missing criterion defin
   const missing = structuredClone(rubric)
   delete testingRow(missing).criterion_definitions
   assert.match(validateAutomatedRubric(missing).join('\n'), /must define every testing-evidence criterion/)
+})
+
+// Round-0 baseline audit: guidance that exceeded or contradicted the fixture
+// cost every repetition points the fixture never asked for.
+test('rubric 8.0 guidance traces to the fixture rather than exceeding it', async () => {
+  const rubric = await automatedRubric()
+  const guidance = (id) => rubric.components
+    .flatMap(({ subcomponents }) => subcomponents)
+    .find((row) => row.id === id)
+    .review_guidance.join('\n')
+
+  // "waits for the configured settle interval before capturing"
+  assert.doesNotMatch(guidance('verification-capture'), /fixed settlement delay is insufficient/i)
+  assert.match(guidance('verification-capture'), /configured settle interval/)
+  // "swiping left advances and swiping right goes back": nothing about multi-touch.
+  assert.match(guidance('scene-modes-and-navigation'), /do not require rejection of vertical scrolling or multi-touch/i)
+  assert.doesNotMatch(guidance('scene-modes-and-navigation'), /require focused assertions for predominantly vertical/i)
+  // "elements inside that subtree": a marked member exempts the pair.
+  assert.match(guidance('verification-warnings'), /at least one element is inside a marked subtree is a correct reading/i)
+  assert.doesNotMatch(guidance('verification-warnings'), /nested text\/chrome/i)
+  // Scaffold branches are SKILL.md procedure verified by agent acceptance.
+  assert.match(guidance('skill-scaffolding'), /Do not require an executable test, driver, or transcript for these branches/)
+  assert.match(guidance('skill-scaffolding'), /copying the template into a new app path/)
+  // Judge errors the audit found.
+  assert.match(guidance('scene-step-model'), /aria-label[^.]*is not on screen/)
+  assert.match(guidance('demo-identity-and-grouping'), /trace every use[^.]*arrow or connector counts/i)
+  assert.match(guidance('demo-identity-and-grouping'), /single groupKey shared by all nine steps is the correct grouping/)
+  assert.match(guidance('demo-code-boundaries'), /trace it through every use/)
+  assert.match(guidance('scene-style-and-attribution'), /https:\/\/github\.com\/Codagent-AI\/and-scene/)
+  // "navigation keys drive that control": the mode shortcut is not a navigation key.
+  assert.match(guidance('scene-modes-and-navigation'), /mode-toggle shortcut is not part of this criterion/)
+  // "does not contain a default and-scene brand link": no brand slot is required.
+  assert.match(guidance('scene-style-and-attribution'), /does not require a kit brand slot/)
+})
+
+// Round-1 audit: 76283fa changed guidance under the same 8.0.0 version, so two
+// rubrics claimed one version. Every content now needs its own version.
+test('the rubric version identifies exactly one recorded rubric content', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const { automated } = await loadRubrics()
+  const history = JSON.parse(await readFile(
+    new URL('../evals/agent-runner/and-scene/rubric-history.json', import.meta.url), 'utf8'))
+  const recorded = history.versions[automated.version]
+  assert.deepEqual(recorded, [automated.sha256],
+    `automated rubric ${automated.version} content changed: bump the version and record its hash in rubric-history.json`)
+  const owners = new Map()
+  for (const [version, hashes] of Object.entries(history.versions)) {
+    for (const hash of hashes) {
+      assert.equal(owners.has(hash), false, `${hash} is recorded for ${owners.get(hash)} and ${version}`)
+      owners.set(hash, version)
+    }
+  }
+})
+
+// Round-1 audit: guidance that contradicted the fixture design or left a
+// criterion open to the judge's own choice of viewport, marker, or mechanism.
+test('rubric 9.0 guidance settles the criteria round 1 judged inconsistently', async () => {
+  const rubric = await automatedRubric()
+  const rows = rubric.components.flatMap(({ subcomponents }) => subcomponents)
+  const guidance = (id) => rows.find((row) => row.id === id).review_guidance.join('\n')
+  const definition = (id) => rows.find((row) => row.criterion_definitions?.[id]).criterion_definitions[id]
+
+  assert.match(guidance('scene-entity-transitions'), /fixed configured delay that meets this is the fixture's own mechanism/)
+  assert.match(guidance('scene-entity-transitions'), /same delay is also applied to the continuing entities' layout motion/)
+  assert.doesNotMatch(guidance('scene-entity-transitions'), /use the same settlement contract/)
+  assert.match(guidance('verification-addressing-and-errors'), /one representative browser-error test/)
+  assert.match(guidance('verification-addressing-and-errors'), /fresh port it reserved itself[\s\S]*raced against the spawned child's exit/)
+  assert.match(guidance('verification-missing-sample'), /unrelated browser or render timeout does not name the failed phase/)
+  assert.match(guidance('scene-modes-and-navigation'), /the marker is a visible indicator/)
+  assert.match(guidance('scene-fixed-canvas-uniform-fit'), /1280×720 \(wide\) and 390×844 \(narrow\)/)
+  assert.match(guidance('verification-warnings'), /chrome counts whether or not it contains text/)
+  assert.match(guidance('assumption-handling-quality-criteria'), /Never score silence above candor/)
+  assert.match(guidance('assumption-handling-quality-criteria'), /count of open decisions with only a pointer/)
+  assert.match(definition('testing-evidence-traceable-coverage'), /could not exercise[\s\S]*does not count against coverage/)
+  assert.match(definition('testing-evidence-final-revision-applicability'), /A changed command counts as explored when the pass ran it/)
+  assert.match(definition('testing-evidence-complete-honest-record'), /exploration plan commits to exercising/)
+})
+
+// Round-2 audit: criteria judges split on because the guidance left a term open.
+test('rubric 10.0 defines the terms round 2 judged inconsistently', async () => {
+  const rubric = await automatedRubric()
+  const rows = rubric.components.flatMap(({ subcomponents }) => subcomponents)
+  const guidance = (id) => rows.find((row) => row.id === id).review_guidance.join('\n')
+  const definition = (id) => rows.find((row) => row.criterion_definitions?.[id]).criterion_definitions[id]
+
+  assert.match(guidance('scene-step-model'), /computed from the step's array position or index[^.]*is not stable/)
+  assert.match(guidance('verification-warnings'), /without visible text its accessible name, a stable hook/)
+  assert.match(guidance('verification-warnings'), /An empty string[^.]*does not identify it/)
+  assert.match(guidance('scene-entity-transitions'), /Judge the visible entry, not each wrapper/)
+  assert.match(guidance('demo-identity-and-grouping'), /do not require the sample deck to rearrange/)
+  assert.match(guidance('skill-scaffolding'), /includes a partially scaffolded project/)
+  assert.match(guidance('assumption-handling-quality-criteria'), /reproduced only when the record shows the workflow observed/)
+  assert.match(guidance('assumption-handling-quality-criteria'), /check for unsurfaced requirement deviations/)
+  assert.match(guidance('assumption-handling-quality-criteria'), /omits it entirely, also fail assumption-repository-facts-distinguished/)
+  assert.match(definition('testing-evidence-complete-honest-record'), /Only a material omission counts/)
+  assert.match(definition('testing-evidence-final-revision-applicability'), /mirror group/)
+  assert.match(definition('testing-evidence-final-revision-applicability'), /acceptance workflow forbids running it/)
+  assert.match(definition('testing-evidence-final-revision-applicability'), /retest_scope fact[^.]*never decides exploration/)
+  assert.match(definition('testing-evidence-usable-proof'), /A stated limitation[^.]*is a disclosure, not a claim/)
+})
+
+// Round-3 audit: one plan omission cost three criteria, and two phrases let
+// samples split on identical evidence.
+test('rubric 11.0 scores each omission once and settles the round-3 splits', async () => {
+  const rubric = await automatedRubric()
+  const rows = rubric.components.flatMap(({ subcomponents }) => subcomponents)
+  const guidance = (id) => rows.find((row) => row.id === id).review_guidance.join('\n')
+  assert.match(guidance('assumption-handling-quality-criteria'), /Do not fail it for a plan commitment[^.]*\./)
+  assert.doesNotMatch(guidance('assumption-handling-quality-criteria'), /every behavior the exploration plan commits to exercising that the exploration log/)
+  assert.match(guidance('assumption-handling-quality-criteria'), /A material limitation here is one the record itself identifies elsewhere/)
+  assert.match(guidance('verification-warnings'), /a stable hook or selector of that chrome[^.]*says which chrome it is/)
+  assert.match(rubric.fallbacks['quality-captions-and-navigation'].guidance.join('\n'), /Captions are met in browse mode/)
+  assert.match(rubric.fallbacks['quality-captions-and-navigation'].guidance.join('\n'), /without the previous\/next controls/)
+  // Round 4b: samples split on whether a changed verify script is covered by
+  // the acceptance skill's ban on automated suites.
+  const definition = (id) => rows.find((row) => row.criterion_definitions?.[id]).criterion_definitions[id]
+  assert.match(definition('testing-evidence-final-revision-applicability'), /changed verification or test script counts as explored even though the record does not name that script/)
+  // Round 4b: two span audits failed controls-keep-keys for a slider the deck never renders.
+  assert.match(guidance('scene-modes-and-navigation'), /do not fail the criterion for a hypothetical control type/)
+})
+
+// Round-4 audit: judges invented a partial-deletion scenario for a missing
+// sample and split on whether a type-checked build proves a typed boundary.
+test('rubric 12.0 defines a missing sample and what proves a compile-time claim', async () => {
+  const rubric = await automatedRubric()
+  const rows = rubric.components.flatMap(({ subcomponents }) => subcomponents)
+  const guidance = (id) => rows.find((row) => row.id === id).review_guidance.join('\n')
+  const definition = (id) => rows.find((row) => row.criterion_definitions?.[id]).criterion_definitions[id]
+  assert.match(guidance('verification-missing-sample'), /A missing sample means the reference presentation is not registered/)
+  assert.match(guidance('verification-missing-sample'), /names the build or sample phase satisfies the criterion/)
+  assert.match(guidance('verification-missing-sample'), /Do not construct partial-deletion scenarios/)
+  assert.match(definition('testing-evidence-usable-proof'), /proven by a recorded successful type-checked build/)
+  // Sanity rescore at 12.0.0: samples failed honest-record because uniform
+  // scaling was observed only as the scene fitting the viewport.
+  assert.match(definition('testing-evidence-complete-honest-record'), /internal properties a viewer cannot see[^.]*need no separate observation/)
+})
+
+// Round-5 audit: rep-2-a failed skill-failures-fixed-before-success on a
+// strict reading that every check type must be named.
+test('rubric 12.2 credits a general fix-and-rerun gate for skill failures', async () => {
+  const rubric = await automatedRubric()
+  const guidance = rubric.components.flatMap(({ subcomponents }) => subcomponents)
+    .find(({ id }) => id === 'skill-self-verification').review_guidance.join('\n')
+  assert.match(guidance, /credit a general instruction to fix failures and re-run the checks/)
+  // Round-6 audit: "any check" went beyond the fixture's build, render, and
+  // visual composition checks.
+  assert.match(guidance, /reporting success while a build or render failure remains/)
+  assert.match(guidance, /fixing visual composition findings and re-inspecting satisfies the visual check/)
+  assert.match(guidance, /Do not fail it for a failure mode of a check tool the instructions do not mention/)
+  assert.doesNotMatch(guidance, /while any check fails/)
+  assert.match(guidance, /need not name each check type/)
+  assert.match(guidance, /allow completing with a failing check/)
+  assert.match(guidance, /pass\/fail field in a completion report format is not a permission/)
 })

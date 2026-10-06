@@ -27,7 +27,7 @@ export function gitBlobId(content) {
   return createHash('sha1').update(`blob ${body.length}\0`).update(body).digest('hex')
 }
 
-function sectionForHeading(content, heading) {
+export function sectionForHeading(content, heading) {
   const lines = content.split(/\r?\n/)
   const wanted = normalizeTraceabilityText(heading)
   const start = lines.findIndex((line) => normalizeTraceabilityText(line.replace(/^#+\s*/, '')) === wanted)

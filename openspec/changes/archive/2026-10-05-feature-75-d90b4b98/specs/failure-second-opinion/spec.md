@@ -1,0 +1,195 @@
+## ADDED Requirements
+
+### Requirement: Failures that receive a second opinion
+In a candidate evaluation, including an evaluator-only rescore, the harness SHALL obtain a second opinion from an LLM verifier for each of these failures, and for no others:
+
+- every deterministic browser criterion whose owning browser evaluator recorded `fail`;
+- every failed hard gate, whatever decided it.
+
+The verifier SHALL be called once per failure. A criterion that failed under its declared fallback judge, and an LLM-judged criterion, SHALL NOT receive a second opinion on its own account.
+
+`verification-sample-outline` SHALL have no verifier call of its own, because it is derived from the final verdicts of `demo-route-and-registration` and `demo-nine-step-content-and-order`. When the derived gate fails, each failing input criterion that has not already received a second opinion SHALL receive one on the gate's behalf; this includes an input that failed under its fallback judge. The gate SHALL then be derived again from the resulting final verdicts.
+
+A build or serve failure that would end the run as a conclusive product failure SHALL receive its second opinion before that outcome is recorded, under the terminal-failure contract.
+
+The second opinion SHALL NOT run in a reference-baseline evaluation or in calibration. In those modes the raw verdicts are final and no second-opinion data is recorded.
+
+#### Scenario: A browser criterion fails
+- **WHEN** the browser evaluator records `fail` for `demo-supported-navigation` in a candidate evaluation
+- **THEN** the harness makes exactly one verifier call for that criterion
+
+#### Scenario: A criterion passes or is not observed
+- **WHEN** a deterministic criterion is recorded as `pass` or as not observed
+- **THEN** no verifier call is made for it
+
+#### Scenario: A fallback judge fails a criterion
+- **WHEN** a not-observed criterion is resolved as `fail` by its fallback judge
+- **AND** that criterion is not an input of a failed `verification-sample-outline` gate
+- **THEN** no verifier call is made for it
+
+#### Scenario: The outline gate fails on a fallback verdict
+- **WHEN** `demo-nine-step-content-and-order` is resolved as `fail` by its fallback judge and the derived `verification-sample-outline` gate therefore fails
+- **THEN** the harness makes one verifier call for `demo-nine-step-content-and-order` on the gate's behalf
+- **AND** the gate is derived again from the criterion's resulting final verdict
+
+#### Scenario: Both outline inputs were already checked
+- **WHEN** both outline input criteria failed in the browser and each received its own second opinion
+- **THEN** no further verifier call is made for the derived outline gate
+
+#### Scenario: The renders gate fails
+- **WHEN** `verification-every-produced-step-renders` fails because runtime or console failures were recorded
+- **THEN** the harness makes exactly one verifier call for that gate
+
+#### Scenario: A reference baseline has a failing criterion
+- **WHEN** a reference-baseline evaluation records a deterministic `fail`
+- **THEN** no verifier call is made
+- **AND** the raw verdict is final
+
+#### Scenario: A finished run is rescored
+- **WHEN** an evaluator-only rescore produces deterministic criterion fails or failed hard gates
+- **THEN** each of them receives a second opinion exactly as in an original candidate evaluation
+
+### Requirement: Verifier inputs and answer
+For each failure, the verifier SHALL receive:
+
+- the criterion or gate identifier and requirement text, and its declared requirement source, including the fixture quote when it is fixture-owned;
+- for a browser-decided failure, the probe's retained observations and trace: the recorded sessions, states, and the basis of each reading, together with the recorded verdict and rationale;
+- the recorded runtime evidence that bears on the failure, such as page errors, console failures, and build or serve logs;
+- read access to the candidate's verified neutral source.
+
+The verifier SHALL answer exactly one of `uphold` or `overturn`, with a rationale. An `overturn` SHALL also name the probe step or recorded observation it says was mismeasured, explain how the measurement went wrong, and cite candidate source.
+
+The verifier SHALL use the same judge authority and invocation path as the other product judges, including the configured judge model, the bounded retry budget, and checkpointed reuse of completed calls. A completed verifier call SHALL be reused on resume when its inputs are unchanged, and SHALL be re-run when they changed.
+
+#### Scenario: The verifier is given the failure's evidence
+- **WHEN** the verifier is called for a browser criterion that failed
+- **THEN** its request contains the criterion requirement, its fixture quote, the probe's retained observations and trace, the recorded verdict and rationale, and access to the neutral source
+
+#### Scenario: A run resumes after the verifier finished
+- **WHEN** an interrupted evaluation resumes and a verifier call for an unchanged failure has already completed
+- **THEN** the harness reuses that call's recorded result instead of calling the verifier again
+
+### Requirement: Overturn acceptance
+An overturn asserts both that the raw `fail` was a measurement problem and that the candidate meets the requirement. The harness SHALL accept an overturn only when all of these hold:
+
+1. it names the mismeasured probe step or observation and explains the measurement fault;
+2. it cites candidate source as one or more spans, each a path with a start line and an end line;
+3. every span is valid: its path is a regular file in the verified delivery's source inventory, inside the neutral source root and not a symbolic link; its start line is at least 1; its end line is not before its start line; and its end line is within the file;
+4. the source audit, shown exactly the cited spans together with the failing record (the probe's or gate's recorded verdict, rationale, observations, and reading basis) and every page or console failure recorded for it, confirms all of these: the spans establish that the requirement is met; the stated measurement fault matches the recorded failing observation; and every contrary runtime observation is accounted for as a measurement fault.
+
+The standard for establishing the requirement SHALL be at least the standard a fallback judge's `pass` must meet. Showing only that the probe was unsound, without positive source evidence that the requirement is met, SHALL NOT be accepted as an overturn.
+
+When the recorded runtime evidence supports the failure, for example a page error raised during the failing step, an overturn SHALL be accepted only when it explains that evidence as a measurement fault and the audit confirms the explanation. Otherwise the failure stands.
+
+An overturn that fails any acceptance condition SHALL be recorded as a rejected overturn with the reason. The failure SHALL then stand as `fail`. Rejection SHALL NOT be treated as missing judge output.
+
+Overturn citations SHALL use this path-and-line shape. Existing fallback-judge citations SHALL remain path-only and SHALL be unchanged.
+An overturn SHALL cite at most 12 source spans, each fewer than 200 lines, and a terminal overturn at most 6 log or artifact spans. All cited spans together SHALL fit the existing bounded source-audit packet; an overturn that exceeds any limit SHALL be rejected. Each overturn SHALL receive exactly one source audit. An audit classification other than confirmed SHALL reject the overturn, with no further verifier or audit cycle. A malformed audit output SHALL be retried within the verifier's retry budget, and SHALL then be treated as missing judge output.
+
+#### Scenario: An overturn with valid, confirmed citations is accepted
+- **WHEN** the verifier overturns a `demo-supported-navigation` fail, explaining that the probe sent only touch events while the candidate handles swipes with pointer events
+- **AND** it cites the source lines of the pointer-event swipe handler
+- **AND** the spans are valid and the source audit confirms them
+- **THEN** the overturn is accepted and the criterion's final verdict is `pass`
+
+#### Scenario: An overturn without citations is rejected
+- **WHEN** the verifier answers `overturn` but cites no source span
+- **THEN** the overturn is rejected
+- **AND** the criterion's final verdict remains `fail`
+
+#### Scenario: A cited span is outside the verified delivery
+- **WHEN** an overturn cites a path that is not in the verified source inventory, or a line range beyond the end of the file
+- **THEN** the overturn is rejected with that reason
+- **AND** the failure stands
+
+#### Scenario: The audit does not confirm the overturn
+- **WHEN** an overturn's spans are valid but the source audit does not confirm that they establish the requirement
+- **THEN** the overturn is rejected
+- **AND** the failure stands
+
+#### Scenario: An overturn shows only that the probe was unsound
+- **WHEN** the verifier explains why the probe's reading was unreliable but cites no source establishing that the requirement is met
+- **THEN** the overturn is rejected
+- **AND** the failure stands
+
+#### Scenario: Runtime evidence supports the failure
+- **WHEN** a criterion failed while the page raised an error during the failing step
+- **AND** the verifier's overturn cites source but does not explain that error as a measurement fault
+- **THEN** the overturn is rejected
+- **AND** the failure stands
+
+#### Scenario: An overturn cites too much
+- **WHEN** an overturn cites 13 source spans, or a span of 200 lines or more
+- **THEN** the overturn is rejected
+- **AND** the failure stands
+
+#### Scenario: A source handler exists but was not active during the probe
+- **WHEN** an overturn cites a swipe handler that exists in source, but the failing probe record shows a page error during the swipe that the overturn does not account for
+- **THEN** the audit does not confirm the overturn
+- **AND** the failure stands
+
+#### Scenario: The verifier upholds
+- **WHEN** the verifier answers `uphold`
+- **THEN** the failure stands as `fail`
+- **AND** no citation is required
+
+### Requirement: Second-opinion verdict
+Each failure that received a second opinion SHALL carry two verdicts: the raw verdict, which is always `fail`, and the second-opinion verdict. The second-opinion verdict SHALL be `pass` when an overturn was accepted, and `fail` otherwise. Scores, component floors, hard gates, and automated eligibility SHALL use the second-opinion verdict. A failure that received no second opinion SHALL be scored from its verdict as before.
+
+An accepted overturn of a deterministic criterion SHALL award that criterion the same points its owner's `pass` would award. An accepted overturn of `verification-every-produced-step-renders` or `verification-clear-outcome` SHALL make that gate `pass`. An overturn SHALL never make an unobserved criterion or gate observed, and SHALL never change a verdict that was not `fail`.
+
+#### Scenario: An overturned criterion is scored
+- **WHEN** a deterministic criterion's raw verdict is `fail` and its overturn is accepted
+- **THEN** the scorer awards it the points its `pass` carries
+- **AND** the result keeps the raw `fail` beside the second-opinion `pass`
+
+#### Scenario: An upheld gate blocks eligibility
+- **WHEN** a failed hard gate is upheld
+- **THEN** automated eligibility fails as it would without a second opinion
+
+#### Scenario: An overturned gate no longer blocks eligibility
+- **WHEN** `verification-every-produced-step-renders` failed and its overturn is accepted
+- **THEN** the gate is `pass` for automated eligibility and the official pass contract
+- **AND** the result keeps the gate's raw `fail`
+
+### Requirement: Terminal build and serve failure contract
+When verification or candidate-server management establishes a product-owned inability to install, build, or serve the frozen final candidate, the harness SHALL obtain the second opinion before recording a conclusive product failure. The verifier SHALL receive the failed gate's requirement and source, the recorded build or serve log and other harness artifacts for the failure, and read access to the frozen candidate source.
+
+An overturn of a terminal failure SHALL be accepted only when all of these hold:
+
+1. it cites exact lines of the recorded build or serve log, or another recorded harness artifact, that show the measurement fault;
+2. it gives a checkable explanation of the fault, such as a wrong invocation, an infrastructure outage, or a process-launch error;
+3. it cites candidate source spans showing what the harness should have run, such as the candidate's declared install, build, or start script and its configuration;
+4. every log, artifact, and source span is valid against the recorded artifact or the verified delivery, and the audit, shown the cited spans and the recorded failure reason and stage, confirms the explanation.
+
+The recorded install and build evidence SHALL be the complete command output, kept losslessly up to a bounded size per stream. Beyond that bound, the beginning and the end SHALL be kept with an explicit omission marker, and the evidence SHALL record that it was truncated. A bounded summary log alone SHALL NOT be the evidence the verifier and audit are given.
+
+An upheld terminal failure SHALL proceed to the conclusive product-failure outcome as before. An accepted overturn SHALL NOT produce a pass: because no built and served application exists to score, the evaluation SHALL end as a resumable evaluation-harness failure that records the overturn. An overturn that fails acceptance SHALL be recorded as rejected, and the conclusive product failure SHALL stand.
+
+#### Scenario: A build failure is upheld
+- **WHEN** the candidate's build fails on a type error in its own source and the verifier upholds
+- **THEN** the build gate fails and the run records the conclusive product failure
+
+#### Scenario: A harness fault caused the build failure
+- **WHEN** the recorded build log shows the harness invoked a build command the candidate does not declare
+- **AND** the verifier's overturn cites those log lines and the candidate's declared build script, and the audit confirms them
+- **THEN** the run ends as a resumable evaluation-harness failure
+- **AND** no product verdict and no score is recorded
+
+#### Scenario: The decisive log line follows long output
+- **WHEN** a build fails and the line showing a harness fault appears after more than 4,000 characters of standard output
+- **THEN** the verifier and the audit are given that line in the recorded build evidence
+- **AND** an overturn citing it can be accepted
+
+#### Scenario: A terminal overturn cites no log
+- **WHEN** the verifier overturns a serve failure while citing only candidate source
+- **THEN** the overturn is rejected
+- **AND** the conclusive product failure stands
+
+### Requirement: Verifier failure handling
+A verifier call that produces no well-formed `uphold` or `overturn` answer within its retry budget SHALL be treated as missing required judge output. The evaluation SHALL take the existing resumable evaluation-harness failure path. The harness SHALL NOT uphold or overturn the failure silently, and SHALL NOT score it from the raw verdict as if it had been checked.
+
+#### Scenario: The verifier never answers validly
+- **WHEN** every attempt of a verifier call returns malformed output
+- **THEN** `evaluation_status` is `evaluation-harness-failed` and the failed phase is resumable
+- **AND** no product verdict is issued from the unchecked failure
