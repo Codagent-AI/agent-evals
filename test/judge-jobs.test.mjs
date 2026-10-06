@@ -1851,13 +1851,13 @@ test('product judging retains schema rejection and quota recovery metadata', asy
   assert.equal(outcome.failures['scene-kit'].resumable, false)
 })
 
-import { validateLineCitations } from '../evals/lib/panel-judging/protocol.mjs'
-for (const [name, citations] of [
-  ['outside inventory', [{ path: '../outside.txt', start_line: 1, end_line: 1 }]],
-  ['outside file', [{ path: 'packet.txt', start_line: 1, end_line: 300 }]],
-  ['200-line span', [{ path: 'packet.txt', start_line: 1, end_line: 200 }]],
-  ['too many spans', Array.from({ length: 13 }, () => ({ path: 'packet.txt', start_line: 1, end_line: 1 }))],
-  ['symlink', [{ path: 'linked.txt', start_line: 1, end_line: 1 }]],
+import { citationTarget, JudgeOutputError, validateLineCitations } from '../evals/lib/panel-judging/protocol.mjs'
+for (const [name, citations, expectedMessage] of [
+  ['outside inventory', [{ path: '../outside.txt', start_line: 1, end_line: 1 }], /outside the verified evidence view: \.\.\/outside\.txt$/],
+  ['outside file', [{ path: 'packet.txt', start_line: 300, end_line: 300 }], /invalid line range: packet\.txt:300-300$/],
+  ['200-line span', [{ path: 'packet.txt', start_line: 1, end_line: 200 }], /invalid line range: packet\.txt:1-200$/],
+  ['too many spans', Array.from({ length: 13 }, () => ({ path: 'packet.txt', start_line: 1, end_line: 1 })), /malformed line citations for x$/],
+  ['symlink', [{ path: 'linked.txt', start_line: 1, end_line: 1 }], /outside the verified evidence view: linked\.txt$/],
 ]) test(`evidence citation validation rejects ${name}`, async t => {
   const root = await mkdtemp(join(tmpdir(), 'evidence-span-'))
   t.after(() => rm(root, { recursive: true, force: true }))
@@ -1865,5 +1865,29 @@ for (const [name, citations] of [
   await symlink(join(root, 'packet.txt'), join(root, 'linked.txt'))
   await assert.rejects(validateLineCitations({ id: 'x', verdict: 'pass', rationale: 'reason', evidence: ['packet'], citations }, {
     job: 'testing-evidence', line_citations: 'evidence-view', input_roots: { evidence: root },
-  }))
+  }), error => error instanceof JudgeOutputError && error.code === 'judge-output' && expectedMessage.test(error.message))
+  if (name === 'symlink') {
+    // Evidence inventories exclude symlinks; also exercise the target guard directly.
+    await assert.rejects(citationTarget(root, 'linked.txt'), error =>
+      error instanceof JudgeOutputError && error.code === 'judge-output'
+      && /source citation is a symbolic link: linked\.txt$/.test(error.message))
+  }
+})
+
+test('evidence citation validation accepts in-range spans at the length and count limits', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'evidence-span-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  await writeFile(join(root, 'packet.txt'), 'evidence\n'.repeat(250))
+  const request = { job: 'testing-evidence', line_citations: 'evidence-view', input_roots: { evidence: root } }
+  const result = { id: 'x', verdict: 'pass', rationale: 'reason', evidence: ['packet'] }
+  const quoted = await validateLineCitations({ ...result, citations: [{ path: 'packet.txt', start_line: 1, end_line: 199 }] }, request)
+  assert.deepEqual(quoted.get('x'), [{
+    path: 'packet.txt', start_line: 1, end_line: 199,
+    lines: Array.from({ length: 199 }, (_, index) => ({ line: index + 1, text: 'evidence' })),
+  }])
+  const citations = Array.from({ length: 12 }, (_, index) => ({ path: 'packet.txt', start_line: index + 1, end_line: index + 1 }))
+  const counted = await validateLineCitations({ ...result, citations }, request)
+  assert.deepEqual(counted.get('x'), citations.map(citation => ({
+    ...citation, lines: [{ line: citation.start_line, text: 'evidence' }],
+  })))
 })
