@@ -126,9 +126,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 12.0 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
+test('rubric 12.1 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '12.0.0')
+  assert.equal(rubric.version, '12.1.0')
   assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(
@@ -604,4 +604,7 @@ test('rubric 12.0 defines a missing sample and what proves a compile-time claim'
   assert.match(guidance('verification-missing-sample'), /names the build or sample phase satisfies the criterion/)
   assert.match(guidance('verification-missing-sample'), /Do not construct partial-deletion scenarios/)
   assert.match(definition('testing-evidence-usable-proof'), /proven by a recorded successful type-checked build/)
+  // Sanity rescore at 12.0.0: samples failed honest-record because uniform
+  // scaling was observed only as the scene fitting the viewport.
+  assert.match(definition('testing-evidence-complete-honest-record'), /internal properties a viewer cannot see[^.]*need no separate observation/)
 })
