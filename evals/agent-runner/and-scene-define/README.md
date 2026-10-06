@@ -312,6 +312,64 @@ gives verdicts for all 72 graded items. Two inputs also carry a synthetic
 every input file. The expected-fail marks await maintainer review (HT-002). See
 [`calibration/README.md`](calibration/README.md).
 
+## Calibration (`--calibrate`)
+
+A maintainer diagnostic. It is never a prerequisite or runtime gate for a
+candidate run (candidate preflight reads only `rubric.json`), and its output is
+never published: the report carries `mode: "calibration"`, which publication
+refuses, and an output directory under `results/` is refused.
+
+```sh
+evals/agent-runner/and-scene-define/run.sh --calibrate --dry-run
+evals/agent-runner/and-scene-define/run.sh --calibrate [--out DIR] [--repeats N] [--rescore-input ID]
+```
+
+- `--dry-run` loads the set, verifies `manifest.json` hashes and expectations,
+  and prints the plan. It makes no model call and writes nothing.
+- A real run refuses before any model call until `hidden/inventory.json` has
+  an `anchors_review` for the current inventory version (HT-003).
+- `--repeats` is at least 3 (default 3). Each repeat of each input is judged in
+  its own fresh directory, `<out>/inputs/<input_id>/repeat-<n>/`, through the
+  candidate `gates-and-judging` phase (OpenSpec gates, coverage per area,
+  quality, and fidelity when the input has a conversation). No judged unit is
+  reused between repeats. Inputs have no disclosure audit, so nothing is leaked.
+- For each input's first repeat, the decider alone is re-run 3 times on every
+  recorded panel record that reached it: the batched decider ruling and every
+  targeted dissent check, rebuilt exactly as the panel built them
+  (`rerunDecider` in the shared panel module).
+- `--out` defaults to `artifacts/evals/and-scene-define-calibration/<timestamp>`
+  (ignored by Git). Eval-owned usage is recorded in
+  `<out>/phases/eval-owned-usage.jsonl`.
+
+`calibration-report.json` (and the readable `calibration-report.md`) gives:
+- per input: score (per repeat, mean, min, max), accuracy against
+  `expected`, `expected_quality`, and `expected_fidelity` (agreement rate,
+  confusion counts, per-item judged verdicts), stability (total-score spread
+  and items whose verdict differs across repeats), settlement-basis shares, and
+  per-family verdict distribution;
+- overall accuracy, basis shares, and each model family's `met`/`partial`/
+  `missing` rates beside the expected distribution, with an agreement rate and
+  a signed leniency (mean judged minus expected value);
+- `decider_flips`: the ruling-flip rate on fixed recorded panel outputs,
+  separate from panel spread, naming each flipped item;
+- `identical_rescore`: repeats 1 and 2 of `--rescore-input` (default
+  `reference`), two judgings under identical conditions, diffed per item;
+- `failures`, each naming the input and items: a removed mandatory item judged
+  `met` in any repeat; the restructured reference (an expected-pass input whose
+  id starts with `restructured`) losing more weighted coverage than
+  `calibration.restructured_tolerance_items` against its expectations in any
+  repeat; a total-score spread above `calibration.max_spread`; and a threshold
+  that cannot separate the outcomes;
+- `threshold`: the midpoint between the highest gate-passing repeat score of a
+  marked expected-fail input and the lowest repeat score of an expected-pass
+  input, or none when they overlap. Gate-failed repeats fail regardless of
+  points, so they do not bound it;
+- `proposed_weights`: the current rubric settings, retained (calibration
+  evaluates them; it does not fit new weights).
+
+The exit status is 0 only when there are no failures. Recording the proposed
+threshold and evidence in `rubric.json` remains a maintainer step (HT-002).
+
 ## Results, resume, and rescore
 
 The paid run needs a clean Agent Runner **external-user-mode** checkout supporting

@@ -349,7 +349,7 @@ Modes:
   --run-agent               Run the paid candidate workflow through define.
   --resume                  Reuse --run-dir and resume its inactive unfinished Runner run.
   --rescore-from RUN_DIR     Host-only audits, gates, judging and discovery from retained evidence.
-  --calibrate               Maintainer rubric diagnostic (implemented by a later task).
+  --calibrate               Maintainer judge calibration (calibrate.mjs); never published or required.
 Options:
   --run-dir PATH            Artifact directory; required for --resume, otherwise generated.
   --runner-dir PATH         Runner checkout (or AGENT_RUNNER_DIR).
@@ -366,6 +366,10 @@ Compare recorded runs (scores are paired only within one series):
   node evals/agent-runner/and-scene-define/compare.mjs RUN_DIR RUN_DIR [...]
 Rescores use current pinned evaluator inputs and a new --run-dir; never published.
 Publication failure: --resume --run-dir retries only publication, without profiles.
+Calibration options (with --calibrate): --out DIR, --repeats N (>=3, default 3),
+  --rescore-input ID, --calibration-dir DIR, --dry-run (no model calls). Output
+  defaults to artifacts/evals/and-scene-define-calibration/<timestamp>; real
+  judging requires reviewed anchors (HT-003).
 Policy diagnostic: node evals/agent-runner/and-scene-define/policy-test.mjs --output PATH
 `
 export function parseArguments(args, env = process.env) {
@@ -377,7 +381,8 @@ export function parseArguments(args, env = process.env) {
     if (['--dry-run', '--run-agent', '--resume', '--calibrate', '--rescore-from'].includes(arg)) {
       if (mode) throw new Error('select exactly one mode')
       mode = arg
-      if (arg === '--calibrate') throw new Error(`${arg} is not yet implemented`)
+      // run.sh hands --calibrate to calibrate.mjs; the candidate controller never runs it.
+      if (arg === '--calibrate') throw new Error('--calibrate runs through run.sh (calibrate.mjs), not the candidate controller')
       if (arg === '--rescore-from') {
         const source = args[++index]
         if (!source || source.startsWith('--')) throw new Error('--rescore-from requires a run directory')

@@ -86,6 +86,31 @@ function route(votes, checks, order) {
     dissent: order.indexOf(dissent.verdict) < order.indexOf(majority) ? dissent : null }
 }
 
+// The decider sees the votes blind: a stable seeded order, with no provider,
+// family, or model in the prompt. Shared by runPanelJob and rerunDecider so a
+// re-run sends exactly the request the recorded panel outputs produced.
+function deciderRequestFor({ job, criteria, request, record, order, decider, scopeRule }) {
+  const shuffled = [0, 1, 2].sort((a, b) => hashJson({ job, criteria, index: a }).localeCompare(hashJson({ job, criteria, index: b })))
+  const blind = shuffled.map((index, n) => ({ label: String.fromCharCode(65 + n), results: record.votes.filter(v => v.panel_index === index).map(vote => ({ id: vote.id, verdict: effective(vote, record.checks, order).verdict,
+    rationale: effective(vote, record.checks, order).verdict !== vote.verdict ? `The source contradiction was independently confirmed: ${vote.contradiction.rationale}` : vote.rationale,
+    citations: vote.citations, evidence: vote.evidence })) }))
+  const deciderRequest = { ...request, authority: { cli: 'claude', model: decider.model, effort: decider.effort },
+    prompt_body: [request.prompt_body ?? request.prompt, '# Untrusted panel votes', JSON.stringify(blind), 'Rule only a verdict one of these panel judges gave.', scopeRule].join('\n') }
+  deciderRequest.prompt = deciderRequest.prompt_body
+  return deciderRequest
+}
+
+function validDeciderVerdicts(record, order, results) {
+  for (const r of results) if (!record.votes.some(v => v.id === r.id && effective(v, record.checks, order).verdict === r.verdict)) throw new JudgeOutputError('decider verdict was not a panel vote')
+}
+
+async function dissentCheckRequest({ request, scopeRule, id, original }) {
+  const material = await sourceMaterial(request, [original])
+  return { ...request, criteria: [id], schema: judgeResultSchemaFor(SOURCE_AUDIT_RESULT_SCHEMA, [id]),
+    input_roots: null, audit_stage: 'dissent-check',
+    prompt: dissentCheckPrompt({ request, scopeRule, id, original, material }) }
+}
+
 // Pure reproduction from the recorded votes, targeted checks, and rulings.
 export function resolvePanel({ criteria, order, votes, checks = [], rulings = [], decider = null, fallback_ids = [] }) {
   if (decider) {
@@ -225,25 +250,13 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
           ...(backing.error ? { error: backing.error } : {}) })
       }
       if (!original.citations_valid) continue
-      const material = await sourceMaterial(request, [original])
-      const next = { ...request, criteria: [id], schema: judgeResultSchemaFor(SOURCE_AUDIT_RESULT_SCHEMA, [id]),
-        input_roots: null, audit_stage: 'dissent-check',
-        prompt: dissentCheckPrompt({ request, scopeRule, id, original, material }) }
+      const next = await dissentCheckRequest({ request, scopeRule, id, original })
       const [check] = await call(next, decider, 'dissent-check', text => parseSourceAuditOutput(text, [id], job))
       record.checks.push({ ...check, stage: 'dissent-check', panel_index: original.panel_index })
     }
     if (pending.length) {
-      // Stable seeded order, with no provider, family, or model in the prompt.
-      const shuffled = [...panel.keys()].sort((a, b) => hashJson({ job, criteria, index: a }).localeCompare(hashJson({ job, criteria, index: b })))
-      const blind = shuffled.map((index, n) => ({ label: String.fromCharCode(65 + n), results: record.votes.filter(v => v.panel_index === index).map(vote => ({ id: vote.id, verdict: effective(vote, record.checks, order).verdict,
-        rationale: effective(vote, record.checks, order).verdict !== vote.verdict ? `The source contradiction was independently confirmed: ${vote.contradiction.rationale}` : vote.rationale,
-        citations: vote.citations, evidence: vote.evidence })) }))
-      const deciderRequest = { ...request, authority: { cli: 'claude', model: decider.model, effort: decider.effort },
-        prompt_body: [request.prompt_body ?? request.prompt, '# Untrusted panel votes', JSON.stringify(blind), 'Rule only a verdict one of these panel judges gave.', scopeRule].join('\n') }
-      deciderRequest.prompt = deciderRequest.prompt_body
-      const validVerdicts = results => {
-        for (const r of results) if (!record.votes.some(v => v.id === r.id && effective(v, record.checks, order).verdict === r.verdict)) throw new JudgeOutputError('decider verdict was not a panel vote')
-      }
+      const deciderRequest = deciderRequestFor({ job, criteria, request, record, order, decider, scopeRule })
+      const validVerdicts = results => validDeciderVerdicts(record, order, results)
       if (request.panel_line_citations) {
         const ruling = await runTiebreak({ request: deciderRequest, criteria: pending, invoke: wrap(decider, 'decider'), validateVerdicts: validVerdicts })
         record.decider = ruling
@@ -266,4 +279,57 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
     record.ok = true
   } catch (error) { record.error = error.message; record.failure = judgeFailure(error) }
   return done()
+}
+
+// Re-runs only the decider stages of a completed record on its recorded panel
+// outputs: the batched decider ruling and each targeted dissent check, built
+// exactly as runPanelJob built them. The record is not changed; callers compare
+// the fresh outcomes with the recorded ones (calibration's ruling-flip rate).
+// A confirmed dissent check changes the verdict; any other classification keeps
+// the majority's, so a check flips when confirmation changes.
+export async function rerunDecider({ record, decider, buildPrompt, schema, validateCitations = async () => false }) {
+  if (record?.protocol !== PANEL_PROTOCOL || record.ok !== true) throw new Error('decider re-run needs a complete panel record')
+  const { job, criteria, verdicts, order } = record
+  const request = { job, criteria, schema, ...(await buildPrompt({ job, criteria, schema })) }
+  if (request.panel_line_citations) throw new Error('decider re-run does not support line-cited tiebreaks')
+  const scopeRule = request.scope_rule ?? [JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE].join('\n')
+  const usage = {}
+  const call = async (next, stage, parser) => {
+    let lastError
+    for (let attempt = 1; attempt <= JUDGE_ATTEMPTS; attempt++) {
+      usage[stage] = (usage[stage] ?? 0) + 1
+      try {
+        return await parser(await decider.invoke({ ...next, authority: { cli: 'claude', model: decider.model, effort: decider.effort }, usage_phase: stage }))
+      } catch (error) {
+        lastError = error
+        if (error.retryable === false) break
+      }
+    }
+    throw lastError
+  }
+  const rulings = []
+  const pending = (record.rulings ?? []).map(r => r.id)
+  if (pending.length) {
+    const deciderRequest = deciderRequestFor({ job, criteria, request, record, order, decider, scopeRule })
+    const results = await call({ ...deciderRequest, criteria: pending }, 'decider-rerun', async text => {
+      const parsed = parse(text, pending, verdicts)
+      validDeciderVerdicts(record, order, parsed)
+      for (const r of parsed) if (!(await validateCitations(r, request))) throw new JudgeOutputError('invalid decider citations')
+      return parsed
+    })
+    for (const recorded of record.rulings) {
+      const before = recorded.vote ?? recorded.verdict
+      const rerun = results.find(r => r.id === recorded.id).verdict
+      rulings.push({ id: recorded.id, recorded: before, rerun, flipped: rerun !== before })
+    }
+  }
+  const checks = []
+  for (const check of record.checks.filter(c => c.stage === 'dissent-check')) {
+    const original = record.votes.find(v => v.id === check.id && v.panel_index === check.panel_index)
+    const next = await dissentCheckRequest({ request, scopeRule, id: check.id, original })
+    const [fresh] = await call(next, 'dissent-check-rerun', text => parseSourceAuditOutput(text, [check.id], job))
+    checks.push({ id: check.id, panel_index: check.panel_index, recorded: check.classification, rerun: fresh.classification,
+      flipped: (check.classification === 'confirmed') !== (fresh.classification === 'confirmed') })
+  }
+  return { job, rulings, checks, usage_by_stage: usage }
 }

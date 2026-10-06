@@ -1,5 +1,5 @@
 // Suite-owned definitions and citations; settlement belongs to the shared panel.
-import { runPanelJob, PANEL_PROTOCOL } from '../../../lib/panel-judging/panel.mjs'
+import { runPanelJob, rerunDecider, PANEL_PROTOCOL } from '../../../lib/panel-judging/panel.mjs'
 import { JudgeOutputError } from '../../../lib/panel-judging/protocol.mjs'
 import { JUDGE_PROFILE } from './profiles.mjs'
 export { PANEL_PROTOCOL, JUDGE_PROFILE }
@@ -146,20 +146,26 @@ export function parseJobOutput(text, job, criteria = job.criteria) {
   }
   return payload.results
 }
-export async function runDefinitionPanel({ job, panel, decider }) {
-  const prompt = jobPrompt(job)
-  // Validation runs inside the invocation boundary so the shared bounded retry
-  // loop never accepts an invalid panel vote. This is not a per-judge audit.
-  const guard = member => ({ ...member, invoke: async req => {
+// Validation runs inside the invocation boundary so the shared bounded retry
+// loop never accepts an invalid panel vote. This is not a per-judge audit.
+function guarded(member, job) {
+  return { ...member, invoke: async req => {
     const text = await member.invoke(req)
     if (req.audit_stage) return text
     // Votes reach the panel with invalid citations dropped and recorded.
     return JSON.stringify({ results: normalizeFidelity(parseJobOutput(text, job, req.criteria), job) })
-  } })
+  } }
+}
+const definitionPrompt = job => { const prompt = jobPrompt(job); return () => ({ prompt, prompt_body: prompt, scope_rule: DEFINITION_SCOPE_RULE }) }
+export async function runDefinitionPanel({ job, panel, decider }) {
   return runPanelJob({ job: job.name, criteria: job.criteria, verdicts: ['met', 'partial', 'missing'], order: ['met', 'partial', 'missing'],
-    panel: panel.map(guard), decider: guard(decider), schema: judgeSchema(job.criteria),
-    buildPrompt: () => ({ prompt, prompt_body: prompt, scope_rule: DEFINITION_SCOPE_RULE }),
+    panel: panel.map(member => guarded(member, job)), decider: guarded(decider, job), schema: judgeSchema(job.criteria),
+    buildPrompt: definitionPrompt(job),
     validateCitations: r => validateFinding(r, job), validateCitation: c => validateCitation(c, job.inputs) })
+}
+// Calibration: the decider alone, re-run on a recorded panel record of this job.
+export async function rerunDefinitionDecider({ job, decider, record }) {
+  return rerunDecider({ record, decider: guarded(decider, job), schema: judgeSchema(job.criteria), buildPrompt: definitionPrompt(job), validateCitations: r => validateFinding(r, job) })
 }
 export async function runDiscovery({ job, invoke }) {
   const schema = discoverySchema(job.criteria)
