@@ -106,6 +106,17 @@ export function normalizeFidelity(results, job) {
 export function excludedGradedContradictions(record) {
   return (record.votes ?? []).filter(v => v.excluded_graded_contradiction).map(v => ({ criterion: v.id, subject_id: v.excluded_graded_contradiction.subject_id, judged_verdict: v.excluded_graded_contradiction.judged_verdict, panel_index: v.panel_index, family: v.family, rationale: v.rationale, citations: v.citations }))
 }
+// Drop-and-keep: each citation is validated on its own; invalid ones are
+// removed and recorded, and the verdict's requirements apply to those kept.
+function keepValidCitations(citations, inputs) {
+  if (!Array.isArray(citations)) bad('missing citations')
+  const kept = []; const dropped = []
+  for (const citation of citations) {
+    try { validateCitation(citation, inputs); kept.push(citation) }
+    catch (error) { if (!(error instanceof JudgeOutputError)) throw error; dropped.push({ citation, reason: error.message }) }
+  }
+  return { kept, dropped }
+}
 export function parseJobOutput(text, job, criteria = job.criteria) {
   let payload
   try { payload = JSON.parse(text) } catch { bad('judge output is not JSON') }
@@ -121,10 +132,16 @@ export function parseJobOutput(text, job, criteria = job.criteria) {
       if (!Array.isArray(r.added_scope) || job.kind !== 'fidelity' && r.added_scope.length) bad('invalid added scope')
       for (const scope of r.added_scope) {
         exact(scope, ['description', 'citations'])
-        if (typeof scope.description !== 'string' || !scope.description.trim() || !Array.isArray(scope.citations) || !scope.citations.some(c => validateCitation(c, job.inputs) === 'span')) bad('added scope needs artifact citations')
-        scope.citations.forEach(c => validateCitation(c, job.inputs))
+        if (typeof scope.description !== 'string' || !scope.description.trim()) bad('added scope needs a description')
+        const { kept, dropped } = keepValidCitations(scope.citations, job.inputs)
+        if (!kept.some(c => validateCitation(c, job.inputs) === 'span')) bad('added scope needs artifact citations')
+        scope.citations = kept
+        if (dropped.length) scope.dropped_citations = dropped
       }
     }
+    const { kept, dropped } = keepValidCitations(r.citations, job.inputs)
+    r.citations = kept
+    if (dropped.length) r.dropped_citations = dropped
     validateFinding(r, job)
   }
   return payload.results
@@ -136,8 +153,8 @@ export async function runDefinitionPanel({ job, panel, decider }) {
   const guard = member => ({ ...member, invoke: async req => {
     const text = await member.invoke(req)
     if (req.audit_stage) return text
-    const results = parseJobOutput(text, job, req.criteria)
-    return job.kind === 'fidelity' ? JSON.stringify({ results: normalizeFidelity(results, job) }) : text
+    // Votes reach the panel with invalid citations dropped and recorded.
+    return JSON.stringify({ results: normalizeFidelity(parseJobOutput(text, job, req.criteria), job) })
   } })
   return runPanelJob({ job: job.name, criteria: job.criteria, verdicts: ['met', 'partial', 'missing'], order: ['met', 'partial', 'missing'],
     panel: panel.map(guard), decider: guard(decider), schema: judgeSchema(job.criteria),

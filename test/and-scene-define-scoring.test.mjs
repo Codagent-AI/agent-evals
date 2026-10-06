@@ -62,6 +62,29 @@ for (const [votes, ruling, classification, expected, basis, extra] of [
     assert.match(prompt, /"label":"A"/); assert.ok(!prompt.includes('stub'))
   }
 })
+test('invalid citations are dropped and recorded while the kept citations still support the verdict', async () => {
+  const strays = [{ ...citation, path: 'hidden/reference/design.md' }, { ...citation, start_line: 40, end_line: 41 }, { path: 'proposal.md', start_line: 1 }]
+  let attempts = 0
+  const judges = members(['met', 'met', 'met'])
+  for (const judge of judges.panel) judge.invoke = async req => { attempts++; return JSON.stringify({ results: req.criteria.map(id => result(id, 'met', [citation, ...strays])) }) }
+  const kept = await runDefinitionPanel({ job, ...judges })
+  assert.equal(kept.ok, true, JSON.stringify(kept.failure)); assert.equal(attempts, 3)
+  assert.equal(kept.results[0].verdict, 'met'); assert.deepEqual(kept.results[0].citations, [citation])
+  for (const vote of kept.record.votes) {
+    assert.deepEqual(vote.citations, [citation])
+    assert.deepEqual(vote.dropped_citations.map(x => x.citation), strays)
+    assert.ok(vote.dropped_citations.every(x => typeof x.reason === 'string' && x.reason))
+  }
+  // A verdict whose remaining citations cannot support it still fails and retries.
+  attempts = 0
+  for (const judge of judges.panel) judge.invoke = async req => { attempts++; return JSON.stringify({ results: req.criteria.map(id => result(id, 'met', [{ ...citation, start_line: null, end_line: null }, ...strays])) }) }
+  const unsupported = await runDefinitionPanel({ job, ...judges })
+  assert.equal(unsupported.ok, false); assert.equal(attempts, 9)
+  assert.match(JSON.stringify(unsupported.record.attempts), /met\/partial must cite an artifact line range/)
+  // Clean votes carry no dropped list.
+  const clean = await runDefinitionPanel({ job, ...members(['met', 'met', 'met']) })
+  assert.ok(clean.record.votes.every(v => v.dropped_citations === undefined))
+})
 test('invalid decider verdict and uncited met are retried and never scored', async () => {
   const calls = []
   const outcome = await runDefinitionPanel({ job, ...members(['met','missing','missing'], 'partial', 'confirmed', calls) })
