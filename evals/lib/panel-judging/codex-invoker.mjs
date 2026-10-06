@@ -16,6 +16,9 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 const JUDGE_ENV_ALLOWLIST = [
   'HOME',
+  // The Claude CLI finds its macOS Keychain login through the user identity.
+  'USER',
+  'LOGNAME',
   'CODEX_HOME',
   'PATH',
   'LANG',

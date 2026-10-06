@@ -132,3 +132,11 @@ test('a numeric error containing 429 is not a rate-limit signal', async t => {
   const { invoke, request } = await fixture(t, [[{ type: 'result', is_error: true, errors: ['error identifier 4290'] }]])
   await assert.rejects(invoke(request), error => error.code !== 'claude-quota')
 })
+test('host judge keeps the login identity the Claude CLI needs on macOS', async t => {
+  const { root, invoke, request } = await fixture(t, [success], { env: { HOME: '/home/judge', PATH: process.env.PATH, USER: 'judge', LOGNAME: 'judge', GH_TOKEN: 'secret' } })
+  await invoke(request)
+  const { env } = JSON.parse(await readFile(join(root, 'args'), 'utf8'))
+  assert.equal(env.USER, 'judge')
+  assert.equal(env.LOGNAME, 'judge')
+  assert.equal(env.GH_TOKEN, undefined)
+})
