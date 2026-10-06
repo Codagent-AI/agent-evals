@@ -128,6 +128,7 @@ const STEP_CONTROL_REGION_SELECTORS = [
 const INTERACTIVE_SELECTOR = 'button, [role="button"], a[href]'
 const PREVIOUS_SELECTORS = [
   '[data-presentation-prev]',
+  '[data-presentation-previous]',
   '[data-presentation-button="previous"]',
   '[data-presentation-node="previous"]',
 ]
@@ -200,7 +201,7 @@ function navigationDiscoverySource() {
   // progress rows; they navigate relatively, so they are never step controls.
   const directionalSelector = ${JSON.stringify([...PREVIOUS_SELECTORS, ...NEXT_SELECTORS, ...MODE_TOGGLE_SELECTORS].join(', '))};
   const isDirectional = (element) => element.matches(directionalSelector)
-    || /^(?:previous|prev|back|next)\b/i.test(accessibleName(element));
+    || /^(?:previous|prev|back|next)\\b/i.test(accessibleName(element));
   const stepControlsOnly = (elements) => elements.filter((element) => !isDirectional(element));
   const explicitControls = stepControlsOnly(inDomOrder([
     ...scope.querySelectorAll(${JSON.stringify(EXPLICIT_CONTROL_SELECTOR)}),
@@ -487,10 +488,23 @@ export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {
         const node = selected ? document.querySelector(selected) : null;
         const visible = Boolean(node && node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden');
         const mode = modeReading();
+        // What a reviewer needs to judge control and focus failures from the
+        // replay itself: every visible interactive control and where focus is.
+        const shown = (element) => element.getClientRects().length > 0
+          && getComputedStyle(element).visibility !== 'hidden' && getComputedStyle(element).display !== 'none';
+        const nameOf = (element) => (element?.getAttribute('aria-label')
+          || element?.getAttribute('title') || element?.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 120);
+        const controls = [...document.querySelectorAll(${JSON.stringify(INTERACTIVE_SELECTOR)})].filter(shown).slice(0, 32)
+          .map((element) => ({ name: nameOf(element),
+            current: element.getAttribute('aria-current') || null,
+            disabled: element.disabled === true || element.getAttribute('aria-disabled') === 'true',
+            focusable: !element.disabled && element.tabIndex >= 0 }));
+        const active = document.activeElement;
+        const focused = active && active !== document.body ? nameOf(active) || active.tagName.toLowerCase() : null;
         return { stepIndex: Number(progress?.getAttribute('data-step-index')),
           stepCount: Number(progress?.getAttribute('data-step-count')),
           mode: mode.mode, modeBasis: mode.basis, visible, text: (node?.textContent ?? '').slice(0, 1000),
-          origin: location.origin };
+          controls, focused, origin: location.origin };
       })`
       const actionSource = (action) => {
         switch (action.type) {
@@ -904,6 +918,7 @@ ${navigationDiscoverySource()}
     name: accessibleName(control),
     role: control.getAttribute('role') || control.tagName.toLowerCase(),
     ariaCurrent: ['step', 'true'].includes(control.getAttribute('aria-current')),
+    disabled: control.disabled === true || control.getAttribute('aria-disabled') === 'true',
     focusable: !control.disabled && control.tabIndex >= 0,
   }));
   const entityOccurrences = new Map();

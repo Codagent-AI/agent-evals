@@ -814,3 +814,36 @@ test('the AXI driver keeps previous, next, and mode controls out of the step con
   assert.match(source, /data-presentation-prev/)
   assert.match(source, /data-presentation-mode-toggle/)
 })
+
+// agent-evals #78 rep 2: `\b` inside a page-script template literal became a
+// backspace, so "Previous step" never matched as directional and shifted the
+// step controls. Every generated script is checked for that class of escape.
+test('generated page scripts carry no control characters from lost regex escapes', async () => {
+  const { createAxiBrowserDriver } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
+  const calls = []
+  const driver = createAxiBrowserDriver({
+    baseUrl: 'http://127.0.0.1:4319/',
+    command: async (args, input) => {
+      calls.push({ args, input })
+      return { status: 0, stdout: `${JSON.stringify(true)}\n`, stderr: '' }
+    },
+  })
+  await driver.setPosition(2)
+  await driver.state()
+  await driver.activate('Step 2')
+  await driver.focus('Step 2')
+  await driver.setMode('browse').catch(() => {})
+  await driver.toggleMode().catch(() => {})
+  await driver.replay([{ type: 'navigate', path: '/how-to-make-a-presentation' }, { type: 'press', key: 'Tab' }],
+    { type: 'step-index-changes' }).catch(() => {})
+  assert.ok(calls.some(({ input }) => input?.includes('const focused')), 'replay script was generated')
+  for (const { input } of calls) {
+    assert.doesNotMatch(input ?? '', /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/)
+  }
+  const source = calls.find(({ input }) => input?.includes('const isDirectional'))?.input
+  const pattern = /\|\| (\/\^\(\?:previous\|prev\|back\|next\)[^/]*\/i)\.test/.exec(source)?.[1]
+  assert.ok(pattern, 'directional name pattern is present')
+  const directional = new Function(`return ${pattern}`)()
+  for (const name of ['Previous step', 'Next step', 'Back', 'prev']) assert.ok(directional.test(name), name)
+  for (const name of ['1: You have a topic', 'Step 3', 'Preview']) assert.ok(!directional.test(name), name)
+})
