@@ -102,6 +102,38 @@ test('admission, identity, lineage and human review', () => {
   }
 })
 
+test('two-hop rescores share one execution even with a mismatch override', () => {
+  const original = extracted({ run_id: 'O', workflow: { run_id: 'execution-O' } })
+  const second = extracted({ run_id: 'R2', workflow: { run_id: 'execution-O', events: [{ event: 'imported-completed-run', source_run_id: 'R1' }] }, rubrics: { automated: { sha256: 'new-hash' } } })
+  assert.equal(original.entry.execution_run_id, 'execution-O')
+  assert.equal(second.entry.execution_run_id, 'execution-O')
+  const both = set(baseline.emptyRecord(), [original, second], { allowMismatch: 'rescore' })
+  refusal(both, 'duplicate-run')
+  assert.match(both.refusals.find(x => x.code === 'duplicate-run').message, /execution/)
+  refusal(add(set(baseline.emptyRecord(), [original]).record, second, { allowMismatch: 'rescore' }), 'duplicate-run')
+})
+
+test('stored baseline validation rejects median and summary inconsistencies', async () => {
+  const root = await temp(), record = join(root, 'record.json'), directory = await resultDir(root, makeResult({ run_id: 'new' }))
+  const valid = set(baseline.emptyRecord(), [extracted()]).record
+  for (const current of [
+    { ...valid.current, human_review: { ...valid.current.human_review, is_current_median: false } },
+    { ...valid.current, summary: {} },
+    { ...valid.current, summary: { ...valid.current.summary, repetitions: 'one' } },
+    { ...valid.current, reps: [{ ...valid.current.reps[0], execution_run_id: 42 }] },
+    { ...valid.current, reps: [{ ...valid.current.reps[0], execution_run_id: undefined }] },
+  ]) {
+    const bytes = JSON.stringify({ ...valid, current })
+    await writeFile(record, bytes)
+    for (const command of [['show'], ['set', directory, '--source', 'manual', '--reason', 'replace']]) {
+      const outcome = await runExperimentsCommand({ argv: ['baseline', ...command, '--record', record] })
+      assert.equal(outcome.exitCode, 2)
+      assert.equal(outcome.errors[0].code, 'invalid-record')
+      assert.equal(await readFile(record, 'utf8'), bytes)
+    }
+  }
+})
+
 test('history, anchor freeze, divergence, and validation', () => {
   const first = set(baseline.emptyRecord(), [extracted()]).record
   const anchored = baseline.applyAnchor(first, { reason: 'freeze', now: at }).record
@@ -125,6 +157,58 @@ test('history, anchor freeze, divergence, and validation', () => {
 async function temp() { return mkdtemp(join(tmpdir(), 'experiment-baseline-')) }
 async function resultDir(root, result) { const dir = join(root, result.run_id); await mkdir(dir); await writeFile(join(dir, 'result.json'), JSON.stringify(result)); return dir }
 function capture() { const lines = []; return { lines, stdout: s => lines.push(s) } }
+
+test('a rescored median carries a source review and recomputes its official score', async () => {
+  const root = await temp(), record = join(root, 'record.json'), output = capture()
+  await resultDir(root, makeResult({ run_id: 'O', human_review: { score: { points_awarded: 23, total: 20 } } }))
+  const rescore = await resultDir(root, makeResult({ run_id: 'R1', rescored_from: 'O', workflow: { events: [{ event: 'imported-completed-run', source_run_id: 'O' }] }, automated_subtotal: { points: 54 }, human_review: null, official_score: null }))
+  const outcome = await runExperimentsCommand({ argv: ['baseline', 'set', rescore, '--source', 'manual', '--reason', 'rescore', '--record', record], stdout: output.stdout })
+  assert.equal(outcome.exitCode, 0)
+  const saved = JSON.parse(await readFile(record))
+  assert.equal(saved.current.reps[0].outcome.official_score, 77)
+  assert.equal(saved.current.reps[0].outcome.human_review_carried_from, 'O')
+  assert.equal(saved.current.human_review.points, 23)
+  assert.equal(saved.current.human_review.carried_from, 'O')
+  assert.equal(saved.current.human_review.official_score, 77)
+  await runExperimentsCommand({ argv: ['baseline', 'show', '--record', record], stdout: output.stdout })
+  assert.match(output.lines.at(-1), /human review carried from O/g)
+})
+
+test('rescores without a compatible ancestor review remain unreviewed', async () => {
+  for (const sourcePatch of [{ human_review: null, official_score: null }, { rubrics: { human: { sha256: 'old-hash' } } }]) {
+    const root = await temp(), record = join(root, 'record.json')
+    await resultDir(root, makeResult({ run_id: 'O', ...sourcePatch }))
+    const rescore = await resultDir(root, makeResult({ run_id: 'R1', workflow: { events: [{ event: 'imported-completed-run', source_run_id: 'O' }] }, human_review: null, official_score: null }))
+    const outcome = await runExperimentsCommand({ argv: ['baseline', 'set', rescore, '--source', 'manual', '--reason', 'rescore', '--record', record] })
+    assert.equal(outcome.exitCode, 1)
+    assert.equal(outcome.errors.at(-1).code, 'median-not-reviewed')
+    await assert.rejects(stat(record))
+  }
+})
+
+test('a second rescore carries the first reviewed ancestor through an unreviewed source', async () => {
+  const root = await temp(), record = join(root, 'record.json')
+  await resultDir(root, makeResult({ run_id: 'O' }))
+  await resultDir(root, makeResult({ run_id: 'R1', workflow: { events: [{ event: 'imported-completed-run', source_run_id: 'O' }] }, human_review: null, official_score: null }))
+  const rescore = await resultDir(root, makeResult({ run_id: 'R2', workflow: { events: [{ event: 'imported-completed-run', source_run_id: 'R1' }] }, human_review: null, official_score: null, automated_subtotal: { points: 57 } }))
+  const outcome = await runExperimentsCommand({ argv: ['baseline', 'set', rescore, '--source', 'manual', '--reason', 'rescore', '--record', record] })
+  assert.equal(outcome.exitCode, 0)
+  const saved = JSON.parse(await readFile(record))
+  assert.equal(saved.current.reps[0].outcome.human_review_carried_from, 'O')
+  assert.equal(saved.current.reps[0].outcome.official_score, 77)
+})
+
+test('add-rep carries a review when a rescore has no usable official score', async () => {
+  const root = await temp(), record = join(root, 'record.json')
+  const initial = await resultDir(root, makeResult({ run_id: 'initial' }))
+  await resultDir(root, makeResult({ run_id: 'O' }))
+  const rescore = await resultDir(root, makeResult({ run_id: 'R1', workflow: { events: [{ event: 'imported-completed-run', source_run_id: 'O' }] }, human_review: { complete: true }, official_score: null, automated_subtotal: { points: 58 } }))
+  assert.equal((await runExperimentsCommand({ argv: ['baseline', 'set', initial, '--source', 'manual', '--reason', 'seed', '--record', record] })).exitCode, 0)
+  assert.equal((await runExperimentsCommand({ argv: ['baseline', 'add-rep', rescore, '--record', record] })).exitCode, 0)
+  const saved = JSON.parse(await readFile(record))
+  assert.equal(saved.current.reps[1].outcome.human_review_carried_from, 'O')
+  assert.equal(saved.current.reps[1].outcome.official_score, 78)
+})
 
 test('command persistence is atomic and show is read-only', async () => {
   const root = await temp(), record = join(root, 'nested', 'baseline.json')

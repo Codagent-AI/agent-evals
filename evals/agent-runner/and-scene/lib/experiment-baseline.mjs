@@ -23,15 +23,21 @@ export function validateBaseline(baseline, path = 'current', anchor = path === '
     if (!object(rep) || typeof rep.run_id !== 'string' || !rep.run_id) fail(`reps[${i}].run_id`, 'must be a non-empty string')
     if (ids.has(rep.run_id)) fail(`reps[${i}].run_id`, 'duplicate repetition id')
     for (const field of ['automated_score', 'tokens', 'cost', 'failure', 'outcome']) if (!object(rep[field])) fail(`reps[${i}].${field}`, 'must be an object')
+    if (rep.execution_run_id !== null && typeof rep.execution_run_id !== 'string') fail(`reps[${i}].execution_run_id`, 'must be a string or null')
     if (!object(rep.tokens.by_provider)) fail(`reps[${i}].tokens.by_provider`, 'must be an object')
     ids.add(rep.run_id)
   })
   if (!object(baseline.identity)) fail('identity', 'must be an object')
   if (!object(baseline.summary)) fail('summary', 'must be an object')
+  if (typeof baseline.summary.repetitions !== 'number') fail('summary.repetitions', 'must be a number')
+  for (const field of ['automated_points', 'tokens_total', 'tokens_by_provider', 'active_duration_ms', 'estimated_cost_usd']) {
+    if (!object(baseline.summary[field]) || typeof baseline.summary[field].complete !== 'boolean') fail(`summary.${field}`, 'must be an object with boolean complete')
+  }
   if (!ids.has(baseline.median_rep)) fail('median_rep', `${JSON.stringify(baseline.median_rep)} is not a repetition`)
   if (!object(baseline.human_review)) fail('human_review', 'must be an object')
   if (!ids.has(baseline.human_review.run_id)) fail('human_review.run_id', 'is not a repetition')
   if (typeof baseline.human_review.is_current_median !== 'boolean') fail('human_review.is_current_median', 'must be a boolean')
+  if (baseline.human_review.is_current_median !== (baseline.median_rep === baseline.human_review.run_id)) fail('human_review.is_current_median', 'must match median repetition')
   if (!SOURCES.includes(baseline.source)) fail('source', 'invalid source')
   for (const field of ['reason', 'set_at']) if (typeof baseline[field] !== 'string') fail(field, 'must be a string')
   if (anchor) for (const field of ['anchored_at', 'anchor_reason']) if (typeof baseline[field] !== 'string') fail(field, 'must be a string')
@@ -55,7 +61,7 @@ export function validateRecord(raw) {
   return raw
 }
 
-export function extractRepetition(result, { directory = null, addedAt, addedBy } = {}) {
+export function extractRepetition(result, { directory = null, addedAt, addedBy, carriedReview = null, carryReason = null } = {}) {
   const errors = []
   const context = { directory, run_id: value(result?.run_id) }
   if (typeof context.run_id !== 'string' || !context.run_id) errors.push(refusal(context, 'missing-run-id', 'Run id is missing'))
@@ -74,24 +80,31 @@ export function extractRepetition(result, { directory = null, addedAt, addedBy }
   }
   const automated = result?.automated_subtotal
   const points = automated?.complete === true && typeof automated.points === 'number' ? automated.points : null
+  const sourceReview = carriedReview?.result?.human_review
+  const humanPoints = sourceReview?.score?.points_awarded ?? sourceReview?.score?.total
+  const useCarried = !(result?.human_review?.complete === true && typeof result?.official_score === 'number') && points !== null && sourceReview?.complete === true && typeof carriedReview?.result?.official_score === 'number' && typeof humanPoints === 'number' && carriedReview.result.rubrics?.human?.sha256 === result?.rubrics?.human?.sha256
+  const officialScore = useCarried ? points + humanPoints : value(result?.official_score)
+  const review = useCarried ? sourceReview : result?.human_review
+  const carriedFrom = useCarried ? carriedReview.run_id : null
   const entry = {
     run_id: context.run_id, added_at: addedAt, added_by: addedBy,
+    execution_run_id: value(result?.workflow?.run_id),
     rescored_from: value(result?.workflow?.events?.find(x => x?.event === 'imported-completed-run')?.source_run_id),
     runner_commit: value(result?.workflow?.provenance?.commit), skills_commit: value(result?.workflow?.agent_skills_provenance?.commit),
     workflow: copyFields(result?.workflow, WORKFLOW_FIELDS), fixture_commit: value(result?.candidate_source?.fixture_commit), roles,
     rubrics: { automated: copyFields(result?.rubrics?.automated, RUBRIC_FIELDS), human: copyFields(result?.rubrics?.human, RUBRIC_FIELDS) },
     automated_score: { points, possible: value(automated?.possible), complete: value(automated?.complete) },
     gates: { passed: value(result?.score?.gates_passed), verdicts: value(result?.score?.gates?.map(x => copyFields(x, ['id', 'verdict']))) },
-    outcome: { evaluation_status: value(result?.evaluation_status), product_verdict: value(result?.product_verdict), official_score: value(result?.official_score), human_review_complete: result?.human_review?.complete === true && typeof result?.official_score === 'number' },
+    outcome: { evaluation_status: value(result?.evaluation_status), product_verdict: value(result?.product_verdict), official_score: officialScore, human_review_complete: useCarried || (result?.human_review?.complete === true && typeof result?.official_score === 'number'), human_review_carried_from: carriedFrom },
     tokens: { complete: result?.cost?.usage?.complete === true, totals: value(result?.cost?.usage?.token_totals), detail: value(result?.cost?.usage?.tokens), by_provider: byProvider },
     active_duration_ms: value(result?.implementation_metrics?.active_duration_ms),
     cost: copyFields(result?.cost?.total, ['state', 'complete', 'estimated_api_cost_usd', 'known_cost_subtotal_usd']),
     failure: copyFields(result, ['failure', 'failed_phase', 'product_failure']), mismatch: null,
   }
-  const reviewSnapshot = { run_id: entry.run_id, official_score: value(result?.official_score), points: value(result?.human_review?.score?.total), possible: value(result?.human_review?.score?.possible), rubric: value(result?.human_review?.rubric), completed_at: value(result?.human_review?.completed_at), is_current_median: true }
+  const reviewSnapshot = { run_id: entry.run_id, official_score: officialScore, points: value(useCarried ? humanPoints : review?.score?.total), possible: value(review?.score?.possible), rubric: value(review?.rubric), completed_at: value(review?.completed_at), is_current_median: true, carried_from: carriedFrom }
   if (!entry.runner_commit) errors.push(refusal(context, 'missing-runner-commit', 'Runner commit is missing'))
   if ((entry.failure.failure !== null && entry.failure.product_failure === null) || (entry.failure.product_failure === null && points === null)) errors.push(refusal(context, 'infrastructure-failure', 'Infrastructure failure or incomplete automated score; rerun this repetition'))
-  return { entry, reviewSnapshot, directory, refusals: errors }
+  return { entry, reviewSnapshot, directory, refusals: errors, carryReason }
 }
 
 export function identityOf(entry) {
@@ -110,8 +123,8 @@ export function compareIdentity(base, entry) {
   return differences
 }
 
-function overlapping(a, b) { return [a.run_id, a.rescored_from].filter(Boolean).some(id => id === b.run_id || id === b.rescored_from) }
-function duplicate(a, b) { return refusal(a, 'duplicate-run', `Repetitions ${a.run_id} and ${b.run_id} share an execution lineage.${a.rescored_from || b.rescored_from ? ' Rebuild with set using only the rescored directory.' : ''}`) }
+function overlapping(a, b) { return (a.execution_run_id && a.execution_run_id === b.execution_run_id) || [a.run_id, a.rescored_from].filter(Boolean).some(id => id === b.run_id || id === b.rescored_from) }
+function duplicate(a, b) { return refusal(a, 'duplicate-run', `Repetitions ${a.run_id} and ${b.run_id} share an execution${a.execution_run_id && a.execution_run_id === b.execution_run_id ? ` (${a.execution_run_id})` : ''} lineage.${a.rescored_from || b.rescored_from ? ' Rebuild with set using only the rescored directory.' : ''}`) }
 function archive(record, kind, date, reason) { record.history.push({ kind, replaced_at: date, replacement_reason: reason, record: structuredClone(record[kind]) }) }
 function identityRefusals(base, entry, allowMismatch, directory = null) {
   const differences = compareIdentity(base, entry), errors = []
@@ -168,7 +181,7 @@ export function applySet(record, items, { source, reason, allowMismatch, now }) 
   }
   if (errors.length) return { refusals: errors }
   const median = selectMedian(entries), index = entries.findIndex(x => x.run_id === median)
-  if (!entries[index]?.outcome.human_review_complete) return { refusals: [refusal({ ...entries[index], directory: admissible[index]?.directory }, 'median-not-reviewed', `Median repetition ${median} requires a complete human review and numeric official score`)] }
+  if (!entries[index]?.outcome.human_review_complete) return { refusals: [refusal({ ...entries[index], directory: admissible[index]?.directory }, 'median-not-reviewed', `Median repetition ${median} requires a complete human review and numeric official score${admissible[index]?.carryReason ? `; carry-over unavailable: ${admissible[index].carryReason}` : ''}`)] }
   const result = structuredClone(record), date = timestamp(now)
   if (result.current) archive(result, 'current', date, reason)
   if (source === 'profile-change' && result.anchor) { archive(result, 'anchor', date, reason); result.anchor = null }
@@ -212,13 +225,13 @@ export function formatShow(record) {
     for (const rep of current.reps) {
       const score = rep.automated_score.points === null ? 'unscored' : `${number(rep.automated_score.points)}/${rep.automated_score.possible}`
       const outcome = rep.failure.product_failure ? `product failure: ${typeof rep.failure.product_failure === 'string' ? rep.failure.product_failure : JSON.stringify(rep.failure.product_failure)}` : `verdict ${rep.outcome.product_verdict ?? 'unavailable'}`
-      lines.push(`  ${rep.run_id}  automated ${score}  ${outcome}  active ${rep.active_duration_ms === null ? 'incomplete' : number(rep.active_duration_ms / 60000, 1) + ' min'}  cost ${rep.cost.complete ? number(rep.cost.estimated_api_cost_usd) : 'incomplete'}${rep.mismatch ? `  [mismatch: ${rep.mismatch.fields.join(', ')} — ${rep.mismatch.reason}]` : ''}${rep.rescored_from ? `  [rescored from ${rep.rescored_from}]` : ''}`)
+      lines.push(`  ${rep.run_id}  automated ${score}  ${outcome}  active ${rep.active_duration_ms === null ? 'incomplete' : number(rep.active_duration_ms / 60000, 1) + ' min'}  cost ${rep.cost.complete ? number(rep.cost.estimated_api_cost_usd) : 'incomplete'}${rep.mismatch ? `  [mismatch: ${rep.mismatch.fields.join(', ')} — ${rep.mismatch.reason}]` : ''}${rep.rescored_from ? `  [rescored from ${rep.rescored_from}]` : ''}${rep.outcome.human_review_carried_from ? `  [human review carried from ${rep.outcome.human_review_carried_from}]` : ''}`)
     }
     const s = current.summary
     const active = s.active_duration_ms.complete ? { complete: true, mean: s.active_duration_ms.mean / 60000, min: s.active_duration_ms.min / 60000, max: s.active_duration_ms.max / 60000, stddev: s.active_duration_ms.stddev === null ? null : s.active_duration_ms.stddev / 60000 } : s.active_duration_ms
     for (const [label, metric, digits] of [['Automated points', s.automated_points, 2], ['Tokens total', s.tokens_total, 0], ['Active time (min)', active, 1], ['Cost (USD)', s.estimated_cost_usd, 2]]) lines.push(showMetric(label, metric, digits))
     lines.push(s.tokens_by_provider.complete ? `Tokens by provider: ${Object.entries(s.tokens_by_provider.providers).map(([name, metric]) => `${name} mean ${number(metric.mean, 0)} min ${number(metric.min, 0)} max ${number(metric.max, 0)} sd ${metric.stddev === null ? 'n/a' : number(metric.stddev, 0)}`).join('; ')}` : `Tokens by provider: incomplete (missing: ${s.tokens_by_provider.missing_run_ids.join(', ')})`)
-    lines.push(`Median repetition: ${current.median_rep}`, `Human review: ${current.human_review.run_id}  official ${number(current.human_review.official_score)}  review ${current.human_review.points}/${current.human_review.possible}`)
+    lines.push(`Median repetition: ${current.median_rep}`, `Human review: ${current.human_review.run_id}  official ${number(current.human_review.official_score)}  review ${current.human_review.points}/${current.human_review.possible}${current.human_review.carried_from ? `  [human review carried from ${current.human_review.carried_from}]` : ''}`)
     if (!current.human_review.is_current_median) lines.push(`  Note: the current median repetition ${current.median_rep} is not the human-reviewed repetition ${current.human_review.run_id}.`)
   }
   const anchor = record.anchor

@@ -17,6 +17,32 @@ const usage = `Usage: experiments.mjs baseline <command> [options]
 
 const VALUE_OPTIONS = ['--record', '--source', '--reason', '--allow-mismatch']
 
+function rescoreSource(result) {
+  return result?.rescored_from ?? result?.workflow?.events?.find(event => event?.event === 'imported-completed-run')?.source_run_id ?? null
+}
+
+async function findCarriedReview(result, directory) {
+  const visited = new Set([result?.run_id])
+  let sourceRunId = rescoreSource(result)
+  if (!sourceRunId) return {}
+  while (sourceRunId) {
+    if (typeof sourceRunId !== 'string' || sourceRunId === '.' || sourceRunId === '..' || sourceRunId.includes('/') || sourceRunId.includes('\\')) return { carryReason: 'invalid source run id' }
+    if (visited.has(sourceRunId)) return { carryReason: 'rescore lineage cycle' }
+    visited.add(sourceRunId)
+    let source
+    try { source = await readJson(join(dirname(directory), sourceRunId, 'result.json')) }
+    catch { return { carryReason: `source ${sourceRunId} is missing or unreadable` } }
+    if (source?.human_review?.complete === true && typeof source?.official_score === 'number') {
+      const humanPoints = source?.human_review?.score?.points_awarded ?? source?.human_review?.score?.total
+      if (typeof humanPoints !== 'number') return { carryReason: `source ${sourceRunId} has no numeric awarded human points` }
+      if (typeof result?.rubrics?.human?.sha256 !== 'string' || source?.rubrics?.human?.sha256 !== result.rubrics.human.sha256) return { carryReason: `human rubric sha256 differs from source ${sourceRunId}` }
+      return { carriedReview: { run_id: sourceRunId, result: source } }
+    }
+    sourceRunId = rescoreSource(source)
+  }
+  return { carryReason: 'no ancestor has a complete human review' }
+}
+
 export function parseArgs(argv) {
   // --help is a flag; a --help that follows a value option is that option's (missing) value.
   if (argv.some((arg, i) => arg === '--help' && !VALUE_OPTIONS.includes(argv[i - 1]))) return { help: true }
@@ -80,7 +106,8 @@ export async function runExperimentsCommand({ argv, now = () => new Date(), stdo
         continue
       }
       const addedAt = now().toISOString()
-      try { items.push(extractRepetition(result, { directory, addedAt, addedBy: args.command })) }
+      const carry = result?.human_review?.complete === true && typeof result?.official_score === 'number' ? {} : await findCarriedReview(result, directory)
+      try { items.push(extractRepetition(result, { directory, addedAt, addedBy: args.command, ...carry })) }
       catch (cause) { items.push({ entry: null, directory, refusals: [{ directory, run_id: null, code: 'invalid-result', message: `${directory}/result.json: ${cause.message}` }] }) }
     }
   }

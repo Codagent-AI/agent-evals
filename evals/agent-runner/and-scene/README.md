@@ -868,6 +868,12 @@ summaries. If the median moves away from the reviewed repetition, the record and
 `show` flag the divergence; `anchor` then requires a fresh `set` that includes
 that median's review. `anchor` freezes a copy of `current`; replacing it archives
 the old anchor. A `profile-change` set clears and archives any anchor.
+For a rescored result without a complete review, `set` and `add-rep` look through
+the rescore's source chain in sibling published result directories. They carry the
+first complete review only when its human rubric sha256 matches the rescore's,
+then recompute the official score from rescored automated points and awarded human
+points. The record and `show` name the review source. An unavailable review or
+rubric mismatch leaves a rescored median ineligible for `set`.
 
 Only schema-8 Agent Runner candidate results are admitted. Every repetition must
 have the same runner commit; `--allow-mismatch <reason>` cannot waive this rule.
@@ -894,6 +900,8 @@ agent-evals#67 result directories. Run `set` with those three directories,
 `--source profile-change`, and a reason describing the profile change. Check
 that rep 2 is the reviewed median, then run `anchor --from-current` with a
 reason. Commit the resulting `experiments/baseline.json` separately.
+If rep 2 was rescored, use its rescored directory. Its prior review carries over
+from the published source directory when the human rubric still matches.
 
 ## Outcomes
 

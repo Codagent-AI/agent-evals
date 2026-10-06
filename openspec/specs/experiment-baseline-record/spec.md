@@ -32,12 +32,15 @@ read, write or change the reference baseline (`--reference-baseline`, `lib/basel
 Before any command reads or changes it, an existing record SHALL be validated against the
 structure and invariants the commands rely on:
 - `current` and `anchor` are each `null` or a baseline object. A baseline object has:
-  - a non-empty `reps` array of objects, each with a string `run_id`;
+  - a non-empty `reps` array of objects, each with a string `run_id` and a string or null
+    `execution_run_id`;
   - unique run ids;
-  - an `identity` object and a `summary` object;
+  - an `identity` object and a `summary` object. The summary has numeric `repetitions`, and
+    `automated_points`, `tokens_total`, `tokens_by_provider`, `active_duration_ms`, and
+    `estimated_cost_usd` objects, each with a boolean `complete`;
   - a `median_rep` naming one of its repetitions;
   - a `human_review` object whose `run_id` names one of its repetitions, with a boolean
-    `is_current_median`;
+    `is_current_median` equal to whether its `run_id` is `median_rep`;
   - a `source` that is one of the three allowed values;
   - string `reason` and `set_at`.
 - An `anchor` also has string `anchored_at` and `anchor_reason`.
@@ -55,6 +58,11 @@ A record that fails validation SHALL be refused by every command, including `sho
   its `median_rep` names a run id that is not in `current.reps`
 - **THEN** `show`, `set`, `add-rep` and `anchor` each exit non-zero, naming the invalid field, and
   the file is unchanged
+
+#### Scenario: Inconsistent review or summary is refused
+- **WHEN** a stored record marks a reviewed repetition as the current median when it is not, or
+  omits a required summary metric
+- **THEN** `show` and `set` refuse it as an invalid record without modifying the file
 
 ### Requirement: Atomic, reviewable, all-or-nothing writes
 A command that changes the record SHALL write it atomically: a temporary file in the same
@@ -159,6 +167,7 @@ result directory, and its values SHALL be read from that rescored `result.json`.
 
 When the result's `workflow.events` contains an `imported-completed-run` event, the entry SHALL
 record that event's `source_run_id` as `rescored_from`. Otherwise `rescored_from` SHALL be `null`.
+The entry SHALL record `workflow.run_id` as `execution_run_id`, or `null` when absent.
 The commands SHALL NOT search for rescores of a given directory.
 
 #### Scenario: Rescored result links to its source
@@ -166,6 +175,10 @@ The commands SHALL NOT search for rescores of a given directory.
   `source_run_id` `abc-rep-2`
 - **THEN** the entry uses the rescored result's run id and scores, and records `rescored_from`
   `abc-rep-2`
+
+#### Scenario: Execution run id is retained
+- **WHEN** a result has `workflow.run_id` `execution-1`
+- **THEN** its stored repetition has `execution_run_id` `execution-1`
 
 ### Requirement: One runner commit per baseline
 Every repetition in `current` SHALL have the same runner commit. `set` and `add-rep` SHALL refuse
@@ -262,9 +275,10 @@ number. The median and summary requirements define how it is ranked and summariz
 - **THEN** the repetition is refused as an infrastructure failure
 
 ### Requirement: Duplicate repetitions are refused
-Each execution SHALL be counted at most once in `current.reps`. A repetition's lineage is its run
-id, plus its `rescored_from` when present. Two repetitions overlap when their lineages share any
-run id.
+Each execution SHALL be counted at most once in `current.reps`. A repetition's lineage includes
+its run id, its `rescored_from` when present, and its Agent Runner execution run id from
+`workflow.run_id`. Two repetitions overlap when their run ids or `rescored_from` values overlap,
+or when both have the same non-null execution run id. `--allow-mismatch` SHALL NOT waive overlap.
 
 `set` SHALL refuse input directories whose lineages overlap. `add-rep` SHALL refuse a repetition
 whose lineage overlaps any repetition already in `current`. The refusal SHALL name both run ids.
@@ -290,6 +304,12 @@ only the corrected (rescored) directory.
 - **WHEN** `baseline add-rep` is given an original repetition whose run id is the `rescored_from`
   of a repetition in `current`
 - **THEN** the command exits non-zero naming both run ids, and the record is unchanged
+
+#### Scenario: Two-hop rescore overlaps the original execution
+- **WHEN** original O and R2, a rescore of R1 which is itself a rescore of O, have the same
+  `workflow.run_id`
+- **THEN** `set` and `add-rep` refuse counting O with R2 as duplicate executions, including
+  with `--allow-mismatch`
 
 ### Requirement: Median repetition
 `current.median_rep` SHALL be the run id of the repetition with the median automated score
@@ -401,6 +421,15 @@ set to `null`. Other sources SHALL leave `anchor` unchanged.
 `human_review.complete` must be `true` and `official_score` must be a number. There SHALL be no
 override.
 
+For a rescore lacking a complete review and numeric official score, `set` and `add-rep` SHALL
+follow its `rescored_from` chain through sibling published result directories to the first
+ancestor with a complete human review and numeric official score. When its human rubric sha256
+matches the rescore's, the repetition SHALL carry that review and identify the ancestor run id.
+Its official score SHALL be the rescored automated points plus the ancestor's awarded human
+points. The baseline human-review snapshot and `show` SHALL identify the review source. Missing
+or unreadable ancestors, cycles, or a different human rubric SHALL leave the repetition
+unreviewed; a median without a usable review SHALL still be refused.
+
 `current.human_review` SHALL record:
 - the reviewed repetition's run id and `official_score`;
 - the human-review score total and possible points;
@@ -419,6 +448,20 @@ It SHALL also record `is_current_median`, which `set` sets to `true`.
   and the other two are unreviewed
 - **THEN** the baseline is set, and `current.human_review` holds the median's run id, official
   score and review score, with `is_current_median` `true`
+
+#### Scenario: Rescored median carries an existing review
+- **WHEN** a median rescore has no review and its source has a complete review under the same
+  human rubric
+- **THEN** `set` records the source run id, uses its awarded human points, and recomputes the
+  official score with the rescored automated points
+
+#### Scenario: Unreviewed rescore lineage is refused
+- **WHEN** neither a median rescore nor its ancestors have a compatible complete review
+- **THEN** `set` refuses it as `median-not-reviewed` and explains why carry-over did not apply
+
+#### Scenario: A second rescore carries its reviewed ancestor
+- **WHEN** R2 is a rescore of unreviewed R1, which is a rescore of reviewed O
+- **THEN** R2 carries O's review and records O as its review source
 
 ### Requirement: Add a control repetition
 `baseline add-rep <result-dir> [--allow-mismatch <reason>]` SHALL append one repetition to
@@ -519,4 +562,3 @@ without changing the record. `--help` SHALL print usage for the `baseline` comma
 #### Scenario: Unknown subcommand
 - **WHEN** `experiments.mjs baseline promote` runs
 - **THEN** it exits non-zero with a usage message, and the record is unchanged
-
