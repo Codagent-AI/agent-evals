@@ -126,9 +126,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 11.1 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
+test('rubric 11.2 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '11.1.0')
+  assert.equal(rubric.version, '11.2.0')
   assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(
@@ -589,4 +589,6 @@ test('rubric 11.0 scores each omission once and settles the round-3 splits', asy
   // the acceptance skill's ban on automated suites.
   const definition = (id) => rows.find((row) => row.criterion_definitions?.[id]).criterion_definitions[id]
   assert.match(definition('testing-evidence-final-revision-applicability'), /changed verification or test script counts as explored even though the record does not name that script/)
+  // Round 4b: two span audits failed controls-keep-keys for a slider the deck never renders.
+  assert.match(guidance('scene-modes-and-navigation'), /do not fail the criterion for a hypothetical control type/)
 })

@@ -572,7 +572,7 @@
     }
   ],
   "rubric_id": "and-scene-automated-product",
-  "version": "11.1.0",
+  "version": "11.2.0",
   "total_points": 100,
   "automated_points": 70,
   "human_points": 30,
@@ -824,7 +824,7 @@
             "For mode-browse-reading-focused, require the active step's title, multi-line caption, wide-viewport table of contents, previous/next controls, and progress indicators exactly as specified.",
             "For mode-present-title-focused, the marker is a visible indicator of the active step's position or section rendered beside the title in present mode, such as the step number, the section or era label, or a progress row; the fixture design places it in the header's logo/marker row. Fail when present mode renders the title without any such visible indicator, including when the only position indicator is hidden in present mode.",
             "Browse mode does not require rendering all steps at once or a separate full-deck reading stack; fail only when the required active-step reading chrome is absent.",
-            "For navigation-controls-keep-keys, focused controls retain their own keyboard semantics: presentation navigation must not intercept the step-navigation keys (Right, Space, PageDown, Left, PageUp) while focus is on an interactive control, so they drive that control rather than also advancing the deck. The fixture scenario names navigation keys only; the mode-toggle shortcut is not part of this criterion. Do not interpret this criterion as requiring global presentation navigation to run from a focused control."
+            "For navigation-controls-keep-keys, focused controls retain their own keyboard semantics: presentation navigation must not intercept the step-navigation keys (Right, Space, PageDown, Left, PageUp) while focus is on an interactive control, so they drive that control rather than also advancing the deck. The fixture scenario names navigation keys only; the mode-toggle shortcut is not part of this criterion. Judge the interactive controls the delivered presentation renders and any native interactive element the guard covers (buttons, links, form fields); do not fail the criterion for a hypothetical control type, such as an ARIA slider, that the delivered presentation never renders. Do not interpret this criterion as requiring global presentation navigation to run from a focused control."
           ]
         },
         {
