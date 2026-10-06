@@ -484,9 +484,11 @@ test('Codex judge invoker still force-kills a stopped call whose descendant outl
   })
 
   assert.equal(await invoke({ job: 'scene-kit', schema: {}, prompt: 'x' }), '{}')
+  // The group is force-killed as Codex exits, not by a later grace timer.
+  assert.deepEqual(spawnImpl.calls[0].child.kills, ['SIGTERM', 'SIGKILL'])
   await new Promise((resolve) => setTimeout(resolve, 60))
   assert.deepEqual(spawnImpl.calls[0].child.kills, ['SIGTERM', 'SIGKILL'])
-  // The settled attempt's evidence files are closed; the late kill is not noted.
+  // The grace period never elapsed, so no overdue kill is noted.
   assert.doesNotMatch(
     await readFile(join(runDir, '.runtime/judge/01-scene-kit.stderr.log'), 'utf8'),
     /sent SIGKILL/,

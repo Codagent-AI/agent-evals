@@ -125,6 +125,7 @@ export function runAttempt({
     let pendingLine = ''
     let timedOut = false
     let killTimer = null
+    let forceKilled = false
     let exited = null
     let settled = false
     let writeError = null
@@ -169,8 +170,11 @@ export function runAttempt({
       if (settled) return
       settled = true
       clearTimeout(timer)
-      // A descendant may outlive a stopped Codex, so its SIGKILL stays armed.
-      if (!stopping) clearTimeout(killTimer)
+      clearTimeout(killTimer)
+      // A descendant may outlive a stopped Codex. It keeps the group's id from
+      // being reused, so the group is force-killed now; a grace timer left
+      // armed could later signal a reused id and would hold the loop open.
+      if (stopping && !forceKilled) stop('SIGKILL')
       if (pendingLine.includes('"turn.completed"')) usageLine = pendingLine
       if (pendingLine.includes('"turn.failed"')) failedLine = pendingLine
       if (/"type":"item\./.test(pendingLine)) workSeen = true
@@ -196,9 +200,10 @@ export function runAttempt({
       stopping = true
       note(`${reason}; sent SIGTERM`)
       stop('SIGTERM')
+      // Settling clears this timer, so it fires only while Codex still runs.
       killTimer = setTimeout(() => {
-        // A settled attempt's evidence files are already closed.
-        if (!settled) note(`did not exit within ${killGraceMs} ms of SIGTERM; sent SIGKILL`)
+        note(`did not exit within ${killGraceMs} ms of SIGTERM; sent SIGKILL`)
+        forceKilled = true
         stop('SIGKILL')
       }, killGraceMs)
       // Codex may have exited already, leaving no `exit` event to settle on.

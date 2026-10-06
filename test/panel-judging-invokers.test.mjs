@@ -140,3 +140,60 @@ test('host judge keeps the login identity the Claude CLI needs on macOS', async 
   assert.equal(env.LOGNAME, 'judge')
   assert.equal(env.GH_TOKEN, undefined)
 })
+
+import { EventEmitter } from 'node:events'
+import { PassThrough } from 'node:stream'
+import { runAttempt } from '../evals/lib/panel-judging/codex-invoker.mjs'
+
+// A stopped judge's force-kill must not outlive it: once the CLI is gone its
+// process-group id may be reused, and an armed timer holds the event loop open.
+for (const [label, overrun] of [
+  ['a timeout', { timeoutMs: 5 }],
+  ['an output-limit', { timeoutMs: 60000, maxStdoutBytes: 4 }],
+]) test(`${label} stop leaves no SIGKILL timer armed once the judge exits`, async () => {
+  const realSetTimeout = globalThis.setTimeout
+  const realClearTimeout = globalThis.clearTimeout
+  const armed = new Set()
+  globalThis.setTimeout = (callback, ms, ...rest) => {
+    const handle = realSetTimeout(() => { armed.delete(handle); callback(...rest) }, ms)
+    armed.add(handle)
+    return handle
+  }
+  globalThis.clearTimeout = (handle) => { armed.delete(handle); realClearTimeout(handle) }
+  const child = new EventEmitter()
+  child.stdout = new PassThrough()
+  child.stderr = new PassThrough()
+  child.stdin = new PassThrough()
+  child.kills = []
+  child.kill = (signal) => {
+    child.kills.push(signal)
+    // The judge honours SIGTERM promptly.
+    if (signal === 'SIGTERM') setImmediate(() => {
+      child.stdout.end()
+      child.stderr.end()
+      child.emit('exit', null, signal)
+      child.emit('close', null, signal)
+    })
+    return true
+  }
+  const sink = { write: async () => {} }
+  let result
+  try {
+    const attempt = runAttempt({
+      spawnImpl: () => child, command: 'judge', args: [], options: {}, prompt: 'x',
+      files: { events: sink, stderr: sink, pathOf: () => 'sink' },
+      killGraceMs: 60000, maxStdoutBytes: 1024, label: 'judge', ...overrun,
+    })
+    if (overrun.maxStdoutBytes) setImmediate(() => child.stdout.write('too much output'))
+    result = await attempt
+  } finally {
+    globalThis.setTimeout = realSetTimeout
+    globalThis.clearTimeout = realClearTimeout
+  }
+  const leaked = armed.size
+  for (const handle of armed) realClearTimeout(handle)
+  assert.ok(result.timedOut || result.outputLimitExceeded)
+  assert.equal(leaked, 0)
+  // Descendants still in the stopped group are force-killed at exit instead.
+  assert.deepEqual(child.kills, ['SIGTERM', 'SIGKILL'])
+})
