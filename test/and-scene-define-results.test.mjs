@@ -54,6 +54,23 @@ test('comparison pairs only identical series and lists all changed candidate com
   assert.equal(report.pairs[1].runs, undefined)
   assert.deepEqual(report.unscored, [])
 })
+import { renderReport } from '../evals/agent-runner/and-scene-define/lib/report.mjs'
+test('report opens with a readable escaped headline before the full JSON', () => {
+  const headline = html => html.slice(html.indexOf('<section class="headline"'), html.indexOf('</section>', html.indexOf('<section class="headline"')))
+  const complete = renderReport({ ...core, run_id: 'run<1>', definition_verdict: 'pass', total: 82.5, components: { coverage: { score: 50, points: 60 }, artifact_quality: { score: 20, points: 25 }, fidelity: { score: 12.5, points: 15 } },
+    gates: [{ id: 'gate:required-artifact:design', passed: true }, { id: 'gate:openspec-validate', passed: false, reason: '<b>invalid</b>' }], leaked_count: 2,
+    discovery_ledger: { counts: { discovered: 3, inferred: 1, missed: 0, 'asked-not-captured': 2, leaked: 2 } }, excluded_graded_contradictions: [{ subject_id: 'INV-001' }] })
+  const top = headline(complete)
+  for (const text of ['Evaluation status', 'complete', 'Definition verdict', 'pass', 'Total', '82.5 / 100', 'coverage', '50 / 60', 'artifact_quality', '20 / 25', 'fidelity', '12.5 / 15',
+    'gate:required-artifact:design', 'passed', 'gate:openspec-validate', 'failed', '&lt;b&gt;invalid&lt;/b&gt;', 'Leaked items', 'discovered', 'asked-not-captured', 'Excluded graded contradictions']) assert.ok(top.includes(text), text)
+  assert.match(complete, /run&lt;1&gt;/); assert.doesNotMatch(complete, /run<1>|<b>invalid/)
+  assert.ok(complete.indexOf('<section class="headline"') < complete.indexOf('<pre>'))
+  const failed = headline(renderReport({ ...core, evaluation_status: 'evaluation-harness-failed', definition_verdict: 'unavailable', owning_phase: 'gates-and-judging', observed_error: '<script>x</script>', resumable: true, total: null, components: null, gates: [], discovery_ledger: null }))
+  for (const text of ['evaluation-harness-failed', 'unavailable', 'gates-and-judging', '&lt;script&gt;x&lt;/script&gt;', 'Resumable', 'Not scored']) assert.ok(failed.includes(text), text)
+  assert.doesNotMatch(failed, /<script>/)
+  const uncalibrated = headline(renderReport({ ...core, definition_verdict: 'unavailable', verdict_unavailable: 'pass threshold not set (calibration pending)', total: 70, components: {} }))
+  assert.ok(uncalibrated.includes('pass threshold not set (calibration pending)'))
+})
 test('comparison pairs only complete scored runs and lists the others as unscored', () => {
   const scored = { ...core, series_identity: { rubric: 1 }, candidate: { agent_skills_commit: 'a' }, total: 10 }
   const failed = { ...scored, run_id: 'failed', evaluation_status: 'evaluation-harness-failed', definition_verdict: 'unavailable', total: 99, owning_phase: 'gates-and-judging' }
