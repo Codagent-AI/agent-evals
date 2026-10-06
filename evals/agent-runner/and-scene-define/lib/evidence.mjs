@@ -24,7 +24,7 @@ async function tree(runDir, root) {
   if (!await lstat(root).catch(error => { if (error.code !== 'ENOENT') throw error; return null })) return []
   return filesUnder(root)
 }
-export async function collectEvidence({ runDir, runnerDir, runtime = join(runDir, 'sandbox/.runtime') }) {
+export async function collectEvidence({ runDir, runnerDir, identity = null, runtime = join(runDir, 'sandbox/.runtime') }) {
   await guardPath(runDir, runtime); await guardPath(runDir, runnerDir)
   const metricsPath = join(runnerDir, 'run-metrics.json'); await guardPath(runDir, metricsPath)
   const invocations = effectiveDefineInvocations(await readJson(metricsPath))
@@ -95,7 +95,7 @@ export async function collectEvidence({ runDir, runnerDir, runtime = join(runDir
     if (path === 'phases/collection.json' && !await lstat(join(runDir, path)).catch(() => null)) continue
     files.push({ path, sha256: sha256(await readFile(join(runDir, path))) })
   }
-  const manifest = { schema_version: 1, files, invocations, outputs }
+  const manifest = { schema_version: 1, identity, files, invocations, outputs }
   await guardPath(runDir, join(runDir, 'evidence-manifest.json'))
   await writeJsonAtomic(join(runDir, 'evidence-manifest.json'), manifest)
   return manifest
@@ -104,11 +104,13 @@ export async function loadEvidence(runDir) {
   await guardPath(runDir, join(runDir, 'evidence-manifest.json'))
   const manifest = await readJson(join(runDir, 'evidence-manifest.json'))
   const retained = new Map()
+  const bytesByPath = new Map()
   for (const file of manifest.files) {
     const path = contained(runDir, file.path); await guardPath(runDir, path)
     const bytes = await readFile(path)
     if (sha256(bytes) !== file.sha256) throw new Error(`evidence hash mismatch: ${file.path}`)
-    retained.set(file.path, bytes.toString('utf8'))
+    if (retained.has(file.path)) throw new Error(`duplicate manifest path: ${file.path}`)
+    retained.set(file.path, bytes.toString('utf8')); bytesByPath.set(file.path, bytes)
   }
   const text = path => { if (!retained.has(path)) throw new Error(`missing retained evidence ${path}`); return retained.get(path) }
   const transcripts = []
@@ -117,7 +119,7 @@ export async function loadEvidence(runDir) {
     const path = invocation.transcript; text(path)
     if (seen.has(path)) continue
     seen.add(path)
-    const records = invocation.cli === 'cursor' ? cursorRecords(join(runDir, path)) : jsonl(text(path))
+    const records = invocation.cli === 'cursor' ? cursorRecords(join(runDir, path), { immutable: true }) : jsonl(text(path))
     transcripts.push({ ...invocation, source: path, ...parseTranscript(records, { cli: invocation.cli, session: invocation.session_id }) })
   }
   const outputs = manifest.outputs.filter(path => path.endsWith('.out')).map(path => {
@@ -134,5 +136,5 @@ export async function loadEvidence(runDir) {
     if (!invocation) throw new Error(`per-turn output has no evaluated session: ${path}`)
     return { source: path, session_id: invocation?.session_id ?? null, cli: invocation?.cli, records }
   })
-  return { manifest, transcripts, outputs, conversation: jsonl(text('conversation.jsonl')), exchanges: jsonl(text('evidence/runner/external-user/exchanges.jsonl')), audit: text('evidence/runner/audit.log') }
+  return { manifest, bytesByPath, transcripts, outputs, conversation: jsonl(text('conversation.jsonl')), exchanges: jsonl(text('evidence/runner/external-user/exchanges.jsonl')), audit: text('evidence/runner/audit.log') }
 }

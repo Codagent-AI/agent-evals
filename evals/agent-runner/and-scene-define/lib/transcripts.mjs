@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url'
 // Native CLI evidence is normalized only on the host; raw records remain retained.
 import { execFileSync } from 'node:child_process'
 export const jsonl = text => text.split('\n').filter(line => line.trim()).map((line, index) => {
@@ -5,9 +6,11 @@ export const jsonl = text => text.split('\n').filter(line => line.trim()).map((l
 })
 const stringify = value => typeof value === 'string' ? value : JSON.stringify(value ?? '')
 const contentText = content => typeof content === 'string' ? content : (content ?? []).filter(c => ['text', 'input_text'].includes(c.type)).map(c => c.text).join('\n')
-export function cursorRecords(path) {
-  // SQLite's backup API includes committed WAL pages, without mutating the source.
-  const output = execFileSync('sqlite3', ['-json', path, 'SELECT rowid, CAST(data AS TEXT) AS data FROM blobs ORDER BY rowid'], { encoding: 'utf8', maxBuffer: 128 * 1024 * 1024 })
+export function cursorRecords(path, { immutable = false } = {}) {
+  // Retained snapshots must ignore unmanifested WAL/journal sidecars. Collection
+  // separately uses VACUUM INTO to preserve committed runtime WAL content.
+  const source = immutable ? `${pathToFileURL(path).href}?immutable=1` : path
+  const output = execFileSync('sqlite3', ['-readonly', '-json', source, 'SELECT rowid, CAST(data AS TEXT) AS data FROM blobs ORDER BY rowid'], { encoding: 'utf8', maxBuffer: 128 * 1024 * 1024 })
   return JSON.parse(output || '[]').map(row => { try { return JSON.parse(row.data) } catch { throw new Error(`invalid Cursor blob ${row.rowid}`) } })
 }
 export function parseTranscript(records, { cli, session, requireComplete = true } = {}) {

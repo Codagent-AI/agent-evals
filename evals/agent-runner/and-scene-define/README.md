@@ -5,13 +5,11 @@ fixture is `https://github.com/Codagent-AI/and-scene.git` at
 `ad667a965a0e1ea0b028c36c04d57bf0411d30d9`, change `create-and-scene`.
 The host controller runs `openspec:change --until define` through Agent Runner's
 sandbox and answers interactive turns using the host-side simulated user.
-Collection now retains native transcripts, reconciles conversation replies, and
-audits contamination before scoring. The disclosure audit, hard gates, coverage,
-artifact quality, fidelity, and discovery ledger now run as checkpointed host
-phases. Result assembly, reporting, and publication remain later work; clean
-candidates currently stop at the unimplemented result-and-report phase. Contaminated candidates stop immediately with no score. The result is
-`evaluation-harness-failed` with `definition_verdict=unavailable`, naming the first
-unimplemented phase and the missing registrations; it never claims completion.
+The host retains native transcripts and conversation evidence, audits contamination
+and disclosure, applies gates and panel judging, and writes a discovery ledger.
+Every outcome produces `result.json` and an offline, self-contained `report.html`.
+Completed candidate verdicts are published as a separate definition results series.
+Contamination stops scoring and publication. All commands run from the repository root.
 
 Run from the repository root:
 
@@ -222,8 +220,10 @@ node --test test/and-scene-define-sandbox-plan.test.mjs
 ```
 
 Without `AGENT_RUNNER_DIR`, that integration test skips with an explicit reason.
-`--rescore-from` and `--calibrate` are documented reserved modes and fail explicitly
-until their later tasks are implemented.
+`--calibrate` remains a reserved maintainer diagnostic and fails explicitly until
+its calibration task is implemented. It is never a candidate prerequisite or gate:
+calibrated evaluator inputs are pinned ahead of candidate admission. Its eventual
+invocation is `evals/agent-runner/and-scene-define/run.sh --calibrate`.
 
 ## Definition judging and calibration prerequisites
 
@@ -260,9 +260,125 @@ credential copies from the run runtime directory. Calls write eval-owned usage t
 ids. Leaks are excluded from both earned and possible coverage. If every item
 is leaked, coverage is zero. `judges/score.json` holds diagnostic component
 scores, gates, citations and panel records; a failed artifact or OpenSpec gate
-produces `complete`/`fail` there even while later result assembly is pending.
+produces `complete`/`fail` in both the final result and report.
 `discovery/asked.json` and `discovery/ledger.json` record asked decisions and the
 five non-scoring outcomes. Each judge job is an independent durable checkpoint,
 so a resumed judging failure reuses jobs whose provenance and hashes still
 match. No hidden input, rubric, or judge packet is staged into the evaluated
 sandbox.
+
+
+## Results, resume, and rescore
+
+The paid run needs a clean Agent Runner **external-user-mode** checkout supporting
+`--external-user`, `--until define`, and sandbox `--auth-only`, `--hide-source`,
+`--no-default-secrets`, `--input-dir`, and `--artifact-dir`. Use clean Agent Skills,
+Docker, Go, Git, Node 22, OpenSpec on the host, and valid Claude and Codex host auth
+for the simulated user and panel. Cursor crosschecks also need host SQLite.
+Publication needs Git author configuration and a configured upstream with push
+permission; GitHub credentials remain on the host.
+
+```sh
+# Paid candidate (the dry-run example above shows checkout overrides).
+evals/agent-runner/and-scene-define/run.sh --run-agent \
+  --run-dir /absolute/candidate-run \
+  --lead-cli codex --lead-model gpt-6 --lead-effort high \
+  --crosscheck-cli claude --crosscheck-model claude-opus-5-5 --crosscheck-effort high
+
+# Interrupted workflow or evaluator phase: retain the same profiles and time limit.
+evals/agent-runner/and-scene-define/run.sh --resume \
+  --run-dir /absolute/candidate-run \
+  --lead-cli codex --lead-model gpt-6 --lead-effort high \
+  --crosscheck-cli claude --crosscheck-model claude-opus-5-5 --crosscheck-effort high
+
+# Publication failure: retries delivery alone; no Runner checkout or profiles needed.
+evals/agent-runner/and-scene-define/run.sh --resume --run-dir /absolute/candidate-run
+
+# Current evaluator inputs; new output directory; no Docker or evaluated agents.
+evals/agent-runner/and-scene-define/run.sh \
+  --rescore-from /absolute/candidate-run --run-dir /absolute/rescore-run
+
+# JSON comparison: all pairs, only identical series get paired scores/leak counts.
+node evals/agent-runner/and-scene-define/compare.mjs \
+  /absolute/candidate-run /absolute/another-run /absolute/rescore-run
+```
+
+The run directory retains:
+
+```text
+run-state.json              phase/job checkpoints, series identity and candidate
+result.json, report.html    all outcomes, citations, panels and provenance
+publication.json            delivery stage, result commit and retryable error
+conversation.jsonl          simulated-user write-ahead conversation
+evidence-manifest.json      retained file hashes and original identity
+collected/                  frozen definition artifacts
+evidence/                   Runner state/metrics/audit/exchanges, transcripts, turns
+audits/                     disclosure flags, leaked items and panel decisions
+judges/                     gates, scores and criterion panel records
+discovery/ledger.json        non-scoring item outcomes and counts
+phases/                     collection, reconciliation, contamination, workflow metrics
+phases/eval-owned-usage.jsonl simulated-user, panel, decider and audit usage
+logs/                       operational diagnostics
+sandbox-input/, sandbox/    isolated inputs, workspace, private session recovery state
+.runtime/                   private host evaluator scratch
+```
+
+`complete` with `definition_verdict=pass` or `fail` is a finished evaluation; failed
+gates still retain diagnostic scores. `contaminated` has an unavailable verdict,
+every match, and no publication. `definition-workflow-failed` identifies the failed
+define step; `evaluation-harness-failed` identifies the evaluator phase. Both
+failure statuses record the observed error and whether resume is possible. Read
+`result.json` first, then the owning phase's checkpoint and evidence. A failed
+publication leaves the complete evaluation untouched, exits nonzero, and records
+the delivery error in `publication.json` and the publication unit in `run-state.json`.
+
+Reports include all criteria/citations, each family's votes, settlement bases,
+checks and decider rulings; gates, leaked count/items, added scope, disclosure flags,
+contamination matches and residual risk; discovery counts and each item's outcome;
+configured/effective profiles, identities and hashes. Workflow metrics preserve
+completeness per define step and role. Eval-owned usage is separate from workflow
+cost; missing metrics are unavailable, never estimated as complete totals.
+
+Rescore verifies every retained hash before running any evaluator. It reads original
+files only through the manifest, copies validated bytes into a fresh directory, and
+reruns reconciliation, contamination, disclosure, gates, judging and discovery using
+current host evaluator inputs. Original judgments, workspace, runtime and logs are
+unused. It requires host OpenSpec and evaluator CLI auth, and can make paid judge
+calls. Its result records the current series identity and the original identity and
+candidate under `original`. The manifest must contain the original identity;
+older incomplete manifests are refused. Identical patterns reproduce deterministic
+contamination matches. To reproduce old scoring inputs, use the suite commit that
+pinned their versions. Rescores are never published and cannot reuse an output
+directory; rerun a failed rescore into a new directory.
+
+Changing the starting prompt, starting tree, reference, inventory, rubric,
+contamination patterns, simulated-user policy/profile, or judge profile starts a
+new series. Comparison labels those pairs **not comparable** and omits paired
+scores. Within a series it lists every changed candidate component: evaluated
+profiles, Runner commit, workflow hashes, and Skills commit. Leaked count appears
+alongside total/component scores; discovery remains non-scoring.
+
+## Publication
+
+Only complete candidate `pass`/`fail` results enter
+`evals/agent-runner/and-scene-define/results/<run-id>/`. The snapshot contains
+`result.json`, `report.html`, `collected/`, `conversation.jsonl`,
+`discovery/ledger.json`, and `artifact-manifest.json` with SHA-256 hashes.
+Runtime/session state, credentials, raw judge output and full logs are excluded.
+Contaminated, workflow/harness-failed, rescore and calibration runs create no
+result commit. Generated results are historical records excluded from Validator
+reviews; correct an erroneous publication with a later revert.
+
+Publication commits only named files in that directory with
+`chore: record and-scene-define eval <run-id>`, then runs ordinary `git push` to the
+current branch's configured upstream. It preserves unrelated staged changes.
+Commit/push failures retain the completed result and a retryable checkpoint.
+Resume reuses an existing commit and retries its push, with no force-push or
+second candidate execution. Keep the run directory and publication checkpoint
+until delivery completes.
+
+The residual contamination risk is present even on clean results: the sandbox has
+network access to a public reference, and evaluated agents can write exchange/audit
+evidence. Reconciliation and deterministic audit detect known patterns; they do
+not prevent all contamination. The Runner image is not scanned. Future hardening
+options remain an outbound allowlist, private fixture and separate Runner OS user.

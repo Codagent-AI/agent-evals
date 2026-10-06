@@ -86,3 +86,24 @@ Run `scripts/check-inventory.mjs` from that suite via Node to verify the referen
 inventory, and versions. Keep `hidden/`, citation supplements, `calibration/`,
 and contamination patterns on the host. Materialize only the allowlisted
 starting tree; the starting repository has no remote and needs no GitHub credential.
+
+
+## Running the Agent Runner `and-scene-define` suite
+
+Run from the repository root; consult
+[`evals/agent-runner/and-scene-define/README.md`](evals/agent-runner/and-scene-define/README.md)
+and `run.sh --help` before constructing an invocation.
+
+- Start with `--dry-run`; paid candidates use `--run-agent` with lead and
+  crosscheck profiles and the Runner `external-user-mode` checkout supporting
+  `--auth-only` and `--hide-source`. Evaluator inputs remain on the host.
+- Resume in the exact run directory with unchanged profiles and pinned inputs.
+  Publication failures resume delivery alone, using the existing result commit.
+- `--rescore-from <run-dir> --run-dir <new-dir>` verifies retained manifest hashes
+  and runs current host evaluators without Docker or Runner. Rescores never publish.
+- Compare with `node evals/agent-runner/and-scene-define/compare.mjs <run-dir>...`.
+  Only identical series are paired; changing evaluator/fixture inputs starts a new series.
+- Read `result.json` first; publication errors live in `publication.json` and
+  `run-state.json`. Workflow metrics and eval-owned usage remain separate.
+- `results/**` are historical output excluded from Validator reviews. Never edit
+  them to change a past result; use a later revert for erroneous publication.

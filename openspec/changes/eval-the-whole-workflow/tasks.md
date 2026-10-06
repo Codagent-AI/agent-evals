@@ -8,5 +8,5 @@
 - [ ] [Extract `and-scene`'s judging into a shared panel-judging module with no behavior change](tasks/06-extract-shared-panel-judging.md)
 - [ ] [Add the Claude invoker and cross-family settlement to the shared module, then switch `and-scene` to the panel](tasks/07-cross-family-panel-and-and-scene-switch.md)
 - [ ] [Score definitions on the shared cross-family panel, with anchors, gates, disclosure audit, and discovery ledger](tasks/08-define-judging-scoring-and-discovery.md)
-- [ ] [Assemble results and reports, rescore from retained evidence, compare runs, and publish completed results](tasks/09-results-rescore-and-publication.md)
+- [x] [Assemble results and reports, rescore from retained evidence, compare runs, and publish completed results](tasks/09-results-rescore-and-publication.md)
 - [ ] [Calibrate the judges and pass threshold, then prove the suite end to end with Claude and Codex leads](tasks/10-calibration-and-end-to-end-runs.md)

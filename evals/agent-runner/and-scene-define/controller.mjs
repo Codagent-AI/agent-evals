@@ -16,9 +16,12 @@ import { ingestDefineMetrics, effectiveDefineInvocations } from './lib/runner-me
 import { collectArtifacts } from './lib/collection.mjs'
 import { collectEvidence, loadEvidence } from './lib/evidence.mjs'
 import { reconcileConversation } from './lib/reconciliation.mjs'
-import { auditContamination, RESIDUAL_RISK } from './lib/contamination.mjs'
+import { auditContamination } from './lib/contamination.mjs'
 import { createJudgingPhases } from './lib/judging.mjs'
 import { AUTOMATED_PHASES, runPhases } from './lib/phases.mjs'
+import { assembleResult, writeResultArtifacts } from './lib/result.mjs'
+import { publishRun } from './lib/publication.mjs'
+import { rescoreEvaluation } from './lib/rescore.mjs'
 import { failureOutcome } from './lib/outcomes.mjs'
 export const DEFAULT_TIME_LIMIT_MS = 3 * 60 * 60 * 1000
 export function identityMismatches(recorded, current, path = '') {
@@ -57,6 +60,7 @@ async function acquireLock(runDir) {
   return () => unlink(path)
 }
 export async function runEvaluation(options, dependencies = {}) {
+  if (options.rescoreFrom) return rescoreEvaluation(options, dependencies)
   const runDir = resolve(options.runDir)
   const timeLimitMs = options.timeLimitMs ?? DEFAULT_TIME_LIMIT_MS
   const statePath = join(runDir, 'run-state.json')
@@ -65,7 +69,7 @@ export async function runEvaluation(options, dependencies = {}) {
   const inspect = dependencies.inspect ?? inspectInputs
   const safetyCheck = dependencies.checkSandboxInputs ?? checkSandboxInputs
   const respond = dependencies.respond ?? runResponder
-  let checkpoint; let phase = 'preflight'; let result; let release; let writable = false; let runnerState = null
+  let checkpoint; let phase = 'preflight'; let result; let release; let writable = false; let runnerState = null; let publicationFailed = false; let artifactsWritten = false
   const persist = () => saveCheckpoint(statePath, checkpoint)
   const provenance = () => ({ ...checkpoint.identity, materialization: checkpoint.materialization ?? null, schema_version: checkpoint.schema_version })
   async function readState() {
@@ -211,7 +215,7 @@ export async function runEvaluation(options, dependencies = {}) {
       await privatePath(join(sandbox.artifactDir, 'workspace/repo/openspec/changes/add-presentation-skill'), runDir)
       const manifest = await collectArtifacts({ repoDir: join(sandbox.artifactDir, 'workspace/repo'), runDir })
       runnerState ??= await readState()
-      const evidence = await collectEvidence({ runDir, runnerDir: runnerState.session_dir })
+      const evidence = await collectEvidence({ runDir, runnerDir: runnerState.session_dir, identity: { run_id: checkpoint.run_id, series_identity: checkpoint.series_identity, candidate: checkpoint.candidate } })
       checkpoint.collection = manifest
       await persist()
       return [join(runDir, 'phases/collection.json'), join(runDir, 'evidence-manifest.json'), ...evidence.files.map(file => join(runDir, file.path))]
@@ -231,8 +235,17 @@ export async function runEvaluation(options, dependencies = {}) {
       checkpoint.contamination_audit = audit
       return [target]
     },
-    ...createJudgingPhases({ runDir, suiteRoot: options.suiteRoot, getCheckpoint: () => checkpoint, setCheckpoint: value => { checkpoint = value }, persist, judges: dependencies.judges, gateCommand: dependencies.gateCommand }),
-    // Result assembly and publication register in their later task.
+    ...createJudgingPhases({ runDir, suiteRoot: options.suiteRoot, getCheckpoint: () => checkpoint, setCheckpoint: value => { checkpoint = value }, persist, judges: dependencies.judges, gateCommand: dependencies.gateCommand, loadInputs: dependencies.loadInputs }),
+    'result-and-report': async () => {
+      result = await assembleResult({ runDir, checkpoint, outcome: { evaluation_status: 'complete', definition_verdict: checkpoint.definition_verdict ?? 'unavailable', resumable: false } })
+      const outputs = await writeResultArtifacts({ runDir, result }); artifactsWritten = true
+      return outputs
+    },
+    publication: async () => {
+      result ??= await readJson(join(runDir, 'result.json'))
+      await (dependencies.publish ?? publishRun)({ runDir, repoDir: options.repoDir ?? resolve(SUITE_ROOT, '../../..'), result })
+      return await hashFile(join(runDir, 'publication.json')) ? [join(runDir, 'publication.json')] : []
+    },
     metrics: async () => {
       const workflow = await readJson(join(runDir, 'phases/workflow.json'))
       const path = workflow.evidence.find(path => path.endsWith('/run-metrics.json'))
@@ -251,6 +264,18 @@ export async function runEvaluation(options, dependencies = {}) {
     await mkdir(runDir, { recursive: true }); release = await acquireLock(runDir); writable = true
     for (const path of ['phases', 'logs', 'sandbox-input', 'sandbox/exchange', 'sandbox/workspace/repo', 'sandbox/.runtime', 'evidence', 'collected', 'judges', 'audits', 'discovery', '.runtime', '.runtime/definition-job-inputs', '.runtime/judge', '.runtime/judge-claude']) await privatePath(join(runDir, path), runDir)
     await mkdir(join(runDir, 'phases'), { recursive: true }); await mkdir(join(runDir, 'logs'), { recursive: true })
+    // Delivery is independent of candidate preflight. A complete result survives
+    // publication failure unchanged; resume retries only the curated delivery.
+    const savedResult = options.resume ? await readJson(join(runDir, 'result.json'), null) : null
+    if (savedResult?.evaluation_status === 'complete' && ['pass', 'fail'].includes(savedResult.definition_verdict)) {
+      checkpoint = await loadCheckpoint(statePath)
+      if (!checkpoint || savedResult.run_id !== checkpoint.run_id) throw new Error('publication resume run identity mismatch')
+      phase = 'publication'; result = savedResult; artifactsWritten = true
+      await handlers.publication()
+      checkpoint = await completeUnit(checkpoint, { phase, unit: 'phase', inputs: provenance(), dependencies: {}, outputs: await hashFile(join(runDir, 'publication.json')) ? [join(runDir, 'publication.json')] : [] })
+      await persist()
+      return { result, exitCode: 0 }
+    }
     if (options.dryRun) {
       const outputs = await handlers.preflight()
       checkpoint = await completeUnit(checkpoint, { phase: 'preflight', unit: 'phase', inputs: provenance(), dependencies: {}, outputs })
@@ -284,23 +309,25 @@ export async function runEvaluation(options, dependencies = {}) {
         await persist()
         if (name === 'contamination-audit' && checkpoint.contamination_audit?.status === 'contaminated') return { stop: true, outcome: checkpoint.contamination_audit }
       } })
-      result = lifecycle.outcome ? { ...lifecycle.outcome, owning_phase: 'contamination-audit', resumable: false } : lifecycle.blocked ? { ...failureOutcome({ phase: lifecycle.blocked, reason: `phases not yet implemented: ${lifecycle.missing.join(', ')}`, resumable: true }), unimplemented_phases: lifecycle.missing }
-        : { evaluation_status: 'complete', definition_verdict: checkpoint.definition_verdict ?? 'unavailable', resumable: false }
+      result = result ?? (lifecycle.outcome ? { ...lifecycle.outcome, owning_phase: 'contamination-audit', resumable: false } : lifecycle.blocked ? { ...failureOutcome({ phase: lifecycle.blocked, reason: `phases not yet implemented: ${lifecycle.missing.join(', ')}`, resumable: true }), unimplemented_phases: lifecycle.missing }
+        : { evaluation_status: 'complete', definition_verdict: checkpoint.definition_verdict ?? 'unavailable', resumable: false })
     }
   } catch (error) {
-    result = failureOutcome({ phase, reason: error.message, workflow: error.workflow ?? false, resumable: error.resumable ?? false, step: error.step ?? null, timeLimitMs: timeLimitMs })
+    if (phase === 'publication' && result?.evaluation_status === 'complete') publicationFailed = true
+    else result = failureOutcome({ phase, reason: error.message, workflow: error.workflow ?? false, resumable: error.resumable ?? false, step: error.step ?? null, timeLimitMs: timeLimitMs })
     if (checkpoint && writable) {
       checkpoint = failUnit(checkpoint, { phase, unit: 'phase', error: error.message })
       await persist()
     }
   } finally {
-    if (writable && result) {
-      result = { ...result, residual_risk: RESIDUAL_RISK, contamination_audit: checkpoint?.contamination_audit ?? null, run_id: checkpoint?.run_id ?? null, series_identity: checkpoint?.series_identity ?? null, candidate: checkpoint?.candidate ?? null, configured_profiles: checkpoint?.candidate?.profiles ?? options.profiles, effective_invocations: checkpoint?.effective_invocations ?? [], runner_run_id: checkpoint?.runner_run_id ?? null }
-      await writeJsonAtomic(join(runDir, 'result.json'), result)
-    }
-    if (release) await release()
+    try {
+      if (writable && result && !artifactsWritten) {
+        result = await assembleResult({ runDir, outcome: result, checkpoint })
+        await writeResultArtifacts({ runDir, result })
+      }
+    } finally { if (release) await release() }
   }
-  return { result, exitCode: options.dryRun && result.dry_run ? 0 : result.evaluation_status === 'complete' ? 0 : 1, plan: checkpoint?.plan }
+  return { result, exitCode: options.dryRun && result.dry_run ? 0 : result.evaluation_status === 'complete' && !publicationFailed ? 0 : 1, plan: checkpoint?.plan }
 }
 export function parseTimeLimit(value) {
   const match = value.match(/^(\d+(?:\.\d+)?)(ms|s|m|h)?$/)
@@ -314,7 +341,7 @@ Modes:
   --dry-run                 Print the full sandbox plan; no containers or model calls.
   --run-agent               Run the paid candidate workflow through define.
   --resume                  Reuse --run-dir and resume its inactive unfinished Runner run.
-  --rescore-from RUN_DIR     Evaluator-only rescore (implemented by a later task).
+  --rescore-from RUN_DIR     Host-only audits, gates, judging and discovery from retained evidence.
   --calibrate               Maintainer rubric diagnostic (implemented by a later task).
 Options:
   --run-dir PATH            Artifact directory; required for --resume, otherwise generated.
@@ -328,7 +355,11 @@ Options:
   --crosscheck-effort EFFORT Crosscheck effort (required).
   --time-limit DURATION     One elapsed-time limit, default 3h; unchanged on resume.
 Pinned simulated-user and judge profiles cannot be overridden.
-Disclosure and scoring phases are not implemented: clean candidates stop after contamination audit.
+Compare recorded runs (scores are paired only within one series):
+  node evals/agent-runner/and-scene-define/compare.mjs RUN_DIR RUN_DIR [...]
+Rescores use current pinned evaluator inputs and a new --run-dir; never published.
+Publication failure: --resume --run-dir retries only publication, without profiles.
+Policy diagnostic: node evals/agent-runner/and-scene-define/policy-test.mjs --output PATH
 `
 export function parseArguments(args, env = process.env) {
   if (args.includes('--help') || args.includes('-h')) return { help: true }
@@ -339,7 +370,12 @@ export function parseArguments(args, env = process.env) {
     if (['--dry-run', '--run-agent', '--resume', '--calibrate', '--rescore-from'].includes(arg)) {
       if (mode) throw new Error('select exactly one mode')
       mode = arg
-      if (['--calibrate', '--rescore-from'].includes(arg)) throw new Error(`${arg} is not yet implemented`)
+      if (arg === '--calibrate') throw new Error(`${arg} is not yet implemented`)
+      if (arg === '--rescore-from') {
+        const source = args[++index]
+        if (!source || source.startsWith('--')) throw new Error('--rescore-from requires a run directory')
+        options.rescoreFrom = resolve(source)
+      }
       continue
     }
     const value = args[++index]
@@ -352,7 +388,7 @@ export function parseArguments(args, env = process.env) {
     else if (arg === '--time-limit') options.timeLimitMs = parseTimeLimit(value)
     else throw new Error(`unknown option ${arg}`)
   }
-  if (!mode) throw new Error('select --dry-run, --run-agent, or --resume')
+  if (!mode) throw new Error('select --dry-run, --run-agent, --resume, or --rescore-from')
   if (mode === '--resume' && !options.runDir) throw new Error('--resume requires --run-dir')
   options.runDir ??= resolve('artifacts/and-scene-define', `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`)
   return { ...options, dryRun: mode === '--dry-run', resume: mode === '--resume' }

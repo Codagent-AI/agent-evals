@@ -213,3 +213,75 @@ test('changed retained evidence invalidates reconciliation and audit checkpoints
   assert.equal(resumed.result.evaluation_status, 'contaminated')
   assert.ok(resumed.result.matches.some(match => match.tool_call === 'changed'))
 })
+
+import { rescoreEvaluation } from '../evals/agent-runner/and-scene-define/lib/rescore.mjs'
+import { loadJudgingInputs } from '../evals/agent-runner/and-scene-define/lib/judging.mjs'
+import { buildRubric } from '../evals/agent-runner/and-scene-define/lib/rubric.mjs'
+import { parseArguments } from '../evals/agent-runner/and-scene-define/controller.mjs'
+function missingJudges(calls) {
+  const invoke = async req => {
+    calls.push(req.job)
+    return JSON.stringify({ results: req.criteria.map(id => req.job === 'discovery' ? { id, asked: false, rationale: 'No question recorded', citations: [] } : { id, verdict: 'missing', rationale: 'Missing from inspected proposal', evidence: ['inspected proposal'], citations: req.job === 'disclosure-audit' || req.job === 'fidelity' ? [] : [{ path: 'proposal.md', start_line: null, end_line: null, gate: null, exchange: null }], subject_id: null, added_scope: [] }) })
+  }
+  return { panel: [0, 1, 2].map(n => ({ family: n ? 'codex' : 'claude', model: 'stub', effort: 'high', invoke })), decider: { family: 'claude', model: 'stub', effort: 'high', invoke } }
+}
+const minimalInputs = async args => {
+  const data = await loadJudgingInputs(args)
+  data.inventory = { ...data.inventory, items: data.inventory.items.filter(x => x.class !== 'preference').slice(0, 2) }
+  data.rubric = { ...buildRubric(data.inventory), rubric_version: 999, pass_threshold: 70 }
+  return data
+}
+test('INT-008 host rescore uses only manifest evidence, current evaluator inputs and original provenance', async t => {
+  const f = await fixture(t, 'capped'); await runEvaluation(f.options, f.deps)
+  const original = JSON.parse(await readFile(join(f.options.runDir, 'result.json'), 'utf8'))
+  // Destroy every unmanifested source including result, checkpoint, and sandbox.
+  await rm(join(f.options.runDir, 'sandbox'), { recursive: true })
+  await rm(join(f.options.runDir, 'run-state.json')); await rm(join(f.options.runDir, 'result.json'))
+  const calls = []; const deps = { inspectEvaluator: async () => ({ seriesIdentity: { rubric: 999 } }), judges: missingJudges(calls), loadInputs: minimalInputs, gateCommand: async () => ({ status: 1, stderr: 'invalid definition' }) }
+  const options = parseArguments(['--rescore-from', f.options.runDir, '--run-dir', join(f.options.runDir, '../rescore')])
+  const originalPath = process.env.PATH
+  process.env.PATH = '' // No Docker, Runner, or other executable is available.
+  t.after(() => { process.env.PATH = originalPath })
+  const { result, exitCode } = await runEvaluation(options, { ...deps, sandbox: { start: () => { throw new Error('rescore must not dispatch') } }, inspect: () => { throw new Error('must not probe Runner') } })
+  assert.equal(exitCode, 0); assert.equal(result.evaluation_status, 'complete'); assert.equal(result.definition_verdict, 'fail')
+  assert.equal(result.rubric_version, 999); assert.deepEqual(result.series_identity, { rubric: 999 })
+  assert.deepEqual(result.original.series_identity, original.series_identity); assert.deepEqual(result.original.candidate, original.candidate)
+  assert.deepEqual(result.contamination_audit, original.contamination_audit)
+  assert.equal(result.mode, 'rescore'); assert.equal(result.workflow_metrics.history_complete, false)
+  assert.ok(calls.includes('discovery')); assert.ok(calls.includes('disclosure-audit')); assert.ok(calls.includes('artifact-quality'))
+  await assert.rejects(readFile(join(options.runDir, 'publication.json')), { code: 'ENOENT' })
+  await writeFile(join(f.options.runDir, 'collected/proposal.md'), 'tampered')
+  await assert.rejects(rescoreEvaluation({ ...options, runDir: join(f.options.runDir, '../tampered-rescore') }, deps), /evidence hash mismatch/)
+})
+test('INT-008 publication-only resume preserves completed result and never preflights or dispatches', async t => {
+  const f = await fixture(t, 'capped'); const calls = []; let failPush = true; let publications = 0
+  delete f.deps.handlers
+  Object.assign(f.deps, { judges: missingJudges(calls), loadInputs: minimalInputs, gateCommand: async () => ({ status: 1 }), publish: async () => { publications++; if (failPush) throw Object.assign(new Error('rejected push'), { publication: true, resumable: true }) } })
+  const completed = await runEvaluation(f.options, f.deps)
+  assert.equal(completed.result.evaluation_status, 'complete'); assert.equal(completed.result.definition_verdict, 'fail'); assert.equal(completed.exitCode, 1)
+  const saved = await readFile(join(f.options.runDir, 'result.json'), 'utf8'); const count = calls.length
+  const state = JSON.parse(await readFile(join(f.options.runDir, 'run-state.json'), 'utf8'))
+  assert.equal(state.phases.publication.units.phase.state, 'failed')
+  failPush = false
+  f.deps.inspect = () => { throw new Error('must not preflight') }; f.deps.sandbox.isActive = () => { throw new Error('must not inspect sandbox') }
+  const resumed = await runEvaluation({ runDir: f.options.runDir, resume: true }, f.deps)
+  assert.equal(JSON.parse(await readFile(join(f.options.runDir, 'run-state.json'), 'utf8')).phases.publication.units.phase.state, 'complete')
+  assert.equal(resumed.exitCode, 0); assert.equal(publications, 2); assert.equal(calls.length, count); assert.equal(f.modes.length, 1)
+  assert.equal(await readFile(join(f.options.runDir, 'result.json'), 'utf8'), saved)
+})
+test('INT-008 contaminated rescore reproduces every match and makes no judge or publication call', async t => {
+  const f = await fixture(t, 'capped')
+  const start = f.deps.sandbox.start.bind(f.deps.sandbox)
+  f.deps.sandbox.start = async (...args) => {
+    await start(...args)
+    await writeFile(join(f.options.runDir, 'sandbox/.runtime/codex/sessions/rollout-fixture-lead.jsonl'), [
+      { type: 'response_item', payload: { type: 'web_search_call', id: 'fixture-fetch', action: { query: 'normal' }, results: 'https://github.com/Codagent-AI/and-scene' } },
+      { type: 'event_msg', payload: { type: 'task_complete' } },
+    ].map(JSON.stringify).join('\n') + '\n')
+  }
+  const original = await runEvaluation(f.options, f.deps)
+  const rescored = await runEvaluation({ rescoreFrom: f.options.runDir, runDir: join(f.options.runDir, '../contaminated-rescore') }, { inspectEvaluator: async () => ({ seriesIdentity: f.identity.seriesIdentity }), judges: { panel: [], decider: { invoke: () => { throw new Error('must not judge') } } }, publish: () => { throw new Error('must not publish') } })
+  assert.equal(rescored.exitCode, 1); assert.equal(rescored.result.evaluation_status, 'contaminated')
+  assert.deepEqual(rescored.result.contamination_audit, original.result.contamination_audit)
+  assert.ok(rescored.result.residual_risk)
+})

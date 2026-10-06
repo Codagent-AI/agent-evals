@@ -95,6 +95,13 @@ export async function inspectInputs({ profiles, runnerDir, skillsDir, suiteRoot 
     await regularAuth(join(home, '.codex/auth.json'))
     for (const cli of ['claude', 'codex']) requireCommand(command(cli, ['--version'], { env }), `host ${cli} availability`)
   }
+  const { seriesIdentity } = await inspectEvaluatorInputs({ suiteRoot, dryRun, rubricChecks })
+  const candidate = { profiles, agent_runner_commit: runnerCommit, workflow_hashes: { 'openspec:change': sha256(change), 'core:define-change': sha256(define) }, agent_skills_commit: skillsCommit }
+  return { seriesIdentity, candidate, credentials, requiredSkills: skills }
+}
+
+// Host-only evaluator identity: no Runner, sandbox, credentials, or CLI probes.
+export async function inspectEvaluatorInputs({ suiteRoot = SUITE_ROOT, dryRun = false, rubricChecks = checkJudgingInputs } = {}) {
   const inventory = await assertPinnedInventory({ suiteRoot })
   const tree = await verifySnapshot({ suiteRoot })
   await rubricChecks({ suiteRoot, inventory, dryRun })
@@ -102,6 +109,5 @@ export async function inspectInputs({ profiles, runnerDir, skillsDir, suiteRoot 
   const reference = await readJson(join(suiteRoot, 'hidden/reference.json'))
   const seriesIdentity = { starting_prompt: versions.inputs['starting-prompt'], starting_tree_hash: tree, reference: { version: reference.commit, commit: reference.commit, files: reference.files, citation_files: reference.citation_files ?? [] }, inventory: versions.inputs.inventory,
     rubric: versions.inputs.rubric ?? null, evaluator_input_versions: versions.inputs, contamination_patterns: versions.inputs['contamination-patterns'], simulated_user_profile: { version: 1, ...SIMULATED_USER_PROFILE }, simulated_user_policy: versions.inputs['simulated-user-policy'], judge_profile: JUDGE_PROFILE, panel_protocol: PANEL_PROTOCOL }
-  const candidate = { profiles, agent_runner_commit: runnerCommit, workflow_hashes: { 'openspec:change': sha256(change), 'core:define-change': sha256(define) }, agent_skills_commit: skillsCommit }
-  return { seriesIdentity, candidate, credentials, requiredSkills: skills }
+  return { seriesIdentity }
 }

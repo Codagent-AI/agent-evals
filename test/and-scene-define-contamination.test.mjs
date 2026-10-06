@@ -216,3 +216,20 @@ test('literal and multiline regex audit excerpts locate the matching text with c
   assert.equal(audit.matches.length, 2)
   for (const match of audit.matches) assert.match(match.excerpt, /hidden\/reference\/file/)
 })
+
+import { cursorRecords } from '../evals/agent-runner/and-scene-define/lib/transcripts.mjs'
+test('manifest-backed Cursor reader ignores unlisted WAL evidence and never writes SQLite sidecars', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'define-immutable-')); t.after(() => rm(root, { recursive: true, force: true }))
+  const db = join(root, 'snapshot #?%.db')
+  execFileSync('python3', ['-c', `import sqlite3, os, sys
+c=sqlite3.connect(sys.argv[1])
+c.execute('PRAGMA journal_mode=WAL')
+c.execute('CREATE TABLE blobs(data BLOB)')
+c.execute('INSERT INTO blobs VALUES (?)', ('{"source":"manifest"}',))
+c.commit()
+c.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+c.execute('INSERT INTO blobs VALUES (?)', ('{"source":"unlisted-wal"}',))
+c.commit()
+os._exit(0)`, db])
+  assert.deepEqual(cursorRecords(db, { immutable: true }), [{ source: 'manifest' }])
+})
