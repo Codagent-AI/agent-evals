@@ -201,3 +201,26 @@ test('gate execution failures are harness failures; invalid definitions remain d
   assert.equal(gates.find(x => x.id === 'gate:required-artifact:design').passed, false)
   assert.equal(gates.at(-1).passed, true)
 })
+
+test('failed gates retain complete/fail diagnostics without a calibrated threshold', () => {
+  const rubric = buildRubric(inventory)
+  const data = { rubric, coverage: rubric.coverage.map(x => result(x.id, 'met')), quality: rubric.quality.map(x => result(x.id, 'met')), fidelity: [] }
+  for (const id of ['gate:required-artifact:design', 'gate:openspec-validate']) {
+    const scored = scoreDefinition({ ...data, gates: [{ id, passed: false }] })
+    assert.equal(scored.evaluation_status, 'complete')
+    assert.equal(scored.definition_verdict, 'fail')
+    assert.equal(scored.total, 100)
+  }
+  assert.throws(() => scoreDefinition({ ...data, gates: [{ passed: true }] }), /calibration must set/)
+})
+test('rubric pins concrete quality, fidelity and reference-shape examples', () => {
+  const rubric = buildRubric(inventory)
+  for (const criterion of rubric.quality) {
+    assert.ok(criterion.examples.pass.trim())
+    assert.ok(criterion.examples.fail.trim())
+  }
+  assert.ok(rubric.fidelity.examples.deduction.length >= 2)
+  assert.ok(rubric.fidelity.examples.no_deduction.length >= 2)
+  assert.ok(rubric.guidance[0].includes('Example:'))
+  assert.ok(rubric.guidance[1].includes('Example:'))
+})

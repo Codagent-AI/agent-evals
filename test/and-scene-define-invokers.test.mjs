@@ -151,7 +151,7 @@ test('cancellation during overflow cleanup does not send SIGTERM twice or leak i
   assert.equal((await stub.calls()).length, 1)
 })
 
-import { mkdtemp, mkdir, chmod, readdir, realpath, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, chmod, readdir, realpath, stat, symlink, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { createClaudeJudgeInvoker } from '../evals/lib/panel-judging/claude-invoker.mjs'
 import { createCodexJudgeInvoker } from '../evals/lib/panel-judging/codex-invoker.mjs'
@@ -186,12 +186,16 @@ test('INT-002 private Codex home contains only auth.json and is removed on succe
   await writeFile(join(authHome, 'auth.json'), '{"token":"test"}')
   await writeFile(join(authHome, 'config.toml'), 'must not be copied')
   const cwd = join(runDir, 'inputs'); await mkdir(cwd); await writeFile(join(cwd, 'packet.json'), '{}')
+  const legacyHome = join(runDir, '.runtime/judge/home-orphan')
+  await mkdir(legacyHome, { recursive: true }); await writeFile(join(legacyHome, 'auth.json'), 'orphaned credential')
   const command = join(runDir, 'codex')
   await writeFile(command, `#!/usr/bin/env node
 const fs = require('node:fs'); const path = require('node:path');
 const argv = process.argv.slice(2); let prompt = '';
 process.stdin.on('data', x => prompt += x); process.stdin.on('end', () => {
-fs.appendFileSync(${JSON.stringify(join(runDir, 'calls.jsonl'))}, JSON.stringify({ argv, cwd: process.cwd(), home: process.env.CODEX_HOME, files: fs.readdirSync(process.env.CODEX_HOME), mode: fs.statSync(process.env.CODEX_HOME).mode & 0o777, authMode: fs.statSync(path.join(process.env.CODEX_HOME, 'auth.json')).mode & 0o777, schema: JSON.parse(fs.readFileSync(argv[argv.indexOf('--output-schema')+1])), prompt })+'\\n');
+fs.appendFileSync(${JSON.stringify(join(runDir, 'calls.jsonl'))}, JSON.stringify({ argv, cwd: process.cwd(), home: process.env.CODEX_HOME, files: fs.readdirSync(process.env.CODEX_HOME), mode: fs.statSync(process.env.CODEX_HOME).mode & 0o777, authMode: fs.statSync(path.join(process.env.CODEX_HOME, 'auth.json')).mode & 0o777, auth: JSON.parse(fs.readFileSync(path.join(process.env.CODEX_HOME, 'auth.json'))), schema: JSON.parse(fs.readFileSync(argv[argv.indexOf('--output-schema')+1])), prompt })+'\\n');
+if (prompt === 'rotate') { const authPath=path.join(process.env.CODEX_HOME,'auth.json'); const auth=JSON.parse(fs.readFileSync(authPath)); auth.generation=(auth.generation||0)+1; fs.writeFileSync(authPath,JSON.stringify(auth)); }
+if (prompt === 'host-conflict') { fs.writeFileSync(path.join(process.env.CODEX_HOME,'auth.json'), JSON.stringify({token:'rotated'})); fs.writeFileSync(${JSON.stringify(join(authHome, 'auth.json'))}, JSON.stringify({token:'host-login'})); }
 if (prompt === 'reject') { process.stdout.write(JSON.stringify({type:'turn.failed',error:{message:'invalid_json_schema'}})+'\\n'); process.exitCode=1; }
 else { fs.writeFileSync(argv[argv.indexOf('--output-last-message')+1], '{"results":[]}'); process.stdout.write(JSON.stringify({type:'turn.completed',usage:{input_tokens:2,output_tokens:1}})+'\\n'); }
 });`)
@@ -199,15 +203,41 @@ else { fs.writeFileSync(argv[argv.indexOf('--output-last-message')+1], '{"result
   const invoke = createCodexJudgeInvoker({ runDir, defaultCwd: cwd, command, privateCodexHome: true, env: { ...process.env, CODEX_HOME: authHome } })
   const request = { job: 'quality', authority: JUDGE_PROFILE.panel[1], schema: judgeSchema(['item']), prompt: 'inputs' }
   await invoke(request)
+  await Promise.all([invoke({ ...request, prompt: 'rotate' }), invoke({ ...request, prompt: 'rotate' })])
+  assert.deepEqual(JSON.parse(await readFile(join(authHome, 'auth.json'), 'utf8')), { token: 'test', generation: 2 })
+  assert.equal((await stat(join(authHome, 'auth.json'))).mode & 0o777, 0o600)
+  await assert.rejects(readdir(legacyHome), { code: 'ENOENT' })
   await assert.rejects(invoke({ ...request, prompt: 'reject' }), error => error.retryable === false)
   const calls = (await readFile(join(runDir, 'calls.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse)
-  assert.equal(calls.length, 2)
+  assert.equal(calls.length, 4)
+  assert.equal(calls[1].auth.generation, undefined)
+  assert.equal(calls[2].auth.generation, 1)
   for (const call of calls) {
+    assert.ok(!call.home.startsWith(runDir + '/'));
     assert.notEqual(call.home, authHome); assert.deepEqual(call.files, ['auth.json']); assert.equal(call.mode, 0o700); assert.equal(call.authMode, 0o600)
     assert.equal(call.argv[call.argv.indexOf('--sandbox') + 1], 'read-only'); assert.equal(call.cwd, await realpath(cwd))
     assertStrictSchema(call.schema)
     await assert.rejects(readdir(call.home), { code: 'ENOENT' })
   }
   const usage = (await readFile(join(runDir, 'phases/eval-owned-usage.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse)
-  assert.equal(usage[1].token_totals.total, 0)
+  assert.equal(usage.at(-1).token_totals.total, 0)
+  await assert.rejects(invoke({ ...request, prompt: 'host-conflict' }), /host authentication changed.*refusing to overwrite/)
+  assert.deepEqual(JSON.parse(await readFile(join(authHome, 'auth.json'), 'utf8')), { token: 'host-login' })
+  const conflictCall = (await readFile(join(runDir, 'calls.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse).at(-1)
+  await assert.rejects(readdir(conflictCall.home), { code: 'ENOENT' })
+})
+
+
+test('private Codex authentication reports missing auth and rejects symlink credentials before dispatch', async t => {
+  const runDir = await mkdtemp(join(tmpdir(), 'define-auth-')); t.after(() => rm(runDir, { recursive: true, force: true }))
+  const authHome = join(runDir, 'auth')
+  const invoke = createCodexJudgeInvoker({ runDir, defaultCwd: join(runDir, 'inputs'), privateCodexHome: true, command: '/never-dispatch', env: { ...process.env, CODEX_HOME: authHome } })
+  const request = { job: 'judge', authority: JUDGE_PROFILE.panel[1], schema: judgeSchema(['item']), prompt: 'inputs' }
+  await assert.rejects(invoke(request), /Codex authentication not found.*codex login/)
+  await mkdir(authHome)
+  await assert.rejects(invoke(request), /Codex authentication not found.*codex login/)
+  const target = join(runDir, 'real-auth.json'); await writeFile(target, '{"token":"test"}')
+  await symlink(target, join(authHome, 'auth.json'))
+  await assert.rejects(invoke(request), /Codex authentication.*symlink/)
+  assert.equal(await readFile(target, 'utf8'), '{"token":"test"}')
 })

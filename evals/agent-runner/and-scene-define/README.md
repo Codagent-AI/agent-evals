@@ -250,7 +250,10 @@ The host judges use the shared `cross-family-panel-v1` protocol with Sonnet
 5.5, two independent `gpt-6-luna` samples, and Opus 5.5 for decisions and
 checks, all at high effort. Claude receives inlined inputs with no tools;
 Codex receives only the job packet in a scratch working directory and a private
-auth-only home, both removed afterward. Calls write eval-owned usage to
+auth-only home outside the run directory, both removed afterward. Refreshed
+authentication is saved atomically to the host auth file; private calls sharing
+that file are serialized. On startup the invoker removes legacy `home-*`
+credential copies from the run runtime directory. Calls write eval-owned usage to
 `phases/eval-owned-usage.jsonl`.
 
 `audits/disclosure.json` records settled and dissenting flags and leaked item

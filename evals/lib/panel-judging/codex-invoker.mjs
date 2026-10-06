@@ -9,8 +9,9 @@
 // arrive, so a stalled or killed call leaves evidence of what it was waiting
 // on. A call that exceeds its timeout is stopped and retried once.
 import { spawn } from 'node:child_process'
-import { appendFile, mkdir, mkdtemp, lstat, open, readFile, rm, writeFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
+import { constants } from 'node:fs'
+import { appendFile, mkdir, mkdtemp, lstat, open, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { homedir, tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 const JUDGE_ENV_ALLOWLIST = [
@@ -314,6 +315,72 @@ function extractCodexUsage(stdout, { request, invocationId, rejected = null }) {
   }
 }
 
+// Private copies must not discard rotated refresh tokens. Serialize private
+// calls sharing host auth across invoker instances in this process.
+const privateAuthLocks = new Map()
+async function lockPrivateAuth(path) {
+  const previous = privateAuthLocks.get(path) ?? Promise.resolve()
+  let release
+  const pending = new Promise(resolveLock => { release = resolveLock })
+  privateAuthLocks.set(path, pending)
+  await previous
+  return () => {
+    if (privateAuthLocks.get(path) === pending) privateAuthLocks.delete(path)
+    release()
+  }
+}
+function authError(error, path) {
+  if (error.code === 'ENOENT') return new Error(`Codex authentication not found at ${path}; run codex login`)
+  if (error.code === 'ELOOP') return new Error(`Codex authentication refuses symlink: ${path}`)
+  return error
+}
+async function readAuth(path) {
+  let handle
+  try {
+    // O_NOFOLLOW closes the lstat/readFile race for the credential file.
+    // O_NONBLOCK also lets fstat reject a FIFO without blocking on open.
+    handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+    if (!(await handle.stat()).isFile()) throw new Error(`Codex authentication must be a regular auth.json: ${path}`)
+    return await handle.readFile()
+  } catch (error) { throw authError(error, path) }
+  finally { await handle?.close() }
+}
+async function verifyAuthRoot(root) {
+  let stat
+  try { stat = await lstat(root) } catch (error) { throw authError(error, root) }
+  if (stat.isSymbolicLink()) throw new Error(`Codex authentication refuses symlink: ${root}`)
+  if (!stat.isDirectory()) throw new Error(`Codex authentication home must be a directory: ${root}`)
+}
+async function persistRefreshedAuth({ privateHome, authPath, originalAuth }) {
+  const refreshed = await readAuth(join(privateHome, 'auth.json'))
+  if (refreshed.equals(originalAuth)) return originalAuth
+  // Never propagate malformed CLI state, or print credential contents in errors.
+  try {
+    const value = JSON.parse(refreshed)
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('invalid auth')
+  } catch { throw new Error('Codex judge wrote invalid authentication JSON') }
+  const root = dirname(authPath)
+  await verifyAuthRoot(root)
+  const staging = await mkdtemp(join(root, '.eval-auth-'))
+  try {
+    const path = join(staging, 'auth.json')
+    const handle = await open(path, 'wx', 0o600)
+    try { await handle.writeFile(refreshed); await handle.sync() } finally { await handle.close() }
+    // Another host CLI may have logged in while the judge was running. Do not
+    // silently overwrite its credentials with our independently refreshed copy.
+    if (!(await readAuth(authPath)).equals(originalAuth)) throw new Error('Codex host authentication changed during the judge call; refusing to overwrite it; run codex login if authentication fails')
+    await rename(path, authPath)
+    return refreshed
+  } finally { await rm(staging, { recursive: true, force: true }) }
+}
+async function sweepLegacyPrivateHomes(runtimeDir) {
+  // Older versions copied auth into the run directory. New private homes live
+  // in the OS temp directory, so no current call creates these legacy entries.
+  for (const name of await readdir(runtimeDir)) {
+    if (/^home-[a-zA-Z0-9]+$/.test(name)) await rm(join(runtimeDir, name), { recursive: true, force: true })
+  }
+}
+
 export function createCodexJudgeInvoker({
   runDir,
   candidateWorktree,
@@ -337,6 +404,7 @@ export function createCodexJudgeInvoker({
   const fallbackCwd = resolve(defaultCwd)
   const approvedRoots = (allowedRoots ?? [fallbackCwd]).map((root) => resolve(root))
   let sequence = 0
+  let privateRuntimeReady
 
   const inMemoryUsage = []
 
@@ -361,6 +429,7 @@ export function createCodexJudgeInvoker({
     const schemaPath = join(runtimeDir, `${stem}.schema.json`)
     const outputPath = join(runtimeDir, `${stem}.output.json`)
     await mkdir(runtimeDir, { recursive: true })
+    if (privateCodexHome) await (privateRuntimeReady ??= sweepLegacyPrivateHomes(runtimeDir))
     await writeFile(schemaPath, `${JSON.stringify(request.schema, null, 2)}\n`)
 
     const args = [
@@ -390,18 +459,18 @@ export function createCodexJudgeInvoker({
     args.push('-')
 
     let privateHome = null
+    let releaseAuth = null
+    let authPath; let originalAuth
     let invocationEnvironment = judgeEnvironment(env)
     try {
       if (privateCodexHome) {
         const authRoot = resolve(env.CODEX_HOME ?? join(env.HOME ?? homedir(), '.codex'))
-        const authPath = join(authRoot, 'auth.json')
-        for (const path of [runtimeDir, dirname(runtimeDir), authRoot, authPath]) {
-          const stat = await lstat(path)
-          if (stat.isSymbolicLink()) throw new Error(`private Codex home refuses symlink: ${path}`)
-        }
-        if (!(await lstat(authPath)).isFile()) throw new Error('Codex authentication must be a regular auth.json')
-        privateHome = await mkdtemp(join(runtimeDir, 'home-'))
-        await writeFile(join(privateHome, 'auth.json'), await readFile(authPath), { mode: 0o600, flag: 'wx' })
+        authPath = join(authRoot, 'auth.json')
+        releaseAuth = await lockPrivateAuth(authPath)
+        await verifyAuthRoot(authRoot)
+        originalAuth = await readAuth(authPath)
+        privateHome = await mkdtemp(join(tmpdir(), 'codagent-eval-codex-home-'))
+        await writeFile(join(privateHome, 'auth.json'), originalAuth, { mode: 0o600, flag: 'wx' })
         invocationEnvironment = { ...invocationEnvironment, CODEX_HOME: privateHome }
       }
       let result
@@ -444,6 +513,7 @@ export function createCodexJudgeInvoker({
         } catch {
           // Usage diagnostics must not replace an otherwise valid judge result.
         }
+        if (privateHome) originalAuth = await persistRefreshedAuth({ privateHome, authPath, originalAuth })
         if (result.writeError) {
           throw new Error(
             `Codex judge ${request.job ?? 'job'} could not record its attempt evidence at ${result.writeError.path}: ${result.writeError.error.message}`,
@@ -482,7 +552,10 @@ export function createCodexJudgeInvoker({
       } catch (error) {
         throw new Error(`Codex judge ${request.job ?? 'job'} produced no final response: ${error.message}`)
       }
-    } finally { if (privateHome) await rm(privateHome, { recursive: true, force: true }) }
+    } finally {
+      try { if (privateHome) await rm(privateHome, { recursive: true, force: true }) }
+      finally { releaseAuth?.() }
+    }
   }
 
   invoke.readUsageEntries = async () => {

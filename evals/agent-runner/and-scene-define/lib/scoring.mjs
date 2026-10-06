@@ -5,7 +5,8 @@ function complete(criteria, results, name) {
 }
 export function scoreDefinition({ rubric, coverage, quality, fidelity, leaked = [], gates }) {
   complete(rubric.coverage, coverage, 'coverage'); complete(rubric.quality, quality, 'quality')
-  if (!Number.isFinite(rubric.pass_threshold)) throw new Error('calibration must set the pass threshold before scoring')
+  const gatesPassed = gates.every(x => x.passed)
+  if (gatesPassed && !Number.isFinite(rubric.pass_threshold)) throw new Error('calibration must set the pass threshold before scoring')
   if (new Set(fidelity.map(x => x.id)).size !== fidelity.length || fidelity.some(x => !['met', 'missing'].includes(x.verdict))) throw new Error('invalid fidelity verdicts')
   const leaks = new Set(leaked)
   if (leaked.some(id => !rubric.coverage.some(x => x.id === id))) throw new Error('unknown leaked item')
@@ -22,7 +23,7 @@ export function scoreDefinition({ rubric, coverage, quality, fidelity, leaked = 
     fidelity: { score: Math.max(rubric.fidelity.floor, rubric.components.fidelity - fidelity.filter(x => x.verdict === 'met').length * rubric.fidelity.deduction_per_exchange), points: rubric.components.fidelity },
   }
   const total = Object.values(components).reduce((sum, c) => sum + c.score, 0)
-  return { evaluation_status: 'complete', definition_verdict: gates.every(x => x.passed) && total >= rubric.pass_threshold ? 'pass' : 'fail', rubric_version: rubric.rubric_version, components, total, coverage: scoredCoverage, quality, fidelity, gates, leaked_items: [...leaks] }
+  return { evaluation_status: 'complete', definition_verdict: gatesPassed && total >= rubric.pass_threshold ? 'pass' : 'fail', rubric_version: rubric.rubric_version, components, total, coverage: scoredCoverage, quality, fidelity, gates, leaked_items: [...leaks] }
 }
 export function discoveryLedger({ coverage, asked }) {
   if (asked.length !== coverage.length || new Set(asked.map(x => x.id)).size !== coverage.length) throw new Error('incomplete discovery decisions')
