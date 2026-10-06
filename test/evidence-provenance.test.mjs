@@ -998,8 +998,8 @@ test('testing and assumption judges receive bounded, distinct evidence views', a
   assert.match(views['testing-evidence'].packet, /Full flow: passed/)
   assert.ok(views['testing-evidence'].packet.length <= 220_000)
   assert.deepEqual(views['assumption-handling'].roles, [
-    'acceptance-pass-record', 'assumptions-ledger', 'exploration-log', 'final-handoff', 'findings-history',
-    'session-audit',
+    'assumptions-ledger', 'final-handoff', 'acceptance-gate-notice', 'findings-history', 'exploration-log',
+    'acceptance-pass-record', 'session-audit', 'referenced-material',
   ])
   const testingIndex = JSON.parse(await readFile(
     join(context.runDir, views['testing-evidence'].index),
@@ -1043,7 +1043,7 @@ const STRAY_SHA = 'c'.repeat(40)
 
 // A Git stand-in for one history: PRIOR_SHA is an ancestor of FINAL_SHA,
 // STRAY_SHA resolves but is not, and `diffs` maps "from..to" to changed paths.
-function fakeGit(diffs = {}) {
+function fakeGit(diffs = {}, blobs = {}) {
   const known = [PRIOR_SHA, FINAL_SHA, STRAY_SHA, BASELINE_SHA]
   return (command, args) => {
     const verb = args[2]
@@ -1056,6 +1056,10 @@ function fakeGit(diffs = {}) {
     if (verb === 'diff') {
       const [from, to] = [args[5], args[6]]
       return { status: 0, stdout: (diffs[`${from}..${to}`] ?? []).map((path) => `${path}\0`).join('') }
+    }
+    if (verb === 'ls-tree') {
+      const paths = args.slice(args.indexOf('--') + 1)
+      return { status: 0, stdout: paths.map((path) => `100644 blob ${blobs[path] ?? `blob-${path}`}\t${path}\0`).join('') }
     }
     return { status: 1, stdout: '' }
   }
@@ -1232,13 +1236,36 @@ test('a diff-scoped pass is given the files between its declared diff base and t
     sha: PRIOR_SHA,
     relation: 'ancestor-of-final',
     tested_revision: FINAL_SHA,
-    retest_coverage: 'established',
+    retest_scope: 'files-listed',
     changes_to_tested_revision: {
       product: { count: 1, paths: ['scripts/verify.mjs'], truncated: false },
       test_only: { count: 1, paths: ['scripts/verify.test.mjs'], truncated: false },
       harness: { count: 0, paths: [], truncated: false },
+      mirrors: [],
     },
   }])
+})
+
+// Round-2 audit: a byte-identical template copy of an explored kit file was
+// counted as an unexplored product change.
+test('changed product files with identical content at the tested revision are listed as mirrors', () => {
+  const facts = testedRevisionFacts({
+    finalSha: FINAL_SHA,
+    worktree: '/candidate',
+    manifest: testedRevisionManifest(FINAL_SHA, [{
+      id: 'pass-2-log', role: 'acceptance-pass-record', verification_state: 'verified',
+      claimed_revision: FINAL_SHA, revision_relation: 'final', declared_diff_base: PRIOR_SHA,
+    }]),
+    exec: fakeGit({ [`${PRIOR_SHA}..${FINAL_SHA}`]: [
+      'src/presentation-kit/Nav.tsx', 'skills/presentation/templates/bootstrap/src/presentation-kit/Nav.tsx', 'src/other.ts',
+    ] }, {
+      'src/presentation-kit/Nav.tsx': 'aaa',
+      'skills/presentation/templates/bootstrap/src/presentation-kit/Nav.tsx': 'aaa',
+    }),
+  })
+  assert.deepEqual(facts.diff_bases[0].changes_to_tested_revision.mirrors, [[
+    'skills/presentation/templates/bootstrap/src/presentation-kit/Nav.tsx', 'src/presentation-kit/Nav.tsx',
+  ]])
 })
 
 test('the testing judge view carries the approved requirement inventory as reference only', async () => {
@@ -1283,7 +1310,8 @@ test('the testing judge view carries the approved requirement inventory as refer
   }])
   assert.match(views['testing-evidence'].packet, /Keyboard navigation/)
   assert.doesNotMatch(views['testing-evidence'].packet, /SHALL advance on Right/)
-  assert.equal(views['assumption-handling'].packet.includes('Keyboard navigation'), false)
+  // The assumption judge gets the full text for its omission check.
+  assert.equal(views['assumption-handling'].packet.includes('SHALL advance on Right'), true)
 })
 
 test('a tested-revision file is read for its SHA, and one without a SHA is malformed', async () => {
@@ -1357,7 +1385,7 @@ test('a diff base without an accepted tested revision does not establish retest 
   })
   assert.equal(facts.diff_bases[0].tested_revision, null)
   assert.equal(facts.diff_bases[0].changes_to_tested_revision, null)
-  assert.equal(facts.diff_bases[0].retest_coverage, 'not-established')
+  assert.equal(facts.diff_bases[0].retest_scope, 'not-established')
 })
 
 test('the last non-empty SHA line is the tested revision claim', async () => {
@@ -1553,4 +1581,199 @@ test('an absolute output path describes only that screenshot, not its path suffi
   ))
   assert.equal(screenshot('other/flow-b/step.png').verification_state, 'verified')
   assert.equal(screenshot('flow-b/step.png').verification_state, 'defective')
+})
+
+// Agent Runner's acceptance gate replaces a non-converged acceptance-handoff.md
+// with a short generated notice and keeps the tester's own handoff as
+// acceptance-handoff-tester.md. Round-0 baseline repetition 2 was judged on
+// the notice, which omits the decisions the tester handoff preserves.
+const RUNNER_NOTICE = [
+  '# Acceptance did not converge within 3 rounds',
+  '',
+  `Local HEAD: ${FINAL_SHA}`,
+  '',
+  'Reasons:',
+  '',
+  `- the tester's round status is 'NOT_READY', not 'READY ${FINAL_SHA}'`,
+  '',
+  'Open findings: /workspace/session/output/acceptance-findings.md',
+  'Unresolved assumptions: /workspace/session/output/acceptance-assumptions.md',
+  'Tester handoff: /workspace/session/output/acceptance-handoff-tester.md',
+].join('\n')
+
+test('the tester handoff, not the Runner non-convergence notice, is the final handoff', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'acceptance-handoff.md': RUNNER_NOTICE,
+    'acceptance-handoff-tester.md': [
+      '# Acceptance handoff',
+      `Current head SHA: ${FINAL_SHA}`,
+      '**Status: NOT READY.** U3 still needs a product decision on narrow readability.',
+      '- `acceptance-screenshots/step-2.png`: step 2 after ArrowRight.',
+    ].join('\n'),
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  const byName = (name) => manifest.artifacts.find(({ origin }) => origin.relative_path === `output/${name}`)
+  assert.equal(byName('acceptance-handoff-tester.md').role, 'final-handoff')
+  assert.equal(byName('acceptance-handoff.md').role, 'acceptance-gate-notice')
+  assert.deepEqual(manifest.missing_roles, [])
+
+  const views = await materializeEvidenceJudgeViews({
+    runDir: context.runDir,
+    candidate: manifest,
+    evaluator: null,
+    contradictions: { items: [] },
+    lineage: { final_sha: FINAL_SHA, accepted: true },
+  })
+  for (const view of ['testing-evidence', 'assumption-handling']) {
+    const packet = views[view].packet
+    assert.match(packet, /U3 still needs a product decision/, view)
+    assert.ok(packet.indexOf('(final-handoff)') < packet.indexOf('(acceptance-gate-notice)'), view)
+  }
+})
+
+test('a Runner non-convergence notice with no tester handoff remains the final handoff', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, { 'acceptance-handoff.md': RUNNER_NOTICE })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  const handoff = manifest.artifacts.find(({ origin }) => origin.relative_path === 'output/acceptance-handoff.md')
+  assert.equal(handoff.role, 'final-handoff')
+})
+
+test('a file a record merely references is supporting material, not a session audit', async () => {
+  const context = await fixture()
+  await mkdir(join(context.worktree, 'skills/presentation'), { recursive: true })
+  await writeFile(join(context.worktree, 'skills/presentation/SKILL.md'), '# Presentation skill\n')
+  await writeExploratoryArtifacts(context, {
+    'acceptance-handoff.md': [
+      '# Acceptance handoff',
+      `Current head SHA: ${FINAL_SHA}`,
+      '- Reviewed `skills/presentation/SKILL.md` for the live flows.',
+      '- `acceptance-screenshots/step-2.png`: step 2 after ArrowRight.',
+    ].join('\n'),
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  const skill = manifest.artifacts.find(({ origin }) => origin.relative_path === 'skills/presentation/SKILL.md')
+  assert.equal(skill.role, 'referenced-material')
+})
+
+// Round-1 audit: per-round metadata kept beside the screenshots and named by
+// bare filename was never resolved, so its screenshots lost their metadata.
+test('a bare filename names a unique file in an output subdirectory and per-round metadata keeps its role', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'acceptance-handoff.md': [
+      '# Acceptance handoff',
+      `Current head SHA: ${FINAL_SHA}`,
+      '- Metadata: `round-1-screenshot-metadata.md` and `round-2-screenshot-metadata.md`',
+      '- Focus: keyboard-focus-round-1.png',
+      '- `acceptance-screenshots/step-2.png`: step 2 after ArrowRight.',
+    ].join('\n'),
+    'acceptance-screenshots/round-1-screenshot-metadata.md': `Round 1\nTested revision: ${FINAL_SHA}\n- keyboard-focus-round-1.png: focus ring on Next\n`,
+    'acceptance-screenshots/round-2-screenshot-metadata.md': `Round 2\nTested revision: ${FINAL_SHA}\n`,
+    'acceptance-screenshots/keyboard-focus-round-1.png': Buffer.from([137, 80, 78, 71, 2]),
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  const byName = (name) => manifest.artifacts.find(({ origin }) => origin.relative_path === `output/${name}`)
+  assert.equal(byName('acceptance-screenshots/round-1-screenshot-metadata.md').role, 'screenshot-metadata')
+  assert.equal(byName('acceptance-screenshots/round-2-screenshot-metadata.md').role, 'screenshot-metadata')
+  assert.deepEqual(
+    manifest.findings.filter(({ code }) => /-reference$/.test(code)).map(({ reference }) => reference),
+    [],
+  )
+})
+
+test('an ambiguous bare filename stays unresolved', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'acceptance-handoff.md': `# Acceptance handoff\nCurrent head SHA: ${FINAL_SHA}\nSee \`notes.md\` for details.\n`,
+    'round-1/notes.md': 'one\n',
+    'round-2/notes.md': 'two\n',
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  assert.ok(manifest.findings.some(({ code, reference }) => /-reference$/.test(code) && reference === 'notes.md'))
+  assert.equal(manifest.artifacts.some(({ origin }) => origin.relative_path.endsWith('notes.md')), false)
+})
+
+test('a Markdown metadata file describes only the screenshots it names', async () => {
+  const context = await fixture()
+  await writeExploratoryArtifacts(context, {
+    'exploration-log.md': `# Exploration log\nTested revision: ${FINAL_SHA}\n- Keyboard: ArrowRight moved to step 2.\n`,
+    'acceptance-handoff.md': `# Acceptance handoff\nCurrent head SHA: ${FINAL_SHA}\nMetadata in \`round-1-screenshot-metadata.md\`.\n`,
+    'acceptance-screenshots/round-1-screenshot-metadata.md': `Tested revision: ${FINAL_SHA}\n- \`acceptance-screenshots/step-2.png\`: step 2 heading\n`,
+    'acceptance-screenshots/unnamed.png': Buffer.from([137, 80, 78, 71, 3]),
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  const byName = (name) => manifest.artifacts.find(({ origin }) => origin.relative_path === `output/${name}`)
+  assert.equal(byName('acceptance-screenshots/step-2.png').verification_state, 'verified')
+  assert.equal(byName('acceptance-screenshots/unnamed.png').verification_state, 'defective')
+})
+
+// Round-2 audit: the assumption judge could not see that a log showed a
+// missing required element, because it never saw the approved requirements.
+test('the assumption judge view carries the full approved requirements as reference only', async () => {
+  const context = await fixture()
+  await writeRequiredArtifacts(context)
+  const requirementsRoot = join(context.root, 'requirements')
+  await mkdir(requirementsRoot, { recursive: true })
+  await writeFile(join(requirementsRoot, 'requirement-001.md'),
+    '#### Scenario: Present mode is title-focused\n- **THEN** the active step shows its marker and one-line title\n')
+  const candidate = await buildCandidateEvidenceManifest({
+    worktree: context.worktree, sessionDir: context.sessionDir, runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  const views = await materializeEvidenceJudgeViews({
+    runDir: context.runDir, candidate, evaluator: null, contradictions: { items: [] },
+    lineage: { final_sha: FINAL_SHA, accepted: true }, requirementsRoot,
+  })
+
+  const view = views['assumption-handling']
+  assert.equal(view.permissions.approved_requirements, 'reference-only')
+  const index = JSON.parse(await readFile(join(context.runDir, view.index), 'utf8'))
+  assert.equal(index.approved_requirements.ownership, 'evaluator-supplied reference')
+  assert.match(view.packet, /shows its marker and one-line title/)
+  assert.ok(view.packet.indexOf('shows its marker') < view.packet.indexOf('BEGIN UNTRUSTED CANDIDATE ARTIFACT'))
 })

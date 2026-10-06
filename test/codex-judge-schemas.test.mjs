@@ -14,6 +14,20 @@ import {
   SOURCE_JUDGE_RESULT_SCHEMA,
 } from '../evals/agent-runner/and-scene/lib/judge-jobs.mjs'
 import { PRICING_FINDING_SCHEMA } from '../evals/agent-runner/and-scene/lib/pricing.mjs'
+import {
+  LINE_CITED_RESULT_SCHEMA,
+  buildJudgeRequest,
+  buildSpanAuditRequest,
+  buildTiebreakRequest,
+  buildSourceAuditRequest,
+  productJudgeJobs,
+} from '../evals/agent-runner/and-scene/lib/judge-jobs.mjs'
+import { SECOND_OPINION_SCHEMA, buildSecondOpinionRequest, buildSpanAuditRequest as buildOpinionAuditRequest }
+  from '../evals/agent-runner/and-scene/lib/second-opinion.mjs'
+import { loadRubrics } from '../evals/agent-runner/and-scene/lib/rubric.mjs'
+import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const CODEX_JUDGE_SCHEMAS = {
   AMBIGUITY_RESULT_SCHEMA,
@@ -21,6 +35,8 @@ const CODEX_JUDGE_SCHEMAS = {
   SOURCE_JUDGE_RESULT_SCHEMA,
   SOURCE_AUDIT_RESULT_SCHEMA,
   PRICING_FINDING_SCHEMA,
+  LINE_CITED_RESULT_SCHEMA,
+  SECOND_OPINION_SCHEMA,
 }
 
 function isObjectSchema(node) {
@@ -57,6 +73,11 @@ function strictViolations(node, path) {
   return violations
 }
 
+// The root of a strict response format must be an object, never a union.
+function rootViolations(schema, name) {
+  return schema?.type === 'object' && !schema.anyOf && !schema.oneOf ? [] : [`${name}: root must be a plain object`]
+}
+
 for (const [name, schema] of Object.entries(CODEX_JUDGE_SCHEMAS)) {
   test(`${name} satisfies OpenAI strict structured-output rules`, () => {
     assert.deepEqual(strictViolations(schema, name), [])
@@ -87,4 +108,43 @@ test('ambiguity parser accepts the strict nullable form of optional fields', () 
   }))
   assert.equal(omitted.findings[0].id, finding.id)
   assert.deepEqual(parsed.proposals, [])
+})
+
+// Agent-evals #79: the browser second-opinion replay sub-schemas were open
+// objects, so every run that needed a browser second opinion got HTTP 400
+// invalid_json_schema. Walk the schema of every request the harness sends.
+test('every schema the harness actually sends to a judge is strict-mode valid', async () => {
+  const rubrics = await loadRubrics()
+  const authority = { cli: 'codex', model: 'gpt-test' }
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-strict-'))
+  await mkdir(join(root, 'source/src'), { recursive: true })
+  await writeFile(join(root, 'source/src/a.ts'), 'export const a = 1\n')
+  const neutral = { root, source_root: join(root, 'source'), audit_root: root, requirements_root: join(root, 'req'),
+    manifest: { entries: [{ namespace: 'neutral-source', path: 'source/src/a.ts' }] } }
+  const notObserved = Object.keys(rubrics.automated.rubric.fallbacks)
+    .map((id) => ({ id, rationale: 'not observed', looked_for: [], evidence: [] }))
+  const sent = []
+  for (const { id } of productJudgeJobs(rubrics, { notObserved })) {
+    const request = buildJudgeRequest({ rubrics, job: id, authority, neutral, notObserved })
+    sent.push([`${id} sample`, request.schema])
+    sent.push([`${id} tiebreak`, buildTiebreakRequest({ request, criteria: request.criteria.slice(0, 2),
+      inventory: { root: neutral.source_root, kind: 'neutral source', paths: ['src/a.ts'] } }).schema])
+    sent.push([`${id} span audit`, buildSpanAuditRequest({ request,
+      passes: [{ id: request.criteria[0], rationale: 'r' }], spans: new Map() }).schema])
+    if (request.source_audit) {
+      const audit = await buildSourceAuditRequest({ request, primaryResults: [{ id: request.criteria[0],
+        verdict: 'pass', rationale: 'r', evidence: ['e'], citations: ['src/a.ts'] }] })
+      sent.push([`${id} source audit`, audit.schema])
+    }
+  }
+  const browser = { criteria: [{ id: 'demo-supported-navigation', verdict: 'fail', rationale: 'keyboard 1/0, swipe 0/0, direct jump 4' }],
+    probes: [{ id: 'demo-supported-navigation', result: { verdict: 'fail', rationale: 'keyboard 1/0, swipe 0/0, direct jump 4' } }], gates: [] }
+  const opinion = buildSecondOpinionRequest({ target: { kind: 'criterion', id: 'demo-supported-navigation' },
+    rubrics, browser, judging: null, neutral, authority })
+  sent.push(['second opinion', opinion.schema])
+  sent.push(['second opinion audit', buildOpinionAuditRequest({ request: opinion,
+    answer: { mismeasured_step: 's', measurement_fault: 'f' }, spans: [], logSpans: [] }).schema])
+  for (const [name, schema] of sent) {
+    assert.deepEqual([...rootViolations(schema, name), ...strictViolations(schema, name)], [])
+  }
 })

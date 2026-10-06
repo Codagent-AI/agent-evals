@@ -202,6 +202,28 @@ An overturn SHALL cite at most 12 source spans, each fewer than 200 lines, and a
 - **THEN** the failure stands as `fail`
 - **AND** no citation is required
 
+#### Scenario: Two verifier samples review a failure
+- **WHEN** a failure receives a second opinion
+- **THEN** two independent verifier samples answer, both are recorded, and each proposed overturn is tried in turn until one is confirmed
+- **AND** the failure stands when no sample's overturn is confirmed
+
+#### Scenario: A real-browser replay decides a browser-derived overturn
+- **WHEN** a sample's admitted replay observes the passing behavior in a real browser and its source spans validate
+- **THEN** the failure is overturned without a further model audit
+
+#### Scenario: The record does not show why a browser probe failed
+- **WHEN** a browser-derived failure's record shows no measurement fault but the source establishes the behavior
+- **THEN** the verifier overturns with a suspected fault and proposes a replay instead of upholding
+- **AND** the span audit may accept the replay's observation of the passing behavior as the explanation of the failure
+
+#### Scenario: A control count includes previous and next controls
+- **WHEN** `quality-captions-and-navigation` fails because the counted navigation controls differ from the step count
+- **THEN** a replay that clicks through every produced step with the presentation's own controls may confirm the overturn
+
+#### Scenario: The wrong control is reported as current
+- **WHEN** `demo-control-semantics` fails because a step marks the wrong control as current
+- **THEN** a replay that ends on that step with a visible `aria-current` control labelled with that step's title or number, and shows the current control changing with the active step, may confirm the overturn
+
 ### Requirement: Second-opinion verdict
 Each failure that received a second opinion SHALL carry two verdicts: the raw verdict, which is always `fail`, and the second-opinion verdict. The second-opinion verdict SHALL be `pass` when an overturn was accepted, and `fail` otherwise. Scores, component floors, hard gates, and automated eligibility SHALL use the second-opinion verdict. A failure that received no second opinion SHALL be scored from its verdict as before.
 

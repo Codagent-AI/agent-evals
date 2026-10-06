@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { lstat, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
@@ -1476,6 +1476,88 @@ test('an evaluator-only rescore imports a completed candidate and never starts A
   assert.equal(written.workflow.events[0].event, 'imported-completed-run')
 })
 
+test('a rescore restores a missing Runner session under the run directory and records it', async () => {
+  const context = await environment()
+  let staging = null
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    controllerChangeName: null,
+    verifyDelivery: async () => {
+      throw new Error('rescore must not rediscover historical artifact paths')
+    },
+    loadRescoreSource: async ({ stagingDir }) => {
+      staging = stagingDir
+      return { ...importedRescore(context), session_reconstruction: { source: 'evidence/candidate/artifacts', files: 3 } }
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.equal(staging, join(context.runDir, '.runtime/rescore-session'))
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.deepEqual(written.workflow.events[0].session_reconstruction,
+    { source: 'evidence/candidate/artifacts', files: 3 })
+})
+
+test('a host rescore leaves an existing Agent Runner projects store in the home untouched', async () => {
+  const context = await environment()
+  await mkdir(join(context.home, '.agent-runner/projects/someone-else'), { recursive: true })
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    controllerChangeName: null,
+    verifyDelivery: async () => {
+      throw new Error('rescore must not rediscover historical artifact paths')
+    },
+    loadRescoreSource: async () => importedRescore(context),
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const projects = await lstat(join(context.home, '.agent-runner/projects'))
+  assert.equal(projects.isSymbolicLink(), false)
+  assert.ok(projects.isDirectory())
+})
+
+test('the controller releases the browser after browser evaluation and after replays', async () => {
+  const context = await environment()
+  const events = []
+  const result = await evaluate(context, profiles, {
+    isProcessAlive: () => true,
+    verifyCandidate: async () => ({ build: { ok: true, log: 'built' },
+      verification: { machine_readable: true, passed: true }, timings: [] }),
+    browserDriverFactory: async () => { events.push('driver'); return browserDemo() },
+    releaseBrowser: async () => { events.push('release') },
+    candidateServer: (() => {
+      let servedIdentity = null
+      return {
+        probe: async () => ({ ok: true, candidate_identity: servedIdentity }),
+        start: async ({ candidate }) => {
+          servedIdentity = candidate
+          return { pid: 9876, url: 'http://127.0.0.1:4319/' }
+        },
+        stop: async () => {},
+      }
+    })(),
+  })
+  assert.ok(events.indexOf('release') > events.indexOf('driver'), JSON.stringify(events))
+  assert.equal(events.at(-1), 'release')
+  assert.ok(result.exitCode === 0 || result.exitCode === 1)
+})
+
+// Agent-evals #78 rep 2 failed in product judging, before metrics were
+// recorded, so its result carries no implementation metrics to import.
+test('a rescore of a source without recorded metrics reads them from the Runner session', async () => {
+  const context = await environment()
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    controllerChangeName: null,
+    verifyDelivery: async () => {
+      throw new Error('rescore must not rediscover historical artifact paths')
+    },
+    loadRescoreSource: async () => ({ ...importedRescore(context), implementation_metrics: null, cost: null, pricing: null }),
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.outcome?.failure ?? result.errors))
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.notEqual(written.failed_phase, 'metrics-pricing')
+  assert.ok(written.implementation_metrics)
+})
+
 test('rescore checks browser failures while a reference baseline does not', async () => {
   const rescoreContext = await environment()
   const broken = () => {
@@ -1536,11 +1618,13 @@ test('rescore starts the candidate server and confirms a browser overturn by rep
   let started = 0
   let replayed = 0
   let servedIdentity = null
-  driver.replay = async () => { replayed += 1; return directJumpObserved() }
+  const lifecycle = []
+  driver.replay = async () => { replayed += 1; lifecycle.push('replay'); return directJumpObserved() }
   const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
     controllerChangeName: null,
     loadRescoreSource: async () => importedRescore(context),
     browserDriver: driver,
+    releaseBrowser: async () => { lifecycle.push('release') },
     isProcessAlive: () => true,
     candidateServer: {
       probe: async () => ({ ok: true, candidate_identity: servedIdentity }),
@@ -1566,6 +1650,18 @@ test('rescore starts the candidate server and confirms a browser overturn by rep
   assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
   assert.equal(started, 1)
   assert.ok(replayed > 0)
+  // The overturn is recorded end to end: verdict, replay plan, and observation.
+  const written = await readJson(join(context.runDir, 'result.json'))
+  const criterion = written.score.components.flatMap(({ subcomponents }) => subcomponents)
+    .flatMap(({ criteria }) => criteria).find(({ id }) => id === 'demo-supported-navigation')
+  assert.equal(criterion.verdict, 'pass')
+  assert.equal(criterion.second_opinion.decision, 'overturn')
+  assert.deepEqual(criterion.second_opinion.replay.actions, DIRECT_JUMP_REPLAY.actions)
+  assert.equal(criterion.second_opinion.replay.observations.at(-1).stepIndex, 4)
+  const opinions = await readJson(join(context.runDir, 'phases/second-opinions.json'))
+  assert.equal(opinions.outcomes['demo-supported-navigation'].replay.passed, true)
+  // The host browser is released after the replay rather than held through scoring.
+  assert.ok(lifecycle.lastIndexOf('release') > lifecycle.lastIndexOf('replay'), lifecycle.join(' '))
 })
 
 test('an evaluator-only rescore accepts a historical reviewer profile as tester', async () => {
@@ -1700,7 +1796,11 @@ test('a browser failure receives a checkpointed audited second opinion before sc
   assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
   const written = await readJson(join(context.runDir, 'result.json'))
   assert.ok(requests.some((request) => !request.audit_stage))
-  assert.ok(requests.some((request) => request.audit_stage))
+  // Two verifier samples; the admitted real-browser replay decides without a model audit.
+  const verifierSamples = requests.filter((request) => !request.audit_stage).map(({ verifier_sample: sample }) => sample)
+  assert.deepEqual([...new Set(verifierSamples)].sort(), [1, 2])
+  assert.equal(verifierSamples.filter((sample) => sample === 1).length, verifierSamples.filter((sample) => sample === 2).length)
+  assert.equal(requests.some((request) => request.audit_stage), false)
   const entry = written.second_opinions.entries.find(({ id }) => id === 'demo-supported-navigation')
   assert.equal(entry?.raw_verdict, 'fail')
   assert.equal(entry?.verdict, 'pass')
@@ -1872,9 +1972,10 @@ test('a failed outline fallback receives a follow-up opinion after the failed re
     },
   })
   assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
-  assert.equal(calls[0].id, 'verification-every-produced-step-renders')
-  assert.equal(calls[1].id, 'demo-nine-step-content-and-order')
-  assert.equal(calls[1].on_behalf_of, 'verification-sample-outline')
+  // Each target gets two verifier samples, in target order.
+  assert.deepEqual([...new Set(calls.map(({ id }) => id))],
+    ['verification-every-produced-step-renders', 'demo-nine-step-content-and-order'])
+  assert.equal(calls.find(({ id }) => id === 'demo-nine-step-content-and-order').on_behalf_of, 'verification-sample-outline')
   assert.equal(fallbackRequest.browser_derived, false)
   assert.equal(fallbackRequest.failing_record.verdict, 'fail')
   assert.equal(replayCalls, 0)

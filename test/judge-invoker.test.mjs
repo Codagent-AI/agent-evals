@@ -602,3 +602,119 @@ test('Codex judge invoker stops a call that exceeds its stdout limit', async () 
   )
   assert.equal((await invoke.readUsageEntries()).length, 1)
 })
+
+test('eval-owned usage records the judging stage so sample and adjudication cost is measurable', async () => {
+  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const candidateWorktree = join(runDir, 'candidate')
+  const invoke = createCodexJudgeInvoker({
+    runDir,
+    candidateWorktree,
+    spawnImpl: fakeSpawn((child, { args }) => {
+      writeFinalOutput(args, '{}')
+      child.stdout.write(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 10, output_tokens: 2 } }))
+      child.exit(0)
+    }),
+  })
+  await invoke({ job: 'scene-kit', usage_phase: 'scene-kit:adjudication', authority: { model: 'gpt-5.2' }, schema: {}, prompt: 'x' })
+  await invoke({ job: 'scene-kit', authority: { model: 'gpt-5.2' }, schema: {}, prompt: 'y' })
+
+  const usage = await invoke.readUsageEntries()
+  assert.equal(usage[0].phase, 'scene-kit')
+  assert.equal(usage[0].stage, 'scene-kit:adjudication')
+  assert.equal(usage[1].stage, null)
+})
+
+const CAPACITY_EVENTS = [
+  JSON.stringify({ type: 'thread.started', thread_id: 't' }),
+  JSON.stringify({ type: 'turn.started' }),
+  JSON.stringify({ type: 'error', message: 'Selected model is at capacity. Please try a different model.' }),
+  JSON.stringify({ type: 'turn.failed', error: { message: 'Selected model is at capacity. Please try a different model.' } }),
+].join('\n')
+
+// Round-1 audit: capacity rejections left 0-5 ledger entries "unavailable"
+// per run and spent judge attempts.
+test('a capacity rejection is waited out and recorded as a call that consumed no tokens', async () => {
+  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const waits = []
+  const spawnImpl = fakeSpawn((child, { args }, count) => {
+    if (count <= 2) {
+      child.stdout.write(`${CAPACITY_EVENTS}\n`)
+      child.exit(1)
+      return
+    }
+    writeFinalOutput(args, '{"results":[]}')
+    child.stdout.write(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 10, output_tokens: 2 } }))
+    child.exit(0)
+  })
+  const invoke = createCodexJudgeInvoker({
+    runDir, candidateWorktree: join(runDir, 'candidate'), spawnImpl,
+    sleep: async (ms) => { waits.push(ms) },
+  })
+
+  const output = await invoke({ job: 'scene-kit', authority: { model: 'gpt-5.2' }, schema: {}, prompt: 'x' })
+
+  assert.equal(output, '{"results":[]}')
+  assert.equal(spawnImpl.calls.length, 3)
+  assert.equal(waits.length, 2)
+  assert.ok(waits[1] > waits[0])
+  const usage = await invoke.readUsageEntries()
+  assert.equal(usage.length, 3)
+  assert.deepEqual(usage.map(({ usage: { state } }) => state), ['available', 'available', 'available'])
+  assert.deepEqual(usage[0].tokens, { input: 0, cached_input: 0, output: 0, reasoning: 0 })
+  assert.match(usage[0].usage.reason, /rejected before any model output: Selected model is at capacity/)
+})
+
+test('a capacity rejection that never clears still fails the call', async () => {
+  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const spawnImpl = fakeSpawn((child) => {
+    child.stdout.write(`${CAPACITY_EVENTS}\n`)
+    child.exit(1)
+  })
+  const invoke = createCodexJudgeInvoker({
+    runDir, candidateWorktree: join(runDir, 'candidate'), spawnImpl, sleep: async () => {},
+  })
+
+  await assert.rejects(
+    () => invoke({ job: 'scene-kit', authority: { model: 'gpt-5.2' }, schema: {}, prompt: 'x' }),
+    /at capacity/,
+  )
+  assert.ok(spawnImpl.calls.length > 1)
+})
+
+// Agent-evals #79: a schema OpenAI rejects fails identically on every retry.
+test('an invalid_json_schema rejection fails fast as a non-retryable harness error', async () => {
+  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const message = JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', code: 'invalid_json_schema',
+    message: "Invalid schema for response_format 'codex_output_schema'" }, status: 400 })
+  const spawnImpl = fakeSpawn((child) => {
+    child.stdout.write([
+      JSON.stringify({ type: 'thread.started', thread_id: 't' }),
+      JSON.stringify({ type: 'turn.started' }),
+      JSON.stringify({ type: 'error', message }),
+      JSON.stringify({ type: 'turn.failed', error: { message } }),
+    ].join('\n') + '\n')
+    child.exit(1)
+  })
+  const invoke = createCodexJudgeInvoker({ runDir, candidateWorktree: join(runDir, 'c'), spawnImpl, sleep: async () => {} })
+
+  const error = await invoke({ job: 'second-opinion', authority: { model: 'm' }, schema: {}, prompt: 'x' }).catch((caught) => caught)
+
+  assert.equal(spawnImpl.calls.length, 1)
+  assert.equal(error.code, 'judge-schema-invalid')
+  assert.equal(error.retryable, false)
+  assert.equal(error.owner, 'evaluation-harness')
+  assert.match(error.message, /invalid_json_schema/)
+})
+
+test('the judge reasoning effort is pinned explicitly rather than left to the CLI default', async () => {
+  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const spawnImpl = fakeSpawn((child, { args }) => {
+    writeFinalOutput(args, '{}')
+    child.exit(0)
+  })
+  const invoke = createCodexJudgeInvoker({ runDir, candidateWorktree: join(runDir, 'c'), spawnImpl })
+  await invoke({ job: 'scene-kit', authority: { model: 'm', effort: 'medium' }, schema: {}, prompt: 'x' })
+  await invoke({ job: 'scene-kit', authority: { model: 'm' }, schema: {}, prompt: 'y' })
+  assert.ok(spawnImpl.calls[0].args.includes('model_reasoning_effort="medium"'))
+  assert.ok(spawnImpl.calls[1].args.includes('model_reasoning_effort="medium"'))
+})

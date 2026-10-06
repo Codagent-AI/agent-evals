@@ -50,6 +50,7 @@ import {
 } from './lib/timing.mjs'
 import { collectSourceEvidence } from './deterministic-checks.mjs'
 import { runBrowserEvaluation } from './lib/browser-eval.mjs'
+import { createHostBrowser } from './lib/host-browser.mjs'
 import { createAxiBrowserDriver } from './lib/axi-browser-driver.mjs'
 import { ensureCandidateServer, stopCandidateServer } from './lib/candidate-server.mjs'
 import {
@@ -57,7 +58,7 @@ import {
   readEvidenceProjectionInputs,
   writeResultArtifacts,
 } from './lib/result.mjs'
-import { createCodexJudgeInvoker } from './lib/judge-invoker.mjs'
+import { JUDGE_REASONING_EFFORT, createCodexJudgeInvoker } from './lib/judge-invoker.mjs'
 import { hideValidatorFromAgents } from './lib/validator-availability.mjs'
 import { runProductJudging } from './lib/judge-jobs.mjs'
 import {
@@ -313,6 +314,9 @@ export async function runEvaluation({
   // absent leaves its component unobserved rather than failing the candidate.
   browserDriver = null,
   browserDriverFactory = null,
+  // Releases a host-managed browser after each browser phase; see
+  // lib/host-browser.mjs. The next phase that needs a driver starts it again.
+  releaseBrowser = null,
   judgeInvoke = null,
   // The candidate-server adapter. Without one the suite still reaches a durable
   // pending result; it simply has no server to hand the reviewer, and says so
@@ -354,7 +358,12 @@ export async function runEvaluation({
   let importedRun = null
   if (rescore) {
     try {
-      importedRun = await loadRescoreSource({ sourceDir: options.rescoreFrom })
+      // A source whose Runner session was not retained is restored from its
+      // hash-verified candidate evidence into this run's private runtime.
+      importedRun = await loadRescoreSource({
+        sourceDir: options.rescoreFrom,
+        stagingDir: join(runDir, '.runtime/rescore-session'),
+      })
     } catch (error) {
       return failure([{ code: 'invalid-rescore-source', message: error.message }])
     }
@@ -726,6 +735,8 @@ export async function runEvaluation({
           event: 'imported-completed-run',
           source_run_id: importedRun.source_run_id,
           provenance_sha256: importedRun.provenance_sha256,
+          ...(importedRun.session_reconstruction
+            ? { session_reconstruction: importedRun.session_reconstruction } : {}),
         }]
       : [],
     run: checkpoint.agent_runner,
@@ -758,7 +769,7 @@ export async function runEvaluation({
 
   // Pricing and ambiguity are eval-owned judge jobs and reuse the single
   // recorded Codex authority rather than selecting one of their own.
-  const judgeAuthority = { cli: 'codex', model: options.judgeModel }
+  const judgeAuthority = { cli: 'codex', model: options.judgeModel, effort: JUDGE_REASONING_EFFORT }
 
   // Each execution session gets its own label so the reported total reads as a
   // sum of recorded machine sessions rather than one uninterrupted stretch.
@@ -768,7 +779,11 @@ export async function runEvaluation({
   // Link the persistent run store into the container home so Agent Runner
   // writes where the controller reads, then read from whichever store is
   // actually in effect.
-  const projectsDir = await resolveProjectsDir({ runDir, home })
+  // An evaluator-only rescore never starts or reads Agent Runner, so it must
+  // not claim the home's projects store; on a host that store is the user's.
+  const projectsDir = rescore
+    ? join(runDir, '.runtime/agent-runner-projects')
+    : await resolveProjectsDir({ runDir, home })
   const readState = readRunnerState ?? ((runIdentifier) => readPersistedRunnerState(projectsDir, runIdentifier))
   const readSteps = observedSteps ?? ((state) => state?.history ?? state?.steps ?? [])
   // Agent Runner must run in the candidate worktree so it discovers the
@@ -843,7 +858,7 @@ export async function runEvaluation({
       audit_root: candidateWorktree, sources: sourceFiles }
     const target = { kind: 'terminal', id: gate }
     const request = buildSecondOpinionRequest({ target, rubrics, browser: null, judging: null,
-      neutral, authority: { cli: 'codex', model: options.judgeModel },
+      neutral, authority: { cli: 'codex', model: options.judgeModel, effort: JUDGE_REASONING_EFFORT },
       terminal: { stage, reason, evidence, log_root: runDir, log_artifact: logArtifact } })
     const unit = `second-opinion:terminal:${gate}`
     const inputs = { input_hash: hashJson({ request, evidence_sha256: hashString(evidence),
@@ -1487,7 +1502,7 @@ export async function runEvaluation({
       } else {
         record.judging = await runProductJudging({
           rubrics,
-          authority: { cli: 'codex', model: options.judgeModel },
+          authority: { cli: 'codex', model: options.judgeModel, effort: JUDGE_REASONING_EFFORT },
           evidence: [
             ...record.sourceEvidence.evidence,
             ...(record.browser?.criteria ?? []),
@@ -1554,10 +1569,10 @@ export async function runEvaluation({
           for (const target of targets) {
             checked.push(target)
             const request = buildSecondOpinionRequest({ target, rubrics, browser: record.browser,
-              judging: record.judging, neutral, authority: { cli: 'codex', model: options.judgeModel } })
+              judging: record.judging, neutral, authority: { cli: 'codex', model: options.judgeModel, effort: JUDGE_REASONING_EFFORT } })
             const id = `second-opinion:${target.kind}:${target.id}`
             const inputHash = hashJson({ request, probe: record.browser.probes?.find((entry) => entry.id === target.id)?.output_sha256,
-              audit_contract: 'closed-world-spans-replay-allowlist-v2' })
+              audit_contract: 'two-verifier-samples-replay-decides-v3' })
             const inputs = { input_hash: inputHash }
             const artifact = join(directory, `${target.id}.json`)
             const reused = await verifyUnit(checkpoint, { phase: 'product-judging', unit: id,
@@ -1591,11 +1606,15 @@ export async function runEvaluation({
             else pendingSecondOpinions.push(target)
           }
         }
-        await runOpinions(secondOpinionTargets({ deterministic: record.browser.criteria,
-          gates: record.browser.gates, mode }))
-        const resolutions = resolveDeterministic({ rubrics, deterministic: record.browser.criteria,
-          judges: record.judging?.judges ?? {}, secondOpinions, pendingSecondOpinions })
-        await runOpinions(outlineFollowUpTargets({ resolutions, checked }))
+        try {
+          await runOpinions(secondOpinionTargets({ deterministic: record.browser.criteria,
+            gates: record.browser.gates, mode }))
+          const resolutions = resolveDeterministic({ rubrics, deterministic: record.browser.criteria,
+            judges: record.judging?.judges ?? {}, secondOpinions, pendingSecondOpinions })
+          await runOpinions(outlineFollowUpTargets({ resolutions, checked }))
+        } finally {
+          await releaseBrowser?.()
+        }
         await writeJsonAtomic(join(runDir, 'phases/second-opinions.json'), {
           checked, outcomes: secondOpinions, pending: pendingSecondOpinions,
         })
@@ -1668,9 +1687,11 @@ export async function runEvaluation({
     },
 
     'metrics-pricing': async () => {
-      if (rescore) {
+      if (rescore && Array.isArray(record.metrics?.attempts)) {
         refreshBillingTokens(record.metrics.attempts)
       } else {
+        // A source that failed before its metrics phase recorded none, so a
+        // rescore reads them from the Runner session it imported.
         record.metrics = await readRunnerMetrics({
           sessionDir: record.run?.session_dir ?? null,
           runId: record.run?.run_id ?? runId,
@@ -1723,6 +1744,7 @@ export async function runEvaluation({
 
     cleanup: async (context) => {
       context.serverRunning = false
+      await releaseBrowser?.()
       if (!candidateServer) return
       const outcome = await stopCandidateServer({
         recorded: record.candidateServer,
@@ -1741,6 +1763,16 @@ export async function runEvaluation({
     'cleanup-result': async (context) => { await writeResult(context.outcome) },
 
     ...handlerOverrides,
+  }
+  // The browser is needed only while the live demo is evaluated; holding it
+  // through source judging costs a small host gigabytes for nothing.
+  const evaluateInBrowser = handlers['browser-evaluation']
+  handlers['browser-evaluation'] = async (...args) => {
+    try {
+      return await evaluateInBrowser(...args)
+    } finally {
+      await releaseBrowser?.()
+    }
   }
 
   // The pending result, its report, and the artifact manifest are written from
@@ -2004,6 +2036,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const candidateWorktree = productionRunDir
     ? join(resolve(productionRunDir), '.runtime/candidate-worktree')
     : null
+  // run.sh --host hands the controller a Chrome binary to manage per phase.
+  const hostBrowser = process.env.AND_SCENE_HOST_CHROME
+    ? createHostBrowser({
+        chromePath: process.env.AND_SCENE_HOST_CHROME,
+        port: Number(process.env.AND_SCENE_HOST_DEVTOOLS_PORT || 9333),
+      })
+    : null
   const result = await runEvaluation({
     argv,
     home: process.env.HOME ?? null,
@@ -2014,12 +2053,19 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       ? createHostCandidateServer({ runDir: productionRunDir })
       : null,
     browserDriverFactory: productionRunDir
-      ? ({ baseUrl }) => createAxiBrowserDriver({ baseUrl })
+      ? async ({ baseUrl }) => {
+          await hostBrowser?.ensure()
+          return createAxiBrowserDriver({ baseUrl })
+        }
       : null,
+    releaseBrowser: hostBrowser ? () => hostBrowser.release() : null,
     judgeInvoke: productionRunDir
       ? createCodexJudgeInvoker({
           runDir: productionRunDir,
           candidateWorktree,
+          // run.sh --host points this at the host CLI; the sandbox default
+          // bypasses the implementation agents' yolo wrapper.
+          ...(process.env.AND_SCENE_CODEX_COMMAND ? { command: process.env.AND_SCENE_CODEX_COMMAND } : {}),
           defaultCwd: join(resolve(productionRunDir), '.runtime/judge-workspace'),
           allowedRoots: [
             join(resolve(productionRunDir), '.runtime/judge-workspace'),
@@ -2030,6 +2076,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       : null,
     log: (line) => console.error(line),
   })
+  await hostBrowser?.release()
   for (const error of result.errors ?? []) console.error(JSON.stringify(error))
   process.exit(result.exitCode)
 }

@@ -372,7 +372,9 @@ Deterministic source facts supplied to an LLM source judge SHALL be treated as l
 ### Requirement: Scene kit correctness
 The evaluation SHALL score the reusable scene kit out of 24 using LLM review of delivered source and structured browser evidence. The judge SHALL assess implementation of the technical contracts rather than the aesthetic quality of the demo that uses them.
 
-For transition sequencing, the judge SHALL require persisting motion and newcomer delay to share one settlement contract or executable proof that newcomers wait until continuing entities settle; the presence of timing constants or named primitives alone SHALL NOT earn credit. Sharing or importing a timing value SHALL be insufficient unless persistent motion consumes that exact configuration, or newcomer admission waits on an observable completion signal from persistent motion. Touch navigation SHALL distinguish predominantly horizontal single-touch swipes from vertical scrolling and multi-touch gestures.
+For transition sequencing, the judge SHALL require persisting motion and newcomer delay to share one settlement contract or executable proof that newcomers wait until continuing entities settle; the presence of timing constants or named primitives alone SHALL NOT earn credit. Sharing or importing a timing value SHALL be insufficient unless persistent motion consumes that exact configuration, or newcomer admission waits on an observable completion signal from persistent motion. Newcomer sequencing SHALL follow the fixture design's timing mechanism: a newcomer entry delay at least as long as the continuing layout transition, applied to the newcomer only, SHALL satisfy `entity-newcomer-after-settle`; the same delay applied to the continuing motion, an entry that can start early, or no entry motion SHALL fail it. A step id SHALL be stable only when it survives inserting, removing, or reordering steps; a position-derived id fails `scene-step-narration-and-identity`. Newcomer timing SHALL be judged on the visible entry, so a zero-delay wrapper around an inner node whose entry is delayed past the layout transition passes. A warning SHALL identify an element by its visible text, or for a textless element by its accessible name, a stable hook, or a selector path. In present mode the marker is a visible indicator of the active step's position or section beside the title. Uniform fit SHALL be judged at the eval-owned reference viewports 1280×720 and 390×844 in both modes. Touch navigation SHALL be judged against the fixture scenario only: a horizontal swipe to the left advances one step and a swipe to the right goes back one step. The judge SHALL NOT require rejection of vertical scrolling or multi-touch gestures, which the fixture does not state.
+
+The step number SHALL count as on screen only when it is rendered visibly; an `aria-label`, other attribute, or visually hidden text SHALL NOT satisfy `scene-order-derived-numbering`. The default attribution SHALL link to the and-scene GitHub repository, `https://github.com/Codagent-AI/and-scene`; a link to another owner or repository path SHALL fail `attribution-default-link`. The deterministic attribution fact SHALL report the GitHub targets the source contains so the judge sees a wrong target by name. No network request decides the link; a reachability probe would make identical evidence score differently.
 
 | Subcomponent | Points | Criteria |
 |---|---:|---|
@@ -396,9 +398,18 @@ For transition sequencing, the judge SHALL require persisting motion and newcome
 - **WHEN** the kit delays newcomers using a duration that is not applied to persistent layout motion and supplies no executable settlement proof
 - **THEN** `entity-newcomer-after-settle` fails
 
-#### Scenario: Vertical gesture has horizontal drift
-- **WHEN** a touch gesture moves primarily vertically while also exceeding the horizontal distance threshold
-- **THEN** the kit does not navigate
+#### Scenario: Horizontal swipe navigation is credited
+- **WHEN** the kit maps a left swipe to the next step and a right swipe to the previous step through its navigation
+- **THEN** `navigation-touch-swipe` passes
+- **AND** the absence of vertical-scroll or multi-touch rejection does not fail it
+
+#### Scenario: Step number exists only as an accessible name
+- **WHEN** the position-derived step number appears only in an `aria-label`
+- **THEN** `scene-order-derived-numbering` fails
+
+#### Scenario: Attribution links to a guessed repository
+- **WHEN** the default attribution links to a GitHub path other than `https://github.com/Codagent-AI/and-scene`
+- **THEN** `attribution-default-link` fails
 
 ### Requirement: Presentation skill correctness
 The evaluation SHALL score the delivered presentation skill out of seven points using LLM review of the skill, its templates, delivered source, and workflow evidence.
@@ -412,7 +423,7 @@ The evaluation SHALL score the delivered presentation skill out of seven points 
 
 Visual-composition inspection and visual-warning review SHALL NOT receive presentation-skill points. The candidate's observable proof that those activities occurred and were handled SHALL be evaluated by the testing-evidence component.
 
-For scaffold scenarios that can be exercised deterministically, prose instructions alone SHALL NOT establish correctness. The judge SHALL require focused executable tests or verified workflow evidence covering empty, already-scaffolded, partial-scaffold, monorepo, standalone, and ambiguous nonempty targets, including template resolution and dependency handling from the resolved target. Acceptable proof SHALL include either a temporary-directory driver that materializes the target state and verifies resulting files and dependencies, or a revision-bound workflow transcript recording the inputs, user choice when interactive confirmation is required, mutations, and observed outcome. An interactive branch SHALL NOT require a live human in a unit test, but prose that merely directs an agent to ask SHALL NOT prove the branch.
+The fixture design makes `SKILL.md` the agent procedure for scaffold detection, target resolution, and confirmation, and its test plan verifies those branches through agent acceptance runs rather than unit tests. For `skill-already-scaffolded`, `skill-partial-scaffold`, `skill-monorepo-target`, `skill-standalone-target`, `skill-nonempty-confirmation`, and `skill-template-path-resolution`, an explicit `SKILL.md` instruction that states the branch's detection condition and required action SHALL earn credit without an executable test, driver, or transcript. A missing, ambiguous, or contradictory instruction, or a delivered helper or template that implements the branch differently, SHALL fail the criterion. `skill-empty-directory-scaffold` SHALL additionally require a complete bootstrap template and a test that materializes it in a fresh temporary location and builds it, as the fixture's integration test plan describes; any materialization pattern SHALL count. `skill-scaffold-style-neutral` SHALL be judged from the bootstrap template's dependencies and styles.
 
 #### Scenario: Skill contracts are scored
 - **WHEN** the LLM judge evaluates the presentation skill
@@ -429,18 +440,22 @@ For scaffold scenarios that can be exercised deterministically, prose instructio
 - **THEN** that record is evaluated under testing-evidence quality
 - **AND** it does not award presentation-skill points
 
-#### Scenario: Scaffold edge cases exist only as instructions
-- **WHEN** the skill describes partial-scaffold and monorepo behavior without executable tests or verified workflow evidence for those cases
-- **THEN** the affected scaffold criteria fail
+#### Scenario: Scaffold branches are explicit instructions
+- **WHEN** `SKILL.md` states the partial-scaffold and monorepo detection conditions and their required actions, with no executable test for those branches
+- **THEN** `skill-partial-scaffold` and `skill-monorepo-target` pass
 
-#### Scenario: Interactive scaffold confirmation is exercised
-- **WHEN** a test driver or revision-bound workflow record supplies the ambiguous nonempty target, records the simulated or actual user choice, and verifies the resulting mutations
-- **THEN** that evidence is eligible for `skill-nonempty-confirmation`
+#### Scenario: A scaffold branch is only implied
+- **WHEN** `SKILL.md` says only to scaffold if needed
+- **THEN** the branch-specific scaffold criteria fail
+
+#### Scenario: Empty-directory scaffold is materialized by a test
+- **WHEN** a test creates a temporary directory, copies the bootstrap template into a new app path inside it, and builds it
+- **THEN** that test satisfies the executable part of `skill-empty-directory-scaffold`
 
 ### Requirement: Verification tool correctness
 The evaluation SHALL score the delivered verification tooling out of seven points using LLM review of its source, executable behavior, and produced artifacts. The four hard-gate criteria SHALL remain outside this point allocation.
 
-The verifier SHALL prove that browser checks connect to the preview process it started and SHALL fail if that process exits; an unrelated stale process on a fixed port SHALL NOT satisfy readiness. This behavior SHALL be scored only under `verification-preview-process-ownership`; `verification-ipv4-loopback` SHALL score only consistent use of `127.0.0.1` for preview binding, readiness probes, and browser URLs. Screenshot settlement SHALL observe animation completion or consume the exact transition configuration used by persistent scene motion; a duplicated fixed delay or an imported value that persistent motion does not consume SHALL NOT satisfy settlement. Warning criteria SHALL require executable regression or verified browser evidence that each warning fires and that intentional-overlap suppression does not hide unrelated collisions; token presence alone SHALL NOT earn credit. Evidence from an earlier revision MAY satisfy a warning criterion only when verified lineage establishes it as an ancestor of the final SHA, hashes show the relevant warning implementation is unchanged, and retained raw executable output demonstrates the behavior; a narrative assertion about an earlier pass SHALL NOT suffice.
+The verifier SHALL prove that browser checks connect to the preview process it started and SHALL fail if that process exits; an unrelated stale process on a fixed port SHALL NOT satisfy readiness. This behavior SHALL be scored only under `verification-preview-process-ownership`; `verification-ipv4-loopback` SHALL score only consistent use of `127.0.0.1` for preview binding, readiness probes, and browser URLs. Preview ownership SHALL be satisfied by either a fresh self-reserved port with a strict port and readiness taken from the spawned child's own announcement, or readiness polling raced against the child's exit; polling a fixed port with only a sampled liveness check SHALL NOT satisfy it. Console and page errors SHALL both fail verification in source, and one representative browser-error test asserting the non-zero exit and offending step SHALL suffice, as the fixture's end-to-end plan describes. A missing sample SHALL fail at a check that reports the sample as missing, as the design's sample assertion and the end-to-end plan's named failed phase require; a later unrelated timeout SHALL NOT satisfy `verification-missing-sample-fails`. Screenshot settlement SHALL be satisfied by a configured settle interval applied after each step advance and before each capture, as the fixture scenario states, or by an observed completion condition; the interval SHALL NOT be required to derive from the runtime motion configuration. Step capture SHALL require a test that runs the helper or its capture loop and asserts one screenshot per step; asserting the expected files SHALL suffice. Warning criteria SHALL require executable regression or verified browser evidence that each warning fires; token presence alone SHALL NOT earn credit. Overlap detection SHALL be judged on overlapping visible text or chrome elements, chrome counting whether or not it contains text, and skipping every pair with at least one element inside an allow-overlap subtree SHALL satisfy `visual-helper-allow-overlap`. Evidence from an earlier revision MAY satisfy a warning criterion only when verified lineage establishes it as an ancestor of the final SHA, hashes show the relevant warning implementation is unchanged, and retained raw executable output demonstrates the behavior; a narrative assertion about an earlier pass SHALL NOT suffice.
 
 | Subcomponent | Points | Criteria |
 |---|---:|---|
@@ -462,6 +477,10 @@ The verifier SHALL prove that browser checks connect to the preview process it s
 - **WHEN** the verifier's own preview process exits because its port is occupied while another server responds on that port
 - **THEN** `verification-preview-process-ownership` fails
 - **AND** `verification-ipv4-loopback` remains independently scored from consistent loopback addressing
+
+#### Scenario: Screenshots wait for a configured interval
+- **WHEN** the helper waits a configured settle interval after each step advance before capturing
+- **THEN** `visual-helper-settled-screenshots` passes without a transition contract shared with runtime motion
 
 #### Scenario: Warning implementation is not exercised
 - **WHEN** warning-related tokens or helper functions exist but no executable regression or verified browser evidence demonstrates the warning behavior
@@ -647,6 +666,62 @@ The automated product rubric and human-review rubric SHALL have distinct explici
 - **THEN** it records distinct version identifiers and SHA-256 hashes for the automated and human-review rubrics
 - **AND** it records component applicability and the score denominator
 
+### Requirement: Robust judge verdicts
+No single model call SHALL decide a scored criterion. Every scored judge job SHALL be judged by two independent samples with identical inputs, run concurrently at an explicitly pinned reasoning effort. Each source-job sample SHALL pass through its own closed-world source audit: a `contradicted` classification SHALL mark that sample's vote disputed, and the vote SHALL turn only when an independent contradiction check confirms the audit's stated contradiction, an `insufficient` classification SHALL trigger at most one focused re-cite, and a verdict still undecided after the re-cite SHALL stand as the sample's vote, except that a browser-fallback pass SHALL then fail because it must be proven from source. A verdict both samples agree on, with neither vote disputed, SHALL stand, pass or fail. A criterion the samples disagree on, or whose vote either sample's audit disputed, SHALL be settled by a third independent sample that receives the job's unchanged context and never sees the first two verdicts; its vote decides the majority.
+
+A majority pass SHALL cite between one and twelve line spans, each under 200 lines, whose paths are in the verified neutral source inventory for a source job or the materialized evidence view for an evidence job, resolve inside that root without a symbolic link, and lie inside the file. A closed-world span audit SHALL check the quoted lines against every clause of the criterion's requirement and review guidance. `insufficient` SHALL ask the third sample to re-cite once, and an audit that still cannot decide SHALL leave the majority pass standing with that recorded. `contradicted` SHALL be checked by an independent contradiction check that judges that audit's stated contradiction against the quoted lines and the rubric, and the majority pass SHALL be withdrawn only when the check confirms that same contradiction; both SHALL be recorded. An unconfirmed browser-fallback majority pass SHALL fail. Invalid third-sample output, including an invalid span, SHALL be retried and, once exhausted, SHALL leave the job unobserved as a harness failure, as SHALL an exhausted sample.
+
+Every judge, sample, third sample, and audit SHALL see, beside each criterion, the requirement it traces to: the full fixture scenario from the pinned snapshot for a fixture-owned criterion, or the eval-owned reason. A pass SHALL meet every clause of that requirement as clarified by its review guidance, and judges SHALL NOT add requirements the requirement and its guidance do not state. Source judges SHALL trace a constant, member, prop, or input through every use before calling it dead, and SHALL treat shown, visible, or on-screen content as rendered content, not an `aria-label`, attribute, or visually hidden text. Evidence judges SHALL compare every behavior the exploration plan commits to with what the log observed or disclosed, and the assumption judge SHALL receive the full approved requirements as reference for its omission check.
+
+Each criterion result SHALL record its judging basis (`consensus-pass`, `consensus-fail`, `majority-pass`, or `majority-fail`) and every sample verdict, and the eval-owned usage ledger SHALL record each call's stage. A Codex turn rejected before any model output (for example a capacity rejection) SHALL be recorded as a call that consumed no tokens, and a capacity rejection SHALL be waited out with backoff rather than spending a judge attempt. Every response schema the harness sends SHALL satisfy OpenAI strict structured-output rules, and a schema rejection (`invalid_json_schema`) SHALL fail fast as a non-retryable harness error. A cached judge job SHALL be reused only under the same judging protocol and only when its results reproduce from its recorded samples and third-sample vote.
+
+#### Scenario: Both samples agree
+- **WHEN** both independent samples pass, or both fail, a criterion
+- **THEN** that verdict stands without another judge
+
+#### Scenario: Samples disagree
+- **WHEN** one sample passes and the other fails a criterion
+- **THEN** a third independent sample decides it
+- **AND** its pass must cite mechanically valid line spans
+
+#### Scenario: A sample's own audit contradicts its vote
+- **WHEN** both samples pass a criterion and one sample's source audit classifies its pass as contradicted
+- **THEN** that vote is marked disputed and an independent check judges the stated contradiction
+- **AND** a refuted contradiction leaves both passes standing, while a confirmed one turns the vote and the blind third sample decides between two signals
+
+#### Scenario: Two audits contradict for different reasons
+- **WHEN** a span audit contradicts a majority pass and the contradiction check finds that stated reason does not hold under the rubric
+- **THEN** the majority pass stands
+
+#### Scenario: A judge invents a scenario the candidate does not produce
+- **WHEN** a judge would fail a criterion on a hypothetical input, file deletion, or rendering that the cited source and evidence do not show
+- **THEN** the shared scope rule in every judge, audit, and check prompt directs it not to, unless the criterion's guidance names that scenario
+
+#### Scenario: A check refutes a span contradiction
+- **WHEN** the span audit contradicts the third sample's quoted lines and the independent check does not confirm that stated contradiction
+- **THEN** the majority pass stands
+
+#### Scenario: A check confirms a span contradiction
+- **WHEN** the independent check confirms the span audit's stated contradiction of the quoted lines
+- **THEN** the criterion fails
+
+#### Scenario: The span audit cannot decide
+- **WHEN** the span audit finds the quoted lines insufficient, the third sample re-cites, and the audit still cannot decide
+- **THEN** the majority pass stands and the evidence records that the audit could not confirm it
+
+#### Scenario: A sample's audit cannot decide after a re-cite
+- **WHEN** a sample's source audit is still insufficient after one focused re-cite
+- **THEN** the sample's verdict stands as its vote and no further citation cycle runs
+
+#### Scenario: Model capacity rejects a judge call
+- **WHEN** Codex rejects a judge turn as at capacity before any model output
+- **THEN** the invoker waits and retries without spending a judge attempt
+- **AND** the usage ledger records the rejected call with zero tokens
+
+#### Scenario: OpenAI rejects a response schema
+- **WHEN** a judge call fails with `invalid_json_schema`
+- **THEN** it is not retried and the owning phase fails as a harness error
+
 ### Requirement: Deterministic criteria fail only on positive evidence
 A scored deterministic browser criterion SHALL have exactly three outcomes: `pass`, `fail`, and not observed. The evaluator SHALL record `fail` only when it holds positive evidence that the candidate violates the requirement the criterion enforces, such as visible text that differs from the normative text, an input that lands on the wrong step, or a browser failure raised by the page. The evaluator SHALL NOT record `fail` because it could not locate the thing it needed to inspect.
 
@@ -734,6 +809,13 @@ A not-observed record SHALL retain the same bounded observation as any other pro
 #### Scenario: Navigation has no operable control
 - **WHEN** neither mode exposes any control with a navigation role, accessible name, or recognised hook
 - **THEN** the criterion that requires the control is recorded as `fail`
+
+### Requirement: Step controls exclude relative navigation
+The browser evaluator SHALL count as step controls only controls that select a step. Previous, next, and mode controls, identified by their presentation hooks or by an accessible name beginning with previous, prev, back, or next, SHALL be excluded even when they share the progress region, so they never inflate the control count or shift which control is read as current.
+
+#### Scenario: Progress row holds previous and next buttons
+- **WHEN** a progress region contains nine step buttons plus Previous and Next
+- **THEN** the evaluator reads nine step controls
 
 ### Requirement: Declared fallback judge for not-observed criteria
 The automated rubric SHALL declare, for each deterministic criterion that can be recorded as not observed, at most one fallback judge. Because any deterministic browser criterion can be recorded as not observed when its `fail` would rest on a heuristic reading, every deterministic browser criterion SHALL declare the `demo-integration` judge as its fallback. Adding these declarations SHALL change the rubric version and hash, and SHALL NOT change any criterion, owner, subcomponent, point allocation, or threshold. The fallback declaration SHALL NOT make the fallback judge an owner of the criterion: the criterion SHALL keep its single owning evaluator, its identifier, and its points, and the rubric SHALL continue to reject duplicate criterion ownership. A deterministic criterion with no declared fallback SHALL NOT be recordable as not observed by a conforming evaluator; if one is nevertheless returned, scoring SHALL treat its component as incomplete.

@@ -48,7 +48,8 @@ test('malformed verifier output exhausts retries without silently upholding', as
   let calls = 0
   const outcome = await runSecondOpinion({ request: { target: { kind: 'criterion', id: 'demo-supported-navigation' } },
     attempts: 2, invoke: async () => { calls += 1; return '{broken' } })
-  assert.equal(calls, 2)
+  // Two independent verifier samples, two attempts each.
+  assert.equal(calls, 4)
   assert.equal(outcome.ok, false)
   assert.match(outcome.reason, /second-opinion output invalid:/)
   assert.match(outcome.reason, /JSON|Unexpected|property/i)
@@ -97,7 +98,7 @@ test('verifier invocation failure retries and keeps its cause when exhausted', a
   let calls = 0
   const outcome = await runSecondOpinion({ request: { target: { kind: 'criterion', id: 'demo-supported-navigation' } },
     attempts: 3, invoke: async () => { calls += 1; throw new Error('judge transport closed') } })
-  assert.equal(calls, 3)
+  assert.equal(calls, 6)
   assert.equal(outcome.ok, false)
   assert.match(outcome.reason, /judge transport closed/)
 })
@@ -116,7 +117,8 @@ test('audit invocation failure retries and keeps its cause when exhausted', asyn
     if (call.audit_stage) throw 'audit transport closed'
     return JSON.stringify(answer)
   } })
-  assert.equal(calls, 4)
+  // Two verifier samples, then three audit attempts for the first overturn.
+  assert.equal(calls, 5)
   assert.equal(outcome.ok, false)
   assert.match(outcome.reason, /audit transport closed/)
 })
@@ -312,10 +314,11 @@ test('the harness allowlist refuses trivial replays and replays outside the fail
       observations: observed({ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 1 }) }) })
   assert.equal(moved.decision, 'overturn')
   assert.equal(moved.verdict, 'pass')
-  assert.equal(audits.length, 1)
-  const packet = JSON.parse(audits[0].prompt.split('\n').at(-1))
-  assert.deepEqual(packet.replay.plan, { actions: swipe, expect: { type: 'step-index-changes' } })
-  assert.equal(packet.replay.observation.observations.at(-1).stepIndex, 1)
+  // The admitted real-browser replay decides; no model audit follows it.
+  assert.equal(audits.length, 0)
+  assert.equal(moved.confirmed_by, 'browser-replay')
+  assert.deepEqual(moved.replay.actions, swipe)
+  assert.equal(moved.replay.observations.at(-1).stepIndex, 1)
 })
 
 test('a target with no replay allowlist cannot be overturned by replay', async () => {
@@ -405,4 +408,174 @@ test('replay navigation cannot leave the candidate origin through backslashes', 
   assert.equal(validReplay({ actions: [{ type: 'navigate', path: '/\\\\example.com/x' }], expect }), false)
   assert.equal(validReplay({ actions: [{ type: 'navigate', path: '/demo\\x' }], expect }), false)
   assert.equal(validReplay({ actions: [{ type: 'navigate', path: DEMO_PATH }], expect }), true)
+})
+
+test('a non-retryable verifier error is not retried', async () => {
+  const { runSecondOpinion } = await import('../evals/agent-runner/and-scene/lib/second-opinion.mjs')
+  let calls = 0
+  const outcome = await runSecondOpinion({
+    request: { target: { kind: 'criterion', id: 'x' }, criteria: ['x'] },
+    invoke: async () => {
+      calls += 1
+      throw Object.assign(new Error('invalid_json_schema'), { retryable: false })
+    },
+  })
+  assert.equal(outcome.ok, false)
+  // Each verifier sample is tried once and never retried.
+  assert.equal(calls, 2)
+  assert.match(outcome.reason, /invalid_json_schema/)
+})
+
+// Round-3 audit: two verifiers found measurement faults on these criteria but
+// could not overturn them because no replay policy covered them.
+test('a control-count failure can be overturned by clicking through every step', async () => {
+  const request = await replayRequest('quality-captions-and-navigation', 'navigation exposes 11 controls for 9 steps')
+  const actions = [{ type: 'navigate', path: DEMO_PATH },
+    ...Array.from({ length: 8 }, (_, index) => ({ type: 'click', selector: `[data-step="${index + 2}"]` }))]
+  const plan = { actions, expect: { type: 'step-index-changes' } }
+  const every = observed({ stepIndex: null }, ...Array.from({ length: 9 }, (_, stepIndex) => ({ stepIndex })))
+  const confirmed = await runSecondOpinion({ request, invoke: confirmingInvoke(request, overturnWith(plan)),
+    replay: async () => ({ passed: true, trace: [], errors: [], observations: every }) })
+  assert.equal(confirmed.decision, 'overturn')
+  const keyed = await runSecondOpinion({ request,
+    invoke: confirmingInvoke(request, overturnWith({ ...plan, actions: [plan.actions[0], { type: 'press', key: 'ArrowRight' }] })),
+    replay: async () => ({ passed: true, trace: [], errors: [], observations: every }) })
+  assert.equal(keyed.decision, 'overturn-rejected')
+  assert.match(keyed.rejection_reason, /allowlist/)
+})
+
+test('a wrong-current-control failure is overturned only by the active step\'s current control', async () => {
+  const request = await replayRequest('demo-control-semantics', 'step 1 marks the wrong control as current')
+  const plan = { actions: [{ type: 'navigate', path: DEMO_PATH }, { type: 'click', selector: '[data-step="2"]' },
+    { type: 'click', selector: '[data-step="1"]' }],
+    expect: { type: 'text-present', selector: '[aria-current="step"]', text: 'You have a topic' } }
+  const run = (observations, candidate = plan) => runSecondOpinion({ request,
+    invoke: confirmingInvoke(request, overturnWith(candidate)),
+    replay: async () => ({ passed: true, trace: [], errors: [], observations }) })
+  const tracking = await run(observed({ stepIndex: null },
+    { stepIndex: 0, visible: true, text: 'You have a topic' },
+    { stepIndex: 1, visible: true, text: 'The skill interviews you' },
+    { stepIndex: 0, visible: true, text: 'You have a topic' }))
+  assert.equal(tracking.decision, 'overturn')
+  const stuck = await run(observed({ stepIndex: null },
+    { stepIndex: 0, visible: true, text: 'Previous' }, { stepIndex: 1, visible: true, text: 'Previous' },
+    { stepIndex: 0, visible: true, text: 'Previous' }))
+  assert.equal(stuck.decision, 'overturn-rejected')
+  const unscoped = await run([], { ...plan, expect: { ...plan.expect, selector: 'h2' } })
+  assert.equal(unscoped.decision, 'overturn-rejected')
+  assert.match(unscoped.rejection_reason, /aria-current/)
+})
+
+// A planted false direct-jump fail was upheld because the verifier could not
+// name the measurement fault from the record. For a browser-derived failure
+// the harness replay in a real browser is the evidence, so the verifier is
+// told to propose one whenever the source establishes the behavior.
+test('a browser-derived verifier proposes a replay without naming the fault from the record', async () => {
+  const rubrics = await loadRubrics()
+  const rationale = 'keyboard 1/0, swipe 1/0, direct jump 0'
+  const request = buildSecondOpinionRequest({
+    target: { kind: 'criterion', id: 'demo-supported-navigation' }, rubrics,
+    browser: { criteria: [{ id: 'demo-supported-navigation', verdict: 'fail', rationale }],
+      probes: [{ id: 'demo-supported-navigation', result: { verdict: 'fail', rationale } }], gates: [] },
+    judging: null, neutral: null, authority: { cli: 'codex', model: 'm' },
+  })
+  assert.match(request.prompt, /do not need to identify the measurement fault from the record/)
+  assert.match(request.prompt, /the harness replay in a real browser decides/)
+  assert.doesNotMatch(request.prompt, /^Uphold unless exact candidate-source lines positively establish the whole requirement and explain a specific fault/m)
+})
+
+test('the replay observation can explain a browser failure to the span auditor', async () => {
+  const { buildSpanAuditRequest } = await import('../evals/agent-runner/and-scene/lib/second-opinion.mjs')
+  const audit = buildSpanAuditRequest({ request: { requirement: 'r', criteria: ['demo-supported-navigation'],
+    failing_record: {} }, answer: { mismeasured_step: 'direct', measurement_fault: 'suspected input' },
+  spans: [], logSpans: [], replay: { plan: {}, observation: { passed: true } } })
+  assert.match(audit.prompt, /by that replay observing the passing behavior in a real browser/)
+  assert.match(audit.prompt, /the failing measurement itself needs no further explanation/)
+})
+
+// A real verifier cited its working-directory path (source/src/...) for a file
+// the inventory lists as src/..., and the valid overturn was refused before
+// the replay could run.
+test('a verifier citation prefixed with the neutral source directory resolves to its inventory path', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'second-opinion-prefix-'))
+  await mkdir(join(root, 'src'), { recursive: true })
+  await writeFile(join(root, 'src/nav.ts'), 'export const jump = true\n')
+  const request = { target: { kind: 'criterion', id: 'demo-supported-navigation' }, browser_derived: true,
+    verified_source_paths: ['src/nav.ts'], input_roots: { source: root }, audit_cwd: root,
+    failing_record: { id: 'demo-supported-navigation', result: { verdict: 'fail', rationale: 'keyboard 1/0, swipe 1/0, direct jump 0' } } }
+  const plan = { actions: [{ type: 'navigate', path: DEMO_PATH }, { type: 'click', selector: '[data-step="5"]' }],
+    expect: { type: 'step-index-equals', value: 4 } }
+  const answer = { ...overturnWith(plan), citations: [{ path: 'source/src/nav.ts', start_line: 1, end_line: 1 }] }
+  let replays = 0
+  const outcome = await runSecondOpinion({ request, invoke: confirmingInvoke(request, answer),
+    replay: async () => { replays += 1; return { passed: true, errors: [], trace: [],
+      observations: observed({ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 4 }) } } })
+  assert.equal(replays, 1)
+  assert.equal(outcome.decision, 'overturn')
+  assert.equal(outcome.citations[0].path, 'src/nav.ts')
+})
+
+// Round 4: the same planted evidence was overturned in one run and upheld in
+// another, because one verifier call decided whether a replay ran at all.
+test('two verifier samples run and either admissible replay is tried, the real-browser replay deciding', async () => {
+  const request = await replayRequest('demo-supported-navigation', 'keyboard 1/0, swipe 1/0, direct jump 0')
+  const plan = { actions: [{ type: 'navigate', path: DEMO_PATH }, { type: 'click', selector: '[data-step="5"]' }],
+    expect: { type: 'step-index-equals', value: 4 } }
+  const calls = []
+  let replays = 0
+  const outcome = await runSecondOpinion({ request,
+    invoke: async (call) => {
+      calls.push(call)
+      if (call.audit_stage) throw new Error('a confirmed browser replay needs no model audit')
+      return JSON.stringify(call.verifier_sample === 1 ? uphold : overturnWith(plan))
+    },
+    replay: async () => { replays += 1; return { passed: true, errors: [], trace: plan.actions,
+      observations: observed({ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 4 }) } } })
+  assert.deepEqual(calls.map(({ verifier_sample: sample }) => sample).sort(), [1, 2])
+  assert.equal(replays, 1)
+  assert.equal(outcome.decision, 'overturn')
+  assert.equal(outcome.verdict, 'pass')
+  assert.equal(outcome.replay.observations.at(-1).stepIndex, 4)
+  assert.deepEqual(outcome.samples.map(({ sample, decision }) => [sample, decision]), [[1, 'uphold'], [2, 'overturn']])
+})
+
+test('when neither verifier sample proposes an admissible replay the failure stands', async () => {
+  const request = await replayRequest('demo-supported-navigation', 'keyboard 1/0, swipe 1/0, direct jump 0')
+  let replays = 0
+  const outcome = await runSecondOpinion({ request,
+    invoke: async () => JSON.stringify(uphold),
+    replay: async () => { replays += 1; return { passed: true, observations: [] } } })
+  assert.equal(replays, 0)
+  assert.equal(outcome.decision, 'uphold')
+  assert.equal(outcome.verdict, 'fail')
+  assert.equal(outcome.samples.length, 2)
+})
+
+test('a second sample\'s replay still runs when the first sample\'s replay does not confirm', async () => {
+  const request = await replayRequest('demo-supported-navigation', 'keyboard 1/0, swipe 1/0, direct jump 0')
+  const wrong = { actions: [{ type: 'navigate', path: DEMO_PATH }, { type: 'click', selector: '#missing' }],
+    expect: { type: 'step-index-equals', value: 4 } }
+  const right = { ...wrong, actions: [wrong.actions[0], { type: 'click', selector: '[data-step="5"]' }] }
+  const outcome = await runSecondOpinion({ request,
+    invoke: async (call) => JSON.stringify(overturnWith(call.verifier_sample === 1 ? wrong : right)),
+    replay: async (plan) => (plan.actions[1].selector === '#missing'
+      ? { passed: false, observations: observed({ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 0 }), errors: [], trace: [] }
+      : { passed: true, observations: observed({ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 4 }), errors: [], trace: [] }) })
+  assert.equal(outcome.decision, 'overturn')
+  assert.equal(outcome.samples[0].decision, 'overturn-rejected')
+  assert.equal(outcome.samples[1].decision, 'overturn')
+})
+
+test('the verifier and its audit carry the shared judging scope rule', async () => {
+  const rubrics = await loadRubrics()
+  const rationale = 'keyboard 1/0, swipe 1/0, direct jump 0'
+  const request = buildSecondOpinionRequest({ target: { kind: 'criterion', id: 'demo-supported-navigation' }, rubrics,
+    browser: { criteria: [{ id: 'demo-supported-navigation', verdict: 'fail', rationale }],
+      probes: [{ id: 'demo-supported-navigation', result: { verdict: 'fail', rationale } }], gates: [] },
+    judging: null, neutral: null, authority: { cli: 'codex', model: 'm' } })
+  const { buildSpanAuditRequest } = await import('../evals/agent-runner/and-scene/lib/second-opinion.mjs')
+  const audit = buildSpanAuditRequest({ request, answer: { mismeasured_step: 's', measurement_fault: 'f' }, spans: [], logSpans: [] })
+  for (const prompt of [request.prompt, audit.prompt]) {
+    assert.match(prompt, /hypothetical input, file deletion, or rendering the candidate does not produce/)
+  }
 })

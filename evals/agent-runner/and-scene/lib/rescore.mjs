@@ -1,11 +1,11 @@
 // Provenance-safe import of a completed candidate workflow for evaluator-only
 // rescoring. The source run stays read-only; only its verified implementation,
 // delivery, and acceptance facts are carried into a fresh evaluation record.
-import { realpath } from 'node:fs/promises'
-import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { lstat, mkdir, readFile, realpath, writeFile } from 'node:fs/promises'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 import { loadCheckpoint } from './checkpoint.mjs'
-import { hashFile, hashJson, readJson } from './persistence.mjs'
+import { hashFile, hashJson, hashString, readJson } from './persistence.mjs'
 import { normalizeRoleProfiles } from './profiles.mjs'
 import { checkWorkflowHistory } from './workflow.mjs'
 
@@ -83,7 +83,54 @@ function changeNameFromWorkflow(workflow) {
   return values[0]
 }
 
-export async function loadCandidateRescoreSource({ sourceDir }) {
+const RETAINED_EVIDENCE = 'evidence/candidate/artifacts'
+const CANDIDATE_WORKTREE = '.runtime/candidate-worktree'
+
+// Factory runs retain every acceptance artifact under evidence/candidate/ but
+// may drop the recorded Runner session under .runtime/. The retained manifest
+// is accepted only when it reproduces the manifest hash the source recorded,
+// and each retained copy only when its bytes match both the manifest and the
+// recorded acceptance hash.
+async function retainedSessionEvidence(root, state) {
+  const manifest = await readJson(join(root, 'evidence/candidate/manifest.json'), null)
+  if (!manifest || !Array.isArray(manifest.artifacts)) {
+    throw new Error('rescore source has no retained candidate evidence manifest to restore its Runner session from')
+  }
+  const { manifest_sha256: recordedSelfHash, ...body } = manifest
+  const expected = state.delivery?.acceptance?.manifest_sha256
+  if (!expected || recordedSelfHash !== expected || hashJson(body) !== expected) {
+    throw new Error('rescore source retained evidence manifest does not match its recorded manifest hash')
+  }
+  const files = new Map()
+  const worktreeFiles = new Map()
+  for (const artifact of manifest.artifacts) {
+    const namespace = artifact?.origin?.namespace
+    if (!['runner-session', 'candidate-worktree'].includes(namespace)) continue
+    const relativePath = artifact.origin.relative_path
+    if (typeof relativePath !== 'string' || isAbsolute(relativePath)
+      || relativePath.split('/').includes('..')
+      || (namespace === 'runner-session' && !relativePath.startsWith('output/'))) {
+      throw new Error(`rescore source retained evidence has an unsafe path: ${relativePath ?? null}`)
+    }
+    if (typeof artifact.path !== 'string' || !artifact.path.startsWith(`${RETAINED_EVIDENCE}/`)) {
+      throw new Error(`rescore source retained evidence is outside ${RETAINED_EVIDENCE}: ${artifact.path ?? null}`)
+    }
+    const retained = resolve(root, artifact.path)
+    if (!within(join(root, RETAINED_EVIDENCE), retained) || (await lstat(retained)).isSymbolicLink()) {
+      throw new Error(`rescore source retained evidence escapes ${RETAINED_EVIDENCE}: ${artifact.path}`)
+    }
+    const bytes = await readFile(retained)
+    if (hashString(bytes) !== artifact.sha256) {
+      throw new Error(`rescore source acceptance evidence hash mismatch: ${artifact.path}`)
+    }
+    const entry = { bytes, sha256: artifact.sha256, retained }
+    if (namespace === 'runner-session') files.set(relativePath, entry)
+    else worktreeFiles.set(relativePath, entry)
+  }
+  return { files, worktreeFiles }
+}
+
+export async function loadCandidateRescoreSource({ sourceDir, stagingDir = null }) {
   const root = await realpath(resolve(sourceDir))
   const statePath = join(root, 'run-state.json')
   const resultPath = join(root, 'result.json')
@@ -116,21 +163,68 @@ export async function loadCandidateRescoreSource({ sourceDir }) {
   if (recordedArtifacts.length === 0) {
     throw new Error('rescore source has no recorded acceptance evidence')
   }
-  const artifacts = []
-  for (const artifact of recordedArtifacts) {
-    const path = sourcePath(root, artifact.path)
-    const observed = await hashFile(path)
-    if (!observed || observed !== artifact.sha256) {
-      throw new Error(`rescore source acceptance evidence hash mismatch: ${artifact.path}`)
-    }
-    artifacts.push({ ...artifact, path })
-  }
-
   const runner = state.agent_runner ?? state.delivery.runner
   if (!runner?.run_id || !runner?.session_dir) {
     throw new Error('rescore source is missing its completed Agent Runner identity')
   }
-  const sessionDir = sourcePath(root, runner.session_dir)
+  let sessionDir = sourcePath(root, runner.session_dir)
+
+  // Each recorded artifact in its recorded order, with whether its bytes are
+  // still at the recorded path.
+  const recorded = []
+  for (const artifact of recordedArtifacts) {
+    const path = sourcePath(root, artifact.path)
+    const observed = await hashFile(path)
+    if (observed !== null && observed !== artifact.sha256) {
+      throw new Error(`rescore source acceptance evidence hash mismatch: ${artifact.path}`)
+    }
+    recorded.push({ ...artifact, path, present: observed !== null })
+  }
+  let artifacts = recorded.map(({ present: _present, ...artifact }) => artifact)
+
+  let sessionReconstruction = null
+  if (recorded.some(({ present }) => !present)) {
+    if (!stagingDir) {
+      throw new Error('rescore source Runner session is missing and no staging directory was given to restore it')
+    }
+    const { files, worktreeFiles } = await retainedSessionEvidence(root, state)
+    const staged = resolve(stagingDir)
+    const worktree = join(root, CANDIDATE_WORKTREE)
+    const retainedPaths = new Map()
+    for (const artifact of recorded) {
+      // A referenced candidate-worktree file is re-read from the rescore's own
+      // checkout; here its retained copy only has to prove the recorded hash.
+      if (!within(sessionDir, artifact.path)) {
+        if (artifact.present) continue
+        const copy = within(worktree, artifact.path)
+          ? worktreeFiles.get(relative(worktree, artifact.path).split(sep).join('/')) : null
+        if (!copy || copy.sha256 !== artifact.sha256) {
+          throw new Error(`rescore source acceptance evidence is missing and not retained: ${artifact.path}`)
+        }
+        retainedPaths.set(artifact.path, copy.retained)
+        continue
+      }
+      const relativePath = relative(sessionDir, artifact.path).split(sep).join('/')
+      const copy = files.get(relativePath)
+      if (copy && copy.sha256 !== artifact.sha256) {
+        throw new Error(`rescore source acceptance evidence hash mismatch: ${artifact.path}`)
+      }
+      if (!copy && !artifact.present) {
+        throw new Error(`rescore source acceptance evidence is missing and not retained: ${artifact.path}`)
+      }
+      if (!copy) files.set(relativePath, { bytes: await readFile(artifact.path), sha256: artifact.sha256 })
+    }
+    for (const [relativePath, { bytes }] of files) {
+      const target = join(staged, relativePath)
+      await mkdir(dirname(target), { recursive: true })
+      await writeFile(target, bytes)
+    }
+    artifacts = artifacts.map((artifact) => ({ ...artifact,
+      path: retainedPaths.get(artifact.path)
+        ?? (within(sessionDir, artifact.path) ? join(staged, relative(sessionDir, artifact.path)) : artifact.path) }))
+    sessionDir = staged
+    sessionReconstruction = { source: RETAINED_EVIDENCE, files: files.size }
+  }
   const candidateSource = state.candidate_source
   if (
     !candidateSource?.repository
@@ -165,6 +259,7 @@ export async function loadCandidateRescoreSource({ sourceDir }) {
       },
     },
     runner: { ...runner, session_dir: sessionDir },
+    session_reconstruction: sessionReconstruction,
     role_profiles: normalizeRoleProfiles(state.role_profiles),
     agent_runner_provenance: state.agent_runner_provenance,
     agent_skills_provenance: state.agent_skills_provenance,

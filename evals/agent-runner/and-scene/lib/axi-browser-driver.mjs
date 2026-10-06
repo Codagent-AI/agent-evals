@@ -196,12 +196,18 @@ function navigationDiscoverySource() {
     .sort((left, right) => (
       left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1
     ));
-  const explicitControls = inDomOrder([
+  // Previous, next, and mode controls sit beside step controls in many
+  // progress rows; they navigate relatively, so they are never step controls.
+  const directionalSelector = ${JSON.stringify([...PREVIOUS_SELECTORS, ...NEXT_SELECTORS, ...MODE_TOGGLE_SELECTORS].join(', '))};
+  const isDirectional = (element) => element.matches(directionalSelector)
+    || /^(?:previous|prev|back|next)\b/i.test(accessibleName(element));
+  const stepControlsOnly = (elements) => elements.filter((element) => !isDirectional(element));
+  const explicitControls = stepControlsOnly(inDomOrder([
     ...scope.querySelectorAll(${JSON.stringify(EXPLICIT_CONTROL_SELECTOR)}),
-  ]);
+  ]));
   const progressRegion = firstVisibleMatch(${JSON.stringify(PROGRESS_SELECTORS)}, 'progress');
   const semanticControls = progressRegion
-    ? inDomOrder([...progressRegion.querySelectorAll('${INTERACTIVE_SELECTOR}')])
+    ? stepControlsOnly(inDomOrder([...progressRegion.querySelectorAll('${INTERACTIVE_SELECTOR}')]))
     : [];
   const namedStepControls = inDomOrder(allInteractive.filter((element) => (
     /^(?:(?:go to|jump to)\\s+)?step\\s+\\d+(?::|$)/i.test(accessibleName(element))

@@ -161,3 +161,29 @@ test('an unreadable candidate tree yields no source files rather than throwing',
 
   assert.deepEqual(collected.files, [])
 })
+
+// Round-0 baseline repetition 2 linked its default attribution to a guessed
+// github.com/and-scene/and-scene, which is not the and-scene repository.
+test('the attribution fact names a wrong GitHub target instead of only reporting it missing', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'and-scene-attribution-target-'))
+  await writeCandidate(dir, {
+    'src/presentation-kit/Attribution.tsx': 'made by and-scene https://github.com/and-scene/and-scene',
+  })
+
+  const fact = (await runDeterministicChecks(dir)).find(({ id }) => id === 'attribution-default-link')
+
+  assert.equal(fact.verdict, 'fail')
+  assert.match(fact.note, /https:\/\/github\.com\/and-scene\/and-scene/)
+  assert.match(fact.note, /expected https:\/\/github\.com\/Codagent-AI\/and-scene/)
+})
+
+test('the attribution fact does not accept the repository URL as a prefix of another repository', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'and-scene-attribution-prefix-'))
+  await writeCandidate(dir, {
+    'src/presentation-kit/Attribution.tsx': 'made by and-scene https://github.com/Codagent-AI/and-scene-fork',
+  })
+
+  const fact = (await runDeterministicChecks(dir)).find(({ id }) => id === 'attribution-default-link')
+
+  assert.equal(fact.verdict, 'fail')
+})
