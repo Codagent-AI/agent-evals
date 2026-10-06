@@ -240,6 +240,10 @@ answer deducts 3 fidelity points per exchange, with a floor of zero. These
 weights and the null pass threshold await calibration. Candidate preflight
 refuses unreviewed anchors, rubric/inventory mismatches, and a null threshold.
 Dry runs verify rubric consistency without requiring review or calibration.
+Scoring itself does not need a threshold: with a null threshold (as during
+calibration) the full breakdown and total are computed, `definition_verdict`
+is unavailable, and `verdict_unavailable` records why. Such a result is never
+publishable.
 
 ```sh
 node evals/agent-runner/and-scene-define/scripts/build-rubric.mjs

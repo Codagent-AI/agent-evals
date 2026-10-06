@@ -211,7 +211,14 @@ test('failed gates retain complete/fail diagnostics without a calibrated thresho
     assert.equal(scored.definition_verdict, 'fail')
     assert.equal(scored.total, 100)
   }
-  assert.throws(() => scoreDefinition({ ...data, gates: [{ passed: true }] }), /calibration must set/)
+  // Calibration scores inputs before a threshold exists: no verdict, full breakdown.
+  const uncalibrated = scoreDefinition({ ...data, gates: [{ passed: true }] })
+  assert.equal(uncalibrated.evaluation_status, 'complete')
+  assert.equal(uncalibrated.definition_verdict, null)
+  assert.match(uncalibrated.verdict_unavailable, /pass threshold not set \(calibration pending\)/)
+  assert.equal(uncalibrated.total, 100); assert.equal(uncalibrated.components.coverage.score, 60)
+  const calibrated = scoreDefinition({ ...data, rubric: { ...rubric, pass_threshold: 70 }, gates: [{ passed: true }] })
+  assert.equal(calibrated.definition_verdict, 'pass'); assert.equal(calibrated.verdict_unavailable, undefined)
 })
 test('rubric pins concrete quality, fidelity and reference-shape examples', () => {
   const rubric = buildRubric(inventory)

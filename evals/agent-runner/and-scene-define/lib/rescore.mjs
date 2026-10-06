@@ -59,7 +59,7 @@ export async function rescoreEvaluation(options, dependencies = {}) {
       checkpoint = await completeUnit(checkpoint, { phase, unit: 'phase', inputs, dependencies, outputs }); await persist()
       if (checkpoint.contamination_audit?.status === 'contaminated') { outcome = { evaluation_status: 'contaminated', definition_verdict: 'unavailable', owning_phase: phase, resumable: false }; break }
     }
-    outcome ??= { evaluation_status: 'complete', definition_verdict: checkpoint.definition_verdict, resumable: false }
+    outcome ??= { evaluation_status: 'complete', definition_verdict: checkpoint.definition_verdict ?? 'unavailable', resumable: false }
   } catch (error) {
     outcome = failureOutcome({ phase, reason: error.message, resumable: false })
     checkpoint = failUnit(checkpoint, { phase, unit: 'phase', error: error.message }); await persist()

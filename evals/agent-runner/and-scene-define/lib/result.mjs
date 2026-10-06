@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { readJson, writeJsonAtomic, writeTextAtomic } from './persistence.mjs'
 import { RESIDUAL_RISK } from './contamination.mjs'
 import { renderReport } from './report.mjs'
+import { DEFINITION_VERDICTS } from './outcomes.mjs'
 export async function assembleResult({ runDir, outcome, checkpoint }) {
   const read = async path => {
     try { return await readJson(join(runDir, path), null) }
@@ -21,7 +22,7 @@ export async function assembleResult({ runDir, outcome, checkpoint }) {
       eval_owned_usage_errors.push({ line: index + 1, error: error.message, truncated: index === lines.length - 1 && !usage.endsWith('\n') })
     }
   }
-  return { schema_version: 1, mode: checkpoint?.kind ?? 'candidate', total: null, components: null, coverage: [], quality: [], fidelity: [], gates: [], panel_records: [], added_scope: [], ...score, ...outcome,
+  const result = { schema_version: 1, mode: checkpoint?.kind ?? 'candidate', total: null, components: null, coverage: [], quality: [], fidelity: [], gates: [], panel_records: [], added_scope: [], ...score, ...outcome,
     run_id: checkpoint?.run_id ?? outcome.run_id ?? null,
     series_identity: checkpoint?.series_identity ?? null, candidate: checkpoint?.candidate ?? null,
     ...(checkpoint?.original ? { original: checkpoint.original } : {}),
@@ -33,6 +34,10 @@ export async function assembleResult({ runDir, outcome, checkpoint }) {
     provenance: { pinned_inputs: checkpoint?.series_identity ?? null, evidence_manifest: manifest, collection },
     workflow_metrics: metrics, eval_owned_usage, eval_owned_usage_errors,
   }
+  // A score without a verdict (no calibrated threshold) is reported as
+  // unavailable with its reason, never as pass/fail, so it is never publishable.
+  if (!DEFINITION_VERDICTS.includes(result.definition_verdict)) result.definition_verdict = 'unavailable'
+  return result
 }
 export async function writeResultArtifacts({ runDir, result }) {
   await writeJsonAtomic(join(runDir, 'result.json'), result)

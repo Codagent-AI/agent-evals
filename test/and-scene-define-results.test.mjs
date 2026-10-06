@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { assembleResult, writeResultArtifacts } from '../evals/agent-runner/and-scene-define/lib/result.mjs'
 import { compareResults } from '../evals/agent-runner/and-scene-define/lib/comparison.mjs'
-import { publishRun } from '../evals/agent-runner/and-scene-define/lib/publication.mjs'
+import { publishRun, publicationEligibility } from '../evals/agent-runner/and-scene-define/lib/publication.mjs'
 async function temp(t) { const dir = await mkdtemp(join(tmpdir(), 'define-results-')); t.after(() => rm(dir, { recursive: true, force: true })); return dir }
 async function json(dir, path, value) { await mkdir(join(dir, path, '..'), { recursive: true }); await writeFile(join(dir, path), JSON.stringify(value)) }
 const core = { evaluation_status: 'complete', definition_verdict: 'fail', run_id: 'recorded', mode: 'candidate' }
@@ -97,4 +97,18 @@ test('result assembly retains valid usage and reports corrupt or truncated usage
   assert.ok(result.eval_owned_usage_errors.every(x => x.error))
   await writeResultArtifacts({ runDir, result })
   assert.match(await readFile(join(runDir, 'report.html'), 'utf8'), /eval_owned_usage_errors/)
+})
+test('an uncalibrated complete score has an unavailable verdict with its reason and is never publishable', async t => {
+  const runDir = await temp(t)
+  await json(runDir, 'judges/score.json', { evaluation_status: 'complete', definition_verdict: null, verdict_unavailable: 'pass threshold not set (calibration pending)', total: 81, components: { coverage: { score: 50, points: 60 } } })
+  for (const definition_verdict of [null, undefined, 'unavailable']) {
+    const result = await assembleResult({ runDir, outcome: { evaluation_status: 'complete', definition_verdict, resumable: false }, checkpoint: { kind: 'candidate', run_id: 'uncalibrated' } })
+    assert.equal(result.definition_verdict, 'unavailable')
+    assert.equal(result.verdict_unavailable, 'pass threshold not set (calibration pending)')
+    assert.equal(result.total, 81)
+    assert.equal(publicationEligibility(result), false)
+    assert.equal(publicationEligibility({ ...result, definition_verdict: null }), false)
+    await writeResultArtifacts({ runDir, result })
+    assert.match(await readFile(join(runDir, 'report.html'), 'utf8'), /pass threshold not set \(calibration pending\)/)
+  }
 })
