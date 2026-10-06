@@ -1,5 +1,10 @@
 // Shared dual-sample judging, citation auditing, and cache reproduction mechanics.
-import { bounded } from './text.mjs'
+import { bounded, normalizeEvidence } from './text.mjs'
+
+// Judge text is escaped once, by `bounded`, when its output is parsed. Harness
+// framing around that already-bounded text only re-limits its length, since
+// escaping it again would turn `&amp;` into `&amp;amp;`.
+const reframed = (text, maxChars) => normalizeEvidence(text, maxChars)
 import { hashJson } from './hash.mjs'
 import { lstat, readFile, readdir, realpath } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
@@ -471,7 +476,7 @@ function buildFocusedRejudgeRequest(request, insufficient) {
     'implementation itself is an explicit counterexample, explain that source mechanism',
     'directly instead of claiming an uncaptured executable check.',
     ...insufficient.map((result) => (
-      `- ${result.id}: ${bounded(result.rationale, MAX_RATIONALE_CHARS)}`
+      `- ${result.id}: ${result.rationale}`
     )),
   ].join('\n')
   return {
@@ -524,8 +529,8 @@ function mergeSourceAudit(primaryResults, auditResults) {
         disputed: true,
         contradiction: { rationale: audit.rationale, evidence: audit.evidence },
         evidence: [...primary.evidence,
-          ...audit.evidence.map((item) => bounded(`source audit contradicted this vote: ${item}`)),
-          bounded(`source audit contradicted this vote: ${audit.rationale}`)],
+          ...audit.evidence.map((item) => reframed(`source audit contradicted this vote: ${item}`)),
+          reframed(`source audit contradicted this vote: ${audit.rationale}`)],
       }
     }
     return primary
@@ -686,8 +691,8 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
       const primary = primaryById.get(audit.id)
       resolvedResults.set(audit.id, fallbackIds.includes(audit.id) && primary.verdict === 'pass'
         ? { id: audit.id, verdict: 'fail', citations: primary.citations,
-            rationale: bounded(`The browser could not observe this criterion and the source audit could not confirm the cited source: ${audit.rationale}`, MAX_RATIONALE_CHARS),
-            evidence: audit.evidence.map((item) => bounded(`source audit: ${item}`)) }
+            rationale: reframed(`The browser could not observe this criterion and the source audit could not confirm the cited source: ${audit.rationale}`, MAX_RATIONALE_CHARS),
+            evidence: audit.evidence.map((item) => reframed(`source audit: ${item}`)) }
         : { ...primary, evidence: [...primary.evidence,
             'source audit could not decide from the cited files; the panel judge\'s verdict stands as its vote'] })
     }
@@ -1085,13 +1090,13 @@ function tiebreakDecisions({ results, spans, outcomes, fallbackIds }) {
     const outcome = outcomes.get(result.id)
     if (outcome.state === 'contradicted') {
       return { id: result.id, verdict: 'fail', citations: paths,
-        rationale: bounded(`the span audit's stated contradiction was confirmed by an independent check: ${outcome.audits.map(({ rationale }) => rationale).join(' | ')}`, MAX_RATIONALE_CHARS),
-        evidence: [...outcome.audits.flatMap(({ evidence }) => evidence).map((item) => bounded(`span audit: ${item}`)),
+        rationale: reframed(`the span audit's stated contradiction was confirmed by an independent check: ${outcome.audits.map(({ rationale }) => rationale).join(' | ')}`, MAX_RATIONALE_CHARS),
+        evidence: [...outcome.audits.flatMap(({ evidence }) => evidence).map((item) => reframed(`span audit: ${item}`)),
           ...references, 'decider ruling: fail (the pass\'s span-audit contradiction was confirmed by an independent check)'] }
     }
     if (outcome.state !== 'confirmed' && fallbackIds.includes(result.id)) {
       return { id: result.id, verdict: 'fail', citations: paths,
-        rationale: bounded(`The browser could not observe this criterion and the span audit could not confirm the quoted source: ${outcome.audits.at(-1)?.rationale ?? ''}`, MAX_RATIONALE_CHARS),
+        rationale: reframed(`The browser could not observe this criterion and the span audit could not confirm the quoted source: ${outcome.audits.at(-1)?.rationale ?? ''}`, MAX_RATIONALE_CHARS),
         evidence: [...references, 'decider ruling: fail (unconfirmed browser-fallback pass)'] }
     }
     return { id: result.id, verdict: 'pass', rationale: result.rationale, citations: paths,
@@ -1112,7 +1117,7 @@ export function buildReciteRequest({ tiebreakRequest, claims }) {
     'again with spans that quote every line the requirement depends on, including the complete statement',
     'or block that implements it and any focused test the guidance requires.',
     'If the lines that would prove your verdict do not exist, change your verdict rather than citing weaker lines.',
-    ...claims.map(({ id, audit }) => `- ${id}: ${bounded(audit.rationale, MAX_RATIONALE_CHARS)}`),
+    ...claims.map(({ id, audit }) => `- ${id}: ${audit.rationale}`),
   ].join('\n')
   return {
     ...tiebreakRequest,
@@ -1185,8 +1190,8 @@ function consensusResult(sampleResults, verdict) {
   }
   const turned = sampleResults[0]
   return { id: turned.id, verdict, citations: turned.citations,
-    rationale: bounded(`the sample's own source audit, confirmed by an independent check: ${turned.contradiction.rationale}`, MAX_RATIONALE_CHARS),
-    evidence: turned.contradiction.evidence.map((item) => bounded(`source audit: ${item}`)) }
+    rationale: reframed(`the sample's own source audit, confirmed by an independent check: ${turned.contradiction.rationale}`, MAX_RATIONALE_CHARS),
+    evidence: turned.contradiction.evidence.map((item) => reframed(`source audit: ${item}`)) }
 }
 
 // Reproduce an audited line-cited ruling without trusting its saved decisions.
