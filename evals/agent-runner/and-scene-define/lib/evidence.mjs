@@ -2,9 +2,10 @@ import { lstat, mkdir, mkdtemp, readFile, rename, rm } from 'node:fs/promises'
 import { dirname, join, relative, resolve, basename } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { contained, filesUnder, readJson, sha256 } from './files.mjs'
-import { writeJsonAtomic, writeTextAtomic } from './persistence.mjs'
+import { writeJsonAtomic, writeTextAtomic, hashJson } from './persistence.mjs'
 import { effectiveDefineInvocations } from './runner-metrics.mjs'
 import { cursorRecords, jsonl, parseTranscript } from './transcripts.mjs'
+export const IDENTITY_EVIDENCE = 'evidence/identity.json'
 // Reject symlinks in every component, including parents of files to create.
 export async function guardPath(runDir, path) {
   const root = resolve(runDir); const target = resolve(path)
@@ -86,6 +87,13 @@ export async function collectEvidence({ runDir, runnerDir, identity = null, runt
     outputs.push(await copy(source, `evidence/runner/output/${basename(source)}`))
   }
   if (!outputs.some(path => path.endsWith('.out'))) throw new Error('missing per-turn output copies')
+  // The original identity is retained as hashed evidence, so a rescore never
+  // trusts an unprotected manifest field for the run it attributes.
+  if (identity !== null) {
+    const target = contained(runDir, IDENTITY_EVIDENCE); await guardPath(runDir, target)
+    await mkdir(dirname(target), { recursive: true }); await writeJsonAtomic(target, identity)
+    retained.push(IDENTITY_EVIDENCE)
+  }
   // Collected content and the host write-ahead record are part of the same
   // rescore manifest. No runtime-only file is required after this point.
   const paths = [...new Set([...retained, 'conversation.jsonl', 'phases/collection.json', ...await tree(runDir, join(runDir, 'collected')).then(files => files.map(path => relative(runDir, path)))])].sort()
@@ -113,6 +121,11 @@ export async function loadEvidence(runDir) {
     retained.set(file.path, bytes.toString('utf8')); bytesByPath.set(file.path, bytes)
   }
   const text = path => { if (!retained.has(path)) throw new Error(`missing retained evidence ${path}`); return retained.get(path) }
+  if (manifest.identity != null) {
+    let recorded
+    try { recorded = JSON.parse(text(IDENTITY_EVIDENCE)) } catch (error) { throw new Error(`evidence manifest identity is not hash-protected: ${error.message}`) }
+    if (hashJson(recorded) !== hashJson(manifest.identity)) throw new Error(`evidence manifest identity differs from hash-protected ${IDENTITY_EVIDENCE}`)
+  }
   const transcripts = []
   const seen = new Set()
   for (const invocation of manifest.invocations) {

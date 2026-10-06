@@ -5,13 +5,27 @@ import { SUITE_ROOT, contained } from './files.mjs'
 import { loadEvidence, guardPath } from './evidence.mjs'
 import { inspectEvaluatorInputs } from './preflight.mjs'
 import { createCheckpoint, saveCheckpoint, beginUnit, completeUnit, failUnit } from './checkpoint.mjs'
-import { readJson, writeJsonAtomic, writeTextAtomic } from './persistence.mjs'
+import { readJson, writeJsonAtomic, writeTextAtomic, hashJson } from './persistence.mjs'
 import { reconcileConversation } from './reconciliation.mjs'
 import { auditContamination } from './contamination.mjs'
 import { createJudgingPhases } from './judging.mjs'
 import { ingestDefineMetrics } from './runner-metrics.mjs'
 import { assembleResult, writeResultArtifacts } from './result.mjs'
 import { failureOutcome } from './outcomes.mjs'
+// The manifest identity is hash-protected by loadEvidence. When the original
+// run's own records survive, they must also agree with it; a rescore source
+// records its original under `original`.
+async function crossCheckOriginal(source, identity) {
+  for (const file of ['run-state.json', 'result.json']) {
+    const path = join(source, file); await guardPath(source, path)
+    const record = await readJson(path, null)
+    if (!record) continue
+    const recorded = record.kind === 'rescore' || record.mode === 'rescore' ? record.original : record
+    for (const field of ['run_id', 'series_identity', 'candidate']) {
+      if (hashJson(recorded?.[field] ?? null) !== hashJson(identity[field] ?? null)) throw new Error(`original identity mismatch: ${file} ${field} differs from the evidence manifest`)
+    }
+  }
+}
 // Read original evidence exclusively through the verified manifest. Only its
 // byte buffers are copied; no workspace, old judgments, or runtime is consulted.
 export async function rescoreEvaluation(options, dependencies = {}) {
@@ -21,6 +35,7 @@ export async function rescoreEvaluation(options, dependencies = {}) {
   if (await lstat(runDir).catch(error => { if (error.code !== 'ENOENT') throw error; return null })) throw new Error('rescore output directory is already used')
   const evidence = await loadEvidence(source)
   if (!evidence.manifest.identity?.series_identity || !evidence.manifest.identity?.candidate) throw new Error('evidence manifest lacks original series identity and candidate')
+  await crossCheckOriginal(source, evidence.manifest.identity)
   const { seriesIdentity } = await (dependencies.inspectEvaluator ?? inspectEvaluatorInputs)({ suiteRoot })
   await mkdir(dirname(runDir), { recursive: true })
   await mkdir(runDir)

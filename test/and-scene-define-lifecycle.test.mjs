@@ -253,6 +253,38 @@ test('INT-008 host rescore uses only manifest evidence, current evaluator inputs
   await writeFile(join(f.options.runDir, 'collected/proposal.md'), 'tampered')
   await assert.rejects(rescoreEvaluation({ ...options, runDir: join(f.options.runDir, '../tampered-rescore') }, deps), /evidence hash mismatch/)
 })
+test('rescore refuses an original identity that is not the hash-protected or recorded one', async t => {
+  const f = await fixture(t, 'capped'); await runEvaluation(f.options, f.deps)
+  const source = f.options.runDir
+  const manifestPath = join(source, 'evidence-manifest.json')
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+  assert.ok(manifest.files.some(x => x.path === 'evidence/identity.json'))
+  assert.deepEqual(JSON.parse(await readFile(join(source, 'evidence/identity.json'), 'utf8')), manifest.identity)
+  const deps = { inspectEvaluator: async () => ({ seriesIdentity: { rubric: 999 } }), judges: missingJudges([]), loadInputs: minimalInputs, gateCommand: async () => ({ status: 1 }) }
+  let n = 0
+  const rescore = () => rescoreEvaluation({ rescoreFrom: source, runDir: join(source, `../tamper-${n++}`) }, deps)
+  // Editing only the manifest's identity is detected against the hashed copy.
+  await writeFile(manifestPath, JSON.stringify({ ...manifest, identity: { ...manifest.identity, candidate: { ...manifest.identity.candidate, agent_skills_commit: 'forged' } } }))
+  await assert.rejects(rescore(), /identity/)
+  // Editing the hashed copy is a hash mismatch.
+  await writeFile(manifestPath, JSON.stringify(manifest))
+  const identityText = await readFile(join(source, 'evidence/identity.json'), 'utf8')
+  await writeFile(join(source, 'evidence/identity.json'), JSON.stringify({ ...manifest.identity, run_id: 'forged' }))
+  await assert.rejects(rescore(), /evidence hash mismatch: evidence\/identity.json/)
+  await writeFile(join(source, 'evidence/identity.json'), identityText)
+  // Consistently forged manifest evidence still disagrees with the recorded run state or result.
+  const forged = { ...manifest.identity, series_identity: { forged: true } }
+  const forgedText = JSON.stringify(forged)
+  const { createHash } = await import('node:crypto')
+  await writeFile(join(source, 'evidence/identity.json'), forgedText)
+  await writeFile(manifestPath, JSON.stringify({ ...manifest, identity: forged, files: manifest.files.map(x => x.path === 'evidence/identity.json' ? { ...x, sha256: createHash('sha256').update(forgedText).digest('hex') } : x) }))
+  await assert.rejects(rescore(), /run-state.json.*series_identity/)
+  await rm(join(source, 'run-state.json'))
+  await assert.rejects(rescore(), /result.json.*series_identity/)
+  // Untampered evidence still rescores.
+  await writeFile(join(source, 'evidence/identity.json'), identityText); await writeFile(manifestPath, JSON.stringify(manifest))
+  assert.equal((await rescore()).result.evaluation_status, 'complete')
+})
 test('INT-008 publication-only resume preserves completed result and never preflights or dispatches', async t => {
   const f = await fixture(t, 'capped'); const calls = []; let failPush = true; let publications = 0
   delete f.deps.handlers
