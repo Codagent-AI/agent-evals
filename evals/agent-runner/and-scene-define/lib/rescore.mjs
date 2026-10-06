@@ -30,9 +30,9 @@ async function crossCheckOriginal(source, identity) {
 // byte buffers are copied; no workspace, old judgments, or runtime is consulted.
 export async function rescoreEvaluation(options, dependencies = {}) {
   const runDir = resolve(options.runDir); const source = resolve(options.rescoreFrom); const suiteRoot = options.suiteRoot ?? SUITE_ROOT
-  if (runDir === source || runDir.startsWith(source + '/')) throw new Error('rescore requires a separate new output directory')
+  if (runDir === source || runDir.startsWith(source + '/')) throw Object.assign(new Error('rescore requires a separate new output directory'), { usage: true })
   await guardPath(runDir, runDir)
-  if (await lstat(runDir).catch(error => { if (error.code !== 'ENOENT') throw error; return null })) throw new Error('rescore output directory is already used')
+  if (await lstat(runDir).catch(error => { if (error.code !== 'ENOENT') throw error; return null })) throw Object.assign(new Error('rescore output directory is already used'), { usage: true })
   const evidence = await loadEvidence(source)
   if (!evidence.manifest.identity?.series_identity || !evidence.manifest.identity?.candidate) throw new Error('evidence manifest lacks original series identity and candidate')
   await crossCheckOriginal(source, evidence.manifest.identity)

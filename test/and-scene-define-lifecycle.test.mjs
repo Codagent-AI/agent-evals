@@ -406,4 +406,12 @@ test('rescore from a directory that is not a collected run fails with a clear me
   assert.match(stderr, /evidence manifest .*not found.*source/)
   assert.doesNotMatch(stderr, /\n\s+at /)
   assert.doesNotMatch(stderr, /ENOENT/)
+  const { loadEvidence } = await import('../evals/agent-runner/and-scene-define/lib/evidence.mjs')
+  await assert.rejects(loadEvidence(join(root, 'source')), error => error.usage === true && error.cause?.code === 'ENOENT')
+  // An unexpected failure, such as a corrupt manifest, keeps its stack.
+  await writeFile(join(root, 'source/evidence-manifest.json'), '{not json')
+  const corrupt = await run()
+  assert.equal(corrupt.code, 1)
+  assert.match(corrupt.stderr, /^and-scene-define: /)
+  assert.match(corrupt.stderr, /\n\s+at /)
 })
