@@ -126,9 +126,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 11.2 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
+test('rubric 12.0 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '11.2.0')
+  assert.equal(rubric.version, '12.0.0')
   assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(
@@ -591,4 +591,17 @@ test('rubric 11.0 scores each omission once and settles the round-3 splits', asy
   assert.match(definition('testing-evidence-final-revision-applicability'), /changed verification or test script counts as explored even though the record does not name that script/)
   // Round 4b: two span audits failed controls-keep-keys for a slider the deck never renders.
   assert.match(guidance('scene-modes-and-navigation'), /do not fail the criterion for a hypothetical control type/)
+})
+
+// Round-4 audit: judges invented a partial-deletion scenario for a missing
+// sample and split on whether a type-checked build proves a typed boundary.
+test('rubric 12.0 defines a missing sample and what proves a compile-time claim', async () => {
+  const rubric = await automatedRubric()
+  const rows = rubric.components.flatMap(({ subcomponents }) => subcomponents)
+  const guidance = (id) => rows.find((row) => row.id === id).review_guidance.join('\n')
+  const definition = (id) => rows.find((row) => row.criterion_definitions?.[id]).criterion_definitions[id]
+  assert.match(guidance('verification-missing-sample'), /A missing sample means the reference presentation is not registered/)
+  assert.match(guidance('verification-missing-sample'), /names the build or sample phase satisfies the criterion/)
+  assert.match(guidance('verification-missing-sample'), /Do not construct partial-deletion scenarios/)
+  assert.match(definition('testing-evidence-usable-proof'), /proven by a recorded successful type-checked build/)
 })

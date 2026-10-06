@@ -667,9 +667,9 @@ The automated product rubric and human-review rubric SHALL have distinct explici
 - **AND** it records component applicability and the score denominator
 
 ### Requirement: Robust judge verdicts
-No single model call SHALL decide a scored criterion. Every scored judge job SHALL be judged by two independent samples with identical inputs, run concurrently at an explicitly pinned reasoning effort. Each source-job sample SHALL pass through its own closed-world source audit: a `contradicted` classification SHALL mark that sample's vote disputed and SHALL NOT invert it, an `insufficient` classification SHALL trigger at most one focused re-cite, and a verdict still undecided after the re-cite SHALL stand as the sample's vote, except that a browser-fallback pass SHALL then fail because it must be proven from source. A verdict both samples agree on, with neither vote disputed, SHALL stand, pass or fail. A criterion the samples disagree on, or whose vote either sample's audit disputed, SHALL be settled by a third independent sample that receives the job's unchanged context and never sees the first two verdicts; its vote decides the majority.
+No single model call SHALL decide a scored criterion. Every scored judge job SHALL be judged by two independent samples with identical inputs, run concurrently at an explicitly pinned reasoning effort. Each source-job sample SHALL pass through its own closed-world source audit: a `contradicted` classification SHALL mark that sample's vote disputed, and the vote SHALL turn only when an independent contradiction check confirms the audit's stated contradiction, an `insufficient` classification SHALL trigger at most one focused re-cite, and a verdict still undecided after the re-cite SHALL stand as the sample's vote, except that a browser-fallback pass SHALL then fail because it must be proven from source. A verdict both samples agree on, with neither vote disputed, SHALL stand, pass or fail. A criterion the samples disagree on, or whose vote either sample's audit disputed, SHALL be settled by a third independent sample that receives the job's unchanged context and never sees the first two verdicts; its vote decides the majority.
 
-A majority pass SHALL cite between one and twelve line spans, each under 200 lines, whose paths are in the verified neutral source inventory for a source job or the materialized evidence view for an evidence job, resolve inside that root without a symbolic link, and lie inside the file. A closed-world span audit SHALL check the quoted lines against every clause of the criterion's requirement and review guidance. `insufficient` SHALL ask the third sample to re-cite once, and an audit that still cannot decide SHALL leave the majority pass standing with that recorded. `contradicted` SHALL be replicated by a second independent audit, and the majority pass SHALL be withdrawn only when both audits find a contradiction. An unconfirmed browser-fallback majority pass SHALL fail. Invalid third-sample output, including an invalid span, SHALL be retried and, once exhausted, SHALL leave the job unobserved as a harness failure, as SHALL an exhausted sample.
+A majority pass SHALL cite between one and twelve line spans, each under 200 lines, whose paths are in the verified neutral source inventory for a source job or the materialized evidence view for an evidence job, resolve inside that root without a symbolic link, and lie inside the file. A closed-world span audit SHALL check the quoted lines against every clause of the criterion's requirement and review guidance. `insufficient` SHALL ask the third sample to re-cite once, and an audit that still cannot decide SHALL leave the majority pass standing with that recorded. `contradicted` SHALL be checked by an independent contradiction check that judges that audit's stated contradiction against the quoted lines and the rubric, and the majority pass SHALL be withdrawn only when the check confirms that same contradiction; both SHALL be recorded. An unconfirmed browser-fallback majority pass SHALL fail. Invalid third-sample output, including an invalid span, SHALL be retried and, once exhausted, SHALL leave the job unobserved as a harness failure, as SHALL an exhausted sample.
 
 Every judge, sample, third sample, and audit SHALL see, beside each criterion, the requirement it traces to: the full fixture scenario from the pinned snapshot for a fixture-owned criterion, or the eval-owned reason. A pass SHALL meet every clause of that requirement as clarified by its review guidance, and judges SHALL NOT add requirements the requirement and its guidance do not state. Source judges SHALL trace a constant, member, prop, or input through every use before calling it dead, and SHALL treat shown, visible, or on-screen content as rendered content, not an `aria-label`, attribute, or visually hidden text. Evidence judges SHALL compare every behavior the exploration plan commits to with what the log observed or disclosed, and the assumption judge SHALL receive the full approved requirements as reference for its omission check.
 
@@ -686,15 +686,23 @@ Each criterion result SHALL record its judging basis (`consensus-pass`, `consens
 
 #### Scenario: A sample's own audit contradicts its vote
 - **WHEN** both samples pass a criterion and one sample's source audit classifies its pass as contradicted
-- **THEN** that vote is marked disputed rather than inverted
-- **AND** the blind third sample decides the criterion
+- **THEN** that vote is marked disputed and an independent check judges the stated contradiction
+- **AND** a refuted contradiction leaves both passes standing, while a confirmed one turns the vote and the blind third sample decides between two signals
 
-#### Scenario: One audit contradicts a majority pass
-- **WHEN** the first span audit contradicts the third sample's quoted lines and a second independent audit does not
+#### Scenario: Two audits contradict for different reasons
+- **WHEN** a span audit contradicts a majority pass and the contradiction check finds that stated reason does not hold under the rubric
 - **THEN** the majority pass stands
 
-#### Scenario: Two audits contradict a majority pass
-- **WHEN** two independent span audits both find the quoted lines contradict the requirement
+#### Scenario: A judge invents a scenario the candidate does not produce
+- **WHEN** a judge would fail a criterion on a hypothetical input, file deletion, or rendering that the cited source and evidence do not show
+- **THEN** the shared scope rule in every judge, audit, and check prompt directs it not to, unless the criterion's guidance names that scenario
+
+#### Scenario: A check refutes a span contradiction
+- **WHEN** the span audit contradicts the third sample's quoted lines and the independent check does not confirm that stated contradiction
+- **THEN** the majority pass stands
+
+#### Scenario: A check confirms a span contradiction
+- **WHEN** the independent check confirms the span audit's stated contradiction of the quoted lines
 - **THEN** the criterion fails
 
 #### Scenario: The span audit cannot decide

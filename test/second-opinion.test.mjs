@@ -565,3 +565,17 @@ test('a second sample\'s replay still runs when the first sample\'s replay does 
   assert.equal(outcome.samples[0].decision, 'overturn-rejected')
   assert.equal(outcome.samples[1].decision, 'overturn')
 })
+
+test('the verifier and its audit carry the shared judging scope rule', async () => {
+  const rubrics = await loadRubrics()
+  const rationale = 'keyboard 1/0, swipe 1/0, direct jump 0'
+  const request = buildSecondOpinionRequest({ target: { kind: 'criterion', id: 'demo-supported-navigation' }, rubrics,
+    browser: { criteria: [{ id: 'demo-supported-navigation', verdict: 'fail', rationale }],
+      probes: [{ id: 'demo-supported-navigation', result: { verdict: 'fail', rationale } }], gates: [] },
+    judging: null, neutral: null, authority: { cli: 'codex', model: 'm' } })
+  const { buildSpanAuditRequest } = await import('../evals/agent-runner/and-scene/lib/second-opinion.mjs')
+  const audit = buildSpanAuditRequest({ request, answer: { mismeasured_step: 's', measurement_fault: 'f' }, spans: [], logSpans: [] })
+  for (const prompt of [request.prompt, audit.prompt]) {
+    assert.match(prompt, /hypothetical input, file deletion, or rendering the candidate does not produce/)
+  }
+})

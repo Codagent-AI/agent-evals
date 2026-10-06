@@ -32,8 +32,9 @@ No single model call decides a scored criterion. Each judge job runs two
 independent samples with identical inputs, concurrently, at a pinned reasoning
 effort (`medium`, the judge model's default). Each source-job sample passes
 through its own closed-world source audit. A contradiction never inverts that
-sample's vote: it marks the vote disputed, and a disputed criterion goes to the
-third sample below. An undecided audit gets one focused re-cite, and a verdict
+sample's vote by itself: it marks the vote disputed, and an independent
+contradiction check then decides whether that stated contradiction holds. Only
+a confirmed contradiction turns the vote; a refuted one leaves it standing. An undecided audit gets one focused re-cite, and a verdict
 still undecided after that stands as the sample's vote rather than spending
 more citation cycles (a browser-fallback pass, which must be proven from
 source, fails instead). A verdict both samples agree on, with neither vote
@@ -51,10 +52,16 @@ quoted lines against every clause of the criterion's requirement. Only
 `confirmed` is recorded as confirmed; `insufficient` asks the same third sample
 to re-cite once, and if the audit still cannot decide, the majority stands with
 that noted; `contradicted` is replicated by a second independent audit, and the
-majority pass is withdrawn only when both audits find a contradiction. So a
-split is decided by votes; a single audit can only send a criterion to the
-third sample, and a pass is withdrawn only when two independent audits agree it
-is contradicted. Invalid third-sample output is retried and, once exhausted,
+majority pass is withdrawn only when an independent contradiction check
+confirms that same stated contradiction; the check judges the first audit's
+reason against the quoted lines and the rubric rather than auditing afresh, and
+both are recorded. So every verdict rests on two agreeing signals: a consensus,
+a majority of votes, or an audit's contradiction confirmed by a check. Every
+judge, audit, and check prompt also carries one shared rule: judge only
+behavior the cited source and recorded evidence establish, never a
+hypothetical input, file deletion, or rendering the candidate does not
+produce unless the guidance names it, and read an undefined term by the plain
+meaning of its fixture requirement. Invalid third-sample output is retried and, once exhausted,
 leaves the job unobserved, never failed.
 
 Every judge sees, beside each criterion, the requirement it traces to: the

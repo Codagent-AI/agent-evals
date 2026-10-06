@@ -9,6 +9,9 @@ import {
   PRODUCT_JUDGE_JOB_IDS,
   buildSourceAuditRequest,
   buildJudgeRequest,
+  buildTiebreakRequest,
+  buildSpanAuditRequest,
+  buildContradictionCheckRequest,
   parseJudgeOutput,
   runJudgeJob,
   productJudgeJobs,
@@ -1338,8 +1341,11 @@ test('a disagreement is settled by an independent third sample whose pass needs 
 // same evidence scored differently across runs. An undecided audit now asks
 // the third sample to re-cite once and otherwise leaves the majority standing;
 // only two independent audits that both find a contradiction flip it.
-function tiebreakScenario({ audits, recite = null }) {
+function tiebreakScenario({ audits, recite = null, checks = [] }) {
   return async (request) => {
+    if (request.audit_stage === 'contradiction-check') {
+      return auditOutput(['navigation-touch-swipe'], { 'navigation-touch-swipe': checks.shift() })
+    }
     if (request.audit_stage === 'tiebreak-span-audit') {
       return auditOutput(['navigation-touch-swipe'], { 'navigation-touch-swipe': audits.shift() })
     }
@@ -1389,30 +1395,40 @@ test('a span audit still undecided after the re-cite leaves the majority pass st
   }
 })
 
-test('one contradicting span audit cannot flip a majority pass', async () => {
+// Round-4 audit: two span audits withdrew a 2-of-3 pass for different
+// reasons, one of which the rubric itself contradicts. The second call now
+// checks the first audit's stated contradiction rather than auditing afresh.
+test('a span contradiction the check does not confirm leaves the majority pass standing', async () => {
   const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  const requests = []
   try {
+    const invoke = tiebreakScenario({ audits: ['contradicted'], checks: ['contradicted'] })
     const outcome = await runRobustJudgeJob({
       request: tree.request(['navigation-touch-swipe']),
-      invoke: tiebreakScenario({ audits: ['contradicted', 'confirmed'] }),
+      invoke: async (request) => { requests.push(request); return invoke(request) },
     })
     assert.equal(outcome.results[0].verdict, 'pass')
-    assert.equal(outcome.tiebreak.audit_results.length, 2)
+    assert.equal(outcome.tiebreak.audit_results.length, 1)
+    assert.equal(outcome.tiebreak.contradiction_checks.length, 1)
+    const check = requests.find(({ audit_stage: stage }) => stage === 'contradiction-check')
+    assert.match(check.prompt, /the cited packet omits the required mechanism|the cited packet resolves the primary claim/)
+    assert.match(check.prompt, /Decide\s+whether this stated contradiction holds/)
+    assert.doesNotMatch(check.prompt, /Classify every primary result/)
   } finally {
     await rm(tree.root, { recursive: true, force: true })
   }
 })
 
-test('two independent contradicting span audits turn the majority pass into a fail', async () => {
+test('a majority pass is withdrawn only when the check confirms the same stated contradiction', async () => {
   const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
   try {
     const outcome = await runRobustJudgeJob({
       request: tree.request(['navigation-touch-swipe']),
-      invoke: tiebreakScenario({ audits: ['contradicted', 'contradicted'] }),
+      invoke: tiebreakScenario({ audits: ['contradicted'], checks: ['confirmed'] }),
     })
     assert.equal(outcome.results[0].verdict, 'fail')
     assert.equal(outcome.consensus[0].basis, 'majority-fail')
-    assert.match(outcome.results[0].rationale, /two independent span audits/)
+    assert.match(outcome.results[0].rationale, /confirmed by an independent check/)
   } finally {
     await rm(tree.root, { recursive: true, force: true })
   }
@@ -1617,30 +1633,99 @@ test('the assumption judge is told to run the omission check', () => {
 // unanimous pass into a manufactured split. A contradicted sample now sends
 // the criterion to the blind third sample, and only two span audits that
 // agree can withdraw a pass.
-test('a sample whose own audit contradicts it sends the criterion to the blind third sample', async () => {
-  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+// Round-4 audit: with one vote disputed, one tiebreak call decided the
+// criterion alone. A dispute now counts only after an independent check
+// confirms the audit's stated contradiction, and the verdict always rests on
+// two agreeing signals.
+function disputeScenario({ checks, tiebreak = null, votes = { 1: 'pass', 2: 'pass' } }) {
   const stages = []
+  const invoke = async (next) => {
+    stages.push(`${stageOf(next)}:${next.judge_sample ?? '-'}`)
+    if (next.audit_stage === 'contradiction-check') {
+      return auditOutput(['navigation-touch-swipe'], { 'navigation-touch-swipe': checks.shift() })
+    }
+    if (next.audit_stage === 'source-pass-audit') {
+      return auditOutput(['navigation-touch-swipe'], next.judge_sample === 2
+        ? { 'navigation-touch-swipe': 'contradicted' } : {})
+    }
+    if (next.audit_stage === 'tiebreak-span-audit') return auditOutput(['navigation-touch-swipe'])
+    if (next.judge_stage === 'tiebreak') {
+      return lineCited({ 'navigation-touch-swipe': tiebreak === 'pass'
+        ? ['pass', [{ path: 'src/nav.ts', start_line: 3, end_line: 3 }]] : ['fail'] })
+    }
+    return verdicts({ 'navigation-touch-swipe': votes[next.judge_sample] })
+  }
+  return { stages, invoke }
+}
+
+test('a dispute the check refutes leaves the sample\'s vote standing, so agreeing votes need no third sample', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
   try {
-    const request = { ...tree.request(['navigation-touch-swipe']), source_audit: true }
-    const outcome = await runRobustJudgeJob({
-      request,
-      invoke: async (next) => {
-        stages.push(`${stageOf(next)}:${next.judge_sample ?? '-'}`)
-        if (next.audit_stage === 'source-pass-audit') {
-          return auditOutput(['navigation-touch-swipe'], next.judge_sample === 2
-            ? { 'navigation-touch-swipe': 'contradicted' } : {})
-        }
-        if (next.audit_stage === 'tiebreak-span-audit') return auditOutput(['navigation-touch-swipe'])
-        if (next.judge_stage === 'tiebreak') {
-          return lineCited({ 'navigation-touch-swipe': ['pass', [{ path: 'src/nav.ts', start_line: 3, end_line: 3 }]] })
-        }
-        return verdicts({ 'navigation-touch-swipe': 'pass' })
-      },
-    })
-    assert.ok(stages.includes('tiebreak:3'), stages.join(' '))
+    const scenario = disputeScenario({ checks: ['contradicted'] })
+    const outcome = await runRobustJudgeJob({ request: { ...tree.request(['navigation-touch-swipe']), source_audit: true },
+      invoke: scenario.invoke })
+    assert.equal(scenario.stages.some((stage) => stage.startsWith('tiebreak')), false)
+    assert.equal(outcome.results[0].verdict, 'pass')
+    assert.equal(outcome.consensus[0].basis, 'consensus-pass')
+    assert.deepEqual(outcome.consensus[0].disputes, [{ sample: 2, vote: 'pass', contradiction_confirmed: false }])
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+test('a confirmed dispute turns that vote and the blind third sample decides between two signals', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  try {
+    const scenario = disputeScenario({ checks: ['confirmed'], tiebreak: 'pass' })
+    const outcome = await runRobustJudgeJob({ request: { ...tree.request(['navigation-touch-swipe']), source_audit: true },
+      invoke: scenario.invoke })
+    assert.ok(scenario.stages.includes('tiebreak:3'), scenario.stages.join(' '))
     assert.equal(outcome.results[0].verdict, 'pass')
     assert.equal(outcome.consensus[0].basis, 'majority-pass')
-    assert.deepEqual(outcome.consensus[0].sample_verdicts, ['pass', 'disputed', 'pass'])
+    assert.deepEqual(outcome.consensus[0].sample_verdicts, ['pass', 'fail', 'pass'])
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+test('a confirmed dispute that agrees with the other sample settles the criterion without a third sample', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  try {
+    const scenario = disputeScenario({ checks: ['confirmed'], votes: { 1: 'fail', 2: 'pass' } })
+    const outcome = await runRobustJudgeJob({ request: { ...tree.request(['navigation-touch-swipe']), source_audit: true },
+      invoke: scenario.invoke })
+    assert.equal(scenario.stages.some((stage) => stage.startsWith('tiebreak')), false)
+    assert.equal(outcome.results[0].verdict, 'fail')
+    assert.equal(outcome.consensus[0].basis, 'consensus-fail')
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+// Round-4 audit: judges failed criteria on hypothetical deletions, inputs, and
+// controls the candidate never produces, and read undefined terms differently.
+test('every judge and audit prompt limits judgment to established behavior and plain fixture meaning', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  const prompts = new Map()
+  try {
+    for (const job of ['scene-kit', 'testing-evidence']) {
+      prompts.set(`${job} sample`, buildJudgeRequest({ rubrics, job, authority, sources: ['src/nav.ts'] }).prompt)
+    }
+    const request = buildJudgeRequest({ rubrics, job: 'scene-kit', authority, sources: ['src/nav.ts'],
+      neutral: { root: tree.root, source_root: join(tree.root, 'source'), requirements_root: join(tree.root, 'r') } })
+    prompts.set('source audit', (await buildSourceAuditRequest({ request, primaryResults: [{ id: request.criteria[0],
+      verdict: 'pass', rationale: 'r', evidence: ['e'], citations: ['src/nav.ts'] }] })).prompt)
+    prompts.set('tiebreak', buildTiebreakRequest({ request, criteria: [request.criteria[0]],
+      inventory: { root: tree.root, kind: 'neutral source', paths: ['src/nav.ts'] } }).prompt)
+    prompts.set('span audit', buildSpanAuditRequest({ request, passes: [{ id: request.criteria[0], rationale: 'r' }],
+      spans: new Map() }).prompt)
+    prompts.set('contradiction check', buildContradictionCheckRequest({ request, claims: [{ id: request.criteria[0],
+      verdict: 'pass', rationale: 'r', contradiction: { rationale: 'c', evidence: ['e'] }, material: [] }] }).prompt)
+    for (const [name, prompt] of prompts) {
+      assert.match(prompt, /Judge only behavior the cited source and recorded evidence establish/, name)
+      assert.match(prompt, /hypothetical input, file deletion, or rendering the candidate does not produce/, name)
+      assert.match(prompt, /plain meaning of the fixture requirement/, name)
+    }
   } finally {
     await rm(tree.root, { recursive: true, force: true })
   }
