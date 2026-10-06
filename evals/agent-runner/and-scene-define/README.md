@@ -5,8 +5,10 @@ fixture is `https://github.com/Codagent-AI/and-scene.git` at
 `ad667a965a0e1ea0b028c36c04d57bf0411d30d9`, change `create-and-scene`.
 The host controller runs `openspec:change --until define` through Agent Runner's
 sandbox and answers interactive turns using the host-side simulated user.
-Candidate runs currently stop after artifact collection: reconciliation, audits,
-judging, discovery, reporting, and publication remain later work. The result is
+Collection now retains native transcripts, reconciles conversation replies, and
+audits contamination before scoring. Clean candidates currently stop at the
+unimplemented disclosure audit; judging, discovery, reporting, and publication
+remain later work. Contaminated candidates stop immediately with no score. The result is
 `evaluation-harness-failed` with `definition_verdict=unavailable`, naming the first
 unimplemented phase and the missing registrations; it never claims completion.
 
@@ -185,12 +187,30 @@ The Docker image is not canary-scanned; this gap is retained in preflight eviden
 The private `sandbox/.runtime/` retains Runner projects, Codex session stores,
 Claude projects, and Cursor chats. Credentials and CLI configuration stay in the
 disposable home. Do not publish `.runtime/`. Workflow state, audit, and metrics
-are copied into host `evidence/`; `collected/` freezes definition artifacts and
+and every evaluated invocation's native transcript, exchange records, and per-turn
+outputs are copied into host `evidence/`. `evidence-manifest.json` hashes every
+retained input needed for rescore, including `conversation.jsonl` and `collected/`.
+Collection rejects missing, truncated, or incomplete native transcripts. Cursor
+crosschecks require the host `sqlite3` CLI; collection uses its backup API to
+retain a consistent snapshot including uncheckpointed WAL data.
+
+`collected/` freezes definition artifacts and
 `phases/collection.json` records HEAD and every file's SHA-256. Later evaluation
 phases read the frozen collection. Workflow metrics ingestion is registered only
 after discovery; its unit-tested implementation preserves native provenance,
 partial usage, unknown costs, and per-step/per-role attribution. Eval-owned usage
 remains separate in `phases/eval-owned-usage.jsonl`.
+
+Reconciliation and contamination audit read retained evidence only and are
+checkpointed as separate phases. `phases/reconciliation.json` records successful
+one-to-one reconciliation; a mismatch names the exchange and record in
+`result.json`. `phases/contamination-audit.json` has deterministic matches with
+session, tool call, pattern, and excerpt, plus excluded disclosed canaries and
+the residual-risk statement. Locator patterns scan every tool input and output;
+undisclosed canaries skip file-writing tools. A match has no override and blocks
+all later phases, including on resume. The result carries the audit and residual
+risks: public network access, agent-writable evidence, the unscanned Runner
+image, and the open network/private-fixture/separate-user hardening options.
 
 The default checkout-independent tests exercise the driver with stub CLIs and
 the lifecycle with a fake sandbox, without paid calls. Test INT-006 invokes the

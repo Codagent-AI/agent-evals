@@ -17,7 +17,15 @@ async function fixture(t, outcome = 'interrupted') {
     await mkdir(session, { recursive: true })
     await writeFile(join(session, 'state.json'), JSON.stringify({ workflowName: 'openspec:change', currentStep: { stepId: 'define', completed: kind === 'capped' }, completed: false }))
     await writeFile(join(session, 'audit.log'), kind === 'failed' ? '2026-10-05T00:00:00Z [define, sub:define-change, design] step_end {"outcome":"failed","error":"CLI failed"}\n' : kind === 'capped' ? '2026-10-05T00:00:00Z [define] step_end {"outcome":"success"}\n2026-10-05T00:00:00Z run_end {"outcome":"success","completed":false}\n' : '2026-10-05T00:00:00Z [define, sub:define-change, specs] step_start {}\n')
-    await writeFile(join(session, 'run-metrics.json'), JSON.stringify({ schema_version: 3, run_id: 'runner-one', workflow: 'openspec:change', history_complete: false, steps: [] }))
+    await mkdir(join(session, 'external-user'), { recursive: true })
+    await mkdir(join(session, 'output'), { recursive: true })
+    const native = join(options.runDir, 'sandbox/.runtime/codex/sessions')
+    await mkdir(native, { recursive: true })
+    await writeFile(join(native, 'rollout-fixture-lead.jsonl'), '{"type":"event_msg","payload":{"type":"task_complete"}}\n')
+    await writeFile(join(session, 'output/define_proposal.attempt-1.turn-1.out'), '{"type":"turn.completed"}\n')
+    await writeFile(join(session, 'external-user/exchanges.jsonl'), '')
+    await writeFile(join(options.runDir, 'conversation.jsonl'), '')
+    await writeFile(join(session, 'run-metrics.json'), JSON.stringify({ schema_version: 3, run_id: 'runner-one', workflow: 'openspec:change', history_complete: false, steps: [{ id: 'proposal', prefix: 'define/proposal', cli: 'codex', agent_invoked: true, session_id: 'lead' }] }))
   }
   class FakeSandbox extends LocalSandbox {
     plan() { return { command: ['fake'], output: 'fake-plan' } }
@@ -46,7 +54,7 @@ test('INT-008 interrupted workflow resumes exact Runner ID without a second fres
   const resumed = await runEvaluation({ ...f.options, resume: true }, f.deps)
   assert.deepEqual(f.modes, [{ kind: 'fresh' }, { kind: 'resume', runId: 'runner-one' }])
   assert.equal(resumed.result.definition_verdict, 'unavailable'); assert.notEqual(resumed.result.evaluation_status, 'complete')
-  assert.equal(resumed.result.owning_phase, 'conversation-reconciliation'); assert.ok(resumed.result.unimplemented_phases.includes('discovery'))
+  assert.equal(resumed.result.owning_phase, 'disclosure-audit'); assert.ok(resumed.result.unimplemented_phases.includes('discovery'))
   assert.equal(await readFile(join(f.options.runDir, 'collected/proposal.md'), 'utf8'), 'proposal')
   assert.equal((await runEvaluation({ ...f.options, resume: true }, f.deps)).result.resumable, true)
   assert.equal(f.modes.length, 2)
@@ -142,4 +150,55 @@ test('recovery eligibility does not relax the Runner workflow identity check', a
   assert.equal(result.resumable, false)
   assert.match(result.observed_error, /unexpected Agent Runner workflow/)
   assert.deepEqual(f.modes, [{ kind: 'fresh' }])
+})
+
+test('contamination checkpoints the audit and prevents gates, judging, and publication on fresh and resumed runs', async t => {
+  const f = await fixture(t, 'capped')
+  const start = f.deps.sandbox.start.bind(f.deps.sandbox)
+  f.deps.sandbox.start = async (...args) => {
+    await start(...args)
+    await writeFile(join(f.options.runDir, 'sandbox/.runtime/codex/sessions/rollout-fixture-lead.jsonl'), [
+      { type: 'response_item', payload: { type: 'web_search_call', id: 'fixture-fetch', action: { query: 'normal' }, results: 'https://github.com/Codagent-AI/and-scene' } },
+      { type: 'event_msg', payload: { type: 'task_complete' } },
+    ].map(JSON.stringify).join('\n') + '\n')
+  }
+  const called = []
+  f.deps.handlers = Object.fromEntries(['disclosure-audit', 'gates-and-judging', 'discovery', 'result-and-report', 'publication'].map(phase => [phase, async () => { called.push(phase); return [] }]))
+  const first = await runEvaluation(f.options, f.deps)
+  assert.equal(first.result.evaluation_status, 'contaminated'); assert.equal(first.result.definition_verdict, 'unavailable')
+  assert.equal(first.result.score, undefined); assert.deepEqual(called, [])
+  assert.ok(first.result.matches.some(m => m.tool_call === 'fixture-fetch'))
+  assert.match(first.result.residual_risk, /Docker image is not scanned/)
+  const state = JSON.parse(await readFile(join(f.options.runDir, 'run-state.json'), 'utf8'))
+  assert.equal(state.phases['contamination-audit'].units.phase.state, 'complete')
+  const resumed = await runEvaluation({ ...f.options, resume: true }, f.deps)
+  assert.equal(resumed.result.evaluation_status, 'contaminated'); assert.deepEqual(called, []); assert.equal(f.modes.length, 1)
+  assert.deepEqual(resumed.result.matches, first.result.matches)
+})
+
+test('a missing evaluated transcript produces a harness failure naming the session', async t => {
+  const f = await fixture(t, 'capped')
+  const start = f.deps.sandbox.start.bind(f.deps.sandbox)
+  f.deps.sandbox.start = async (...args) => { await start(...args); await rm(join(f.options.runDir, 'sandbox/.runtime/codex/sessions/rollout-fixture-lead.jsonl')) }
+  const { result } = await runEvaluation(f.options, f.deps)
+  assert.equal(result.evaluation_status, 'evaluation-harness-failed')
+  assert.equal(result.owning_phase, 'artifact-collection'); assert.match(result.observed_error, /missing.*codex:lead/)
+  assert.equal(result.definition_verdict, 'unavailable'); assert.match(result.residual_risk, /network access/)
+})
+
+test('changed retained evidence invalidates reconciliation and audit checkpoints', async t => {
+  const f = await fixture(t, 'capped')
+  const clean = await runEvaluation(f.options, f.deps)
+  assert.equal(clean.result.contamination_audit.status, 'clean')
+  const manifest = JSON.parse(await readFile(join(f.options.runDir, 'evidence-manifest.json'), 'utf8'))
+  const native = [
+    { type: 'response_item', payload: { type: 'function_call', name: 'exec_command', call_id: 'changed', arguments: '{"cmd":"cat hidden/reference/file"}' } },
+    { type: 'response_item', payload: { type: 'function_call_output', call_id: 'changed', output: 'contents' } },
+    { type: 'event_msg', payload: { type: 'task_complete' } },
+  ].map(JSON.stringify).join('\n') + '\n'
+  await writeFile(join(f.options.runDir, 'sandbox/.runtime/codex/sessions/rollout-fixture-lead.jsonl'), native)
+  await writeFile(join(f.options.runDir, manifest.invocations[0].transcript), native)
+  const resumed = await runEvaluation({ ...f.options, resume: true }, f.deps)
+  assert.equal(resumed.result.evaluation_status, 'contaminated')
+  assert.ok(resumed.result.matches.some(match => match.tool_call === 'changed'))
 })

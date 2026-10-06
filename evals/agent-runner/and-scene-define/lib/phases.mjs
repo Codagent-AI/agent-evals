@@ -4,8 +4,9 @@ export async function runPhases({ handlers, execute = async (name, handler) => h
   const completed = []
   for (const name of phases) {
     if (!handlers[name]) return { completed, missing: phases.filter(phase => !handlers[phase]), blocked: name }
-    await execute(name, handlers[name])
+    const result = await execute(name, handlers[name])
     completed.push(name)
+    if (result?.stop) return { completed, missing: [], blocked: null, outcome: result.outcome }
   }
   return { completed, missing: [], blocked: null }
 }

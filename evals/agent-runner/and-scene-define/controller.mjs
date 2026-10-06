@@ -2,7 +2,7 @@ import { mkdir, rm, rename, readFile, lstat, open, unlink } from 'node:fs/promis
 import { join, resolve, dirname } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
-import { filesUnder } from './lib/files.mjs'
+import { filesUnder, SUITE_ROOT } from './lib/files.mjs'
 import { inspectInputs, verifyMountPlan } from './lib/preflight.mjs'
 import { validateProfiles } from './lib/profiles.mjs'
 import { LocalSandbox, stageRuntime } from './lib/sandbox.mjs'
@@ -14,6 +14,9 @@ import { readRunnerState, listRunnerStates, classifyDefineState } from './lib/ru
 import { runResponder } from './lib/responder.mjs'
 import { ingestDefineMetrics, effectiveDefineInvocations } from './lib/runner-metrics.mjs'
 import { collectArtifacts } from './lib/collection.mjs'
+import { collectEvidence, loadEvidence } from './lib/evidence.mjs'
+import { reconcileConversation } from './lib/reconciliation.mjs'
+import { auditContamination, RESIDUAL_RISK } from './lib/contamination.mjs'
 import { AUTOMATED_PHASES, runPhases } from './lib/phases.mjs'
 import { failureOutcome } from './lib/outcomes.mjs'
 export const DEFAULT_TIME_LIMIT_MS = 3 * 60 * 60 * 1000
@@ -206,9 +209,26 @@ export async function runEvaluation(options, dependencies = {}) {
     'artifact-collection': async () => {
       await privatePath(join(sandbox.artifactDir, 'workspace/repo/openspec/changes/add-presentation-skill'), runDir)
       const manifest = await collectArtifacts({ repoDir: join(sandbox.artifactDir, 'workspace/repo'), runDir })
+      runnerState ??= await readState()
+      const evidence = await collectEvidence({ runDir, runnerDir: runnerState.session_dir })
       checkpoint.collection = manifest
       await persist()
-      return [join(runDir, 'phases/collection.json'), ...await filesUnder(join(runDir, 'collected'))]
+      return [join(runDir, 'phases/collection.json'), join(runDir, 'evidence-manifest.json'), ...evidence.files.map(file => join(runDir, file.path))]
+    },
+    'conversation-reconciliation': async () => {
+      const evidence = await loadEvidence(runDir)
+      const target = join(runDir, 'phases/reconciliation.json')
+      await writeJsonAtomic(target, reconcileConversation(evidence))
+      return [target]
+    },
+    'contamination-audit': async () => {
+      const evidence = await loadEvidence(runDir)
+      const patterns = await readJson(join(options.suiteRoot ?? SUITE_ROOT, 'contamination-patterns.json'))
+      const audit = auditContamination({ ...evidence, patterns })
+      const target = join(runDir, 'phases/contamination-audit.json')
+      await writeJsonAtomic(target, audit)
+      checkpoint.contamination_audit = audit
+      return [target]
     },
     // Registered now, but ordered after discovery: unavailable predecessors block it.
     metrics: async () => {
@@ -239,13 +259,23 @@ export async function runEvaluation(options, dependencies = {}) {
         phase = name
         const inputs = checkpoint ? provenance() : {}
         const dependencies = name === 'preflight' ? {} : { predecessor: AUTOMATED_PHASES[AUTOMATED_PHASES.indexOf(name) - 1], materialization: checkpoint.materialization ?? null }
-        if (!['preflight', 'define-workflow'].includes(name) && (await verifyUnit(checkpoint, { phase: name, unit: 'phase', inputs, dependencies })).reusable) return
+        if (['conversation-reconciliation', 'contamination-audit'].includes(name)) dependencies.evidence_manifest_sha256 = await hashFile(join(runDir, 'evidence-manifest.json'))
+        if (name === 'contamination-audit') dependencies.patterns_sha256 = await hashFile(join(options.suiteRoot ?? SUITE_ROOT, 'contamination-patterns.json'))
+        if (!['preflight', 'define-workflow'].includes(name) && (await verifyUnit(checkpoint, { phase: name, unit: 'phase', inputs, dependencies })).reusable) {
+          if (name === 'contamination-audit') {
+            const audit = await readJson(join(runDir, 'phases/contamination-audit.json'))
+            checkpoint.contamination_audit = audit
+            if (audit.status === 'contaminated') return { stop: true, outcome: audit }
+          }
+          return
+        }
         if (checkpoint) { checkpoint = beginUnit(checkpoint, { phase: name, unit: 'phase', inputs, dependencies }); await persist() }
         const outputs = await handler()
         checkpoint = await completeUnit(checkpoint, { phase: name, unit: 'phase', inputs: provenance(), dependencies, outputs })
         await persist()
+        if (name === 'contamination-audit' && checkpoint.contamination_audit?.status === 'contaminated') return { stop: true, outcome: checkpoint.contamination_audit }
       } })
-      result = lifecycle.blocked ? { ...failureOutcome({ phase: lifecycle.blocked, reason: `phases not yet implemented: ${lifecycle.missing.join(', ')}`, resumable: true }), unimplemented_phases: lifecycle.missing }
+      result = lifecycle.outcome ? { ...lifecycle.outcome, owning_phase: 'contamination-audit', resumable: false } : lifecycle.blocked ? { ...failureOutcome({ phase: lifecycle.blocked, reason: `phases not yet implemented: ${lifecycle.missing.join(', ')}`, resumable: true }), unimplemented_phases: lifecycle.missing }
         : { evaluation_status: 'complete', definition_verdict: checkpoint.definition_verdict ?? 'unavailable', resumable: false }
     }
   } catch (error) {
@@ -256,7 +286,7 @@ export async function runEvaluation(options, dependencies = {}) {
     }
   } finally {
     if (writable && result) {
-      result = { ...result, run_id: checkpoint?.run_id ?? null, series_identity: checkpoint?.series_identity ?? null, candidate: checkpoint?.candidate ?? null, configured_profiles: checkpoint?.candidate?.profiles ?? options.profiles, effective_invocations: checkpoint?.effective_invocations ?? [], runner_run_id: checkpoint?.runner_run_id ?? null }
+      result = { ...result, residual_risk: RESIDUAL_RISK, contamination_audit: checkpoint?.contamination_audit ?? null, run_id: checkpoint?.run_id ?? null, series_identity: checkpoint?.series_identity ?? null, candidate: checkpoint?.candidate ?? null, configured_profiles: checkpoint?.candidate?.profiles ?? options.profiles, effective_invocations: checkpoint?.effective_invocations ?? [], runner_run_id: checkpoint?.runner_run_id ?? null }
       await writeJsonAtomic(join(runDir, 'result.json'), result)
     }
     if (release) await release()
@@ -289,7 +319,7 @@ Options:
   --crosscheck-effort EFFORT Crosscheck effort (required).
   --time-limit DURATION     One elapsed-time limit, default 3h; unchanged on resume.
 Pinned simulated-user and judge profiles cannot be overridden.
-Later audit and scoring phases are not implemented: candidates stop after collection.
+Disclosure and scoring phases are not implemented: clean candidates stop after contamination audit.
 `
 export function parseArguments(args, env = process.env) {
   if (args.includes('--help') || args.includes('-h')) return { help: true }
