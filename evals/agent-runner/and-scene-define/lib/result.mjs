@@ -4,9 +4,23 @@ import { readJson, writeJsonAtomic, writeTextAtomic } from './persistence.mjs'
 import { RESIDUAL_RISK } from './contamination.mjs'
 import { renderReport } from './report.mjs'
 export async function assembleResult({ runDir, outcome, checkpoint }) {
-  const read = path => readJson(join(runDir, path), null)
+  const read = async path => {
+    try { return await readJson(join(runDir, path), null) }
+    catch (error) { throw new Error(`cannot assemble ${path}: ${error.message}`, { cause: error }) }
+  }
   const [score, discovery, contamination, disclosure, reconciliation, metrics, manifest, collection] = await Promise.all(['judges/score.json', 'discovery/ledger.json', 'phases/contamination-audit.json', 'audits/disclosure.json', 'phases/reconciliation.json', 'phases/workflow-metrics.json', 'evidence-manifest.json', 'phases/collection.json'].map(read))
   const usage = await readFile(join(runDir, 'phases/eval-owned-usage.jsonl'), 'utf8').catch(error => { if (error.code !== 'ENOENT') throw error; return '' })
+  const eval_owned_usage = []; const eval_owned_usage_errors = []
+  const lines = usage.split('\n')
+  for (const [index, line] of lines.entries()) {
+    if (!line.trim()) continue
+    try { eval_owned_usage.push(JSON.parse(line)) }
+    catch (error) {
+      // Keep accepted records without treating an interrupted append as a total
+      // assembly failure. Retain line diagnostics so missing usage is visible.
+      eval_owned_usage_errors.push({ line: index + 1, error: error.message, truncated: index === lines.length - 1 && !usage.endsWith('\n') })
+    }
+  }
   return { schema_version: 1, mode: checkpoint?.kind ?? 'candidate', total: null, components: null, coverage: [], quality: [], fidelity: [], gates: [], panel_records: [], added_scope: [], ...score, ...outcome,
     run_id: checkpoint?.run_id ?? outcome.run_id ?? null,
     series_identity: checkpoint?.series_identity ?? null, candidate: checkpoint?.candidate ?? null,
@@ -17,7 +31,7 @@ export async function assembleResult({ runDir, outcome, checkpoint }) {
     discovery_ledger: discovery, contamination_audit: contamination ?? checkpoint?.contamination_audit ?? null,
     disclosure_audit: disclosure, reconciliation, residual_risk: RESIDUAL_RISK,
     provenance: { pinned_inputs: checkpoint?.series_identity ?? null, evidence_manifest: manifest, collection },
-    workflow_metrics: metrics, eval_owned_usage: usage.split('\n').filter(x => x.trim()).map(JSON.parse),
+    workflow_metrics: metrics, eval_owned_usage, eval_owned_usage_errors,
   }
 }
 export async function writeResultArtifacts({ runDir, result }) {

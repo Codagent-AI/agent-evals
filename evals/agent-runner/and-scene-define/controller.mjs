@@ -16,7 +16,7 @@ import { ingestDefineMetrics, effectiveDefineInvocations } from './lib/runner-me
 import { collectArtifacts } from './lib/collection.mjs'
 import { collectEvidence, loadEvidence } from './lib/evidence.mjs'
 import { reconcileConversation } from './lib/reconciliation.mjs'
-import { auditContamination } from './lib/contamination.mjs'
+import { auditContamination, RESIDUAL_RISK } from './lib/contamination.mjs'
 import { createJudgingPhases } from './lib/judging.mjs'
 import { AUTOMATED_PHASES, runPhases } from './lib/phases.mjs'
 import { assembleResult, writeResultArtifacts } from './lib/result.mjs'
@@ -322,7 +322,14 @@ export async function runEvaluation(options, dependencies = {}) {
   } finally {
     try {
       if (writable && result && !artifactsWritten) {
-        result = await assembleResult({ runDir, outcome: result, checkpoint })
+        try { result = await assembleResult({ runDir, outcome: result, checkpoint }) }
+        catch (assemblyError) {
+          // A broken phase artifact must not replace the failure already owned
+          // by the lifecycle or leave the previous attempt's result in place.
+          result = { ...result, assembly_error: assemblyError.message,
+            run_id: checkpoint?.run_id ?? null, series_identity: checkpoint?.series_identity ?? null,
+            candidate: checkpoint?.candidate ?? null, residual_risk: RESIDUAL_RISK }
+        }
         await writeResultArtifacts({ runDir, result })
       }
     } finally { if (release) await release() }

@@ -285,3 +285,32 @@ test('INT-008 contaminated rescore reproduces every match and makes no judge or 
   assert.deepEqual(rescored.result.contamination_audit, original.result.contamination_audit)
   assert.ok(rescored.result.residual_risk)
 })
+for (const corrupt of ['judges/score.json', 'audits/disclosure.json']) {
+  test(`failure finalization preserves the original outcome despite corrupt ${corrupt}`, async t => {
+    const f = await fixture(t)
+    const previous = await runEvaluation(f.options, f.deps)
+    const stale = await readFile(join(f.options.runDir, 'result.json'), 'utf8')
+    f.setNext('failed')
+    const start = f.deps.sandbox.start.bind(f.deps.sandbox)
+    f.deps.sandbox.start = async (...args) => {
+      await start(...args)
+      await mkdir(join(f.options.runDir, corrupt, '..'), { recursive: true })
+      await writeFile(join(f.options.runDir, corrupt), '{"incomplete":')
+    }
+    const { result, exitCode } = await runEvaluation({ ...f.options, resume: true }, f.deps)
+    assert.equal(exitCode, 1)
+    assert.equal(result.evaluation_status, 'definition-workflow-failed')
+    assert.equal(result.owning_phase, 'define-workflow')
+    assert.match(result.observed_error, /CLI failed/)
+    assert.equal(result.resumable, true)
+    assert.equal(result.run_id, previous.result.run_id)
+    assert.deepEqual(result.series_identity, previous.result.series_identity)
+    assert.deepEqual(result.candidate, previous.result.candidate)
+    assert.ok(result.residual_risk)
+    assert.match(result.assembly_error, /JSON/)
+    assert.deepEqual(JSON.parse(await readFile(join(f.options.runDir, 'result.json'), 'utf8')), result)
+    assert.notEqual(await readFile(join(f.options.runDir, 'result.json'), 'utf8'), stale)
+    assert.match(await readFile(join(f.options.runDir, 'report.html'), 'utf8'), /CLI failed/)
+    await assert.rejects(readFile(join(f.options.runDir, '.controller.lock')), { code: 'ENOENT' })
+  })
+}

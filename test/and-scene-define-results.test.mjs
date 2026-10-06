@@ -87,3 +87,14 @@ test('INT-008 publication commits only curated files and retries a rejected push
 
   for (const result of [{ ...core, evaluation_status: 'contaminated' }, { ...core, evaluation_status: 'definition-workflow-failed' }, { ...core, evaluation_status: 'evaluation-harness-failed' }, { ...core, mode: 'rescore' }, { ...core, mode: 'calibration' }]) assert.equal((await publishRun({ runDir, repoDir, result })).skipped, true)
 })
+test('result assembly retains valid usage and reports corrupt or truncated usage lines', async t => {
+  const runDir = await temp(t)
+  await mkdir(join(runDir, 'phases'))
+  await writeFile(join(runDir, 'phases/eval-owned-usage.jsonl'), '{"cost":1}\ninvalid\n{"cost":2}\n{"cost":')
+  const result = await assembleResult({ runDir, outcome: core })
+  assert.deepEqual(result.eval_owned_usage, [{ cost: 1 }, { cost: 2 }])
+  assert.deepEqual(result.eval_owned_usage_errors.map(x => ({ line: x.line, truncated: x.truncated })), [{ line: 2, truncated: false }, { line: 4, truncated: true }])
+  assert.ok(result.eval_owned_usage_errors.every(x => x.error))
+  await writeResultArtifacts({ runDir, result })
+  assert.match(await readFile(join(runDir, 'report.html'), 'utf8'), /eval_owned_usage_errors/)
+})
