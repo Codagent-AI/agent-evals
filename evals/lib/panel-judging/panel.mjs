@@ -287,7 +287,8 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
 // the fresh outcomes with the recorded ones (calibration's ruling-flip rate).
 // A confirmed dissent check changes the verdict; any other classification keeps
 // the majority's, so a check flips when confirmation changes.
-export async function rerunDecider({ record, decider, buildPrompt, schema, validateCitations = async () => false }) {
+export async function rerunDecider({ record, decider, buildPrompt, schema, validateCitations }) {
+  if (typeof validateCitations !== 'function') throw new Error('decider re-run needs a citation validator')
   if (record?.protocol !== PANEL_PROTOCOL || record.ok !== true) throw new Error('decider re-run needs a complete panel record')
   const { job, criteria, verdicts, order } = record
   const request = { job, criteria, schema, ...(await buildPrompt({ job, criteria, schema })) }

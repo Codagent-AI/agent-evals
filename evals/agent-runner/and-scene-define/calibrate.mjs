@@ -107,6 +107,7 @@ async function rerunDeciders({ input, runDir, suiteRoot, scored, judges, reruns 
   for (const { record } of scored.panel_records) {
     if (!record.rulings?.length && !record.checks?.some(c => c.stage === 'dissent-check')) continue
     const job = jobs.find(x => x.name === record.job)
+    if (!job) throw new Error(`no judge job for recorded panel record ${record.job} (${input.input_id})`)
     const runs = []
     for (let n = 0; n < reruns; n++) runs.push(await rerunDefinitionDecider({ job, decider: judges.decider, record }))
     entries.push({ input_id: input.input_id, repeat: 1, job: record.job, runs })
