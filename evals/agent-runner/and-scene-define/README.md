@@ -1,9 +1,14 @@
-# and-scene-define pinned inputs
+# and-scene-define workflow evaluation
 
 This suite defines `add-presentation-skill` from the short starting prompt. Its
 fixture is `https://github.com/Codagent-AI/and-scene.git` at
 `ad667a965a0e1ea0b028c36c04d57bf0411d30d9`, change `create-and-scene`.
-The run controller and sandbox invocation are delivered by later tasks.
+The host controller runs `openspec:change --until define` through Agent Runner's
+sandbox and answers interactive turns using the host-side simulated user.
+Candidate runs currently stop after artifact collection: reconciliation, audits,
+judging, discovery, reporting, and publication remain later work. The result is
+`evaluation-harness-failed` with `definition_verdict=unavailable`, naming the first
+unimplemented phase and the missing registrations; it never claims completion.
 
 Run from the repository root:
 
@@ -57,16 +62,16 @@ Git object format, and branches are fixed; user Git configuration and hooks are
 disabled. `main` and `add-presentation-skill` point to the sole commit, the feature
 branch is checked out, and there is no remote. The manifest remains on the host.
 
-Before any evaluated model call, the later controller must call
+Before any evaluated model call, the controller calls
 `scanCanaries({ stagedDir, skillsDir, credentialFiles })` on the host. It scans
 all staged files, Git repository and bundle objects, the Agent Skills HEAD's
 tracked blobs and working copies, and forwarded credential/configuration files.
 Symlinks, submodules, and unsupported file types cause a scan error instead of
 silently omitting readable content. Matches return `{ file, pattern, kind }`.
-The caller must turn matches or scan errors into `evaluation-harness-failed` and
-stop before starting the sandbox. Never stage `hidden/`, `calibration/`, the
+The controller turns matches or scan errors into `evaluation-harness-failed` and
+stops before starting the sandbox. Never stage `hidden/`, `calibration/`, the
 pattern list, or any suite manifest. Credential isolation and preventing push/PR
-operations are responsibilities of the later sandbox invocation.
+operations are enforced by the sandbox invocation.
 
 `versions.json` records current versions and immutable historical content hashes.
 For a content change, bump the input's version, retain its old hashes, and append
@@ -132,3 +137,66 @@ and private-reference mentions. `consistent` compares these intent checks, while
 replies to assess nuanced semantic compliance and consistency. This diagnostic is
 never a candidate gate. Automated tests use a stub CLI and clean PoC stream replays;
 no paid calls are required by `npm run check`.
+
+
+Run `run.sh --help` before constructing a new invocation. Node 22, Git, and Go
+are needed on the host: preflight builds a temporary Runner from the selected
+checkout to probe `--external-user`, then deletes the binary. Dry runs do not
+need Docker or host evaluator auth, but the real Runner script requires each
+selected CLI's credential file to exist. They verify clean checkouts, workflow
+steps, plugin manifests, snapshot and inventory pins, mount isolation, and the
+canary check; they start no container and make no model call.
+
+```sh
+AGENT_RUNNER_DIR=/Users/paul/codagent/agent-runner/worktrees/external-user-mode \
+AGENT_SKILLS_DIR=/path/to/clean/agent-skills \
+evals/agent-runner/and-scene-define/run.sh --dry-run \
+  --run-dir /absolute/new-run-dir \
+  --lead-cli codex --lead-model gpt-6 --lead-effort high \
+  --crosscheck-cli claude --crosscheck-model claude-opus-5-5 --crosscheck-effort high \
+  --time-limit 3h
+```
+
+Use `--run-agent` with the same options for a paid candidate. That mode also
+checks Docker availability and host Claude/Codex auth. Use an unused directory;
+even a dry run reserves its directory. `--resume --run-dir` reuses the exact
+existing directory and requires identical profiles, evaluator inputs, candidate
+commits/workflow hashes, and time limit. The original deadline survives resume,
+including downtime. Active containers are refused. Inactive unfinished runs use
+the exact saved Runner ID; a capped stop is collected without resuming it. An
+ambiguous crash without recoverable Runner state is refused rather than starting
+a duplicate. `result.json` names the owning failure phase and resumability.
+
+Only six allowlisted files enter `sandbox-input/`: the deterministic starting
+bundle, driver, CLI/session bootstrap scripts, and Runner config/settings. The
+script obtains its own input directory without evaluator paths or patterns.
+Preflight regenerates these inputs on resume and refuses changed hashes. Every
+Docker command is checked: the build container may mount Runner source, while
+the command container receives only input, sandbox artifacts, the Skills checkout,
+selected credential files, and the Runner binary's named volume. Host settings
+and GitHub credentials are excluded. The inherited canary checker rejects tracked
+symlinks in a Skills checkout; such a checkout must be corrected before a run.
+The Docker image is not canary-scanned; this gap is retained in preflight evidence.
+
+The private `sandbox/.runtime/` retains Runner projects, Codex session stores,
+Claude projects, and Cursor chats. Credentials and CLI configuration stay in the
+disposable home. Do not publish `.runtime/`. Workflow state, audit, and metrics
+are copied into host `evidence/`; `collected/` freezes definition artifacts and
+`phases/collection.json` records HEAD and every file's SHA-256. Later evaluation
+phases read the frozen collection. Workflow metrics ingestion is registered only
+after discovery; its unit-tested implementation preserves native provenance,
+partial usage, unknown costs, and per-step/per-role attribution. Eval-owned usage
+remains separate in `phases/eval-owned-usage.jsonl`.
+
+The default checkout-independent tests exercise the driver with stub CLIs and
+the lifecycle with a fake sandbox, without paid calls. Test INT-006 invokes the
+real Runner sandbox dry-run script using isolated test auth and Skills inputs:
+
+```sh
+AGENT_RUNNER_DIR=/Users/paul/codagent/agent-runner/worktrees/external-user-mode \
+node --test test/and-scene-define-sandbox-plan.test.mjs
+```
+
+Without `AGENT_RUNNER_DIR`, that integration test skips with an explicit reason.
+`--rescore-from` and `--calibrate` are documented reserved modes and fail explicitly
+until their later tasks are implemented.
