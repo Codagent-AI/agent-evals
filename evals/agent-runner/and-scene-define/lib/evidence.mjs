@@ -1,4 +1,4 @@
-import { lstat, mkdir, readFile } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, readFile, rename, rm } from 'node:fs/promises'
 import { dirname, join, relative, resolve, basename } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { contained, filesUnder, readJson, sha256 } from './files.mjs'
@@ -57,10 +57,21 @@ export async function collectEvidence({ runDir, runnerDir, runtime = join(runDir
       if (cli === 'cursor') {
         for (const suffix of ['', '-wal', '-shm']) await guardPath(runDir, source + suffix)
         const target = contained(runDir, targetPath); await guardPath(runDir, target); await mkdir(dirname(target), { recursive: true })
-        // .backup observes committed WAL content, including when the source has
-        // not checkpointed. Never copy only the base database.
-        try { execFileSync('sqlite3', [source, `.backup ${JSON.stringify(target)}`], { stdio: 'pipe' }) }
-        catch (error) { throw new Error(`cannot retain Cursor transcript ${session}: sqlite3 snapshot failed: ${error.message}`) }
+        // VACUUM INTO reads committed WAL pages and uses SQL string quoting,
+        // so filenames are never interpreted as sqlite3 dot-command arguments.
+        // Build a fresh snapshot privately, then atomically replace the old one;
+        // SQLite never opens a pre-existing destination file or symlink.
+        const staging = await mkdtemp(join(dirname(target), '.cursor-snapshot-'))
+        try {
+          const snapshot = join(staging, 'store.db')
+          const quoted = "'" + snapshot.replaceAll("'", "''") + "'"
+          execFileSync('sqlite3', [source, `VACUUM INTO ${quoted}`], { stdio: 'pipe' })
+          await guardPath(runDir, snapshot)
+          await guardPath(runDir, target)
+          await rename(snapshot, target)
+        } catch (error) {
+          throw new Error(`cannot retain Cursor transcript ${session}: sqlite3 snapshot failed: ${error.message}`)
+        } finally { await rm(staging, { recursive: true, force: true }) }
         retained.push(targetPath)
       } else await copy(source, targetPath)
       const records = cli === 'cursor' ? cursorRecords(join(runDir, targetPath)) : jsonl(await readFile(join(runDir, targetPath), 'utf8'))

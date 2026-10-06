@@ -191,7 +191,7 @@ and every evaluated invocation's native transcript, exchange records, and per-tu
 outputs are copied into host `evidence/`. `evidence-manifest.json` hashes every
 retained input needed for rescore, including `conversation.jsonl` and `collected/`.
 Collection rejects missing, truncated, or incomplete native transcripts. Cursor
-crosschecks require the host `sqlite3` CLI; collection uses its backup API to
+crosschecks require the host `sqlite3` CLI; collection uses `VACUUM INTO` and atomic replacement to
 retain a consistent snapshot including uncheckpointed WAL data.
 
 `collected/` freezes definition artifacts and

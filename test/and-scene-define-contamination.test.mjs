@@ -17,8 +17,8 @@ const call = (name, input, output, id = 'c1') => [
   { type: 'assistant', message: { content: [{ type: 'tool_use', name, input, id }] } },
   { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, content: output }] } },
 ]
-async function fixture(t, { extra = [], conversation = [exchange], replies = [exchange], users = [exchange.reply], crosscheck = null } = {}) {
-  const runDir = await mkdtemp(join(tmpdir(), 'define-audit-')); t.after(() => rm(runDir, { recursive: true, force: true }))
+async function fixture(t, { extra = [], conversation = [exchange], replies = [exchange], users = [exchange.reply], crosscheck = null, runPrefix = 'define-audit-' } = {}) {
+  const runDir = await mkdtemp(join(tmpdir(), runPrefix)); t.after(() => rm(runDir, { recursive: true, force: true }))
   const runtime = join(runDir, 'sandbox/.runtime'); const runnerDir = join(runtime, 'agent-runner-projects/repo/runs/run')
   for (const dir of [runnerDir, join(runnerDir, 'external-user'), join(runnerDir, 'output'), join(runtime, 'claude/projects/repo'), join(runDir, 'collected')]) await mkdir(dir, { recursive: true })
   const put = (path, value) => writeFile(path, typeof value === 'string' ? value : JSON.stringify(value))
@@ -100,11 +100,12 @@ test('Codex native and per-turn web search results are audited', async t => {
   assert.ok(audit.matches.some(m => m.session === 'child' && m.tool_call === 'web'))
   assert.ok(audit.matches.some(m => m.pattern === 'reference-canvas-dimensions' && m.source.includes('output')))
 })
-test('Cursor retains a consistent WAL snapshot and audits complete chat-store tool calls', async t => {
-  const f = await fixture(t, { crosscheck: 'cursor' }); const dir = join(f.runtime, 'cursor/chats/workspace/child'); await mkdir(dir, { recursive: true })
+for (const runPrefix of ['define-audit-', "define-audit-'\\\n\u0001-"]) test(`Cursor retains WAL content at exact path ${JSON.stringify(runPrefix)}`, async t => {
+  const f = await fixture(t, { crosscheck: 'cursor', runPrefix }); const dir = join(f.runtime, 'cursor/chats/workspace/child'); await mkdir(dir, { recursive: true })
   const db = join(dir, 'store.db')
   execFileSync('python3', ['-c', `import sqlite3,os
-c=sqlite3.connect(${JSON.stringify(db)})
+import sys
+c=sqlite3.connect(sys.argv[1])
 c.execute('PRAGMA journal_mode=WAL')
 c.execute('CREATE TABLE blobs (id TEXT PRIMARY KEY,data BLOB)');c.commit()
 c.execute('PRAGMA wal_checkpoint(TRUNCATE)')
@@ -114,11 +115,17 @@ for i,s in enumerate(${JSON.stringify([
     { role: 'assistant', content: [{ type: 'text', text: 'done' }] },
   ].map(r => JSON.stringify(r)))}):c.execute('INSERT INTO blobs VALUES (?,?)',(str(i),s))
 c.commit()
-os._exit(0)`])
+os._exit(0)`, db])
   const evidence = await retained(f)
   assert.ok(auditContamination({ ...evidence, patterns }).matches.some(m => m.session === 'child' && m.tool_call === 'cursor-call'))
   const snapshot = join(f.runDir, evidence.manifest.invocations.find(i => i.cli === 'cursor').transcript)
   assert.match(execFileSync('sqlite3', [snapshot, 'SELECT CAST(data AS TEXT) FROM blobs'], { encoding: 'utf8' }), /hidden\/reference/)
+  await f.put(snapshot, 'stale snapshot')
+  await collectEvidence(f)
+  assert.match(execFileSync('sqlite3', [snapshot, 'SELECT CAST(data AS TEXT) FROM blobs'], { encoding: 'utf8' }), /hidden\/reference/)
+  await rm(snapshot); await symlink(db, snapshot)
+  await assert.rejects(collectEvidence(f), /symlink/)
+  await rm(snapshot)
   await f.put(join(f.runnerDir, 'run-metrics.json'), { steps: [{ id: 'child', kind: 'agent-call', agent_invoked: true, cli: 'cursor', session_id: 'absent' }] })
   await assert.rejects(collectEvidence(f), /absent/)
 })
@@ -191,4 +198,21 @@ test('Codex native web_search events retain their input and results', async () =
   ], { cli: 'codex', session: 'native' })
   const audit = auditContamination({ transcripts: [{ ...transcript, session_id: 'native', source: 'native.jsonl' }], conversation: [], patterns })
   assert.ok(audit.matches.some(m => m.tool_call === 'search-event' && m.field === 'output'))
+})
+
+test('literal and multiline regex audit excerpts locate the matching text with compiled flags', async () => {
+  const { compilePatterns } = await import('../evals/agent-runner/and-scene-define/lib/canary.mjs')
+  const data = { version: 1, patterns: [
+    { id: 'literal', kind: 'locator', type: 'literal', value: 'Hidden/Reference/' },
+    { id: 'multiline', kind: 'locator', type: 'regex', value: '^HIDDEN/REFERENCE/FILE$' },
+  ] }
+  const text = 'ordinary line\n'.repeat(30) + 'hidden/reference/file\nordinary ending'
+  for (const pattern of compilePatterns(data)) {
+    assert.equal(pattern.matches(text), true)
+    const offset = pattern.type === 'literal' ? text.toLowerCase().indexOf(pattern.value.toLowerCase()) : text.search(new RegExp(pattern.value, 'im'))
+    assert.equal(offset, text.indexOf('hidden/reference/file'))
+  }
+  const audit = auditContamination({ transcripts: [{ session_id: 's', source: 's.jsonl', calls: [{ id: 'read', name: 'Read', input: '', output: text }] }], conversation: [], patterns: data })
+  assert.equal(audit.matches.length, 2)
+  for (const match of audit.matches) assert.match(match.excerpt, /hidden\/reference\/file/)
 })

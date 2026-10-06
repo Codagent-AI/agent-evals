@@ -174,6 +174,17 @@ test('contamination checkpoints the audit and prevents gates, judging, and publi
   const resumed = await runEvaluation({ ...f.options, resume: true }, f.deps)
   assert.equal(resumed.result.evaluation_status, 'contaminated'); assert.deepEqual(called, []); assert.equal(f.modes.length, 1)
   assert.deepEqual(resumed.result.matches, first.result.matches)
+  // verifyUnit must reject both an altered output and a deleted output before
+  // the controller's reusable-audit branch can trust either.
+  const auditPath = join(f.options.runDir, 'phases/contamination-audit.json')
+  for (const corruption of ['tampered', 'deleted']) {
+    if (corruption === 'tampered') await writeFile(auditPath, JSON.stringify({ status: 'clean', matches: [] }))
+    else await rm(auditPath)
+    const recovered = await runEvaluation({ ...f.options, resume: true }, f.deps)
+    assert.equal(recovered.result.evaluation_status, 'contaminated', corruption)
+    assert.deepEqual(recovered.result.matches, first.result.matches)
+    assert.deepEqual(called, [])
+  }
 })
 
 test('a missing evaluated transcript produces a harness failure naming the session', async t => {
