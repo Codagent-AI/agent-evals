@@ -56,6 +56,10 @@ export async function capture() {
   return { replay, replay_score: score(replay), protocol: jobs.JUDGING_PROTOCOL,
     exports: Object.fromEntries(Object.entries(modules).map(([name, module]) => [name, Object.keys(module)])),
     records, outcome, score: score(outcome),
-    prompts: prompts.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+    prompts: prompts.sort((a, b) => {
+      const left = JSON.stringify(a)
+      const right = JSON.stringify(b)
+      return left < right ? -1 : left > right ? 1 : 0
+    }),
   }
 }

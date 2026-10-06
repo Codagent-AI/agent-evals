@@ -14,3 +14,8 @@ the original cache path strips optional citations and changes output hashes.
 The input paths are repository-relative so recorded cache hashes are portable.
 The regression tests replay this fixed baseline; do not regenerate it to make an
 extraction regression pass.
+
+After extraction, only the ordering of the recorded prompt fingerprints was
+changed to use serialized entries in UTF-16 code unit order rather than locale
+collation. All captured values remain unchanged. Live capture uses the same
+locale-independent ordering.
