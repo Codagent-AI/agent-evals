@@ -421,3 +421,43 @@ test('a non-retryable verifier error is not retried', async () => {
   assert.equal(calls, 1)
   assert.match(outcome.reason, /invalid_json_schema/)
 })
+
+// Round-3 audit: two verifiers found measurement faults on these criteria but
+// could not overturn them because no replay policy covered them.
+test('a control-count failure can be overturned by clicking through every step', async () => {
+  const request = await replayRequest('quality-captions-and-navigation', 'navigation exposes 11 controls for 9 steps')
+  const actions = [{ type: 'navigate', path: DEMO_PATH },
+    ...Array.from({ length: 8 }, (_, index) => ({ type: 'click', selector: `[data-step="${index + 2}"]` }))]
+  const plan = { actions, expect: { type: 'step-index-changes' } }
+  const every = observed({ stepIndex: null }, ...Array.from({ length: 9 }, (_, stepIndex) => ({ stepIndex })))
+  const confirmed = await runSecondOpinion({ request, invoke: confirmingInvoke(request, overturnWith(plan)),
+    replay: async () => ({ passed: true, trace: [], errors: [], observations: every }) })
+  assert.equal(confirmed.decision, 'overturn')
+  const keyed = await runSecondOpinion({ request,
+    invoke: confirmingInvoke(request, overturnWith({ ...plan, actions: [plan.actions[0], { type: 'press', key: 'ArrowRight' }] })),
+    replay: async () => ({ passed: true, trace: [], errors: [], observations: every }) })
+  assert.equal(keyed.decision, 'overturn-rejected')
+  assert.match(keyed.rejection_reason, /allowlist/)
+})
+
+test('a wrong-current-control failure is overturned only by the active step\'s current control', async () => {
+  const request = await replayRequest('demo-control-semantics', 'step 1 marks the wrong control as current')
+  const plan = { actions: [{ type: 'navigate', path: DEMO_PATH }, { type: 'click', selector: '[data-step="2"]' },
+    { type: 'click', selector: '[data-step="1"]' }],
+    expect: { type: 'text-present', selector: '[aria-current="step"]', text: 'You have a topic' } }
+  const run = (observations, candidate = plan) => runSecondOpinion({ request,
+    invoke: confirmingInvoke(request, overturnWith(candidate)),
+    replay: async () => ({ passed: true, trace: [], errors: [], observations }) })
+  const tracking = await run(observed({ stepIndex: null },
+    { stepIndex: 0, visible: true, text: 'You have a topic' },
+    { stepIndex: 1, visible: true, text: 'The skill interviews you' },
+    { stepIndex: 0, visible: true, text: 'You have a topic' }))
+  assert.equal(tracking.decision, 'overturn')
+  const stuck = await run(observed({ stepIndex: null },
+    { stepIndex: 0, visible: true, text: 'Previous' }, { stepIndex: 1, visible: true, text: 'Previous' },
+    { stepIndex: 0, visible: true, text: 'Previous' }))
+  assert.equal(stuck.decision, 'overturn-rejected')
+  const unscoped = await run([], { ...plan, expect: { ...plan.expect, selector: 'h2' } })
+  assert.equal(unscoped.decision, 'overturn-rejected')
+  assert.match(unscoped.rejection_reason, /aria-current/)
+})

@@ -202,6 +202,14 @@ An overturn SHALL cite at most 12 source spans, each fewer than 200 lines, and a
 - **THEN** the failure stands as `fail`
 - **AND** no citation is required
 
+#### Scenario: A control count includes previous and next controls
+- **WHEN** `quality-captions-and-navigation` fails because the counted navigation controls differ from the step count
+- **THEN** a replay that clicks through every produced step with the presentation's own controls may confirm the overturn
+
+#### Scenario: The wrong control is reported as current
+- **WHEN** `demo-control-semantics` fails because a step marks the wrong control as current
+- **THEN** a replay that ends on that step with a visible `aria-current` control labelled with that step's title or number, and shows the current control changing with the active step, may confirm the overturn
+
 ### Requirement: Second-opinion verdict
 Each failure that received a second opinion SHALL carry two verdicts: the raw verdict, which is always `fail`, and the second-opinion verdict. The second-opinion verdict SHALL be `pass` when an overturn was accepted, and `fail` otherwise. Scores, component floors, hard gates, and automated eligibility SHALL use the second-opinion verdict. A failure that received no second opinion SHALL be scored from its verdict as before.
 

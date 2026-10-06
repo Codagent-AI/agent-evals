@@ -137,8 +137,18 @@ export function replayPolicy({ target, failing_record: record }) {
       return index === null ? null : normativeText('caption', index, 'browse')
     }
     case 'quality-captions-and-navigation': {
+      // A control count that disagrees with the step count is contradicted
+      // by clicking through every step with the presentation's own controls.
+      if (/^navigation exposes \d+ controls for \d+ steps$/.test(rationale)) {
+        return { subject: 'traversal', inputs: ['click'], expect: ['step-index-changes'] }
+      }
       const index = step(/^step (\d+) exposes no caption$/)
       return index === null ? null : normativeText('caption', index, 'browse')
+    }
+    case 'demo-control-semantics': {
+      const index = step(/^step (\d+) marks the wrong control as current$/)
+      return index === null ? null : { subject: 'current-control', step: index, inputs: ['click', 'press'],
+        expect: ['text-present'] }
     }
     default:
       return null
@@ -156,7 +166,9 @@ export function describeReplayPolicy(policy) {
     case 'text':
       return `${base}; replay.expect is text-present whose text is exactly the normative ${policy.source}${policy.step === null ? ' of the active step' : ` of step ${policy.step + 1}`}, read from an element that shows different text on another step${policy.mode ? `, in declared ${policy.mode} mode` : ''}.`
     case 'traversal':
-      return `${base}; replay.expect is step-index-changes. The replay must visit every produced step and report no runtime or console failures.`
+      return `${base}; replay.expect is step-index-changes. The replay must visit every produced step${policy.clean ? ' and report no runtime or console failures' : ''}.`
+    case 'current-control':
+      return `${base}; replay.expect is text-present whose selector selects the control marked aria-current and whose text is the label that control shows on step ${policy.step + 1} (its normative title or its step number). The replay must end on step ${policy.step + 1} and show that the current control changes with the active step.`
     default:
       return base
   }
@@ -178,6 +190,9 @@ function replayPlanRefusal(policy, replay) {
   }
   if (!policy.expect.includes(replay.expect.type)) {
     return `replay is outside the harness allowlist: ${replay.expect.type} cannot confirm this failure`
+  }
+  if (policy.subject === 'current-control' && !/aria-current/.test(replay.expect.selector ?? '')) {
+    return 'replay is outside the harness allowlist: text-present must select the control marked aria-current'
   }
   if (policy.subject === 'text') {
     const allowed = policy.step === null ? NORMATIVE[policy.source] : [NORMATIVE[policy.source][policy.step]]
@@ -227,6 +242,22 @@ function replayEvidenceRefusal(policy, replay, observed) {
       if (!after.some((entry) => Number.isInteger(entry?.stepIndex) && entry.stepIndex !== last.stepIndex
         && normalized(entry.text) !== expected)) {
         return `replay did not show that the ${policy.source} element tracks the active step`
+      }
+      return null
+    }
+    case 'current-control': {
+      if (last?.stepIndex !== policy.step || !last.visible) {
+        return 'replay did not end on the failing step with a visible current control'
+      }
+      const labels = (index) => [normalized(DEMO_CONTRACT.step_titles[index]), String(index + 1)]
+      const names = (entry, index) => {
+        const text = normalized(entry?.text)
+        return text !== '' && labels(index).some((label) => text === label || text.includes(label))
+      }
+      if (!names(last, last.stepIndex)) return 'replay did not show the active step\'s own control marked current'
+      if (!after.some((entry) => Number.isInteger(entry?.stepIndex) && entry.stepIndex !== last.stepIndex
+        && entry.visible && names(entry, entry.stepIndex) && normalized(entry.text) !== normalized(last.text))) {
+        return 'replay did not show that the current control tracks the active step'
       }
       return null
     }

@@ -1618,11 +1618,13 @@ test('rescore starts the candidate server and confirms a browser overturn by rep
   let started = 0
   let replayed = 0
   let servedIdentity = null
-  driver.replay = async () => { replayed += 1; return directJumpObserved() }
+  const lifecycle = []
+  driver.replay = async () => { replayed += 1; lifecycle.push('replay'); return directJumpObserved() }
   const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
     controllerChangeName: null,
     loadRescoreSource: async () => importedRescore(context),
     browserDriver: driver,
+    releaseBrowser: async () => { lifecycle.push('release') },
     isProcessAlive: () => true,
     candidateServer: {
       probe: async () => ({ ok: true, candidate_identity: servedIdentity }),
@@ -1648,6 +1650,18 @@ test('rescore starts the candidate server and confirms a browser overturn by rep
   assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
   assert.equal(started, 1)
   assert.ok(replayed > 0)
+  // The overturn is recorded end to end: verdict, replay plan, and observation.
+  const written = await readJson(join(context.runDir, 'result.json'))
+  const criterion = written.score.components.flatMap(({ subcomponents }) => subcomponents)
+    .flatMap(({ criteria }) => criteria).find(({ id }) => id === 'demo-supported-navigation')
+  assert.equal(criterion.verdict, 'pass')
+  assert.equal(criterion.second_opinion.decision, 'overturn')
+  assert.deepEqual(criterion.second_opinion.replay.actions, DIRECT_JUMP_REPLAY.actions)
+  assert.equal(criterion.second_opinion.replay.observations.at(-1).stepIndex, 4)
+  const opinions = await readJson(join(context.runDir, 'phases/second-opinions.json'))
+  assert.equal(opinions.outcomes['demo-supported-navigation'].replay.passed, true)
+  // The host browser is released after the replay rather than held through scoring.
+  assert.ok(lifecycle.lastIndexOf('release') > lifecycle.lastIndexOf('replay'), lifecycle.join(' '))
 })
 
 test('an evaluator-only rescore accepts a historical reviewer profile as tester', async () => {

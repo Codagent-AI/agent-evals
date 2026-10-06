@@ -9,8 +9,9 @@ replay. The harness runs it through `chrome-devtools-axi` against the candidate
 server, including during evaluator-only rescore. The harness decides which
 replays count: `replayPolicy` in `lib/second-opinion.mjs` admits, per failing
 target, only the input kind that failed and an observation that contradicts the
-failure (a step change, a declared mode change, or normative text on the active
-step). A target without a policy cannot be overturned by replay. The replay runs
+failure (a step change, a declared mode change, normative text on the active
+step, a click-through of every step, or the active step's own control marked
+`aria-current`). Step controls never include previous, next, or mode controls. A target without a policy cannot be overturned by replay. The replay runs
 before the span audit, collects page and console failures, and its plan and
 observation go into the audit packet. Its actions, observations, errors, trace,
 and pass result are retained in `phases/second-opinions.json`, the result, and

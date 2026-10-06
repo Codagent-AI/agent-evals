@@ -802,6 +802,13 @@ A not-observed record SHALL retain the same bounded observation as any other pro
 - **WHEN** neither mode exposes any control with a navigation role, accessible name, or recognised hook
 - **THEN** the criterion that requires the control is recorded as `fail`
 
+### Requirement: Step controls exclude relative navigation
+The browser evaluator SHALL count as step controls only controls that select a step. Previous, next, and mode controls, identified by their presentation hooks or by an accessible name beginning with previous, prev, back, or next, SHALL be excluded even when they share the progress region, so they never inflate the control count or shift which control is read as current.
+
+#### Scenario: Progress row holds previous and next buttons
+- **WHEN** a progress region contains nine step buttons plus Previous and Next
+- **THEN** the evaluator reads nine step controls
+
 ### Requirement: Declared fallback judge for not-observed criteria
 The automated rubric SHALL declare, for each deterministic criterion that can be recorded as not observed, at most one fallback judge. Because any deterministic browser criterion can be recorded as not observed when its `fail` would rest on a heuristic reading, every deterministic browser criterion SHALL declare the `demo-integration` judge as its fallback. Adding these declarations SHALL change the rubric version and hash, and SHALL NOT change any criterion, owner, subcomponent, point allocation, or threshold. The fallback declaration SHALL NOT make the fallback judge an owner of the criterion: the criterion SHALL keep its single owning evaluator, its identifier, and its points, and the rubric SHALL continue to reject duplicate criterion ownership. A deterministic criterion with no declared fallback SHALL NOT be recordable as not observed by a conforming evaluator; if one is nevertheless returned, scoring SHALL treat its component as incomplete.
 

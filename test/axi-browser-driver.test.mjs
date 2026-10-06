@@ -794,3 +794,23 @@ test('the AXI driver counts every exposed text rather than dropping texts past a
   assert.match(source, /MAX_EXPOSED_TEXTS/)
   assert.match(source, /left\[0\]\.length - right\[0\]\.length/)
 })
+
+// Round-3 audit: a progress region that also held Previous and Next counted 11
+// step controls for 9 steps and shifted which control was "current".
+test('the AXI driver keeps previous, next, and mode controls out of the step controls', async () => {
+  const { createAxiBrowserDriver } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
+  const calls = []
+  const driver = createAxiBrowserDriver({
+    baseUrl: 'http://127.0.0.1:4319/',
+    command: async (args, input) => {
+      calls.push({ args, input })
+      return { status: 0, stdout: `${JSON.stringify(true)}\n`, stderr: '' }
+    },
+  })
+  await driver.state()
+  const source = calls.at(-1).input
+  assert.match(source, /const stepControlsOnly = \(elements\) => elements\.filter\(\(element\) => !isDirectional\(element\)\)/)
+  assert.match(source, /stepControlsOnly\(inDomOrder\(\[\.\.\.progressRegion\.querySelectorAll/)
+  assert.match(source, /data-presentation-prev/)
+  assert.match(source, /data-presentation-mode-toggle/)
+})
