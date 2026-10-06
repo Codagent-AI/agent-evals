@@ -14,6 +14,7 @@ Relevant current state:
 
   A smoke run proved it on Claude and Codex leads through `proposal`, including its crosscheck, in a one-commit repository with no remote.
 - **The `and-scene` suite** runs its controller and judges inside the sandbox, and mounts its whole suite directory at `/eval-input`. That is acceptable there but not here: this suite's data includes the hidden reference.
+- **`and-scene` judging after agent-evals PR #81** (merged as `cd7a3fc`, rubric 12.3.0, protocol `dual-sample-majority-v4`) runs every scored job as two `gpt-6-sol` samples with per-sample closed-world source audits. A blind third sample settles disagreements, and its pass is line-cited and span-audited. Contradictions turn a vote only when a targeted check confirms them. It also has strict schemas, capacity backoff, zero-token rejection records, and protocol-versioned caches. Its judge calls are Codex-only and run inside the `and-scene` sandbox. The peer audit found that residual variance came from undefined terms and from single calls deciding splits.
 - **`scripts/sandbox-run.sh`** in Agent Runner:
   - builds the Runner from `/agent-runner-source`, which stays mounted read-only for the container's lifetime;
   - with `--mount-claude-auth`, also mounts the host's `~/.claude/settings.json` and `settings.local.json`.
@@ -30,13 +31,14 @@ Relevant current state:
 **Goals:**
 - Implement the six capabilities so a maintainer can run a paid candidate run, dry run, resume, rescore, and calibration locally.
 - Keep every hidden input on the host. The evaluated sandbox sees only the starting repository, its runtime, and the conversation.
-- Reuse proven and-scene mechanics without changing the and-scene suite.
+- Give both suites one panel-judging approach and one shared implementation, `evals/lib/panel-judging/`, built from `and-scene`'s post-#81 judging.
+- Reuse other proven and-scene mechanics by copying them, without changing `and-scene` beyond its judging.
 
 **Non-Goals:**
 - Running on Fly or Agent Factory. Their shared-Machine boundary is out of scope.
 - An enforced network allowlist or a private fixture. Both are recorded only as residual risk.
 - Cursor leads. The external-user mode supports only Claude and Codex leads.
-- Extracting a library shared with and-scene.
+- Sharing anything with `and-scene` beyond panel judging (persistence, checkpoints, publication, reporting).
 
 ## Approach
 
@@ -163,39 +165,45 @@ A missing, extra, or differing reply in any record ends the run `evaluation-harn
 - The four artifacts are present: `proposal.md`, at least one `specs/**/spec.md`, `design.md`, and `test-plan.md`.
 - `openspec validate <change> --strict` passes on a scratch copy.
 
-**Judges** run on the host, under one pinned judge profile:
+**Judges** run on the host, under one pinned judge profile, through the shared panel-judging module (see "Shared panel judging"):
 
 | Role | Model | Invocation |
 |---|---|---|
-| panel judge A | `claude-sonnet-5-5`, high effort | `claude -p` with `--tools ''`, `--setting-sources ''`, `--strict-mcp-config`, `--disable-slash-commands`, `--no-session-persistence`, and `--json-schema`; the job's inputs are inlined in the prompt |
-| panel judges B and C | `gpt-6-luna`, high effort; two independent calls | `codex exec --sandbox read-only --json --output-schema`; a private `CODEX_HOME` containing only a copy of `auth.json`, deleted afterward; the working directory is a scratch copy of only that job's inputs |
-| decider | `claude-opus-5-5`, high effort | as panel judge A |
+| Claude-family panel judge | `claude-sonnet-5-5`, high effort | shared Claude invoker, host mode: `claude -p` with `--tools ''`, `--setting-sources ''`, `--strict-mcp-config`, `--disable-slash-commands`, `--no-session-persistence`, and `--json-schema`; the job's inputs are inlined in the prompt |
+| two Codex-family panel judges | `gpt-6-luna`, high effort; two independent calls | shared Codex invoker, host mode: `codex exec --sandbox read-only --json --output-schema`; a private `CODEX_HOME` containing only a copy of `auth.json`, deleted afterward; the working directory is a scratch copy of only that job's inputs |
+| decider, targeted checks | `claude-opus-5-5`, high effort | as the Claude-family panel judge |
 
-**Scoring jobs** (coverage, fidelity, artifact quality) run on a three-judge cross-family panel:
+**Scoring jobs** (coverage, fidelity, artifact quality) run on the cross-family panel and settle under the shared rule:
 1. All three panel judges run every scoring job independently, with identical inputs.
-2. Only unanimity settles a verdict:
-   - **Coverage and quality:** where all three give the same verdict, that is the verdict.
-   - **Fidelity:** a deduction stands without the decider only when all three cite the same contradicted item or exchange.
-   - **No deduction:** none of the three finds a contradiction.
-3. Every item or criterion without consensus goes to the decider. It sees the item or criterion, the job's inputs, and all three verdicts with their citations, labelled only "A", "B", and "C". It returns the final verdict with its own citation.
-4. Disagreements are batched per job, so a job with no disagreement makes no decider call.
+2. A verdict all three give stands.
+3. A verdict two give stands when the two include the Claude-family judge. The exception is a backed dissent: a higher verdict than the majority's (`met` over `partial` or `missing`, or `partial` over `missing`) whose artifact citations pass validation. A backed dissent goes to a targeted check: the decider judges only whether the dissent's stated reason holds against its cited lines and the item's anchors. If it holds, the dissent's verdict stands; otherwise the majority's does.
+4. A verdict the two Codex-family judges give against the Claude-family judge, and a three-way split, go to the decider. It sees the item, the job's inputs, and all three verdicts with their citations, labelled only "A", "B", and "C". It must rule one of the three verdicts, with citations that pass validation, or the decider output is retried.
+5. **Fidelity:** a contradicted exchange counts as agreed when the judges cite the same exchange. A deduction stands when the Claude-family judge and at least one Codex-family judge cite it. When only the two Codex-family judges cite it, the decider rules. When one judge alone cites it with valid citations, it is a backed dissent and gets a targeted check.
+6. Decider calls and targeted checks are batched per job. A job with no split makes neither.
 
-The result records the panel verdicts, every disagreement, and the decider's ruling.
+The result records every panel verdict, each item's settlement basis (`consensus`, `majority`, `checked-dissent`, or `decider`), every targeted check, and every ruling.
 
-The **disclosure audit** also runs on the panel, because it changes the score. Each panel judge returns flags per exchange, and each over-disclosure flag names the inventory items disclosed without being asked. An item is leaked when all three name it, not leaked when none does, and otherwise the decider rules. Leaked items are excluded from coverage (see Rubric). Inconsistent-withholding and contradiction flags are report-only; they are taken from the panel and the decider in the same way but change no score.
+The **disclosure audit** also runs on the panel, because it changes the score. Each panel judge returns flags per exchange, and each over-disclosure flag names the inventory items disclosed without being asked. Each item's leak settles under the same rule:
+- leaked when the Claude-family judge and a Codex-family judge name it;
+- decided by the decider when only the two Codex-family judges name it;
+- a backed dissent when one judge alone names it with a valid exchange citation.
+
+Leaked items are excluded from coverage (see Rubric). Inconsistent-withholding and contradiction flags are report-only; they settle the same way but change no score.
 
 The **discovery** judge is non-scoring and is a single call to the decider model.
 
+Every judge prompt carries the shared scope rule (`JUDGE_SCOPE_RULE`, adapted to definitions: judge only what the cited artifacts establish, add nothing the item and its anchors do not state, plain reference meaning for undefined terms). For each item it also carries the statement or intent, every source quote with its heading, and the item's anchors.
+
 | Job | Inputs | Output |
 |---|---|---|
-| coverage × inventory area | collected artifacts; that area's mandatory and acceptable-alternative items (statement, intent, class, and each source quote with its reference heading) | per-item `met` / `partial` / `missing` with artifact citations |
-| fidelity | collected artifacts; mandatory and acceptable-alternative items; conversation | contradictions citing artifact and item or exchange; added-scope list |
+| coverage × inventory area | collected artifacts; that area's mandatory and acceptable-alternative items (statement, intent, class, anchors, and each source quote with its reference heading) | per-item `met` / `partial` / `missing` with artifact citations |
+| fidelity | collected artifacts; preference items; conversation | contradictions of the simulated user's answers about preference items or matters outside the inventory, citing artifact and exchange; added-scope list |
 | artifact quality | collected artifacts only | the four quality criteria with citations |
 | discovery | conversation; mandatory and acceptable-alternative items | per-item asked yes/no, with a cited exchange when yes |
 | disclosure audit | conversation; the reference (as the simulated user saw it); policy; mandatory and acceptable-alternative items | flags citing exchanges; inventory items named per over-disclosure flag |
 
 Each job's output is validated against a JSON schema and citation rules. Every criterion must be present, and each verdict needs the citation its kind requires:
-- `met` and `partial` coverage verdicts, quality findings, and fidelity deductions cite a collected file and line range; fidelity deductions also cite an item or exchange identity;
+- `met` and `partial` coverage verdicts, quality findings, and fidelity deductions cite a collected file and line range; fidelity deductions also cite an exchange identity;
 - a `missing` verdict cites the list of collected files inspected. Where the artifact the item would belong in is absent, it cites the gate's absence record (for example `gate:required-artifact:design`) instead of a line;
 - discovery and disclosure flags cite an exchange identity.
 
@@ -224,6 +232,10 @@ The scorer is deterministic code over the validated verdicts. Discovery outcomes
 - verdict values: `met` 1, `partial` 0.5, `missing` 0. `partial` means the artifacts commit to the item's intent but leave out or weaken part of what the item requires;
 - leaked items: an item the disclosure audit marks leaked is dropped from both earned and possible coverage points, and coverage is scaled to its 60 points over the remaining items;
 - fidelity deductions, quality criteria, gates, the pass threshold, and the calibration evidence.
+
+Each coverage criterion carries its item's anchors from `inventory.json` (`anchors.met`, `anchors.partial`, `anchors.missing`). They are written in the reference's words where possible, and against the intent for acceptable-alternative items. An agent drafts them from each item's statement, intent, and source quotes. A maintainer reviews them, and the review is recorded in the inventory (`anchors_review`: reviewer, date, and the inventory version reviewed). Preflight refuses a candidate run whose anchors are unreviewed. Adding anchors bumps the inventory version.
+
+Rubric guidance is limited to what the reference states. Each omission is owned by exactly one criterion: a contradicted graded item is a coverage verdict, and fidelity covers only the simulated user's answers that coverage does not grade.
 
 `scripts/build-rubric.mjs` generates the coverage criteria from `inventory.json`, and the generated file is committed. A test fails when they diverge.
 
@@ -339,7 +351,7 @@ The series identity contains only evaluator and fixture inputs:
 - the reference and inventory versions;
 - the rubric and contamination-pattern versions;
 - the simulated-user profile and policy versions;
-- the judge profile.
+- the judge profile, including the shared panel-judging protocol version.
 
 The candidate record holds what a comparison varies:
 - the lead and crosscheck profiles;
@@ -375,23 +387,51 @@ Rescore applies the suite's **current** evaluator inputs: rubric, inventory, pat
 
 Locally it wraps `sandbox-run.sh` with bind mounts. The controller relies only on the staged input, the work directory, and the exchange contract (atomic file appearance, polling), never on shared-filesystem semantics beyond that. A later Fly or end-to-end variant can then sync the exchange and work directories without changing the controller.
 
-### Reused and-scene code
+### Shared panel judging
 
-These are copied into `and-scene-define/lib/` and adapted. The judge mechanics are copied only after agent-evals PR #81 merges, so the copy includes:
-- majority voting;
-- capacity backoff;
-- zero-token rejection records;
-- strict schemas;
-- citation validation;
-- protocol-versioned judge caches.
+`evals/lib/panel-judging/` holds the judging both suites use. It is extracted from `and-scene`'s post-#81 `lib/judge-jobs.mjs` and `lib/judge-invoker.mjs`. Suites own their criteria, anchors or definitions, prompts, verdict scale, evidence views, and job lists. The module owns how verdicts are produced, checked, and settled:
+- `text.mjs`: `bounded` and `normalizeEvidence` (moved from `and-scene`'s `browser-eval.mjs`, which re-exports them);
+- `hash.mjs`: canonical `hashJson` and `hashString` (moved from `and-scene`'s `persistence.mjs`, which re-exports them);
+- `codex-invoker.mjs`: the Codex judge invoker (moved from `and-scene`'s `judge-invoker.mjs`, which re-exports it), with an option for a private `CODEX_HOME` in host mode;
+- `claude-invoker.mjs`: a Claude judge invoker with two modes:
+  - host mode, with no tools and inputs inlined;
+  - in-sandbox mode, with read-only `Read`, `Grep`, and `Glob` only, a working directory at the job's read-only root, `--setting-sources ''`, `--strict-mcp-config`, `--disable-slash-commands`, `--no-session-persistence`, and `--json-schema`.
 
-The copied modules are:
+  Both modes check that only allowed tools were used and record usage like the Codex invoker. They back off on capacity rejections without spending an attempt, record zero-token rejection records, and fail fast on schema rejection. They use the suite's Claude-quota wait for an identified subscription limit with a reset within six hours;
+- `protocol.mjs`: the post-#81 mechanics:
+  - strict schemas;
+  - output parsing with missing-criterion retries;
+  - citation and line-span validation;
+  - closed-world audits, targeted contradiction checks, and re-cites;
+  - the scope rule;
+  - cache reproduction checks;
+- `panel.mjs`: `runPanelJob({ job, criteria, verdicts, order, panel: [{ family, model, effort, invoke }], decider, buildPrompt, schema, validateCitations, audit, cache })`. It runs the panel concurrently, applies each suite's optional per-judge audit, and settles every criterion under the cross-family rule. It returns per-criterion results with `votes`, `basis`, `checks`, `ruling`, and usage by stage. `verdicts` and `order` give the suite's scale: `pass`/`fail` for `and-scene`, `met`/`partial`/`missing` for this suite.
+
+Migration happens in three steps, each its own task and commit series:
+1. **Extract with no behavior change.**
+   - The code moves verbatim, and `and-scene` imports and re-exports it, so every existing import path and test keeps working. Request fields the shared code needs, such as marking an evidence-view job, are set by `and-scene`'s request builder.
+   - Proof that nothing changed:
+     - the full existing test suite passes unchanged;
+     - a cache-replay test loads recorded `and-scene` judge records through `verifyCachedRobustJob` and the scorer, and asserts identical results, consensus, and scores before and after.
+2. **Add the Claude invoker and `runPanelJob` with the cross-family rule,** with unit tests on stub CLIs and canned votes. Neither suite uses them yet.
+3. **Switch `and-scene` to the cross-family panel:**
+   - the panel is `claude-sonnet-5-5` plus two `gpt-6-sol` samples at the pinned medium effort; `claude-opus-5-5` decides and runs the targeted and contradiction checks;
+   - each panel judge keeps its own closed-world source audit and one re-cite;
+   - the blind third sample is replaced by the decider. The decider's line-span rules, span audit, and contradiction check are the third sample's, unchanged;
+   - Claude judges run inside the `and-scene` sandbox in in-sandbox mode, so every `and-scene` run forwards Claude credentials (`--mount-claude-auth`);
+   - the judging protocol becomes `cross-family-panel-v1`, cache keys include it, and the rubric version gets a major bump recorded in `rubric-history.json`. Earlier results stay as published and form the earlier series;
+   - the browser second opinion, the pricing search, and other single-purpose judge calls keep the Codex judge authority, because they are evidence checks, not scoring votes;
+   - acceptance re-scores the baseline reps (claim `cc572181`) under the new panel and audits the paired verdicts (`E2E-004`).
+
+This suite then uses `runPanelJob` for coverage, fidelity, quality, and the disclosure audit.
+
+### Other reused and-scene code
+
+These are copied into `and-scene-define/lib/` and adapted:
 - `persistence.mjs`, `checkpoint.mjs`, `orchestrator.mjs`, `phases.mjs`;
-- `judge-invoker.mjs`, made host-side with a private `CODEX_HOME`, plus a Claude `claude -p` invoker for panel judge A and the decider;
-- the citation and schema checks from `judge-jobs.mjs`;
 - `runner-metrics.mjs`, `runner-state.mjs`, `publication.mjs`, `subprocess.mjs`.
 
-`state-machine.mjs`, `outcomes.mjs`, `profiles.mjs`, and `report.mjs` are rewritten for this lifecycle. The and-scene suite is not modified.
+`state-machine.mjs`, `outcomes.mjs`, `profiles.mjs`, and `report.mjs` are rewritten for this lifecycle.
 
 ## Decisions
 
@@ -416,12 +456,12 @@ The copied modules are:
 6. **The controller owns time; no Runner timeout and no turn cap.**
    - The single elapsed-time limit is the spec's contract.
    - An abort or stop is enough to end a stuck run.
-7. **A cheap three-judge cross-family panel (Sonnet plus two Luna samples), with Opus deciding anything short of consensus.**
-   - The eval compares Claude and Codex leads, and a panel from one family could favor its own family's writing.
-   - Two families make different mistakes, so agreement is strong evidence and no single call decides a contested item.
-   - A second Luna sample is nearly free. It catches Luna's own sampling noise, so consensus requires agreement across families and across samples.
-   - The decider sees all three verdicts and citations, which beats a blind majority.
-   - Expected cost is three cheap calls per job plus decider calls for non-consensus items. The labellers disagreed on about 19% of items, so expect at least that share to reach Opus.
+7. **A three-judge cross-family panel (one Claude judge, two Codex samples), where only a majority that includes the Claude judge settles a verdict, and Opus decides otherwise.**
+   - Both suites compare Claude and Codex agents, and a panel from one family could favor its own family's writing. The maintainer requires a Claude model in every verdict.
+   - Requiring unanimity would send a large share of items to a single decider call. The labellers disagreed on about 19% of items, and three judges on a three-level scale disagree more often. In PR #81, every score difference on identical evidence came from such single-call decisions. A cross-family majority settles most splits without one.
+   - The decider must pick a verdict a panel judge gave, so every final verdict has two agreeing signals.
+   - Audits and dissents only mark a verdict disputed. A targeted check of the one stated claim resolves it, never an open-ended re-audit. PR #81 showed that one call overturning a vote produced its worst false fails.
+   - Expected cost is three cheap calls per job, plus Opus calls for Codex-only majorities, three-way splits, and backed dissents.
 8. **Host-side canary check over mount sources.**
    - Running it in the sandbox would put canary phrases into the evaluated environment.
 9. **Native session files as audit evidence**, located through `run-metrics.json`, with per-turn output as a second source.
@@ -432,9 +472,10 @@ The copied modules are:
 11. **Committed, generated rubric and calibration inputs.**
     - They are pinned and reviewable.
     - Calibration makes real judge calls and is a maintainer diagnostic, never a gate.
-12. **Copy, not extract, shared mechanics.**
-    - Extraction would change and-scene's code and tests in an unrelated change.
-    - It is a follow-up once both suites are stable.
+12. **Share panel judging; copy everything else.**
+    - Two suites now need the same judging behavior, which meets the repository rule for a shared module, and the maintainer wants one way of panel judging.
+    - Extraction lands first with no behavior change, proven by cache replay, so the later protocol switch is the only behavioral change to `and-scene`'s scores.
+    - Other mechanics stay copied, because their behavior differs per suite.
 13. **The Runner comes from the `external-user-mode` worktree until it merges.**
     - Implementation runs and tests against `/Users/paul/codagent/agent-runner/worktrees/external-user-mode`.
     - Runner defects found during implementation, including the two sandbox flags, are fixed there.
@@ -445,6 +486,10 @@ The copied modules are:
     - A leak would otherwise inflate coverage for a requirement the agent never discovered.
     - Dropping only the leaked items keeps the rest of a paid run's score valid.
     - Because the audit now changes the score, it uses the panel and decider rather than a single call.
+16. **Anchors per graded item, and lessons from PR #81 in both suites.**
+    - In PR #81, most remaining splits came from undefined or borderline terms, and each definition added removed the split it targeted. Anchors are the definition step for intent-graded items.
+    - The fixture or reference text in every prompt, the shared scope rule, and rubric guidance traced to the fixture stopped judges from adding requirements or inventing scenarios.
+    - Scoring each omission once avoids charging one fault under two criteria.
 
 ## Risks / Trade-offs
 
@@ -455,14 +500,15 @@ The copied modules are:
   - The disclosure audit removes leaked items from coverage and shows every flag next to the scores. A run with many leaked items scores over fewer items, so the report shows the leaked count for comparisons.
   - Conclusions need repeated runs.
 - **Judge reliance on intent.** Calibration with a restructured reference and degraded variants checks that judges credit alternatives and catch removals. The provisional weights and threshold are fixed only after calibration.
-- **Cheaper panel models.** Sonnet 5.5 and `gpt-6-luna` are weaker than the decider at intent judgments.
-  - Disagreements go to Opus 5.5, and the two families make different mistakes, so a shared blind spot is the residual risk.
-  - Calibration reports panel agreement and decider rate along with accuracy.
-  - The decider is still one stochastic call deciding exactly the borderline items. In agent-evals PR #81, every score difference on identical evidence came from such single-call decisions.
-  - Calibration therefore measures the decider's own test-retest spread: it re-runs the decider 3 times on the same recorded panel outputs and reports how often a ruling flips, separately from the panel's spread.
-  - If rulings flip beyond the pinned spread, the maintainer replicates the decider. For example, two decider calls must agree, with a defined default when they don't. That is a judge-profile change and starts a new series.
-  - If the panel fails calibration's accuracy or spread checks, the maintainer changes the pinned judge profile. That is a new series.
-- **Agent-writable evidence.** The exchange directory, the Runner's exchange record, and the session transcripts live where the agent can write. Reconciliation catches an inconsistent alteration but not a consistent rewrite of all three. A separate OS user for the Runner would close it and is a later hardening option.
+- **Cheaper panel models.** Sonnet 5.5, `gpt-6-luna`, and `gpt-6-sol` are weaker than the decider at intent judgments.
+  - Cross-family splits, backed dissents, and three-way splits go to Opus 5.5, and the two families make different mistakes, so a shared blind spot is the residual risk.
+  - Families read borderline terms differently, and systematically. Calibration reports each family's verdict distribution, the share of items settled by each basis, and a per-item diff of two identical rescores.
+  - The decider is still one stochastic call on the items it decides. Calibration re-runs it 3 times on the same recorded panel outputs and reports its flip rate. A high flip rate on an item means its anchors need sharpening, not that more judges are needed.
+  - If the panel fails calibration's accuracy or spread checks, the maintainer changes the pinned judge profile. That starts a new series.
+- **`and-scene` series break and quota.**
+  - Switching `and-scene` to the panel changes its scores, so it starts a new series. Earlier results are not edited, and the baseline reps are re-scored under the new panel.
+  - Claude judge calls inside the `and-scene` sandbox share the Claude subscription quota with the evaluated agent's Claude sessions. An identified limit with a reset within six hours waits; any other limit leaves the job a resumable harness failure.
+- **Shared module couples the suites.** A change to `evals/lib/panel-judging/` affects both suites' scores. Its protocol identifier is part of both suites' cache keys and series identity, and both suites' tests run in `npm run check`.
 - **Unscanned Docker image.** It is built from the Runner Dockerfile with generic tooling and recorded by image ID. The report states the gap.
 - **Runner changes outside this repository.** The two sandbox flags and any fixes land on the `external-user-mode` branch. The suite records the Runner commit in each run's candidate record, so results stay attributable.
 - **Host CLI configuration bleeding into eval-owned calls.** The simulated user runs with `--setting-sources ''`, `--strict-mcp-config`, and no tools. Judges use a private `CODEX_HOME`. Claude still attaches its small automatic environment block, which carries no hidden material.
@@ -470,7 +516,7 @@ The copied modules are:
 
 ## Migration Plan
 
-The suite is new and has no migration.
+This suite is new. `and-scene` migrates its judging in the three steps under "Shared panel judging"; its earlier results stay published as the earlier series.
 
 - Move `inventory/` from this change into `evals/agent-runner/and-scene-define/hidden/` when implementing.
 - Keep `poc/` with this change as implementation reference, but do not commit `poc/runs/claude-20261004T022704Z/`, the run contaminated by the host plugin. It records the maintainer's personal Claude setup, and `poc/README.md` already documents its finding. Leave the directory on disk, untracked.

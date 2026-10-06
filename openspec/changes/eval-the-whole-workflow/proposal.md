@@ -26,7 +26,7 @@ The result is a **repeatable define-workflow benchmark** for comparing Codagent 
   - Two agents from different model families label independently from a versioned brief, and a maintainer reconciles their disagreements.
 - **Artifact scoring.** Eval-owned judges score the produced proposal, specifications, design, and test plan under a versioned rubric with explicit criteria, points, gates, and pass threshold:
   - **Requirement coverage** of mandatory and acceptable-alternative items, judged by intent rather than wording or structure. This is the primary component.
-  - **Fidelity:** no contradiction of hidden intent or of the simulated user's answers. Added scope is reported but not penalized unless it falls under a scope exclusion or contradicts the user.
+  - **Fidelity:** no contradiction of the simulated user's answers on matters coverage does not grade, such as preference items. A contradiction of a graded requirement is scored once, under coverage. Added scope is reported but not penalized unless it contradicts the user.
   - **Artifact quality:** testable specification scenarios, cross-artifact consistency, sound design decisions, and a test plan that covers the requirements.
   - **Gates:** passing `openspec validate`, and a completed define workflow.
 - **Calibration.** Weights and the pass threshold are set only after calibration against three kinds of input:
@@ -34,6 +34,18 @@ The result is a **repeatable define-workflow benchmark** for comparing Codagent 
   - the fixture's own reviewed change, and a restructured rewrite of it that keeps every requirement;
   - deliberately degraded variants.
   Judges must credit sound alternatives, not just recognize the reference.
+- **One panel-judging approach for both suites.** Judging moves into a shared module, `evals/lib/panel-judging/`, used by this suite and by `and-scene`. It is extracted from `and-scene`'s judging after agent-evals PR #81 made it robust.
+  - Every scored judge job runs a three-judge, cross-family panel: one Claude judge and two independent Codex samples.
+  - A majority settles a verdict only when it includes the Claude judge.
+  - When the two Codex judges agree against the Claude judge, or the panel splits three ways, a Claude decider (Opus) rules. The decider must choose a verdict a panel judge gave, with citations that pass validation.
+  - Audits and dissents never overturn a verdict alone. They trigger a targeted check of the one stated claim.
+  - No verdict is decided without a Claude model, and none by a single call.
+  - `and-scene` switches to this panel. That changes its judging protocol and starts a new `and-scene` scoring series. Its earlier results are not edited.
+  - Lessons from PR #81 apply to both suites:
+    - every criterion carries anchor definitions of what counts as each verdict;
+    - every judge prompt includes the fixture or reference text and a shared scope rule;
+    - rubric guidance is limited to what the fixture states;
+    - each omission is scored under one criterion only.
 - **Requirement-discovery diagnostic.** A non-scoring ledger. For each graded hidden requirement it records whether the agent asked about it, with a cited exchange, and combines that with the requirement's coverage verdict: discovered, inferred, missed, or asked but not captured.
 - **Isolation and contamination audit.**
   - Nothing hidden is mounted or readable in the evaluated agent's environment.
@@ -65,11 +77,12 @@ The suite also needs two opt-in Agent Runner sandbox options: forwarding Claude 
 - `evaluation-isolation`: keeping hidden material out of the evaluated environment, the tool-call contamination audit that invalidates contaminated runs, and the stated residual risk.
 
 ### Modified Capabilities
-- None. The `and-scene` suite and its specifications are unchanged.
+- `product-quality-scoring`: `and-scene`'s robust judge verdicts move from two Codex samples plus a blind third sample to the shared cross-family panel with a Claude decider.
+- `evaluation-metrics-reporting`: eval-owned usage capture covers Claude judge calls as well as Codex.
 
 ## Technical Approach
 
-- **New suite, own lifecycle.** Scoring targets artifacts rather than a product, and the lifecycle stops after define, so this is a separate suite under the repository rule that suites own their runner, evidence, and scoring. It reuses the same sandbox entry point (`sandbox-run.sh -- <command>`), profile conventions, and Agent Skills bootstrap pattern as `and-scene`. Unlike `and-scene`, only the evaluated workflow runs in the sandbox; the controller, simulated user, and judges run on the host. Generic `and-scene` mechanics are copied into the new suite rather than extracted, so `and-scene` is untouched; extracting a shared library is a follow-up once both suites are stable.
+- **New suite, own lifecycle.** Scoring targets artifacts rather than a product, and the lifecycle stops after define, so this is a separate suite under the repository rule that suites own their runner, evidence, and scoring. It reuses the same sandbox entry point (`sandbox-run.sh -- <command>`), profile conventions, and Agent Skills bootstrap pattern as `and-scene`. Unlike `and-scene`, only the evaluated workflow runs in the sandbox; the controller, simulated user, and judges run on the host. Panel judging is extracted into `evals/lib/panel-judging/` and shared, because both suites now need the same behavior. First the extraction lands with no behavior change, proven by replaying cached `and-scene` judge records. Then the shared module gains a Claude invoker, usable on the host and inside the sandbox, and the cross-family settlement rule. Finally `and-scene` switches to the new panel. Other generic `and-scene` mechanics, such as persistence, checkpoints, and publication, are still copied rather than shared.
 - **Hidden-knowledge boundary.**
   - The hidden reference and inventory live in this suite's pinned data, outside anything the evaluated agent can read.
   - The simulated user answers through the Agent Runner external-user mode's file exchange, running on the host outside the sandbox.
@@ -90,12 +103,13 @@ The suite also needs two opt-in Agent Runner sandbox options: forwarding Claude 
 - A raw Claude Code control arm; deferred to `eval-end-to-end-workflow`.
 - Making the discovery diagnostic score-affecting.
 - Additional fixtures beyond and-scene.
-- Any change to the `and-scene` suite, its rubric, or its historical results.
+- Any change to `and-scene` beyond moving its judging onto the shared panel, and any edit to its historical results.
 
 ## Impact
 
-- **New code:** `evals/agent-runner/and-scene-define/`, containing the runner script, controller, simulated-user responder and policies, judges, scoring, discovery diagnostic, contamination audit, pinned prompt, allowlisted starting-repository snapshot, hidden-reference inventory, rubric, calibration inputs, runbook, and tests. The root `AGENTS.md` gains a short section on running the suite.
-- **Specs:** six new capabilities, listed above.
+- **New code:** `evals/lib/panel-judging/` (shared panel judging), and `evals/agent-runner/and-scene-define/`, containing the runner script, controller, simulated-user responder and policies, judges, scoring, discovery diagnostic, contamination audit, pinned prompt, allowlisted starting-repository snapshot, hidden-reference inventory, rubric, calibration inputs, runbook, and tests. The root `AGENTS.md` gains a short section on running the suite.
+- **Specs:** six new capabilities and two modified `and-scene` capabilities, listed above.
+- **`and-scene`:** a new judging protocol and scoring series. Claude judge calls inside its sandbox share the Claude subscription quota with the evaluated agent's Claude sessions, and need forwarded Claude credentials on every run. Its baseline reps are re-scored under the new panel as acceptance.
 - **Dependencies:**
   - Agent Runner's external-user mode, `--resume` with `--until`, the two sandbox options above, plus the existing sandbox, `run-metrics.json`, and retained session transcripts for the audit.
   - The pinned and-scene fixture as the source of the hidden reference.

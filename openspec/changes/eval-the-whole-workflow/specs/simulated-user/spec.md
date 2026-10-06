@@ -87,7 +87,7 @@ Every exchange SHALL be recorded in the run's simulated-user conversation with i
 - **THEN** the conversation records the step, attempt, turn, agent message, reply, and reply type
 
 ### Requirement: Disclosure audit
-After the define workflow, eval-owned judges SHALL audit every simulated-user reply against the agent turn it answered and the conversation before it, flagging over-disclosure, inconsistent withholding, and contradiction of an earlier answer. Each flag SHALL cite the exchange. Each over-disclosure flag SHALL name the `mandatory` and `acceptable-alternative` inventory items the reply disclosed without being asked. The audit SHALL use the same three-judge panel and decider rule as scoring jobs: an item SHALL be leaked when all three panel judges name it in an over-disclosure flag, SHALL NOT be leaked when none does, and SHALL otherwise be decided by the decider. A leaked item SHALL be excluded from that run's coverage score and SHALL be reported as `leaked` in place of its coverage verdict. Inconsistent-withholding and contradiction flags SHALL be report-only. Every flag and every leaked item SHALL be shown in the result and report, and a run with flags SHALL still be scored and published.
+After the define workflow, eval-owned judges SHALL audit every simulated-user reply against the agent turn it answered and the conversation before it, flagging over-disclosure, inconsistent withholding, and contradiction of an earlier answer. Each flag SHALL cite the exchange. Each over-disclosure flag SHALL name the `mandatory` and `acceptable-alternative` inventory items the reply disclosed without being asked. The audit SHALL use the same cross-family panel and settlement rule as scoring jobs, judging for each item whether it was leaked. An item named in an over-disclosure flag by the Claude-family judge and at least one Codex-family judge SHALL be leaked. An item named by both Codex-family judges but not the Claude-family judge SHALL be decided by the decider. An item named by one judge alone SHALL be a dissent, checked by the decider when that judge's flag cites a valid exchange. A leaked item SHALL be excluded from that run's coverage score and SHALL be reported as `leaked` in place of its coverage verdict. Inconsistent-withholding and contradiction flags SHALL be report-only. Every flag and every leaked item SHALL be shown in the result and report, and a run with flags SHALL still be scored and published.
 
 #### Scenario: Over-disclosure is flagged
 - **WHEN** a reply states a requirement the agent's turn did not ask about
@@ -99,7 +99,7 @@ After the define workflow, eval-owned judges SHALL audit every simulated-user re
 - **THEN** the item contributes neither earned nor possible coverage points and is reported as `leaked`
 
 #### Scenario: Panel disagrees about a leak
-- **WHEN** two panel judges name an item in an over-disclosure flag and the third does not
+- **WHEN** both Codex-family judges name an item in an over-disclosure flag and the Claude-family judge does not
 - **THEN** the decider rules whether the item is leaked and the result records the disagreement and ruling
 
 #### Scenario: Withholding flag does not change the score

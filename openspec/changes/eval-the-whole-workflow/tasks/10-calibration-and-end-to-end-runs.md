@@ -10,30 +10,25 @@ Calibration checks that judges credit sound alternatives instead of the referenc
 
 ## Background
 
-### Blocking prerequisite: agent-evals PR #81
+### Prerequisite: reviewed anchors
 
-Calibration and candidate runs depend on judge mechanics copied after agent-evals PR #81 ("fix: make and-scene judging and scoring robust") merges. Before doing anything else, run:
-
-```sh
-gh pr view 81 --repo Codagent-AI/agent-evals --json state
-```
-
-If it is not `MERGED`, stop and report this task as blocked on PR #81. Do not poll indefinitely.
+Calibration and candidate runs need the maintainer-reviewed verdict anchors (`HT-003`). Before doing anything else, check that `hidden/inventory.json` has a non-null `anchors_review` for the current inventory version. If it does not, stop and report this task as blocked on `HT-003`, the anchor review. Do not fill in the review yourself, and do not poll.
 
 ### Context
 
 Read for full context:
-- `openspec/changes/eval-the-whole-workflow/design.md`, sections "Rubric", "Collection, gates, and judging", "Risks / Trade-offs" (the cheaper-panel-models and decider-spread bullets), Decision 11, and "Open Questions";
+- `openspec/changes/eval-the-whole-workflow/design.md`, sections "Rubric", "Collection, gates, and judging", "Shared panel judging", "Risks / Trade-offs" (the cheaper-panel-models bullet), Decisions 7, 11, and 16, and "Open Questions";
 - `openspec/changes/eval-the-whole-workflow/test-plan.md`, `E2E-001`, `E2E-002`, `E2E-003`, and the "Acceptance Testing Envelope".
 
 State of the suite `evals/agent-runner/and-scene-define/`. Use these; if one is missing, stop and report which:
 - `run.sh` with `--help`, `--dry-run`, `--run-agent`, `--resume`, `--rescore-from`, and `--time-limit`;
 - the controller and its full ordered lifecycle;
 - `rubric.json`: generated from `hidden/inventory.json`, with provisional points (coverage 60, artifact quality 25, fidelity 15), item weights (mandatory 2, acceptable-alternative 1), and a `null` pass threshold, so preflight refuses candidate runs until calibration sets it;
-- the judge panel:
-  - panel judge A is `claude-sonnet-5-5`; panel judges B and C are `gpt-6-luna`, run twice;
-  - the decider is `claude-opus-5-5`;
-  - unanimity settles a verdict, and anything short of it goes to the decider;
+- the judge panel, through the shared `runPanelJob` (`evals/lib/panel-judging/panel.mjs`, protocol `cross-family-panel-v1`):
+  - the Claude-family judge is `claude-sonnet-5-5`, and the two Codex-family samples are `gpt-6-luna`;
+  - the decider, which also runs the targeted checks, is `claude-opus-5-5`;
+  - a unanimous verdict, or a two-to-one majority that includes the Claude-family judge, settles a verdict. A backed higher-verdict dissent gets a targeted check. Codex-only majorities and three-way splits go to the decider;
+- `hidden/inventory.json` with reviewed `met`, `partial`, and `missing` anchors for every graded item;
 - `hidden/reference/`: the and-scene fixture's `create-and-scene` change at `ad667a9`;
 - `hidden/inventory.json`: 24 mandatory, 48 acceptable-alternative, and 48 preference items;
 - `versions.json`.
@@ -57,10 +52,13 @@ Mark each degraded variant as **proposed** expected-fail. Marking which degraded
 It judges each input at least three times, and reports:
 - accuracy against expectations;
 - stability across repeats;
-- panel agreement and decider rate;
+- the share of items settled by each basis (consensus, majority, checked dissent, decider);
+- each model family's `met`, `partial`, and `missing` distribution beside the expected verdicts, so systematic leniency or strictness by family is visible;
 - each input's score.
 
-It also re-runs the decider 3 times on the same recorded panel outputs, and reports the decider's ruling-flip rate separately from the panel's spread.
+It also:
+- re-runs the decider 3 times on the same recorded panel outputs, and reports its ruling-flip rate separately from the panel's spread. A high flip rate names the items whose anchors need sharpening;
+- rescores one input twice under identical conditions and lists every item whose verdict differs.
 
 It reports a failure, naming the item and input, when:
 - a removed mandatory item is not detected;
@@ -117,7 +115,7 @@ Repository rules:
 ## Spec
 
 ### Requirement: Calibration
-The `--calibrate` mode SHALL judge a calibration set, repeating each input at least three times, and report judge accuracy, stability, and the resulting score of each input. The calibration set SHALL include the fixture's own change; a restructured reference that renames, merges, splits, and rewords it and replaces `acceptable-alternative` mechanisms with others that meet their intents; degraded variants of both with items removed, contradictions planted, excluded scope added, and quality defects introduced; and, when available, real candidate definitions with maintainer-reviewed verdicts. Each synthetic input SHALL carry its expected per-item verdicts. Calibration SHALL report a failure when a removed `mandatory` item is not detected, when the restructured reference loses more items than the pinned tolerance, or when repeated judging of one input differs by more than the pinned spread. The maintainer SHALL mark which degraded variants are expected to fail, and the pass threshold SHALL lie between those and the definitions expected to pass. Calibration SHALL NOT be a prerequisite or runtime gate for a candidate run.
+The `--calibrate` mode SHALL judge a calibration set, repeating each input at least three times, and report judge accuracy, stability, and the resulting score of each input. The calibration set SHALL include the fixture's own change; a restructured reference that renames, merges, splits, and rewords it and replaces `acceptable-alternative` mechanisms with others that meet their intents; degraded variants of both with items removed, contradictions planted, excluded scope added, and quality defects introduced; and, when available, real candidate definitions with maintainer-reviewed verdicts. Each synthetic input SHALL carry its expected per-item verdicts. Calibration SHALL report a failure when a removed `mandatory` item is not detected, when the restructured reference loses more items than the pinned tolerance, or when repeated judging of one input differs by more than the pinned spread. Calibration SHALL also report each panel judge's verdict distribution by model family, the share of items settled by each basis, the decider's ruling-flip rate when re-run on the same recorded panel outputs, and a per-item diff of two identical rescores of the same input. The maintainer SHALL mark which degraded variants are expected to fail, and the pass threshold SHALL lie between those and the definitions expected to pass. Calibration SHALL NOT be a prerequisite or runtime gate for a candidate run.
 
 #### Scenario: Judge credits only the reference's wording
 - **WHEN** the restructured reference scores below the reference by more than the pinned tolerance
@@ -126,6 +124,10 @@ The `--calibrate` mode SHALL judge a calibration set, repeating each input at le
 #### Scenario: Removed mandatory item goes undetected
 - **WHEN** a degraded variant omits a `mandatory` item and the judge marks it `met`
 - **THEN** calibration reports a failure that names the item and variant
+
+#### Scenario: One model family is systematically lenient
+- **WHEN** calibration completes
+- **THEN** its report shows each model family's `met`, `partial`, and `missing` rates beside the expected verdicts, so a family that is systematically more lenient or strict is visible
 
 #### Scenario: Threshold separates expected outcomes
 - **WHEN** calibration completes without failures
@@ -168,7 +170,8 @@ This task delivers `--calibrate`. It is never a prerequisite or runtime gate for
 - `E2E-003` (Calibration): run `run.sh --calibrate` with the committed calibration set, the pinned judge profile, and host Claude and Codex auth.
   - Assert:
     - each input is judged at least three times;
-    - the report gives accuracy, stability, panel agreement, decider rate, and each input's score;
+    - the report gives accuracy, stability, each settlement basis's share, each model family's verdict distribution, and each input's score;
+    - two identical rescores of one input are diffed per item, and every differing item is listed;
     - the decider is re-run 3 times on the same recorded panel outputs, and its ruling-flip rate is reported separately;
     - the report names any undetected removed mandatory item, any restructured-reference loss beyond tolerance, or any spread beyond the pinned limit;
     - it proposes a pass threshold between the expected-fail variants and the expected-pass inputs.
@@ -180,7 +183,7 @@ This task delivers `--calibrate`. It is never a prerequisite or runtime gate for
     - all four artifacts are collected with hashes, and the gates are evaluated;
     - the contamination audit is clean, with a transcript for every invocation in `run-metrics.json`;
     - `result.json`, `report.html`, the conversation, the discovery ledger, and the evidence manifest exist;
-    - the result reports panel verdicts and decider rulings;
+    - the result reports panel verdicts by model family, settlement bases, targeted checks, and decider rulings;
     - the result commit lands on the local bare remote;
     - the rescore reproduces the contamination outcome and gate results without Docker.
 - `E2E-002` (Codex-lead run, interrupted and resumed): set up as for `E2E-001`, with lead `codex` and crosscheck `claude`. Stop the sandbox after the first answered `define.proposal` exchange, then run `run.sh --resume` with the same profiles.
@@ -190,13 +193,13 @@ This task delivers `--calibrate`. It is never a prerequisite or runtime gate for
     - the workflow stops after `define`, and the run completes;
     - resuming with a different lead profile is refused.
 - Unit and integration tests, in `npm run check`, with stub judges, for the `--calibrate` aggregation:
-  - accuracy, stability, the flip rate, the failure conditions, and the threshold proposal;
+  - accuracy, stability, basis shares, per-family distributions, the identical-rescore diff, the flip rate, the failure conditions, and the threshold proposal;
   - calibration output is never published;
   - candidate runs never require calibration output.
 
 ## Done When
 
-- PR #81 was confirmed merged. Otherwise, the task is reported blocked.
+- Reviewed anchors (`HT-003`) were confirmed before any paid call. Otherwise, the task is reported blocked.
 - `calibration/` holds the reference, the restructured reference, and the degraded variants, each with expected per-item verdicts and proposed expected-fail marks.
 - `run.sh --calibrate` works, and its aggregation is covered by tests in `npm run check`.
 - `E2E-003` completed without failures. Its proposed threshold, weights, and calibration evidence are recorded in `rubric.json`, marked pending maintainer approval, with the rubric version and `versions.json` bumped.

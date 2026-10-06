@@ -48,6 +48,17 @@ Every `acceptable-alternative` item SHALL have a non-empty intent that states wh
 - **WHEN** a candidate definition omits or contradicts a `preference` item
 - **THEN** that item contributes no criterion to the score
 
+### Requirement: Verdict anchors
+Every `mandatory` and `acceptable-alternative` item SHALL carry anchors that state, in the fixture change's own words wherever possible, what counts as `met`, `partial`, and `missing` for that item. An `acceptable-alternative` item's anchors SHALL be written against its intent, not the reference's mechanism. Anchors SHALL be drafted from the item's statement, intent, and source quotes, and reviewed by a maintainer before the inventory version that contains them is used for a candidate run. The inventory check SHALL fail when a graded item lacks any anchor.
+
+#### Scenario: Graded item has no anchors
+- **WHEN** a `mandatory` or `acceptable-alternative` item lacks its `met`, `partial`, or `missing` anchor
+- **THEN** the inventory check fails and names the item
+
+#### Scenario: Anchors are not yet reviewed
+- **WHEN** a candidate run starts and the pinned inventory's anchors have no recorded maintainer review
+- **THEN** preflight fails before any model call and states that the anchors need review
+
 ### Requirement: Independent labelling and reconciliation
 Final classes SHALL come from two independent label sets produced from the same versioned labelling brief by labellers from different model families, neither of which reads the other's labels. A maintainer SHALL reconcile every item on which the labels disagree, and the reconciled inventory SHALL record for each item both labellers' classes and confidence, the final class, the intent and which labeller's intent it was taken from, whether the class was agreed or reconciled, and, for a reconciled item, the reason. Any general rule the maintainer applies across items SHALL be recorded in the inventory.
 
@@ -60,7 +71,7 @@ Final classes SHALL come from two independent label sets produced from the same 
 - **THEN** the inventory check fails and names the item
 
 ### Requirement: Inventory versioning
-A change to the pinned fixture commit, the starting prompt, any item, or any item's final class or intent SHALL produce a new inventory version. The inventory version SHALL be part of the run's series identity, so runs scored against different inventory versions are not compared.
+A change to the pinned fixture commit, the starting prompt, any item, or any item's final class, intent, or anchors SHALL produce a new inventory version. The inventory version SHALL be part of the run's series identity, so runs scored against different inventory versions are not compared.
 
 #### Scenario: Final class changes
 - **WHEN** a maintainer changes one item's final class

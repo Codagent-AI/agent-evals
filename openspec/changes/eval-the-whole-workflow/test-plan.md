@@ -6,16 +6,15 @@ Integration tests run in `npm run check` (`node --test test/*.test.mjs`). They m
 
 End-to-end tests are local, paid, opt-in runs of the suite's public entry point, and never run in CI.
 
-### Ordering constraint: agent-evals PR #81
+### Ordering constraint: shared panel judging first
 
-The judge mechanics are copied from the and-scene suite only after agent-evals PR #81 ("fix: make and-scene judging and scoring robust") merges. These items depend on that copy:
-- judges, scoring, and calibration;
-- INT-003 and the judge half of INT-002;
-- E2E-001, E2E-002, and E2E-003, because candidate runs need a calibrated rubric.
+Agent-evals PR #81 ("fix: make and-scene judging and scoring robust") is merged (`cd7a3fc`), and this branch has merged `main`. Panel judging is built in this order, and each step lands before the next:
+1. extract `evals/lib/panel-judging/` from `and-scene` with no behavior change (INT-009);
+2. add the Claude invoker and the cross-family settlement to the shared module (INT-002, INT-010);
+3. switch `and-scene` to the cross-family panel (INT-010, then E2E-004 during acceptance);
+4. build this suite's judging on the shared module (INT-003).
 
-Everything else proceeds first. Before starting the dependent work, check the PR with `gh pr view 81 --repo Codagent-AI/agent-evals --json state`:
-- if it is merged, copy from the updated `main`;
-- if it is not merged, stop and report the work as blocked on PR #81. Do not copy the pre-#81 versions or poll indefinitely.
+The E2E runs need a calibrated rubric, so E2E-001 and E2E-002 run after E2E-003.
 
 ## Integration Tests
 
@@ -35,8 +34,8 @@ Everything else proceeds first. Before starting the dependent work, check the PR
 - Execution: `test/and-scene-define-responder.test.mjs` in `npm run check`.
 
 ### INT-002: Eval-owned CLI invocation contracts
-- Covers: simulated-user knowledge boundary, eval-owned judges, strict schemas (`simulated-user`, `definition-artifact-scoring`).
-- Boundary: the controller's simulated-user, Claude-judge, and Codex-judge invokers spawning stub `claude` and `codex` executables. The stubs record their argv and environment and replay recorded stream-json and `--json` output from the proof-of-concept runs.
+- Covers: simulated-user knowledge boundary, eval-owned judges, strict schemas, the shared Claude invoker's host and in-sandbox modes (`simulated-user`, `definition-artifact-scoring`, `product-quality-scoring`, `evaluation-metrics-reporting`).
+- Boundary: the controller's simulated-user invoker and the shared panel-judging Claude and Codex invokers spawning stub `claude` and `codex` executables. The stubs record their argv and environment and replay recorded stream-json and `--json` output from the proof-of-concept runs.
 - Setup: stub executables on `PATH`; recorded outputs, including one with an unexpected `tool_use` and one `invalid_json_schema` error.
 - Action: invoke the simulated user and each judge role once per case.
 - Assertions:
@@ -44,33 +43,44 @@ Everything else proceeds first. Before starting the dependent work, check the PR
   - the tool check rejects the stray `tool_use`;
   - Codex judges run with `--sandbox read-only` and a private `CODEX_HOME` that holds only `auth.json` and is deleted afterward;
   - every schema sent is strict-mode valid (`additionalProperties: false`, all properties required);
-  - `invalid_json_schema` fails the run without retrying.
-- Execution: `test/and-scene-define-invokers.test.mjs` in `npm run check`. The judge half is written after PR #81 merges.
+  - `invalid_json_schema` fails the run without retrying;
+  - the in-sandbox Claude mode offers only `Read`, `Grep`, and `Glob`, runs in the job's read-only root, and rejects any other tool use;
+  - a Claude capacity rejection backs off without spending an attempt and writes a zero-token usage record with provider `anthropic`;
+  - an identified Claude subscription limit with a reset within six hours waits and retries, and any other limit fails the job as resumable.
+- Execution: `test/and-scene-define-invokers.test.mjs` and `test/panel-judging-invokers.test.mjs` in `npm run check`.
 
 ### INT-003: Judge panel to score
 - Covers: eval-owned judges with the three-judge panel and decider, requirement coverage, fidelity, artifact quality, gates, scoring, discovery outcomes, disclosure audit and leaked items (`definition-artifact-scoring`, `requirement-discovery-diagnostic`, `simulated-user`).
-- Boundary: judge-job orchestration, panel consensus, decider routing, citation validation, scorer, and discovery computation, with stub judges returning canned verdicts.
+- Boundary: this suite's jobs on the shared `runPanelJob`, cross-family settlement, decider and targeted-check routing, citation validation, scorer, and discovery computation, with stub judges returning canned verdicts.
 - Setup: a collected definition fixture with known per-item expectations, plus canned panel outputs:
   - unanimous;
-  - 2-to-1;
+  - 2-to-1 with the Claude-family judge in the majority and an unbacked dissent;
+  - 2-to-1 with the Claude-family judge in the majority and a backed higher-verdict dissent, once confirmed and once refuted by the targeted check;
+  - 2-to-1 with the two Codex-family judges against the Claude-family judge;
   - a three-way split;
+  - a decider ruling a verdict no panel judge gave;
+  - a definition that contradicts a mandatory item the simulated user also stated, and one that contradicts a stated preference;
   - fidelity citations that don't match;
   - one uncited `met` verdict;
   - one rejected call;
   - a collected change with no design, where a design-only item is `missing` citing the inspected files and the gate's absence record;
-  - disclosure-audit panel outputs where one mandatory item is named by all three, one by two of three, and a withholding flag by all three.
+  - disclosure-audit panel outputs where one mandatory item is named by the Claude-family judge and one Codex-family judge, one only by both Codex-family judges, and a withholding flag by all three.
 - Action: run the scoring phase.
 - Assertions:
-  - unanimous items make no decider call;
-  - every non-consensus item reaches the decider, with verdicts labelled only A, B, and C;
+  - unanimous items and Claude-inclusive majorities with unbacked dissents make no decider call;
+  - a backed dissent gets one targeted check, and its verdict stands only when the check confirms it;
+  - Codex-only majorities and three-way splits reach the decider, with verdicts labelled only A, B, and C;
+  - a decider ruling outside the panel's verdicts is retried and never scored;
+  - the contradicted mandatory item is scored only under coverage, and the contradicted preference is a fidelity deduction;
+  - every prompt contains the scope rule and each judged item's anchors and source quotes;
   - the uncited verdict is retried and never scored;
   - the `missing` verdict for the absent design is accepted without a retry, and the run stays `complete` with `definition_verdict=fail`;
-  - the unanimously leaked item and the decider-ruled item, if ruled leaked, are dropped from earned and possible coverage, reported `leaked` in the result and discovery ledger, and coverage is scaled over the remaining items;
+  - the cross-family leaked item and the decider-ruled item, if ruled leaked, are dropped from earned and possible coverage, reported `leaked` in the result and discovery ledger, and coverage is scaled over the remaining items;
   - the withholding flag changes no score;
   - a rejected call writes a zero-token usage record;
-  - the result records panel verdicts, non-consensus items, and rulings;
+  - the result records panel verdicts, each settlement basis, targeted checks, and rulings;
   - component scores, gates, and the four discovery outcomes match the expectations.
-- Execution: `test/and-scene-define-scoring.test.mjs` in `npm run check`, written after PR #81 merges.
+- Execution: `test/and-scene-define-scoring.test.mjs` in `npm run check`.
 
 ### INT-004: Contamination audit over real transcripts
 - Covers: contamination audit, complete audit evidence, conversation reconciliation, rescore reproducibility (`evaluation-isolation`).
@@ -152,6 +162,38 @@ Everything else proceeds first. Before starting the dependent work, check the PR
   - after a rejected push, resume retries the push using the same commit, with no new commit and no force.
 - Execution: `test/and-scene-define-lifecycle.test.mjs` in `npm run check`.
 
+### INT-009: Shared panel-judging extraction changes nothing
+- Covers: the no-behavior-change extraction of `evals/lib/panel-judging/` (design, "Shared panel judging", step 1).
+- Boundary: `and-scene` judging through the shared module, against recorded judge records.
+- Setup: recorded `and-scene` judge-job records under protocol `dual-sample-majority-v4`, taken from the post-#81 baseline rescores or built from the existing judge-jobs test fixtures, with their expected results, consensus, and component scores.
+- Action: before the extraction, capture each record's reproduced results, consensus, input hash, and scores. After it, replay the same records through `verifyCachedRobustJob`, `runProductJudging` with a cache loader, and the scorer.
+- Assertions:
+  - results, consensus, input hashes, and scores are byte-identical before and after;
+  - every existing `and-scene` test passes without modification;
+  - every former import path from `and-scene/lib/` still resolves to the same exports.
+- Execution: `test/panel-judging-extraction.test.mjs` in `npm run check`.
+
+### INT-010: Cross-family settlement and the `and-scene` switch
+- Covers: the shared settlement rule, and `and-scene`'s robust judge verdicts under the panel (`product-quality-scoring`).
+- Boundary: `runPanelJob` with stub invokers, then `and-scene`'s `runProductJudging` on it, with stub Claude and Codex judges, audits, and checks.
+- Setup: canned votes on a pass/fail scale:
+  - unanimous pass and unanimous fail;
+  - a Claude-inclusive majority with a backed pass dissent, confirmed once and refuted once;
+  - both Codex samples against the Claude judge;
+  - a vote whose source audit is contradicted, with the contradiction check confirming it once and refuting it once;
+  - a decider pass whose span audit is `insufficient`, then `contradicted` with the check confirming;
+  - a browser-fallback decider pass the span audit cannot confirm;
+  - a Claude subscription-limit event with a reset within six hours.
+- Assertions:
+  - each criterion's basis and verdict match the `product-quality-scoring` scenarios;
+  - no criterion is settled by Codex votes alone;
+  - decider passes cite valid line spans, and invalid spans are retried;
+  - a cached job is reused only under `cross-family-panel-v1`, and only when it reproduces from its votes, checks, and rulings;
+  - a record under `dual-sample-majority-v4` is not reused;
+  - the usage ledger records stage, provider, and model for Claude and Codex calls;
+  - the rubric's major version bump is recorded in `rubric-history.json`.
+- Execution: `test/panel-judging-settlement.test.mjs` and the existing `test/judge-jobs.test.mjs`, updated, in `npm run check`.
+
 ## End-to-End Tests
 
 ### E2E-001: Claude-lead candidate run
@@ -174,7 +216,7 @@ Everything else proceeds first. Before starting the dependent work, check the PR
   - the result reports panel verdicts and decider rulings;
   - the result commit lands on the local bare remote;
   - the rescore reproduces the contamination outcome and gate results without Docker.
-- Execution: local, opt-in, paid; never in CI. Run after PR #81 merges and E2E-003.
+- Execution: local, opt-in, paid; never in CI. Run after E2E-003.
 
 ### E2E-002: Codex-lead run, interrupted and resumed
 - Covers: resume through the external-user mode, replay, and the `--until define` cap (`define-workflow-evaluation`, `simulated-user`).
@@ -195,11 +237,27 @@ Everything else proceeds first. Before starting the dependent work, check the PR
 - Journey: run calibration.
 - Assertions:
   - each input is judged at least three times;
-  - the report gives accuracy, stability, panel agreement, decider rate, and each input's score;
+  - the report gives accuracy, stability, each settlement basis's share, each model family's verdict distribution, and each input's score;
+  - two identical rescores of one input are diffed per item, and every differing item is listed;
   - the decider is re-run 3 times on the same recorded panel outputs, and its ruling-flip rate is reported separately;
   - the report names any undetected removed mandatory item, restructured-reference loss beyond tolerance, or spread beyond the pinned limit;
   - it proposes a pass threshold between the expected-fail variants and the expected-pass inputs.
-- Execution: local, opt-in, paid; never in CI. Run after PR #81 merges.
+- Execution: local, opt-in, paid; never in CI. Run after HT-003.
+
+### E2E-004: `and-scene` baseline re-scored under the cross-family panel
+- Covers: the `and-scene` switch on real evidence (`product-quality-scoring`, `evaluation-metrics-reporting`).
+- Surface: `evals/agent-runner/and-scene/run.sh` rescore of retained run directories.
+- Setup:
+  - the `and-scene` baseline reps 1–3 (claim `cc572181`), with their rubric 12.3.0 rescores as the comparison;
+  - host Claude and Codex auth, with Claude credentials forwarded to the `and-scene` sandbox;
+  - runs strictly one at a time, with one headless Chrome at a time.
+- Journey: rescore each rep twice under `cross-family-panel-v1`, then compare per-criterion verdicts against each other and against the 12.3.0 rescores.
+- Assertions:
+  - every criterion records its basis and its votes by model family, and none is settled by Codex votes alone;
+  - repeated rescores of the same rep differ by no more than the pinned spread, and every differing criterion is listed;
+  - every verdict that changed from 12.3.0 is listed with its votes and rationale for audit;
+  - Claude and Codex judge usage both appear in the eval-owned usage ledger.
+- Execution: local, opt-in, paid; never in CI. Run during acceptance. The runner-evals-strategy session or the maintainer audits the changed verdicts.
 
 ## Acceptance Testing Envelope
 
@@ -214,7 +272,7 @@ Everything else proceeds first. Before starting the dependent work, check the PR
   - no GitHub credential is forwarded into any sandbox;
   - `gh` on the host may be used read-only, for example to check PR #81.
 - **Authorized effects:**
-  - paid model calls for the E2E runs, calibration, and policy tests: about $150 in total, covering the three E2E runs plus at most one rerun each after a fix. Stop and ask before exceeding it.
+  - paid model calls for the E2E runs, calibration, and policy tests: about $150 in total, covering E2E-001 to E2E-003 plus at most one rerun each after a fix. E2E-004 is budgeted separately at about $50. Stop and ask before exceeding either.
   - local Docker image builds and containers;
   - commits on the `eval-the-whole-workflow` branch;
   - commits on the Agent Runner `external-user-mode` branch, for the two sandbox flags and any defects found.
@@ -222,7 +280,7 @@ Everything else proceeds first. Before starting the dependent work, check the PR
   - pushing anything, in either repository, without asking;
   - force-pushing;
   - modifying `~/.claude` or `~/.codex`;
-  - the `and-scene` suite's code, rubric, and `results/**`;
+  - `and-scene` code outside its judging, its rubric content beyond the version bump and history entry, and its `results/**`;
   - the and-scene fixture repository;
   - publishing eval results to GitHub.
 - **Permitted substitutes:**
@@ -248,6 +306,12 @@ Everything else proceeds first. Before starting the dependent work, check the PR
   - the tree and its manifest (allowlist and rewrites) are committed.
 - Instructions: read the files under `evals/agent-runner/and-scene-define/starting-repo/` as the evaluated agent will see them.
 - Required decision or observation: approve the tree, or list the files or passages to exclude or rewrite.
+
+### HT-003: Anchor review
+- Reason: the inventory spec requires a maintainer review of every graded item's anchors before they are used for a candidate run, and the anchors decide borderline verdicts.
+- Prerequisites: the drafted anchors for all 72 graded items are committed in `hidden/inventory.json`, and the inventory check passes.
+- Instructions: read each item's `met`, `partial`, and `missing` anchors beside its statement, intent, and source quotes.
+- Required decision or observation: approve the anchors, which records `anchors_review`, or name the items to change.
 
 ### HT-002: Calibrated threshold and weights
 - Reason: the spec reserves the expected-fail marking of degraded variants and the pass threshold to the maintainer.
@@ -278,3 +342,7 @@ Everything else proceeds first. Before starting the dependent work, check the PR
 | Permanent result publication | INT-008 | E2E-001 | — |
 | Define workflow execution and `--until define` | — | E2E-001, E2E-002 | — |
 | Calibration | — | E2E-003 | HT-002 |
+| Verdict anchors | INT-003 | E2E-003 | HT-003 |
+| Shared panel judging, extraction | INT-009 | — | — |
+| Cross-family settlement, `and-scene` robust judge verdicts | INT-010 | E2E-004 | — |
+| Eval-owned Claude and Codex usage | INT-002, INT-010 | E2E-004 | — |

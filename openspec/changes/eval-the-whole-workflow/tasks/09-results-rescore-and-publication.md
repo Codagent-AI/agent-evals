@@ -14,7 +14,7 @@ These are what make a run usable by a maintainer: reproducible, comparable, and 
 ## Background
 
 Read for full context:
-- `openspec/changes/eval-the-whole-workflow/design.md`, sections "Run directory", "Profiles, preflight, and identity" (series identity and candidate), "Retained evidence and rescore", "Reused and-scene code", and Decision 14;
+- `openspec/changes/eval-the-whole-workflow/design.md`, sections "Run directory", "Profiles, preflight, and identity" (series identity and candidate), "Retained evidence and rescore", "Other reused and-scene code", "Shared panel judging", and Decision 14;
 - `openspec/changes/eval-the-whole-workflow/test-plan.md`, `INT-008`.
 
 State of the suite `evals/agent-runner/and-scene-define/`. Use these; if one is missing, stop and report which:
@@ -45,7 +45,7 @@ State of the suite `evals/agent-runner/and-scene-define/`. Use these; if one is 
 - the outputs of earlier phases under `<run>/audits/`, `<run>/judges/`, and `<run>/discovery/`:
   - reconciliation, contamination matches, and the residual-risk statement;
   - disclosure flags and leaked items;
-  - gates, component scores, per-criterion verdicts with citations, panel verdicts, disagreements, and rulings;
+  - gates, component scores, per-criterion verdicts with citations, panel verdicts by model family, each settlement basis, targeted checks, and decider rulings;
   - added scope;
   - the discovery ledger.
 - `phases/eval-owned-usage.jsonl`, and the workflow metrics ingested from `run-metrics.json`.
@@ -60,7 +60,7 @@ Required behavior:
 
 - **`result.json` and `report.html`** contain:
   - `evaluation_status` and `definition_verdict`;
-  - the total and component scores, every criterion's verdict with citations, panel verdicts, disagreements, and rulings;
+  - the total and component scores, every criterion's verdict with citations, panel verdicts by model family, each settlement basis, targeted checks, and decider rulings;
   - gate results;
   - leaked items and the leaked count;
   - the discovery-ledger summary (count per outcome) and each item's outcome;
