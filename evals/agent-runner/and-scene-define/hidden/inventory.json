@@ -1,5 +1,5 @@
 {
-  "inventory_version": 1,
+  "inventory_version": 2,
   "source": {
     "repository": "https://github.com/Codagent-AI/and-scene.git",
     "commit": "ad667a965a0e1ea0b028c36c04d57bf0411d30d9",
@@ -78,7 +78,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: A presentation is a single evolving diagrammatic scene rendered through an ordered list of named steps (states), rather than a deck of independent slides.",
+        "partial": "Commits to one evolving scene with ordered steps, but leaves step naming unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: A presentation is a single evolving diagrammatic scene rendered through an ordered list of named steps (states), rather than a deck of independent slides."
+      }
     },
     {
       "id": "INV-002",
@@ -111,7 +116,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Each step is individually identifiable and defines the diagram state shown while it is active. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Defines the active diagram state per step, but leaves how steps are individually identified unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Each step is individually identifiable and defines the diagram state shown while it is active."
+      }
     },
     {
       "id": "INV-003",
@@ -139,7 +149,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Provide narration for every step that remains useful for both live presenting and independent browsing. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Provides step narration for both uses, but leaves one use less fully explained.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Provide narration for every step that remains useful for both live presenting and independent browsing."
+      }
     },
     {
       "id": "INV-004",
@@ -234,7 +249,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: An entity with the same identity in two consecutive steps keeps that identity and, when navigating between the steps, animates in place from its old state (position, size, label, emphasis) to its new state rather than disappearing and reappearing.",
+        "partial": "Keeps entity identity and animates in place, but leaves some of position, size, label, or emphasis transitions unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: An entity with the same identity in two consecutive steps keeps that identity and, when navigating between the steps, animates in place from its old state (position, size, label, emphasis) to its new state rather than disappearing and reappearing."
+      }
     },
     {
       "id": "INV-007",
@@ -272,7 +292,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Introduce new entities in a visually coherent transition while maintaining continuity of existing entities. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Introduces entities coherently, but leaves continuity of existing entities during introduction underspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Introduce new entities in a visually coherent transition while maintaining continuity of existing entities."
+      }
     },
     {
       "id": "INV-008",
@@ -301,7 +326,12 @@
         }
       },
       "resolution": "reconciled",
-      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1).",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: When a later diagram state omits an entity, remove it coherently without leaving stale content visible. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Removes omitted entities, but leaves the coherence of their exit underspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: When a later diagram state omits an entity, remove it coherently without leaving stale content visible."
+      }
     },
     {
       "id": "INV-009",
@@ -339,7 +369,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Successive states of the same diagram keep scene continuity so entities morph rather than the scene being torn down and rebuilt between steps. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Keeps diagram continuity, but leaves how entities morph across some state changes unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Successive states of the same diagram keep scene continuity so entities morph rather than the scene being torn down and rebuilt between steps."
+      }
     },
     {
       "id": "INV-010",
@@ -367,7 +402,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Treat continuing entities as the same entities through a transition rather than presenting them as newly introduced content. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Treats continuing entities as the same entities, but leaves part of the transition behavior unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Treat continuing entities as the same entities through a transition rather than presenting them as newly introduced content."
+      }
     },
     {
       "id": "INV-011",
@@ -477,7 +517,12 @@
           "confidence": "medium"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Individual presentations can customize the visual appearance of kit-rendered elements and chrome. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Allows visual customization of kit elements, but leaves chrome customization unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Individual presentations can customize the visual appearance of kit-rendered elements and chrome."
+      }
     },
     {
       "id": "INV-014",
@@ -533,7 +578,12 @@
           "confidence": "medium"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Authors can position elements precisely per step and can go beyond the provided primitives when they do not fit a diagram's shape. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Supports precise positioning, but leaves the extension path beyond provided primitives unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Authors can position elements precisely per step and can go beyond the provided primitives when they do not fit a diagram's shape."
+      }
     },
     {
       "id": "INV-016",
@@ -693,7 +743,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: A presentation supports a present mode for live delivery and a browse mode for self-guided reading, and the viewer can switch between them at runtime.",
+        "partial": "Commits to present and browse modes, but leaves runtime switching unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: A presentation supports a present mode for live delivery and a browse mode for self-guided reading, and the viewer can switch between them at runtime."
+      }
     },
     {
       "id": "INV-021",
@@ -754,7 +809,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Provide a mode suited to live delivery with clear step narration and a diagram-focused presentation. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Provides a live-delivery mode focused on the diagram, but leaves step narration unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Provide a mode suited to live delivery with clear step narration and a diagram-focused presentation."
+      }
     },
     {
       "id": "INV-023",
@@ -782,7 +842,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Provide a mode for independent reading in which step narration and usable navigation are available. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Provides independent reading with narration, but leaves part of usable navigation unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Provide a mode for independent reading in which step narration and usable navigation are available."
+      }
     },
     {
       "id": "INV-024",
@@ -810,7 +875,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Toggling between present and browse mode keeps the presentation on the current step.",
+        "partial": "Commits to preserving the current step on a mode toggle, but leaves one direction unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Toggling between present and browse mode keeps the presentation on the current step."
+      }
     },
     {
       "id": "INV-025",
@@ -843,7 +913,12 @@
           "confidence": "medium"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Viewers can advance and go back one step from the keyboard using conventional presentation keys. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Provides forward and backward keyboard navigation, but leaves conventional key choices unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Viewers can advance and go back one step from the keyboard using conventional presentation keys."
+      }
     },
     {
       "id": "INV-026",
@@ -967,7 +1042,12 @@
           "confidence": "medium"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Make the current position understandable to viewers and expose current-state semantics for any applicable navigation controls. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Makes current position understandable, but leaves current-state semantics on applicable controls unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Make the current position understandable to viewers and expose current-state semantics for any applicable navigation controls."
+      }
     },
     {
       "id": "INV-030",
@@ -1000,7 +1080,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: When focus is on an interactive control, navigation keys operate that control and do not also move the presentation.",
+        "partial": "Protects interactive controls from presentation navigation, but leaves some navigation keys unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: When focus is on an interactive control, navigation keys operate that control and do not also move the presentation."
+      }
     },
     {
       "id": "INV-031",
@@ -1038,7 +1123,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Navigating past the first or last step behaves predictably and never goes out of range or errors. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Keeps navigation in range, but leaves boundary behavior at one end unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Navigating past the first or last step behaves predictably and never goes out of range or errors."
+      }
     },
     {
       "id": "INV-032",
@@ -1071,7 +1161,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Keep the diagram readable, compositionally coherent, and capable of clean entity transitions across screen sizes. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Commits to responsive scene readability and coherent composition, but leaves transition behavior across sizes unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Keep the diagram readable, compositionally coherent, and capable of clean entity transitions across screen sizes."
+      }
     },
     {
       "id": "INV-033",
@@ -1132,7 +1227,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Fit the scene appropriately within the available space in both presenting and browsing modes. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Fits the scene to available space, but leaves fitting in one viewing mode underspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Fit the scene appropriately within the available space in both presenting and browsing modes."
+      }
     },
     {
       "id": "INV-035",
@@ -1193,7 +1293,12 @@
           "confidence": "low"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: The skill establishes the topic, the visual style, and the content of each step, whether from the user or by deriving them. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Establishes topic and step content, but leaves how visual style is established unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: The skill establishes the topic, the visual style, and the content of each step, whether from the user or by deriving them."
+      }
     },
     {
       "id": "INV-037",
@@ -1270,7 +1375,12 @@
         }
       },
       "resolution": "reconciled",
-      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1).",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: The skill can produce a presentation without requiring the user to specify every detail up front, and supports iterating afterward. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Supports creating without every detail up front, but leaves subsequent iteration unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: The skill can produce a presentation without requiring the user to specify every detail up front, and supports iterating afterward."
+      }
     },
     {
       "id": "INV-039",
@@ -1364,7 +1474,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Before creating or modifying a presentation, the skill checks whether the project provides the infrastructure a generated presentation depends on, resolves where that infrastructure belongs, and scaffolds whatever is missing.",
+        "partial": "Checks and supplies missing infrastructure, but leaves how its location is resolved unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Before creating or modifying a presentation, the skill checks whether the project provides the infrastructure a generated presentation depends on, resolves where that infrastructure belongs, and scaffolds whatever is missing."
+      }
     },
     {
       "id": "INV-042",
@@ -1397,7 +1512,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Provide a working application build setup capable of producing the generated browser presentation. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Provides an application build setup, but leaves how it produces the browser presentation underspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Provide a working application build setup capable of producing the generated browser presentation."
+      }
     },
     {
       "id": "INV-043",
@@ -1426,7 +1546,12 @@
         }
       },
       "resolution": "reconciled",
-      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1).",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Provide reusable, topic-independent scene infrastructure for step states, evolving entities, captions, navigation, viewing modes, and responsive rendering. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Provides topic-independent scene infrastructure, but leaves one of captions, navigation, modes, or responsive rendering unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Provide reusable, topic-independent scene infrastructure for step states, evolving entities, captions, navigation, viewing modes, and responsive rendering."
+      }
     },
     {
       "id": "INV-044",
@@ -1455,7 +1580,12 @@
         }
       },
       "resolution": "reconciled",
-      "reconciliation_reason": "The repository holds the sample and the skill generates more, so a presentation that overwrites or hides another is a real defect whatever the mechanism."
+      "reconciliation_reason": "The repository holds the sample and the skill generates more, so a presentation that overwrites or hides another is a real defect whatever the mechanism.",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Multiple presentations (including the sample) can coexist in one project, each individually reachable. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Supports multiple coexisting presentations, but leaves how each is reached unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Multiple presentations (including the sample) can coexist in one project, each individually reachable."
+      }
     },
     {
       "id": "INV-045",
@@ -1484,7 +1614,12 @@
         }
       },
       "resolution": "reconciled",
-      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1).",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Detection of existing infrastructure is robust to cosmetic differences, so working setups are not needlessly re-scaffolded or overwritten. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Reuses working infrastructure, but leaves robustness to cosmetic differences underspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Detection of existing infrastructure is robust to cosmetic differences, so working setups are not needlessly re-scaffolded or overwritten."
+      }
     },
     {
       "id": "INV-046",
@@ -1527,7 +1662,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Ensure all runtime, build, and verification dependencies required by the chosen implementation are available when bootstrapping. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Supplies runtime and build dependencies, but leaves required verification dependencies unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Ensure all runtime, build, and verification dependencies required by the chosen implementation are available when bootstrapping."
+      }
     },
     {
       "id": "INV-047",
@@ -1608,7 +1748,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Locate required bootstrap and authoring resources reliably regardless of the invocation working directory. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Locates authoring resources independently of working directory, but leaves bootstrap resource lookup unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Locate required bootstrap and authoring resources reliably regardless of the invocation working directory."
+      }
     },
     {
       "id": "INV-049",
@@ -1637,7 +1782,12 @@
         }
       },
       "resolution": "reconciled",
-      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1).",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: In an unprepared project, supply everything needed to build, run, and verify a generated presentation before declaring it ready. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Bootstraps an unprepared project to build and run, but leaves verification readiness unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: In an unprepared project, supply everything needed to build, run, and verify a generated presentation before declaring it ready."
+      }
     },
     {
       "id": "INV-050",
@@ -1665,7 +1815,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: When all three anchors are already present, the skill skips scaffolding and proceeds directly to creating or modifying the presentation.",
+        "partial": "Skips scaffolding when all anchors are present, but leaves proceeding directly to create or modify unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: When all three anchors are already present, the skill skips scaffolding and proceeds directly to creating or modifying the presentation."
+      }
     },
     {
       "id": "INV-051",
@@ -1693,7 +1848,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: When some but not all anchors are present, the skill scaffolds only the missing anchors (and their dependencies) and leaves the anchors already present undisturbed.",
+        "partial": "Scaffolds only missing anchors, but leaves dependencies of those anchors unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: When some but not all anchors are present, the skill scaffolds only the missing anchors (and their dependencies) and leaves the anchors already present undisturbed."
+      }
     },
     {
       "id": "INV-052",
@@ -1793,7 +1953,12 @@
           "confidence": "medium"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Choose a safe scaffold target in an existing project and resolve material target ambiguity before making disruptive changes. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Chooses a safe scaffold target, but leaves how material ambiguity is resolved unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Choose a safe scaffold target in an existing project and resolve material target ambiguity before making disruptive changes."
+      }
     },
     {
       "id": "INV-055",
@@ -1826,7 +1991,12 @@
           "confidence": "medium"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Each new presentation is separately reachable and added without interfering with other presentations. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Adds separate presentation reachability, but leaves protection of other presentations underspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Each new presentation is separately reachable and added without interfering with other presentations."
+      }
     },
     {
       "id": "INV-056",
@@ -1855,7 +2025,12 @@
         }
       },
       "resolution": "reconciled",
-      "reconciliation_reason": "Reusable components that carry one presentation's look are not reusable; consistent with INV-072, which both labelled acceptable-alternative."
+      "reconciliation_reason": "Reusable components that carry one presentation's look are not reusable; consistent with INV-072, which both labelled acceptable-alternative.",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Keep presentation-specific visual choices configurable without making reusable scene infrastructure depend on one presentation's design. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Keeps presentation-specific choices configurable, but leaves independence of reusable infrastructure unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Keep presentation-specific visual choices configurable without making reusable scene infrastructure depend on one presentation's design."
+      }
     },
     {
       "id": "INV-057",
@@ -1921,7 +2096,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Creating a new presentation when other presentations already exist leaves the existing presentations intact and reachable.",
+        "partial": "Leaves existing presentations intact, but leaves their continued reachability unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Creating a new presentation when other presentations already exist leaves the existing presentations intact and reachable."
+      }
     },
     {
       "id": "INV-059",
@@ -2044,7 +2224,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Before reporting that a create or modify is complete, the skill runs the build, at least a render check of the first step (no runtime or console errors), and a browser-based visual composition check.",
+        "partial": "Requires build and first-step render checks before completion, but leaves visual composition checking underspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Before reporting that a create or modify is complete, the skill runs the build, at least a render check of the first step (no runtime or console errors), and a browser-based visual composition check."
+      }
     },
     {
       "id": "INV-063",
@@ -2072,7 +2257,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Inspect enough rendered steps and viewport sizes to establish visual coherence and catch significant layout and responsive defects. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Reviews rendered steps and sizes for coherence, but leaves the responsive review breadth unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Inspect enough rendered steps and viewport sizes to establish visual coherence and catch significant layout and responsive defects."
+      }
     },
     {
       "id": "INV-064",
@@ -2100,7 +2290,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: If the build, render, or visual composition check fails, the skill fixes the issues itself and re-checks, and does not report success while a check fails.",
+        "partial": "Requires fixes and re-checking before success, but leaves one of build, render, or composition failures unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: If the build, render, or visual composition check fails, the skill fixes the issues itself and re-checks, and does not report success while a check fails."
+      }
     },
     {
       "id": "INV-065",
@@ -2168,7 +2363,12 @@
         }
       },
       "resolution": "reconciled",
-      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1).",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Ensure generated presentation code builds successfully without compilation or applicable type-checking errors. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Requires successful compilation, but leaves applicable type checking unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Ensure generated presentation code builds successfully without compilation or applicable type-checking errors."
+      }
     },
     {
       "id": "INV-067",
@@ -2196,7 +2396,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Opening a generated presentation's route renders its first step with no runtime or console errors.",
+        "partial": "Requires the route to render the first step, but leaves console-error checking unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Opening a generated presentation's route renders its first step with no runtime or console errors."
+      }
     },
     {
       "id": "INV-068",
@@ -2229,7 +2434,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: In every generated presentation, each step shows a caption and the viewer can navigate to the next and previous steps.",
+        "partial": "Provides captions and navigation, but leaves previous-step navigation or captions on some steps unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: In every generated presentation, each step shows a caption and the viewer can navigate to the next and previous steps."
+      }
     },
     {
       "id": "INV-069",
@@ -2257,7 +2467,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Every generated presentation conforms to the evolving-scene presentation model (one scene of stable entities moving through named steps) rather than independent slides.",
+        "partial": "Commits to one scene of stable entities through named steps, but leaves the continuity of their motion underspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Every generated presentation conforms to the evolving-scene presentation model (one scene of stable entities moving through named steps) rather than independent slides."
+      }
     },
     {
       "id": "INV-070",
@@ -2291,7 +2506,12 @@
         }
       },
       "resolution": "reconciled",
-      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1).",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Ensure important diagram content and presentation controls remain readable, fit the available display area, and avoid accidental obstructive collisions. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Protects readable content and controls, but leaves fitting or accidental collision handling underspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Ensure important diagram content and presentation controls remain readable, fit the available display area, and avoid accidental obstructive collisions."
+      }
     },
     {
       "id": "INV-071",
@@ -2319,7 +2539,12 @@
           "confidence": "medium"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: When automated checks flag possible visual problems, the skill investigates them, fixes genuine problems, and only accepts flagged items that are intentional and acceptable. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Investigates flagged visual problems and fixes genuine ones, but leaves the standard for accepting intentional overlaps unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: When automated checks flag possible visual problems, the skill investigates them, fixes genuine problems, and only accepts flagged items that are intentional and acceptable."
+      }
     },
     {
       "id": "INV-072",
@@ -2352,7 +2577,12 @@
           "confidence": "medium"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Generated presentations make the current step visibly distinct in their navigation chrome. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Distinguishes the current step visually, but leaves the distinction on some navigation chrome underspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Generated presentations make the current step visibly distinct in their navigation chrome."
+      }
     },
     {
       "id": "INV-073",
@@ -2386,7 +2616,12 @@
         }
       },
       "resolution": "reconciled",
-      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1).",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Verify the complete generated application build and fail on errors in any included presentation or required application infrastructure. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Requires an application build and failure on errors, but leaves inclusion of all presentations unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Verify the complete generated application build and fail on errors in any included presentation or required application infrastructure."
+      }
     },
     {
       "id": "INV-074",
@@ -2415,7 +2650,12 @@
         }
       },
       "resolution": "reconciled",
-      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1).",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Include a working sample in the repository that users can access as a reference presentation. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Includes a working sample, but leaves user access to it unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Include a working sample in the repository that users can access as a reference presentation."
+      }
     },
     {
       "id": "INV-075",
@@ -2453,7 +2693,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: The reference sample is generated by the presentation skill itself (it is the skill's own output), not hand-built through a separate process.",
+        "partial": "Requires the skill to generate the reference sample, but leaves evidence that the committed sample is that output unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: The reference sample is generated by the presentation skill itself (it is the skill's own output), not hand-built through a separate process."
+      }
     },
     {
       "id": "INV-076",
@@ -2486,7 +2731,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: The sample explains how to use the skill to make a presentation. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Makes the sample about using the skill, but leaves explanation of how to make a presentation incomplete.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: The sample explains how to use the skill to make a presentation."
+      }
     },
     {
       "id": "INV-077",
@@ -2514,7 +2764,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: The sample is one continuously evolving scene that builds on what is already on screen rather than switching to unrelated compositions. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Builds one continuously evolving sample scene, but leaves how later states build on existing content underspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: The sample is one continuously evolving scene that builds on what is already on screen rather than switching to unrelated compositions."
+      }
     },
     {
       "id": "INV-078",
@@ -2832,7 +3087,12 @@
           "confidence": "medium"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Verification confirms the committed sample presentation is present, reachable, and contains its expected steps. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Checks sample presence and reachability, but leaves verification of its expected steps incomplete.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Verification confirms the committed sample presentation is present, reachable, and contains its expected steps."
+      }
     },
     {
       "id": "INV-089",
@@ -2861,7 +3121,12 @@
         }
       },
       "resolution": "reconciled",
-      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1).",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Verification does not silently pass when a presentation it is meant to check is missing. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Requires a missing checked presentation to fail verification, but leaves the failure diagnostic unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Verification does not silently pass when a presentation it is meant to check is missing."
+      }
     },
     {
       "id": "INV-090",
@@ -2894,7 +3159,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Automated verification renders every step of the checked presentation(s) in an environment faithful to real viewing and fails on runtime or console errors. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Renders every checked step faithfully, but leaves runtime or console-error detection incomplete.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Automated verification renders every step of the checked presentation(s) in an environment faithful to real viewing and fails on runtime or console errors."
+      }
     },
     {
       "id": "INV-091",
@@ -2971,7 +3241,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: A console error, an uncaught page error, an error while rendering a step, or a step transition that fails makes verification fail and identifies the failing step.",
+        "partial": "Requires rendering errors to fail and identify the step, but leaves console, page, or transition errors unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: A console error, an uncaught page error, an error while rendering a step, or a step transition that fails makes verification fail and identifies the failing step."
+      }
     },
     {
       "id": "INV-093",
@@ -3004,7 +3279,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Verification produces an unambiguous pass/fail outcome suitable for automated checks: it reports a clear pass or fail, exits with a non-zero status on failure, and identifies which check failed.",
+        "partial": "Reports clear pass/fail with non-zero failure exit, but leaves identification of the failed check unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Verification produces an unambiguous pass/fail outcome suitable for automated checks: it reports a clear pass or fail, exits with a non-zero status on failure, and identifies which check failed."
+      }
     },
     {
       "id": "INV-094",
@@ -3032,7 +3312,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Verification cleans up the preview server processes it starts after each run, including runs that fail.",
+        "partial": "Cleans up started preview processes, but leaves cleanup on failed runs unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Verification cleans up the preview server processes it starts after each run, including runs that fail."
+      }
     },
     {
       "id": "INV-095",
@@ -3065,7 +3350,12 @@
           "confidence": "low"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Visual review is supported by a repeatable way to capture views of each step of a presentation. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Provides repeatable step capture, but leaves capture of some steps unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Visual review is supported by a repeatable way to capture views of each step of a presentation."
+      }
     },
     {
       "id": "INV-096",
@@ -3098,7 +3388,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Visual captures reflect each step's settled state, not mid-transition frames. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Requires settled visual captures, but leaves how completion of transitions is determined unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Visual captures reflect each step's settled state, not mid-transition frames."
+      }
     },
     {
       "id": "INV-097",
@@ -3271,7 +3566,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: The change includes an agent skill that creates browser-based presentations from a topic.",
+        "partial": "Includes a presentation-creating agent skill, but leaves generation from a topic underspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: The change includes an agent skill that creates browser-based presentations from a topic."
+      }
     },
     {
       "id": "INV-103",
@@ -3300,7 +3600,12 @@
         }
       },
       "resolution": "reconciled",
-      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1).",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Supply reusable scene-building resources that the skill uses to generate presentations across topics and projects. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Supplies reusable scene-building resources, but leaves how the skill uses them across projects unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Supply reusable scene-building resources that the skill uses to generate presentations across topics and projects."
+      }
     },
     {
       "id": "INV-104",
@@ -3328,7 +3633,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: The change includes a verification flow that confirms the generated sample presentation builds and renders.",
+        "partial": "Includes sample verification, but leaves one of build or render confirmation incomplete.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: The change includes a verification flow that confirms the generated sample presentation builds and renders."
+      }
     },
     {
       "id": "INV-105",
@@ -3362,7 +3672,12 @@
         }
       },
       "resolution": "reconciled",
-      "reconciliation_reason": "Export is a sizeable unrequested feature that pulls against \"browser-based\"; consistent with INV-106 and INV-107, which both labelled mandatory."
+      "reconciliation_reason": "Export is a sizeable unrequested feature that pulls against \"browser-based\"; consistent with INV-106 and INV-107, which both labelled mandatory.",
+      "anchors": {
+        "met": "The definition does not include the excluded scope; an explicit exclusion statement is not required. Exporting presentations to PowerPoint, Keynote, PDF, or images is out of scope.",
+        "partial": "Excludes presentation export generally, but leaves whether one of PowerPoint, Keynote, PDF, or image export is excluded unclear.",
+        "missing": "Includes the excluded scope or commits to behavior that contradicts this exclusion: Exporting presentations to PowerPoint, Keynote, PDF, or images is out of scope."
+      }
     },
     {
       "id": "INV-106",
@@ -3390,7 +3705,12 @@
           "confidence": "medium"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "The definition does not include the excluded scope; an explicit exclusion statement is not required. A general-purpose visual editor for presentations is out of scope.",
+        "partial": "Excludes a general-purpose visual editor, but proposes limited editing whose boundary with that scope is unresolved.",
+        "missing": "Includes the excluded scope or commits to behavior that contradicts this exclusion: A general-purpose visual editor for presentations is out of scope."
+      }
     },
     {
       "id": "INV-107",
@@ -3418,7 +3738,12 @@
           "confidence": "medium"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "The definition does not include the excluded scope; an explicit exclusion statement is not required. A production hosting or publishing workflow for presentations is out of scope.",
+        "partial": "Excludes production hosting or publishing generally, but leaves the boundary of a proposed deployment feature unresolved.",
+        "missing": "Includes the excluded scope or commits to behavior that contradicts this exclusion: A production hosting or publishing workflow for presentations is out of scope."
+      }
     },
     {
       "id": "INV-108",
@@ -3446,7 +3771,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "The definition does not include the excluded scope; an explicit exclusion statement is not required. Subjective scoring of visual taste is out of scope as the primary verification mechanism.",
+        "partial": "Keeps automated verification primary, but leaves whether visual-taste scoring can override it unresolved.",
+        "missing": "Includes the excluded scope or commits to behavior that contradicts this exclusion: Subjective scoring of visual taste is out of scope as the primary verification mechanism."
+      }
     },
     {
       "id": "INV-109",
@@ -3480,7 +3810,12 @@
         }
       },
       "resolution": "reconciled",
-      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1)."
+      "reconciliation_reason": "Both labellers treat the underlying need as required; the item names a mechanism a sound alternative could do differently, so the need is graded through the intent and the mechanism is not (reconciliation rule R1).",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Provide an agent procedure that uses reusable scene infrastructure and includes checks for generated output quality. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Provides an agent procedure using reusable infrastructure, but leaves output-quality checks underspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Provide an agent procedure that uses reusable scene infrastructure and includes checks for generated output quality."
+      }
     },
     {
       "id": "INV-110",
@@ -3508,7 +3843,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: Automatic verification is available from a single, documented entry point that runs the build and the render checks. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Provides a single verification entry point, but leaves documentation or inclusion of one check unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: Automatic verification is available from a single, documented entry point that runs the build and the render checks."
+      }
     },
     {
       "id": "INV-111",
@@ -3541,7 +3881,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: The render check runs in an environment that faithfully executes the presentation, including layout and animation, rather than a superficial component mount. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Uses a faithful presentation execution environment, but leaves fidelity of layout or animation unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: The render check runs in an environment that faithfully executes the presentation, including layout and animation, rather than a superficial component mount."
+      }
     },
     {
       "id": "INV-112",
@@ -3574,7 +3919,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: External tooling can enumerate the steps and observe the current step without depending on fragile DOM structure. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Provides tooling access to the current step, but leaves step enumeration or independence from DOM structure unclear.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: External tooling can enumerate the steps and observe the current step without depending on fragile DOM structure."
+      }
     },
     {
       "id": "INV-113",
@@ -3716,7 +4066,12 @@
           "confidence": "high"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: The reusable components are topic-agnostic building blocks that presentations on any topic can compose. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Provides topic-independent building blocks, but leaves composability across topics underspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: The reusable components are topic-agnostic building blocks that presentations on any topic can compose."
+      }
     },
     {
       "id": "INV-117",
@@ -3787,7 +4142,12 @@
           "confidence": "medium"
         }
       },
-      "resolution": "agreed"
+      "resolution": "agreed",
+      "anchors": {
+        "met": "A specification requirement or scenario, design decision, or proposal scope statement commits to: The components the skill bootstraps into new projects match the repository's reusable components and cannot silently diverge from them. Another mechanism achieving this intent is equally met; the reference mechanism is not required.",
+        "partial": "Requires bootstrapped components to match repository components, but leaves enforcement against silent drift unspecified.",
+        "missing": "The artifacts do not commit to this requirement, mention it only in passing or in the test plan, or contradict it: The components the skill bootstraps into new projects match the repository's reusable components and cannot silently diverge from them."
+      }
     },
     {
       "id": "INV-119",
@@ -4681,5 +5041,6 @@
       "heading": "Agent Acceptance Tests",
       "reason": "AT-001 through AT-004 exercise obligations already itemized from the specs; they add no new product obligation."
     }
-  ]
+  ],
+  "anchors_review": null
 }

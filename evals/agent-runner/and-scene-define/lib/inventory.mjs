@@ -78,6 +78,8 @@ export async function checkInventory({ suiteRoot = SUITE_ROOT, hiddenDir = join(
     if (!KINDS.includes(item.kind)) errors.push(`${prefix}: invalid kind`)
     if (!CLASSES.includes(item.class)) errors.push(`${prefix}: exactly one final class required`)
     else counts[item.class]++
+    if (item.class === 'preference' && Object.hasOwn(item, 'anchors')) errors.push(`${prefix}: preference item must not have anchors`)
+    if (item.class !== 'preference' && ['met', 'partial', 'missing'].some(verdict => !nonempty(item.anchors?.[verdict]))) errors.push(`${prefix}: graded item requires met, partial, and missing anchors`)
     if (item.class === 'acceptable-alternative') {
       if (!nonempty(item.intent) || !nonempty(item.intent_source)) errors.push(`${prefix}: acceptable-alternative requires intent and intent_source`)
     } else if (item.intent != null || item.intent_source != null) errors.push(`${prefix}: intent only belongs to acceptable-alternative`)

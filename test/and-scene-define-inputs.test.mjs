@@ -18,10 +18,10 @@ async function fixture(t) {
   await writeFile(join(root, 'prompt.md'), 'Build a useful tool.\n')
   const source = { repository: 'https://github.com/Codagent-AI/and-scene.git', commit: 'ad667a965a0e1ea0b028c36c04d57bf0411d30d9', change: 'create-and-scene' }
   const labels = { opus: { class: 'mandatory', confidence: 'high' }, codex: { class: 'mandatory', confidence: 'high' } }
-  const item = { id: 'INV-001', area: 'example', kind: 'behavior', title: 'Useful', statement: 'The tool works.', sources: [{ document, heading: 'Requirement: Useful', quote: 'The tool SHALL work.' }], class: 'mandatory', intent: null, intent_source: null, labels, resolution: 'agreed' }
+  const item = { id: 'INV-001', area: 'example', kind: 'behavior', title: 'Useful', statement: 'The tool works.', sources: [{ document, heading: 'Requirement: Useful', quote: 'The tool SHALL work.' }], class: 'mandatory', intent: null, intent_source: null, labels, resolution: 'agreed', anchors: { met: 'Commits to working.', partial: 'Works with an unresolved detail.', missing: 'Does not commit to working.' } }
   const inventory = { inventory_version: 1, source, inputs: { starting_prompt: { path: 'prompt.md', sha256: sha256('Build a useful tool.\n') } }, counts: { mandatory: 1, 'acceptable-alternative': 0, preference: 0 }, items: [item], coverage: [{ document, requirement: 'Requirement: Useful', scenario: null, items: [item.id] }, { document, requirement: 'Requirement: Useful', scenario: 'Scenario: Success', items: [item.id] }], excluded: [] }
   inventory.reconciliation = { by: 'maintainer', rules: {} }
-  const original = Object.fromEntries(Object.entries(item).filter(([key]) => !['class', 'intent', 'intent_source', 'labels', 'resolution'].includes(key)))
+  const original = Object.fromEntries(Object.entries(item).filter(([key]) => !['class', 'intent', 'intent_source', 'labels', 'resolution', 'anchors'].includes(key)))
   const itemData = JSON.stringify({ source, items: [original] })
   const brief = 'Classify independently.\n'
   await writeFile(join(root, 'items.json'), itemData)
@@ -113,6 +113,7 @@ test('version checker rejects changed file content and self-consistent hash rewr
   await mkdir(join(root, 'hidden'))
   const inputs = {}
   for (const [name, path, text] of [
+    ['rubric', 'rubric.json', '{"rubric_version":1}'],
     ['inventory', 'hidden/inventory.json', '{"inventory_version":1}'],
     ['starting-prompt', 'hidden/starting-prompt.md', 'Prompt'],
     ['simulated-user-policy', 'hidden/simulated-user-policy.md', 'Policy'],
@@ -142,7 +143,7 @@ async function versionRepository(t) {
   const root = await mkdtemp(join(tmpdir(), 'define-history-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   await mkdir(join(root, 'hidden'))
-  for (const path of ['versions.json', 'contamination-patterns.json', 'hidden/inventory.json', 'hidden/starting-prompt.md', 'hidden/simulated-user-policy.md']) await cp(join(suite, path), join(root, path))
+  for (const path of ['versions.json', 'rubric.json', 'contamination-patterns.json', 'hidden/inventory.json', 'hidden/starting-prompt.md', 'hidden/simulated-user-policy.md']) await cp(join(suite, path), join(root, path))
   const git = (...args) => execFileSync('git', ['-C', root, '-c', 'core.hooksPath=/dev/null', '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
   git('init')
   return { root, git }

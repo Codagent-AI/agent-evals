@@ -17,6 +17,7 @@ import { collectArtifacts } from './lib/collection.mjs'
 import { collectEvidence, loadEvidence } from './lib/evidence.mjs'
 import { reconcileConversation } from './lib/reconciliation.mjs'
 import { auditContamination, RESIDUAL_RISK } from './lib/contamination.mjs'
+import { createJudgingPhases } from './lib/judging.mjs'
 import { AUTOMATED_PHASES, runPhases } from './lib/phases.mjs'
 import { failureOutcome } from './lib/outcomes.mjs'
 export const DEFAULT_TIME_LIMIT_MS = 3 * 60 * 60 * 1000
@@ -230,7 +231,8 @@ export async function runEvaluation(options, dependencies = {}) {
       checkpoint.contamination_audit = audit
       return [target]
     },
-    // Registered now, but ordered after discovery: unavailable predecessors block it.
+    ...createJudgingPhases({ runDir, suiteRoot: options.suiteRoot, getCheckpoint: () => checkpoint, setCheckpoint: value => { checkpoint = value }, persist, judges: dependencies.judges, gateCommand: dependencies.gateCommand }),
+    // Result assembly and publication register in their later task.
     metrics: async () => {
       const workflow = await readJson(join(runDir, 'phases/workflow.json'))
       const path = workflow.evidence.find(path => path.endsWith('/run-metrics.json'))
@@ -247,7 +249,7 @@ export async function runEvaluation(options, dependencies = {}) {
     if (!options.resume && await lstat(runDir).catch(() => null)) throw new Error('run directory is already used; use --resume with its exact path')
     if (options.resume && !await lstat(runDir).catch(() => null)) throw new Error('resume run directory does not exist')
     await mkdir(runDir, { recursive: true }); release = await acquireLock(runDir); writable = true
-    for (const path of ['phases', 'logs', 'sandbox-input', 'sandbox/exchange', 'sandbox/workspace/repo', 'sandbox/.runtime', 'evidence', 'collected']) await privatePath(join(runDir, path), runDir)
+    for (const path of ['phases', 'logs', 'sandbox-input', 'sandbox/exchange', 'sandbox/workspace/repo', 'sandbox/.runtime', 'evidence', 'collected', 'judges', 'audits', 'discovery', '.runtime', '.runtime/definition-job-inputs', '.runtime/judge', '.runtime/judge-claude']) await privatePath(join(runDir, path), runDir)
     await mkdir(join(runDir, 'phases'), { recursive: true }); await mkdir(join(runDir, 'logs'), { recursive: true })
     if (options.dryRun) {
       const outputs = await handlers.preflight()
@@ -260,6 +262,13 @@ export async function runEvaluation(options, dependencies = {}) {
         const inputs = checkpoint ? provenance() : {}
         const dependencies = name === 'preflight' ? {} : { predecessor: AUTOMATED_PHASES[AUTOMATED_PHASES.indexOf(name) - 1], materialization: checkpoint.materialization ?? null }
         if (['conversation-reconciliation', 'contamination-audit'].includes(name)) dependencies.evidence_manifest_sha256 = await hashFile(join(runDir, 'evidence-manifest.json'))
+        if (['disclosure-audit', 'gates-and-judging', 'discovery'].includes(name)) {
+          dependencies.conversation_sha256 = await hashFile(join(runDir, 'conversation.jsonl'))
+          dependencies.collection_sha256 = await hashFile(join(runDir, 'phases/collection.json'))
+          dependencies.collected = await Promise.all((await filesUnder(join(runDir, 'collected'))).map(async path => [path, await hashFile(path)]))
+          if (name !== 'disclosure-audit') dependencies.disclosure_sha256 = await hashFile(join(runDir, 'audits/disclosure.json'))
+          if (name === 'discovery') dependencies.score_sha256 = await hashFile(join(runDir, 'judges/score.json'))
+        }
         if (name === 'contamination-audit') dependencies.patterns_sha256 = await hashFile(join(options.suiteRoot ?? SUITE_ROOT, 'contamination-patterns.json'))
         if (!['preflight', 'define-workflow'].includes(name) && (await verifyUnit(checkpoint, { phase: name, unit: 'phase', inputs, dependencies })).reusable) {
           if (name === 'contamination-audit') {

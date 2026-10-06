@@ -9,7 +9,8 @@
 // arrive, so a stalled or killed call leaves evidence of what it was waiting
 // on. A call that exceeds its timeout is stopped and retried once.
 import { spawn } from 'node:child_process'
-import { appendFile, mkdir, open, readFile, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, lstat, open, readFile, rm, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 const JUDGE_ENV_ALLOWLIST = [
@@ -318,6 +319,8 @@ export function createCodexJudgeInvoker({
   candidateWorktree,
   defaultCwd = candidateWorktree,
   allowedRoots = null,
+  // Host suites may isolate CLI state; sandbox callers keep existing behavior.
+  privateCodexHome = false,
   // The sandbox installs `codex` as a yolo wrapper for implementation agents.
   // Judges must bypass that wrapper and invoke the real, sandboxed CLI.
   command = '/usr/bin/codex',
@@ -345,6 +348,12 @@ export function createCodexJudgeInvoker({
     })
     if (!approved) {
       throw new Error(`Codex judge ${request.job ?? 'job'} cwd is not an approved read-only root: ${cwd}`)
+    }
+    if (privateCodexHome) {
+      for (const path of [runtimeDir, dirname(runtimeDir)]) {
+        const stat = await lstat(path).catch(error => { if (error.code !== 'ENOENT') throw error; return null })
+        if (stat?.isSymbolicLink()) throw new Error(`private Codex home refuses symlink: ${path}`)
+      }
     }
     await mkdir(cwd, { recursive: true })
     sequence += 1
@@ -380,84 +389,100 @@ export function createCodexJudgeInvoker({
     args.push('--config', `model_reasoning_effort="${request.authority?.effort ?? JUDGE_REASONING_EFFORT}"`)
     args.push('-')
 
-    let result
-    let capacityWaits = 0
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-      await rm(outputPath, { force: true })
-      const files = await openAttemptFiles(openFile, runtimeDir, stem)
-      try {
-        result = await runAttempt({
-          spawnImpl,
-          command,
-          args,
-          options: { cwd, env: judgeEnvironment(env) },
-          prompt: request.prompt,
-          files,
-          timeoutMs,
-          killGraceMs,
-          maxStdoutBytes,
-          label: `Codex judge ${request.job ?? 'job'} attempt ${attempt}`,
-        })
-      } finally {
-        await Promise.all([files.events.close(), files.stderr.close()])
-      }
-      const rejected = rejectedBeforeWork(result)
-      // A response format OpenAI rejects is rejected identically on every
-      // retry (agent-evals #79), so it fails fast as a harness defect.
-      const schemaRejection = /invalid_json_schema/.test(`${rejected ?? ''}\n${result.stdout ?? ''}`)
-      const usageEntry = extractCodexUsage(result.usageLine, {
-        request,
-        invocationId: `${files.attemptStem}-${Date.now()}`,
-        rejected,
-      })
-      if (result.timedOut && usageEntry.usage.state !== 'available') {
-        usageEntry.usage.reason = `Codex judge attempt timed out after ${timeoutMs} ms without turn.completed usage`
-      }
-      inMemoryUsage.push(usageEntry)
-      try {
-        await mkdir(dirname(usagePath), { recursive: true })
-        await appendFile(usagePath, `${JSON.stringify(usageEntry)}\n`)
-      } catch {
-        // Usage diagnostics must not replace an otherwise valid judge result.
-      }
-      if (result.writeError) {
-        throw new Error(
-          `Codex judge ${request.job ?? 'job'} could not record its attempt evidence at ${result.writeError.path}: ${result.writeError.error.message}`,
-        )
-      }
-      if (result.outputLimitExceeded) {
-        throw new Error(
-          `Codex judge ${request.job ?? 'job'} exceeded the ${maxStdoutBytes}-byte stdout limit`,
-        )
-      }
-      if (schemaRejection) {
-        throw Object.assign(new Error(
-          `Codex judge ${request.job ?? 'job'} output schema was rejected (invalid_json_schema): ${rejected ?? detail(result)}`,
-        ), { code: 'judge-schema-invalid', retryable: false, owner: 'evaluation-harness', resumable: false })
-      }
-      if (rejected !== null && CAPACITY_PATTERN.test(rejected) && capacityWaits < CAPACITY_RETRIES) {
-        await sleep(CAPACITY_BASE_DELAY_MS * 2 ** capacityWaits)
-        capacityWaits += 1
-        attempt -= 1
-        continue
-      }
-      if (!result.timedOut) break
-    }
-    if (result.timedOut) {
-      throw new Error(
-        `Codex judge ${request.job ?? 'job'} timed out after ${timeoutMs} ms on ${MAX_ATTEMPTS} attempts`,
-      )
-    }
-    if (result.error || result.status !== 0) {
-      throw new Error(
-        `Codex judge ${request.job ?? 'job'} exited ${result.status ?? -1}: ${detail(result)}`,
-      )
-    }
+    let privateHome = null
+    let invocationEnvironment = judgeEnvironment(env)
     try {
-      return await readFile(outputPath, 'utf8')
-    } catch (error) {
-      throw new Error(`Codex judge ${request.job ?? 'job'} produced no final response: ${error.message}`)
-    }
+      if (privateCodexHome) {
+        const authRoot = resolve(env.CODEX_HOME ?? join(env.HOME ?? homedir(), '.codex'))
+        const authPath = join(authRoot, 'auth.json')
+        for (const path of [runtimeDir, dirname(runtimeDir), authRoot, authPath]) {
+          const stat = await lstat(path)
+          if (stat.isSymbolicLink()) throw new Error(`private Codex home refuses symlink: ${path}`)
+        }
+        if (!(await lstat(authPath)).isFile()) throw new Error('Codex authentication must be a regular auth.json')
+        privateHome = await mkdtemp(join(runtimeDir, 'home-'))
+        await writeFile(join(privateHome, 'auth.json'), await readFile(authPath), { mode: 0o600, flag: 'wx' })
+        invocationEnvironment = { ...invocationEnvironment, CODEX_HOME: privateHome }
+      }
+      let result
+      let capacityWaits = 0
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+        await rm(outputPath, { force: true })
+        const files = await openAttemptFiles(openFile, runtimeDir, stem)
+        try {
+          result = await runAttempt({
+            spawnImpl,
+            command,
+            args,
+            options: { cwd, env: invocationEnvironment },
+            prompt: request.prompt,
+            files,
+            timeoutMs,
+            killGraceMs,
+            maxStdoutBytes,
+            label: `Codex judge ${request.job ?? 'job'} attempt ${attempt}`,
+          })
+        } finally {
+          await Promise.all([files.events.close(), files.stderr.close()])
+        }
+        const rejected = rejectedBeforeWork(result)
+        // A response format OpenAI rejects is rejected identically on every
+        // retry (agent-evals #79), so it fails fast as a harness defect.
+        const schemaRejection = /invalid_json_schema/.test(`${rejected ?? ''}\n${result.stdout ?? ''}`)
+        const usageEntry = extractCodexUsage(result.usageLine, {
+          request,
+          invocationId: `${files.attemptStem}-${Date.now()}`,
+          rejected,
+        })
+        if (result.timedOut && usageEntry.usage.state !== 'available') {
+          usageEntry.usage.reason = `Codex judge attempt timed out after ${timeoutMs} ms without turn.completed usage`
+        }
+        inMemoryUsage.push(usageEntry)
+        try {
+          await mkdir(dirname(usagePath), { recursive: true })
+          await appendFile(usagePath, `${JSON.stringify(usageEntry)}\n`)
+        } catch {
+          // Usage diagnostics must not replace an otherwise valid judge result.
+        }
+        if (result.writeError) {
+          throw new Error(
+            `Codex judge ${request.job ?? 'job'} could not record its attempt evidence at ${result.writeError.path}: ${result.writeError.error.message}`,
+          )
+        }
+        if (result.outputLimitExceeded) {
+          throw new Error(
+            `Codex judge ${request.job ?? 'job'} exceeded the ${maxStdoutBytes}-byte stdout limit`,
+          )
+        }
+        if (schemaRejection) {
+          throw Object.assign(new Error(
+            `Codex judge ${request.job ?? 'job'} output schema was rejected (invalid_json_schema): ${rejected ?? detail(result)}`,
+          ), { code: 'judge-schema-invalid', retryable: false, owner: 'evaluation-harness', resumable: false })
+        }
+        if (rejected !== null && CAPACITY_PATTERN.test(rejected) && capacityWaits < CAPACITY_RETRIES) {
+          await sleep(CAPACITY_BASE_DELAY_MS * 2 ** capacityWaits)
+          capacityWaits += 1
+          attempt -= 1
+          continue
+        }
+        if (!result.timedOut) break
+      }
+      if (result.timedOut) {
+        throw new Error(
+          `Codex judge ${request.job ?? 'job'} timed out after ${timeoutMs} ms on ${MAX_ATTEMPTS} attempts`,
+        )
+      }
+      if (result.error || result.status !== 0) {
+        throw new Error(
+          `Codex judge ${request.job ?? 'job'} exited ${result.status ?? -1}: ${detail(result)}`,
+        )
+      }
+      try {
+        return await readFile(outputPath, 'utf8')
+      } catch (error) {
+        throw new Error(`Codex judge ${request.job ?? 'job'} produced no final response: ${error.message}`)
+      }
+    } finally { if (privateHome) await rm(privateHome, { recursive: true, force: true }) }
   }
 
   invoke.readUsageEntries = async () => {

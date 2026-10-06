@@ -2,9 +2,10 @@
   "inputs": {
     "inventory": {
       "path": "hidden/inventory.json",
-      "version": 1,
+      "version": 2,
       "hashes": {
-        "1": "984fb984787a5ab1c3202e877637473d26faa149b02cabbb413b12ba8a580daa"
+        "1": "984fb984787a5ab1c3202e877637473d26faa149b02cabbb413b12ba8a580daa",
+        "2": "5d4eba4c3c5ba01a51c8dd77d630e227ef9fec61b3c7b8c07f7d43c3370e2501"
       }
     },
     "starting-prompt": {
@@ -26,6 +27,13 @@
       "version": 1,
       "hashes": {
         "1": "dd144b83082dd1fc27c619aafbb412aec233b159bc2cbbfef26a5ecd64bf8d50"
+      }
+    },
+    "rubric": {
+      "path": "rubric.json",
+      "version": 1,
+      "hashes": {
+        "1": "8c1a28e2feaf4a5cbee01e0a94130033c5655bf212af7695f9c36adfb0d269d0"
       }
     }
   }

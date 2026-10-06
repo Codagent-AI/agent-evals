@@ -43,7 +43,7 @@ async function fixture(t, outcome = 'interrupted') {
     async stop() { stopCount++; this.finish?.({ code: null, signal: 'SIGTERM' }) }
   }
   const identity = { seriesIdentity: { version: 1 }, candidate: { profiles, agent_skills_commit: 'skills-one' }, credentials: [] }
-  const deps = { sandbox: new FakeSandbox(options), inspect: async () => identity, checkSandboxInputs: async () => {}, respond: async ({ signal }) => new Promise(resolve => { const done = () => resolve({ status: 'stopped' }); signal.addEventListener('abort', done, { once: true }); if (signal.aborted) done() }) }
+  const deps = { handlers: { 'disclosure-audit': async () => { throw Object.assign(new Error('stub disclosure failure'), { resumable: true }) } }, sandbox: new FakeSandbox(options), inspect: async () => identity, checkSandboxInputs: async () => {}, respond: async ({ signal }) => new Promise(resolve => { const done = () => resolve({ status: 'stopped' }); signal.addEventListener('abort', done, { once: true }); if (signal.aborted) done() }) }
   return { options, deps, modes, identity, state, setNext: value => { next = value }, stopCount: () => stopCount }
 }
 test('INT-008 interrupted workflow resumes exact Runner ID without a second fresh run', async t => {
@@ -54,7 +54,7 @@ test('INT-008 interrupted workflow resumes exact Runner ID without a second fres
   const resumed = await runEvaluation({ ...f.options, resume: true }, f.deps)
   assert.deepEqual(f.modes, [{ kind: 'fresh' }, { kind: 'resume', runId: 'runner-one' }])
   assert.equal(resumed.result.definition_verdict, 'unavailable'); assert.notEqual(resumed.result.evaluation_status, 'complete')
-  assert.equal(resumed.result.owning_phase, 'disclosure-audit'); assert.ok(resumed.result.unimplemented_phases.includes('discovery'))
+  assert.equal(resumed.result.owning_phase, 'disclosure-audit'); assert.match(resumed.result.observed_error, /stub disclosure failure/)
   assert.equal(await readFile(join(f.options.runDir, 'collected/proposal.md'), 'utf8'), 'proposal')
   assert.equal((await runEvaluation({ ...f.options, resume: true }, f.deps)).result.resumable, true)
   assert.equal(f.modes.length, 2)

@@ -150,3 +150,64 @@ test('cancellation during overflow cleanup does not send SIGTERM twice or leak i
   assert.equal((await readFile(join(stub.runDir, 'signals.jsonl'), 'utf8')).trim().split('\n').length, 1)
   assert.equal((await stub.calls()).length, 1)
 })
+
+import { mkdtemp, mkdir, chmod, readdir, realpath, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { createClaudeJudgeInvoker } from '../evals/lib/panel-judging/claude-invoker.mjs'
+import { createCodexJudgeInvoker } from '../evals/lib/panel-judging/codex-invoker.mjs'
+import { JUDGE_PROFILE, judgeSchema, discoverySchema } from '../evals/agent-runner/and-scene-define/lib/judge-jobs.mjs'
+
+test('INT-002 pinned Claude judge and decider are tool-less, strict, fail fast on invalid schema and reject tools', async t => {
+  const schema = judgeSchema(['item'])
+  for (const authority of [JUDGE_PROFILE.panel[0], JUDGE_PROFILE.decider]) {
+    const stub = await claudeStub(t, [stream({ results: [] })])
+    const invoke = createClaudeJudgeInvoker(stub)
+    await invoke({ job: 'judge', authority, schema, prompt: 'inlined inputs' })
+    const [call] = await stub.calls()
+    for (const flag of ['--tools', '--setting-sources']) assert.equal(call.argv[call.argv.indexOf(flag) + 1], '')
+    for (const flag of ['--strict-mcp-config', '--disable-slash-commands', '--no-session-persistence']) assert.ok(call.argv.includes(flag))
+    assert.equal(call.argv[call.argv.indexOf('--model') + 1], authority.model)
+    assertStrictSchema(JSON.parse(call.argv[call.argv.indexOf('--json-schema') + 1]))
+    assert.deepEqual(call.files, [])
+  }
+  assertStrictSchema(discoverySchema(['item']))
+  const bad = await claudeStub(t, [stream({ results: [] }, [{ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read' }] } }])])
+  await assert.rejects(createClaudeJudgeInvoker(bad)({ authority: JUDGE_PROFILE.decider, schema, prompt: 'inputs' }), /forbidden tool/)
+  const invalid = await claudeStub(t, [{ stdout: '', stderr: 'invalid_json_schema', code: 1 }])
+  await assert.rejects(createClaudeJudgeInvoker(invalid)({ authority: JUDGE_PROFILE.decider, schema, prompt: 'inputs' }), error => error.retryable === false)
+  assert.equal((await invalid.calls()).length, 1)
+  const record = JSON.parse((await readFile(join(invalid.runDir, 'phases/eval-owned-usage.jsonl'), 'utf8')).trim())
+  assert.equal(record.token_totals.total, 0)
+})
+
+test('INT-002 private Codex home contains only auth.json and is removed on success or schema rejection', async t => {
+  const runDir = await mkdtemp(join(tmpdir(), 'define-codex-')); t.after(() => rm(runDir, { recursive: true, force: true }))
+  const authHome = join(runDir, 'host-home'); await mkdir(authHome)
+  await writeFile(join(authHome, 'auth.json'), '{"token":"test"}')
+  await writeFile(join(authHome, 'config.toml'), 'must not be copied')
+  const cwd = join(runDir, 'inputs'); await mkdir(cwd); await writeFile(join(cwd, 'packet.json'), '{}')
+  const command = join(runDir, 'codex')
+  await writeFile(command, `#!/usr/bin/env node
+const fs = require('node:fs'); const path = require('node:path');
+const argv = process.argv.slice(2); let prompt = '';
+process.stdin.on('data', x => prompt += x); process.stdin.on('end', () => {
+fs.appendFileSync(${JSON.stringify(join(runDir, 'calls.jsonl'))}, JSON.stringify({ argv, cwd: process.cwd(), home: process.env.CODEX_HOME, files: fs.readdirSync(process.env.CODEX_HOME), mode: fs.statSync(process.env.CODEX_HOME).mode & 0o777, authMode: fs.statSync(path.join(process.env.CODEX_HOME, 'auth.json')).mode & 0o777, schema: JSON.parse(fs.readFileSync(argv[argv.indexOf('--output-schema')+1])), prompt })+'\\n');
+if (prompt === 'reject') { process.stdout.write(JSON.stringify({type:'turn.failed',error:{message:'invalid_json_schema'}})+'\\n'); process.exitCode=1; }
+else { fs.writeFileSync(argv[argv.indexOf('--output-last-message')+1], '{"results":[]}'); process.stdout.write(JSON.stringify({type:'turn.completed',usage:{input_tokens:2,output_tokens:1}})+'\\n'); }
+});`)
+  await chmod(command, 0o755)
+  const invoke = createCodexJudgeInvoker({ runDir, defaultCwd: cwd, command, privateCodexHome: true, env: { ...process.env, CODEX_HOME: authHome } })
+  const request = { job: 'quality', authority: JUDGE_PROFILE.panel[1], schema: judgeSchema(['item']), prompt: 'inputs' }
+  await invoke(request)
+  await assert.rejects(invoke({ ...request, prompt: 'reject' }), error => error.retryable === false)
+  const calls = (await readFile(join(runDir, 'calls.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse)
+  assert.equal(calls.length, 2)
+  for (const call of calls) {
+    assert.notEqual(call.home, authHome); assert.deepEqual(call.files, ['auth.json']); assert.equal(call.mode, 0o700); assert.equal(call.authMode, 0o600)
+    assert.equal(call.argv[call.argv.indexOf('--sandbox') + 1], 'read-only'); assert.equal(call.cwd, await realpath(cwd))
+    assertStrictSchema(call.schema)
+    await assert.rejects(readdir(call.home), { code: 'ENOENT' })
+  }
+  const usage = (await readFile(join(runDir, 'phases/eval-owned-usage.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse)
+  assert.equal(usage[1].token_totals.total, 0)
+})

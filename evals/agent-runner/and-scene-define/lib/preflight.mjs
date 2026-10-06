@@ -6,6 +6,8 @@ import { assertPinnedInventory } from './inventory.mjs'
 import { readJson, sha256, SUITE_ROOT } from './files.mjs'
 import { SIMULATED_USER_PROFILE } from './simulated-user.mjs'
 import { JUDGE_PROFILE, validateProfiles } from './profiles.mjs'
+import { checkJudgingInputs } from './rubric.mjs'
+import { PANEL_PROTOCOL } from '../../../lib/panel-judging/panel.mjs'
 import { runTimed, requireCommand } from './subprocess.mjs'
 export { verifyMountPlan } from './mount-plan.mjs'
 export function verifyCapabilities(runnerHelp, sandboxHelp) {
@@ -50,7 +52,7 @@ async function regularAuth(path) {
   if (!stat?.isFile() || stat.size === 0) throw new Error(`authentication: missing regular credential file ${path}`)
 }
 // All paid-run probes are read-only and finish before sandbox/model dispatch.
-export async function inspectInputs({ profiles, runnerDir, skillsDir, suiteRoot = SUITE_ROOT, dryRun = false, home = homedir(), env = process.env, command = runTimed, rubricChecks = async () => {} }) {
+export async function inspectInputs({ profiles, runnerDir, skillsDir, suiteRoot = SUITE_ROOT, dryRun = false, home = homedir(), env = process.env, command = runTimed, rubricChecks = checkJudgingInputs }) {
   validateProfiles(profiles)
   const runnerCommit = cleanCommit(runnerDir, 'Agent Runner')
   const skillsCommit = cleanCommit(skillsDir, 'Agent Skills')
@@ -95,11 +97,11 @@ export async function inspectInputs({ profiles, runnerDir, skillsDir, suiteRoot 
   }
   const inventory = await assertPinnedInventory({ suiteRoot })
   const tree = await verifySnapshot({ suiteRoot })
-  await rubricChecks({ suiteRoot, inventory }) // Future inventory-version and calibrated-threshold checks.
+  await rubricChecks({ suiteRoot, inventory, dryRun })
   const versions = await readJson(join(suiteRoot, 'versions.json'))
   const reference = await readJson(join(suiteRoot, 'hidden/reference.json'))
   const seriesIdentity = { starting_prompt: versions.inputs['starting-prompt'], starting_tree_hash: tree, reference: { version: reference.commit, commit: reference.commit, files: reference.files, citation_files: reference.citation_files ?? [] }, inventory: versions.inputs.inventory,
-    rubric: versions.inputs.rubric ?? null, evaluator_input_versions: versions.inputs, contamination_patterns: versions.inputs['contamination-patterns'], simulated_user_profile: { version: 1, ...SIMULATED_USER_PROFILE }, simulated_user_policy: versions.inputs['simulated-user-policy'], judge_profile: JUDGE_PROFILE }
+    rubric: versions.inputs.rubric ?? null, evaluator_input_versions: versions.inputs, contamination_patterns: versions.inputs['contamination-patterns'], simulated_user_profile: { version: 1, ...SIMULATED_USER_PROFILE }, simulated_user_policy: versions.inputs['simulated-user-policy'], judge_profile: JUDGE_PROFILE, panel_protocol: PANEL_PROTOCOL }
   const candidate = { profiles, agent_runner_commit: runnerCommit, workflow_hashes: { 'openspec:change': sha256(change), 'core:define-change': sha256(define) }, agent_skills_commit: skillsCommit }
   return { seriesIdentity, candidate, credentials, requiredSkills: skills }
 }

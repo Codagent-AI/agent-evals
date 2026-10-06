@@ -6,9 +6,10 @@ fixture is `https://github.com/Codagent-AI/and-scene.git` at
 The host controller runs `openspec:change --until define` through Agent Runner's
 sandbox and answers interactive turns using the host-side simulated user.
 Collection now retains native transcripts, reconciles conversation replies, and
-audits contamination before scoring. Clean candidates currently stop at the
-unimplemented disclosure audit; judging, discovery, reporting, and publication
-remain later work. Contaminated candidates stop immediately with no score. The result is
+audits contamination before scoring. The disclosure audit, hard gates, coverage,
+artifact quality, fidelity, and discovery ledger now run as checkpointed host
+phases. Result assembly, reporting, and publication remain later work; clean
+candidates currently stop at the unimplemented result-and-report phase. Contaminated candidates stop immediately with no score. The result is
 `evaluation-harness-failed` with `definition_verdict=unavailable`, naming the first
 unimplemented phase and the missing registrations; it never claims completion.
 
@@ -81,9 +82,8 @@ the new hash. JSON inputs carry their own version field; the starting prompt's
 version lives in the ledger. The check also compares Git's committed ledger to
 catch changing a recorded hash without a version bump. Git or baseline lookup
 failures reject the check; incomplete shallow history must be fetched before
-preflight. Only a genuinely new, uncommitted ledger needs no baseline. Once the rubric and
-simulated-user policy exist, add each to `VERSIONED_INPUTS` with one line and
-record its initial version/hash in the ledger.
+preflight. Only a genuinely new, uncommitted ledger needs no baseline. The
+rubric and simulated-user policy are both recorded as versioned inputs.
 
 The simulated user is pinned to `claude-opus-5-5`. Its versioned disclosure and
 decision policy is `hidden/simulated-user-policy.md`. `loadSimulatedUserInputs()`
@@ -224,3 +224,42 @@ node --test test/and-scene-define-sandbox-plan.test.mjs
 Without `AGENT_RUNNER_DIR`, that integration test skips with an explicit reason.
 `--rescore-from` and `--calibrate` are documented reserved modes and fail explicitly
 until their later tasks are implemented.
+
+## Definition judging and calibration prerequisites
+
+Inventory version 2 drafts `met`, `partial`, and `missing` anchors for all 72
+graded items. `anchors_review` is deliberately null. A maintainer must complete
+**HT-003 (anchor review)** before calibration and record `{ reviewer, date,
+inventory_version }` for the reviewed version, updating the inventory pin using
+the versioning rules above. Preference items have no coverage anchors.
+
+`rubric.json` is generated from the inventory. Its provisional components are
+coverage 60, artifact quality 25, and fidelity 15; mandatory items weigh 2 and
+acceptable alternatives weigh 1. A contradicted preference/outside-inventory
+answer deducts 3 fidelity points per exchange, with a floor of zero. These
+weights and the null pass threshold await calibration. Candidate preflight
+refuses unreviewed anchors, rubric/inventory mismatches, and a null threshold.
+Dry runs verify rubric consistency without requiring review or calibration.
+
+```sh
+node evals/agent-runner/and-scene-define/scripts/build-rubric.mjs
+node evals/agent-runner/and-scene-define/scripts/build-rubric.mjs --check
+```
+
+The host judges use the shared `cross-family-panel-v1` protocol with Sonnet
+5.5, two independent `gpt-6-luna` samples, and Opus 5.5 for decisions and
+checks, all at high effort. Claude receives inlined inputs with no tools;
+Codex receives only the job packet in a scratch working directory and a private
+auth-only home, both removed afterward. Calls write eval-owned usage to
+`phases/eval-owned-usage.jsonl`.
+
+`audits/disclosure.json` records settled and dissenting flags and leaked item
+ids. Leaks are excluded from both earned and possible coverage. If every item
+is leaked, coverage is zero. `judges/score.json` holds diagnostic component
+scores, gates, citations and panel records; a failed artifact or OpenSpec gate
+produces `complete`/`fail` there even while later result assembly is pending.
+`discovery/asked.json` and `discovery/ledger.json` record asked decisions and the
+five non-scoring outcomes. Each judge job is an independent durable checkpoint,
+so a resumed judging failure reuses jobs whose provenance and hashes still
+match. No hidden input, rubric, or judge packet is staged into the evaluated
+sandbox.

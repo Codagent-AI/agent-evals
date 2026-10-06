@@ -7,6 +7,7 @@ import { SUITE_ROOT, readJson, sha256, contained } from './files.mjs'
 // Add future inputs here once they exist; no checker changes are needed.
 export const VERSIONED_INPUTS = {
   'simulated-user-policy': { path: 'hidden/simulated-user-policy.md' },
+  rubric: { path: 'rubric.json', versionField: 'rubric_version' },
   inventory: { path: 'hidden/inventory.json', versionField: 'inventory_version' },
   'starting-prompt': { path: 'hidden/starting-prompt.md' },
   'contamination-patterns': { path: 'contamination-patterns.json', versionField: 'version' },
