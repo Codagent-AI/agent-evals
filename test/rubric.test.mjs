@@ -126,9 +126,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 12.2 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
+test('rubric 12.3 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '12.2.0')
+  assert.equal(rubric.version, '12.3.0')
   assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(
@@ -616,6 +616,12 @@ test('rubric 12.2 credits a general fix-and-rerun gate for skill failures', asyn
   const guidance = rubric.components.flatMap(({ subcomponents }) => subcomponents)
     .find(({ id }) => id === 'skill-self-verification').review_guidance.join('\n')
   assert.match(guidance, /credit a general instruction to fix failures and re-run the checks/)
+  // Round-6 audit: "any check" went beyond the fixture's build, render, and
+  // visual composition checks.
+  assert.match(guidance, /reporting success while a build or render failure remains/)
+  assert.match(guidance, /fixing visual composition findings and re-inspecting satisfies the visual check/)
+  assert.match(guidance, /Do not fail it for a failure mode of a check tool the instructions do not mention/)
+  assert.doesNotMatch(guidance, /while any check fails/)
   assert.match(guidance, /need not name each check type/)
   assert.match(guidance, /allow completing with a failing check/)
   assert.match(guidance, /pass\/fail field in a completion report format is not a permission/)

@@ -572,7 +572,7 @@
     }
   ],
   "rubric_id": "and-scene-automated-product",
-  "version": "12.2.0",
+  "version": "12.3.0",
   "total_points": 100,
   "automated_points": 70,
   "human_points": 30,
@@ -952,7 +952,7 @@
           "review_guidance": [
             "The normative skill instructions are the implementation of the agent's completion gate. Credit explicit instructions that require build, render, and browser composition checks before success and require fixing and rerunning failures before completion.",
             "Do not require an automated agent-remediation loop or interaction transcript; the verification tooling itself is scored separately for its executable technical behavior.",
-            "For skill-failures-fixed-before-success, credit a general instruction to fix failures and re-run the checks together with a rule against reporting success while any check fails; it need not name each check type. Fail it when the instructions allow completing with a failing check, or name a failure type that may be reported instead of fixed. A pass/fail field in a completion report format is not a permission to complete with a failing check."
+            "For skill-failures-fixed-before-success, credit a general instruction to fix failures and re-run the checks, together with a rule against reporting success while a build or render failure remains; fixing visual composition findings and re-inspecting satisfies the visual check. Do not fail it for a failure mode of a check tool the instructions do not mention. It need not name each check type. Fail it when the instructions allow completing with a failing check, or name a failure type that may be reported instead of fixed. A pass/fail field in a completion report format is not a permission to complete with a failing check."
           ]
         }
       ]
