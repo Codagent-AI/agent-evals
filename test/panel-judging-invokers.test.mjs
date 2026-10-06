@@ -1,0 +1,107 @@
+import assert from 'node:assert/strict'
+import { mkdtemp, writeFile, readFile, rm, realpath } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { test } from 'node:test'
+import { createClaudeJudgeInvoker } from '../evals/lib/panel-judging/claude-invoker.mjs'
+
+async function fixture(t, events, options = {}) {
+  const root = await mkdtemp(join(tmpdir(), 'claude-judge-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const command = join(root, 'claude')
+  await writeFile(command, `#!/usr/bin/env node\nimport fs from 'node:fs';\nconst root = ${JSON.stringify(root)};\nlet n = Number(fs.existsSync(root+'/count') ? fs.readFileSync(root+'/count','utf8') : 0);\nfs.writeFileSync(root+'/count',String(n+1));\nfs.writeFileSync(root+'/args',JSON.stringify({args:process.argv.slice(2),cwd:process.cwd(),env:process.env}));\nprocess.stdin.resume();\nprocess.stdin.on('end',()=>process.stdout.write(${JSON.stringify(events)}[Math.min(n,${events.length - 1})].map(e=>JSON.stringify(e)).join('\\n')+'\\n'));\n`, { mode: 0o755 })
+  const invoke = createClaudeJudgeInvoker({ runDir: root, command, allowedRoots: [root], ...options })
+  return { root, invoke, request: { job: 'test', schema: {}, authority: { model: 'sonnet', effort: 'medium' }, prompt: 'packet', cwd: root } }
+}
+const success = [{ type: 'system', subtype: 'init', tools: ['StructuredOutput'] }, { type: 'result', subtype: 'success', structured_output: { results: [] }, usage: { input_tokens: 10, cache_read_input_tokens: 3, cache_creation_input_tokens: 2, output_tokens: 4 } }]
+test('host mode isolates cwd and tools, pins effort and records Anthropic usage', async t => {
+  const { root, invoke, request } = await fixture(t, [success])
+  assert.equal(await invoke(request), '{"results":[]}')
+  const { args, cwd } = JSON.parse(await readFile(join(root, 'args'), 'utf8'))
+  for (const flag of ['--setting-sources', '--strict-mcp-config', '--disable-slash-commands', '--no-session-persistence', '--json-schema']) assert.ok(args.includes(flag))
+  assert.equal(args[args.indexOf('--tools') + 1], '')
+  assert.equal(args[args.indexOf('--effort') + 1], 'medium')
+  assert.notEqual(cwd, root)
+  const [usage] = await invoke.readUsageEntries()
+  assert.equal(usage.provider, 'anthropic')
+  assert.deepEqual(usage.token_totals, { input: 15, output: 4, total: 19 })
+})
+test('sandbox permits only read tools in approved roots', async t => {
+  const { root, invoke, request } = await fixture(t, [success], { mode: 'in-sandbox' })
+  await invoke({ ...request, input_roots: { source: root } })
+  const { args, cwd } = JSON.parse(await readFile(join(root, 'args'), 'utf8'))
+  assert.equal(cwd, await realpath(root))
+  assert.equal(args[args.indexOf('--tools') + 1], 'Read,Grep,Glob')
+  assert.equal(args[args.indexOf('--allowedTools') + 1], 'Read,Grep,Glob')
+  await assert.rejects(invoke({ ...request, cwd: tmpdir() }), /approved/)
+})
+for (const event of [{ type: 'system', subtype: 'init', tools: ['Bash'] }, { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input: {} }] } }]) test('unexpected tool is rejected', async t => {
+  const { invoke, request } = await fixture(t, [[event, ...success]])
+  await assert.rejects(invoke(request), /tool/)
+})
+test('capacity writes zero tokens and backs off; schema rejection fails fast', async t => {
+  const delays = []
+  const { invoke, request } = await fixture(t, [[{ type: 'result', is_error: true, errors: ['at capacity'] }], success], { sleep: async ms => delays.push(ms) })
+  await invoke(request)
+  assert.deepEqual(delays, [30000])
+  assert.equal((await invoke.readUsageEntries())[0].token_totals.total, 0)
+  const bad = await fixture(t, [[{ type: 'result', is_error: true, errors: ['invalid_json_schema'] }]])
+  await assert.rejects(bad.invoke(bad.request), error => error.retryable === false)
+  assert.equal(await readFile(join(bad.root, 'count'), 'utf8'), '1')
+})
+test('identified quota waits through injected helper; ambiguous quota is resumable', async t => {
+  const limit = [{ type: 'result', is_error: true, errors: ['hit your limit resets 3pm UTC'] }]
+  let waited = 0
+  const { invoke, request } = await fixture(t, [limit, success], { detectQuotaReset: () => ({ wait_ms: 1000 }), waitForQuotaReset: async () => { waited++; return { waited: true } } })
+  await invoke(request)
+  assert.equal(waited, 1)
+  const bad = await fixture(t, [limit])
+  await assert.rejects(bad.invoke(bad.request), error => error.resumable === true && error.owner === 'evaluation-harness')
+})
+
+test('Read contents are omitted from durable events while tool input and Grep output survive', async t => {
+  const events = [
+    { type: 'system', subtype: 'init', tools: ['Read', 'Grep', 'Glob', 'StructuredOutput'] },
+    { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'read1', name: 'Read', input: { file_path: 'a' } }] } },
+    { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'read1', content: 'private file contents' }] }, tool_use_result: { file: { content: 'private file contents' } } },
+    { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'grep1', name: 'Grep', input: { pattern: 'foo' } }] } },
+    { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'grep1', content: 'grep evidence' }] } },
+    success[1],
+  ]
+  const { root, invoke, request } = await fixture(t, [events], { mode: 'in-sandbox' })
+  await invoke({ ...request, input_roots: { source: root } })
+  const saved = await readFile(join(root, '.runtime/judge-claude/01-test.events.jsonl'), 'utf8')
+  assert.doesNotMatch(saved, /private file contents/)
+  assert.match(saved, /file_path/)
+  assert.match(saved, /grep evidence/)
+})
+
+test('sandbox evidence packet has no tools and runs in empty scratch cwd', async t => {
+  const { root, invoke, request } = await fixture(t, [success], { mode: 'in-sandbox' })
+  await invoke({ ...request, input_roots: { evidence: root } })
+  const { args, cwd } = JSON.parse(await readFile(join(root, 'args'), 'utf8'))
+  assert.equal(args[args.indexOf('--tools') + 1], '')
+  assert.notEqual(cwd, await realpath(root))
+})
+
+import { detectClaudeQuotaReset, waitForClaudeQuotaReset } from '../evals/agent-runner/and-scene/lib/claude-quota.mjs'
+for (const [label, error, waits] of [
+  ['near reset', 'hit your limit reset 2026-10-06 15:00 UTC', true],
+  ['over six hours', 'hit your limit reset 2026-10-06 22:00 UTC', false],
+  ['stale', 'hit your limit reset 2026-10-06 12:00 UTC', false],
+  ['ambiguous 429', '429 rate limit', false],
+]) test(`quota policy: ${label}`, async t => {
+  const slept = []
+  const clock = () => new Date('2026-10-06T13:00:00Z')
+  const { invoke, request } = await fixture(t, [[{ type: 'result', is_error: true, errors: [error] }], success], {
+    now: clock, detectQuotaReset: detectClaudeQuotaReset,
+    waitForQuotaReset: args => waitForClaudeQuotaReset({ ...args, now: clock, sleep: async ms => slept.push(ms) }),
+  })
+  if (waits) {
+    await invoke(request)
+    assert.deepEqual(slept, [2 * 60 * 60 * 1000 + 60000])
+  } else {
+    await assert.rejects(invoke(request), e => e.owner === 'evaluation-harness' && e.resumable === true)
+    assert.deepEqual(slept, [])
+  }
+})

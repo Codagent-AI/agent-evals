@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chmod, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -386,7 +386,7 @@ test('an evaluator-only rescore mounts a completed run read-only and invokes no 
   assert.ok(!result.output.includes('bootstrap-agent-skills.sh'), result.output)
   assert.ok(!result.output.includes('--lead-cli'), result.output)
   assert.ok(!result.output.includes('--change-name'), result.output)
-  assert.ok(!result.output.includes('--mount-claude-auth'), result.output)
+  assert.ok(result.output.includes('--mount-claude-auth'), result.output)
   assert.ok(result.output.includes('--mount-codex-auth'), result.output)
 })
 
@@ -646,4 +646,24 @@ test('host mode is refused outside an evaluator-only rescore', async () => {
 
   assert.notEqual(result.status, 0)
   assert.match(result.output, /--host is supported only with --run-agent --rescore-from/)
+})
+
+
+test('every judging run requires Claude auth even with Codex-only implementation profiles', async () => {
+  const context = await setup()
+  const codexProfiles = profileArgs.map(value => value === 'claude' ? 'codex' : value)
+  const planned = await scored(context, codexProfiles)
+  assert.equal(planned.status, 0, planned.output)
+  assert.match(planned.output, /--mount-claude-auth/)
+  await rm(join(context.home, '.claude/.credentials.json'))
+  const missing = await scored(context, codexProfiles)
+  assert.equal(missing.status, 2)
+  assert.match(missing.output, /Cross-family judging requires Claude auth/)
+})
+
+test('sandbox judging mounts the shared panel modules read-only at their resolved import path', async () => {
+  const context = await setup()
+  const result = await scored(context, profileArgs)
+  assert.equal(result.status, 0, result.output)
+  assert.match(result.output, /source=.*evals\/lib\/panel-judging\\,target=\/lib\/panel-judging\\,readonly/)
 })

@@ -34,6 +34,12 @@
     ],
     "12.3.0": [
       "64606d7d07b5153781e52c3556052573281597d823a3222db5335f785ae0fffc"
+    ],
+    "13.0.0": [
+      "f8a2ad8b05babc722cdcc6a43e7d51842262cb9fc5a407ba4533ac712e14a48b"
     ]
+  },
+  "changes": {
+    "13.0.0": "Judging protocol changed to cross-family-panel-v1. No criterion changed. Results before 13.0.0 form a different scoring series."
   }
 }

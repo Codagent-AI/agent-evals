@@ -12,13 +12,19 @@
 // scorer marks it incomplete, while the other three components keep their
 // valid, reusable results.
 import {
-  JUDGE_SAMPLES, JUDGE_SCOPE_RULE, JUDGING_PROTOCOL,
+  JUDGE_SCOPE_RULE,
   JUDGE_RESULT_SCHEMA, SOURCE_JUDGE_RESULT_SCHEMA,
   MAX_EVIDENCE_ITEMS, MAX_SOURCE_PATHS,
-  judgeResultSchemaFor, parseJudgeOutput, validateFallbackCitations,
-  runRobustJudgeJob, verifyCachedRobustJob,
+  judgeResultSchemaFor,
+  runJudgeJob, citationTarget,
 } from '../../../lib/panel-judging/protocol.mjs'
 export * from '../../../lib/panel-judging/protocol.mjs'
+import { runPanelJob, verifyCachedPanelJob, PANEL_PROTOCOL } from '../../../lib/panel-judging/panel.mjs'
+import { PRODUCT_JUDGE_PROFILE } from './judge-profile.mjs'
+export { PRODUCT_JUDGE_PROFILE } from './judge-profile.mjs'
+export { runPanelJob, verifyCachedPanelJob } from '../../../lib/panel-judging/panel.mjs'
+export const JUDGING_PROTOCOL = PANEL_PROTOCOL
+export const JUDGE_SAMPLES = 3
 import { bounded } from './browser-eval.mjs'
 import { JUDGE_INPUT_POLICIES } from './neutral-source.mjs'
 import { hashJson } from './persistence.mjs'
@@ -370,7 +376,7 @@ export async function runProductJudging({
   const tiebreaks = {}
   const disputeChecks = {}
 
-  // Sequential by design: the jobs share one judge authority and one rate
+  // Sequential by design: the jobs share one panel profile and one rate
   // budget, and a component-local failure must be attributable to its job.
   for (const { id } of jobs) {
     const request = buildJudgeRequest({
@@ -388,78 +394,57 @@ export async function runProductJudging({
       source_audit_version: request.source_audit_version,
       judging_protocol: JUDGING_PROTOCOL,
       judge_samples: JUDGE_SAMPLES,
+      authority: PRODUCT_JUDGE_PROFILE,
       prompt: request.prompt,
     })
     inputHashes[id] = inputHash
     const cached = await loadJob?.({ id, inputHash, request })
+    let outcome
     if (cached?.results) {
       try {
-        const results = parseJudgeOutput(
-          JSON.stringify({ results: cached.results }),
-          request.criteria,
-          request.job,
-          { requireSourceCitationsFor: requiredFallbackIds },
-        )
-        const verified = validateFallbackCitations(results, requiredFallbackIds, request.verified_source_paths)
-        const reproduced = verifyCachedRobustJob(cached, request, requiredFallbackIds
-          .filter((fallbackId) => verified.find((result) => result.id === fallbackId)?.verdict === 'pass'))
-        judges[id] = verified
-        consensus[id] = reproduced.consensus
-        tiebreaks[id] = cached.tiebreak ?? null
-        disputeChecks[id] = cached.dispute_checks ?? []
-        attempts[id] = cached.attempts ?? []
-        auditAttempts[id] = cached.audit_attempts ?? []
-        audits[id] = cached.audit_results ?? null
-        retries[id] = Math.max(0, attempts[id].length - JUDGE_SAMPLES)
-        outputHashes[id] = hashJson(results)
+        const reproduced = verifyCachedPanelJob(cached)
+        if (hashJson(cached.criteria) !== hashJson(request.criteria)) throw new Error('cached criteria changed')
+        outcome = { ok: true, results: reproduced.results, record: cached }
         reusedJobs.push(id)
-        continue
-      } catch {
-        // A malformed or stale cached output is not reusable. Re-run just this
-        // job under the current hashed input contract.
-      }
+      } catch { /* stale cache: rerun only this job */ }
     }
-    await startJob?.({ id, inputHash, request })
-    const outcome = await runRobustJudgeJob({
-      request: { ...request, requireSourceCitationsFor: requiredFallbackIds },
-      invoke,
-    })
+    if (!outcome) {
+      await startJob?.({ id, inputHash, request })
+      outcome = await runPanelJob({
+        job: id, criteria: request.criteria, verdicts: ['pass', 'fail'], order: ['pass', 'fail'],
+        panel: PRODUCT_JUDGE_PROFILE.panel.map(member => ({ ...member, invoke })),
+        decider: { ...PRODUCT_JUDGE_PROFILE.decider, invoke },
+        buildPrompt: () => ({ ...request, panel_line_citations: true, requireSourceCitationsFor: requiredFallbackIds }),
+        schema: request.schema,
+        audit: ({ request: next, invoke: call }) => runJudgeJob({ request: next, invoke: call }),
+        validateCitations: async result => {
+          if (!result.citations?.length || !request.input_roots?.source) return false
+          try {
+            for (const path of result.citations) {
+              if (!request.verified_source_paths.includes(path)) return false
+              await citationTarget(request.input_roots.source, path)
+            }
+            return true
+          } catch { return false }
+        },
+      })
+    }
+    const record = outcome.record
     judges[id] = outcome.results
-    attempts[id] = outcome.attempts
-    auditAttempts[id] = outcome.audit_attempts
-    audits[id] = outcome.audit_results
-    consensus[id] = outcome.consensus
-    tiebreaks[id] = outcome.tiebreak
-    disputeChecks[id] = outcome.dispute_checks ?? []
-    retries[id] = Math.max(0, outcome.attempts.length - JUDGE_SAMPLES)
+    attempts[id] = record.attempts ?? []
+    auditAttempts[id] = record.audit_attempts ?? []
+    audits[id] = record.samples?.map(sample => sample.audit_results) ?? []
+    consensus[id] = outcome.results?.map(({ id, basis, votes }) => ({ id, basis, votes })) ?? null
+    tiebreaks[id] = record.decider ?? null
+    disputeChecks[id] = record.dispute_checks ?? []
+    retries[id] = Math.max(0, attempts[id].length - JUDGE_SAMPLES)
     if (!outcome.ok) {
       failedJobs.push(id)
-      await failJob?.({
-        id,
-        inputHash,
-        attempts: outcome.audit_attempts.length > 0
-          ? outcome.audit_attempts
-          : outcome.attempts,
-      })
+      await failJob?.({ id, inputHash, attempts: [...attempts[id], ...auditAttempts[id]] })
       continue
     }
-    const outputHash = hashJson(outcome.results)
-    outputHashes[id] = outputHash
-    await saveJob?.({
-      id,
-      inputHash,
-      outputHash,
-      results: outcome.results,
-      attempts: outcome.attempts,
-      audit_results: outcome.audit_results,
-      audit_attempts: outcome.audit_attempts,
-      protocol: outcome.protocol,
-      samples: outcome.samples,
-      consensus: outcome.consensus,
-      tiebreak: outcome.tiebreak,
-      dispute_checks: outcome.dispute_checks ?? [],
-      authority,
-    })
+    outputHashes[id] = hashJson(outcome.results)
+    if (!reusedJobs.includes(id)) await saveJob?.({ ...record, id, inputHash, outputHash: outputHashes[id], authority: PRODUCT_JUDGE_PROFILE })
   }
 
   return {
@@ -478,6 +463,6 @@ export async function runProductJudging({
     consensus,
     tiebreaks,
     dispute_checks: disputeChecks,
-    authority,
+    authority: PRODUCT_JUDGE_PROFILE,
   }
 }

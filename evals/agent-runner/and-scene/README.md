@@ -28,57 +28,56 @@ and source-judged fallbacks, cannot be replayed and use the span and log audit.
 
 ## Robust judging
 
-No single model call decides a scored criterion. Each judge job runs two
-independent samples with identical inputs, concurrently, at a pinned reasoning
-effort (`medium`, the judge model's default). Each source-job sample passes
-through its own closed-world source audit. A contradiction never inverts that
-sample's vote by itself: it marks the vote disputed, and an independent
-contradiction check then decides whether that stated contradiction holds. Only
-a confirmed contradiction turns the vote; a refuted one leaves it standing. An undecided audit gets one focused re-cite, and a verdict
-still undecided after that stands as the sample's vote rather than spending
-more citation cycles (a browser-fallback pass, which must be proven from
-source, fails instead). A verdict both samples agree on, with neither vote
-disputed, stands, pass or fail. A criterion they disagree on, or that either
-sample's audit disputed, goes to a third independent sample that gets the job's
-unchanged context and never sees the first two verdicts, so its vote decides.
+Every scored job runs three independent panel judges concurrently on identical
+inputs: `claude-sonnet-5-5` and two `gpt-6-sol` samples, all at pinned medium
+effort. `claude-opus-5-5`, medium, decides Codex-only majorities, three-way
+splits, and unresolved disputes. A unanimous verdict stands. A two-to-one
+majority stands when it includes Claude, except that a higher-credit dissent
+with validated citations gets an Opus check of its stated reason. A confirmed
+dissent stands; otherwise the majority stands.
 
-A majority pass must cite line spans (`path`, `start_line`, `end_line`) that
-the harness validates mechanically, exactly as the browser second opinion
-does: the path must be in the verified neutral source inventory (or the
-materialized evidence view for the testing-evidence and assumption-handling
-jobs), resolve inside it without a symbolic link, and the range must lie inside
-the file and span under 200 lines. A closed-world span audit then checks the
-quoted lines against every clause of the criterion's requirement. Only
-`confirmed` is recorded as confirmed; `insufficient` asks the same third sample
-to re-cite once, and if the audit still cannot decide, the majority stands with
-that noted; `contradicted` is replicated by a second independent audit, and the
-majority pass is withdrawn only when an independent contradiction check
-confirms that same stated contradiction; the check judges the first audit's
-reason against the quoted lines and the rubric rather than auditing afresh, and
-both are recorded; each disputed vote's check is kept as `dispute_checks` in `phases/judges/<job>.json`, `phases/product-judging.json`, and the result's `judging`. So every verdict rests on two agreeing signals: a consensus,
-a majority of votes, or an audit's contradiction confirmed by a check. Every
-judge, audit, and check prompt also carries one shared rule: judge only
-behavior the cited source and recorded evidence establish, never a
-hypothetical input, file deletion, or rendering the candidate does not
-produce unless the guidance names it, and read an undefined term by the plain
-meaning of its fixture requirement. Invalid third-sample output is retried and, once exhausted,
-leaves the job unobserved, never failed.
+Each source judge keeps its closed-world source audit and one focused re-cite.
+An audit contradiction marks the vote disputed. Opus checks that same stated
+contradiction; only confirmation turns the vote. An insufficient audit after
+one re-cite leaves the vote standing, except an unconfirmed browser fallback
+pass fails. Judges, audits, and checks retain the shared scope rule and the
+full fixture requirement or eval-owned reason beside each criterion.
 
-Every judge sees, beside each criterion, the requirement it traces to: the
-full fixture scenario from `fixture-snapshot/` for a fixture-owned criterion,
-or the eval-owned reason. The assumption-handling view also carries the full
-approved requirements as reference, so its judge can run the omission check.
-Each criterion's evidence records its judging basis (`consensus-pass`,
-`consensus-fail`, `majority-pass`, `majority-fail`), `phases/product-judging.json`
-keeps every sample, the third-sample vote with its audits, and the
-per-criterion consensus, and `phases/eval-owned-usage.jsonl` records each
-call's `stage` (`<job>:sample-1`, `<job>:sample-2`, `<job>:tiebreak`,
-`<job>:tiebreak-recite`, `<job>:tiebreak-audit`). A Codex turn rejected as at
-capacity before any model output is waited out with backoff, without spending
-a judge attempt, and is recorded with zero tokens. A response schema OpenAI
-rejects (`invalid_json_schema`) fails fast as a harness error; every schema the
-harness sends is checked against strict structured-output rules in
-`test/codex-judge-schemas.test.mjs`.
+The decider sees unchanged job context and all three votes, labelled A/B/C in
+seeded order without model identities. It must choose a panel verdict. A pass
+requires 1–12 valid line spans, each under 200 lines, in the verified neutral
+source inventory or materialized evidence view, resolving without symlinks.
+A closed-world span audit checks every requirement clause, with one re-cite on
+insufficient evidence. A contradiction withdraws the pass only when Opus
+confirms that same contradiction. A still-insufficient audit leaves the pass
+standing with that recorded, except an unconfirmed browser fallback pass fails.
+Invalid output is retried; exhausted calls leave the job unobserved.
+
+Criterion records and reports show the basis (`consensus-pass/fail`,
+`majority-pass/fail`, `checked-dissent-pass`, or `decider-pass/fail`) and all
+family-labelled votes, targeted checks, and rulings. Cache reuse requires
+`cross-family-panel-v1` and reproduction from the recorded votes, checks, and
+rulings. Rubric **13.0.0** starts a new scoring series; no criterion changed,
+and earlier results stay published. Acceptance `E2E-004` pairs baseline
+rescores under this panel.
+
+Claude source judges use only Read/Grep/Glob inside the evaluation sandbox.
+Evidence and closed-world packets are inlined with no tools. Every judging
+run and rescore implies `--mount-claude-auth` and requires readable Claude
+credentials; host rescoring uses the same restricted invoker against neutral
+inputs. Browser second opinions, pricing search, and other single-purpose
+calls retain their Codex authority. Fixture calibration exercises the same
+panel settlement with canned invokers; an injected live invoker uses the
+profile too.
+
+`phases/eval-owned-usage.jsonl` records provider, model and stage:
+`panel-claude`, `panel-codex-1`, `panel-codex-2`, `source-audit`,
+`contradiction-check`, `dissent-check`, `decider`, `span-audit`, and
+`decider-recite`. This usage is not priced or included in implementation cost.
+Capacity rejections before model output record zero tokens and back off without
+spending a judge attempt. Schema rejection fails fast. Identified Claude
+subscription limits with an explicit UTC reset within six hours wait and
+retry; other limits remain resumable harness failures.
 
 `rubric-history.json` records the content hash of every automated rubric
 version; a test fails when the rubric changes without a new version.
@@ -120,8 +119,8 @@ adapter and mounts only this suite at `/eval-input`.
 
 Each lead, implementor, and tester profile selects its own CLI
 adapter (`claude`, `codex`, or `cursor`), and eval-owned judging always runs
-through Codex. The adapter mounts the host authentication matching the selected
-adapters plus Codex. Model identifiers are passed through unchanged: Cursor
+through the cross-family panel. The adapter mounts the host authentication matching the selected
+adapters plus Claude and Codex. Model identifiers are passed through unchanged: Cursor
 accepts a versioned id such as `grok-4.6` or a full Cursor id such as
 `cursor-grok-4.6-high`. A bare family such as `grok` is passed through, but the
 Cursor CLI rejects it. Before starting Agent Runner, the suite verifies the
@@ -316,7 +315,7 @@ no browser runs during source judging (`lib/host-browser.mjs`).
 Chrome reached about 9 GB on a 16 GB Mac, and two parallel rescores exhausted
 it. Start the next rescore only after the previous one exits, and check that no
 earlier `controller.mjs`, `serve-candidate.mjs`, or host Chrome is still
-running. Judges still run in Codex's read-only sandbox against the run's
+running. Panel judges use their restricted invokers against the run's
 neutral inputs. A rescore never starts or reads Agent Runner, so it leaves the
 home's `~/.agent-runner/projects` untouched.
 

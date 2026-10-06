@@ -58,7 +58,7 @@ import {
   readEvidenceProjectionInputs,
   writeResultArtifacts,
 } from './lib/result.mjs'
-import { JUDGE_REASONING_EFFORT, createCodexJudgeInvoker } from './lib/judge-invoker.mjs'
+import { JUDGE_REASONING_EFFORT, createSuiteJudgeInvoker } from './lib/judge-invoker.mjs'
 import { hideValidatorFromAgents } from './lib/validator-availability.mjs'
 import { runProductJudging } from './lib/judge-jobs.mjs'
 import {
@@ -2060,7 +2060,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       : null,
     releaseBrowser: hostBrowser ? () => hostBrowser.release() : null,
     judgeInvoke: productionRunDir
-      ? createCodexJudgeInvoker({
+      ? createSuiteJudgeInvoker({
           runDir: productionRunDir,
           candidateWorktree,
           // run.sh --host points this at the host CLI; the sandbox default

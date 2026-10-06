@@ -70,8 +70,8 @@ consult `run.sh --help` before constructing an unfamiliar invocation.
   output and are excluded from Validator reviews. Do not edit them to change a
   past result; correct erroneous publication with a later revert.
 - Implementation metrics come from Agent Runner's `run-metrics.json`; retain
-  its completeness/provenance rather than inventing totals. Eval-owned Codex
-  judge usage lives separately in `phases/eval-owned-usage.jsonl` and is not
+  its completeness/provenance rather than inventing totals. Eval-owned Claude and Codex
+  panel, decider, and audit usage lives separately in `phases/eval-owned-usage.jsonl` and is not
   implementation cost.
 
 ## Commit messages

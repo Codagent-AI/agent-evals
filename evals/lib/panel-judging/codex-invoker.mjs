@@ -27,7 +27,7 @@ const JUDGE_ENV_ALLOWLIST = [
   'NO_COLOR',
 ]
 
-function judgeEnvironment(source) {
+export function judgeEnvironment(source) {
   return Object.fromEntries(JUDGE_ENV_ALLOWLIST.flatMap((name) => (
     typeof source?.[name] === 'string' ? [[name, source[name]]] : []
   )))
@@ -46,8 +46,8 @@ const DIAGNOSTIC_TAIL_CHARS = 64 * 1024
 const DEFAULT_MAX_STDOUT_BYTES = 16 * 1024 * 1024
 // A model-capacity rejection arrives before any work, so it is waited out
 // rather than spending one of the judge's limited attempts.
-const CAPACITY_RETRIES = 5
-const CAPACITY_BASE_DELAY_MS = 30 * 1000
+export const CAPACITY_RETRIES = 5
+export const CAPACITY_BASE_DELAY_MS = 30 * 1000
 const CAPACITY_PATTERN = /at capacity/i
 
 // The turn.failed message when Codex rejected the turn before doing any work.
@@ -78,7 +78,7 @@ function persistableEventLine(line) {
 
 // Claims the first unused attempt slot so neither a retry nor a later process
 // recovering the same call overwrites an earlier attempt's evidence.
-async function openAttemptFiles(openFile, runtimeDir, stem) {
+export async function openAttemptFiles(openFile, runtimeDir, stem) {
   for (let slot = 1; ; slot += 1) {
     const attemptStem = slot === 1 ? stem : `${stem}.attempt-${slot}`
     const eventsPath = join(runtimeDir, `${attemptStem}.events.jsonl`)
@@ -104,8 +104,8 @@ function tail(text) {
   return text.length > DIAGNOSTIC_TAIL_CHARS ? text.slice(-DIAGNOSTIC_TAIL_CHARS) : text
 }
 
-function runAttempt({
-  spawnImpl, command, args, options, prompt, files, timeoutMs, killGraceMs, maxStdoutBytes, label,
+export function runAttempt({
+  spawnImpl, command, args, options, prompt, files, timeoutMs, killGraceMs, maxStdoutBytes, label, observeLine = () => {}, persistLine = persistableEventLine,
 }) {
   return new Promise((resolveAttempt) => {
     // Complete output is on disk; memory keeps only usage and a short tail.
@@ -169,7 +169,8 @@ function runAttempt({
       if (pendingLine.includes('"turn.completed"')) usageLine = pendingLine
       if (pendingLine.includes('"turn.failed"')) failedLine = pendingLine
       if (/"type":"item\./.test(pendingLine)) workSeen = true
-      if (pendingLine) writeEvents(persistableEventLine(pendingLine))
+      if (pendingLine) observeLine(pendingLine)
+      if (pendingLine) writeEvents(persistLine(pendingLine))
       await Promise.all([eventWrites, stderrWrites])
       resolveAttempt({
         status,
@@ -217,11 +218,12 @@ function runAttempt({
       pendingLine = lines.pop()
       if (lines.length === 0) return
       for (const line of lines) {
+        observeLine(line)
         if (line.includes('"turn.completed"')) usageLine = line
         if (line.includes('"turn.failed"')) failedLine = line
         if (/"type":"item\./.test(line)) workSeen = true
       }
-      throttle(child.stdout, writeEvents(lines.map((line) => `${persistableEventLine(line)}\n`).join('')))
+      throttle(child.stdout, writeEvents(lines.map((line) => `${persistLine(line)}\n`).join('')))
     })
     child.stderr.setEncoding('utf8')
     child.stderr.on('data', (chunk) => {

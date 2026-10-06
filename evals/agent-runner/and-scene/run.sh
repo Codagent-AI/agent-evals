@@ -64,8 +64,8 @@ Runs the and-scene evaluation through Agent Runner's sandbox adapter.
 
 Credential posture: a candidate run requires GitHub credentials that can push
 the unique eval/and-scene/<run-id> branch and create or update its draft pull
-request. No host credentials are inherited by default except the agent auth
-mounts required by selected profiles. Pass only short-lived, repo-scoped
+request. No host credentials are inherited by default except the auth mounts
+required by selected profiles and the Claude/Codex judging panel. Pass only short-lived, repo-scoped
 credentials with --env (for example --env GITHUB_TOKEN), or use the sandbox
 runner's default .sandbox-secrets.env file. Credentials remain in the ephemeral
 container home and are never written into the persistent run directory.
@@ -317,6 +317,10 @@ fi
 # Calibration runs entirely on the host: no sandbox, no Agent Runner checkout,
 # no credentials. It is handled before every check those things require.
 if [[ "$CALIBRATE" == 1 ]]; then
+  if [[ "$DRY_RUN" != 1 && ! -r "$HOME/.claude/.credentials.json" ]]; then
+    echo "Cross-family calibration requires Claude auth at $HOME/.claude/.credentials.json." >&2
+    exit 2
+  fi
   if [[ -z "$ARTIFACT_DIR" ]]; then
     ARTIFACT_DIR="$EVALS_ROOT/artifacts/evals/and-scene-calibration/$(timestamp)"
   elif [[ "$ARTIFACT_DIR" != /* ]]; then
@@ -442,7 +446,16 @@ if [[ "$RUN_AGENT" == 1 ]]; then
     CANDIDATE_REF="$REFERENCE_REF"
   fi
 
-  # Eval-owned judging always runs through Codex.
+  if [[ "$MOUNT_CLAUDE_AUTH" != 1 ]]; then
+    AUTH_ARGS+=(--mount-claude-auth)
+    MOUNT_CLAUDE_AUTH=1
+  fi
+  if [[ ! -r "$HOME/.claude/.credentials.json" ]]; then
+    echo "Cross-family judging requires Claude auth at $HOME/.claude/.credentials.json; forward it with --mount-claude-auth (implied for judging)." >&2
+    exit 2
+  fi
+
+  # Scored judging uses Claude and Codex; single-purpose checks remain Codex.
   if [[ "$MOUNT_CODEX_AUTH" != 1 ]]; then
     AUTH_ARGS+=(--mount-codex-auth)
     MOUNT_CODEX_AUTH=1
@@ -482,7 +495,7 @@ export AND_SCENE_RUN_ID
 ENV_ARGS+=(--env AND_SCENE_RUN_ID)
 
 # An evaluator-only rescore can run on the host: it invokes no Agent Runner and
-# no implementation agent, only the build, the browser evaluator, and Codex
+# no implementation agent, only the build, the browser evaluator, and panel
 # judges, which run read-only against this run's own neutral inputs.
 if [[ "$HOST" == 1 ]]; then
   host_codex="${AND_SCENE_CODEX_COMMAND:-$(command -v codex || true)}"
@@ -498,7 +511,7 @@ if [[ "$HOST" == 1 ]]; then
     printf '\n'
     exit 0
   fi
-  for tool in node npm chrome-devtools-axi; do
+  for tool in node npm claude chrome-devtools-axi; do
     if ! command -v "$tool" >/dev/null 2>&1; then
       echo "Host rescore requires $tool on PATH." >&2
       exit 2
@@ -780,6 +793,12 @@ AGENT
 )
 
 sandbox_args=(--artifact-dir "$ARTIFACT_DIR" --input-dir "$SUITE_DIR")
+# Suite imports ../../../lib/panel-judging from /eval-input/lib. Keep this
+# eval-owned code available at the same resolved path inside the sandbox.
+sandbox_args+=(
+  --docker-run-arg --mount
+  --docker-run-arg "type=bind,source=$EVALS_ROOT/evals/lib/panel-judging,target=/lib/panel-judging,readonly"
+)
 # Codex's read-only sandbox uses Linux user namespaces. Docker's default
 # seccomp profile blocks their creation, which prevents source judges from
 # inspecting even the neutral read-only checkout. The outer Agent Runner

@@ -19,6 +19,8 @@ import {
   runRobustJudgeJob,
   resolveJudgeSamples,
   JUDGE_SAMPLES,
+  PRODUCT_JUDGE_PROFILE,
+  runPanelJob,
   JUDGING_PROTOCOL,
 } from '../evals/agent-runner/and-scene/lib/judge-jobs.mjs'
 import { criteriaForJob, loadRubrics } from '../evals/agent-runner/and-scene/lib/rubric.mjs'
@@ -1141,8 +1143,8 @@ test('one failed job does not discard the other five complete outputs', async ()
     assert.equal(outcome.judges[job].length, criteriaForJob(automated, job).length, job)
   }
   assert.deepEqual(outcome.failed_jobs, ['scene-kit'])
-  // Two samples of three attempts each.
-  assert.equal(outcome.retries['scene-kit'], 2 * JUDGE_ATTEMPTS - JUDGE_SAMPLES)
+  // Three panel judges of three attempts each.
+  assert.equal(outcome.retries['scene-kit'], 3 * JUDGE_ATTEMPTS - JUDGE_SAMPLES)
 })
 
 test('six jobs checkpoint independently and reuse a valid completed output', async () => {
@@ -1151,10 +1153,13 @@ test('six jobs checkpoint independently and reuse a valid completed output', asy
   const invoked = []
   const sceneCriteria = criteriaForJob(automated, 'scene-kit')
   const sampleResults = JSON.parse(judgeOutput(sceneCriteria)).results
-  const samples = [1, 2].map(() => ({ ok: true, results: sampleResults, attempts: [], audit_results: null, audit_attempts: [] }))
-  const { results: sceneResults } = resolveJudgeSamples({ criteria: sceneCriteria, samples })
-  loaded.set('scene-kit', { protocol: JUDGING_PROTOCOL, results: sceneResults, samples, tiebreak: null,
-    attempts: [{ attempt: 1, ok: true, error: null }] })
+  const cached = await runPanelJob({ job: 'scene-kit', criteria: sceneCriteria,
+    verdicts: ['pass', 'fail'], order: ['pass', 'fail'], schema: {},
+    buildPrompt: () => ({ prompt: 'test' }),
+    panel: PRODUCT_JUDGE_PROFILE.panel.map(member => ({ ...member, invoke: async () => JSON.stringify({ results: sampleResults }) })),
+    decider: PRODUCT_JUDGE_PROFILE.decider,
+  })
+  loaded.set('scene-kit', cached.record)
 
   const outcome = await runProductJudging({
     rubrics,
@@ -1186,7 +1191,7 @@ test('product judging runs its jobs sequentially through one recorded authority'
   const outcome = await runProductJudging({
     rubrics, authority, evidence: [], sources: [],
     invoke: async ({ job, criteria, authority: recorded }) => {
-      assert.deepEqual(recorded, authority)
+      assert.ok(PRODUCT_JUDGE_PROFILE.panel.some(member => member.model === recorded.model && member.effort === recorded.effort))
       order.push(`start:${job}`)
       await new Promise((resolve) => setImmediate(resolve))
       order.push(`end:${job}`)
@@ -1195,8 +1200,8 @@ test('product judging runs its jobs sequentially through one recorded authority'
   })
 
   // Jobs never interleave; a job's independent samples run concurrently.
-  assert.deepEqual(order, PRODUCT_JUDGE_JOB_IDS.flatMap((id) => [`start:${id}`, `start:${id}`, `end:${id}`, `end:${id}`]))
-  assert.deepEqual(outcome.authority, authority)
+  assert.deepEqual(order, PRODUCT_JUDGE_JOB_IDS.flatMap((id) => [`start:${id}`, `start:${id}`, `start:${id}`, `end:${id}`, `end:${id}`, `end:${id}`]))
+  assert.deepEqual(outcome.authority, PRODUCT_JUDGE_PROFILE)
   assert.deepEqual(outcome.failed_jobs, [])
 })
 
@@ -1247,9 +1252,9 @@ const NAV_SOURCE = [
   'export const swipe = (dx) => (dx < 0 ? next() : prev())',
 ].join('\n')
 
-test('the protocol runs two independent samples per job and a third only on disagreement', () => {
-  assert.equal(JUDGE_SAMPLES, 2)
-  assert.match(JUDGING_PROTOCOL, /dual-sample-majority/)
+test('the protocol runs three cross-family judges per job', () => {
+  assert.equal(JUDGE_SAMPLES, 3)
+  assert.equal(JUDGING_PROTOCOL, 'cross-family-panel-v1')
 })
 
 const stageOf = (request) => request.judge_stage ?? request.audit_stage ?? 'primary'
@@ -1582,8 +1587,8 @@ test('a cached single-sample judge output is not reused under the dual-sample pr
   const scene = saved.find(({ id }) => id === 'scene-kit')
   assert.equal(scene.protocol, JUDGING_PROTOCOL)
   assert.equal(scene.samples.length, JUDGE_SAMPLES)
-  assert.ok(scene.consensus.every(({ basis }) => basis === 'consensus-pass'))
-  assert.deepEqual(outcome.consensus['scene-kit'], scene.consensus)
+  assert.ok(scene.results.every(({ basis }) => basis === 'consensus-pass'))
+  assert.deepEqual(outcome.consensus['scene-kit'], scene.results.map(({ id, basis, votes }) => ({ id, basis, votes })))
 })
 
 test('a cached record that does not reproduce from its samples is re-judged', async () => {

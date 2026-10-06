@@ -6,7 +6,7 @@ import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 export const JUDGE_ATTEMPTS = 3
 // Every scored job is judged by two independent samples so that no single
-// model sample decides a criterion. A verdict both samples agree on stands; a
+// model sample decides a criterion. A verdict panel judges agree on stands; a
 // disagreement is settled by a third independent sample, and a pass it casts
 // must quote validated lines that a closed-world audit confirms.
 export const JUDGE_SAMPLES = 2
@@ -256,6 +256,11 @@ export async function citationTarget(sourceRoot, citation) {
   }
   let stat
   try {
+    let directory = resolve(sourceRoot)
+    for (const part of relative(directory, target).split(sep).slice(0, -1)) {
+      directory = join(directory, part)
+      if ((await lstat(directory)).isSymbolicLink()) throw new JudgeOutputError(`source citation traverses a symbolic link: ${citation}`)
+    }
     stat = await lstat(target)
   } catch (error) {
     throw new JudgeOutputError(
@@ -390,7 +395,7 @@ export async function buildSourceAuditRequest({
   }
 }
 
-function parseSourceAuditOutput(text, expectedIds, job) {
+export function parseSourceAuditOutput(text, expectedIds, job) {
   let payload
   try {
     payload = JSON.parse(text)
@@ -499,7 +504,7 @@ function mergeSourceAudit(primaryResults, auditResults) {
   return primaryResults.map((primary) => {
     const audit = audited.get(primary.id)
     // One audit does not overturn a vote. A contradiction marks this sample's
-    // vote disputed, which sends the criterion to the blind third sample.
+    // vote disputed, which sends the criterion to the blind decider.
     if (audit?.classification === 'contradicted') {
       return {
         ...primary,
@@ -670,7 +675,7 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
             rationale: bounded(`The browser could not observe this criterion and the source audit could not confirm the cited source: ${audit.rationale}`, MAX_RATIONALE_CHARS),
             evidence: audit.evidence.map((item) => bounded(`source audit: ${item}`)) }
         : { ...primary, evidence: [...primary.evidence,
-            'source audit could not decide from the cited files; the sample\'s verdict stands as its vote'] })
+            'source audit could not decide from the cited files; the panel judge\'s verdict stands as its vote'] })
     }
     return {
       job: request.job,
@@ -770,7 +775,7 @@ async function lineCitationInventory(request) {
   }
 }
 
-// The disputed criteria go to a third sample with the job's full, unchanged
+// The disputed criteria go to a decider with the job's full, unchanged
 // context. It never sees the first two verdicts, so it is an independent vote;
 // only its citation format differs, because a pass it casts must be provable
 // from quoted lines alone.
@@ -782,7 +787,7 @@ export function buildTiebreakRequest({ request, criteria, inventory }) {
     '',
     '# Line-cited verdicts',
     evidenceJob
-      ? 'You may read the files under your working directory, the evidence view, to find exact line numbers. Cite them by their path relative to it.'
+      ? (request.panel_line_citations ? 'Use only the inlined line-numbered evidence packet; do not use tools. Cite paths relative to the evidence view.' : 'You may read the files under your working directory, the evidence view, to find exact line numbers. Cite them by their path relative to it.')
       : 'Inspect the neutral source read-only from your working directory.',
     'For this review, citations are line spans, not bare paths:',
     `- A pass MUST cite 1-${MAX_LINE_CITATIONS} spans {path, start_line, end_line}, each under`,
@@ -1043,7 +1048,7 @@ async function checkContradictions({ request, claims, invoke, attempts, log }) {
 
 const spanReference = ({ path, start_line: start, end_line: end }) => `${path}:${start}-${end}`
 
-// The third sample's vote for each disputed criterion. Its pass needs quoted
+// The decider's vote for each disputed criterion. Its pass needs quoted
 // lines that validate mechanically; the span audit can only withdraw it when
 // two independent audits both find the quoted lines contradict the
 // requirement. An audit that cannot decide never decides the split.
@@ -1054,7 +1059,7 @@ function tiebreakDecisions({ results, spans, outcomes, fallbackIds }) {
     const paths = [...new Set(quoted.map(({ path }) => path))]
     if (result.verdict !== 'pass') {
       return { id: result.id, verdict: 'fail', rationale: result.rationale, citations: paths,
-        evidence: [...result.evidence, ...references, 'judging basis: majority fail (third sample)'] }
+        evidence: [...result.evidence, ...references, 'judging basis: majority fail (decider)'] }
     }
     const outcome = outcomes.get(result.id)
     if (outcome.state === 'contradicted') {
@@ -1070,8 +1075,8 @@ function tiebreakDecisions({ results, spans, outcomes, fallbackIds }) {
     }
     return { id: result.id, verdict: 'pass', rationale: result.rationale, citations: paths,
       evidence: [...result.evidence, ...references, outcome.state === 'confirmed'
-        ? 'judging basis: majority pass (third sample) confirmed by the closed-world span audit'
-        : 'judging basis: majority pass (third sample); the span audit could not confirm or refute it from the quoted lines'] }
+        ? 'judging basis: majority pass (decider) confirmed by the closed-world span audit'
+        : 'judging basis: majority pass (decider); the span audit could not confirm or refute it from the quoted lines'] }
   })
 }
 
@@ -1122,7 +1127,7 @@ export function resolveJudgeSamples({ criteria, samples, decisions = [] }) {
     }
     if (consensus.at(-1)?.id === id) continue
     const decision = tiebroken.get(id)
-    if (!decision) throw new JudgeOutputError(`criterion ${id} needs a third sample but has none`)
+    if (!decision) throw new JudgeOutputError(`criterion ${id} needs a decider but has none`)
     results.push(decision.result)
     consensus.push({ id, basis: decision.result.verdict === 'pass' ? 'majority-pass' : 'majority-fail',
       sample_verdicts: [...sampleVerdicts, decision.vote], ...(disputes.length ? { disputes } : {}) })
@@ -1162,9 +1167,41 @@ function consensusResult(sampleResults, verdict) {
     evidence: turned.contradiction.evidence.map((item) => bounded(`source audit: ${item}`)) }
 }
 
-export async function runTiebreak({ request, criteria, invoke, attempts = JUDGE_ATTEMPTS }) {
+// Reproduce an audited line-cited ruling without trusting its saved decisions.
+export function resolveLineCitedRecord(record, fallbackIds = []) {
+  const spans = new Map(Object.entries(record.spans ?? {}))
+  const outcomes = new Map()
+  for (const result of record.results ?? []) {
+    if (result.verdict !== 'pass') continue
+    const audits = (record.audit_results ?? []).filter(audit => audit.id === result.id)
+    const last = audits.at(-1)
+    if (!last) throw new JudgeOutputError('cached decider pass lacks its span audit')
+    const check = (record.contradiction_checks ?? []).find(check => check.id === result.id)
+    if (last.classification === 'contradicted' && !check) throw new JudgeOutputError('cached decider contradiction lacks its targeted check')
+    const state = last.classification === 'confirmed' ? 'confirmed'
+      : last.classification === 'contradicted' && check.classification === 'confirmed' ? 'contradicted' : 'undecided'
+    outcomes.set(result.id, { state, audits: state === 'contradicted' ? [last, check] : audits })
+  }
+  return tiebreakDecisions({ results: record.results ?? [], spans, outcomes, fallbackIds })
+    .map((result, index) => ({ id: result.id, vote: record.results[index].verdict, result }))
+}
+
+export async function runTiebreak({ request, criteria, invoke, attempts = JUDGE_ATTEMPTS, validateVerdicts = () => {} }) {
   const inventory = await lineCitationInventory(request)
-  const tiebreakRequest = buildTiebreakRequest({ request, criteria, inventory })
+  let contextRequest = request
+  if (request.panel_line_citations && isEvidenceJob(request)) {
+    const files = []
+    let size = 0
+    for (const path of inventory.paths) {
+      const text = await readFile(await citationTarget(inventory.root, path), 'utf8')
+      size += text.length
+      if (size > MAX_AUDIT_PACKET_CHARS) throw new JudgeOutputError('decider evidence packet exceeds its bounded size')
+      files.push({ path, lines: text.split('\n').map((text, index) => ({ line: index + 1, text })) })
+    }
+    contextRequest = { ...request, prompt_body: [request.prompt_body ?? request.prompt,
+      '# BEGIN LINE-NUMBERED UNTRUSTED EVIDENCE', JSON.stringify(files), '# END LINE-NUMBERED UNTRUSTED EVIDENCE'].join('\n') }
+  }
+  const tiebreakRequest = buildTiebreakRequest({ request: contextRequest, criteria, inventory })
   const history = []
   const auditHistory = []
   // One call with retries for malformed or invalid output; null when exhausted.
@@ -1184,6 +1221,7 @@ export async function runTiebreak({ request, criteria, invoke, attempts = JUDGE_
   }
   const parseCited = (ids) => async (output) => {
     const parsed = parseLineCitedOutput(output, ids, request.job)
+    validateVerdicts(parsed)
     return { parsed, spans: await quoteSpans(parsed, inventory, request.job) }
   }
   const audit = async (passes, spans) => {
@@ -1216,7 +1254,7 @@ export async function runTiebreak({ request, criteria, invoke, attempts = JUDGE_
     if (!audits) return { ok: false, ...record }
     remember(audits)
 
-    // Undecided: the same third sample re-cites once.
+    // Undecided: the same decider re-cites once.
     const undecided = audits.filter(({ classification }) => classification === 'insufficient')
     if (undecided.length > 0) {
       const ids = undecided.map(({ id }) => id)
@@ -1255,14 +1293,14 @@ export async function runTiebreak({ request, criteria, invoke, attempts = JUDGE_
   }
   record.results = results
   record.spans = Object.fromEntries(spans)
-  // Each decision keeps the third sample's own vote beside the audited result.
+  // Each decision keeps the decider's own vote beside the audited result.
   record.decisions = tiebreakDecisions({ results, spans, outcomes, fallbackIds: request.requireSourceCitationsFor ?? [] })
     .map((result, index) => ({ id: result.id, vote: results[index].verdict, result }))
   return { ok: true, ...record }
 }
 
 // The closed-world packet a sample's audit saw: the files it cited.
-async function sourceMaterial(request, results) {
+export async function sourceMaterial(request, results) {
   const sourceRoot = request.input_roots?.source
   if (!sourceRoot) return []
   const files = []
