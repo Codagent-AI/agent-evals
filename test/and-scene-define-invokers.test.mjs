@@ -11,16 +11,27 @@ import { assertStrictSchema, claudeStub, stream } from './and-scene-define-helpe
 test('INT-002: simulated-user CLI is stateless, tool-less, strict and keeps host auth', async t => {
   const stub = await claudeStub(t, [stream()])
   const inputs = await loadSimulatedUserInputs()
-  const invoke = createSimulatedUser({ runDir: stub.runDir, inputs, env: { ...process.env, PATH: `${stub.runDir}:${process.env.PATH}`, CLAUDECODE: 'nested' } })
+  const invoke = createSimulatedUser({ runDir: stub.runDir, inputs, env: { ...process.env, PATH: `${stub.runDir}:${process.env.PATH}`, CLAUDECODE: 'nested', CLAUDE_CODE_OAUTH_TOKEN: 'test-oauth-secret', ANTHROPIC_API_KEY: 'test-api-secret', CLAUDE_CODE_API_KEY: 'test-claude-api-secret', CLAUDE_CONFIG_DIR: '/unwanted/config', CLAUDE_CODE_USE_BEDROCK: '1' } })
   await invoke({ conversation: [{ step: 'define.proposal', agent_message: 'Earlier?', text: 'Earlier answer' }], request: { agent_message: 'Later?' }, deadline: Date.now() + 10000 })
   const [call] = await stub.calls()
   for (const flag of ['--tools', '--setting-sources']) assert.equal(call.argv[call.argv.indexOf(flag) + 1], '')
   for (const flag of ['--strict-mcp-config', '--disable-slash-commands', '--no-session-persistence']) assert.ok(call.argv.includes(flag))
   assert.equal(call.argv[call.argv.indexOf('--model') + 1], 'claude-opus-5-5')
-  assert.deepEqual(call.files, [])
+  assert.deepEqual(call.files, ['system-prompt.md'])
+  assert.equal(call.promptMode, 0o600)
+  assert.equal(call.scratchMode, 0o700)
+  assert.equal(call.oauth, true)
+  assert.equal(call.apiKey, true)
+  assert.equal(call.claudeApiKey, true)
+  assert.equal(call.configDir, undefined)
+  assert.equal(call.bedrock, undefined)
   assert.equal(call.nested, undefined)
   assert.equal(call.home, process.env.HOME)
-  const system = call.argv[call.argv.indexOf('--system-prompt') + 1]
+  const system = call.system
+  assert.ok(call.argv.includes('--system-prompt-file'))
+  assert.ok(!call.argv.includes('--system-prompt'))
+  assert.ok(!call.argv.some(arg => arg.includes(inputs.referenceDocuments[0].text)))
+  await assert.rejects(readFile(call.argv[call.argv.indexOf('--system-prompt-file') + 1]), { code: 'ENOENT' })
   for (const doc of inputs.referenceDocuments) assert.ok(system.includes(doc.text))
   assert.ok(!system.includes('inventory_class'))
   assert.ok(!system.includes('## Done When'))
@@ -97,4 +108,45 @@ test('capacity backoff is bounded by the deadline and records each rejected call
   const usage = JSON.parse((await readFile(join(stub.runDir, 'phases/eval-owned-usage.jsonl'), 'utf8')).trim())
   assert.equal(usage.rejection, 'capacity')
   assert.equal(usage.output_tokens, 0)
+})
+
+
+test('CLI auth failures retain bounded diagnostics with credential redaction and scratch cleanup', async t => {
+  const stub = await claudeStub(t, Array.from({ length: 3 }, () => ({ stdout: '', code: 1, stderr: 'Authentication failed: token test-oauth-secret / key test-api-secret / test-claude-api-secret. ' + 'x'.repeat(2000) })))
+  const invoke = createSimulatedUser({ ...stub, env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: 'test-oauth-secret', ANTHROPIC_API_KEY: 'test-api-secret', CLAUDE_CODE_API_KEY: 'test-claude-api-secret' } })
+  await assert.rejects(invoke({ request: { agent_message: '?' }, deadline: Date.now() + 10000 }), error => {
+    assert.match(error.message, /Authentication failed/)
+    assert.ok(!error.message.includes('test-oauth-secret'))
+    assert.ok(!error.message.includes('test-api-secret'))
+    assert.ok(!error.message.includes('test-claude-api-secret'))
+    return true
+  })
+  const usage = (await readFile(join(stub.runDir, 'phases/eval-owned-usage.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse)
+  assert.ok(usage.every(record => /Authentication failed/.test(record.rejection) && record.rejection.length < 1200 && !record.rejection.includes('test-oauth-secret') && !record.rejection.includes('test-api-secret')))
+  for (const call of await stub.calls()) await assert.rejects(readFile(join(call.cwd, 'system-prompt.md')), { code: 'ENOENT' })
+})
+
+test('CLI output overflow is rejected with zero usage and only one stop signal per process', async t => {
+  const stub = await claudeStub(t, Array.from({ length: 3 }, () => ({ flood: 128 * 1024 })))
+  await assert.rejects(createSimulatedUser({ ...stub, maxOutputBytes: 64 * 1024 })({ request: { agent_message: '?' }, deadline: Date.now() + 10000 }), /output exceeded/)
+  const usage = (await readFile(join(stub.runDir, 'phases/eval-owned-usage.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse)
+  assert.equal(usage.length, 3)
+  assert.ok(usage.every(record => /output exceeded/.test(record.rejection) && record.input_tokens === 0 && record.output_tokens === 0))
+  assert.equal((await readFile(join(stub.runDir, 'signals.jsonl'), 'utf8')).trim().split('\n').length, 3)
+})
+
+
+test('cancellation during overflow cleanup does not send SIGTERM twice or leak its kill timer', async t => {
+  const stub = await claudeStub(t, [{ flood: 128 * 1024, ignoreTerm: true }])
+  const controller = new AbortController()
+  const pending = assert.rejects(createSimulatedUser({ ...stub, maxOutputBytes: 64 * 1024 })({ request: { agent_message: '?' }, signal: controller.signal, deadline: Date.now() + 10000 }), /cancelled/)
+  for (let attempt = 0; attempt < 200; attempt++) {
+    try { await readFile(join(stub.runDir, 'signals.jsonl')); break }
+    catch (error) { if (error.code !== 'ENOENT') throw error }
+    await new Promise(resolve => setTimeout(resolve, 10))
+  }
+  controller.abort()
+  await pending
+  assert.equal((await readFile(join(stub.runDir, 'signals.jsonl'), 'utf8')).trim().split('\n').length, 1)
+  assert.equal((await stub.calls()).length, 1)
 })

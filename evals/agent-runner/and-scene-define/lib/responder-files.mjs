@@ -23,6 +23,35 @@ export async function optionalText(path) {
     return await readFile(path, 'utf8')
   } catch (error) { if (error.code === 'ENOENT') return null; throw error }
 }
+export async function readConversation(path) {
+  const text = await optionalText(path)
+  if (text === null) return []
+  const lines = text.split('\n')
+  const last = lines.findLastIndex(line => line.trim())
+  const records = []
+  for (let index = 0; index <= last; index++) {
+    if (!lines[index].trim()) continue
+    try { records.push(JSON.parse(lines[index])) }
+    catch (error) {
+      if (index !== last) throw error
+      // A crash during append can tear only the final record. Recover the
+      // complete prefix before any new append or reply publication.
+      const prefix = lines.slice(0, index).join('\n') + (index ? '\n' : '')
+      const file = await open(path, 'r+')
+      try { await file.truncate(Buffer.byteLength(prefix)); await file.sync() }
+      finally { await file.close() }
+      return records
+    }
+  }
+  // A write may also finish the JSON but stop before its newline. Preserve the
+  // record and finish the delimiter so a subsequent append cannot join records.
+  if (text && !text.endsWith('\n')) {
+    const file = await open(path, 'a')
+    try { await file.writeFile('\n'); await file.sync() }
+    finally { await file.close() }
+  }
+  return records
+}
 export function deadlineMs(deadline) {
   const value = deadline instanceof Date ? deadline.getTime() : deadline
   if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error('a finite absolute deadline is required')

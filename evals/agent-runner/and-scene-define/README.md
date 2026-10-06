@@ -83,10 +83,17 @@ decision policy is `hidden/simulated-user-policy.md`. `loadSimulatedUserInputs()
 checks the pins and constructs a system prompt from an explicit allowlist of
 proposal, specs, design and test plan; citation supplements, task files, inventory
 classes and rubric never enter the prompt. Only the system prompt hash is retained
-in usage evidence. Each call uses an empty temporary directory, host Claude auth,
-no settings sources, no MCP servers, no real tools and no session persistence.
+in usage evidence. Each call starts in a private temporary directory (0700), writes
+the system prompt to a file (0600), and passes its path with `--system-prompt-file`
+so the reference text never enters process arguments. The directory and prompt
+are removed after the call. Host auth is retained, including
+`CLAUDE_CODE_OAUTH_TOKEN` and `CLAUDE_CODE_API_KEY`; other `CLAUDE*` behaviour
+overrides are removed. Calls use no settings sources, no MCP servers, no real
+tools and no session persistence. Combined stdout and stderr buffering is capped
+at 10 MiB; overflow terminates the child and records a rejected call.
 Every call appends to `phases/eval-owned-usage.jsonl`; rejected calls record zero
-tokens and a rejection reason. Ordinary failures allow three attempts; schema
+tokens and a rejection reason, with a bounded, credential-redacted stderr excerpt
+for ordinary failures. Ordinary failures allow three attempts; schema
 errors fail immediately and capacity errors back off until the caller's deadline.
 
 The controller can call `runResponder({ runDir, exchangeDir, deadline, signal,
@@ -105,7 +112,10 @@ already recorded ID should pass `runnerRunId`; any discrepancy fails. Conversati
 identity uses JSON `step`, `step_id`, `attempt`, and `turn`, regardless of filename.
 `conversation.jsonl` is fsynced before atomic reply publication (0644). Restarting
 replays recorded replies without another model call, including after a stop in
-the write-ahead window. Run only one responder per artifact directory.
+the write-ahead window. A torn final JSON record is truncated and fsynced before
+the pending request is processed again; corruption in earlier records fails the
+run. A complete final record missing only its newline is retained and durably
+separated from later appends. Run only one responder per artifact directory.
 
 Run the optional maintainer policy diagnostic manually (30 paid Claude calls):
 

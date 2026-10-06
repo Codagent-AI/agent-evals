@@ -20,9 +20,22 @@ const fs = require('node:fs'); const path = require('node:path');
 const root = ${JSON.stringify(runDir)};
 const callsPath = path.join(root, 'calls.jsonl');
 const n = fs.existsSync(callsPath) ? fs.readFileSync(callsPath,'utf8').trim().split('\\n').length : 0;
-fs.appendFileSync(callsPath, JSON.stringify({argv:process.argv.slice(2),cwd:process.cwd(),files:fs.readdirSync('.'),nested:process.env.CLAUDECODE,home:process.env.HOME})+'\\n');
+const promptFile = process.argv[process.argv.indexOf('--system-prompt-file') + 1];
+const prompt = process.argv.includes('--system-prompt-file') ? {system:fs.readFileSync(promptFile,'utf8'),promptMode:fs.statSync(promptFile).mode & 0o777} : {};
+fs.appendFileSync(callsPath, JSON.stringify({...prompt,scratchMode:fs.statSync('.').mode & 0o777,oauth:process.env.CLAUDE_CODE_OAUTH_TOKEN === 'test-oauth-secret',apiKey:process.env.ANTHROPIC_API_KEY === 'test-api-secret',claudeApiKey:process.env.CLAUDE_CODE_API_KEY === 'test-claude-api-secret',configDir:process.env.CLAUDE_CONFIG_DIR,bedrock:process.env.CLAUDE_CODE_USE_BEDROCK,argv:process.argv.slice(2),cwd:process.cwd(),files:fs.readdirSync('.'),nested:process.env.CLAUDECODE,home:process.env.HOME})+'\\n');
 const out = JSON.parse(fs.readFileSync(path.join(root,'outputs.json')))[n];
-process.stdout.write(out.stdout); process.stderr.write(out.stderr || ''); process.exitCode = out.code || 0;
+if (out.flood) {
+  process.on('SIGTERM', () => {
+    fs.appendFileSync(path.join(root,'signals.jsonl'), 'SIGTERM\\n');
+    process.stdout.write('x'.repeat(out.flood)); process.stderr.write('y'.repeat(out.flood));
+    if (!out.ignoreTerm) setTimeout(() => process.exit(0), 50);
+  });
+  process.stdout.write('x'.repeat(out.flood));
+  process.stderr.write('y'.repeat(out.flood));
+  setInterval(() => {}, 1000);
+} else {
+  process.stdout.write(out.stdout); process.stderr.write(out.stderr || ''); process.exitCode = out.code || 0;
+}
 `)
   await chmod(command, 0o755)
   return { runDir, command, calls: async () => (await readFile(join(runDir, 'calls.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse) }

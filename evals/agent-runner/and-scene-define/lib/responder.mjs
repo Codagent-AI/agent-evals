@@ -2,7 +2,7 @@ import { readdir, readFile, mkdir, lstat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { loadSimulatedUserInputs } from './simulated-user-inputs.mjs'
 import { createSimulatedUser, validateReply } from './simulated-user.mjs'
-import { appendDurable, atomicJson, optionalText, deadlineMs, ElapsedTimeLimit, sleep } from './responder-files.mjs'
+import { appendDurable, atomicJson, optionalText, readConversation, deadlineMs, ElapsedTimeLimit, sleep } from './responder-files.mjs'
 export function exchangeIdentity(request) {
   return JSON.stringify([request.step, request.step_id, request.attempt, request.turn])
 }
@@ -23,8 +23,7 @@ export async function runResponder({ runDir, exchangeDir, deadline, invoke, inpu
     const state = stateText ? JSON.parse(stateText) : {}
     if (runnerRunId && state.runner_run_id && runnerRunId !== state.runner_run_id) throw new Error('recorded Runner run_id mismatch')
     runnerRunId ??= state.runner_run_id
-    const conversationText = await optionalText(conversationPath)
-    const conversation = conversationText ? conversationText.trim().split('\n').filter(Boolean).map(JSON.parse) : []
+    const conversation = await readConversation(conversationPath)
     const recorded = new Map()
     for (const exchange of conversation) {
       validateRequest(exchange)

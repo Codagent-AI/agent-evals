@@ -173,3 +173,52 @@ test('elapsed limit aborts the pending exchange and preserves already consumed r
   assert.equal((await reply(dirs.exchangeDir, 'a-old')).text, 'Opening')
   assert.equal((await reply(dirs.exchangeDir, 'z-pending')).reason, 'elapsed-time limit')
 })
+
+
+test('torn final conversation records are durably truncated before regenerating the pending reply', async t => {
+  for (const suffix of ['{"schema_version":1,"text":"torn', '{"schema_version":1,"text":"torn\n\n']) {
+    const dirs = await setup(t)
+    const prior = { ...request(1), text: 'Opening with Unicode 🌳', reply_type: 'answer' }
+    const prefix = JSON.stringify(prior) + '\n'
+    await writeFile(join(dirs.runDir, 'conversation.jsonl'), prefix + suffix)
+    await publish(dirs.exchangeDir, 'pending', request(2))
+    const controller = new AbortController()
+    let calls = 0
+    const done = runResponder({ ...dirs, signal: controller.signal, deadline: Date.now() + 10000, invoke: async ({ conversation }) => {
+      calls++
+      assert.deepEqual(conversation, [prior])
+      assert.equal(await readFile(join(dirs.runDir, 'conversation.jsonl'), 'utf8'), prefix)
+      return { text: 'Recovered', reply_type: 'answer' }
+    } })
+    assert.equal((await reply(dirs.exchangeDir, 'pending')).text, 'Recovered')
+    controller.abort(); assert.equal((await done).status, 'stopped')
+    assert.equal(calls, 1)
+    const records = (await readFile(join(dirs.runDir, 'conversation.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse)
+    assert.equal(records.length, 2)
+    assert.equal(records[0].text, prior.text)
+    assert.equal(records[1].text, 'Recovered')
+  }
+})
+
+test('corruption in a non-final conversation line fails closed without truncation', async t => {
+  const dirs = await setup(t)
+  const text = '{bad json}\n' + JSON.stringify({ ...request(1), text: 'Opening', reply_type: 'answer' }) + '\n'
+  await writeFile(join(dirs.runDir, 'conversation.jsonl'), text)
+  const outcome = await runResponder({ ...dirs, deadline: Date.now() + 10000 })
+  assert.equal(outcome.status, 'evaluation-harness-failed')
+  assert.equal(await readFile(join(dirs.runDir, 'conversation.jsonl'), 'utf8'), text)
+})
+
+test('a complete final record missing its newline is retained and separated from the next append', async t => {
+  const dirs = await setup(t)
+  const prior = { ...request(1), text: 'Opening', reply_type: 'answer' }
+  await writeFile(join(dirs.runDir, 'conversation.jsonl'), JSON.stringify(prior))
+  await publish(dirs.exchangeDir, 'pending', request(2))
+  const controller = new AbortController()
+  const done = runResponder({ ...dirs, signal: controller.signal, deadline: Date.now() + 10000, invoke: async () => ({ text: 'Next', reply_type: 'answer' }) })
+  assert.equal((await reply(dirs.exchangeDir, 'pending')).text, 'Next')
+  controller.abort(); await done
+  const records = (await readFile(join(dirs.runDir, 'conversation.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse)
+  assert.equal(records.length, 2)
+  assert.equal(records[0].text, 'Opening')
+})
