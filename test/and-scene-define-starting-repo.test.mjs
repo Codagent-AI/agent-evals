@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, mkdir, readFile, writeFile, rm, readdir } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, writeFile, rm, readdir, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { materialize, verifySnapshot } from '../evals/agent-runner/and-scene-define/lib/starting-repo.mjs'
@@ -69,6 +69,26 @@ test('canary check reports every planted pattern in staging, tracked skills, and
   await writeFile(join(skillsDir, 'SKILL.md'), 'Clean worktree\n')
   matches = await scanCanaries({ stagedDir, skillsDir })
   assert(matches.some(match => match.file.includes('SKILL.md') && match.pattern === 'reference-skill'))
+})
+
+test('tracked skill symlinks to tracked files inside the checkout are accepted; others are refused', async t => {
+  const root = await temporary(t)
+  const skillsDir = join(root, 'skills')
+  await mkdir(join(skillsDir, 'docs'), { recursive: true })
+  git(skillsDir, 'init')
+  await writeFile(join(skillsDir, 'AGENTS.md'), 'Clean instructions\n')
+  await symlink('../AGENTS.md', join(skillsDir, 'docs/CLAUDE.md'))
+  const commit = () => { git(skillsDir, 'add', '-A'); git(skillsDir, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'c') }
+  commit()
+  assert.deepEqual(await scanCanaries({ skillsDir }), [])
+  await writeFile(join(skillsDir, 'AGENTS.md'), 'and-scene:presentation\n'); commit()
+  assert((await scanCanaries({ skillsDir })).some(match => match.file.endsWith('AGENTS.md') && match.pattern === 'reference-skill'))
+  await writeFile(join(skillsDir, 'large.png'), Buffer.alloc(3 * 1024 * 1024, 7)); commit()
+  assert((await scanCanaries({ skillsDir })).some(match => match.file.endsWith('AGENTS.md')))
+  await rm(join(skillsDir, 'docs/CLAUDE.md')); await symlink('/etc/hosts', join(skillsDir, 'docs/CLAUDE.md')); commit()
+  await assert.rejects(scanCanaries({ skillsDir }), /symlink/)
+  await rm(join(skillsDir, 'docs/CLAUDE.md')); await symlink('../../outside.md', join(skillsDir, 'docs/CLAUDE.md')); commit()
+  await assert.rejects(scanCanaries({ skillsDir }), /symlink/)
 })
 
 test('bundle blobs are scanned even when compressed', async t => {

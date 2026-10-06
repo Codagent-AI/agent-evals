@@ -1,9 +1,12 @@
 import { mkdtemp, readFile, rm, lstat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, basename } from 'node:path'
+import { join, basename, posix } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { SUITE_ROOT, readJson, filesUnder } from './files.mjs'
 import { repoGit } from './starting-repo.mjs'
+
+// Tracked skill assets such as screenshots exceed execFileSync's 1 MiB default.
+const MAX_BLOB_BYTES = 64 * 1024 * 1024
 
 export function compilePatterns(data) {
   if (!Number.isInteger(data.version) || data.version < 1) throw new Error('pattern list requires a positive version')
@@ -68,12 +71,21 @@ export async function scanCanaries({ stagedDir, skillsDir, credentialFiles = [],
     // Scan committed blobs, not just mutable working-tree copies. Only HEAD's
     // tracked files are installed; historical and untracked files aren't inputs.
     const entries = repoGit(skillsDir, ['ls-tree', '-r', '-z', 'HEAD']).split('\0').filter(Boolean)
-    for (const entry of entries) {
-      const [metadata, path] = entry.split('\t')
-      const [mode, , oid] = metadata.split(' ')
+      .map(entry => { const [metadata, path] = entry.split('\t'); const [mode, , oid] = metadata.split(' '); return { mode, oid, path } })
+    const regular = new Set(entries.filter(x => ['100644', '100755'].includes(x.mode)).map(x => x.path))
+    for (const { mode, oid, path } of entries) {
+      if (mode === '120000') {
+        // A tracked link is accepted only when it names a tracked regular file
+        // inside the checkout, which this loop scans in its own right.
+        const target = repoGit(skillsDir, ['cat-file', 'blob', oid])
+        const resolved = posix.normalize(posix.join(posix.dirname(path), target))
+        if (posix.isAbsolute(target) || resolved.startsWith('../') || !regular.has(resolved)) throw new Error(`refusing forwarded symlink outside tracked skills: ${path} -> ${target}`)
+        scan(join(skillsDir, path), target)
+        continue
+      }
       if (!['100644', '100755'].includes(mode)) throw new Error(`unsupported tracked skill input: ${path}`)
       const file = join(skillsDir, path)
-      scan(file, repoGit(skillsDir, ['cat-file', 'blob', oid]))
+      scan(file, repoGit(skillsDir, ['cat-file', 'blob', oid], { maxBuffer: MAX_BLOB_BYTES }))
       if ((await lstat(file)).isSymbolicLink()) throw new Error(`refusing forwarded symlink: ${file}`)
       scan(file, await readFile(file))
     }
