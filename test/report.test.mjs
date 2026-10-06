@@ -91,6 +91,24 @@ test('incomplete step rollup labels resolved verification as partial', () => {
   assert.doesNotMatch(html, /<td>unavailable<\/td><td>\$2\.00<\/td><td>estimated<\/td>/)
 })
 
+test('overturned failures render escaped source spans and legacy results omit the section', () => {
+  const legacy = renderReport(result())
+  assert.doesNotMatch(legacy, /Overturned failures/)
+  const html = renderReport(result({ second_opinions: { checked: 1, overturned: 1,
+    overturned_points: 1, entries: [{ kind: 'criterion', id: 'demo-supported-navigation',
+      decision: 'overturn', raw_rationale: '<raw>', measurement_fault: '<fault>',
+      replay: { passed: true, observations: [{ stepIndex: 1 }], trace: ['pressed'] },
+      citations: [{ path: 'src/<demo>.tsx', start_line: 1, end_line: 4 }] }] } }))
+  assert.match(html, /Overturned failures/)
+  assert.match(html, /src\/&lt;demo&gt;\.tsx:1-4/)
+  assert.match(html, /stepIndex/)
+  assert.match(html, /Raw verdict/)
+  assert.match(html, /Second-opinion verdict/)
+  assert.doesNotMatch(html, /<fault>/)
+  assert.throws(() => renderReport(result({ second_opinions: { checked: 1, overturned: 2,
+    entries: [] } })), ReportConsistencyError)
+})
+
 test('an adjudicated gate renders its revised record as current and its harness output as raw data', () => {
   const adjudicated = result()
   adjudicated.score.gates = [{

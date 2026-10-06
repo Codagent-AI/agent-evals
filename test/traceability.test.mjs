@@ -77,7 +77,14 @@ test('only criteria the fixture does not describe are eval-owned', async () => {
     'testing-evidence-usable-proof',
     'verification-preview-process-ownership',
   ])
-  assert.ok(!rubric.eval_owned_values.some(({ value }) => /\d\s*[×x]\s*\d/.test(value)), 'a fixture dimension must be cited, not exempted')
+  // A value the fixture states must be cited, never exempted as eval-owned.
+  const fixture = await loadFixtureSnapshot()
+  const fixtureText = normalizeTraceabilityText(fixture.files.map(({ content }) => content).join('\n')).replace(/\s+/g, '')
+  for (const { value } of rubric.eval_owned_values) {
+    if (/\d\s*[×x]\s*\d/.test(value)) {
+      assert.equal(fixtureText.includes(normalizeTraceabilityText(value).replace(/\s+/g, '')), false, `${value} is a fixture dimension and must be cited, not exempted`)
+    }
+  }
 })
 
 test('traceability names missing source, missing quote, and uncited guidance values', () => {

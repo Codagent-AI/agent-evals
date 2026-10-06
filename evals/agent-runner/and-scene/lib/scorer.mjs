@@ -17,7 +17,7 @@
 // through diagnostically and never touches a point.
 import { componentApplicable, rubricCriteria } from './rubric.mjs'
 
-export const SCORE_SCHEMA_VERSION = 4
+export const SCORE_SCHEMA_VERSION = 5
 
 const VERDICTS = ['pass', 'fail']
 
@@ -156,7 +156,7 @@ function scoreSubcomponent(component, subcomponent, resultsBySource, resolutions
   const decided = (result) => result?.verdict != null
   const criteria = subcomponent.criteria.map((id) => {
     const resolution = resolutionOf(id)
-    const result = resolution?.result ?? indexed?.get(id) ?? null
+    const result = resolution ? resolution.result : (indexed?.get(id) ?? null)
     return {
       id,
       points_possible: criterionPoints,
@@ -169,6 +169,7 @@ function scoreSubcomponent(component, subcomponent, resultsBySource, resolutions
       source_citations: result?.citations ?? [],
       fallback_job: resolution?.fallback_job ?? null,
       not_observed: resolution?.not_observed ?? null,
+      ...(resolution?.second_opinion ? { second_opinion: resolution.second_opinion } : {}),
     }
   })
   const passed = criteria.filter(({ verdict }) => verdict === 'pass').length
@@ -236,26 +237,58 @@ function scoreComponent(component, resultsBySource, applicable, resolutions) {
   }
 }
 
-function scoreGates(gates, results) {
+function scoreGates(gates, results, resolutions = new Map(), secondOpinions = {}, pending = new Set()) {
   if (results === null || results === undefined) {
     return { gates: gates.map(({ id, requirement }) => ({ id, requirement, verdict: null, rationale: null, evidence: [], observed: false })), passed: null }
   }
   const indexed = indexResults('hard-gates', results, gates.map(({ id }) => id), { allowUnobserved: true })
   const rows = gates.map(({ id, requirement }) => {
     const result = indexed.get(id)
+    const opinion = secondOpinions[id]
+    const rawBrowserGate = id === 'verification-sample-outline' ? result : null
+    const outlineInputs = ['demo-route-and-registration', 'demo-nine-step-content-and-order']
+      .map((key) => resolutions.get(key)?.result?.verdict ?? null)
+    const verdict = pending.has(id) ? null : id === 'verification-sample-outline'
+      ? (outlineInputs.includes(null) ? null : (outlineInputs.every((value) => value === 'pass') ? 'pass' : 'fail'))
+      : (opinion?.verdict ?? result.verdict ?? null)
     return {
       id,
       requirement,
-      verdict: result.verdict ?? null,
+      verdict,
+      ...(opinion ? { raw_verdict: result.verdict, second_opinion: opinion } : {}),
+      ...(rawBrowserGate ? { raw_browser_gate: rawBrowserGate } : {}),
       rationale: result.rationale ?? null,
       evidence: result.evidence ?? [],
-      observed: result.verdict !== null && result.verdict !== undefined,
+      observed: verdict !== null,
     }
   })
   // A gate whose evidence was never observed makes the whole gate set
   // unavailable. It is never counted as a gate the candidate failed.
   if (rows.some(({ observed }) => !observed)) return { gates: rows, passed: null }
   return { gates: rows, passed: rows.every(({ verdict }) => verdict === 'pass') }
+}
+
+export function resolveDeterministic({ rubrics, deterministic = [], judges = {}, secondOpinions = {}, pendingSecondOpinions = [] }) {
+  const automated = rubrics.automated.rubric
+  const owner = new Map(deterministic.map((entry) => [entry.id, entry]))
+  const pending = new Set(pendingSecondOpinions.map((entry) => typeof entry === 'string' ? entry : entry.id))
+  const resolutions = new Map()
+  for (const id of rubricCriteria(automated).filter(({ evaluator }) => evaluator === 'deterministic-browser').map(({ id }) => id)) {
+    const entry = owner.get(id)
+    if (!entry) continue
+    const fallback = automated.fallbacks?.[id]
+    const judge = entry.verdict === null ? judges?.[fallback?.job]?.find((item) => item.id === id) : null
+    const source = entry.verdict === null ? (judge ? 'fallback' : 'unresolved') : 'owner'
+    const result = pending.has(id) ? null : (judge ?? (entry.verdict !== null ? entry : null))
+    const opinion = secondOpinions[id]
+    resolutions.set(id, {
+      result: opinion && result?.verdict === 'fail' ? { ...result, verdict: opinion.verdict } : result,
+      source, fallback_job: source === 'owner' ? null : fallback?.job ?? null,
+      not_observed: entry.verdict === null ? entry : null,
+      second_opinion: opinion ?? null,
+    })
+  }
+  return resolutions
 }
 
 export function scoreProduct({
@@ -266,6 +299,9 @@ export function scoreProduct({
   humanReview = null,
   harness = null,
   mode = 'agent-runner',
+  secondOpinions = {},
+  pendingSecondOpinions = [],
+  recordSecondOpinions = true,
 }) {
   const automated = rubrics.automated.rubric
   const humanRubric = rubrics.human.rubric
@@ -300,25 +336,15 @@ export function scoreProduct({
     resultsBySource.set(job, indexResults(job, results, [...rows.filter((row) => row.job === job).map(({ id }) => id), ...fallbackForJob]))
   }
 
-  const resolutions = new Map()
-  const deterministicResults = resultsBySource.get('deterministic-browser')
-  for (const id of deterministicIds) {
-    const owner = deterministicResults?.get(id)
-    if (owner?.verdict !== null) resolutions.set(id, { result: owner, source: 'owner' })
-    else if (owner) {
-      const fallback = automated.fallbacks?.[id]
-      const judge = fallback ? resultsBySource.get(fallback.job)?.get(id) : null
-      resolutions.set(id, judge
-        ? { result: judge, source: 'fallback', fallback_job: fallback.job, not_observed: owner }
-        : { result: null, source: 'unresolved', fallback_job: fallback?.job ?? null, not_observed: owner })
-    }
-  }
+  const resolutions = resolveDeterministic({ rubrics, deterministic: deterministic ?? [], judges,
+    secondOpinions, pendingSecondOpinions })
 
   const scoredComponents = automated.components.map((component) => (
     scoreComponent(component, resultsBySource, applicableComponents.has(component.id), resolutions)
   ))
   const components = scoredComponents.map(({ observed_shares: _shares, ...component }) => component)
-  const gateScore = scoreGates(automated.gates, gates)
+  const gateScore = scoreGates(automated.gates, gates, resolutions, secondOpinions,
+    new Set(pendingSecondOpinions.map((entry) => typeof entry === 'string' ? entry : entry.id)))
   const human = validateHumanReview(humanReview, humanRubric)
 
   const automatedComplete = components.every(({ complete }) => complete)
@@ -427,6 +453,13 @@ export function scoreProduct({
     gates_passed: gateScore.passed,
     automated_subtotal: automatedSubtotal,
     fallback: { criteria: fallbackCriteria.length, points: fallbackPoints },
+    ...(mode === 'reference-baseline' || !recordSecondOpinions ? {} : { second_opinions: {
+      checked: Object.keys(secondOpinions).length,
+      overturned: Object.values(secondOpinions).filter(({ decision }) => decision === 'overturn').length,
+      overturned_points: components.flatMap(({ subcomponents }) => subcomponents.flatMap(({ criteria }) => criteria))
+        .filter(({ second_opinion }) => second_opinion?.decision === 'overturn')
+        .reduce((sum, { points_possible }) => sum + points_possible, 0),
+    } }),
     automated_pass_threshold: automated.automated_pass_threshold,
     automated_pass: automatedPass,
     automated_failures: automatedFailures,

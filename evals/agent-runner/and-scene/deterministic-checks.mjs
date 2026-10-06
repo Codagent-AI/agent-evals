@@ -18,6 +18,7 @@ const MAX_SCAN_ENTRIES = 2000
 
 // The canonical outline is normative and shared with the browser evaluation.
 const SAMPLE_TITLES = DEMO_STEP_TITLES
+const ATTRIBUTION_REPOSITORY = 'https://github.com/Codagent-AI/and-scene'
 
 async function textFiles(root, directory, budget) {
   const base = join(root, directory)
@@ -128,14 +129,29 @@ export async function runDeterministicChecks(root, { screenshotManifest, scanBud
     }
   }
 
-  const attribution = source.includes('made by and-scene') && source.includes('github.com/Codagent-AI/and-scene')
+  // The fixture names the and-scene GitHub repository as the default target;
+  // that is the fixture's own repository. Other GitHub targets are reported by
+  // name so a judge sees a guessed owner rather than only a missing link.
+  const githubTargets = [...new Set([...source.matchAll(/https?:\/\/(?:www\.)?github\.com\/[\w.-]+\/[\w.-]+/gi)]
+    .map(([url]) => url.replace(/\.git$/i, '').replace(/[.]+$/, '')))].sort()
+  const attributionTarget = githubTargets.some((url) => (
+    url.replace(/^http:/i, 'https:').replace(/\/\/www\./i, '//').toLowerCase() === ATTRIBUTION_REPOSITORY.toLowerCase()
+  ))
+  const attributionLabel = source.includes('made by and-scene')
+  const attribution = attributionLabel && attributionTarget
+  const attributionNote = attribution
+    ? `Default attribution label and target ${ATTRIBUTION_REPOSITORY} are present.`
+    : [
+        attributionLabel ? null : 'Default made by and-scene attribution label is missing.',
+        attributionTarget ? null : `Default attribution target is not the and-scene repository: expected ${ATTRIBUTION_REPOSITORY}; GitHub targets found: ${githubTargets.join(', ') || 'none'}.`,
+      ].filter(Boolean).join(' ')
   const stableActiveHook = (text) => /data-(?:[a-z0-9-]*-)?active\b|is-active\b/i.test(text)
   const activeState = source.includes('aria-current') && stableActiveHook(source)
   const localHelper = Boolean(screenshotFile) && screenshot.includes('playwright')
   const overlap = hasTokens(screenshot, ['overlap', 'warning']) && (screenshot.includes('data-allow-overlap') || screenshot.includes('allow-overlap'))
   const activeWarning = hasTokens(screenshot, ['getComputedStyle', 'active', 'inactive', 'warning'])
     && (screenshot.includes('aria-current') || stableActiveHook(screenshot))
-  const attributionTarget = screenshot.includes('made by and-scene') || screenshot.includes('data-presentation-attribution')
+  const attributionWarningTarget = screenshot.includes('made by and-scene') || screenshot.includes('data-presentation-attribution')
   const attributionMissing = /missing[^\n]{0,40}attribution/i.test(screenshot)
     || /!\s*(?:isVisible\()?attribution/.test(screenshot)
   const attributionSize = screenshot.includes('font-size') || screenshot.includes('fontSize')
@@ -143,12 +159,12 @@ export async function runDeterministicChecks(root, { screenshotManifest, scanBud
     || screenshot.includes('textDecoration')
     || screenshot.includes('defaultLink')
     || screenshot.includes('browser-default')
-  const attributionWarning = attributionTarget && attributionMissing && attributionSize && attributionDefault && screenshot.toLowerCase().includes('warning')
+  const attributionWarning = attributionWarningTarget && attributionMissing && attributionSize && attributionDefault && screenshot.toLowerCase().includes('warning')
 
   const scenarios = [
     result('verification-sample-outline', sampleComplete, sampleComplete ? 'Canonical nine-step sample is present.' : 'Canonical nine-step sample or nine-frame evidence is incomplete.', sourceFiles.filter(({ text }) => SAMPLE_TITLES.some((title) => text.includes(title))).map(({ path }) => path)),
     result('verification-ipv4-loopback', verify.includes('127.0.0.1') && !verify.includes('localhost'), verify.includes('127.0.0.1') && !verify.includes('localhost') ? 'Verification consistently names IPv4 loopback.' : 'Verification must use 127.0.0.1 and must not use localhost.', ['scripts/verify.mjs']),
-    result('attribution-default-link', attribution, attribution ? 'Default attribution label and target are present.' : 'Default made by and-scene GitHub attribution is missing.', sourceFiles.filter(({ text }) => text.includes('made by and-scene')).map(({ path }) => path)),
+    result('attribution-default-link', attribution, attributionNote, sourceFiles.filter(({ text }) => text.includes('made by and-scene')).map(({ path }) => path)),
     result('navigation-active-state', activeState, activeState ? 'Semantic current state and stable active hook are present.' : 'Active navigation needs aria-current plus a stable active hook.', sourceFiles.filter(({ text }) => text.includes('aria-current')).map(({ path }) => path)),
     result('quality-project-local-screenshot-helper', localHelper, localHelper ? 'Project-local Playwright screenshot helper is present.' : 'Project-local Playwright screenshot helper is missing.', screenshotFile ? [screenshotFile.path] : []),
     result('visual-helper-overlap-warning', overlap, overlap ? 'Overlap warning and allow-overlap marker are implemented.' : 'Overlap warning or explicit allow-overlap marker is missing.', screenshotFile ? [screenshotFile.path] : []),

@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, realpath, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { hashString } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
+import { hashJson, hashString } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
 import { loadCandidateRescoreSource } from '../evals/agent-runner/and-scene/lib/rescore.mjs'
 
 const fixtureSha = '1'.repeat(40)
@@ -152,7 +152,7 @@ async function sourceRun({
     join(sourceDir, 'phases/delivery-verification.json'),
     `${JSON.stringify(delivery)}\n`,
   )
-  return { sourceDir, sessionDir, state, delivery }
+  return { sourceDir, sessionDir, state, delivery, evidence }
 }
 
 test('a completed candidate run imports its immutable change name for evaluator-only rescoring', async () => {
@@ -228,5 +228,127 @@ test('candidate rescore rejects a missing or malformed workflow change name', as
   await assert.rejects(
     () => loadCandidateRescoreSource({ sourceDir: malformed.sourceDir }),
     /exactly one valid change_name/i,
+  )
+})
+
+// Factory runs keep the acceptance evidence under evidence/candidate/artifacts
+// but drop .runtime/agent-runner-projects, where the recorded session lived.
+async function retainEvidenceOnly(context, { corruptRetained = false, staleManifest = false, worktreeFile = null } = {}) {
+  const artifacts = []
+  if (worktreeFile) {
+    const retained = 'evidence/candidate/artifacts/candidate-w-SKILL.md'
+    await mkdir(join(context.sourceDir, 'evidence/candidate/artifacts'), { recursive: true })
+    await writeFile(join(context.sourceDir, retained), worktreeFile.retained ?? worktreeFile.bytes)
+    artifacts.push({ id: 'candidate-w', role: 'referenced-material',
+      origin: { namespace: 'candidate-worktree', relative_path: 'skills/presentation/SKILL.md' },
+      path: retained, sha256: hashString(worktreeFile.retained ?? worktreeFile.bytes) })
+    context.delivery.acceptance_artifacts.push({ role: 'session-audit',
+      path: '/artifacts/.runtime/candidate-worktree/skills/presentation/SKILL.md',
+      sha256: hashString(worktreeFile.bytes) })
+    await writeFile(join(context.sourceDir, 'phases/delivery-verification.json'), `${JSON.stringify(context.delivery)}\n`)
+  }
+  await mkdir(join(context.sourceDir, 'evidence/candidate/artifacts'), { recursive: true })
+  for (const [role, relativePath, bytes] of context.evidence) {
+    const retained = `evidence/candidate/artifacts/candidate-${artifacts.length}-${relativePath.split('/').at(-1)}`
+    await writeFile(join(context.sourceDir, retained), corruptRetained && artifacts.length === 0 ? 'tampered' : bytes)
+    artifacts.push({
+      id: `candidate-${artifacts.length}`,
+      role,
+      origin: { namespace: 'runner-session', relative_path: `output/${relativePath}` },
+      path: retained,
+      sha256: hashString(bytes),
+    })
+  }
+  const referenced = 'Referenced session report.\n'
+  await writeFile(join(context.sourceDir, 'evidence/candidate/artifacts/candidate-x-session-report.md'), referenced)
+  artifacts.push({
+    id: 'candidate-x',
+    role: 'session-audit',
+    origin: { namespace: 'runner-session', relative_path: 'output/reports/session-report.md' },
+    path: 'evidence/candidate/artifacts/candidate-x-session-report.md',
+    sha256: hashString(referenced),
+  })
+  const manifest = { schema_version: 1, ownership: 'candidate-produced', artifacts }
+  manifest.manifest_sha256 = hashJson(manifest)
+  await writeFile(join(context.sourceDir, 'evidence/candidate/manifest.json'), `${JSON.stringify(manifest)}\n`)
+  context.state.delivery.acceptance.manifest_sha256 = staleManifest ? '8'.repeat(64) : manifest.manifest_sha256
+  await writeFile(join(context.sourceDir, 'run-state.json'), `${JSON.stringify(context.state)}\n`)
+  await rm(context.sessionDir, { recursive: true, force: true })
+}
+
+test('a source whose runner session is gone is rescored from hash-matching retained evidence', async () => {
+  const context = await sourceRun()
+  await retainEvidenceOnly(context)
+  const stagingDir = join(await mkdtemp(join(tmpdir(), 'and-scene-rescore-staging-')), 'session')
+
+  const imported = await loadCandidateRescoreSource({ sourceDir: context.sourceDir, stagingDir })
+
+  assert.equal(imported.runner.session_dir, stagingDir)
+  assert.equal(imported.session_reconstruction.source, 'evidence/candidate/artifacts')
+  assert.equal(imported.session_reconstruction.files, context.evidence.length + 1)
+  for (const [, relativePath, bytes] of context.evidence) {
+    assert.equal(await readFile(join(stagingDir, 'output', relativePath), 'utf8'), bytes)
+  }
+  assert.equal(await readFile(join(stagingDir, 'output/reports/session-report.md'), 'utf8'), 'Referenced session report.\n')
+  assert.ok(imported.delivery.acceptance.artifacts.every(({ path }) => path.startsWith(stagingDir)))
+  // Provenance names the evidence, not where its bytes were read from.
+  const original = await loadCandidateRescoreSource({ sourceDir: (await sourceRun()).sourceDir })
+  assert.equal(
+    hashJson(imported.delivery.acceptance.artifacts.map(({ role, sha256 }) => ({ role, sha256 }))),
+    hashJson(original.delivery.acceptance.artifacts.map(({ role, sha256 }) => ({ role, sha256 }))),
+  )
+})
+
+test('retained evidence whose bytes do not match the recorded hash is refused', async () => {
+  const context = await sourceRun()
+  await retainEvidenceOnly(context, { corruptRetained: true })
+  const stagingDir = join(await mkdtemp(join(tmpdir(), 'and-scene-rescore-staging-')), 'session')
+
+  await assert.rejects(
+    () => loadCandidateRescoreSource({ sourceDir: context.sourceDir, stagingDir }),
+    /acceptance evidence hash/i,
+  )
+})
+
+test('a retained evidence manifest that differs from the recorded manifest hash is refused', async () => {
+  const context = await sourceRun()
+  await retainEvidenceOnly(context, { staleManifest: true })
+  const stagingDir = join(await mkdtemp(join(tmpdir(), 'and-scene-rescore-staging-')), 'session')
+
+  await assert.rejects(
+    () => loadCandidateRescoreSource({ sourceDir: context.sourceDir, stagingDir }),
+    /manifest/i,
+  )
+})
+
+test('a missing runner session without a staging directory is refused', async () => {
+  const context = await sourceRun()
+  await retainEvidenceOnly(context)
+
+  await assert.rejects(
+    () => loadCandidateRescoreSource({ sourceDir: context.sourceDir }),
+    /staging/i,
+  )
+})
+
+test('a referenced worktree file that was not retained in place is verified against its retained copy', async () => {
+  const context = await sourceRun()
+  await retainEvidenceOnly(context, { worktreeFile: { bytes: '# Skill\n' } })
+  const stagingDir = join(await mkdtemp(join(tmpdir(), 'and-scene-rescore-staging-')), 'session')
+
+  const imported = await loadCandidateRescoreSource({ sourceDir: context.sourceDir, stagingDir })
+
+  const skill = imported.delivery.acceptance.artifacts.find(({ path }) => path.endsWith('SKILL.md'))
+  assert.equal(skill.path, join(imported.source_dir, 'evidence/candidate/artifacts/candidate-w-SKILL.md'))
+})
+
+test('a referenced worktree file whose retained copy differs is refused', async () => {
+  const context = await sourceRun()
+  await retainEvidenceOnly(context, { worktreeFile: { bytes: '# Skill\n', retained: '# Other\n' } })
+  const stagingDir = join(await mkdtemp(join(tmpdir(), 'and-scene-rescore-staging-')), 'session')
+
+  await assert.rejects(
+    () => loadCandidateRescoreSource({ sourceDir: context.sourceDir, stagingDir }),
+    /missing and not retained/,
   )
 })

@@ -76,7 +76,11 @@ export function parseArgs(argv) {
   return options
 }
 
+// A closed input stream is an interruption, never a harness failure: piped
+// input that runs out before a prompt closes the interface first, and asking on
+// it then rejects with ERR_USE_AFTER_CLOSE.
 export function askReadline(rl, prompt) {
+  if (rl.closed === true) return Promise.resolve(null)
   return new Promise((resolve, reject) => {
     let settled = false
     const finish = (value, error = null) => {
@@ -88,11 +92,31 @@ export function askReadline(rl, prompt) {
     }
     const onClose = () => finish(null)
     rl.once('close', onClose)
-    rl.question(prompt).then(
-      (answer) => finish(answer === undefined ? null : answer),
-      (error) => finish(null, error),
-    )
+    const onError = (error) => (error?.code === 'ERR_USE_AFTER_CLOSE' ? finish(null) : finish(null, error))
+    let asked
+    try {
+      asked = Promise.resolve(rl.question(prompt))
+    } catch (error) {
+      onError(error)
+      return
+    }
+    asked.then((answer) => finish(answer === undefined ? null : answer), onError)
   })
+}
+
+// A review that broke in the harness, not in the product, can be reopened. The
+// failure must be the evaluation harness's own, recorded in the human-review
+// phase, marked resumable, and must not sit on a durable verdict; run-state.json
+// and result.json must agree on it. The reopened review then continues as
+// pending human review: the lifecycle records `phase-recovered` when the
+// human-review phase completes, so both artifacts are restored through the same
+// outcome events as any other resumed phase.
+export function isRecoverableHumanReviewFailure({ result, outcome }) {
+  const failedHere = (record) => record?.evaluation_status === 'evaluation-harness-failed'
+    && record.failed_phase === 'human-review'
+    && record.failure?.owner === 'evaluation-harness'
+    && record.resumable === true
+  return failedHere(result) && failedHere(outcome) && outcome.verdict_durable !== true
 }
 
 // Load everything the review depends on and refuse the run before a single
@@ -111,7 +135,11 @@ async function openRun({ runDir, rubrics }) {
   if (finalized) {
     return { errors: [], run: { runId, runDir, mode: result.mode ?? 'agent-runner', result, finalized: true } }
   }
-  if (result.evaluation_status !== 'pending-human-review') {
+  const checkpoint = await loadCheckpoint(join(runDir, 'run-state.json'))
+  if (
+    result.evaluation_status !== 'pending-human-review'
+    && !isRecoverableHumanReviewFailure({ result, outcome: checkpoint?.outcome })
+  ) {
     return {
       errors: [{
         code: 'not-pending-human-review',
@@ -120,8 +148,6 @@ async function openRun({ runDir, rubrics }) {
       }],
     }
   }
-
-  const checkpoint = await loadCheckpoint(join(runDir, 'run-state.json'))
   const candidate = checkpoint?.identity?.candidate_identity ?? result.candidate_identity ?? null
 
   // A rubric edited between the automated run and the review would change what
@@ -177,6 +203,7 @@ async function openRun({ runDir, rubrics }) {
       state: saved ? { ...saved, readiness_confirmed: false } : createReviewState(provenance),
       browser: await readJson(join(runDir, 'phases/browser-evaluation.json'), null),
       judging: await readJson(join(runDir, 'phases/product-judging.json'), null),
+      secondOpinions: await readJson(join(runDir, 'phases/second-opinions.json'), null),
     },
   }
 }
@@ -189,6 +216,10 @@ function rescore({ rubrics, run, humanReview }) {
     deterministic: run.browser?.criteria ?? null,
     judges: run.judging?.judges ?? {},
     gates: run.browser?.gates ?? null,
+    ...(run.mode === 'reference-baseline' ? {} : {
+      secondOpinions: run.secondOpinions?.outcomes ?? {},
+      pendingSecondOpinions: run.secondOpinions?.pending ?? [],
+    }),
     humanReview: humanReview?.complete
       ? { ratings: humanReview.responses.map(({ rating }) => rating), total: humanReview.score.total }
       : null,
@@ -213,6 +244,11 @@ function buildResult({ run, outcome, rubrics, score, humanReview, baseline, cand
     browser: run.browser,
     sourceEvidence: previous.source_evidence ?? null,
     judging: run.judging,
+    terminalSecondOpinion: previous.terminal_failure?.second_opinion
+      ?? previous.second_opinions?.entries?.find(({ kind }) => kind === 'terminal') ?? null,
+    terminalSecondOpinionGate: previous.terminal_failure?.gate
+      ?? previous.second_opinions?.entries?.find(({ kind }) => kind === 'terminal')?.id ?? null,
+    terminalFailure: previous.terminal_failure ?? null,
     workflow: previous.workflow ?? null,
     metrics: previous.implementation_metrics === 'not-applicable' ? null : previous.implementation_metrics,
     cost: previous.cost === 'not-applicable' ? null : previous.cost,

@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-10-02T17-09-59-374483526Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_verify-change__sub_verify-change__review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": "verification and demo checks",
+        "agent_role": null,
+        "task": "nine-step sample and demo"
+      },
+      "source": "judge-discovered",
+      "concern": "The required nine-step sequence was incomplete or out of order.",
+      "evidence": [
+        "verification-sample-outline: fail — Canonical nine-step sample or nine-frame evidence is incomplete.",
+        "demo-nine-step-content-and-order: fail"
+      ],
+      "handling": "The delivered product failed both checks; the available artifacts do not show the implementation decision behind it.",
+      "consequence": "The sample and demo did not satisfy the verified nine-step requirement.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failures establish the product outcome, but do not distinguish an assumption, a context gap, or an implementation error.",
+      "resolution": "unresolved",
+      "id": "a72090fd8990943d"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "attribution checks",
+        "agent_role": null,
+        "task": "app shell and visual helper"
+      },
+      "source": "judge-discovered",
+      "concern": "The default attribution link and its visual warning coverage were incomplete.",
+      "evidence": [
+        "attribution-default-link: fail — Default made by and-scene GitHub attribution is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "The delivered product failed the attribution checks; no implementation rationale is visible.",
+      "consequence": "Default attribution was absent, and the helper did not fully warn about attribution problems.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The checks show omissions but provide no basis to identify why they occurred.",
+      "resolution": "unresolved",
+      "id": "dbd08ba3ae74a451"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "visual helper checks",
+        "agent_role": null,
+        "task": "visual helper"
+      },
+      "source": "judge-discovered",
+      "concern": "The visual helper lacked overlap and active-state comparison warnings.",
+      "evidence": [
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing."
+      ],
+      "handling": "Both warning checks failed; the helper implementation and agent reasoning are unavailable.",
+      "consequence": "Those visual conditions would not receive the expected warnings.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The observed omissions materially affect validation, but their cause cannot be classified from the supplied artifacts.",
+      "resolution": "unresolved",
+      "id": "ec7be5247f2c83ff"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "demo behavior checks",
+        "agent_role": null,
+        "task": "demo present mode"
+      },
+      "source": "judge-discovered",
+      "concern": "Present mode did not meet its behavior check.",
+      "evidence": [
+        "demo-present-mode-behavior: fail",
+        "demo-browse-mode-behavior: pass",
+        "demo-mode-position-preservation: pass"
+      ],
+      "handling": "The present-mode check failed while related mode checks passed; the specific failure and implementation decision are not shown.",
+      "consequence": "At least one required present-mode behavior was missing or incorrect.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The check result is too broad to identify a particular assumption or context gap.",
+      "resolution": "unresolved",
+      "id": "4592c84ef38edfc6"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}

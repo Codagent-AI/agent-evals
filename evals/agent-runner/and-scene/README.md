@@ -1,5 +1,88 @@
 # and-scene eval
 
+## Second opinions on failures
+
+Failed deterministic browser criteria and failed hard gates receive a second
+opinion from two independent verifier samples, so one model call never decides
+whether a failure is re-examined. Each sample's proposed overturn is tried in
+turn, and the first one confirmed decides; a failure no sample overturns
+stands. Every overturn needs mechanically validated source spans. For
+browser-derived failures, a sample also proposes a bounded interaction replay,
+and the verifier does not need to explain the failed measurement from the
+record. The harness runs the replay through `chrome-devtools-axi` against the
+candidate server, including during evaluator-only rescore, and the real-browser
+replay decides: an admitted replay that observes the passing behavior
+overturns the failure with no further model call. The harness decides which
+replays count: `replayPolicy` in `lib/second-opinion.mjs` admits, per failing
+target, only the input kind that failed and an observation that contradicts the
+failure (a step change, a declared mode change, normative text on the active
+step, a click-through of every step, or the active step's own control marked
+`aria-current`). Step controls never include previous, next, or mode controls.
+A target without a policy cannot be overturned by replay. The replay collects
+page and console failures. Its actions, observations, errors, trace, and pass
+result, and both verifier samples, are retained in
+`phases/second-opinions.json`, the result, and the report. A browser or driver
+fault during replay leaves the opinion pending and resumable; only what the
+candidate page did can reject an overturn. Build and serve terminal failures,
+and source-judged fallbacks, cannot be replayed and use the span and log audit.
+
+## Robust judging
+
+No single model call decides a scored criterion. Each judge job runs two
+independent samples with identical inputs, concurrently, at a pinned reasoning
+effort (`medium`, the judge model's default). Each source-job sample passes
+through its own closed-world source audit. A contradiction never inverts that
+sample's vote by itself: it marks the vote disputed, and an independent
+contradiction check then decides whether that stated contradiction holds. Only
+a confirmed contradiction turns the vote; a refuted one leaves it standing. An undecided audit gets one focused re-cite, and a verdict
+still undecided after that stands as the sample's vote rather than spending
+more citation cycles (a browser-fallback pass, which must be proven from
+source, fails instead). A verdict both samples agree on, with neither vote
+disputed, stands, pass or fail. A criterion they disagree on, or that either
+sample's audit disputed, goes to a third independent sample that gets the job's
+unchanged context and never sees the first two verdicts, so its vote decides.
+
+A majority pass must cite line spans (`path`, `start_line`, `end_line`) that
+the harness validates mechanically, exactly as the browser second opinion
+does: the path must be in the verified neutral source inventory (or the
+materialized evidence view for the testing-evidence and assumption-handling
+jobs), resolve inside it without a symbolic link, and the range must lie inside
+the file and span under 200 lines. A closed-world span audit then checks the
+quoted lines against every clause of the criterion's requirement. Only
+`confirmed` is recorded as confirmed; `insufficient` asks the same third sample
+to re-cite once, and if the audit still cannot decide, the majority stands with
+that noted; `contradicted` is replicated by a second independent audit, and the
+majority pass is withdrawn only when an independent contradiction check
+confirms that same stated contradiction; the check judges the first audit's
+reason against the quoted lines and the rubric rather than auditing afresh, and
+both are recorded; each disputed vote's check is kept as `dispute_checks` in `phases/judges/<job>.json`, `phases/product-judging.json`, and the result's `judging`. So every verdict rests on two agreeing signals: a consensus,
+a majority of votes, or an audit's contradiction confirmed by a check. Every
+judge, audit, and check prompt also carries one shared rule: judge only
+behavior the cited source and recorded evidence establish, never a
+hypothetical input, file deletion, or rendering the candidate does not
+produce unless the guidance names it, and read an undefined term by the plain
+meaning of its fixture requirement. Invalid third-sample output is retried and, once exhausted,
+leaves the job unobserved, never failed.
+
+Every judge sees, beside each criterion, the requirement it traces to: the
+full fixture scenario from `fixture-snapshot/` for a fixture-owned criterion,
+or the eval-owned reason. The assumption-handling view also carries the full
+approved requirements as reference, so its judge can run the omission check.
+Each criterion's evidence records its judging basis (`consensus-pass`,
+`consensus-fail`, `majority-pass`, `majority-fail`), `phases/product-judging.json`
+keeps every sample, the third-sample vote with its audits, and the
+per-criterion consensus, and `phases/eval-owned-usage.jsonl` records each
+call's `stage` (`<job>:sample-1`, `<job>:sample-2`, `<job>:tiebreak`,
+`<job>:tiebreak-recite`, `<job>:tiebreak-audit`). A Codex turn rejected as at
+capacity before any model output is waited out with backoff, without spending
+a judge attempt, and is recorded with zero tokens. A response schema OpenAI
+rejects (`invalid_json_schema`) fails fast as a harness error; every schema the
+harness sends is checked against strict structured-output rules in
+`test/codex-judge-schemas.test.mjs`.
+
+`rubric-history.json` records the content hash of every automated rubric
+version; a test fails when the rubric changes without a new version.
+
 ## Fixture traceability
 
 Every automated criterion and gate has a `criterion_sources` entry in
@@ -140,6 +223,14 @@ acceptance-preparation, and handoff-verification steps. In skipped mode the
 harness requires an explicit skipped outcome for the final `run-validator`
 step; an absent, interrupted, or unexpectedly successful step is not accepted
 as proof of intentional skipping.
+Skipped mode also keeps Agent Validator away from the run's agents: the
+controller starts Agent Runner with a `PATH` whose first entry shadows
+`agent-validator` and `agent-validate` with a shim that exits 127. The shim
+appends each attempt to `logs/blocked-validator-invocations.log`, and the
+workflow events record a `validator-unavailable` entry. Runner needs no
+Validator when every Validator step is skipped. The sandbox is unprivileged,
+so the installed binary still exists; only name lookup is blocked. Validator-on
+runs are unchanged.
 The first complete benchmark candidate explicitly uses `--skip-validator`.
 The harness never queries CI and never permits merge, ready-for-review, close,
 archive, release, or candidate-branch deletion behavior.
@@ -192,6 +283,42 @@ The source is mounted read-only. The harness verifies its workflow, evidence,
 branch, draft PR, and final SHA, then runs only evaluator-owned phases. It does
 not invoke Agent Runner, repeat acceptance, create or push a branch, or modify
 the candidate.
+
+A factory artifact may no longer hold `.runtime/agent-runner-projects`, where
+the recorded Runner session lived. The rescore then restores the session's
+acceptance evidence from `evidence/candidate/artifacts` into
+`<rescore-run>/.runtime/rescore-session`, after checking the retained manifest
+against the manifest hash the source recorded and every retained copy against
+the recorded acceptance hashes. Any mismatch refuses the source. The
+`imported-completed-run` event records the reconstruction.
+
+Without Docker, add `--host` to run the same controller on this machine:
+
+```bash
+evals/agent-runner/and-scene/run.sh \
+  --run-agent --host \
+  --rescore-from artifacts/evals/and-scene/<completed-run-id> \
+  --artifact-dir artifacts/evals/and-scene/<rescore-run-id>
+```
+
+Host mode needs `node`, `npm`, `chrome-devtools-axi`, and `codex` on `PATH`
+(or `AND_SCENE_CODEX_COMMAND`), plus either a DevTools endpoint in
+`CHROME_DEVTOOLS_AXI_BROWSER_URL` or a Chrome or Chromium binary (`CHROME_PATH`,
+the macOS Google Chrome app, `chromium`, or `google-chrome`). With a binary, the
+controller starts headless Chrome on `AND_SCENE_HOST_DEVTOOLS_PORT` (default
+9333) only for the browser evaluation and for second-opinion replays, with
+flags that disable the GPU, extensions, background networking, site isolation,
+and caches, cap renderer processes at two, and cap the JavaScript heap; it
+stops Chrome and removes its profile as soon as each of those phases ends, so
+no browser runs during source judging (`lib/host-browser.mjs`).
+
+**Run host rescores one at a time on a small machine.** A long-lived headless
+Chrome reached about 9 GB on a 16 GB Mac, and two parallel rescores exhausted
+it. Start the next rescore only after the previous one exits, and check that no
+earlier `controller.mjs`, `serve-candidate.mjs`, or host Chrome is still
+running. Judges still run in Codex's read-only sandbox against the run's
+neutral inputs. A rescore never starts or reads Agent Runner, so it leaves the
+home's `~/.agent-runner/projects` untouched.
 
 Evaluate an existing candidate as a reference baseline without invoking Agent
 Runner. Role profiles are neither required nor applicable:
@@ -310,12 +437,16 @@ map. An incompatible fixture exits as `fixture-planning-contract`, with no
 agent call.
 
 The external fixture is pinned to commit
-`2262a9f118887593654dc8fa1bed2a565a11301c` in
+`f0695b96c0c23b2d17ecc6cfbaf8be1fcdedd6f8` in
 `https://github.com/Codagent-AI/and-scene.git`. The implemented reference commit
 `171c7def1e12aca2a5f605a5e5feafb20d4e4d19` is the comparable reference baseline.
 It is not a similarity target. The fixture includes the reviewed structured test
 plan merged by `Codagent-AI/and-scene#11`; advance it only to another reviewed
-planning-only fixture revision.
+planning-only fixture revision. Its `.validator/config.yml` runs the checks and
+`all-reviewers` on the root entry point and scopes the `skill-quality` review
+to a separate `skills` entry point, so that review runs only when files under
+`skills/` change. The pinned commit is kept reachable on the and-scene branch
+`eval/fixture-baseline-scrub`.
 
 The suite runs Agent Runner's exact
 `workflows/core/implement-change-v1.0.yaml` workflow through completion, invoked
@@ -411,15 +542,27 @@ filenames are:
 | Acceptance flow record (or an exploration log in its place) | `acceptance-flow-evidence.md`, `acceptance-test-results.md`, `acceptance-flow.md`, `acceptance-evidence.md`, `flow-evidence.md` |
 | Exploration log (satisfies the flow record) | `exploration-log.md`, `acceptance-exploration-log.md`, `acceptance-exploration.md` |
 | Screenshots | `.png`, `.jpg`, `.jpeg`, or `.webp` files referenced by the handoff or found in the recorded acceptance output, such as `acceptance-screenshots/` |
-| Screenshot metadata (optional) | `acceptance-test.md`, `capture-metadata.json`, `screenshot-metadata.json`, `screenshot-manifest.json`, `capture-manifest.json` |
+| Screenshot metadata (optional, one or more) | `acceptance-test.md`, `capture-metadata.json`, `screenshot-metadata.json`, `screenshot-manifest.json`, `capture-manifest.json`, and any `*-screenshot-metadata.md`/`.json` such as `round-1-screenshot-metadata.md` |
 | Findings and retest history | `findings-history.md`, `retest-history.md`, `acceptance-findings.md`, `findings.md`, `acceptance-retest.md` |
-| Final handoff | `acceptance-handoff.md`, `final-acceptance-handoff.md`, `acceptance-final-handoff.md`, `final-handoff.md` |
+| Final handoff | `acceptance-handoff.md`, `final-acceptance-handoff.md`, `acceptance-final-handoff.md`, `final-handoff.md`, `acceptance-handoff-tester.md` |
+| Acceptance gate notice (optional) | Agent Runner's generated `acceptance-handoff.md` starting `# Acceptance did not converge within`, when a tester handoff exists |
 | Assumptions ledger | `acceptance-assumptions.md`, `assumptions-ledger.md`, `acceptance-assumption-ledger.md`, `assumptions.md` |
 | Acceptance pass record (optional) | `exploration-plan.md`, `acceptance-exploration-plan.md`, and pass-numbered copies of acceptance records such as `acceptance-findings-pass1.md` |
 | Tested revision (optional) | `acceptance-tested-revision.txt` |
 
-Referenced session reports and assumption/context-gap audits are retained when
-present. A record that names a revision Git resolves to an ancestor of the
+A bare filename a record names, such as `round-1-screenshot-metadata.md`
+kept in `acceptance-screenshots/`, resolves to the one scanned output file with
+that name; an ambiguous name stays unresolved. Without usable JSON capture
+metadata, a screenshot is verified only when a verified record, including a
+Markdown metadata file, names it.
+
+When acceptance does not converge, Agent Runner's acceptance gate moves the
+tester's handoff to `acceptance-handoff-tester.md` and writes its own short
+notice to `acceptance-handoff.md`. The tester handoff is then the final handoff
+and the notice keeps the `acceptance-gate-notice` role; the notice is the final
+handoff only when the tester wrote none. Referenced session reports and
+assumption/context-gap audits are retained when present; any other file a
+record references is retained as `referenced-material`. A record that names a revision Git resolves to an ancestor of the
 final SHA is verified as a record of that earlier revision
 (`revision_relation: ancestor-of-final`); one naming a revision that does not
 resolve or lies off the final history stays defective. A well-formed tested-revision SHA off the final history is still recorded for lineage diagnosis as `recorded-off-history`; it never establishes final-revision support.
@@ -429,7 +572,7 @@ final-revision criterion: the SHA on the last non-empty line of the verified tes
 relation to the final SHA, and the files changed since, split into product,
 test-only, and harness-owned paths. Each verified pass record that declares a
 `Diff base:` also gets the files between that base and the revision it tested,
-so the judge can check that a diff-scoped re-test explored them. If the record does not identify an accepted tested revision, the diff base has null `tested_revision` and `changes_to_tested_revision`, with `retest_coverage: not-established`. A tested
+so the judge can check that a diff-scoped re-test explored them; `retest_scope: files-listed` says only that those files are known, never that they were explored, and `mirrors` groups changed product files that are byte-identical at the tested revision, such as a kit file and its bootstrap-template copy. If the record does not identify an accepted tested revision, the diff base has null `tested_revision` and `changes_to_tested_revision`, with `retest_scope: not-established`. A tested
 revision equal to the final SHA, or an ancestor with no later product changes,
 establishes final-revision support without a full re-run. Missing expected roles make candidate-evidence coverage incomplete but
 do not stop independent scored judging. The exploratory `codagent:prepare-acceptance`
@@ -460,6 +603,36 @@ is judged against those user-visible behaviors, whatever testing approach the
 candidate took, never against a fixed test-plan case list. Each testing-evidence
 criterion's definition comes from `criterion_definitions` in the automated
 rubric and is shown to the judge beside its identifier.
+
+Automated rubric 10.0.0 defines the terms the round-2 audit found judges
+splitting on: a stable step id survives insertion and reordering, a warning
+identifies an element by text, accessible name, hook, or selector, the visible
+newcomer entry is judged rather than each wrapper, demo identity needs no
+rearrangement, non-empty confirmation covers partial scaffolds, assumption
+handling distinguishes reproduced violations and runs an explicit omission
+check, complete-honest-record counts only material omissions, usable proof
+treats a stated limitation as a disclosure, and final-revision applicability
+credits mirrors and commands the acceptance workflow forbids.
+
+Automated rubric 9.0.0 settles the criteria the round-1 audit found judges
+splitting on: newcomer sequencing follows the design's entry delay, the
+present-mode marker, the uniform-fit reference viewports (1280×720 and
+390×844), preview ownership mechanisms, one representative browser-error test,
+the missing-sample failure phase, textless chrome in overlap detection,
+environment-impossible acceptance journeys, diff-scoped re-test exploration,
+exploration-plan commitments, candor in assumption handling, and decisions
+named in the final handoff. 8.0.0 was published with two contents; tell those
+results apart by their recorded rubric hash.
+
+Automated rubric 8.0.0 traces guidance to the fixture where 7.0.0 exceeded it:
+settled screenshots accept the configured settle interval, touch swipe no
+longer requires vertical or multi-touch rejection, overlap and allow-overlap
+follow the fixture scenarios, and five scaffold branches plus template path
+resolution are judged from explicit `SKILL.md` instructions. It also states
+that an on-screen step number must be rendered text and that the default
+attribution must link to `https://github.com/Codagent-AI/and-scene`. Scores
+for those criteria are not comparable with 7.0.0; re-judge an earlier run with
+`--rescore-from`.
 
 Automated rubric 6.0.0 redefined the four testing-evidence criteria and the
 final-revision rule. Testing-evidence scores from 6.0.0 are not comparable with
@@ -884,13 +1057,19 @@ the build and serve commands. It takes a few minutes.
 ### Adversarial real-browser pages
 
 `test/real-browser/adversarial.test.mjs` drives the production evaluator in real
-Chrome against seven hand-made pages that no real candidate resembles: a deck
+Chrome against ten hand-made pages: a deck
 that ignores deck keys while a button holds focus, one whose keys stay dead
 after any control use, a correct scene with no recognised hook, a hidden step
 title, a deck that listens for keys on its own root, a control that will not
-release focus, and a deck whose root has no root hook. It sits outside the
+release focus, a deck whose root has no root hook, a deck whose step titles sit
+in unhooked header `<span>` and `<strong>` elements beside a persistent list of
+every title, a deck that declares its mode only as `data-mode` and shows a
+footer present-title paragraph with a nested step marker, and a deck that
+exposes its titles only in that persistent list. The two unhooked decks
+reproduce the markup of the two eval #51 candidates the outline gate wrongly
+failed; the last must still fail the outline. It sits outside the
 `test/*.test.mjs` glob because CI has no browser. Run it before merging any change to the control-key, scene, or
-present-mode probes, and never while the candidate check is running:
+present-mode, title, caption, or mode-inference probes, and never while the candidate check is running:
 
 ```bash
 node --test test/real-browser/adversarial.test.mjs

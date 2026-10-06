@@ -12,7 +12,7 @@ REPO="${REPO:-https://github.com/Codagent-AI/and-scene.git}"
 # are reproducible. This is the reviewed planning-only fixture merged into
 # eval/create-and-scene-spec-only on 2026-08-28; bump it deliberately when the
 # fixture snapshot changes.
-FIXTURE_REF="${FIXTURE_REF:-2262a9f118887593654dc8fa1bed2a565a11301c}"
+FIXTURE_REF="${FIXTURE_REF:-f0695b96c0c23b2d17ecc6cfbaf8be1fcdedd6f8}"
 # Pin the known-good reference used for calibration and judge tiebreaks.
 REFERENCE_REF="${REFERENCE_REF:-171c7def1e12aca2a5f605a5e5feafb20d4e4d19}"
 if [[ -n "${CHANGE_NAME+x}" ]]; then
@@ -43,6 +43,7 @@ DRY_RUN=0
 PROOF_BROWSER=0
 RUN_AGENT=0
 CALIBRATE=0
+HOST=0
 SUITE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 EVALS_ROOT="$(cd -- "$SUITE_DIR/../../.." && pwd)"
 AGENT_RUNNER_DIR="${AGENT_RUNNER_DIR:-$EVALS_ROOT/../agent-runner}"
@@ -92,13 +93,18 @@ Options:
                           run:   artifacts/evals/and-scene/<timestamp>
   --repo URL             and-scene repository URL.
   --fixture-ref REF      Implementation-ready fixture ref.
-                          Default: 2262a9f118887593654dc8fa1bed2a565a11301c
+                          Default: f0695b96c0c23b2d17ecc6cfbaf8be1fcdedd6f8
   --reference-ref REF    Implemented/reference ref.
                           Default: 171c7def1e12aca2a5f605a5e5feafb20d4e4d19
   --candidate-ref REF    Grade an existing candidate ref.
   --rescore-from PATH    Re-run evaluator-owned phases against a completed,
                           immutable candidate run. Never invokes Agent Runner,
                           creates a branch, or changes candidate contents.
+  --host                 With --rescore-from only: run the evaluator on this
+                          host instead of the Docker sandbox. Needs node, npm,
+                          codex (or AND_SCENE_CODEX_COMMAND), chrome-devtools-axi,
+                          and either CHROME_DEVTOOLS_AXI_BROWSER_URL or a local
+                          Chrome/Chromium (CHROME_PATH) to start headless.
   --reference-baseline   Evaluate an existing candidate without invoking Agent
                           Runner. Role profiles are not required or applicable.
   --change-name NAME     OpenSpec change name. Default: create-and-scene
@@ -197,6 +203,10 @@ while (($#)); do
       ;;
     --reference-baseline)
       REFERENCE_BASELINE=1
+      shift
+      ;;
+    --host)
+      HOST=1
       shift
       ;;
     --change-name)
@@ -299,6 +309,10 @@ if [[ -n "$RESCORE_FROM" && (
   echo "--rescore-from cannot be combined with --resume, --reference-baseline, or --candidate-ref." >&2
   exit 2
 fi
+if [[ "$HOST" == 1 && ( "$RUN_AGENT" != 1 || -z "$RESCORE_FROM" ) ]]; then
+  echo "--host is supported only with --run-agent --rescore-from." >&2
+  exit 2
+fi
 
 # Calibration runs entirely on the host: no sandbox, no Agent Runner checkout,
 # no credentials. It is handled before every check those things require.
@@ -325,7 +339,7 @@ AGENT_RUNNER_DIR="$(cd -- "$AGENT_RUNNER_DIR" && pwd)"
 if [[ -z "$SANDBOX_RUNNER" ]]; then
   SANDBOX_RUNNER="$AGENT_RUNNER_DIR/scripts/sandbox-run.sh"
 fi
-if [[ ! -x "$SANDBOX_RUNNER" ]]; then
+if [[ "$HOST" != 1 && ! -x "$SANDBOX_RUNNER" ]]; then
   echo "Agent Runner sandbox-run.sh is not executable: $SANDBOX_RUNNER" >&2
   exit 2
 fi
@@ -466,6 +480,61 @@ fi
 AND_SCENE_RUN_ID="$(basename -- "$ARTIFACT_DIR")"
 export AND_SCENE_RUN_ID
 ENV_ARGS+=(--env AND_SCENE_RUN_ID)
+
+# An evaluator-only rescore can run on the host: it invokes no Agent Runner and
+# no implementation agent, only the build, the browser evaluator, and Codex
+# judges, which run read-only against this run's own neutral inputs.
+if [[ "$HOST" == 1 ]]; then
+  host_codex="${AND_SCENE_CODEX_COMMAND:-$(command -v codex || true)}"
+  host_command=(node "$SUITE_DIR/controller.mjs" --run-dir "$ARTIFACT_DIR" --run-id "$AND_SCENE_RUN_ID"
+    --agent-runner-dir "$AGENT_RUNNER_DIR" --repo "$REPO" --fixture-ref "$FIXTURE_REF"
+    --judge-model "$JUDGE_MODEL" --rescore-from "$RESCORE_FROM")
+  if [[ "$CHANGE_NAME_PROVIDED" == 1 ]]; then
+    host_command+=(--change-name "$CHANGE_NAME")
+  fi
+  if [[ "$DRY_RUN" == 1 ]]; then
+    printf 'AND_SCENE_CODEX_COMMAND=%q ' "$host_codex"
+    printf '%q ' "${host_command[@]}"
+    printf '\n'
+    exit 0
+  fi
+  for tool in node npm chrome-devtools-axi; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+      echo "Host rescore requires $tool on PATH." >&2
+      exit 2
+    fi
+  done
+  if [[ -z "$host_codex" || ! -x "$host_codex" ]]; then
+    echo "Host rescore requires codex on PATH or AND_SCENE_CODEX_COMMAND." >&2
+    exit 2
+  fi
+  # The controller starts this Chrome only for browser phases, with
+  # memory-limiting flags, and stops it between them (lib/host-browser.mjs).
+  # An externally supplied CHROME_DEVTOOLS_AXI_BROWSER_URL is used as is.
+  if [[ -z "${CHROME_DEVTOOLS_AXI_BROWSER_URL:-}" ]]; then
+    host_chrome="${CHROME_PATH:-}"
+    if [[ -z "$host_chrome" ]]; then
+      for candidate in "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+        "$(command -v chromium || true)" "$(command -v google-chrome || true)"; do
+        if [[ -n "$candidate" && -x "$candidate" ]]; then host_chrome="$candidate"; break; fi
+      done
+    fi
+    if [[ -z "$host_chrome" ]]; then
+      echo "Host rescore needs CHROME_DEVTOOLS_AXI_BROWSER_URL or a Chrome/Chromium binary (CHROME_PATH)." >&2
+      exit 2
+    fi
+    export AND_SCENE_HOST_CHROME="$host_chrome"
+    export AND_SCENE_HOST_DEVTOOLS_PORT="${AND_SCENE_HOST_DEVTOOLS_PORT:-9333}"
+  fi
+  mkdir -p "$ARTIFACT_DIR"
+  export AND_SCENE_CODEX_COMMAND="$host_codex" AGENT_RUNNER_NO_TUI=1
+  if [[ " ${NODE_OPTIONS:-} " != *" --dns-result-order="* ]]; then
+    export NODE_OPTIONS="${NODE_OPTIONS:-} --dns-result-order=ipv4first"
+  fi
+  host_status=0
+  "${host_command[@]}" || host_status=$?
+  exit "$host_status"
+fi
 
 REPO_Q="$(shell_quote "$REPO")"
 FIXTURE_REF_Q="$(shell_quote "$FIXTURE_REF")"

@@ -11,6 +11,8 @@ invocation schema was copied from
 `internal/measurements/invocation-v1.schema.json`.
 
 The compatible wire versions are Agent Runner `run-metrics.json` schema v4,
-Runner aggregate v1, Runner native-measurement v1, and Agent Validator
-measurement/export v1. Update this snapshot and its fixture tests together;
+Runner aggregate v1, Runner native-measurement v1 and v2, and Agent Validator
+measurement/export v1. Native-measurement v2 (Agent Runner `3ad7008` and
+later) adds per-thread Claude `allocations` and `subagent_collection`; it is
+tested in `test/runner-metrics.test.mjs`, not in the `v1/` snapshot. Update this snapshot and its fixture tests together;
 do not silently accept a new outer or nested version.

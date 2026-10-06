@@ -9,10 +9,17 @@ import {
   PRODUCT_JUDGE_JOB_IDS,
   buildSourceAuditRequest,
   buildJudgeRequest,
+  buildTiebreakRequest,
+  buildSpanAuditRequest,
+  buildContradictionCheckRequest,
   parseJudgeOutput,
   runJudgeJob,
   productJudgeJobs,
   runProductJudging,
+  runRobustJudgeJob,
+  resolveJudgeSamples,
+  JUDGE_SAMPLES,
+  JUDGING_PROTOCOL,
 } from '../evals/agent-runner/and-scene/lib/judge-jobs.mjs'
 import { criteriaForJob, loadRubrics } from '../evals/agent-runner/and-scene/lib/rubric.mjs'
 
@@ -329,8 +336,8 @@ test('a judge request excludes screenshots and forbids visual-taste judgments', 
 test('source judges must verify behavior and resolve deterministic-fact contradictions', () => {
   const expectations = {
     'demo-integration': [/public API inputs/i, /deterministic facts are leads/i],
-    'scene-kit': [/same settlement contract/i, /predominantly horizontal/i],
-    'presentation-skill': [/prose instructions alone/i, /partial scaffold/i],
+    'scene-kit': [/entry delay/i, /swipe to the left advances one step/i],
+    'presentation-skill': [/explicit SKILL\.md instruction/i, /skill-partial-scaffold/i],
     'verification-tooling': [/stale server/i, /executable warning/i],
   }
 
@@ -350,6 +357,9 @@ test('source judges must verify behavior and resolve deterministic-fact contradi
     assert.match(request.prompt, /do not infer\s+behavior from a filename/i, job)
     assert.match(request.prompt, /inspect the setup and assertions/i, job)
     assert.match(request.prompt, /missing mechanism.*plausible behavior/i, job)
+    assert.match(request.prompt, /Before calling a constant, export, member, prop, or input unused or dead, trace it through every use/i, job)
+    assert.match(request.prompt, /shown, visible, or on screen[\s\S]*aria-label[\s\S]*does not satisfy/i, job)
+    assert.match(request.prompt, /do not add requirements that the criterion and\s+its review guidance do not state/i, job)
     assert.match(request.prompt, /citations MUST contain exact relative paths[\s\S]*neutral\s+source file list/i, job)
     assert.equal(request.source_audit, true, job)
     assert.equal(request.source_audit_version, 'closed-world-v8-absence-confirmed-fail', job)
@@ -373,7 +383,8 @@ test('presentation-skill judges treat normative skill policy as implementation e
   assert.match(request.prompt, /normative instructions in SKILL\.md are the implemented agent policy/i)
   assert.match(request.prompt, /questioning.*target selection.*preservation.*verification loop/i)
   assert.match(request.prompt, /do not demand a separate interaction driver/i)
-  assert.match(request.prompt, /scaffold.*review guidance.*focused executable/i)
+  assert.match(request.prompt, /scaffold review guidance names the one scaffold criterion that requires a materialization test/i)
+  assert.doesNotMatch(request.prompt, /still requires focused executable tests/i)
 })
 
 test('source-judge pass verdicts require explicit neutral-source citation paths', () => {
@@ -741,15 +752,18 @@ test('source judge credit requires primary and closed-world audit agreement', as
   try {
     const result = await runJudgeJob({ request, invoke: async () => responses.shift() })
     assert.equal(result.ok, true)
-    assert.equal(result.results[0].verdict, 'fail')
-    assert.match(result.results[0].rationale, /tracks only X/)
+    // Round-3 audit: one audit no longer inverts a sample's vote; it marks
+    // the vote disputed so the blind third sample decides the criterion.
+    assert.equal(result.results[0].verdict, 'pass')
+    assert.equal(result.results[0].disputed, true)
+    assert.ok(result.results[0].evidence.some((item) => /tracks only X/.test(item)))
     assert.equal(result.results[1].verdict, 'pass')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
 })
 
-test('a contradicted source audit reverses either primary verdict', async () => {
+test('a contradicted source audit marks either primary verdict disputed instead of reversing it', async () => {
   const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
   await mkdir(join(sourceRoot, 'src'), { recursive: true })
@@ -793,9 +807,9 @@ test('a contradicted source audit reverses either primary verdict', async () => 
     })
 
     assert.equal(result.ok, true)
-    assert.deepEqual(result.results.map(({ id, verdict }) => ({ id, verdict })), [
-      { id: ids[0], verdict: 'fail' },
-      { id: ids[1], verdict: 'pass' },
+    assert.deepEqual(result.results.map(({ id, verdict, disputed }) => ({ id, verdict, disputed })), [
+      { id: ids[0], verdict: 'pass', disputed: true },
+      { id: ids[1], verdict: 'fail', disputed: true },
     ])
   } finally {
     await rm(root, { recursive: true, force: true })
@@ -969,71 +983,70 @@ test('an insufficient primary fail is re-judged instead of charged to the candid
   }
 })
 
-test('progressive insufficient audits may use more than three focused source cycles', async () => {
+// Round-2 audit: rep 1 spent 12 citation retries and 46 calls on audits that
+// never contradicted anything. A sample now re-cites once; an audit that still
+// cannot decide leaves the sample's own verdict as its vote.
+test('a sample re-cites once and a verdict still unproven after that stands as its vote', async () => {
   const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
   await mkdir(join(sourceRoot, 'src'), { recursive: true })
   await writeFile(join(sourceRoot, 'src/scene.ts'), 'export const stableIdentity = true\n')
   await writeFile(join(sourceRoot, 'src/node.ts'), 'export const layoutMotion = true\n')
-  await writeFile(join(sourceRoot, 'src/node.test.ts'), 'export const morphTest = true\n')
-  await writeFile(join(sourceRoot, 'src/integration.test.ts'), 'export const integrationTest = true\n')
   const ids = ['entity-persisting-morph']
-  const primary = (citations, rationale) => JSON.stringify({
-    results: [{
-      id: ids[0],
-      verdict: 'pass',
-      rationale,
-      evidence: citations,
-      citations,
-    }],
-  })
+  const primary = (citations) => JSON.stringify({ results: [{
+    id: ids[0], verdict: 'pass', rationale: 'stable identity uses layout motion', evidence: citations, citations,
+  }] })
   const responses = [
-    primary(['src/scene.ts'], 'stable identity exists'),
+    primary(['src/scene.ts']),
     auditOutput(ids, { [ids[0]]: 'insufficient' }),
-    primary(['src/node.ts'], 'stable identity uses layout motion'),
+    primary(['src/node.ts']),
     auditOutput(ids, { [ids[0]]: 'insufficient' }),
-    primary(
-      ['src/node.test.ts'],
-      'stable identity uses tested layout motion',
-    ),
-    auditOutput(ids, { [ids[0]]: 'insufficient' }),
-    primary(
-      ['src/integration.test.ts'],
-      'integration proves stable identity and layout motion',
-    ),
-    auditOutput(ids),
   ]
   const requests = []
-
   try {
     const result = await runJudgeJob({
       request: {
-        job: 'scene-kit',
-        criteria: ids,
-        authority,
-        cwd: root,
-        audit_cwd: join(root, 'audit'),
-        input_roots: { source: sourceRoot },
-        input_permissions: { neutral_source: true },
-        source_audit: true,
-        prompt: 'primary rubric prompt',
+        job: 'scene-kit', criteria: ids, authority, cwd: root, audit_cwd: join(root, 'audit'),
+        input_roots: { source: sourceRoot }, input_permissions: { neutral_source: true },
+        source_audit: true, prompt: 'primary rubric prompt',
       },
       invoke: async (request) => {
         requests.push(request)
         return responses.shift()
       },
     })
-
     assert.equal(result.ok, true)
+    assert.equal(requests.length, 4)
     assert.equal(result.results[0].verdict, 'pass')
-    assert.equal(result.attempts.length, 4)
-    assert.equal(result.audit_attempts.length, 4)
-    assert.match(requests[4].prompt, /previous source audit found insufficient citations/i)
-    assert.match(requests[3].prompt, /stableIdentity/)
-    assert.match(requests[3].prompt, /layoutMotion/)
-    assert.match(requests[5].prompt, /stableIdentity/)
-    assert.match(requests[5].prompt, /layoutMotion/)
-    assert.match(requests[5].prompt, /morphTest/)
+    assert.ok(result.results[0].evidence.some((item) => /source audit could not decide/.test(item)))
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('a browser-fallback pass the source audit cannot confirm after a re-cite is a fail', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const sourceRoot = join(root, 'source')
+  await mkdir(join(sourceRoot, 'src'), { recursive: true })
+  await writeFile(join(sourceRoot, 'src/demo.tsx'), 'export const demo = true\n')
+  const ids = ['demo-evolving-scene-structure']
+  const primary = JSON.stringify({ results: [{
+    id: ids[0], verdict: 'pass', rationale: 'scene evolves', evidence: ['src/demo.tsx'], citations: ['src/demo.tsx'],
+  }] })
+  const responses = [primary, auditOutput(ids, { [ids[0]]: 'insufficient' }), primary,
+    auditOutput(ids, { [ids[0]]: 'insufficient' })]
+  try {
+    const result = await runJudgeJob({
+      request: {
+        job: 'demo-integration', criteria: ids, authority, cwd: root, audit_cwd: join(root, 'audit'),
+        input_roots: { source: sourceRoot }, input_permissions: { neutral_source: true },
+        source_audit: true, prompt: 'primary', requireSourceCitationsFor: ids, verified_source_paths: ['src/demo.tsx'],
+      },
+      invoke: async () => responses.shift(),
+    })
+    assert.equal(result.ok, true)
+    assert.equal(result.results[0].verdict, 'fail')
+    assert.match(result.results[0].rationale, /browser could not observe/i)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -1094,57 +1107,9 @@ test('a focused citation retry preserves already contradicted criteria', async (
     assert.equal(result.ok, true)
     assert.deepEqual(requests[2].criteria, ['navigation-direct-jump'])
     assert.deepEqual(result.results.map(({ id, verdict }) => ({ id, verdict })), [
-      { id: 'navigation-touch-swipe', verdict: 'fail' },
+      { id: 'navigation-touch-swipe', verdict: 'pass' },
       { id: 'navigation-direct-jump', verdict: 'pass' },
     ])
-  } finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
-test('unchanged insufficient citations stop early as a no-progress protocol failure', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
-  const sourceRoot = join(root, 'source')
-  await mkdir(join(sourceRoot, 'src'), { recursive: true })
-  await writeFile(join(sourceRoot, 'src/nav.ts'), 'export const horizontal = true\n')
-  const ids = ['navigation-touch-swipe']
-  const primary = JSON.stringify({
-    results: [{
-      id: ids[0],
-      verdict: 'pass',
-      rationale: 'horizontal swipe exists',
-      evidence: ['src/nav.ts'],
-      citations: ['src/nav.ts'],
-    }],
-  })
-  const responses = [
-    primary,
-    auditOutput(ids, { [ids[0]]: 'insufficient' }),
-    primary,
-    auditOutput(ids, { [ids[0]]: 'insufficient' }),
-  ]
-
-  try {
-    const result = await runJudgeJob({
-      request: {
-        job: 'scene-kit',
-        criteria: ids,
-        authority,
-        cwd: root,
-        audit_cwd: join(root, 'audit'),
-        input_roots: { source: sourceRoot },
-        input_permissions: { neutral_source: true },
-        source_audit: true,
-        prompt: 'primary rubric prompt',
-      },
-      invoke: async () => responses.shift(),
-    })
-
-    assert.equal(result.ok, false)
-    assert.equal(result.results, null)
-    assert.equal(result.attempts.length, 2)
-    assert.equal(result.audit_attempts.length, 2)
-    assert.match(result.audit_attempts.at(-1).error, /no source-evidence progress/i)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -1176,15 +1141,20 @@ test('one failed job does not discard the other five complete outputs', async ()
     assert.equal(outcome.judges[job].length, criteriaForJob(automated, job).length, job)
   }
   assert.deepEqual(outcome.failed_jobs, ['scene-kit'])
-  assert.equal(outcome.retries['scene-kit'], 2)
+  // Two samples of three attempts each.
+  assert.equal(outcome.retries['scene-kit'], 2 * JUDGE_ATTEMPTS - JUDGE_SAMPLES)
 })
 
 test('six jobs checkpoint independently and reuse a valid completed output', async () => {
   const loaded = new Map()
   const saved = []
   const invoked = []
-  const sceneResults = JSON.parse(judgeOutput(criteriaForJob(automated, 'scene-kit'))).results
-  loaded.set('scene-kit', { results: sceneResults, attempts: [{ attempt: 1, ok: true, error: null }] })
+  const sceneCriteria = criteriaForJob(automated, 'scene-kit')
+  const sampleResults = JSON.parse(judgeOutput(sceneCriteria)).results
+  const samples = [1, 2].map(() => ({ ok: true, results: sampleResults, attempts: [], audit_results: null, audit_attempts: [] }))
+  const { results: sceneResults } = resolveJudgeSamples({ criteria: sceneCriteria, samples })
+  loaded.set('scene-kit', { protocol: JUDGING_PROTOCOL, results: sceneResults, samples, tiebreak: null,
+    attempts: [{ attempt: 1, ok: true, error: null }] })
 
   const outcome = await runProductJudging({
     rubrics,
@@ -1224,7 +1194,606 @@ test('product judging runs its jobs sequentially through one recorded authority'
     },
   })
 
-  assert.deepEqual(order, PRODUCT_JUDGE_JOB_IDS.flatMap((id) => [`start:${id}`, `end:${id}`]))
+  // Jobs never interleave; a job's independent samples run concurrently.
+  assert.deepEqual(order, PRODUCT_JUDGE_JOB_IDS.flatMap((id) => [`start:${id}`, `start:${id}`, `end:${id}`, `end:${id}`]))
   assert.deepEqual(outcome.authority, authority)
   assert.deepEqual(outcome.failed_jobs, [])
+})
+
+// Round-0 baseline audit: one judge sample swung criteria by whole points on
+// identical evidence. Each job now runs two independent samples; only a
+// criterion both samples agree on stands; a disagreement goes to a third sample whose pass must
+// quote validated source lines that a closed-world audit confirms.
+async function neutralTree(files) {
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-robust-judge-'))
+  const sourceRoot = join(root, 'source')
+  for (const [path, text] of Object.entries(files)) {
+    await mkdir(join(sourceRoot, path, '..'), { recursive: true })
+    await writeFile(join(sourceRoot, path), text)
+  }
+  return {
+    root,
+    request: (criteria) => ({
+      job: 'scene-kit',
+      criteria,
+      authority,
+      cwd: root,
+      audit_cwd: root,
+      input_roots: { source: sourceRoot },
+      verified_source_paths: Object.keys(files),
+      rubric_slice: criteria.map((id) => `- ${id}`).join('\n'),
+      prompt_body: 'judge these criteria',
+      prompt: 'judge these criteria',
+      source_audit: false,
+    }),
+  }
+}
+
+function verdicts(map, citations = ['src/nav.ts']) {
+  return JSON.stringify({ results: Object.entries(map).map(([id, verdict]) => ({
+    id, verdict, rationale: `${id} is ${verdict}`, evidence: ['src/nav.ts'], citations,
+  })) })
+}
+
+function lineCited(map) {
+  return JSON.stringify({ results: Object.entries(map).map(([id, [verdict, citations = []]]) => ({
+    id, verdict, rationale: `line-cited ${verdict}`, evidence: ['src/nav.ts'], citations,
+  })) })
+}
+
+const NAV_SOURCE = [
+  'export const ENTITY = { kit: "kit-wire" }',
+  'export function Arrow() { return <path layoutId={ENTITY.kit} /> }',
+  'export const swipe = (dx) => (dx < 0 ? next() : prev())',
+].join('\n')
+
+test('the protocol runs two independent samples per job and a third only on disagreement', () => {
+  assert.equal(JUDGE_SAMPLES, 2)
+  assert.match(JUDGING_PROTOCOL, /dual-sample-majority/)
+})
+
+const stageOf = (request) => request.judge_stage ?? request.audit_stage ?? 'primary'
+
+test('a criterion both samples pass is a consensus pass and needs no third sample', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  const stages = []
+  try {
+    const outcome = await runRobustJudgeJob({
+      request: tree.request(['navigation-touch-swipe']),
+      invoke: async (request) => {
+        stages.push(`${stageOf(request)}:${request.judge_sample ?? '-'}`)
+        return verdicts({ 'navigation-touch-swipe': 'pass' })
+      },
+    })
+    assert.equal(outcome.ok, true)
+    assert.deepEqual(stages.sort(), ['primary:1', 'primary:2'])
+    assert.equal(outcome.results[0].verdict, 'pass')
+    assert.equal(outcome.consensus[0].basis, 'consensus-pass')
+    assert.deepEqual(outcome.consensus[0].sample_verdicts, ['pass', 'pass'])
+    assert.equal(outcome.tiebreak, null)
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+// Round-1 audit: one adjudicator overturned fail+fail to pass on identical
+// evidence in one run and not another. A consensus fail now stands.
+test('a criterion both samples fail is a consensus fail that no single judge can overturn', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  const stages = []
+  try {
+    const outcome = await runRobustJudgeJob({
+      request: tree.request(['navigation-touch-swipe']),
+      invoke: async (request) => {
+        stages.push(stageOf(request))
+        return verdicts({ 'navigation-touch-swipe': 'fail' })
+      },
+    })
+    assert.equal(outcome.results[0].verdict, 'fail')
+    assert.equal(outcome.consensus[0].basis, 'consensus-fail')
+    assert.deepEqual(stages, ['primary', 'primary'])
+    assert.ok(outcome.results[0].evidence.some((item) => /both independent samples failed/.test(item)))
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+test('a disagreement is settled by an independent third sample whose pass needs confirmed line spans', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  const requests = []
+  try {
+    const outcome = await runRobustJudgeJob({
+      request: tree.request(['navigation-touch-swipe', 'navigation-direct-jump']),
+      invoke: async (request) => {
+        requests.push(request)
+        if (request.audit_stage === 'tiebreak-span-audit') return auditOutput(['navigation-touch-swipe'])
+        if (request.judge_stage === 'tiebreak') {
+          return lineCited({ 'navigation-touch-swipe': ['pass', [{ path: 'src/nav.ts', start_line: 3, end_line: 3 }]] })
+        }
+        return verdicts({
+          'navigation-touch-swipe': request.judge_sample === 1 ? 'pass' : 'fail',
+          'navigation-direct-jump': 'pass',
+        })
+      },
+    })
+    assert.equal(outcome.ok, true)
+    const tiebreak = requests.find(({ judge_stage: stage }) => stage === 'tiebreak')
+    assert.deepEqual(tiebreak.criteria, ['navigation-touch-swipe'])
+    assert.equal(tiebreak.judge_sample, 3)
+    // Independent: the third sample never sees the first two verdicts.
+    assert.doesNotMatch(tiebreak.prompt, /navigation-touch-swipe is pass|navigation-touch-swipe is fail/)
+    const audit = requests.find(({ audit_stage: stage }) => stage === 'tiebreak-span-audit')
+    assert.match(audit.prompt, /dx < 0 \? next\(\) : prev\(\)/)
+    assert.match(audit.prompt, /every clause of the criterion's requirement/)
+    assert.equal(audit.input_roots, null)
+    const swipe = outcome.results.find(({ id }) => id === 'navigation-touch-swipe')
+    assert.equal(swipe.verdict, 'pass')
+    assert.deepEqual(swipe.citations, ['src/nav.ts'])
+    assert.ok(swipe.evidence.some((item) => item.includes('src/nav.ts:3-3')))
+    assert.equal(outcome.consensus.find(({ id }) => id === 'navigation-touch-swipe').basis, 'majority-pass')
+    assert.deepEqual(outcome.consensus.find(({ id }) => id === 'navigation-touch-swipe').sample_verdicts, ['pass', 'fail', 'pass'])
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+// Round-2 audit: one unreplicated span audit vetoed 2-of-3 passes, so the
+// same evidence scored differently across runs. An undecided audit now asks
+// the third sample to re-cite once and otherwise leaves the majority standing;
+// only two independent audits that both find a contradiction flip it.
+function tiebreakScenario({ audits, recite = null, checks = [] }) {
+  return async (request) => {
+    if (request.audit_stage === 'contradiction-check') {
+      return auditOutput(['navigation-touch-swipe'], { 'navigation-touch-swipe': checks.shift() })
+    }
+    if (request.audit_stage === 'tiebreak-span-audit') {
+      return auditOutput(['navigation-touch-swipe'], { 'navigation-touch-swipe': audits.shift() })
+    }
+    if (request.judge_stage === 'tiebreak-recite') {
+      return lineCited({ 'navigation-touch-swipe': ['pass', recite] })
+    }
+    if (request.judge_stage === 'tiebreak') {
+      return lineCited({ 'navigation-touch-swipe': ['pass', [{ path: 'src/nav.ts', start_line: 1, end_line: 1 }]] })
+    }
+    return verdicts({ 'navigation-touch-swipe': request.judge_sample === 1 ? 'pass' : 'fail' })
+  }
+}
+
+test('an undecided span audit triggers one re-cite and a confirmed re-cite keeps the majority pass', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  const stages = []
+  try {
+    const invoke = tiebreakScenario({ audits: ['insufficient', 'confirmed'],
+      recite: [{ path: 'src/nav.ts', start_line: 1, end_line: 3 }] })
+    const outcome = await runRobustJudgeJob({
+      request: tree.request(['navigation-touch-swipe']),
+      invoke: async (request) => { stages.push(stageOf(request)); return invoke(request) },
+    })
+    assert.equal(outcome.results[0].verdict, 'pass')
+    assert.equal(outcome.consensus[0].basis, 'majority-pass')
+    assert.deepEqual(stages.filter((stage) => stage !== 'primary'),
+      ['tiebreak', 'tiebreak-span-audit', 'tiebreak-recite', 'tiebreak-span-audit'])
+    assert.ok(outcome.results[0].evidence.some((item) => item.includes('src/nav.ts:1-3')))
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+test('a span audit still undecided after the re-cite leaves the majority pass standing', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  try {
+    const outcome = await runRobustJudgeJob({
+      request: tree.request(['navigation-touch-swipe']),
+      invoke: tiebreakScenario({ audits: ['insufficient', 'insufficient'],
+        recite: [{ path: 'src/nav.ts', start_line: 1, end_line: 2 }] }),
+    })
+    assert.equal(outcome.results[0].verdict, 'pass')
+    assert.equal(outcome.consensus[0].basis, 'majority-pass')
+    assert.ok(outcome.results[0].evidence.some((item) => /could not confirm/.test(item)))
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+// Round-4 audit: two span audits withdrew a 2-of-3 pass for different
+// reasons, one of which the rubric itself contradicts. The second call now
+// checks the first audit's stated contradiction rather than auditing afresh.
+test('a span contradiction the check does not confirm leaves the majority pass standing', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  const requests = []
+  try {
+    const invoke = tiebreakScenario({ audits: ['contradicted'], checks: ['contradicted'] })
+    const outcome = await runRobustJudgeJob({
+      request: tree.request(['navigation-touch-swipe']),
+      invoke: async (request) => { requests.push(request); return invoke(request) },
+    })
+    assert.equal(outcome.results[0].verdict, 'pass')
+    assert.equal(outcome.tiebreak.audit_results.length, 1)
+    assert.equal(outcome.tiebreak.contradiction_checks.length, 1)
+    const check = requests.find(({ audit_stage: stage }) => stage === 'contradiction-check')
+    assert.match(check.prompt, /the cited packet omits the required mechanism|the cited packet resolves the primary claim/)
+    assert.match(check.prompt, /Decide\s+whether this stated contradiction holds/)
+    assert.doesNotMatch(check.prompt, /Classify every primary result/)
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+test('a majority pass is withdrawn only when the check confirms the same stated contradiction', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  try {
+    const outcome = await runRobustJudgeJob({
+      request: tree.request(['navigation-touch-swipe']),
+      invoke: tiebreakScenario({ audits: ['contradicted'], checks: ['confirmed'] }),
+    })
+    assert.equal(outcome.results[0].verdict, 'fail')
+    assert.equal(outcome.consensus[0].basis, 'majority-fail')
+    assert.match(outcome.results[0].rationale, /confirmed by an independent check/)
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+test('a third-sample fail settles a disagreement without line citations', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  const stages = []
+  try {
+    const outcome = await runRobustJudgeJob({
+      request: tree.request(['navigation-touch-swipe']),
+      invoke: async (request) => {
+        stages.push(stageOf(request))
+        if (request.judge_stage === 'tiebreak') return lineCited({ 'navigation-touch-swipe': ['fail'] })
+        return verdicts({ 'navigation-touch-swipe': request.judge_sample === 1 ? 'pass' : 'fail' })
+      },
+    })
+    assert.equal(outcome.results[0].verdict, 'fail')
+    assert.equal(outcome.consensus[0].basis, 'majority-fail')
+    assert.equal(stages.includes('tiebreak-span-audit'), false)
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+test('a third-sample pass citing lines outside the verified source is retried and then exhausts the job', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  let tiebreaks = 0
+  try {
+    const outcome = await runRobustJudgeJob({
+      request: tree.request(['navigation-touch-swipe']),
+      invoke: async (request) => {
+        if (request.judge_stage === 'tiebreak') {
+          tiebreaks += 1
+          return lineCited({ 'navigation-touch-swipe': ['pass', [{ path: 'src/nav.ts', start_line: 2, end_line: 40 }]] })
+        }
+        return verdicts({ 'navigation-touch-swipe': request.judge_sample === 1 ? 'pass' : 'fail' })
+      },
+    })
+    assert.equal(outcome.ok, false)
+    assert.equal(outcome.results, null)
+    assert.equal(tiebreaks, JUDGE_ATTEMPTS)
+    assert.match(outcome.tiebreak.attempts.at(-1).error, /line range/)
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+test('a third-sample pass without line citations is malformed', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  try {
+    const outcome = await runRobustJudgeJob({
+      request: tree.request(['navigation-touch-swipe']),
+      invoke: async (request) => (request.judge_stage === 'tiebreak'
+        ? lineCited({ 'navigation-touch-swipe': ['pass'] })
+        : verdicts({ 'navigation-touch-swipe': request.judge_sample === 1 ? 'pass' : 'fail' })),
+    })
+    assert.equal(outcome.ok, false)
+    assert.match(outcome.tiebreak.attempts.at(-1).error, /cites no source lines/)
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+test('a job is unresolved when either sample exhausts, never decided by one sample', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  try {
+    const outcome = await runRobustJudgeJob({
+      request: tree.request(['navigation-touch-swipe']),
+      invoke: async (request) => (request.judge_sample === 2 ? '{truncated' : verdicts({ 'navigation-touch-swipe': 'pass' })),
+    })
+    assert.equal(outcome.ok, false)
+    assert.equal(outcome.results, null)
+    assert.equal(outcome.samples.length, 2)
+    assert.equal(outcome.samples[0].ok, true)
+    assert.equal(outcome.samples[1].ok, false)
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+test('an evidence-job third sample validates its line citations against the evidence view', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-evidence-tiebreak-'))
+  await mkdir(join(root, 'candidate'), { recursive: true })
+  await writeFile(join(root, 'index.json'), '{}\n')
+  await writeFile(join(root, 'candidate/handoff.md'), '# Handoff\nU3 remains open: decide narrow readability.\n')
+  const id = 'assumption-final-handoff-preserves-decisions'
+  try {
+    const request = buildJudgeRequest({
+      rubrics, job: 'assumption-handling', authority,
+      evidenceViews: { 'assumption-handling': { root, index: join(root, 'index.json'), packet: 'packet' } },
+    })
+    const outcome = await runRobustJudgeJob({
+      request,
+      invoke: async (next) => {
+        if (next.audit_stage === 'tiebreak-span-audit') return auditOutput([id])
+        if (next.judge_stage === 'tiebreak') {
+          return JSON.stringify({ results: next.criteria.map((criterion) => ({
+            id: criterion, verdict: 'pass', rationale: 'the tester handoff preserves U3',
+            evidence: ['candidate/handoff.md'],
+            citations: [{ path: 'candidate/handoff.md', start_line: 2, end_line: 2 }],
+          })) })
+        }
+        return JSON.stringify({ results: next.criteria.map((criterion) => ({
+          id: criterion,
+          verdict: criterion === id && next.judge_sample === 1 ? 'pass' : 'fail',
+          rationale: 'sample verdict',
+          evidence: ['candidate/handoff.md'],
+        })) })
+      },
+    })
+    assert.equal(outcome.ok, true)
+    assert.equal(outcome.results.find((result) => result.id === id).verdict, 'pass')
+    assert.deepEqual(outcome.tiebreak.criteria, [id])
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+// Round-1 audit: source judges never saw the fixture scenario, so a judge
+// passed present mode without the marker the scenario requires.
+test('every judge prompt carries each criterion\'s fixture requirement', () => {
+  const request = buildJudgeRequest({ rubrics, job: 'scene-kit', authority, sources: ['src/a.ts'] })
+  assert.match(request.prompt, /mode-present-title-focused[\s\S]*Fixture requirement[^\n]*Present mode is title-focused[^\n]*shows its marker and one-line title/)
+  assert.match(request.rubric_slice, /WHEN the presentation is in present mode/)
+  assert.match(request.prompt, /every clause of the fixture requirement/i)
+  const evidence = buildJudgeRequest({ rubrics, job: 'assumption-handling', authority })
+  assert.match(evidence.rubric_slice, /Requirement \(eval-owned\): Judges implementation-workflow evidence/)
+})
+
+test('evidence judges compare the exploration plan with what was observed or disclosed', () => {
+  const request = buildJudgeRequest({ rubrics, job: 'testing-evidence', authority })
+  assert.match(request.prompt, /exploration plan[^.]*commits[\s\S]*observed or disclosed/i)
+})
+
+test('a cached single-sample judge output is not reused under the dual-sample protocol', async () => {
+  const sceneResults = JSON.parse(judgeOutput(criteriaForJob(automated, 'scene-kit'))).results
+  const invoked = []
+  const saved = []
+  const outcome = await runProductJudging({
+    rubrics, authority, evidence: [], sources: [],
+    loadJob: async ({ id }) => (id === 'scene-kit' ? { results: sceneResults, attempts: [] } : null),
+    saveJob: async (record) => saved.push(record),
+    invoke: async ({ job, criteria }) => {
+      invoked.push(job)
+      return judgeOutput(criteria)
+    },
+  })
+  assert.equal(outcome.reused_jobs.includes('scene-kit'), false)
+  assert.equal(invoked.filter((job) => job === 'scene-kit').length, JUDGE_SAMPLES)
+  const scene = saved.find(({ id }) => id === 'scene-kit')
+  assert.equal(scene.protocol, JUDGING_PROTOCOL)
+  assert.equal(scene.samples.length, JUDGE_SAMPLES)
+  assert.ok(scene.consensus.every(({ basis }) => basis === 'consensus-pass'))
+  assert.deepEqual(outcome.consensus['scene-kit'], scene.consensus)
+})
+
+test('a cached record that does not reproduce from its samples is re-judged', async () => {
+  const criteria = criteriaForJob(automated, 'scene-kit')
+  const sampleResults = JSON.parse(judgeOutput(criteria)).results
+  const samples = [1, 2].map(() => ({ ok: true, results: sampleResults, attempts: [], audit_results: null, audit_attempts: [] }))
+  const { results } = resolveJudgeSamples({ criteria, samples })
+  const tampered = results.map((result, index) => (index === 0 ? { ...result, verdict: 'fail' } : result))
+  const outcome = await runProductJudging({
+    rubrics, authority, evidence: [], sources: [],
+    loadJob: async ({ id }) => (id === 'scene-kit'
+      ? { protocol: JUDGING_PROTOCOL, results: tampered, samples, tiebreak: null, attempts: [] } : null),
+    invoke: async ({ criteria: asked }) => judgeOutput(asked),
+  })
+  assert.equal(outcome.reused_jobs.includes('scene-kit'), false)
+  assert.equal(outcome.judges['scene-kit'][0].verdict, 'pass')
+})
+
+test('evidence judges are told the Runner non-convergence notice is not the candidate handoff', () => {
+  for (const job of ['testing-evidence', 'assumption-handling']) {
+    const request = buildJudgeRequest({ rubrics, job, authority })
+    assert.match(request.prompt, /acceptance-gate-notice[^.]*generated by Agent Runner[^.]*not candidate-written/i, job)
+  }
+})
+
+test('a non-retryable judge error is not retried', async () => {
+  let calls = 0
+  const result = await runJudgeJob({
+    request: buildJudgeRequest({ rubrics, job: 'scene-kit', authority, evidence: [], sources: [] }),
+    invoke: async () => {
+      calls += 1
+      throw Object.assign(new Error('invalid_json_schema'), { retryable: false })
+    },
+  })
+  assert.equal(result.ok, false)
+  assert.equal(calls, 1)
+})
+
+test('the assumption judge is told to run the omission check', () => {
+  const request = buildJudgeRequest({ rubrics, job: 'assumption-handling', authority })
+  assert.match(request.prompt, /run the omission check/)
+  assert.match(request.prompt, /surfaces a gap must never score lower/)
+  assert.match(request.prompt, /Plan commitments the log did not cover are scored under\s+testing-evidence, not here/)
+})
+
+// Round-3 audit: a single per-sample audit inverted one vote, which turned a
+// unanimous pass into a manufactured split. A contradicted sample now sends
+// the criterion to the blind third sample, and only two span audits that
+// agree can withdraw a pass.
+// Round-4 audit: with one vote disputed, one tiebreak call decided the
+// criterion alone. A dispute now counts only after an independent check
+// confirms the audit's stated contradiction, and the verdict always rests on
+// two agreeing signals.
+function disputeScenario({ checks, tiebreak = null, votes = { 1: 'pass', 2: 'pass' } }) {
+  const stages = []
+  const invoke = async (next) => {
+    stages.push(`${stageOf(next)}:${next.judge_sample ?? '-'}`)
+    if (next.audit_stage === 'contradiction-check') {
+      return auditOutput(['navigation-touch-swipe'], { 'navigation-touch-swipe': checks.shift() })
+    }
+    if (next.audit_stage === 'source-pass-audit') {
+      return auditOutput(['navigation-touch-swipe'], next.judge_sample === 2
+        ? { 'navigation-touch-swipe': 'contradicted' } : {})
+    }
+    if (next.audit_stage === 'tiebreak-span-audit') return auditOutput(['navigation-touch-swipe'])
+    if (next.judge_stage === 'tiebreak') {
+      return lineCited({ 'navigation-touch-swipe': tiebreak === 'pass'
+        ? ['pass', [{ path: 'src/nav.ts', start_line: 3, end_line: 3 }]] : ['fail'] })
+    }
+    return verdicts({ 'navigation-touch-swipe': votes[next.judge_sample] })
+  }
+  return { stages, invoke }
+}
+
+test('a dispute the check refutes leaves the sample\'s vote standing, so agreeing votes need no third sample', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  try {
+    const scenario = disputeScenario({ checks: ['contradicted'] })
+    const outcome = await runRobustJudgeJob({ request: { ...tree.request(['navigation-touch-swipe']), source_audit: true },
+      invoke: scenario.invoke })
+    assert.equal(scenario.stages.some((stage) => stage.startsWith('tiebreak')), false)
+    assert.equal(outcome.results[0].verdict, 'pass')
+    assert.equal(outcome.consensus[0].basis, 'consensus-pass')
+    assert.deepEqual(outcome.consensus[0].disputes, [{ sample: 2, vote: 'pass', contradiction_confirmed: false }])
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+test('a confirmed dispute turns that vote and the blind third sample decides between two signals', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  try {
+    const scenario = disputeScenario({ checks: ['confirmed'], tiebreak: 'pass' })
+    const outcome = await runRobustJudgeJob({ request: { ...tree.request(['navigation-touch-swipe']), source_audit: true },
+      invoke: scenario.invoke })
+    assert.ok(scenario.stages.includes('tiebreak:3'), scenario.stages.join(' '))
+    assert.equal(outcome.results[0].verdict, 'pass')
+    assert.equal(outcome.consensus[0].basis, 'majority-pass')
+    assert.deepEqual(outcome.consensus[0].sample_verdicts, ['pass', 'fail', 'pass'])
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+test('a confirmed dispute that agrees with the other sample settles the criterion without a third sample', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  try {
+    const scenario = disputeScenario({ checks: ['confirmed'], votes: { 1: 'fail', 2: 'pass' } })
+    const outcome = await runRobustJudgeJob({ request: { ...tree.request(['navigation-touch-swipe']), source_audit: true },
+      invoke: scenario.invoke })
+    assert.equal(scenario.stages.some((stage) => stage.startsWith('tiebreak')), false)
+    assert.equal(outcome.results[0].verdict, 'fail')
+    assert.equal(outcome.consensus[0].basis, 'consensus-fail')
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+// Round-4 audit: judges failed criteria on hypothetical deletions, inputs, and
+// controls the candidate never produces, and read undefined terms differently.
+test('every judge and audit prompt limits judgment to established behavior and plain fixture meaning', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  const prompts = new Map()
+  try {
+    for (const job of ['scene-kit', 'testing-evidence']) {
+      prompts.set(`${job} sample`, buildJudgeRequest({ rubrics, job, authority, sources: ['src/nav.ts'] }).prompt)
+    }
+    const request = buildJudgeRequest({ rubrics, job: 'scene-kit', authority, sources: ['src/nav.ts'],
+      neutral: { root: tree.root, source_root: join(tree.root, 'source'), requirements_root: join(tree.root, 'r') } })
+    prompts.set('source audit', (await buildSourceAuditRequest({ request, primaryResults: [{ id: request.criteria[0],
+      verdict: 'pass', rationale: 'r', evidence: ['e'], citations: ['src/nav.ts'] }] })).prompt)
+    prompts.set('tiebreak', buildTiebreakRequest({ request, criteria: [request.criteria[0]],
+      inventory: { root: tree.root, kind: 'neutral source', paths: ['src/nav.ts'] } }).prompt)
+    prompts.set('span audit', buildSpanAuditRequest({ request, passes: [{ id: request.criteria[0], rationale: 'r' }],
+      spans: new Map() }).prompt)
+    prompts.set('contradiction check', buildContradictionCheckRequest({ request, claims: [{ id: request.criteria[0],
+      verdict: 'pass', rationale: 'r', contradiction: { rationale: 'c', evidence: ['e'] }, material: [] }] }).prompt)
+    for (const [name, prompt] of prompts) {
+      assert.match(prompt, /Judge only behavior the cited source and recorded evidence establish/, name)
+      assert.match(prompt, /hypothetical input, file deletion, or rendering the candidate does not produce/, name)
+      assert.match(prompt, /plain meaning of the fixture requirement/, name)
+    }
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+test('a third-sample citation prefixed with the neutral source directory resolves to its inventory path', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  try {
+    const outcome = await runRobustJudgeJob({
+      request: tree.request(['navigation-touch-swipe']),
+      invoke: async (request) => {
+        if (request.audit_stage === 'tiebreak-span-audit') return auditOutput(['navigation-touch-swipe'])
+        if (request.judge_stage === 'tiebreak') {
+          return lineCited({ 'navigation-touch-swipe': ['pass', [{ path: 'source/src/nav.ts', start_line: 3, end_line: 3 }]] })
+        }
+        return verdicts({ 'navigation-touch-swipe': request.judge_sample === 1 ? 'pass' : 'fail' })
+      },
+    })
+    assert.equal(outcome.ok, true)
+    assert.deepEqual(outcome.results[0].citations, ['src/nav.ts'])
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
+
+// Round-5 audit: the saved judge record dropped dispute_checks, so a reader
+// could not see why a disputed vote stood or turned.
+test('a saved judge record and the judging result keep every dispute\'s check', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-dispute-record-'))
+  await mkdir(join(root, 'source/src'), { recursive: true })
+  await writeFile(join(root, 'source/src/nav.ts'), NAV_SOURCE)
+  const neutral = { root, source_root: join(root, 'source'), audit_root: root, requirements_root: join(root, 'r'),
+    manifest: { entries: [{ namespace: 'neutral-source', path: 'source/src/nav.ts' }] } }
+  const disputedId = 'navigation-touch-swipe'
+  const saved = []
+  try {
+    const outcome = await runProductJudging({
+      rubrics, authority, neutral,
+      saveJob: async (record) => saved.push(record),
+      invoke: async (request) => {
+        if (request.audit_stage === 'contradiction-check') {
+          return JSON.stringify({ results: request.criteria.map((id) => ({ id, classification: 'contradicted',
+            rationale: 'the stated reason does not hold under the guidance', evidence: ['src/nav.ts:3'] })) })
+        }
+        if (request.audit_stage === 'source-pass-audit') {
+          return auditOutput(request.criteria, request.judge_sample === 2 && request.job === 'scene-kit'
+            ? { [disputedId]: 'contradicted' } : {})
+        }
+        return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
+          rationale: 'implemented', evidence: ['src/nav.ts'], citations: ['src/nav.ts'] })) })
+      },
+    })
+    const scene = saved.find(({ id }) => id === 'scene-kit')
+    assert.deepEqual(scene.dispute_checks.map(({ id, sample, classification }) => ({ id, sample, classification })),
+      [{ id: disputedId, sample: 2, classification: 'contradicted' }])
+    assert.match(scene.dispute_checks[0].rationale, /does not hold/)
+    assert.deepEqual(outcome.dispute_checks['scene-kit'], scene.dispute_checks)
+    assert.equal(scene.consensus.find(({ id }) => id === disputedId).basis, 'consensus-pass')
+
+    // A reused job keeps its checks too.
+    const reused = await runProductJudging({
+      rubrics, authority, neutral,
+      loadJob: async ({ id }) => saved.find((record) => record.id === id) ?? null,
+      invoke: async () => { throw new Error('a valid cached job is not re-judged') },
+    })
+    assert.ok(reused.reused_jobs.includes('scene-kit'))
+    assert.deepEqual(reused.dispute_checks['scene-kit'], scene.dispute_checks)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })

@@ -204,6 +204,7 @@ export function applyOutcomeEvent(outcome, event) {
             phase: event.phase ?? null,
             reason: event.reason ?? null,
             gate: event.gate ?? null,
+            ...(event.second_opinion ? { second_opinion: event.second_opinion } : {}),
           },
           failed_phase: null,
           failure: null,

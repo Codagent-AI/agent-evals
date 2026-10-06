@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-10-02T14-07-51-502782316Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_verify-change__sub_verify-change__review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": "product verification",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The verification workflow used an address that failed the IPv4 loopback requirement.",
+      "evidence": [
+        "verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost."
+      ],
+      "handling": "The available artifacts do not show the command used or the reason for the address choice.",
+      "consequence": "The IPv4 loopback verification check failed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check establishes the workflow effect, but the artifacts do not show whether it arose from an assumption, missing context, or an execution error.",
+      "resolution": "unresolved",
+      "id": "486d9653bb12bd5f"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "product verification",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The default made-by attribution was absent.",
+      "evidence": [
+        "attribution-default-link: fail — Default made by and-scene GitHub attribution is missing."
+      ],
+      "handling": "No implementation decision or explanation for the missing link is visible.",
+      "consequence": "The attribution check failed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The product defect is observable, but the supplied evidence cannot identify the assumption or context gap behind it.",
+      "resolution": "unresolved",
+      "id": "d8def69fc73111a9"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "product verification",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The visual helper omitted required review warnings.",
+      "evidence": [
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "The supplied artifacts show the failed checks but not how the helper requirements were interpreted.",
+      "consequence": "Three visual helper checks failed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The omissions materially affect the delivered helper; their cause cannot be distinguished from the available evidence.",
+      "resolution": "unresolved",
+      "id": "2fef0f2d43f7fc72"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "product verification",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The demo did not satisfy the required content, order, and supported navigation checks.",
+      "evidence": [
+        "demo-nine-step-content-and-order: fail",
+        "demo-required-scene-content: fail",
+        "demo-supported-navigation: fail",
+        "demo-route-and-registration: pass",
+        "demo-evolving-scene-structure: pass"
+      ],
+      "handling": "The demo was delivered and registered, but the artifacts do not expose the content or navigation decisions behind these failures.",
+      "consequence": "Three demo checks failed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The checks establish a material product effect without enough detail to classify the underlying decision.",
+      "resolution": "unresolved",
+      "id": "c1af592d97b5cde1"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "product verification",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "One verification of the sample outline failed despite another passing.",
+      "evidence": [
+        "verification-sample-outline: pass — Canonical nine-step sample is present.",
+        "verification-sample-outline: fail"
+      ],
+      "handling": "The artifacts do not identify the scope or criteria of the two checks.",
+      "consequence": "At least one sample-outline verification failed; the product implication is unclear.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The conflicting results cannot be reconciled from the supplied evidence.",
+      "resolution": "unresolved",
+      "id": "e1cb1ed281b28e88"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}

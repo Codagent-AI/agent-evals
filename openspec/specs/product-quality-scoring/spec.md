@@ -115,19 +115,19 @@ The evaluation SHALL score the delivered demo presentation out of 24 using the f
 | Uses stable identities and appropriate grouped-scene architecture | 3 | LLM source review | `demo-stable-identity-and-grouping` |
 | Maintains clear boundaries and scope discipline | 3 | LLM source review | `demo-clear-code-boundaries`, `quality-active-chrome-and-attribution-local`, `demo-scope-discipline` |
 
-The deterministic evaluator SHALL preserve the presentation's initial mode when opening it. Before traversing captions and canonical content, it SHALL explicitly enter browse mode. Before a mode-specific probe, it SHALL explicitly enter that probe's required present or browse mode. It SHALL NOT treat captions intentionally hidden in present mode as missing content. It SHALL change modes through a presentation-exposed mode control when one is discoverable, and SHALL fall back to a keyboard shortcut only when no such control exists. When a presentation exposes more than one mode control, the evaluator SHALL select the control for the mode it is establishing; when it cannot identify exactly one such control, it SHALL raise a resumable harness failure rather than record the unchanged mode as a product deduction.
+The deterministic evaluator SHALL preserve the presentation's initial mode when opening it. Before traversing captions and canonical content, it SHALL explicitly enter browse mode. Before a mode-specific probe, it SHALL explicitly enter that probe's required present or browse mode. It SHALL NOT treat captions intentionally hidden in present mode as missing content. It SHALL change modes through a presentation-exposed mode control when one is discoverable, and SHALL fall back to a keyboard shortcut only when no such control exists. When a presentation exposes more than one mode control, the evaluator SHALL select the control for the mode it is establishing; when it cannot identify exactly one such control, it SHALL raise a resumable harness failure rather than record the unchanged mode as a product deduction. The evaluator SHALL read a presentation's declared mode from a `data-presentation-mode` attribute, or failing that from a `data-mode` attribute on the element carrying the `data-step-count` hook or one containing it, whose value is `present` or `browse`, and SHALL ignore either attribute with any other value and a `data-mode` anywhere else. When a presentation declares no such mode, the evaluator SHALL infer browse mode from a visible caption or table of contents, and SHALL NOT count an element carrying a recognised title hook or the step-marker hook (`data-presentation-marker`) as a caption unless it carries an explicit caption hook. An inferred mode is a heuristic reading under "Deterministic criteria fail only on positive evidence": it MAY position the demo and support a `pass`, but a `fail` SHALL NOT rest on it.
 
 The deterministic evaluator SHALL drive the browser through primitives every supported chrome-devtools-axi build provides, and SHALL NOT depend on adapter behavior that varies between builds, including the adapter's own wait helper and whether a page callback closes over the driving script's scope. Before asserting responsive presentation chrome, the deterministic evaluator SHALL establish and record a suite-owned viewport. It SHALL discover navigation through either stable presentation-owned hooks or equivalent semantic navigation regions, native interactive descendants, accessible names, and current-state attributes. It SHALL accept any ARIA-valid current-state value for the active step. The absence of one non-normative per-control selector SHALL NOT be treated as a product failure. When a conforming page exposes multiple indistinguishable controls and the evaluator cannot identify the intended target deterministically, it SHALL report the observation as unavailable with a harness diagnostic rather than fabricate a product failure. A page that reports no mode or no step index has not answered at all, so the evaluator SHALL raise a resumable harness failure rather than record a product deduction.
 
 Deterministic criteria SHALL assert only mechanically provable behavior. They SHALL NOT require a design choice the candidate-facing fixture does not state. Specifically, the deterministic browse-mode criterion SHALL require browse mode to be reported, the active step's caption to be exposed, and every step to be reached by operating the discovered navigation, either by activating each direct step control or by advancing through the discovered next control from the first step, asserting the resulting step at each activation. It SHALL NOT infer reachability from the number or visibility of controls alone; it SHALL NOT require the active step title in preference to the deck title, a visible table of contents, or simultaneously visible previous and next controls. The deterministic present-mode criterion SHALL require present mode to be reported and the active step's title to be exposed by any visible title element, and SHALL NOT require one element to carry it, nor judge that title's visual prominence. Whether browse and present chrome are composed well SHALL be judged by `mode-browse-reading-focused`, `mode-present-title-focused`, and human review.
 
-The canonical-content checks SHALL verify the registered demo route, the nine required steps in their specified order, their normative titles, captions, and scene content, and their implementation as one evolving scene. Route registration SHALL be judged by whether the declared demo route is reachable and operable. Landing-page link discovery SHALL be recorded as an observation and SHALL NOT by itself produce a product deduction. Normative title and caption comparison SHALL normalize Unicode punctuation variants and whitespace before comparing.
+The canonical-content checks SHALL verify the registered demo route, the nine required steps in their specified order, their normative titles, captions, and scene content, and their implementation as one evolving scene. Route registration SHALL be judged by whether the declared demo route is reachable and operable. Landing-page link discovery SHALL be recorded as an observation and SHALL NOT by itself produce a product deduction. Normative title and caption comparison SHALL normalize Unicode punctuation variants and whitespace before comparing. A step's normative title SHALL be accepted when any visible title-bearing element in either mode exposes it, including that element's own text apart from a nested step marker, and the outline check SHALL NOT require the element the evaluator ranks first as a title to carry it. A step's normative caption SHALL likewise be accepted from any visible caption-bearing element. A title or caption SHALL count as the active step's own only when a traversal of every step shows it on more visible elements at that step than at some other step, so a persistent list of every title or caption, such as a table of contents, never stands in for the active step's title or caption.
 
 The evolving-scene check SHALL derive a scene identity only from a candidate-declared scene identity. When no scene identity is declared, the evaluator SHALL record it as undeclared and SHALL judge the criterion on entity persistence alone, rather than comparing a substitute value with itself.
 
-The navigation checks SHALL exercise present and browse modes, mode changes, supported navigation inputs, direct controls, and end boundaries. When a check activates a navigation control, it SHALL activate it the way a pointer does, focusing the control before firing, so that a presentation which suppresses deck keys while its own control holds focus is observable rather than hidden by the probe. A check that needs a control SHALL establish whichever mode exposes one rather than skip itself when the mode it started in has none. Establishing a precondition SHALL remain neutral, so one defect is not charged to every criterion that happens to position the demo. The reliability and accessibility checks SHALL exercise step transitions and mode interactions, monitor browser failures, and inspect control semantics, current-state exposure, focus behavior, and keyboard operability.
+The navigation checks SHALL exercise present and browse modes, mode changes, supported navigation inputs, direct controls, and end boundaries. When a check activates a navigation control, it SHALL activate it the way a pointer does, focusing the control before firing, so that a presentation which suppresses deck keys while its own control holds focus is observable rather than hidden by the probe. When a check exercises touch navigation, it SHALL deliver a single-finger, predominantly horizontal swipe the way a finger does: a touchstart on the element under the finger within the presentation's stage (or the presentation when it has no stage), a series of touchmove events, and a touchend, all keeping that target, each delivered in its own page task after the page has rendered an animation frame since the previous event, so that a presentation which records the touch start in state committed after a render is observed swiping rather than having its touchend arrive before its touchstart is recorded. A page that renders no frame between touch events within a bounded wait SHALL be reported as a harness failure rather than a product deduction. Because a real finger produces both touch and pointer events, when the touch swipe leaves the step unchanged the check SHALL deliver the same swipe as pointer events: a pointerdown, a series of pointermoves, and a pointerup with pointer type `touch`, a single primary pointer, the same target, path, and per-event render pacing. The swipe observation SHALL record which input paths were tried and the step each produced. A swipe that lands on the wrong step under either path SHALL be positive evidence of a violation. When neither path changes the step, the swipe SHALL be not observed rather than `fail`, so a criterion whose other inputs pass is recorded as not observed with the swipe as its unobserved fact. A check that needs a control SHALL establish whichever mode exposes one rather than skip itself when the mode it started in has none. Establishing a precondition SHALL remain neutral, so one defect is not charged to every criterion that happens to position the demo. The reliability and accessibility checks SHALL exercise step transitions and mode interactions, monitor browser failures, and inspect control semantics, current-state exposure, focus behavior, and keyboard operability.
 
-Every deterministic probe artifact SHALL retain a bounded observation of what the evaluator saw: the established viewport, mode, step index and count, active title and caption, chrome visibility, the discovered controls, and the selector or strategy that matched each navigation role. The retention bound SHALL cover a full traversal of every step in both modes, and a probe that exceeds it SHALL publish the number of observations it dropped rather than truncate silently. A deduction SHALL be adjudicable from the retained artifact without replaying the run.
+Every deterministic probe artifact SHALL retain a bounded observation of what the evaluator saw: the established viewport, mode, step index and count, active title and caption, chrome visibility, the discovered controls, the selector or strategy that matched each navigation role, and the basis of each mode, title, and caption reading as defined in "Deterministic criteria fail only on positive evidence". The retention bound SHALL cover a full traversal of every step in both modes, and a probe that exceeds it SHALL publish the number of observations it dropped rather than truncate silently. A deduction SHALL be adjudicable from the retained artifact without replaying the run.
 
 Candidate text retained as evidence SHALL be normalized exactly once. The evaluator SHALL separate collapsing and truncating candidate text, which SHALL be idempotent, from escaping it for a rationale or report, which SHALL be applied once at the emitting edge. Retained artifacts SHALL NOT contain repeatedly escaped text. A probe that returns evidence which is not a list SHALL be recorded as a single citation rather than decomposed.
 
@@ -141,6 +141,26 @@ Deterministic source facts supplied to an LLM source judge SHALL be treated as l
 - **WHEN** the built demo is available to the evaluator
 - **THEN** deterministic browser checks exercise every demo criterion assigned to them
 - **AND** the scorer applies the listed point allocations to their resolved pass/fail results
+
+#### Scenario: Swipe start is recorded after a render
+- **WHEN** a presentation records a touch start in state that only takes effect after the page renders, and navigates on a sufficiently long horizontal swipe
+- **THEN** the navigation check's swipe moves the presentation one step in the swipe's direction
+- **AND** a presentation with no swipe handling still records no step change from the swipe
+
+#### Scenario: Swipes are handled with pointer events
+- **WHEN** a presentation navigates on a horizontal swipe through `pointerdown` and `pointerup` handlers and ignores touch events
+- **THEN** the touch swipe leaves the step unchanged and the pointer swipe moves the presentation one step in the swipe's direction
+- **AND** `demo-supported-navigation` is not recorded as `fail` on account of the swipe
+- **AND** the observation records that the touch path produced no change and the pointer path did
+
+#### Scenario: No swipe input path changes the step
+- **WHEN** keyboard navigation and direct jump behave correctly but neither the touch swipe nor the pointer swipe changes the step
+- **THEN** `demo-supported-navigation` is recorded as not observed rather than `fail`
+- **AND** the record states that both swipe paths were tried and what each produced
+
+#### Scenario: A swipe lands on the wrong step
+- **WHEN** a swipe left under either input path moves the presentation back a step or more than one step
+- **THEN** `demo-supported-navigation` is recorded as `fail`
 
 #### Scenario: Presentation opens in present mode
 - **WHEN** the presentation's initial mode is present
@@ -246,6 +266,48 @@ Deterministic source facts supplied to an LLM source judge SHALL be treated as l
 - **THEN** the deterministic present-mode criterion passes
 - **AND** the probe observation records every visible title text it considered
 
+#### Scenario: Step titles sit in unhooked chrome elements
+- **WHEN** in both modes the element the evaluator ranks first as a title carries the deck title or nothing
+- **AND** each step title is visible in another title-bearing element, such as an unhooked header `<span>` or `<strong>`
+- **THEN** `demo-nine-step-content-and-order` and `verification-sample-outline` pass
+- **AND** a step title that no visible element exposes in either mode still fails the outline
+
+#### Scenario: A persistent list of every title is visible
+- **WHEN** a visible list shows every step title at every step
+- **AND** no other element exposes the active step title
+- **THEN** `demo-nine-step-content-and-order` and `verification-sample-outline` fail
+- **AND** when another element does expose the active step title beside that list, both pass
+
+#### Scenario: A present-mode title carries its step marker
+- **WHEN** present mode shows a title element whose text is a nested step marker followed by the normative step title
+- **THEN** the evaluator treats the active step title as exposed
+
+#### Scenario: A deck declares its mode as data-mode
+- **WHEN** a presentation declares its mode only as `data-mode="present"` or `data-mode="browse"`
+- **AND** its present mode shows a visible footer paragraph that carries no recognised hook, such as the deck title
+- **THEN** the evaluator reads the declared mode rather than inferring browse mode from that paragraph
+- **AND** a `data-mode` with any other value, such as a theme name, or on an element that neither carries nor contains the `data-step-count` hook, such as a per-mode button, does not declare a presentation mode
+
+#### Scenario: An undeclared mode is inferred as the wrong mode
+- **WHEN** a presentation declares no mode and, after the evaluator operates its present-mode control, a visible unhooked footer paragraph leads the evaluator to infer browse mode
+- **THEN** `demo-present-mode-behavior` and every other criterion whose `fail` would rest on that inferred mode are recorded as not observed rather than `fail`
+- **AND** each record states the mode was inferred and lists the mode declarations the evaluator looked for
+
+#### Scenario: A deck without a mode attribute shows a footer title paragraph in present mode
+- **WHEN** a presentation declares no explicit mode attribute
+- **AND** its present-mode title is a footer paragraph carrying a recognised title hook
+- **THEN** the evaluator infers present mode rather than reading that paragraph as a browse caption
+
+#### Scenario: A deck without a mode attribute shows a footer step-marker paragraph in both modes
+- **WHEN** a presentation declares no explicit mode attribute
+- **AND** its footer shows a paragraph carrying the step-marker hook, such as `01 / 09 · the ask`, in both modes
+- **THEN** the evaluator infers present mode when no caption or table of contents is visible, rather than reading the marker paragraph as a browse caption
+- **AND** the marker does not stand in for a step title: when no other visible element exposes the active step title, `demo-nine-step-content-and-order` and `verification-sample-outline` fail
+
+#### Scenario: An unhooked step-title paragraph precedes the caption
+- **WHEN** browse mode shows an unhooked step-title paragraph before the caption paragraph
+- **THEN** `demo-required-scene-content` accepts the caption from the caption paragraph
+
 #### Scenario: The demo route is reachable but unlinked
 - **WHEN** the declared demo route is registered and reachable but the landing page does not link to it
 - **THEN** `demo-route-and-registration` passes
@@ -310,7 +372,9 @@ Deterministic source facts supplied to an LLM source judge SHALL be treated as l
 ### Requirement: Scene kit correctness
 The evaluation SHALL score the reusable scene kit out of 24 using LLM review of delivered source and structured browser evidence. The judge SHALL assess implementation of the technical contracts rather than the aesthetic quality of the demo that uses them.
 
-For transition sequencing, the judge SHALL require persisting motion and newcomer delay to share one settlement contract or executable proof that newcomers wait until continuing entities settle; the presence of timing constants or named primitives alone SHALL NOT earn credit. Sharing or importing a timing value SHALL be insufficient unless persistent motion consumes that exact configuration, or newcomer admission waits on an observable completion signal from persistent motion. Touch navigation SHALL distinguish predominantly horizontal single-touch swipes from vertical scrolling and multi-touch gestures.
+For transition sequencing, the judge SHALL require persisting motion and newcomer delay to share one settlement contract or executable proof that newcomers wait until continuing entities settle; the presence of timing constants or named primitives alone SHALL NOT earn credit. Sharing or importing a timing value SHALL be insufficient unless persistent motion consumes that exact configuration, or newcomer admission waits on an observable completion signal from persistent motion. Newcomer sequencing SHALL follow the fixture design's timing mechanism: a newcomer entry delay at least as long as the continuing layout transition, applied to the newcomer only, SHALL satisfy `entity-newcomer-after-settle`; the same delay applied to the continuing motion, an entry that can start early, or no entry motion SHALL fail it. A step id SHALL be stable only when it survives inserting, removing, or reordering steps; a position-derived id fails `scene-step-narration-and-identity`. Newcomer timing SHALL be judged on the visible entry, so a zero-delay wrapper around an inner node whose entry is delayed past the layout transition passes. A warning SHALL identify an element by its visible text, or for a textless element by its accessible name, a stable hook, or a selector path. In present mode the marker is a visible indicator of the active step's position or section beside the title. Uniform fit SHALL be judged at the eval-owned reference viewports 1280×720 and 390×844 in both modes. Touch navigation SHALL be judged against the fixture scenario only: a horizontal swipe to the left advances one step and a swipe to the right goes back one step. The judge SHALL NOT require rejection of vertical scrolling or multi-touch gestures, which the fixture does not state.
+
+The step number SHALL count as on screen only when it is rendered visibly; an `aria-label`, other attribute, or visually hidden text SHALL NOT satisfy `scene-order-derived-numbering`. The default attribution SHALL link to the and-scene GitHub repository, `https://github.com/Codagent-AI/and-scene`; a link to another owner or repository path SHALL fail `attribution-default-link`. The deterministic attribution fact SHALL report the GitHub targets the source contains so the judge sees a wrong target by name. No network request decides the link; a reachability probe would make identical evidence score differently.
 
 | Subcomponent | Points | Criteria |
 |---|---:|---|
@@ -334,9 +398,18 @@ For transition sequencing, the judge SHALL require persisting motion and newcome
 - **WHEN** the kit delays newcomers using a duration that is not applied to persistent layout motion and supplies no executable settlement proof
 - **THEN** `entity-newcomer-after-settle` fails
 
-#### Scenario: Vertical gesture has horizontal drift
-- **WHEN** a touch gesture moves primarily vertically while also exceeding the horizontal distance threshold
-- **THEN** the kit does not navigate
+#### Scenario: Horizontal swipe navigation is credited
+- **WHEN** the kit maps a left swipe to the next step and a right swipe to the previous step through its navigation
+- **THEN** `navigation-touch-swipe` passes
+- **AND** the absence of vertical-scroll or multi-touch rejection does not fail it
+
+#### Scenario: Step number exists only as an accessible name
+- **WHEN** the position-derived step number appears only in an `aria-label`
+- **THEN** `scene-order-derived-numbering` fails
+
+#### Scenario: Attribution links to a guessed repository
+- **WHEN** the default attribution links to a GitHub path other than `https://github.com/Codagent-AI/and-scene`
+- **THEN** `attribution-default-link` fails
 
 ### Requirement: Presentation skill correctness
 The evaluation SHALL score the delivered presentation skill out of seven points using LLM review of the skill, its templates, delivered source, and workflow evidence.
@@ -350,7 +423,7 @@ The evaluation SHALL score the delivered presentation skill out of seven points 
 
 Visual-composition inspection and visual-warning review SHALL NOT receive presentation-skill points. The candidate's observable proof that those activities occurred and were handled SHALL be evaluated by the testing-evidence component.
 
-For scaffold scenarios that can be exercised deterministically, prose instructions alone SHALL NOT establish correctness. The judge SHALL require focused executable tests or verified workflow evidence covering empty, already-scaffolded, partial-scaffold, monorepo, standalone, and ambiguous nonempty targets, including template resolution and dependency handling from the resolved target. Acceptable proof SHALL include either a temporary-directory driver that materializes the target state and verifies resulting files and dependencies, or a revision-bound workflow transcript recording the inputs, user choice when interactive confirmation is required, mutations, and observed outcome. An interactive branch SHALL NOT require a live human in a unit test, but prose that merely directs an agent to ask SHALL NOT prove the branch.
+The fixture design makes `SKILL.md` the agent procedure for scaffold detection, target resolution, and confirmation, and its test plan verifies those branches through agent acceptance runs rather than unit tests. For `skill-already-scaffolded`, `skill-partial-scaffold`, `skill-monorepo-target`, `skill-standalone-target`, `skill-nonempty-confirmation`, and `skill-template-path-resolution`, an explicit `SKILL.md` instruction that states the branch's detection condition and required action SHALL earn credit without an executable test, driver, or transcript. A missing, ambiguous, or contradictory instruction, or a delivered helper or template that implements the branch differently, SHALL fail the criterion. `skill-empty-directory-scaffold` SHALL additionally require a complete bootstrap template and a test that materializes it in a fresh temporary location and builds it, as the fixture's integration test plan describes; any materialization pattern SHALL count. `skill-scaffold-style-neutral` SHALL be judged from the bootstrap template's dependencies and styles.
 
 #### Scenario: Skill contracts are scored
 - **WHEN** the LLM judge evaluates the presentation skill
@@ -367,18 +440,22 @@ For scaffold scenarios that can be exercised deterministically, prose instructio
 - **THEN** that record is evaluated under testing-evidence quality
 - **AND** it does not award presentation-skill points
 
-#### Scenario: Scaffold edge cases exist only as instructions
-- **WHEN** the skill describes partial-scaffold and monorepo behavior without executable tests or verified workflow evidence for those cases
-- **THEN** the affected scaffold criteria fail
+#### Scenario: Scaffold branches are explicit instructions
+- **WHEN** `SKILL.md` states the partial-scaffold and monorepo detection conditions and their required actions, with no executable test for those branches
+- **THEN** `skill-partial-scaffold` and `skill-monorepo-target` pass
 
-#### Scenario: Interactive scaffold confirmation is exercised
-- **WHEN** a test driver or revision-bound workflow record supplies the ambiguous nonempty target, records the simulated or actual user choice, and verifies the resulting mutations
-- **THEN** that evidence is eligible for `skill-nonempty-confirmation`
+#### Scenario: A scaffold branch is only implied
+- **WHEN** `SKILL.md` says only to scaffold if needed
+- **THEN** the branch-specific scaffold criteria fail
+
+#### Scenario: Empty-directory scaffold is materialized by a test
+- **WHEN** a test creates a temporary directory, copies the bootstrap template into a new app path inside it, and builds it
+- **THEN** that test satisfies the executable part of `skill-empty-directory-scaffold`
 
 ### Requirement: Verification tool correctness
 The evaluation SHALL score the delivered verification tooling out of seven points using LLM review of its source, executable behavior, and produced artifacts. The four hard-gate criteria SHALL remain outside this point allocation.
 
-The verifier SHALL prove that browser checks connect to the preview process it started and SHALL fail if that process exits; an unrelated stale process on a fixed port SHALL NOT satisfy readiness. This behavior SHALL be scored only under `verification-preview-process-ownership`; `verification-ipv4-loopback` SHALL score only consistent use of `127.0.0.1` for preview binding, readiness probes, and browser URLs. Screenshot settlement SHALL observe animation completion or consume the exact transition configuration used by persistent scene motion; a duplicated fixed delay or an imported value that persistent motion does not consume SHALL NOT satisfy settlement. Warning criteria SHALL require executable regression or verified browser evidence that each warning fires and that intentional-overlap suppression does not hide unrelated collisions; token presence alone SHALL NOT earn credit. Evidence from an earlier revision MAY satisfy a warning criterion only when verified lineage establishes it as an ancestor of the final SHA, hashes show the relevant warning implementation is unchanged, and retained raw executable output demonstrates the behavior; a narrative assertion about an earlier pass SHALL NOT suffice.
+The verifier SHALL prove that browser checks connect to the preview process it started and SHALL fail if that process exits; an unrelated stale process on a fixed port SHALL NOT satisfy readiness. This behavior SHALL be scored only under `verification-preview-process-ownership`; `verification-ipv4-loopback` SHALL score only consistent use of `127.0.0.1` for preview binding, readiness probes, and browser URLs. Preview ownership SHALL be satisfied by either a fresh self-reserved port with a strict port and readiness taken from the spawned child's own announcement, or readiness polling raced against the child's exit; polling a fixed port with only a sampled liveness check SHALL NOT satisfy it. Console and page errors SHALL both fail verification in source, and one representative browser-error test asserting the non-zero exit and offending step SHALL suffice, as the fixture's end-to-end plan describes. A missing sample SHALL fail at a check that reports the sample as missing, as the design's sample assertion and the end-to-end plan's named failed phase require; a later unrelated timeout SHALL NOT satisfy `verification-missing-sample-fails`. Screenshot settlement SHALL be satisfied by a configured settle interval applied after each step advance and before each capture, as the fixture scenario states, or by an observed completion condition; the interval SHALL NOT be required to derive from the runtime motion configuration. Step capture SHALL require a test that runs the helper or its capture loop and asserts one screenshot per step; asserting the expected files SHALL suffice. Warning criteria SHALL require executable regression or verified browser evidence that each warning fires; token presence alone SHALL NOT earn credit. Overlap detection SHALL be judged on overlapping visible text or chrome elements, chrome counting whether or not it contains text, and skipping every pair with at least one element inside an allow-overlap subtree SHALL satisfy `visual-helper-allow-overlap`. Evidence from an earlier revision MAY satisfy a warning criterion only when verified lineage establishes it as an ancestor of the final SHA, hashes show the relevant warning implementation is unchanged, and retained raw executable output demonstrates the behavior; a narrative assertion about an earlier pass SHALL NOT suffice.
 
 | Subcomponent | Points | Criteria |
 |---|---:|---|
@@ -400,6 +477,10 @@ The verifier SHALL prove that browser checks connect to the preview process it s
 - **WHEN** the verifier's own preview process exits because its port is occupied while another server responds on that port
 - **THEN** `verification-preview-process-ownership` fails
 - **AND** `verification-ipv4-loopback` remains independently scored from consistent loopback addressing
+
+#### Scenario: Screenshots wait for a configured interval
+- **WHEN** the helper waits a configured settle interval after each step advance before capturing
+- **THEN** `visual-helper-settled-screenshots` passes without a transition contract shared with runtime motion
 
 #### Scenario: Warning implementation is not exercised
 - **WHEN** warning-related tokens or helper functions exist but no executable regression or verified browser evidence demonstrates the warning behavior
@@ -468,7 +549,9 @@ An official candidate pass SHALL require all of the following: a total score of 
 
 Before human review, a complete candidate automated result SHALL pass automated eligibility only when the automated subtotal is at least 40 out of 70, both 15-out-of-24 automated component floors are met, and all four hard gates pass. The 40-point threshold SHALL equal the 70-point official threshold minus the maximum 30 human-review points. A failed automated eligibility requirement SHALL conclusively fail the candidate without human review or an official score. An incomplete automated score, floor, or gate SHALL leave automated eligibility unavailable and SHALL NOT be converted into a product failure.
 
-Failure of a hard gate SHALL prevent an official candidate pass but SHALL NOT erase the numerical score supported by available evidence. A workflow failure, evaluation-harness failure, or pending human review that prevents the official pass contract from being evaluated SHALL make the candidate product verdict unavailable rather than converting unobserved behavior into a product failure. As a narrow exception, a reproducible product-owned inability to install dependencies, build, or serve the frozen final candidate SHALL conclusively fail the applicable hard gate and candidate product verdict even when it prevents browser or human evidence from being collected. That exception SHALL preserve completed component results, leave unobserved criteria unscored, and SHALL NOT fabricate an official score or human ratings. A harness failure after an official score and verdict have been durably recorded SHALL preserve that product result under the evaluation-outcomes rules.
+`verification-sample-outline` SHALL be derived during scoring from the final verdicts of `demo-route-and-registration` and `demo-nine-step-content-and-order`: it SHALL pass when both final verdicts are `pass`, fail when either is `fail`, and remain unobserved only while either is unresolved. A criterion's final verdict SHALL be its owner's verdict or, when not observed, its fallback judge's verdict, after any second opinion. The result SHALL retain the browser evaluator's raw outline gate beside the derived gate. The raw gate SHALL pass when both inputs pass, fail only when an input has a definite `fail`, and be unobserved otherwise; a not-observed input SHALL never produce a raw outline failure. Every hard gate SHALL be applied using its second-opinion verdict when it received one, under the failure-second-opinion capability.
+
+Failure of a hard gate SHALL prevent an official candidate pass but SHALL NOT erase the numerical score supported by available evidence. A workflow failure, evaluation-harness failure, or pending human review that prevents the official pass contract from being evaluated SHALL make the candidate product verdict unavailable rather than converting unobserved behavior into a product failure. As a narrow exception, a reproducible product-owned inability to install dependencies, build, or serve the frozen final candidate, upheld by its second opinion, SHALL conclusively fail the applicable hard gate and candidate product verdict even when it prevents browser or human evidence from being collected. That exception SHALL preserve completed component results, leave unobserved criteria unscored, and SHALL NOT fabricate an official score or human ratings. A harness failure after an official score and verdict have been durably recorded SHALL preserve that product result under the evaluation-outcomes rules.
 
 The reference baseline SHALL NOT receive an official candidate pass/fail verdict, candidate total threshold, component-floor gate, or human-rating gate.
 
@@ -505,6 +588,7 @@ The reference baseline SHALL NOT receive an official candidate pass/fail verdict
 
 #### Scenario: Product cannot install, build, or serve
 - **WHEN** deterministic verification establishes that reproducible product behavior prevents the frozen final candidate from installing, building, or serving
+- **AND** the failure's second opinion upholds it
 - **THEN** the applicable hard gate fails and the candidate product verdict is conclusively `fail`
 - **AND** the evaluator preserves available component results without assigning points or human ratings to unobserved behavior
 - **AND** it reports no official score
@@ -523,6 +607,20 @@ The reference baseline SHALL NOT receive an official candidate pass/fail verdict
 - **WHEN** the reference's applicable automated and human components are complete
 - **THEN** the evaluator reports its score out of 92
 - **AND** it applies no official candidate pass/fail verdict or candidate component floor
+
+#### Scenario: The outline gate follows fallback-resolved criteria
+- **WHEN** `demo-route-and-registration` passes in the browser and `demo-nine-step-content-and-order` is not observed and resolved as `pass` by its fallback judge
+- **THEN** the derived `verification-sample-outline` gate passes
+- **AND** the result retains the browser's raw outline gate beside it
+
+#### Scenario: An outline input stays unresolved
+- **WHEN** an outline input criterion is not observed and its fallback verdict is missing
+- **THEN** the derived outline gate is unobserved and automated eligibility is unavailable
+- **AND** the gate is not recorded as failed
+
+#### Scenario: An outline input is overturned
+- **WHEN** `demo-nine-step-content-and-order` failed in the browser, the other outline input passed, and the criterion's overturn is accepted
+- **THEN** the derived outline gate passes
 
 ### Requirement: Controlled scoring and rubric provenance
 The suite-owned scorer SHALL own criterion identifiers, evaluator assignments, point allocations, component applicability, score denominators, hard gates, thresholds, and final calculations. Neither an LLM judge nor the human-review interface SHALL change those policies while producing evaluation results. Every machine-evaluated criterion result SHALL include its identifier, pass/fail verdict, rationale, and cited verified evidence.
@@ -568,10 +666,80 @@ The automated product rubric and human-review rubric SHALL have distinct explici
 - **THEN** it records distinct version identifiers and SHA-256 hashes for the automated and human-review rubrics
 - **AND** it records component applicability and the score denominator
 
+### Requirement: Robust judge verdicts
+No single model call SHALL decide a scored criterion. Every scored judge job SHALL be judged by two independent samples with identical inputs, run concurrently at an explicitly pinned reasoning effort. Each source-job sample SHALL pass through its own closed-world source audit: a `contradicted` classification SHALL mark that sample's vote disputed, and the vote SHALL turn only when an independent contradiction check confirms the audit's stated contradiction, an `insufficient` classification SHALL trigger at most one focused re-cite, and a verdict still undecided after the re-cite SHALL stand as the sample's vote, except that a browser-fallback pass SHALL then fail because it must be proven from source. A verdict both samples agree on, with neither vote disputed, SHALL stand, pass or fail. A criterion the samples disagree on, or whose vote either sample's audit disputed, SHALL be settled by a third independent sample that receives the job's unchanged context and never sees the first two verdicts; its vote decides the majority.
+
+A majority pass SHALL cite between one and twelve line spans, each under 200 lines, whose paths are in the verified neutral source inventory for a source job or the materialized evidence view for an evidence job, resolve inside that root without a symbolic link, and lie inside the file. A closed-world span audit SHALL check the quoted lines against every clause of the criterion's requirement and review guidance. `insufficient` SHALL ask the third sample to re-cite once, and an audit that still cannot decide SHALL leave the majority pass standing with that recorded. `contradicted` SHALL be checked by an independent contradiction check that judges that audit's stated contradiction against the quoted lines and the rubric, and the majority pass SHALL be withdrawn only when the check confirms that same contradiction; both SHALL be recorded. An unconfirmed browser-fallback majority pass SHALL fail. Invalid third-sample output, including an invalid span, SHALL be retried and, once exhausted, SHALL leave the job unobserved as a harness failure, as SHALL an exhausted sample.
+
+Every judge, sample, third sample, and audit SHALL see, beside each criterion, the requirement it traces to: the full fixture scenario from the pinned snapshot for a fixture-owned criterion, or the eval-owned reason. A pass SHALL meet every clause of that requirement as clarified by its review guidance, and judges SHALL NOT add requirements the requirement and its guidance do not state. Source judges SHALL trace a constant, member, prop, or input through every use before calling it dead, and SHALL treat shown, visible, or on-screen content as rendered content, not an `aria-label`, attribute, or visually hidden text. Evidence judges SHALL compare every behavior the exploration plan commits to with what the log observed or disclosed, and the assumption judge SHALL receive the full approved requirements as reference for its omission check.
+
+Each criterion result SHALL record its judging basis (`consensus-pass`, `consensus-fail`, `majority-pass`, or `majority-fail`) and every sample verdict, and the eval-owned usage ledger SHALL record each call's stage. A Codex turn rejected before any model output (for example a capacity rejection) SHALL be recorded as a call that consumed no tokens, and a capacity rejection SHALL be waited out with backoff rather than spending a judge attempt. Every response schema the harness sends SHALL satisfy OpenAI strict structured-output rules, and a schema rejection (`invalid_json_schema`) SHALL fail fast as a non-retryable harness error. A cached judge job SHALL be reused only under the same judging protocol and only when its results reproduce from its recorded samples and third-sample vote.
+
+#### Scenario: Both samples agree
+- **WHEN** both independent samples pass, or both fail, a criterion
+- **THEN** that verdict stands without another judge
+
+#### Scenario: Samples disagree
+- **WHEN** one sample passes and the other fails a criterion
+- **THEN** a third independent sample decides it
+- **AND** its pass must cite mechanically valid line spans
+
+#### Scenario: A sample's own audit contradicts its vote
+- **WHEN** both samples pass a criterion and one sample's source audit classifies its pass as contradicted
+- **THEN** that vote is marked disputed and an independent check judges the stated contradiction
+- **AND** a refuted contradiction leaves both passes standing, while a confirmed one turns the vote and the blind third sample decides between two signals
+
+#### Scenario: Two audits contradict for different reasons
+- **WHEN** a span audit contradicts a majority pass and the contradiction check finds that stated reason does not hold under the rubric
+- **THEN** the majority pass stands
+
+#### Scenario: A judge invents a scenario the candidate does not produce
+- **WHEN** a judge would fail a criterion on a hypothetical input, file deletion, or rendering that the cited source and evidence do not show
+- **THEN** the shared scope rule in every judge, audit, and check prompt directs it not to, unless the criterion's guidance names that scenario
+
+#### Scenario: A check refutes a span contradiction
+- **WHEN** the span audit contradicts the third sample's quoted lines and the independent check does not confirm that stated contradiction
+- **THEN** the majority pass stands
+
+#### Scenario: A check confirms a span contradiction
+- **WHEN** the independent check confirms the span audit's stated contradiction of the quoted lines
+- **THEN** the criterion fails
+
+#### Scenario: The span audit cannot decide
+- **WHEN** the span audit finds the quoted lines insufficient, the third sample re-cites, and the audit still cannot decide
+- **THEN** the majority pass stands and the evidence records that the audit could not confirm it
+
+#### Scenario: A sample's audit cannot decide after a re-cite
+- **WHEN** a sample's source audit is still insufficient after one focused re-cite
+- **THEN** the sample's verdict stands as its vote and no further citation cycle runs
+
+#### Scenario: Model capacity rejects a judge call
+- **WHEN** Codex rejects a judge turn as at capacity before any model output
+- **THEN** the invoker waits and retries without spending a judge attempt
+- **AND** the usage ledger records the rejected call with zero tokens
+
+#### Scenario: OpenAI rejects a response schema
+- **WHEN** a judge call fails with `invalid_json_schema`
+- **THEN** it is not retried and the owning phase fails as a harness error
+
 ### Requirement: Deterministic criteria fail only on positive evidence
 A scored deterministic browser criterion SHALL have exactly three outcomes: `pass`, `fail`, and not observed. The evaluator SHALL record `fail` only when it holds positive evidence that the candidate violates the requirement the criterion enforces, such as visible text that differs from the normative text, an input that lands on the wrong step, or a browser failure raised by the page. The evaluator SHALL NOT record `fail` because it could not locate the thing it needed to inspect.
 
-Not observed SHALL be deliberately narrow, because the candidate controls what a browser can see. It SHALL apply only when a check depends on a markup convention that the pinned fixture does not mandate, and the evaluator finds no instance of any convention it recognises. The absence of something a reader must be able to see or do, including an active step title, step numbering derived from position, a caption in browse mode, or an operable navigation control, SHALL be positive evidence of a violation and SHALL be recorded as `fail`. An unreadable page state, an adapter diagnostic, and an ambiguous control SHALL remain resumable harness failures as already specified and SHALL NOT be recorded as not observed.
+Every mode, title, caption, and navigation reading a probe relies on SHALL carry its basis, which is one of:
+
+- **declared**: read from a recognised presentation hook or a declared mode attribute;
+- **semantic**: the directly measured effect of operating a control uniquely identified by its role, accessible name, or recognised hook;
+- **text**: the presence or absence of normative text across the step's full visible text and accessibility tree, which does not depend on choosing which element carries it. Text presence SHALL be judged from the normalized rendered text of visible elements, including text split across descendant elements, and from resolved accessible names, including names supplied by `aria-labelledby` references to hidden elements. A text observation that did not cover the whole presentation SHALL be treated as heuristic, because it cannot prove absence;
+- **heuristic**: anything chosen by visibility or layout, including an inferred mode and a title or caption element picked without a hook.
+
+A `fail` SHALL rest only on declared, semantic, or text readings, and on page-raised browser failures. When a probe's `fail` would rest on any heuristic reading, the criterion SHALL be recorded as not observed. The record SHALL state which reading was heuristic and what declared hooks or conventions the evaluator looked for. A heuristic reading MAY support a `pass`.
+
+Not observed SHALL also apply when a check depends on a markup convention that the pinned fixture does not mandate, and the evaluator finds no instance of any convention it recognises. It SHALL also apply when every input path the fixture allows for a navigation input has been tried and none changes the step. Absence that the live page positively establishes SHALL remain positive evidence of a violation and SHALL be recorded as `fail`. This covers:
+
+- in a declared or semantically established mode, a step whose full visible text and accessibility tree contain no instance of its required normative title or caption, or a normative text that appears only in a persistent list shown at every step;
+- step numbering that is visibly not derived from position;
+- a mode that exposes no control of the needed role, by hook, role, or accessible name;
+- discovered controls whose operation produces no step change or the wrong step. An unreadable page state, an adapter diagnostic, and an ambiguous control SHALL remain resumable harness failures as already specified and SHALL NOT be recorded as not observed.
 
 A criterion that combines a reader-visible fact with a convention-dependent fact SHALL be judged in that order: a violation of the reader-visible fact SHALL be recorded as `fail` regardless of whether the convention-dependent fact was observed. Finding a recognised convention on some steps SHALL NOT be treated as proof that a step without one lacks content: when the convention-dependent fact cannot be established for every step it concerns, that fact is not observed. A convention-dependent `fail` SHALL rest on what positively identified objects show, such as identified objects being replaced rather than persisting between steps.
 
@@ -584,7 +752,7 @@ A not-observed record SHALL retain the same bounded observation as any other pro
 - **AND** the record lists the conventions the evaluator looked for
 
 #### Scenario: Captions are wrong and scene objects are not found
-- **WHEN** a step's caption differs from the normative caption and the evaluator also finds no scene objects
+- **WHEN** browse mode is declared, a step's full visible text contains no instance of its normative caption, and the evaluator also finds no scene objects
 - **THEN** `demo-required-scene-content` is recorded as `fail` on the caption evidence
 - **AND** it is not recorded as not observed
 
@@ -602,7 +770,7 @@ A not-observed record SHALL retain the same bounded observation as any other pro
 - **THEN** `demo-evolving-scene-structure` is recorded as `fail` on that evidence
 
 #### Scenario: A reader-visible element is hidden
-- **WHEN** the presentation hides its active step title from readers in present mode
+- **WHEN** the presentation declares present mode and hides its active step title from readers, so that no visible element at that step shows it
 - **THEN** `demo-present-mode-behavior` is recorded as `fail`
 - **AND** it is not recorded as not observed
 
@@ -611,8 +779,46 @@ A not-observed record SHALL retain the same bounded observation as any other pro
 - **THEN** the scene criteria are judged `pass` or `fail` from what it observed
 - **AND** no fallback judge is consulted for them
 
+#### Scenario: A declared mode contradicts the mode being established
+- **WHEN** the evaluator operates a present-mode control and the presentation's declared mode attribute still reads `browse`
+- **THEN** `demo-present-mode-behavior` is recorded as `fail` on that declared reading
+
+#### Scenario: A caption is read from an unhooked element
+- **WHEN** browse mode is declared and the evaluator can identify a caption only by layout, and that element's text differs from the normative caption
+- **AND** the normative caption text appears elsewhere in the step's visible text
+- **THEN** no caption criterion is recorded as `fail` on the layout-chosen element's text
+
+#### Scenario: The normative caption appears nowhere
+- **WHEN** browse mode is declared and a step's full visible text and accessibility tree contain no instance of its normative caption
+- **THEN** `demo-required-scene-content` is recorded as `fail` on that text evidence
+
+#### Scenario: A step title is missing only under an inferred mode
+- **WHEN** a presentation declares no mode, the evaluator infers present mode, and no visible element shows the active step title
+- **THEN** `demo-present-mode-behavior` is recorded as not observed rather than `fail`
+
+#### Scenario: A caption is split across nested elements
+- **WHEN** browse mode is declared and a step's normative caption is rendered across several nested inline elements
+- **THEN** the caption is present by text
+- **AND** no caption criterion is recorded as `fail` for its absence
+
+#### Scenario: A title is announced through a hidden label
+- **WHEN** a presentation exposes the active step title only as an accessible name supplied by `aria-labelledby` pointing at a visually hidden element
+- **THEN** the title is present by text
+- **AND** the title criterion is not recorded as `fail` for its absence
+
+#### Scenario: Navigation has no operable control
+- **WHEN** neither mode exposes any control with a navigation role, accessible name, or recognised hook
+- **THEN** the criterion that requires the control is recorded as `fail`
+
+### Requirement: Step controls exclude relative navigation
+The browser evaluator SHALL count as step controls only controls that select a step. Previous, next, and mode controls, identified by their presentation hooks or by an accessible name beginning with previous, prev, back, or next, SHALL be excluded even when they share the progress region, so they never inflate the control count or shift which control is read as current.
+
+#### Scenario: Progress row holds previous and next buttons
+- **WHEN** a progress region contains nine step buttons plus Previous and Next
+- **THEN** the evaluator reads nine step controls
+
 ### Requirement: Declared fallback judge for not-observed criteria
-The automated rubric SHALL declare, for each deterministic criterion that can be recorded as not observed, at most one fallback judge. The fallback declaration SHALL NOT make the fallback judge an owner of the criterion: the criterion SHALL keep its single owning evaluator, its identifier, and its points, and the rubric SHALL continue to reject duplicate criterion ownership. A deterministic criterion with no declared fallback SHALL NOT be recordable as not observed by a conforming evaluator; if one is nevertheless returned, scoring SHALL treat its component as incomplete.
+The automated rubric SHALL declare, for each deterministic criterion that can be recorded as not observed, at most one fallback judge. Because any deterministic browser criterion can be recorded as not observed when its `fail` would rest on a heuristic reading, every deterministic browser criterion SHALL declare the `demo-integration` judge as its fallback. Adding these declarations SHALL change the rubric version and hash, and SHALL NOT change any criterion, owner, subcomponent, point allocation, or threshold. The fallback declaration SHALL NOT make the fallback judge an owner of the criterion: the criterion SHALL keep its single owning evaluator, its identifier, and its points, and the rubric SHALL continue to reject duplicate criterion ownership. A deterministic criterion with no declared fallback SHALL NOT be recordable as not observed by a conforming evaluator; if one is nevertheless returned, scoring SHALL treat its component as incomplete.
 
 When a criterion with a declared fallback is recorded as not observed, the harness SHALL ask the declared fallback judge for a verdict on that criterion in that run only. The judge SHALL receive the criterion's requirement and guidance, the bounded browser observation, and the statement of which conventions were looked for. The judge SHALL return `pass` or `fail` with a rationale. A `pass` SHALL cite delivered candidate source that establishes the requirement; a `pass` without such a citation SHALL be rejected as invalid judge output. The judge SHALL treat the browser observation as a lead rather than an authoritative verdict, consistent with existing source-review rules.
 
@@ -620,7 +826,7 @@ Exact criterion coverage SHALL continue to hold in both directions for every eva
 
 Points SHALL only ever be awarded from a binary `pass` or `fail` verdict; not observed is an unresolved state, never a scored verdict. The scorer SHALL award a fallback-resolved criterion the same points it would award for the same verdict from its owner. It SHALL record, for every scored criterion, whether the verdict came from the owning evaluator or from the fallback judge, and SHALL retain the fallback judge's source citations. An unresolved criterion SHALL make only its own subcomponent and component incomplete; other deterministic subcomponents SHALL keep their scores. When the fallback verdict is missing after the judge's retry budget is exhausted, the criterion's component SHALL be incomplete and the existing missing-judge-output outcome SHALL apply; a missing fallback verdict SHALL never be scored as `fail`.
 
-Hard-gate handling of unobserved evidence SHALL NOT change. Hard gates SHALL NOT have fallback judges.
+Hard-gate handling of unobserved evidence SHALL NOT change, except that `verification-sample-outline` is derived from its input criteria's final verdicts as specified under "Hard gates and official pass". Hard gates SHALL NOT have fallback judges. A failed hard gate's second opinion SHALL be governed by the failure-second-opinion capability; it is not a fallback judge and SHALL NOT resolve an unobserved gate.
 
 #### Scenario: A not-observed criterion is resolved by its fallback judge
 - **WHEN** `demo-evolving-scene-structure` is recorded as not observed and its declared fallback judge returns `pass` citing the delivered source that keeps scene objects across steps
@@ -661,6 +867,16 @@ Hard-gate handling of unobserved evidence SHALL NOT change. Hard gates SHALL NOT
 - **WHEN** a deterministic criterion with no declared fallback is returned as not observed
 - **THEN** its component is incomplete
 - **AND** the official verdict is unavailable rather than failed
+
+#### Scenario: A navigation criterion is not observed
+- **WHEN** `demo-supported-navigation` is recorded as not observed because no swipe input path changed the step
+- **THEN** the `demo-integration` judge is asked for its verdict on that criterion in that run
+- **AND** the judge receives the observation stating which swipe paths were tried
+
+#### Scenario: The rubric gains fallback declarations
+- **WHEN** the rubric with the added fallback declarations is loaded
+- **THEN** every deterministic browser criterion names one fallback judge
+- **AND** every criterion's owner, points, and subcomponent are unchanged, while the rubric version and hash differ from the prior rubric
 
 ### Requirement: Focused controls keep their keys
 The deterministic control-key check SHALL follow the pinned fixture scenario "Controls keep their keys": while focus is on an interactive control, navigation keys drive that control rather than also advancing the deck. After activating a navigation control the way a pointer does, the check SHALL NOT require a deck navigation key pressed while that control still holds focus to advance the deck, and SHALL NOT deduct when the deck stays on its step. The check SHALL deduct when it holds positive evidence of a violation: the deck fails to clamp at its first or last step, or deck navigation keys do not advance the deck once focus rests on a non-interactive part of the presentation itself. The check SHALL keep focus inside the presentation when it releases a control, so that a presentation which listens for keys on its own root is not failed, and SHALL verify that focus is no longer on an interactive control. When it cannot establish that state, it SHALL raise a resumable harness failure rather than record a product deduction.

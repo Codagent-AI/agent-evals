@@ -1102,3 +1102,183 @@ test('rescore gates a stored allocation on its attempt\'s partial collection', a
   assert.equal(attempt.allocations[0].usage.billing_tokens, null)
   assert.match(attempt.allocations[0].usage.billing_reason, /usage collection is incomplete/)
 })
+
+// Agent Runner 3ad7008 and later write schema-2 native measurements for Claude
+// attempts: one allocation per thread (main and each subagent), each naming the
+// observed model it ran on, plus the subagent collection's completeness.
+function nativeAllocation(id, kind, ref, tokens, overrides = {}) {
+  return {
+    allocation_id: id,
+    kind,
+    observed_identity_ref: ref,
+    availability: 'available',
+    reason: null,
+    tokens,
+    cost: unavailable('allocation_cost_not_reported'),
+    ...overrides,
+  }
+}
+
+function allocationTokens(input, cacheRead, cacheWrite, output) {
+  return canonicalTokens({
+    input_total: measured(input + cacheRead + cacheWrite),
+    input_uncached: measured(input),
+    cache_read: measured(cacheRead),
+    cache_write: measured(cacheWrite),
+    output: measured(output),
+    normalized_total: measured(input + cacheRead + cacheWrite + output),
+  })
+}
+
+function subagentNativeMeasurement({ collection = 'complete', reason = null } = {}) {
+  const main = allocationTokens(100, 1000, 200, 50)
+  const sub = allocationTokens(10, 300, 40, 20)
+  const sum = allocationTokens(110, 1300, 240, 70)
+  const tokens = collection === 'complete'
+    ? sum
+    : Object.fromEntries(Object.entries(sum).map(([field, value]) => [
+        field,
+        value.availability === 'available' ? { ...value, availability: 'partial', reason } : value,
+      ]))
+  return nativeMeasurement({
+    native_measurement_schema_version: 2,
+    requested_identity: {
+      adapter: 'claude', model: 'claude-sonnet-5-5', provider: null, effort: null,
+      provenance: 'configuration',
+    },
+    resolved_identity: {
+      adapter: 'claude', model: 'claude-sonnet-5-5', provider: 'anthropic', effort: 'high',
+      provenance: 'launch_resolution',
+    },
+    observed_identities: [
+      { ...identity('claude-sonnet-5-5', 'observed-main'), provider: { availability: 'available', value: 'anthropic', reason: null } },
+      {
+        ...identity('claude-haiku-4-5', 'observed-2'),
+        provider: { availability: 'unavailable', value: null, reason: 'not_reported' },
+      },
+    ],
+    tokens,
+    provider_reported_costs: [],
+    allocations: [
+      nativeAllocation('main', 'main', 'observed-main', main),
+      nativeAllocation('subagent:claude-haiku-4-5', 'subagent', 'observed-2', sub, {
+        agent_type: 'Explore', tool_use_id: 'toolu_1', spawn_depth: 1,
+      }),
+    ],
+    subagent_collection: collection === 'complete'
+      ? { completeness: 'complete' }
+      : { completeness: 'partial', reason },
+  })
+}
+
+const CLAUDE_CATALOG = {
+  state: 'available',
+  entries: {
+    anthropic: {
+      models: {
+        'claude-sonnet-5-5': { cost: { input: 2, output: 10, cache_read: 0.2, cache_write: 2.5 } },
+        'claude-haiku-4-5': { cost: { input: 1, output: 5, cache_read: 0.1, cache_write: 1.25 } },
+      },
+    },
+  },
+}
+
+test('schema-2 native measurements price each Claude thread at its own model', async () => {
+  const payload = v4Metrics({ native_measurements: [subagentNativeMeasurement()], measurement_heads: [] })
+  const ingested = ingestRunnerMetrics({ text: JSON.stringify(payload), runId: RUN_ID, workflow: WORKFLOW })
+
+  assert.equal(ingested.state, 'ingested', ingested.reason)
+  const [attempt] = ingested.attempts
+  assert.equal(attempt.usage.state, 'available')
+  // The role configured the main thread's model; the subagent's is in its allocation.
+  assert.equal(attempt.model, 'claude-sonnet-5-5')
+  assert.equal(attempt.unallocated_usage, null)
+  assert.equal(attempt.identity.per_model_attribution, 'complete')
+  assert.deepEqual(
+    attempt.allocations.map(({ allocation_id, provider, model, usage }) => ({
+      allocation_id, provider, model, state: usage.state, billing: usage.billing_tokens,
+    })),
+    [
+      {
+        allocation_id: 'main', provider: 'anthropic', model: 'claude-sonnet-5-5', state: 'available',
+        billing: { input: 100, cached_input: 1000, cache_write: 200, output: 50 },
+      },
+      {
+        // A subagent's provider is the attempt's: one Claude invocation runs on one provider.
+        allocation_id: 'subagent:claude-haiku-4-5', provider: 'anthropic', model: 'claude-haiku-4-5', state: 'available',
+        billing: { input: 10, cached_input: 300, cache_write: 40, output: 20 },
+      },
+    ],
+  )
+
+  const resolution = await resolveAttemptCost({ attempt, catalog: CLAUDE_CATALOG, fallbackTable: null, invoke: null })
+  assert.equal(resolution.state, 'resolved', resolution.reason)
+  const expected = (100 * 2 + 1000 * 0.2 + 200 * 2.5 + 50 * 10 + 10 * 1 + 300 * 0.1 + 40 * 1.25 + 20 * 5) / 1e6
+  assert.ok(Math.abs(resolution.amount_usd - expected) < 1e-12, `${resolution.amount_usd} != ${expected}`)
+  assert.deepEqual(resolution.allocation_costs.map((cost) => cost.allocation_id), ['main', 'subagent:claude-haiku-4-5'])
+
+  refreshBillingTokens(ingested.attempts)
+  const rescored = await resolveAttemptCost({ attempt, catalog: CLAUDE_CATALOG, fallbackTable: null, invoke: null })
+  assert.equal(rescored.amount_usd, resolution.amount_usd)
+})
+
+test('a schema-2 attempt with only its main thread prices like schema 1', async () => {
+  const measurement = subagentNativeMeasurement()
+  measurement.observed_identities = measurement.observed_identities.slice(0, 1)
+  measurement.allocations = measurement.allocations.slice(0, 1)
+  measurement.tokens = measurement.allocations[0].tokens
+  const payload = v4Metrics({ native_measurements: [measurement], measurement_heads: [] })
+  const ingested = ingestRunnerMetrics({ text: JSON.stringify(payload), runId: RUN_ID, workflow: WORKFLOW })
+
+  assert.equal(ingested.state, 'ingested', ingested.reason)
+  const [attempt] = ingested.attempts
+  assert.equal(attempt.model, 'claude-sonnet-5-5')
+  const resolution = await resolveAttemptCost({ attempt, catalog: CLAUDE_CATALOG, fallbackTable: null, invoke: null })
+  assert.equal(resolution.state, 'resolved', resolution.reason)
+  assert.ok(Math.abs(resolution.amount_usd - (100 * 2 + 1000 * 0.2 + 200 * 2.5 + 50 * 10) / 1e6) < 1e-12)
+})
+
+test('a partial subagent collection leaves the Claude attempt unpriced', async () => {
+  const payload = v4Metrics({
+    native_measurements: [subagentNativeMeasurement({ collection: 'partial', reason: 'subagent_span_unavailable' })],
+    measurement_heads: [],
+  })
+  const ingested = ingestRunnerMetrics({ text: JSON.stringify(payload), runId: RUN_ID, workflow: WORKFLOW })
+
+  assert.equal(ingested.state, 'ingested', ingested.reason)
+  const [attempt] = ingested.attempts
+  assert.equal(attempt.usage.state, 'partial')
+  for (const allocation of attempt.allocations) assert.equal(allocation.usage.billing_tokens, null)
+  const resolution = await resolveAttemptCost({ attempt, catalog: CLAUDE_CATALOG, fallbackTable: null, invoke: null })
+  assert.notEqual(resolution.state, 'resolved')
+})
+
+test('a schema-2 allocation without an observed model is left unallocated', async () => {
+  const measurement = subagentNativeMeasurement()
+  measurement.allocations[1].observed_identity_ref = null
+  const payload = v4Metrics({ native_measurements: [measurement], measurement_heads: [] })
+  const ingested = ingestRunnerMetrics({ text: JSON.stringify(payload), runId: RUN_ID, workflow: WORKFLOW })
+
+  assert.equal(ingested.state, 'ingested', ingested.reason)
+  const [attempt] = ingested.attempts
+  assert.equal(attempt.identity.per_model_attribution, 'unavailable')
+  assert.ok(attempt.unallocated_usage)
+  const resolution = await resolveAttemptCost({ attempt, catalog: CLAUDE_CATALOG, fallbackTable: null, invoke: null })
+  assert.notEqual(resolution.state, 'resolved')
+})
+
+test('unknown native measurement fields and versions are still rejected', () => {
+  for (const [label, measurement] of [
+    ['field', { ...subagentNativeMeasurement(), surprise: true }],
+    ['allocation field', (() => {
+      const m = subagentNativeMeasurement()
+      m.allocations[0].surprise = true
+      return m
+    })()],
+    ['version', { ...subagentNativeMeasurement(), native_measurement_schema_version: 3 }],
+  ]) {
+    const payload = v4Metrics({ native_measurements: [measurement], measurement_heads: [] })
+    const ingested = ingestRunnerMetrics({ text: JSON.stringify(payload), runId: RUN_ID, workflow: WORKFLOW })
+    assert.equal(ingested.state, 'rejected', label)
+  }
+})

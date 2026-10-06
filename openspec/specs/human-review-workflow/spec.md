@@ -153,10 +153,26 @@ After question 7 has a valid response, the harness SHALL display every rating an
 - **THEN** the run remains `pending-human-review`
 - **AND** no official total score or pass verdict is produced
 
+#### Scenario: Reviewer answers yes at the summary
+- **WHEN** the reviewer answers the summary prompt with an affirmative word accepted at the readiness prompt, such as `yes`
+- **THEN** the harness treats it as an explicit confirmation and finalizes the review
+
+#### Scenario: Unrecognized answer at the summary
+- **WHEN** the reviewer answers the summary prompt with anything other than confirm, an affirmative word, revise, or quit
+- **THEN** the harness says which answers it accepts and asks again
+- **AND** the review ends unconfirmed only on an explicit quit or a closed input stream
+
 ### Requirement: Durable human-review progress
 The human-review command SHALL durably save each valid response immediately after accepting it. On resume, it SHALL verify that the saved review belongs to the same candidate and human-review rubric, restore every completed response, present the candidate URL and readiness confirmation again, and continue at the first unanswered question. It SHALL NOT rerun completed automated evaluation or LLM judging solely because human review was interrupted.
 
 The finalized `human-review.json` artifact SHALL record the evaluated candidate identity, human-review rubric version and SHA-256 hash, all question identifiers and text, ratings, rationales, dimension subtotals, final score, component-gate result, and completion state.
+
+Finalization SHALL rescore from the durable second-opinion outcomes and pending list for candidate runs and preserve terminal second-opinion evidence and failure context in the result.
+
+#### Scenario: Finalization keeps an automated overturn
+- **WHEN** a failed deterministic browser criterion was overturned before human review
+- **AND** the reviewer finalizes the run
+- **THEN** the official result retains the second-opinion `pass`, the raw `fail`, and the checked second-opinion count
 
 #### Scenario: Review resumes after interruption
 - **WHEN** `human-review.sh` resumes a pending review with matching candidate and rubric provenance
@@ -165,6 +181,16 @@ The finalized `human-review.json` artifact SHALL record the evaluated candidate 
 #### Scenario: Paired review resumes after interruption
 - **WHEN** a paired baseline and candidate review is interrupted
 - **THEN** the next invocation resumes the first run with an unanswered question and does not repeat finalized answers from either run
+
+#### Scenario: Input closes before a prompt
+- **WHEN** the reviewer's input stream closes before or while a prompt is asked
+- **THEN** the harness ends the review as an interruption with every saved answer intact
+- **AND** it does not record an evaluation-harness failure
+
+#### Scenario: Review reopens after a resumable human-review harness failure
+- **WHEN** `human-review.sh` is invoked for a run whose `run-state.json` and `result.json` both record a resumable evaluation-harness failure in the `human-review` phase without a durable verdict
+- **THEN** the harness reopens it as pending human review with its saved answers, records `phase-recovered` in the outcome history once the human-review phase completes, and finalizes it on confirmation
+- **AND** any other run that is not pending human review is still refused
 
 #### Scenario: Review provenance does not match
 - **WHEN** the saved human-review state names a different candidate or human-review rubric

@@ -1,5 +1,110 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { runInNewContext } from 'node:vm'
+
+test('browser replay validates actions and checks a fresh-page observation', async () => {
+  const { createAxiBrowserDriver } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
+  const scripts = []
+  const driver = createAxiBrowserDriver({ baseUrl: 'http://127.0.0.1:4319/',
+    command: async (args, input) => {
+      scripts.push(input)
+      if (args[0] === 'resize') return { status: 0, stdout: '' }
+      if (args[0] === 'console') return { status: 0, stdout: '<no console messages found>\n' }
+      return { status: 0, stdout: `${JSON.stringify({ observations: [null, 0, 0].map((stepIndex) => ({
+        stepIndex, stepCount: 9, mode: 'present', visible: true, text: '',
+      })), trace: ['navigate', 'press'] })}\n` }
+    } })
+  await assert.rejects(driver.replay([{ type: 'script', code: 'alert(1)' }],
+    { type: 'step-index-equals', value: 1 }), /invalid replay/i)
+  await assert.rejects(driver.replay([{ type: 'press', key: 'ArrowRight' }],
+    { type: 'step-index-changes' }), /invalid replay/i)
+  await assert.rejects(driver.replay([{ type: 'navigate', path: '/' },
+    { type: 'navigate', path: '/other' }], { type: 'step-index-changes' }), /invalid replay/i)
+  const outcome = await driver.replay([{ type: 'navigate', path: '/' },
+    { type: 'press', key: 'ArrowRight' }], { type: 'step-index-equals', value: 1 })
+  assert.equal(outcome.passed, false)
+  assert.equal(outcome.observations.at(-1).stepIndex, 0)
+  const unchanged = await driver.replay([{ type: 'navigate', path: '/' },
+    { type: 'press', key: 'ArrowRight' }], { type: 'step-index-changes' })
+  assert.equal(unchanged.passed, false)
+  const missingHook = createAxiBrowserDriver({ baseUrl: 'http://127.0.0.1:4319/',
+    command: async (args) => (args[0] === 'console' ? { status: 0, stdout: '<no console messages found>\n' }
+      : { status: 0, stdout: `${JSON.stringify({ observations: [
+        { stepIndex: null }, { stepIndex: null }, { stepIndex: 0 },
+      ], trace: [] })}\n` }) })
+  assert.equal((await missingHook.replay([{ type: 'navigate', path: '/' },
+    { type: 'press', key: 'ArrowRight' }], { type: 'step-index-changes' })).passed, false)
+  assert.ok(scripts.some((script) => script?.includes('page.open(')))
+  assert.ok(scripts.some((script) => script?.includes('page.press("ArrowRight")')))
+})
+
+test('browser replay records runtime failures and separates product evidence from harness faults', async () => {
+  const { createAxiBrowserDriver, BrowserDriverError } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
+  const origin = 'http://127.0.0.1:4319'
+  const driverWith = ({ observations, product_failure = null, consoleOut = '<no console messages found>\n', consoleStatus = 0 }) => {
+    const calls = []
+    return { calls, driver: createAxiBrowserDriver({ baseUrl: `${origin}/`, command: async (args, input) => {
+      calls.push({ args, input })
+      if (args[0] === 'console') return { status: consoleStatus, stdout: consoleOut, stderr: 'axi console unavailable' }
+      return { status: 0, stdout: `${JSON.stringify({ observations, trace: [], product_failure })}\n` }
+    } }) }
+  }
+  const step = (stepIndex, extra = {}) => ({ stepIndex, stepCount: 9, mode: 'present', visible: false, text: '', origin, ...extra })
+  const plan = [{ type: 'navigate', path: '/how-to-make-a-presentation' }, { type: 'press', key: 'ArrowRight' }]
+
+  const erroring = driverWith({ observations: [step(null), step(0), step(1)],
+    consoleOut: 'Uncaught TypeError: boom at step 2\n' })
+  const withErrors = await erroring.driver.replay(plan, { type: 'step-index-changes' })
+  assert.deepEqual(withErrors.errors, ['Uncaught TypeError: boom at step 2'])
+  assert.ok(erroring.calls.some(({ args }) => args.join(' ') === 'console --type error'))
+
+  const consoleDown = driverWith({ observations: [step(null), step(0), step(1)], consoleStatus: 1 })
+  await assert.rejects(consoleDown.driver.replay(plan, { type: 'step-index-changes' }),
+    (error) => error instanceof BrowserDriverError && error.resumable === true)
+
+  const clickPlan = [{ type: 'navigate', path: '/how-to-make-a-presentation' }, { type: 'click', selector: '#missing' }]
+  const missing = driverWith({ observations: [step(null), step(0)], product_failure: 'replay click target was not found' })
+  const absent = await missing.driver.replay(clickPlan, { type: 'step-index-changes' })
+  assert.equal(absent.passed, false)
+  assert.equal(absent.product_failure, 'replay click target was not found')
+  assert.match(missing.calls.find(({ args }) => args[0] === 'run').input, /break replay/)
+
+  const escaped = driverWith({ observations: [step(null), step(0), step(1, { origin: 'http://example.com' })] })
+  const left = await escaped.driver.replay(plan, { type: 'step-index-changes' })
+  assert.equal(left.passed, false)
+  assert.match(left.product_failure, /origin/)
+
+  // These paths pass the shape check but resolve to another host once the
+  // route is made relative. The driver refuses them before opening anything.
+  for (const path of ['/https://example.com/x', '/\t/\t/example.com/x']) {
+    const escaping = driverWith({ observations: [] })
+    await assert.rejects(escaping.driver.replay([{ type: 'navigate', path }],
+      { type: 'step-index-changes' }), (error) => /origin/.test(error.message) && error.resumable !== true, path)
+    assert.equal(escaping.calls.length, 0, path)
+  }
+})
+
+test('the AXI driver reads eligible declared modes before inferring them', async () => {
+  const { createAxiBrowserDriver } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
+  let script = ''
+  const driver = createAxiBrowserDriver({ baseUrl: 'http://127.0.0.1:4319/',
+    command: async (_args, input) => { script = input; return { status: 0, stdout: 'true\n' } } })
+  await driver.setMode('browse')
+  const source = script.slice(script.indexOf('const modeReading = () => {'), script.indexOf('\n  };', script.indexOf('const modeReading = () => {')) + 5)
+  const read = (presentationModes, dataModes) => runInNewContext(`${source}\nmodeReading()`, {
+    document: { querySelector: () => null, querySelectorAll: (selector) => selector === '[data-presentation-mode]'
+      ? presentationModes.map((value) => ({ getAttribute: () => value }))
+      : selector === '[data-mode]' ? dataModes.map(({ value, ownsProgress }) => ({
+        getAttribute: () => value, matches: () => ownsProgress === 'self',
+        querySelector: () => ownsProgress === 'ancestor' ? {} : null,
+      })) : [],
+    },
+  })
+  assert.equal(read([], [{ value: 'present', ownsProgress: 'descendant' }]).basis, 'heuristic')
+  assert.equal(read([], [{ value: 'dark', ownsProgress: 'ancestor' },
+    { value: 'browse', ownsProgress: 'ancestor' }]).mode, 'browse')
+  assert.equal(read(['dark', 'present'], []).mode, 'present')
+})
 
 test('the AXI driver opens the candidate route and returns structured browser state', async () => {
   let module = null
@@ -194,7 +299,7 @@ test('the AXI driver observes compatible stable presentation hooks without requi
   assert.match(calls[1].input, /target\.dispatchEvent/)
   assert.match(
     calls[1].input,
-    /TouchEvent\('touchstart',[\s\S]*touches: \[touch\(startX\)\],[\s\S]*changedTouches: \[touch\(startX\)\]/,
+    /TouchEvent\("touchstart", \{\s*touches: \[touch\],\s*targetTouches: \[touch\],\s*changedTouches: \[touch\]/,
   )
   assert.match(calls[1].input, /setTimeout\(resolve, 100\)/)
   assert.match(calls[2].input, /setTimeout\(resolve, 100\)/)
@@ -521,6 +626,71 @@ test('the AXI driver activates a control the way a pointer does', async () => {
   assert.match(source, /target\.focus\(\);\s*\n?\s*target\.click\(\);/)
 })
 
+// The touch-event evaluations of one swipe, in order, from the script it emits,
+// each with the frame wait that follows it.
+function evaluations(source) {
+  return source.split('dispatched = (await page.eval(').slice(1)
+}
+
+test('the AXI driver delivers a swipe the way a finger does, one touch event per task', async () => {
+  // A presentation that keeps its touch start in state committed after a
+  // render, as React's setState does, ignores a touchend delivered in the
+  // same task as its touchstart. A finger's swipe spans many frames.
+  const source = await emitted((driver) => driver.swipe('left'))
+  const phases = evaluations(source)
+  const types = phases.map((phase) => phase.match(/new TouchEvent\("(touch\w+)"/)?.[1])
+
+  assert.deepEqual(types, ['touchstart', 'touchmove', 'touchmove', 'touchmove', 'touchmove', 'touchend'])
+  for (const phase of phases.slice(0, -1)) {
+    // Each event asks for the page's next frame, and the next event waits on it.
+    assert.match(phase, /requestAnimationFrame\(\(\) => \{ frame\.rendered = true; \}\);\s*return true;/)
+  }
+  const waits = source.match(/while \(!\(await page\.eval\(\(\) => Boolean\(window\.__andSceneSwipe\?\.frame\?\.rendered\)\)\)\)/g)
+  assert.equal(waits.length, phases.length - 1)
+  assert.match(source, /throw new Error\('the page rendered no animation frame between swipe touch events'\)/)
+  assert.doesNotMatch(phases.at(-1), /requestAnimationFrame|while \(!/)
+  assert.match(phases.at(-1), /touches: \[\],\s*targetTouches: \[\],\s*changedTouches: \[touch\]/)
+})
+
+test('the AXI driver lands a swipe on the element under the finger and keeps that target', async () => {
+  const [start, ...rest] = evaluations(await emitted((driver) => driver.swipe('left')))
+
+  assert.match(start, /data-presentation-stage/)
+  assert.match(start, /getBoundingClientRect\(\)/)
+  // A surface narrower than the swipe still receives the finger.
+  assert.match(start, /rect\.left,\s*Math\.min\(rect\.right, window\.innerWidth\),/)
+  assert.match(start, /document\.elementFromPoint\(startX, y\)/)
+  assert.match(start, /presentation\.contains\(hit\) \? hit : presentation/)
+  for (const phase of rest) {
+    assert.match(phase, /const \{ target, startX, y \} = swipe;/)
+    assert.doesNotMatch(phase, /elementFromPoint/)
+  }
+})
+
+test('the AXI driver moves a swipe horizontally in its direction and nowhere else', async () => {
+  const offsets = (source) => evaluations(source)
+    .map((phase) => Number(phase.match(/clientX: startX \+ (-?[\d.]+)/)[1]))
+  const left = offsets(await emitted((driver) => driver.swipe('left')))
+  const right = offsets(await emitted((driver) => driver.swipe('right')))
+
+  assert.deepEqual(left, [0, -40, -80, -120, -160, -200])
+  assert.deepEqual(right, [0, 40, 80, 120, 160, 200])
+  const source = await emitted((driver) => driver.swipe('left'))
+  assert.equal(source.match(/clientY: y,/g).length, 6)
+  await assert.rejects(
+    emitted((driver) => driver.swipe('up')),
+    (error) => error.code === 'browser-driver-failed',
+  )
+})
+
+test('the AXI driver can dispatch a pointer swipe with touch pointer type', async () => {
+  const source = await emitted((driver) => driver.swipe('left', { input: 'pointer' }))
+  assert.match(source, /new PointerEvent\("pointerdown"/)
+  assert.match(source, /new PointerEvent\("pointermove"/)
+  assert.match(source, /new PointerEvent\("pointerup"/)
+  assert.match(source, /pointerType: 'touch'/)
+})
+
 test('the AXI driver waits without the adapter-specific wait helper', async () => {
   // `page.wait` is not implemented the same way across chrome-devtools-axi
   // builds, and a script that calls it can fail wholesale. Waiting through
@@ -546,4 +716,101 @@ test('the AXI driver never reads a script constant inside a page callback', asyn
 
   assert.doesNotMatch(source, /const requiredPosition = /)
   assert.match(source, /controls\[4\]/)
+})
+
+test('the AXI driver never reads a step-title hook as a caption when inferring the mode', async () => {
+  // A deck without a mode attribute is read as browsing while a caption is
+  // visible. A present-mode title paragraph in the footer is not a caption, so
+  // the footer-paragraph fallback must exclude every title hook, or present mode
+  // can never be established.
+  const inference = [
+    await emitted((driver) => driver.open('how-to-make-a-presentation').catch(() => {})),
+    await emitted((driver) => driver.setMode('present')),
+    await emitted((driver) => driver.toggleMode()),
+  ]
+  for (const source of inference) {
+    assert.match(source, /\[data-presentation-footer\] p:not\(\[data-presentation-present-title\]\)/)
+    assert.doesNotMatch(source, /\[data-presentation-footer\] p["',]/)
+  }
+  const state = await emitted((driver) => driver.state())
+  for (const hook of [
+    'data-presentation-present-title',
+    'data-presentation-step-title',
+    'data-presentation-footer-title',
+    'data-presentation-title',
+  ]) {
+    assert.ok(state.includes(`:not([${hook}])`), hook)
+  }
+})
+
+test('the AXI driver never reads a step-marker paragraph as a caption when inferring the mode', async () => {
+  // A deck may show its step marker, such as "01 / 09 · the ask", as a footer
+  // paragraph in both modes. It is not a caption: reading it as one makes a
+  // deck without a mode attribute look like it is always browsing, so present
+  // mode can never be established.
+  const inference = [
+    await emitted((driver) => driver.open('how-to-make-a-presentation').catch(() => {})),
+    await emitted((driver) => driver.setMode('present')),
+    await emitted((driver) => driver.toggleMode()),
+    await emitted((driver) => driver.state()),
+  ]
+  for (const source of inference) {
+    assert.match(source, /\[data-presentation-footer\] p(?::not\(\[[^\]]+\]\))*:not\(\[data-presentation-marker\]\)/)
+    // The other heuristic caption selectors exclude a marker too. An element a
+    // deck explicitly hooks as its caption stays a caption.
+    assert.match(source, /figcaption:not\(\[data-presentation-marker\]\)/)
+    assert.ok(source.includes(`[aria-label*='caption' i]:not([data-presentation-marker])`), 'aria-label caption excludes the marker')
+    assert.doesNotMatch(source, /\[data-presentation-caption\]:not/)
+  }
+})
+
+test('the AXI driver reports every visible caption and title text a presentation exposes', async () => {
+  const source = await emitted((driver) => driver.state())
+
+  // Any caption-bearing element, not only the first ranked one.
+  assert.match(source, /captionTexts,/)
+  // How many distinct visible elements expose each text, so a persistent list
+  // of every title or caption can be told apart from the active one.
+  assert.match(source, /titleOccurrences,/)
+  assert.match(source, /captionOccurrences,/)
+  // A step title set in <strong> is as visible as one set in <span>.
+  assert.match(source, /\[data-presentation-header\] strong/)
+  assert.match(source, /\[data-presentation-footer\] strong/)
+  // A title element's own text, apart from a nested step marker such as "01".
+  assert.match(source, /nodeType === 3/)
+  // The page script is emitted from a template literal, so the whitespace class
+  // must survive as \s rather than collapse to a literal "s".
+  assert.ok(source.includes(".replace(/\\s+/g, ' ')"), 'own-text whitespace collapse is emitted intact')
+})
+
+test('the AXI driver counts every exposed text rather than dropping texts past a cap', async () => {
+  // A verbose deck can show many texts before the active title. Dropping texts
+  // once a cap is reached would hide the active title and fail the outline.
+  const source = await emitted((driver) => driver.state())
+
+  assert.doesNotMatch(source, /occurrences\.size >= \d+/)
+  // What is returned stays bounded, keeping the shortest texts, which is where
+  // a normative title or caption sits, and skipping implausibly long ones.
+  assert.match(source, /MAX_EXPOSED_TEXTS/)
+  assert.match(source, /left\[0\]\.length - right\[0\]\.length/)
+})
+
+// Round-3 audit: a progress region that also held Previous and Next counted 11
+// step controls for 9 steps and shifted which control was "current".
+test('the AXI driver keeps previous, next, and mode controls out of the step controls', async () => {
+  const { createAxiBrowserDriver } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
+  const calls = []
+  const driver = createAxiBrowserDriver({
+    baseUrl: 'http://127.0.0.1:4319/',
+    command: async (args, input) => {
+      calls.push({ args, input })
+      return { status: 0, stdout: `${JSON.stringify(true)}\n`, stderr: '' }
+    },
+  })
+  await driver.state()
+  const source = calls.at(-1).input
+  assert.match(source, /const stepControlsOnly = \(elements\) => elements\.filter\(\(element\) => !isDirectional\(element\)\)/)
+  assert.match(source, /stepControlsOnly\(inDomOrder\(\[\.\.\.progressRegion\.querySelectorAll/)
+  assert.match(source, /data-presentation-prev/)
+  assert.match(source, /data-presentation-mode-toggle/)
 })

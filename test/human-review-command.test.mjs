@@ -3,7 +3,9 @@ import { mkdir, mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { EventEmitter } from 'node:events'
+import { EventEmitter, once } from 'node:events'
+import { createInterface } from 'node:readline/promises'
+import { Readable } from 'node:stream'
 
 import { askReadline, runHumanReview } from '../evals/agent-runner/and-scene/human-review.mjs'
 import { assembleResult } from '../evals/agent-runner/and-scene/lib/result.mjs'
@@ -24,6 +26,29 @@ test('readline EOF resolves as an interrupted answer even when question never se
   rl.emit('close')
 
   assert.equal(await answer, null)
+})
+
+test('a readline closed before the question is asked resolves as an interrupted answer', async () => {
+  // Piped input that runs out before a prompt is reached closes the interface
+  // first; asking on it must end the review, not fail the harness.
+  const rl = createInterface({ input: Readable.from([]), terminal: false })
+  await once(rl, 'close')
+
+  assert.equal(await askReadline(rl, 'Ready to begin? (yes) '), null)
+})
+
+test('a use-after-close rejection from readline resolves as an interrupted answer', async () => {
+  const rl = new EventEmitter()
+  rl.question = () => Promise.reject(Object.assign(new Error('readline was closed'), { code: 'ERR_USE_AFTER_CLOSE' }))
+
+  assert.equal(await askReadline(rl, 'Rating? '), null)
+})
+
+test('any other readline error still rejects', async () => {
+  const rl = new EventEmitter()
+  rl.question = () => Promise.reject(new Error('terminal exploded'))
+
+  await assert.rejects(askReadline(rl, 'Rating? '), /terminal exploded/)
 })
 
 // A fully observed automated evaluation, generated from the rubric itself so
@@ -189,6 +214,30 @@ test('a confirmed review finalizes the official score without rerunning automate
   const runState = await readJson(join(run.runDir, 'run-state.json'))
   assert.equal(runState.outcome.evaluation_status, 'complete')
   assert.equal(runState.outcome.product_verdict, result.product_verdict)
+})
+
+test('finalizing human review preserves an overturned deterministic failure', async () => {
+  const directory = await root()
+  const run = await pendingRun({ root: directory })
+  const browserPath = join(run.runDir, 'phases/browser-evaluation.json')
+  const browser = await readJson(browserPath)
+  const criterion = browser.criteria.find(({ id }) => id === 'demo-supported-navigation')
+  criterion.verdict = 'fail'
+  criterion.rationale = 'raw navigation failure'
+  await writeJsonAtomic(browserPath, browser)
+  await writeJsonAtomic(join(run.runDir, 'phases/second-opinions.json'), {
+    checked: [{ kind: 'criterion', id: criterion.id }], pending: [],
+    outcomes: { [criterion.id]: { ok: true, decision: 'overturn', verdict: 'pass',
+      raw_verdict: 'fail', rationale: 'replay confirmed navigation', replay: { passed: true } } },
+  })
+  const outcome = await runHumanReview({ argv: ['--run-dir', run.runDir],
+    io: scriptedIo(answers()).io, ...servers() })
+  assert.equal(outcome.exitCode, 0, JSON.stringify(outcome.errors))
+  const result = await readJson(join(run.runDir, 'result.json'))
+  const entry = result.second_opinions.entries.find(({ id }) => id === criterion.id)
+  assert.equal(result.second_opinions.checked, 1)
+  assert.equal(entry.verdict, 'pass')
+  assert.equal(entry.raw_verdict, 'fail')
 })
 
 test('a confirmed review cannot turn incomplete automated scoring into a product failure', async () => {
@@ -567,6 +616,107 @@ test('a report that cannot be rendered records the missing report without erasin
   assert.equal(result.evaluation_status, 'evaluation-harness-failed')
   assert.equal(result.report.written, false)
   assert.match(result.report.error, /template exploded/)
+})
+
+// Leave a run exactly as a broken input stream used to: every answer saved by
+// an earlier session, then a later session whose input fails at the readiness
+// prompt and records a harness failure in the human-review phase.
+async function humanReviewHarnessFailure({ resumable = true } = {}) {
+  const directory = await root()
+  const run = await pendingRun({ root: directory })
+  await runHumanReview({
+    argv: ['--run-dir', run.runDir], io: scriptedIo(answers({ rating: 4, tail: ['quit'] })).io, ...servers(),
+  })
+  const broken = {
+    write: () => {},
+    ask: () => {
+      throw Object.assign(new Error('readline was closed'), { code: 'ERR_USE_AFTER_CLOSE', resumable })
+    },
+  }
+  const failed = await runHumanReview({ argv: ['--run-dir', run.runDir], io: broken, ...servers() })
+  assert.equal(failed.exitCode, 1)
+  const result = await readJson(join(run.runDir, 'result.json'))
+  assert.equal(result.evaluation_status, 'evaluation-harness-failed')
+  assert.equal(result.failed_phase, 'human-review')
+  return run
+}
+
+test('a resumable human-review harness failure is reopened and finalized with the saved answers', async () => {
+  const run = await humanReviewHarnessFailure()
+  const saved = await readJson(join(run.runDir, 'human-review.json'))
+  const { io, asked } = scriptedIo(['yes', 'confirm'])
+
+  const outcome = await runHumanReview({ argv: ['--run-dir', run.runDir], io, ...servers() })
+
+  assert.equal(outcome.exitCode, 0, JSON.stringify(outcome.errors))
+  assert.equal(asked.length, 2, 'only readiness and the summary are asked; no answer is re-asked')
+  const review = await readJson(join(run.runDir, 'human-review.json'))
+  assert.equal(review.complete, true)
+  assert.deepEqual(review.responses, saved.responses, 'the saved answers are restored unchanged')
+
+  const result = await readJson(join(run.runDir, 'result.json'))
+  assert.equal(result.evaluation_status, 'complete')
+  assert.equal(result.product_verdict, 'pass')
+  assert.equal(Number.isFinite(result.official_score), true)
+  assert.equal(result.failed_phase, null)
+  assert.equal(result.failure, null)
+  const events = result.history.map(({ event }) => event)
+  const failure = events.indexOf('harness-failure')
+  const recovered = events.indexOf('phase-recovered')
+  assert.ok(failure !== -1 && recovered > failure, `history records the recovery: ${events.join(', ')}`)
+  assert.ok(events.indexOf('product-verdict') > recovered)
+
+  const state = await readJson(join(run.runDir, 'run-state.json'))
+  assert.equal(state.outcome.evaluation_status, 'complete')
+  assert.equal(state.outcome.product_verdict, 'pass')
+  assert.deepEqual(state.outcome.history, result.history, 'run-state.json and result.json agree')
+})
+
+test('a reopened human-review harness failure that is quit again returns to pending human review', async () => {
+  const run = await humanReviewHarnessFailure()
+
+  const outcome = await runHumanReview({
+    argv: ['--run-dir', run.runDir], io: scriptedIo(['yes', 'quit']).io, ...servers(),
+  })
+
+  assert.equal(outcome.exitCode, 0, JSON.stringify(outcome.errors))
+  const result = await readJson(join(run.runDir, 'result.json'))
+  assert.equal(result.evaluation_status, 'pending-human-review')
+  assert.equal(result.failure, null)
+  assert.equal('official_score' in result, false)
+  const state = await readJson(join(run.runDir, 'run-state.json'))
+  assert.equal(state.outcome.evaluation_status, 'pending-human-review')
+  assert.equal(state.outcome.failure, null)
+  assert.equal((await readJson(join(run.runDir, 'human-review.json'))).responses.length, 7)
+})
+
+test('a non-resumable human-review harness failure is still refused', async () => {
+  const run = await humanReviewHarnessFailure({ resumable: false })
+  const { io, asked } = scriptedIo(['yes', 'confirm'])
+
+  const outcome = await runHumanReview({ argv: ['--run-dir', run.runDir], io, ...servers() })
+
+  assert.equal(outcome.exitCode, 1)
+  assert.ok(outcome.errors.some(({ code }) => code === 'not-pending-human-review'), JSON.stringify(outcome.errors))
+  assert.deepEqual(asked, [])
+})
+
+test('a harness failure outside the human-review phase is still refused', async () => {
+  const directory = await root()
+  const run = await pendingRun({ root: directory })
+  await runHumanReview({
+    argv: ['--run-dir', run.runDir],
+    io: scriptedIo(answers()).io,
+    ...servers({ live: new Set(), urls: [], serves: false }),
+  })
+  assert.equal((await readJson(join(run.runDir, 'result.json'))).failed_phase, 'candidate-server')
+  const { io, asked } = scriptedIo(answers())
+
+  const outcome = await runHumanReview({ argv: ['--run-dir', run.runDir], io, ...servers() })
+
+  assert.equal(outcome.exitCode, 1)
+  assert.ok(outcome.errors.some(({ code }) => code === 'not-pending-human-review'), JSON.stringify(outcome.errors))
+  assert.deepEqual(asked, [])
 })
 
 test('a run that is not pending human review is refused', async () => {

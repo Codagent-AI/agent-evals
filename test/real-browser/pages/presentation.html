@@ -25,7 +25,7 @@
   </nav>
 </div>
 <script>
-// One page, seven behaviours. The server injects VARIANT and STEPS; nothing here
+// One page, several adversarial behaviours. The server injects VARIANT and STEPS; nothing here
 // is a candidate. Each variant isolates one judgment the evaluator must make.
 const variant = window.VARIANT
 const steps = window.STEPS
@@ -38,14 +38,112 @@ let keysDead = false
 // as a real candidate built its presentation.
 if (variant === 'g') root.removeAttribute('data-presentation')
 
+// (h) and (i) are correct decks whose chrome carries no title hook the
+// evaluator ranks first. (h) sets the step title in an unhooked header <span>
+// beside an unhooked <strong> deck title in browse mode, and in an unhooked
+// <strong> in present mode. (i) declares its mode only as data-mode, puts an
+// unhooked step-title paragraph before an unhooked caption paragraph in its
+// footer, and in present mode shows a footer title paragraph, carrying the
+// present-title hook, whose step marker is a nested element.
+// (h) also keeps a persistent list of every step title visible in its stage,
+// as a table of contents might. (j) is (h) without the active step title: only
+// that list exposes the titles, so it must not stand in for them.
+// (k) is 215c3182 rep 1's footer: it declares its mode only as data-mode and
+// shows a step-marker paragraph ("01 / 09 · era") and a hooked step-title
+// heading in both modes, with a caption paragraph only in browse mode. (l) is
+// (k) without the step-title heading: the marker must not stand in for it.
+const marked = variant === 'k' || variant === 'l'
+const unhooked = variant === 'h' || variant === 'i' || variant === 'j' || variant === 'r' || marked
+let footer = null
+if (unhooked) {
+  document.getElementById('title').remove()
+  document.getElementById('caption').remove()
+  root.querySelector('[data-presentation-header]').replaceChildren()
+  footer = document.createElement('footer')
+  footer.setAttribute('data-presentation-footer', '')
+  root.insertBefore(footer, progress)
+}
+
+function renderUnhooked() {
+  const step = steps[index]
+  const marker = String(index + 1).padStart(2, '0')
+  const header = root.querySelector('[data-presentation-header]')
+  const element = (tag, text, attributes = {}) => {
+    const node = document.createElement(tag)
+    for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value)
+    if (Array.isArray(text)) node.append(...text)
+    else node.textContent = text
+    return node
+  }
+  if (variant === 'h' || variant === 'j') {
+    const active = variant === 'h' ? [step.title] : []
+    header.replaceChildren(...(mode === 'browse'
+      ? [element('span', `section · ${marker}`), element('strong', 'How to Use This Skill to Make a Presentation'), ...active.map((title) => element('span', title))]
+      : [element('span', `section · ${marker}`), ...active.map((title) => element('strong', title))]))
+    footer.replaceChildren(...(mode === 'browse' ? [element('p', step.caption, { 'data-presentation-caption': '' })] : []))
+    return
+  }
+  if (marked) {
+    header.replaceChildren(...(mode === 'browse'
+      ? [element('h1', 'How to Use This Skill to Make a Presentation', { 'data-presentation-title': '' })]
+      : []))
+    footer.replaceChildren(
+      element('p', `${marker} / ${String(steps.length).padStart(2, '0')} · the ask`, { 'data-presentation-marker': '' }),
+      ...(variant === 'k' ? [element('h2', step.title, { 'data-presentation-step-title': '' })] : []),
+      ...(mode === 'browse' ? [element('p', step.caption, { 'data-presentation-caption': '' })] : []),
+    )
+    return
+  }
+  header.replaceChildren(...(mode === 'browse'
+    ? [element('div', 'How to Use This Skill to Make a Presentation', { 'data-presentation-title': '' })]
+    : []))
+  footer.replaceChildren(...(mode === 'browse'
+    ? [element('p', step.title, { class: 'step-title' }), element('p', step.caption, { class: 'caption' })]
+    : [element('p', [element('span', marker), ` ${step.title}`],
+      variant === 'r' ? {} : { 'data-presentation-present-title': '' })]))
+}
+
 function render() {
-  root.setAttribute('data-presentation-mode', mode)
+  if (variant === 'i' || marked || variant === 'p') {
+    root.removeAttribute('data-presentation-mode')
+    root.setAttribute('data-mode', mode)
+  } else if (variant === 'r') {
+    root.removeAttribute('data-presentation-mode')
+    root.removeAttribute('data-mode')
+  } else {
+    root.setAttribute('data-presentation-mode', mode)
+  }
   progress.setAttribute('data-step-index', String(index))
-  const title = document.getElementById('title')
-  title.textContent = steps[index].title
-  // (d) hides the one thing a reader must see in present mode.
-  title.classList.toggle('hidden', variant === 'd' && mode === 'present')
-  document.getElementById('caption').textContent = steps[index].caption
+  if (unhooked) {
+    renderUnhooked()
+  } else {
+    const title = document.getElementById('title')
+    title.textContent = variant === 't' ? '' : steps[index].title
+    // (d) hides the one thing a reader must see in present mode.
+    title.classList.toggle('hidden', variant === 'd' && mode === 'present')
+    const caption = document.getElementById('caption')
+    if (variant === 's') {
+      caption.removeAttribute('data-presentation-caption')
+      const middle = Math.floor(steps[index].caption.length / 2)
+      const left = document.createElement('span')
+      const right = document.createElement('span')
+      left.textContent = steps[index].caption.slice(0, middle)
+      right.textContent = steps[index].caption.slice(middle)
+      caption.replaceChildren(left, right)
+      caption.setAttribute('data-presentation-footer', '')
+    } else caption.textContent = steps[index].caption
+    if (variant === 't') {
+      let hidden = document.getElementById('hidden-title')
+      if (!hidden) {
+        hidden = document.createElement('span')
+        hidden.id = 'hidden-title'
+        hidden.className = 'hidden'
+        root.append(hidden)
+      }
+      hidden.textContent = steps[index].title
+      title.setAttribute('aria-labelledby', 'hidden-title')
+    }
+  }
   const stage = document.getElementById('stage')
   stage.replaceChildren()
   // (c) is a correct evolving scene whose hook no evaluator recognises.
@@ -55,6 +153,18 @@ function render() {
     entity.setAttribute(hook, id)
     entity.style.left = `${(id === 'stage-anchor' ? 0 : Number(id.slice(5)) + 1) * 70}px`
     stage.append(entity)
+  }
+  // The list sits inside the stage region, so its spans are title-bearing text.
+  if (variant === 'h' || variant === 'j') {
+    const list = document.createElement('p')
+    list.style.cssText = 'margin: 0; font-size: 10px;'
+    list.append(...steps.map(({ title }) => {
+      const item = document.createElement('span')
+      item.textContent = title
+      item.style.marginRight = '8px'
+      return item
+    }))
+    stage.prepend(list)
   }
   // Buttons are created once and updated in place, as a real app keeps its
   // nodes: recreating them would silently drop focus from the activated control.
@@ -78,6 +188,8 @@ function render() {
 function go(next) {
   index = Math.max(0, Math.min(steps.length - 1, next))
   render()
+  // (u) renders every step but throws an uncaught error on reaching step 6.
+  if (variant === 'u' && index === 5) throw new Error('step 6 failed to render')
 }
 
 function onKey(event) {
@@ -86,7 +198,7 @@ function onKey(event) {
   if (event.target.closest('button')) return
   // (b) is the real defect: once a control was used, deck keys never come back.
   if (keysDead) return
-  if (['ArrowRight', 'PageDown', ' '].includes(event.key)) go(index + 1)
+  if (['ArrowRight', 'PageDown', ' '].includes(event.key)) go(variant === 'r' ? index : index + 1)
   if (['ArrowLeft', 'PageUp'].includes(event.key)) go(index - 1)
 }
 
@@ -99,16 +211,49 @@ if (variant === 'e') {
   document.addEventListener('keydown', onKey)
 }
 for (const [id, delta] of [['prev', -1], ['next', 1]]) {
-  document.getElementById(id).addEventListener('click', () => { keysDead ||= variant === 'b'; go(index + delta) })
+  document.getElementById(id).addEventListener('click', () => { keysDead ||= variant === 'b'; go(index + (variant === 'r' ? 0 : delta)) })
 }
+// (m) keeps the touch start in state that is only committed after the next
+// frame, as React's setState is: a touchend delivered in the same task as its
+// touchstart still sees no start. A real finger's swipe spans many frames.
+// (n) has no swipe support at all. (o) listens for touches on its stage only,
+// as a real candidate did, so only a touch landing on the stage reaches it.
 let touchStart = null
-root.addEventListener('touchstart', (event) => { touchStart = event.touches[0].clientX })
-root.addEventListener('touchend', (event) => {
-  if (touchStart === null) return
-  const delta = event.changedTouches[0].clientX - touchStart
-  if (Math.abs(delta) > 40) go(index + (delta < 0 ? 1 : -1))
-  touchStart = null
-})
+const touchTarget = variant === 'o' ? document.getElementById('stage') : root
+if (variant !== 'n' && variant !== 'q') {
+  touchTarget.addEventListener('touchstart', (event) => {
+    const x = event.touches[0].clientX
+    if (variant === 'm') requestAnimationFrame(() => { touchStart = x })
+    else touchStart = x
+  })
+  touchTarget.addEventListener('touchend', (event) => {
+    if (touchStart === null) return
+    const delta = event.changedTouches[0].clientX - touchStart
+    if (Math.abs(delta) > 40) go(index + (delta < 0 ? 1 : -1))
+    touchStart = null
+  })
+}
+if (variant === 'q') {
+  let pointerStart = null
+  root.addEventListener('pointerdown', (event) => { pointerStart = event.clientX })
+  root.addEventListener('pointerup', (event) => {
+    if (pointerStart === null) return
+    const delta = event.clientX - pointerStart
+    if (Math.abs(delta) > 40) go(index + (delta < 0 ? 1 : -1))
+    pointerStart = null
+  })
+}
+// (r) contains plausible navigation handlers in source, but no interaction advances.
+if (variant === 'r') {
+  let pointerStart = null
+  root.addEventListener('pointerdown', (event) => { pointerStart = event.clientX })
+  root.addEventListener('pointerup', (event) => {
+    if (pointerStart === null) return
+    const delta = event.clientX - pointerStart
+    if (Math.abs(delta) > 40) go(index)
+    pointerStart = null
+  })
+}
 render()
 </script>
 </body>

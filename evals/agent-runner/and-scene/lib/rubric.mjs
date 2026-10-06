@@ -277,6 +277,9 @@ export function validateAutomatedRubric(rubric) {
     if (error) errors.push(error)
   }
   const deterministic = new Set(rows.filter(({ evaluator }) => evaluator === 'deterministic-browser').map(({ id }) => id))
+  for (const id of deterministic) {
+    if (!rubric.fallbacks?.[id]) errors.push(`deterministic-browser criterion ${id} requires a fallback`)
+  }
   for (const [id, fallback] of Object.entries(rubric.fallbacks ?? {})) {
     if (!deterministic.has(id)) errors.push(`fallback ${id} must name a deterministic-browser criterion`)
     if (!JUDGE_JOBS.includes(fallback?.job)) errors.push(`fallback ${id} has unknown judge job ${fallback?.job}`)

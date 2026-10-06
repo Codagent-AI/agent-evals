@@ -481,13 +481,43 @@ function criteriaSection(result) {
       criterion.id,
       sub.id,
       `${verdictCell(criterion.verdict)}${criterion.verdict_source === 'fallback' ? ' (decided by the LLM because the browser check could not observe it)' : ''}`,
-      `${criterion.rationale ?? 'not observed'}${criterion.not_observed ? ` | Browser: ${criterion.not_observed.rationale ?? 'not observed'}; looked for ${(criterion.not_observed.looked_for ?? []).join(', ')}` : ''}`,
+      `${criterion.rationale ?? 'not observed'}${criterion.not_observed ? ` | Browser: ${criterion.not_observed.rationale ?? 'not observed'}; looked for ${(criterion.not_observed.looked_for ?? []).join(', ')}` : ''}`
+        + (criterion.second_opinion ? ` | second opinion: ${{
+          uphold: 'upheld', overturn: 'overturned', 'overturn-rejected': 'overturn rejected',
+        }[criterion.second_opinion.decision] ?? criterion.second_opinion.decision}`
+          + (criterion.second_opinion.rejection_reason ? ` (${criterion.second_opinion.rejection_reason})` : '') : ''),
       [...(criterion.evidence ?? []), ...(criterion.source_citations ?? [])].join(' | '),
     ]))
   ))
   const fallback = result.fallback ?? result.score?.fallback
   const summary = fallback?.criteria ? `<p>${escapeHtml(`${fallback.criteria} criteria (${points(fallback.points)} points) were decided by fallback LLM review.`)}</p>` : ''
   return section('Automated criteria', summary + table(['Criterion', 'Subcomponent', 'Verdict', 'Rationale', 'Evidence'], rows))
+}
+
+function overturnedFailuresSection(result) {
+  const opinions = result.second_opinions
+  if (!opinions) return ''
+  if ((opinions.entries ?? []).length !== opinions.checked) {
+    throw new ReportConsistencyError('second-opinion checked count does not match entries')
+  }
+  const entries = (opinions.entries ?? []).filter(({ decision }) => decision === 'overturn')
+  if (entries.length !== opinions.overturned) {
+    throw new ReportConsistencyError('second-opinion overturn count does not match entries')
+  }
+  if (!opinions.checked) return ''
+  return section('Overturned failures', entries.length === 0
+    ? '<p>No failures were overturned.</p>'
+    : table(['Failure', 'Raw verdict', 'Second-opinion verdict', 'Raw rationale', 'Measurement fault', 'Cited spans', 'Browser replay'], entries.map((entry) => [
+      entry.id,
+      entry.raw_verdict ?? 'fail',
+      entry.verdict ?? 'pass',
+      entry.raw_rationale ?? '',
+      entry.measurement_fault ?? '',
+      (entry.citations ?? []).map(({ path, start_line, end_line }) => `${path}:${start_line}-${end_line}`).join(' | '),
+      entry.replay ? JSON.stringify({ passed: entry.replay.passed, actions: entry.replay.actions,
+        expect: entry.replay.expect, observations: entry.replay.observations,
+        trace: entry.replay.trace }) : '—',
+    ])))
 }
 
 function humanSection(result) {
@@ -666,6 +696,7 @@ export function renderReport(result, { current = null } = {}) {
   const body = [
     `<h1 class="${headlineClass(result)}">${escapeHtml(label)}</h1>`,
     summaryBlock(result),
+    overturnedFailuresSection(result),
     availableSection(result),
     componentSections(result),
     adjudicationSection(result),
@@ -676,7 +707,8 @@ export function renderReport(result, { current = null } = {}) {
         (result.score?.gates ?? []).map((gate) => [
           gate.id, gate.requirement ?? '', verdictCell(gate.verdict), gate.rationale ?? 'not observed',
           (gate.evidence ?? []).join(' | '),
-          rawGateRecord(gate),
+          `${rawGateRecord(gate)}${gate.raw_browser_gate ? `browser ${verdictCell(gate.raw_browser_gate.verdict)}; derived ${verdictCell(gate.verdict)}` : ''}`
+            + (gate.second_opinion ? ` | second opinion: raw ${verdictCell(gate.raw_verdict)}, ${gate.second_opinion.decision}` : ''),
         ]),
       )
       + table(

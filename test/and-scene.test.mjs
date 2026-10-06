@@ -11,7 +11,7 @@ import { validateRoleProfiles } from '../evals/agent-runner/and-scene/lib/profil
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const runScript = join(root, 'evals/agent-runner/and-scene/run.sh')
 const shotsScript = join(root, 'evals/agent-runner/and-scene/scene-shots.mjs')
-const fixtureSha = '2262a9f118887593654dc8fa1bed2a565a11301c'
+const fixtureSha = 'f0695b96c0c23b2d17ecc6cfbaf8be1fcdedd6f8'
 const referenceSha = '171c7def1e12aca2a5f605a5e5feafb20d4e4d19'
 
 const profileArgs = [
@@ -621,4 +621,29 @@ test('a full Agent Runner evaluation does not require a calibration receipt', as
   assert.equal(result.status, 0, result.output)
   assert.match(result.output, /controller\.mjs/)
   assert.doesNotMatch(result.output, /calibration record/i)
+})
+
+test('a host rescore runs the controller directly without the sandbox', async () => {
+  const context = await setup({ dirty: true })
+  const source = join(context.dir, 'completed-candidate')
+  await mkdir(source)
+
+  const result = await scored(context, ['--rescore-from', source, '--host'])
+
+  assert.equal(result.status, 0, result.output)
+  assert.match(result.output, /controller\.mjs --run-dir .*\/run --run-id run /)
+  assert.match(result.output, /--rescore-from .*completed-candidate/)
+  assert.match(result.output, /AND_SCENE_CODEX_COMMAND=/)
+  assert.ok(!result.output.includes('/rescore-source'), result.output)
+  assert.ok(!result.output.includes('--docker-run-arg'), result.output)
+  assert.ok(!result.output.includes('--lead-cli'), result.output)
+})
+
+test('host mode is refused outside an evaluator-only rescore', async () => {
+  const context = await setup()
+
+  const result = await scored(context, ['--host', ...profileArgs])
+
+  assert.notEqual(result.status, 0)
+  assert.match(result.output, /--host is supported only with --run-agent --rescore-from/)
 })

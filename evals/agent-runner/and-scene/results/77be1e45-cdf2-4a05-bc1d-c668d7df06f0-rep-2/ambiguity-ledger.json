@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-09-29T04-59-24-103367181Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_verify-change__sub_verify-change__review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": "verification",
+        "agent_role": null,
+        "task": "reference sample verification"
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered verification sample lacks complete nine-step or nine-frame evidence.",
+      "evidence": [
+        "Product evidence: verification-sample-outline: fail — Canonical nine-step sample or nine-frame evidence is incomplete.",
+        "Product evidence: demo-nine-step-content-and-order: fail."
+      ],
+      "handling": "The visible artifacts do not show what assumption, if any, led to the incomplete sample.",
+      "consequence": "The required sample and its verification are incomplete.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failures establish a material product gap, but the available excerpts do not distinguish a specification gap, a mistaken assumption, or an implementation defect.",
+      "resolution": "unresolved",
+      "id": "a0043b433bbb806f"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "verification",
+        "agent_role": null,
+        "task": "demo interaction"
+      },
+      "source": "judge-discovered",
+      "concern": "Present mode and several navigation behaviors failed verification.",
+      "evidence": [
+        "Product evidence: demo-present-mode-behavior: fail; demo-mode-position-preservation: fail.",
+        "Product evidence: demo-supported-navigation: fail; demo-navigation-boundaries-and-control-keys: fail; demo-step-and-transition-reliability: fail; demo-mode-interaction-reliability: fail."
+      ],
+      "handling": "The visible artifacts do not explain the implementation decisions behind these behaviors.",
+      "consequence": "Core demo interactions did not meet verification criteria.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The checks show a material delivered-product problem, but do not establish whether an assumption or missing context caused it.",
+      "resolution": "unresolved",
+      "id": "536c60a88400f3b6"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
