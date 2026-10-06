@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import { readFile, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildRubric, checkRubric, verifyJudgingInputs } from '../evals/agent-runner/and-scene-define/lib/rubric.mjs'
+import { buildRubric, checkRubric, verifyJudgingInputs, rubricSettings, RUBRIC_SETTINGS_DEFAULTS } from '../evals/agent-runner/and-scene-define/lib/rubric.mjs'
+import { checkVersions } from '../evals/agent-runner/and-scene-define/lib/versions.mjs'
 import { checkInventory } from '../evals/agent-runner/and-scene-define/lib/inventory.mjs'
 import { scoreDefinition, discoveryLedger } from '../evals/agent-runner/and-scene-define/lib/scoring.mjs'
 import { runDefinitionPanel, judgeSchema, exchangeIdentity, makeJobs } from '../evals/agent-runner/and-scene-define/lib/judge-jobs.mjs'
@@ -230,4 +231,55 @@ test('rubric pins concrete quality, fidelity and reference-shape examples', () =
   assert.ok(rubric.fidelity.examples.no_deduction.length >= 2)
   assert.ok(rubric.guidance[0].includes('Example:'))
   assert.ok(rubric.guidance[1].includes('Example:'))
+})
+test('committed rubric pins provisional settings and calibration limits as defaults', async () => {
+  const rubric = JSON.parse(await readFile(join(root, 'rubric.json'), 'utf8'))
+  assert.deepEqual(rubric.components, { coverage: 60, artifact_quality: 25, fidelity: 15 })
+  assert.deepEqual(rubric.weights, { mandatory: 2, 'acceptable-alternative': 1 })
+  assert.ok(rubric.quality.every(x => x.points === 6.25))
+  assert.equal(rubric.fidelity.deduction_per_exchange, 3)
+  assert.equal(rubric.pass_threshold, null)
+  assert.equal(rubric.calibration.restructured_tolerance_items, 3)
+  assert.equal(rubric.calibration.max_spread, 5)
+  assert.equal(rubric.calibration.provisional, true)
+  assert.match(rubric.calibration.note, /provisional/i)
+  assert.deepEqual(rubricSettings(rubric), { ...RUBRIC_SETTINGS_DEFAULTS, rubric_version: rubric.rubric_version, quality_points: rubricSettings(rubric).quality_points })
+  assert.deepEqual(checkRubric(rubric, inventory), [])
+  assert.deepEqual(await checkVersions(), [])
+})
+test('recorded calibrated settings round-trip while coverage criteria stay generated from the inventory', () => {
+  const quality_points = Object.fromEntries(buildRubric(inventory).quality.map((x, n) => [x.id, [10, 8, 6, 6][n]]))
+  const settings = { rubric_version: 4, provisional: true, components: { coverage: 50, artifact_quality: 30, fidelity: 20 }, weights: { mandatory: 3, 'acceptable-alternative': 1.5 }, quality_points,
+    fidelity: { deduction_per_exchange: 4, floor: 2 }, calibration: { restructured_tolerance_items: 4, max_spread: 6, provisional: false, note: 'Calibrated by E2E-003.', expected_fail: ['variant-a'], approval: 'awaiting HT-002' },
+    pass_threshold: 72, calibration_evidence: { report: 'calibration/run/report.html', input_hashes: { reference: 'abc' } } }
+  const rubric = buildRubric(inventory, settings)
+  assert.deepEqual(checkRubric(rubric, inventory), [])
+  assert.deepEqual(rubricSettings(rubric), settings)
+  assert.equal(rubric.coverage.find(x => x.class === 'mandatory').weight, 3)
+  assert.equal(rubric.coverage.find(x => x.class === 'acceptable-alternative').weight, 1.5)
+  assert.deepEqual(rubric.quality.map(x => x.points), [10, 8, 6, 6])
+  assert.equal(rubric.fidelity.deduction_per_exchange, 4); assert.equal(rubric.fidelity.floor, 2)
+  assert.equal(rubric.pass_threshold, 72); assert.equal(rubric.calibration.approval, 'awaiting HT-002')
+  // Scoring follows the recorded settings.
+  const scored = scoreDefinition({ rubric, coverage: rubric.coverage.map(x => result(x.id, 'met')), quality: rubric.quality.map(x => result(x.id, 'met')), fidelity: [result('fidelity:a', 'met')], gates: [] })
+  assert.equal(scored.components.coverage.score, 50); assert.equal(scored.components.artifact_quality.score, 30); assert.equal(scored.components.fidelity.score, 16)
+  // Divergence from the inventory or inconsistent settings is still refused.
+  const stale = structuredClone(rubric); stale.coverage[0].anchors.met = 'changed'
+  assert.ok(checkRubric(stale, inventory).length)
+  const reweighted = structuredClone(rubric); reweighted.coverage[0].weight = 9
+  assert.ok(checkRubric(reweighted, inventory).length)
+  const dropped = structuredClone(rubric); dropped.coverage.pop()
+  assert.ok(checkRubric(dropped, inventory).length)
+  for (const [change, pattern] of [
+    [r => { r.components.coverage = 55 }, /sum to 100/],
+    [r => { r.quality[0].points = 1 }, /quality points/],
+    [r => { r.weights.mandatory = 0 }, /weight/],
+    [r => { r.fidelity.deduction_per_exchange = -1 }, /deduction/],
+    [r => { r.calibration.max_spread = -1 }, /max_spread/],
+    [r => { r.calibration.restructured_tolerance_items = 'many' }, /restructured_tolerance_items/],
+    [r => { r.pass_threshold = 120 }, /threshold/],
+  ]) {
+    const bad = structuredClone(rubric); change(bad)
+    assert.ok(checkRubric(bad, inventory).some(x => pattern.test(x)), String(pattern))
+  }
 })

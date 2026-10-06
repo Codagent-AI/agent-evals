@@ -233,11 +233,29 @@ graded items. `anchors_review` is deliberately null. A maintainer must complete
 inventory_version }` for the reviewed version, updating the inventory pin using
 the versioning rules above. Preference items have no coverage anchors.
 
-`rubric.json` is generated from the inventory. Its provisional components are
-coverage 60, artifact quality 25, and fidelity 15; mandatory items weigh 2 and
-acceptable alternatives weigh 1. A contradicted preference/outside-inventory
-answer deducts 3 fidelity points per exchange, with a floor of zero. These
-weights and the null pass threshold await calibration. Candidate preflight
+`rubric.json` is generated from the inventory. Its coverage criteria and
+anchors, quality and fidelity wording, guidance, and gates are always
+regenerated; its scoring settings are recorded in the file and round-trip
+through the builder, so calibration can record proposed values there:
+
+| Setting | Field in `rubric.json` | Provisional default |
+| --- | --- | --- |
+| Component points (sum to 100) | `components` | coverage 60, artifact_quality 25, fidelity 15 |
+| Item weight per class | `weights` | mandatory 2, acceptable-alternative 1 |
+| Quality criterion points (sum to artifact_quality) | `quality[].points` | 6.25 each |
+| Fidelity deduction and floor | `fidelity.deduction_per_exchange`, `fidelity.floor` | 3 per contradicted exchange, floor 0 |
+| Restructured-reference tolerance | `calibration.restructured_tolerance_items` | 3 (total coverage weight lost) |
+| Repeat-judging spread limit | `calibration.max_spread` | 5 total-score points |
+| Pass threshold | `pass_threshold` | `null` |
+| Calibration evidence | `calibration_evidence` | `null` |
+
+The calibration limits are provisional (`calibration.provisional: true`) until
+E2E-003 evidence and maintainer approval (HT-002). Extra keys in `calibration`
+(for example approval status or expected-fail marks) are preserved. To record
+calibrated settings, edit those fields, bump `rubric_version` and
+`versions.json`, and run the builder. `--check` still refuses any coverage
+criterion, anchor, or item weight that diverges from the inventory and the
+recorded class weights, and any inconsistent settings. Candidate preflight
 refuses unreviewed anchors, rubric/inventory mismatches, and a null threshold.
 Dry runs verify rubric consistency without requiring review or calibration.
 Scoring itself does not need a threshold: with a null threshold (as during

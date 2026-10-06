@@ -1,5 +1,5 @@
 {
-  "rubric_version": 2,
+  "rubric_version": 3,
   "inventory_version": 2,
   "provisional": true,
   "components": {
@@ -893,6 +893,12 @@
     "gate:required-artifact:test-plan",
     "gate:openspec-validate"
   ],
+  "calibration": {
+    "restructured_tolerance_items": 3,
+    "max_spread": 5,
+    "provisional": true,
+    "note": "Provisional limits pending E2E-003 calibration evidence and maintainer approval (HT-002). restructured_tolerance_items: total coverage weight the restructured reference may lose versus the reference. max_spread: total-score points by which repeated judging of one input may differ."
+  },
   "pass_threshold": null,
   "calibration_evidence": null
 }

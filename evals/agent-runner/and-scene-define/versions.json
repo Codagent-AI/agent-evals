@@ -31,10 +31,11 @@
     },
     "rubric": {
       "path": "rubric.json",
-      "version": 2,
+      "version": 3,
       "hashes": {
         "1": "8c1a28e2feaf4a5cbee01e0a94130033c5655bf212af7695f9c36adfb0d269d0",
-        "2": "343a69925088dd2139da70513fcd8dc97d46df8dbfac98cbd93bfc41ab6470e1"
+        "2": "343a69925088dd2139da70513fcd8dc97d46df8dbfac98cbd93bfc41ab6470e1",
+        "3": "dc9bf5245622447b233c163bdb8540a7057160de8c603122e57fc9fd7cbbb35c"
       }
     }
   }
