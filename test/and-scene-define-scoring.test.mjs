@@ -125,6 +125,20 @@ test('deterministic score excludes leaks, charges fidelity once, gates fail and 
   assert.equal(rescored.total, snapshot.total); assert.deepEqual(rescored.components, snapshot.components)
   assert.equal(scoreDefinition({ rubric, coverage, quality, fidelity: [], leaked: [], gates: [] }).definition_verdict, 'pass')
 })
+test('a run where every graded item leaked has no coverage score and no verdict unless a gate failed', () => {
+  const rubric = { ...buildRubric(inventory), pass_threshold: 70 }
+  const coverage = rubric.coverage.map(x => result(x.id, 'met'))
+  const quality = rubric.quality.map(x => result(x.id, 'met'))
+  const leaked = coverage.map(x => x.id)
+  const scored = scoreDefinition({ rubric, coverage, quality, fidelity: [], leaked, gates: [{ passed: true }] })
+  assert.equal(scored.evaluation_status, 'complete')
+  assert.equal(scored.definition_verdict, null)
+  assert.match(scored.verdict_unavailable, /every graded item leaked/)
+  assert.equal(scored.components.coverage.score, null); assert.equal(scored.components.coverage.possible, 0)
+  assert.equal(scored.total, null)
+  assert.equal(scored.components.artifact_quality.score, 25)
+  assert.equal(scoreDefinition({ rubric, coverage, quality, fidelity: [], leaked, gates: [{ passed: false }] }).definition_verdict, 'fail')
+})
 test('quality inputs contain no hidden material; fidelity excludes graded subjects without failing and requires matching exchange', async () => {
   const exchange = { step: 'define.specs', step_id: 'specs', attempt: 1, turn: 1, agent_message: 'Style?', reply: 'Blue', reply_type: 'answer' }
   const jobs = makeJobs({ inventory, rubric: buildRubric(inventory), artifacts: inputs.artifacts, conversation: [exchange], gates: [] })

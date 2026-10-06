@@ -20,7 +20,7 @@ A definition SHALL fail through a hard gate when the collected change lacks a pr
 - **AND** the component scores are still reported as diagnostics
 
 ### Requirement: Requirement coverage
-The rubric SHALL contain one coverage criterion for each `mandatory` and `acceptable-alternative` inventory item and none for `preference` items. Each criterion SHALL be judged `met`, `partial`, or `missing`, where `partial` means the artifacts commit to the item's intent but leave out or weaken part of what the item requires: a `mandatory` item against its statement, and an `acceptable-alternative` item against its intent only, so a different mechanism that achieves the intent is `met`. An item SHALL count as captured only where an artifact commits to it in a specification requirement or scenario, a design decision, or a proposal scope statement; a mention only in the test plan or in passing SHALL NOT count. A `scope-exclusion` item SHALL be `met` when the definition does not include the excluded scope, without requiring an explicit exclusion statement. Each criterion SHALL be judged against its item's pinned anchors, which state in the reference's own words what counts as `met`, `partial`, and `missing`. A definition that contradicts a graded item SHALL be scored under that item's coverage criterion only. An item the disclosure audit marks leaked SHALL be excluded from both the earned and the possible coverage points and reported as `leaked`. Coverage SHALL be the primary component.
+The rubric SHALL contain one coverage criterion for each `mandatory` and `acceptable-alternative` inventory item and none for `preference` items. Each criterion SHALL be judged `met`, `partial`, or `missing`, where `partial` means the artifacts commit to the item's intent but leave out or weaken part of what the item requires: a `mandatory` item against its statement, and an `acceptable-alternative` item against its intent only, so a different mechanism that achieves the intent is `met`. An item SHALL count as captured only where an artifact commits to it in a specification requirement or scenario, a design decision, or a proposal scope statement; a mention only in the test plan or in passing SHALL NOT count. A `scope-exclusion` item SHALL be `met` when the definition does not include the excluded scope, without requiring an explicit exclusion statement. Each criterion SHALL be judged against its item's pinned anchors, which state in the reference's own words what counts as `met`, `partial`, and `missing`. A definition that contradicts a graded item SHALL be scored under that item's coverage criterion only. An item the disclosure audit marks leaked SHALL be excluded from both the earned and the possible coverage points and reported as `leaked`. When every graded item is leaked, coverage and the total SHALL be reported as unavailable rather than zero, and `definition_verdict` SHALL be unavailable with that reason unless a gate failed. Coverage SHALL be the primary component.
 
 #### Scenario: Alternative mechanism meets the intent
 - **WHEN** a definition specifies a different mechanism that achieves an `acceptable-alternative` item's intent
@@ -33,6 +33,11 @@ The rubric SHALL contain one coverage criterion for each `mandatory` and `accept
 #### Scenario: Anchor decides a borderline item
 - **WHEN** a definition commits to an item in a way its `partial` anchor describes
 - **THEN** that criterion is `partial`, and the verdict cites the artifact location
+
+#### Scenario: Every graded item leaked
+- **WHEN** the disclosure audit marks every `mandatory` and `acceptable-alternative` item leaked and every gate passes
+- **THEN** the coverage score and the total are reported as unavailable, not zero
+- **AND** `definition_verdict` is unavailable, with the reason that coverage could not be measured
 
 #### Scenario: Excluded scope is simply absent
 - **WHEN** a definition neither includes nor mentions an excluded scope item
