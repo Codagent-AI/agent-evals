@@ -120,6 +120,11 @@ test('stored baseline validation rejects median and summary inconsistencies', as
     { ...valid.current, human_review: { ...valid.current.human_review, is_current_median: false } },
     { ...valid.current, summary: {} },
     { ...valid.current, summary: { ...valid.current.summary, repetitions: 'one' } },
+    { ...valid.current, summary: { ...valid.current.summary, active_duration_ms: { complete: false } } },
+    { ...valid.current, summary: { ...valid.current.summary, automated_points: { complete: true } } },
+    { ...valid.current, summary: { ...valid.current.summary, automated_points: { ...valid.current.summary.automated_points, stddev: 'n/a' } } },
+    { ...valid.current, summary: { ...valid.current.summary, tokens_by_provider: { complete: true } } },
+    { ...valid.current, summary: { ...valid.current.summary, tokens_by_provider: { complete: true, providers: { openai: { complete: true } } } } },
     { ...valid.current, reps: [{ ...valid.current.reps[0], execution_run_id: 42 }] },
     { ...valid.current, reps: [{ ...valid.current.reps[0], execution_run_id: undefined }] },
   ]) {
@@ -391,6 +396,14 @@ test('show without a record and anchor replacement', () => {
   assert.equal(frozen.anchor.anchor_reason, 'first')
 })
 
+
+test('anchor compares the median and reviewed run ids, not only the stored flag', () => {
+  const first = set(baseline.emptyRecord(), [extracted()]).record
+  const forged = structuredClone(first)
+  forged.current.median_rep = 'other'
+  forged.current.reps.push({ ...forged.current.reps[0], run_id: 'other' })
+  refusal(baseline.applyAnchor(forged, { reason: 'freeze', now: at }), 'median-not-reviewed')
+})
 
 test('show reports malformed stored metrics as invalid record', async () => {
   const root = await temp(), record = join(root, 'record.json')

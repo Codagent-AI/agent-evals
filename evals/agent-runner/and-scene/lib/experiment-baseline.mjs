@@ -30,8 +30,13 @@ export function validateBaseline(baseline, path = 'current', anchor = path === '
   if (!object(baseline.identity)) fail('identity', 'must be an object')
   if (!object(baseline.summary)) fail('summary', 'must be an object')
   if (typeof baseline.summary.repetitions !== 'number') fail('summary.repetitions', 'must be a number')
+  const validStats = x => object(x) && x.complete === true && ['mean', 'min', 'max'].every(key => typeof x[key] === 'number') && (x.stddev === null || typeof x.stddev === 'number')
   for (const field of ['automated_points', 'tokens_total', 'tokens_by_provider', 'active_duration_ms', 'estimated_cost_usd']) {
-    if (!object(baseline.summary[field]) || typeof baseline.summary[field].complete !== 'boolean') fail(`summary.${field}`, 'must be an object with boolean complete')
+    const metric = baseline.summary[field]
+    if (!object(metric) || typeof metric.complete !== 'boolean') fail(`summary.${field}`, 'must be an object with boolean complete')
+    if (!metric.complete && !Array.isArray(metric.missing_run_ids)) fail(`summary.${field}.missing_run_ids`, 'must be an array when incomplete')
+    if (metric.complete && field !== 'tokens_by_provider' && !validStats(metric)) fail(`summary.${field}`, 'must have numeric mean, min, max and numeric or null stddev when complete')
+    if (metric.complete && field === 'tokens_by_provider' && !(object(metric.providers) && Object.values(metric.providers).every(validStats))) fail(`summary.${field}.providers`, 'must map providers to complete statistics')
   }
   if (!ids.has(baseline.median_rep)) fail('median_rep', `${JSON.stringify(baseline.median_rep)} is not a repetition`)
   if (!object(baseline.human_review)) fail('human_review', 'must be an object')
@@ -208,7 +213,7 @@ export function applyAddRep(record, item, { allowMismatch, now }) {
 export function applyAnchor(record, { reason, now }) {
   if (!record.current) return { refusals: [refusal(null, 'no-current', 'Set a baseline first')] }
   const current = record.current
-  if (!current.human_review.is_current_median) return { refusals: [refusal(null, 'median-not-reviewed', `Current median ${current.median_rep} differs from reviewed repetition ${current.human_review.run_id}; use a fresh set including the new median's review`)] }
+  if (!current.human_review.is_current_median || current.median_rep !== current.human_review.run_id) return { refusals: [refusal(null, 'median-not-reviewed', `Current median ${current.median_rep} differs from reviewed repetition ${current.human_review.run_id}; use a fresh set including the new median's review`)] }
   const result = structuredClone(record), date = timestamp(now)
   if (result.anchor) archive(result, 'anchor', date, reason)
   result.anchor = { ...structuredClone(result.current), anchored_at: date, anchor_reason: reason }
