@@ -297,6 +297,21 @@ match. No hidden input, rubric, or judge packet is staged into the evaluated
 sandbox.
 
 
+## Calibration set
+
+`calibration/` is the host-only input set for `--calibrate`, and it is never
+staged or published. It contains:
+- the fixture's own change (`reference`);
+- a `restructured` rewrite that swaps acceptable-alternative mechanisms;
+- six degraded variants, each with a proposed expected-fail mark;
+- an empty `real-candidates/` slot.
+
+Each input pairs a `collected/` change directory with `expectations.json`, which
+gives verdicts for all 72 graded items. Two inputs also carry a synthetic
+`conversation.jsonl` that plants fidelity contradictions. `manifest.json` hashes
+every input file. The expected-fail marks await maintainer review (HT-002). See
+[`calibration/README.md`](calibration/README.md).
+
 ## Results, resume, and rescore
 
 The paid run needs a clean Agent Runner **external-user-mode** checkout supporting
