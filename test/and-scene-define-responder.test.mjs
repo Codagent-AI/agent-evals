@@ -35,6 +35,8 @@ test('INT-001: atomic exchange, durable opening, full conversation and restart r
   const start = () => {
     const controller = new AbortController()
     const done = runResponder({ ...dirs, inputs, invoke, signal: controller.signal, deadline: Date.now() + 10000, onExchangeDurable: () => { durable++ } })
+    // Stop the loop even when an assertion fails first, or the file never exits.
+    t.after(() => { controller.abort(); return done.catch(() => {}) })
     return { controller, done }
   }
   const first = start()
@@ -111,12 +113,13 @@ test('INT-001: actual conversation fsync precedes publication; stop in write-ahe
   await assert.rejects(readFile(join(dirs.exchangeDir, 'opening.reply.json')), { code: 'ENOENT' })
   const resumed = new AbortController()
   const done = runResponder({ ...dirs, deadline: Date.now() + 10000, signal: resumed.signal, invoke: () => { throw new Error('must replay') } })
+  t.after(() => { resumed.abort(); return done.catch(() => {}) })
   const inputs = await loadSimulatedUserInputs()
   assert.equal((await reply(dirs.exchangeDir, 'opening')).text, inputs.startingPrompt)
   resumed.abort(); await done
 })
 
-test('INT-001: stub claude replays a clean recorded whole-turn response across steps', async t => {
+test('INT-001: stub claude replays a clean recorded whole-turn response across steps', { timeout: 60000 }, async t => {
   const dirs = await setup(t)
   const poc = 'openspec/changes/eval-the-whole-workflow/poc/runs/codex-20261004T023437Z'
   const conversation = JSON.parse(await readFile(join(poc, 'conversation.json'), 'utf8'))
@@ -125,6 +128,7 @@ test('INT-001: stub claude replays a clean recorded whole-turn response across s
   const stub = await claudeStub(t, [{ stdout: recorded }])
   const controller = new AbortController()
   const done = runResponder({ ...dirs, signal: controller.signal, deadline: Date.now() + 10000, invoke: createSimulatedUser({ ...stub, runDir: dirs.runDir }) })
+  t.after(() => { controller.abort(); return done.catch(() => {}) })
   // A separate fake Runner process publishes atomic requests and awaits replies.
   const runner = spawn(process.execPath, ['--input-type=module', '-e', `
     import { writeFile, rename, readFile } from 'node:fs/promises';
@@ -143,7 +147,9 @@ test('INT-001: stub claude replays a clean recorded whole-turn response across s
   `], { stdio: ['ignore', 'ignore', 'pipe'] })
   const runnerDone = new Promise((resolve, reject) => { runner.on('error', reject); runner.on('close', code => code === 0 ? resolve() : reject(new Error('fake Runner failed'))) })
   t.after(() => runner.kill())
-  await runnerDone
+  // The fake Runner waits for replies indefinitely; fail as soon as the
+  // responder stops instead of hanging the test file.
+  await Promise.race([runnerDone, done.then(outcome => { throw new Error(`responder stopped before the fake Runner finished: ${outcome?.status}`) })])
   const result = JSON.parse(recorded.trim().split('\n').at(-1))
   assert.equal((await reply(dirs.exchangeDir, 'next')).text, result.structured_output.text)
   controller.abort(); await done
@@ -190,6 +196,7 @@ test('torn final conversation records are durably truncated before regenerating 
       assert.equal(await readFile(join(dirs.runDir, 'conversation.jsonl'), 'utf8'), prefix)
       return { text: 'Recovered', reply_type: 'answer' }
     } })
+    t.after(() => { controller.abort(); return done.catch(() => {}) })
     assert.equal((await reply(dirs.exchangeDir, 'pending')).text, 'Recovered')
     controller.abort(); assert.equal((await done).status, 'stopped')
     assert.equal(calls, 1)
@@ -216,6 +223,7 @@ test('a complete final record missing its newline is retained and separated from
   await publish(dirs.exchangeDir, 'pending', request(2))
   const controller = new AbortController()
   const done = runResponder({ ...dirs, signal: controller.signal, deadline: Date.now() + 10000, invoke: async () => ({ text: 'Next', reply_type: 'answer' }) })
+  t.after(() => { controller.abort(); return done.catch(() => {}) })
   assert.equal((await reply(dirs.exchangeDir, 'pending')).text, 'Next')
   controller.abort(); await done
   const records = (await readFile(join(dirs.runDir, 'conversation.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse)
