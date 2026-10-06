@@ -24,14 +24,15 @@ log audit.
 No single model call decides a scored criterion. Each judge job runs two
 independent samples with identical inputs, concurrently, at a pinned reasoning
 effort (`medium`, the judge model's default). Each source-job sample passes
-through its own closed-world source audit: a contradiction corrects that
-sample's vote, an undecided audit gets one focused re-cite, and a verdict still
-undecided after that stands as the sample's vote rather than spending more
-citation cycles (a browser-fallback pass, which must be proven from source,
-fails instead). A verdict both samples agree on stands, pass or fail. A
-criterion they disagree on goes to a third independent sample that gets the
-job's unchanged context and never sees the first two verdicts, so its vote is
-the majority.
+through its own closed-world source audit. A contradiction never inverts that
+sample's vote: it marks the vote disputed, and a disputed criterion goes to the
+third sample below. An undecided audit gets one focused re-cite, and a verdict
+still undecided after that stands as the sample's vote rather than spending
+more citation cycles (a browser-fallback pass, which must be proven from
+source, fails instead). A verdict both samples agree on, with neither vote
+disputed, stands, pass or fail. A criterion they disagree on, or that either
+sample's audit disputed, goes to a third independent sample that gets the job's
+unchanged context and never sees the first two verdicts, so its vote decides.
 
 A majority pass must cite line spans (`path`, `start_line`, `end_line`) that
 the harness validates mechanically, exactly as the browser second opinion
@@ -44,8 +45,9 @@ quoted lines against every clause of the criterion's requirement. Only
 to re-cite once, and if the audit still cannot decide, the majority stands with
 that noted; `contradicted` is replicated by a second independent audit, and the
 majority pass is withdrawn only when both audits find a contradiction. So a
-split is decided by votes, and an audit can overturn a vote only when two
-audits agree. Invalid third-sample output is retried and, once exhausted,
+split is decided by votes; a single audit can only send a criterion to the
+third sample, and a pass is withdrawn only when two independent audits agree it
+is contradicted. Invalid third-sample output is retried and, once exhausted,
 leaves the job unobserved, never failed.
 
 Every judge sees, beside each criterion, the requirement it traces to: the

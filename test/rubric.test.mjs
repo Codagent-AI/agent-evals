@@ -126,9 +126,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 10.0 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
+test('rubric 11.0 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '10.0.0')
+  assert.equal(rubric.version, '11.0.0')
   assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(
@@ -564,11 +564,25 @@ test('rubric 10.0 defines the terms round 2 judged inconsistently', async () => 
   assert.match(guidance('demo-identity-and-grouping'), /do not require the sample deck to rearrange/)
   assert.match(guidance('skill-scaffolding'), /includes a partially scaffolded project/)
   assert.match(guidance('assumption-handling-quality-criteria'), /reproduced only when the record shows the workflow observed/)
-  assert.match(guidance('assumption-handling-quality-criteria'), /run an omission check/)
+  assert.match(guidance('assumption-handling-quality-criteria'), /check for unsurfaced requirement deviations/)
   assert.match(guidance('assumption-handling-quality-criteria'), /omits it entirely, also fail assumption-repository-facts-distinguished/)
   assert.match(definition('testing-evidence-complete-honest-record'), /Only a material omission counts/)
   assert.match(definition('testing-evidence-final-revision-applicability'), /mirror group/)
   assert.match(definition('testing-evidence-final-revision-applicability'), /acceptance workflow forbids running it/)
   assert.match(definition('testing-evidence-final-revision-applicability'), /retest_scope fact[^.]*never decides exploration/)
   assert.match(definition('testing-evidence-usable-proof'), /A stated limitation[^.]*is a disclosure, not a claim/)
+})
+
+// Round-3 audit: one plan omission cost three criteria, and two phrases let
+// samples split on identical evidence.
+test('rubric 11.0 scores each omission once and settles the round-3 splits', async () => {
+  const rubric = await automatedRubric()
+  const rows = rubric.components.flatMap(({ subcomponents }) => subcomponents)
+  const guidance = (id) => rows.find((row) => row.id === id).review_guidance.join('\n')
+  assert.match(guidance('assumption-handling-quality-criteria'), /Do not fail it for a plan commitment[^.]*\./)
+  assert.doesNotMatch(guidance('assumption-handling-quality-criteria'), /every behavior the exploration plan commits to exercising that the exploration log/)
+  assert.match(guidance('assumption-handling-quality-criteria'), /A material limitation here is one the record itself identifies elsewhere/)
+  assert.match(guidance('verification-warnings'), /a stable hook or selector of that chrome[^.]*says which chrome it is/)
+  assert.match(rubric.fallbacks['quality-captions-and-navigation'].guidance.join('\n'), /Captions are met in browse mode/)
+  assert.match(rubric.fallbacks['quality-captions-and-navigation'].guidance.join('\n'), /without the previous\/next controls/)
 })

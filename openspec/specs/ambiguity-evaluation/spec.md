@@ -151,7 +151,12 @@ The component SHALL have no independent score floor. For a reference-baseline ev
 #### Scenario: A reproduced violation is omitted
 - **WHEN** the record shows the workflow observed a requirement violation in a run and never surfaces it
 - **THEN** the surfaced-ambiguities, repository-facts, and decisions criteria fail
-- **AND** the assumption judge finds it through the omission check against the plan and the approved requirements
+- **AND** the assumption judge finds it through the omission check against the approved requirements
+
+#### Scenario: A plan commitment is neither observed nor disclosed
+- **WHEN** the exploration plan commits to a behavior the log neither observed nor disclosed and no requirement deviation is shown
+- **THEN** the surfaced-ambiguities criterion does not fail for it
+- **AND** its materiality is scored once, under testing-evidence complete-honest-record
 
 #### Scenario: Final handoff names decisions and points to the ledger
 - **WHEN** the handoff names each unresolved decision by identifier and subject and points to the ledger entry that holds its consequence and options

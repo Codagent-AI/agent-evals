@@ -667,7 +667,7 @@ The automated product rubric and human-review rubric SHALL have distinct explici
 - **AND** it records component applicability and the score denominator
 
 ### Requirement: Robust judge verdicts
-No single model call SHALL decide a scored criterion. Every scored judge job SHALL be judged by two independent samples with identical inputs, run concurrently at an explicitly pinned reasoning effort. Each source-job sample SHALL pass through its own closed-world source audit: a `contradicted` classification SHALL correct that sample's vote, an `insufficient` classification SHALL trigger at most one focused re-cite, and a verdict still undecided after the re-cite SHALL stand as the sample's vote, except that a browser-fallback pass SHALL then fail because it must be proven from source. A verdict both samples agree on SHALL stand, pass or fail. A criterion the samples disagree on SHALL be settled by a third independent sample that receives the job's unchanged context and never sees the first two verdicts; its vote decides the majority.
+No single model call SHALL decide a scored criterion. Every scored judge job SHALL be judged by two independent samples with identical inputs, run concurrently at an explicitly pinned reasoning effort. Each source-job sample SHALL pass through its own closed-world source audit: a `contradicted` classification SHALL mark that sample's vote disputed and SHALL NOT invert it, an `insufficient` classification SHALL trigger at most one focused re-cite, and a verdict still undecided after the re-cite SHALL stand as the sample's vote, except that a browser-fallback pass SHALL then fail because it must be proven from source. A verdict both samples agree on, with neither vote disputed, SHALL stand, pass or fail. A criterion the samples disagree on, or whose vote either sample's audit disputed, SHALL be settled by a third independent sample that receives the job's unchanged context and never sees the first two verdicts; its vote decides the majority.
 
 A majority pass SHALL cite between one and twelve line spans, each under 200 lines, whose paths are in the verified neutral source inventory for a source job or the materialized evidence view for an evidence job, resolve inside that root without a symbolic link, and lie inside the file. A closed-world span audit SHALL check the quoted lines against every clause of the criterion's requirement and review guidance. `insufficient` SHALL ask the third sample to re-cite once, and an audit that still cannot decide SHALL leave the majority pass standing with that recorded. `contradicted` SHALL be replicated by a second independent audit, and the majority pass SHALL be withdrawn only when both audits find a contradiction. An unconfirmed browser-fallback majority pass SHALL fail. Invalid third-sample output, including an invalid span, SHALL be retried and, once exhausted, SHALL leave the job unobserved as a harness failure, as SHALL an exhausted sample.
 
@@ -683,6 +683,11 @@ Each criterion result SHALL record its judging basis (`consensus-pass`, `consens
 - **WHEN** one sample passes and the other fails a criterion
 - **THEN** a third independent sample decides it
 - **AND** its pass must cite mechanically valid line spans
+
+#### Scenario: A sample's own audit contradicts its vote
+- **WHEN** both samples pass a criterion and one sample's source audit classifies its pass as contradicted
+- **THEN** that vote is marked disputed rather than inverted
+- **AND** the blind third sample decides the criterion
 
 #### Scenario: One audit contradicts a majority pass
 - **WHEN** the first span audit contradicts the third sample's quoted lines and a second independent audit does not

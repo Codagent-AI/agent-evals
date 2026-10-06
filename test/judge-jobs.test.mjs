@@ -749,15 +749,18 @@ test('source judge credit requires primary and closed-world audit agreement', as
   try {
     const result = await runJudgeJob({ request, invoke: async () => responses.shift() })
     assert.equal(result.ok, true)
-    assert.equal(result.results[0].verdict, 'fail')
-    assert.match(result.results[0].rationale, /tracks only X/)
+    // Round-3 audit: one audit no longer inverts a sample's vote; it marks
+    // the vote disputed so the blind third sample decides the criterion.
+    assert.equal(result.results[0].verdict, 'pass')
+    assert.equal(result.results[0].disputed, true)
+    assert.ok(result.results[0].evidence.some((item) => /tracks only X/.test(item)))
     assert.equal(result.results[1].verdict, 'pass')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
 })
 
-test('a contradicted source audit reverses either primary verdict', async () => {
+test('a contradicted source audit marks either primary verdict disputed instead of reversing it', async () => {
   const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
   await mkdir(join(sourceRoot, 'src'), { recursive: true })
@@ -801,9 +804,9 @@ test('a contradicted source audit reverses either primary verdict', async () => 
     })
 
     assert.equal(result.ok, true)
-    assert.deepEqual(result.results.map(({ id, verdict }) => ({ id, verdict })), [
-      { id: ids[0], verdict: 'fail' },
-      { id: ids[1], verdict: 'pass' },
+    assert.deepEqual(result.results.map(({ id, verdict, disputed }) => ({ id, verdict, disputed })), [
+      { id: ids[0], verdict: 'pass', disputed: true },
+      { id: ids[1], verdict: 'fail', disputed: true },
     ])
   } finally {
     await rm(root, { recursive: true, force: true })
@@ -1101,7 +1104,7 @@ test('a focused citation retry preserves already contradicted criteria', async (
     assert.equal(result.ok, true)
     assert.deepEqual(requests[2].criteria, ['navigation-direct-jump'])
     assert.deepEqual(result.results.map(({ id, verdict }) => ({ id, verdict })), [
-      { id: 'navigation-touch-swipe', verdict: 'fail' },
+      { id: 'navigation-touch-swipe', verdict: 'pass' },
       { id: 'navigation-direct-jump', verdict: 'pass' },
     ])
   } finally {
@@ -1607,4 +1610,38 @@ test('the assumption judge is told to run the omission check', () => {
   const request = buildJudgeRequest({ rubrics, job: 'assumption-handling', authority })
   assert.match(request.prompt, /run the omission check/)
   assert.match(request.prompt, /surfaces a gap must never score lower/)
+  assert.match(request.prompt, /Plan commitments the log did not cover are scored under\s+testing-evidence, not here/)
+})
+
+// Round-3 audit: a single per-sample audit inverted one vote, which turned a
+// unanimous pass into a manufactured split. A contradicted sample now sends
+// the criterion to the blind third sample, and only two span audits that
+// agree can withdraw a pass.
+test('a sample whose own audit contradicts it sends the criterion to the blind third sample', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  const stages = []
+  try {
+    const request = { ...tree.request(['navigation-touch-swipe']), source_audit: true }
+    const outcome = await runRobustJudgeJob({
+      request,
+      invoke: async (next) => {
+        stages.push(`${stageOf(next)}:${next.judge_sample ?? '-'}`)
+        if (next.audit_stage === 'source-pass-audit') {
+          return auditOutput(['navigation-touch-swipe'], next.judge_sample === 2
+            ? { 'navigation-touch-swipe': 'contradicted' } : {})
+        }
+        if (next.audit_stage === 'tiebreak-span-audit') return auditOutput(['navigation-touch-swipe'])
+        if (next.judge_stage === 'tiebreak') {
+          return lineCited({ 'navigation-touch-swipe': ['pass', [{ path: 'src/nav.ts', start_line: 3, end_line: 3 }]] })
+        }
+        return verdicts({ 'navigation-touch-swipe': 'pass' })
+      },
+    })
+    assert.ok(stages.includes('tiebreak:3'), stages.join(' '))
+    assert.equal(outcome.results[0].verdict, 'pass')
+    assert.equal(outcome.consensus[0].basis, 'majority-pass')
+    assert.deepEqual(outcome.consensus[0].sample_verdicts, ['pass', 'disputed', 'pass'])
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
 })

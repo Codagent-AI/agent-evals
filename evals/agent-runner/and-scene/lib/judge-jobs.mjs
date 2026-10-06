@@ -335,9 +335,10 @@ function evidenceJudgePrompt({ job, definition, slice, view }) {
         'If reproduced nonconforming behavior is called not a finding or optional hardening, fail the',
         'repository-facts and decisions-and-escalations criteria as directed by the rubric guidance.',
         'Score the final-handoff criterion independently: it fails when material decisions or limitations are omitted.',
-        'Before scoring the surfaced-ambiguities criterion, run the omission check the guidance describes: list plan',
-        'commitments the log neither observed nor disclosed, and deviations from the approved requirements in the index',
-        'that the log, findings, or recorded observations show, then check each against what the record surfaces.',
+        'Before scoring the surfaced-ambiguities criterion, run the omission check the guidance describes: list the',
+        'deviations from the approved requirements in the index that the log, findings, or recorded observations show,',
+        'then check each against what the record surfaces. Plan commitments the log did not cover are scored under',
+        'testing-evidence, not here.',
         'A workflow that surfaces a gap must never score lower on any criterion than one that omits it.',
       ]
   return [
@@ -814,13 +815,15 @@ function mergeSourceAudit(primaryResults, auditResults) {
   const audited = new Map(auditResults.map((result) => [result.id, result]))
   return primaryResults.map((primary) => {
     const audit = audited.get(primary.id)
+    // One audit does not overturn a vote. A contradiction marks this sample's
+    // vote disputed, which sends the criterion to the blind third sample.
     if (audit?.classification === 'contradicted') {
       return {
-        id: primary.id,
-        verdict: primary.verdict === 'pass' ? 'fail' : 'pass',
-        rationale: audit.rationale,
-        citations: primary.citations,
-        evidence: audit.evidence.map((item) => bounded(`source audit: ${item}`)),
+        ...primary,
+        disputed: true,
+        evidence: [...primary.evidence,
+          ...audit.evidence.map((item) => bounded(`source audit contradicted this vote: ${item}`)),
+          bounded(`source audit contradicted this vote: ${audit.rationale}`)],
       }
     }
     return primary
@@ -1465,7 +1468,7 @@ export function resolveJudgeSamples({ criteria, samples, decisions = [] }) {
   const consensus = []
   for (const id of criteria) {
     const sampleResults = samples.map((sample) => sample.results.find((entry) => entry.id === id) ?? null)
-    const sampleVerdicts = sampleResults.map((result) => result?.verdict ?? null)
+    const sampleVerdicts = sampleResults.map(sampleVote)
     for (const verdict of ['pass', 'fail']) {
       if (sampleVerdicts.every((value) => value === verdict)) {
         const [first] = sampleResults
@@ -1485,9 +1488,17 @@ export function resolveJudgeSamples({ criteria, samples, decisions = [] }) {
   return { results, consensus }
 }
 
+// A sample's vote, or `disputed` when its own source audit contradicted it.
+function sampleVote(result) {
+  if (!result) return null
+  return result.disputed ? 'disputed' : result.verdict
+}
+
 export function disputedCriteria(criteria, samples) {
-  return criteria.filter((id) => new Set(samples
-    .map((sample) => sample.results.find((entry) => entry.id === id)?.verdict ?? null)).size > 1)
+  return criteria.filter((id) => {
+    const votes = samples.map((sample) => sampleVote(sample.results.find((entry) => entry.id === id)))
+    return new Set(votes).size > 1 || votes.includes('disputed')
+  })
 }
 
 export async function runTiebreak({ request, criteria, invoke, attempts = JUDGE_ATTEMPTS }) {
