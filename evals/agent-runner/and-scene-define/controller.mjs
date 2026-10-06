@@ -416,6 +416,10 @@ async function main() {
     const { result, exitCode, plan } = await runEvaluation(options, { signal: signal.signal })
     if (options.dryRun && plan) { console.log(plan.command.map(value => `'${value.replaceAll("'", "'\\''")}'`).join(' ')); console.log(plan.output) }
     console.log(JSON.stringify({ ...result, run_directory: options.runDir }, null, 2)); process.exitCode = exitCode
+  } catch (error) {
+    // Failures before a run directory exists (for example an unusable rescore
+    // source) have no result.json to explain them; report the cause plainly.
+    console.error(`and-scene-define: ${error.message}`); process.exitCode = 1
   } finally { process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop) }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) await main()

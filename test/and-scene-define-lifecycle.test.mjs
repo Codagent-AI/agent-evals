@@ -394,3 +394,16 @@ for (const corrupt of ['judges/score.json', 'audits/disclosure.json']) {
     await assert.rejects(readFile(join(f.options.runDir, '.controller.lock')), { code: 'ENOENT' })
   })
 }
+
+test('rescore from a directory that is not a collected run fails with a clear message, not a stack trace', async t => {
+  const { execFile } = await import('node:child_process')
+  const root = await mkdtemp(join(tmpdir(), 'define-bad-rescore-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  await mkdir(join(root, 'source'))
+  const run = () => new Promise(done => execFile(process.execPath, ['evals/agent-runner/and-scene-define/controller.mjs', '--rescore-from', join(root, 'source'), '--run-dir', join(root, 'out')], (error, stdout, stderr) => done({ code: error?.code ?? 0, stdout, stderr })))
+  const { code, stderr } = await run()
+  assert.equal(code, 1)
+  assert.match(stderr, /evidence manifest .*not found.*source/)
+  assert.doesNotMatch(stderr, /\n\s+at /)
+  assert.doesNotMatch(stderr, /ENOENT/)
+})

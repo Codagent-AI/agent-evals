@@ -110,7 +110,10 @@ export async function collectEvidence({ runDir, runnerDir, identity = null, runt
 }
 export async function loadEvidence(runDir) {
   await guardPath(runDir, join(runDir, 'evidence-manifest.json'))
-  const manifest = await readJson(join(runDir, 'evidence-manifest.json'))
+  const manifest = await readJson(join(runDir, 'evidence-manifest.json')).catch(error => {
+    if (error.code === 'ENOENT') throw new Error(`evidence manifest not found in ${runDir}: it is not a collected define run, or its collection did not finish`)
+    throw error
+  })
   const retained = new Map()
   const bytesByPath = new Map()
   for (const file of manifest.files) {
