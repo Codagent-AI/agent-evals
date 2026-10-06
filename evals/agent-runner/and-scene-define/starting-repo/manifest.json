@@ -1,0 +1,210 @@
+{
+  "snapshot_version": 1,
+  "source": {
+    "repository": "https://github.com/Codagent-AI/and-scene.git",
+    "commit": "ad667a965a0e1ea0b028c36c04d57bf0411d30d9",
+    "change": "create-and-scene"
+  },
+  "change_name": "add-presentation-skill",
+  "allowlist": [
+    ".gitignore",
+    ".npmrc",
+    ".validator/config.yml",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "README.md",
+    "eslint.config.js",
+    "index.html",
+    "package-lock.json",
+    "package.json",
+    "src/App.css",
+    "src/App.tsx",
+    "src/index.css",
+    "src/main.tsx",
+    "tsconfig.app.json",
+    "tsconfig.json",
+    "tsconfig.node.json",
+    "vite.config.ts"
+  ],
+  "rewrites": [
+    {
+      "path": ".validator/config.yml",
+      "reason": "Replace product identity, target guidance, or product-specific page with neutral scaffold content.",
+      "sha256": "df4d22048988af3ecaf9b53f12731b039c7c73c3e7b0f44cc7f761ac0bdb6167"
+    },
+    {
+      "path": "AGENTS.md",
+      "reason": "Replace product identity, target guidance, or product-specific page with neutral scaffold content.",
+      "sha256": "a50f1f65b68dc975ba189dfa0205851d255e4a5e18ea9f76771a42a5eec2531d"
+    },
+    {
+      "path": "CLAUDE.md",
+      "reason": "Replace product identity, target guidance, or product-specific page with neutral scaffold content.",
+      "sha256": "08c1380fde61b4cbc51bc85b5d17f9098435725bf2c196f65cda7158710dcaca"
+    },
+    {
+      "path": "README.md",
+      "reason": "Replace product identity, target guidance, or product-specific page with neutral scaffold content.",
+      "sha256": "62bf6d0beb7e9a3faee9f82ff0f8a97e21d9bd3d9e3fe69339e3cf1c4bc1bda8"
+    },
+    {
+      "path": "index.html",
+      "reason": "Replace product identity, target guidance, or product-specific page with neutral scaffold content.",
+      "sha256": "2ddf7e23139add17f8cd3ef9d4e133c2dc5cc729fb408e3c5a3c15fc9ded021c"
+    },
+    {
+      "path": "package-lock.json",
+      "reason": "Neutralize the package identity; retain pinned scaffold dependencies.",
+      "sha256": "57d6d2ab5d1b5c4cb3189ca9481f7156f3c4829197ff578656e41bfa9e2fd2c6"
+    },
+    {
+      "path": "package.json",
+      "reason": "Neutralize the package identity; retain pinned scaffold dependencies.",
+      "sha256": "b7ed834248eddff37a4c718e52b17c495a847b080d2bed6bc646cea55674d5e9"
+    },
+    {
+      "path": "src/App.css",
+      "reason": "Replace product identity, target guidance, or product-specific page with neutral scaffold content.",
+      "sha256": "5fc47743ced95a47341a63891490a945b0a2d59c76da1869f274256c627df3f6"
+    },
+    {
+      "path": "src/App.tsx",
+      "reason": "Replace product identity, target guidance, or product-specific page with neutral scaffold content.",
+      "sha256": "3201ceaf2af9b55bd9fcd41832c37246e22833c00f7c0387225acab51077c187"
+    },
+    {
+      "path": "src/index.css",
+      "reason": "Replace product identity, target guidance, or product-specific page with neutral scaffold content.",
+      "sha256": "6d5d98dbd8e7e67e662af93aae9e0dbdd769979e3127688c8296795bbe9422c9"
+    }
+  ],
+  "files": [
+    {
+      "path": ".gitignore",
+      "mode": "100644",
+      "sha256": "fa51094912607d729ce3b0b4b8992cbbae686963f19431e3360314547d862c20",
+      "source_sha256": "fa51094912607d729ce3b0b4b8992cbbae686963f19431e3360314547d862c20",
+      "source_path": ".gitignore"
+    },
+    {
+      "path": ".npmrc",
+      "mode": "100644",
+      "sha256": "3a951f66e7e0f3e2dd1832473a871357c4a507b51100636b73bcf6ff0dd78b6c",
+      "source_sha256": "3a951f66e7e0f3e2dd1832473a871357c4a507b51100636b73bcf6ff0dd78b6c",
+      "source_path": ".npmrc"
+    },
+    {
+      "path": ".validator/config.yml",
+      "mode": "100644",
+      "sha256": "df4d22048988af3ecaf9b53f12731b039c7c73c3e7b0f44cc7f761ac0bdb6167",
+      "source_sha256": "3bf64fa15548997d2f61e546369bce0a9733bf1f993e9e76599cdb5ab4a2ee09",
+      "source_path": ".validator/config.yml"
+    },
+    {
+      "path": "AGENTS.md",
+      "mode": "100644",
+      "sha256": "a50f1f65b68dc975ba189dfa0205851d255e4a5e18ea9f76771a42a5eec2531d",
+      "source_sha256": "2caf8fd9169d0b95a75f9242b085c5d96b36dc366ca6d354a9963b9321fa81cf",
+      "source_path": "AGENTS.md"
+    },
+    {
+      "path": "CLAUDE.md",
+      "mode": "100644",
+      "sha256": "08c1380fde61b4cbc51bc85b5d17f9098435725bf2c196f65cda7158710dcaca",
+      "source_sha256": "2caf8fd9169d0b95a75f9242b085c5d96b36dc366ca6d354a9963b9321fa81cf",
+      "source_path": "AGENTS.md"
+    },
+    {
+      "path": "README.md",
+      "mode": "100644",
+      "sha256": "62bf6d0beb7e9a3faee9f82ff0f8a97e21d9bd3d9e3fe69339e3cf1c4bc1bda8",
+      "source_sha256": "dd7b7e9a34cd6d5de14f4ae194d62dbbe6a4dcffc7f515d75fee4053663b7f8e",
+      "source_path": "README.md"
+    },
+    {
+      "path": "eslint.config.js",
+      "mode": "100644",
+      "sha256": "cf80a7510234dcd5ae594b30b44682b8b45ba13c0fcb5bf8928bea143802aa1c",
+      "source_sha256": "cf80a7510234dcd5ae594b30b44682b8b45ba13c0fcb5bf8928bea143802aa1c",
+      "source_path": "eslint.config.js"
+    },
+    {
+      "path": "index.html",
+      "mode": "100644",
+      "sha256": "2ddf7e23139add17f8cd3ef9d4e133c2dc5cc729fb408e3c5a3c15fc9ded021c",
+      "source_sha256": "53be2c7a4a63a4e08bdab72c0ede51b2e366e1c1873826d7320715d2e257c833",
+      "source_path": "index.html"
+    },
+    {
+      "path": "package-lock.json",
+      "mode": "100644",
+      "sha256": "57d6d2ab5d1b5c4cb3189ca9481f7156f3c4829197ff578656e41bfa9e2fd2c6",
+      "source_sha256": "492e2206d9518c536db1cea9d16eb8e1352b6fec0998ce60db03e1f115f669d3",
+      "source_path": "package-lock.json"
+    },
+    {
+      "path": "package.json",
+      "mode": "100644",
+      "sha256": "b7ed834248eddff37a4c718e52b17c495a847b080d2bed6bc646cea55674d5e9",
+      "source_sha256": "1c953be6f2a10892429e453f2840eb0935f06f040da905142203329b6a1a34f3",
+      "source_path": "package.json"
+    },
+    {
+      "path": "src/App.css",
+      "mode": "100644",
+      "sha256": "5fc47743ced95a47341a63891490a945b0a2d59c76da1869f274256c627df3f6",
+      "source_sha256": "0bdc2fd68851cb3021da179d3cb4698960d5a7e85ccfa752e72f4c47652c7856",
+      "source_path": "src/App.css"
+    },
+    {
+      "path": "src/App.tsx",
+      "mode": "100644",
+      "sha256": "3201ceaf2af9b55bd9fcd41832c37246e22833c00f7c0387225acab51077c187",
+      "source_sha256": "b15bdd05397aa3e71b85600a3ab274cacea6177b2aebd171978230aa1194f37f",
+      "source_path": "src/App.tsx"
+    },
+    {
+      "path": "src/index.css",
+      "mode": "100644",
+      "sha256": "6d5d98dbd8e7e67e662af93aae9e0dbdd769979e3127688c8296795bbe9422c9",
+      "source_sha256": "2086ae2471b68b7a0064e27770c8c5a4e5a5d69e83c77f0ca34da118b3df745b",
+      "source_path": "src/index.css"
+    },
+    {
+      "path": "src/main.tsx",
+      "mode": "100644",
+      "sha256": "6e9e5807fcbd48b75a96db5cbef36c996262196be42e6d4760dc86babbe61ad2",
+      "source_sha256": "6e9e5807fcbd48b75a96db5cbef36c996262196be42e6d4760dc86babbe61ad2",
+      "source_path": "src/main.tsx"
+    },
+    {
+      "path": "tsconfig.app.json",
+      "mode": "100644",
+      "sha256": "b1eac9ba6cd1c01d59ebca159805e052c798d9d4ab904680b79ce3e306ea0bbd",
+      "source_sha256": "b1eac9ba6cd1c01d59ebca159805e052c798d9d4ab904680b79ce3e306ea0bbd",
+      "source_path": "tsconfig.app.json"
+    },
+    {
+      "path": "tsconfig.json",
+      "mode": "100644",
+      "sha256": "770b4140bbb581e2dfd9ea9946ffc9c75a1d86ba7d2db5f77c83e37cbdf9d808",
+      "source_sha256": "770b4140bbb581e2dfd9ea9946ffc9c75a1d86ba7d2db5f77c83e37cbdf9d808",
+      "source_path": "tsconfig.json"
+    },
+    {
+      "path": "tsconfig.node.json",
+      "mode": "100644",
+      "sha256": "90a22c920cbc14624fb4658b58f15c875abf3234224f3933f211849c3ada3242",
+      "source_sha256": "90a22c920cbc14624fb4658b58f15c875abf3234224f3933f211849c3ada3242",
+      "source_path": "tsconfig.node.json"
+    },
+    {
+      "path": "vite.config.ts",
+      "mode": "100644",
+      "sha256": "4d36db3522a7b2dd10e0936e1004373c7ee65f10f7cd7920cd76410459c15a45",
+      "source_sha256": "4d36db3522a7b2dd10e0936e1004373c7ee65f10f7cd7920cd76410459c15a45",
+      "source_path": "vite.config.ts"
+    }
+  ],
+  "tree_hash": "f348de85cf22a29d6a67bb123356d8f95e7c03fb"
+}

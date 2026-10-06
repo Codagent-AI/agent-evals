@@ -77,3 +77,12 @@ consult `run.sh --help` before constructing an unfamiliar invocation.
 ## Commit messages
 
 Use `type: lowercase description` with one of: `fix`, `feat`, `chore`, `refactor`, `test`, or `docs`.
+
+## Maintaining the Agent Runner `and-scene-define` inputs
+
+The pinned-input runbook is
+[`evals/agent-runner/and-scene-define/README.md`](evals/agent-runner/and-scene-define/README.md).
+Run `scripts/check-inventory.mjs` from that suite via Node to verify the reference,
+inventory, and versions. Keep `hidden/`, citation supplements, `calibration/`,
+and contamination patterns on the host. Materialize only the allowlisted
+starting tree; the starting repository has no remote and needs no GitHub credential.

@@ -1,0 +1,25 @@
+{
+  "inputs": {
+    "inventory": {
+      "path": "hidden/inventory.json",
+      "version": 1,
+      "hashes": {
+        "1": "984fb984787a5ab1c3202e877637473d26faa149b02cabbb413b12ba8a580daa"
+      }
+    },
+    "starting-prompt": {
+      "path": "hidden/starting-prompt.md",
+      "version": 1,
+      "hashes": {
+        "1": "b38a2a7a955e36fb3f6251f9c6f8b9cd19db1404b20dca06597a11fe6328a30d"
+      }
+    },
+    "contamination-patterns": {
+      "path": "contamination-patterns.json",
+      "version": 1,
+      "hashes": {
+        "1": "7db6d596c9b0153975d023cd81c847e27bb157c7eaf656e330b65cf3cbb56306"
+      }
+    }
+  }
+}

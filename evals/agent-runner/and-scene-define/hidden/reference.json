@@ -1,0 +1,41 @@
+{
+  "repository": "https://github.com/Codagent-AI/and-scene.git",
+  "commit": "ad667a965a0e1ea0b028c36c04d57bf0411d30d9",
+  "change": "create-and-scene",
+  "files": [
+    {
+      "path": "openspec/changes/create-and-scene/design.md",
+      "sha256": "ffb241de8740bd45d2fe79074d5167e15c0aa43f6dc56f4e68fd9c4a25c2bf4e"
+    },
+    {
+      "path": "openspec/changes/create-and-scene/proposal.md",
+      "sha256": "995418b9e59b0c3d25051c4bca64acc29b2c23a670921874dd07d3f6b7cc0c5d"
+    },
+    {
+      "path": "openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md",
+      "sha256": "371380260a0528b2d3cbb32fafee0bb182b9f1f648c784a749e8e95192f8c5e2"
+    },
+    {
+      "path": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+      "sha256": "0b0f9c73051e56b31c0a21d41b312ae6d02c8afeacfabafde20be1764eee04bb"
+    },
+    {
+      "path": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+      "sha256": "151847d9d2da5ea4f3fb9594be231c0c2d093fe3736339bae1ba346bcc6dbd63"
+    },
+    {
+      "path": "openspec/changes/create-and-scene/test-plan.md",
+      "sha256": "9318e2acdd83538964a3a5f42d45eab2eaf999369aed1708f286d8987627ef1c"
+    }
+  ],
+  "citation_files": [
+    {
+      "path": "openspec/changes/create-and-scene/tasks/01-scene-kit-app-shell.md",
+      "sha256": "bf69323505f6e35090d80158a111481d7cabc5c4a0183f046570db569e33ab3e"
+    },
+    {
+      "path": "openspec/changes/create-and-scene/tasks/03-reference-sample-verification.md",
+      "sha256": "406eb29b0f062e48216f532a1420c0de1d7f57e5af6612315fbf7052c2798d78"
+    }
+  ]
+}
