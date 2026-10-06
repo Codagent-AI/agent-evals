@@ -52,6 +52,20 @@ test('comparison pairs only identical series and lists all changed candidate com
   assert.equal(report.pairs[1].comparable, false)
   assert.match(report.pairs[1].reason, /not comparable/)
   assert.equal(report.pairs[1].runs, undefined)
+  assert.deepEqual(report.unscored, [])
+})
+test('comparison pairs only complete scored runs and lists the others as unscored', () => {
+  const scored = { ...core, series_identity: { rubric: 1 }, candidate: { agent_skills_commit: 'a' }, total: 10 }
+  const failed = { ...scored, run_id: 'failed', evaluation_status: 'evaluation-harness-failed', definition_verdict: 'unavailable', total: 99, owning_phase: 'gates-and-judging' }
+  const contaminated = { ...scored, run_id: 'contaminated', evaluation_status: 'contaminated', definition_verdict: 'unavailable', total: null }
+  const unscoredComplete = { ...scored, run_id: 'no-total', total: null }
+  const uncalibrated = { ...scored, run_id: 'uncalibrated', definition_verdict: 'unavailable', verdict_unavailable: 'pass threshold not set (calibration pending)', total: 70, candidate: { agent_skills_commit: 'b' } }
+  const report = compareResults([scored, failed, contaminated, unscoredComplete, uncalibrated])
+  assert.deepEqual(report.pairs.map(x => x.run_ids), [['recorded', 'uncalibrated']])
+  assert.equal(report.pairs[0].runs[1].definition_verdict, 'unavailable')
+  assert.deepEqual(report.unscored.map(x => [x.run_id, x.evaluation_status]), [['failed', 'evaluation-harness-failed'], ['contaminated', 'contaminated'], ['no-total', 'complete']])
+  assert.ok(report.unscored.every(x => x.reason))
+  assert.equal(report.unscored[0].total, undefined)
 })
 test('INT-008 publication commits only curated files and retries a rejected push with the same commit', async t => {
   const root = await temp(t); const repoDir = join(root, 'repo'); const remote = join(root, 'remote.git'); const runDir = join(root, 'run')

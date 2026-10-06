@@ -327,7 +327,7 @@ evals/agent-runner/and-scene-define/run.sh --resume --run-dir /absolute/candidat
 evals/agent-runner/and-scene-define/run.sh \
   --rescore-from /absolute/candidate-run --run-dir /absolute/rescore-run
 
-# JSON comparison: all pairs, only identical series get paired scores/leak counts.
+# JSON comparison: pairs complete scored runs; identical series get paired scores/leak counts.
 node evals/agent-runner/and-scene-define/compare.mjs \
   /absolute/candidate-run /absolute/another-run /absolute/rescore-run
 ```
@@ -386,6 +386,8 @@ new series. Comparison labels those pairs **not comparable** and omits paired
 scores. Within a series it lists every changed candidate component: evaluated
 profiles, Runner commit, workflow hashes, and Skills commit. Leaked count appears
 alongside total/component scores; discovery remains non-scoring.
+Only complete runs with a score are paired; failed, contaminated, or unscored
+runs are listed under `unscored` with their status and owning phase.
 
 ## Publication
 
