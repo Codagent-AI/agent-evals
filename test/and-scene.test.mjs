@@ -599,9 +599,11 @@ test('help documents the exact fixture pin, role profiles, and validator option'
   assert.ok(!result.stdout.includes('--calibration-record'))
 })
 
-test('calibration runs the reference and degraded mutations without Docker or Agent Runner', async () => {
+test('calibration runs the reference and degraded mutations without Docker, Agent Runner, or Claude auth', async () => {
   const context = await setup()
   const artifacts = join(context.dir, 'calibration')
+  // Calibration judges with fixture invokers on the host and never calls Claude.
+  await rm(join(context.home, '.claude/.credentials.json'))
 
   const result = await run(['--calibrate', '--artifact-dir', artifacts], context)
 
@@ -634,6 +636,9 @@ test('a host rescore runs the controller directly without the sandbox', async ()
   assert.match(result.output, /controller\.mjs --run-dir .*\/run --run-id run /)
   assert.match(result.output, /--rescore-from .*completed-candidate/)
   assert.match(result.output, /AND_SCENE_CODEX_COMMAND=/)
+  // The judge invoker defaults to the sandbox's real CLI path, so a host run
+  // names the host Claude explicitly.
+  assert.match(result.output, /AND_SCENE_CLAUDE_COMMAND=/)
   assert.ok(!result.output.includes('/rescore-source'), result.output)
   assert.ok(!result.output.includes('--docker-run-arg'), result.output)
   assert.ok(!result.output.includes('--lead-cli'), result.output)

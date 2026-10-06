@@ -718,3 +718,12 @@ test('the judge reasoning effort is pinned explicitly rather than left to the CL
   assert.ok(spawnImpl.calls[0].args.includes('model_reasoning_effort="medium"'))
   assert.ok(spawnImpl.calls[1].args.includes('model_reasoning_effort="medium"'))
 })
+
+// Inside the sandbox `claude` is Agent Runner's yolo wrapper, which sources the
+// sandbox env and skips permissions. The in-sandbox judge bypasses it.
+test('in-sandbox Claude judge resolves the real CLI, not the sandbox wrapper', async () => {
+  const { sandboxClaudeCommand } = await import('../evals/agent-runner/and-scene/lib/judge-invoker.mjs')
+  assert.equal(sandboxClaudeCommand({}), '/usr/bin/claude')
+  assert.equal(sandboxClaudeCommand({ SANDBOX_REAL_CLAUDE: '/opt/claude' }), '/opt/claude')
+  assert.equal(sandboxClaudeCommand({ SANDBOX_REAL_CLAUDE: '/opt/claude', AND_SCENE_CLAUDE_COMMAND: '/stub/claude' }), '/stub/claude')
+})

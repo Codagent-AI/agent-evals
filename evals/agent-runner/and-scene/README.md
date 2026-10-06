@@ -304,8 +304,9 @@ evals/agent-runner/and-scene/run.sh \
   --artifact-dir artifacts/evals/and-scene/<rescore-run-id>
 ```
 
-Host mode needs `node`, `npm`, `chrome-devtools-axi`, and `codex` on `PATH`
-(or `AND_SCENE_CODEX_COMMAND`), plus either a DevTools endpoint in
+Host mode needs `node`, `npm`, `chrome-devtools-axi`, `codex` (or
+`AND_SCENE_CODEX_COMMAND`), and `claude` (or `AND_SCENE_CLAUDE_COMMAND`) on
+`PATH`, plus either a DevTools endpoint in
 `CHROME_DEVTOOLS_AXI_BROWSER_URL` or a Chrome or Chromium binary (`CHROME_PATH`,
 the macOS Google Chrome app, `chromium`, or `google-chrome`). With a binary, the
 controller starts headless Chrome on `AND_SCENE_HOST_DEVTOOLS_PORT` (default
@@ -349,8 +350,8 @@ artifacts default to `artifacts/evals/and-scene-calibration/<timestamp>/`. Use
 ## Calibration
 
 Calibration is an optional diagnostic, not a score or candidate-run gate. It
-runs on the host and invokes no sandbox, no Agent Runner, no browser, and no
-human.
+runs on the host and invokes no sandbox, no Agent Runner, no browser, no
+model, and no human, so it needs no Claude or Codex credentials.
 
 It evaluates the known-good reference and a suite-owned set of degraded
 mutations against the real rubric, judge-job, scoring, gate, result, and report
