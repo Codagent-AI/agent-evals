@@ -1319,11 +1319,21 @@ export function parseLineCitedOutput(text, criteria, job) {
 // The same span validation the browser second opinion uses: every cited path
 // must be in the verified inventory, resolve inside its root without a
 // symbolic link, and every range must lie inside the file.
+// A judge working from the neutral root sees source files under `source/`;
+// a citation with that prefix (or `./`) names the same inventory file.
+export function inventoryPath(path, inventory) {
+  const allowed = inventory instanceof Set ? inventory : new Set(inventory)
+  if (allowed.has(path)) return path
+  const stripped = String(path).replace(/^\.\//, '').replace(/^source\//, '')
+  return allowed.has(stripped) ? stripped : path
+}
+
 async function quoteSpans(results, inventory, job) {
   const allowed = new Set(inventory.paths)
   const quoted = new Map()
   for (const result of results) {
     const spans = []
+    result.citations = result.citations.map((citation) => ({ ...citation, path: inventoryPath(citation.path, allowed) }))
     for (const citation of result.citations) {
       if (!inventory.root) throw new JudgeOutputError(`${job} tiebreak has no ${inventory.kind} root to validate citations`)
       if (!allowed.has(citation.path)) {

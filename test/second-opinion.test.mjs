@@ -487,3 +487,25 @@ test('the replay observation can explain a browser failure to the span auditor',
   spans: [], logSpans: [], replay: { plan: {}, observation: { passed: true } } })
   assert.match(audit.prompt, /by that replay observing the passing behavior in a real browser/)
 })
+
+// A real verifier cited its working-directory path (source/src/...) for a file
+// the inventory lists as src/..., and the valid overturn was refused before
+// the replay could run.
+test('a verifier citation prefixed with the neutral source directory resolves to its inventory path', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'second-opinion-prefix-'))
+  await mkdir(join(root, 'src'), { recursive: true })
+  await writeFile(join(root, 'src/nav.ts'), 'export const jump = true\n')
+  const request = { target: { kind: 'criterion', id: 'demo-supported-navigation' }, browser_derived: true,
+    verified_source_paths: ['src/nav.ts'], input_roots: { source: root }, audit_cwd: root,
+    failing_record: { id: 'demo-supported-navigation', result: { verdict: 'fail', rationale: 'keyboard 1/0, swipe 1/0, direct jump 0' } } }
+  const plan = { actions: [{ type: 'navigate', path: DEMO_PATH }, { type: 'click', selector: '[data-step="5"]' }],
+    expect: { type: 'step-index-equals', value: 4 } }
+  const answer = { ...overturnWith(plan), citations: [{ path: 'source/src/nav.ts', start_line: 1, end_line: 1 }] }
+  let replays = 0
+  const outcome = await runSecondOpinion({ request, invoke: confirmingInvoke(request, answer),
+    replay: async () => { replays += 1; return { passed: true, errors: [], trace: [],
+      observations: observed({ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 4 }) } } })
+  assert.equal(replays, 1)
+  assert.equal(outcome.decision, 'overturn')
+  assert.equal(outcome.citations[0].path, 'src/nav.ts')
+})

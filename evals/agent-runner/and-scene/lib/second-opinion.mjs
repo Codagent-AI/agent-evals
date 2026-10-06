@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { DEMO_CONTRACT } from './demo-contract.mjs'
-import { JUDGE_ATTEMPTS, MAX_AUDIT_PACKET_CHARS, SOURCE_AUDIT_RESULT_SCHEMA, citationTarget } from './judge-jobs.mjs'
+import { JUDGE_ATTEMPTS, MAX_AUDIT_PACKET_CHARS, SOURCE_AUDIT_RESULT_SCHEMA, citationTarget, inventoryPath } from './judge-jobs.mjs'
 import { JUDGE_INPUT_POLICIES } from './neutral-source.mjs'
 import { rubricCriteria } from './rubric.mjs'
 
@@ -398,6 +398,8 @@ async function validatedSpans(answer, request) {
   if (answer.log_citations.length > 6) throw new Error('log citation count is invalid')
   if (request.target.kind === 'terminal' && !answer.log_citations.length) throw new Error('terminal overturn requires a log citation')
   const spans = []
+  answer.citations = answer.citations.map((citation) => ({ ...citation,
+    path: inventoryPath(citation.path, request.verified_source_paths) }))
   for (const citation of answer.citations) {
     if (!request.verified_source_paths.includes(citation.path)) throw new Error(`source path outside verified inventory: ${citation.path}`)
     const file = await citationTarget(request.input_roots.source, citation.path)
@@ -475,6 +477,7 @@ export async function runSecondOpinion({ request, invoke, replay, attempts = JUD
   try { ({ spans, logSpans } = await validatedSpans(answer, request)) } catch (error) {
     return { ...base, decision: 'overturn-rejected', verdict: 'fail', rejection_reason: error.message }
   }
+  base.citations = answer.citations
   // A browser-derived overturn is confirmed only by a harness replay inside
   // the target's allowlist. The replay runs before the audit so the auditor
   // sees what the browser actually did.

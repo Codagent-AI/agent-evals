@@ -1645,3 +1645,23 @@ test('a sample whose own audit contradicts it sends the criterion to the blind t
     await rm(tree.root, { recursive: true, force: true })
   }
 })
+
+test('a third-sample citation prefixed with the neutral source directory resolves to its inventory path', async () => {
+  const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
+  try {
+    const outcome = await runRobustJudgeJob({
+      request: tree.request(['navigation-touch-swipe']),
+      invoke: async (request) => {
+        if (request.audit_stage === 'tiebreak-span-audit') return auditOutput(['navigation-touch-swipe'])
+        if (request.judge_stage === 'tiebreak') {
+          return lineCited({ 'navigation-touch-swipe': ['pass', [{ path: 'source/src/nav.ts', start_line: 3, end_line: 3 }]] })
+        }
+        return verdicts({ 'navigation-touch-swipe': request.judge_sample === 1 ? 'pass' : 'fail' })
+      },
+    })
+    assert.equal(outcome.ok, true)
+    assert.deepEqual(outcome.results[0].citations, ['src/nav.ts'])
+  } finally {
+    await rm(tree.root, { recursive: true, force: true })
+  }
+})
