@@ -202,6 +202,11 @@ An overturn SHALL cite at most 12 source spans, each fewer than 200 lines, and a
 - **THEN** the failure stands as `fail`
 - **AND** no citation is required
 
+#### Scenario: The record does not show why a browser probe failed
+- **WHEN** a browser-derived failure's record shows no measurement fault but the source establishes the behavior
+- **THEN** the verifier overturns with a suspected fault and proposes a replay instead of upholding
+- **AND** the span audit may accept the replay's observation of the passing behavior as the explanation of the failure
+
 #### Scenario: A control count includes previous and next controls
 - **WHEN** `quality-captions-and-navigation` fails because the counted navigation controls differ from the step count
 - **THEN** a replay that clicks through every produced step with the presentation's own controls may confirm the overturn

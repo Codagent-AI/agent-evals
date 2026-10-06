@@ -461,3 +461,29 @@ test('a wrong-current-control failure is overturned only by the active step\'s c
   assert.equal(unscoped.decision, 'overturn-rejected')
   assert.match(unscoped.rejection_reason, /aria-current/)
 })
+
+// A planted false direct-jump fail was upheld because the verifier could not
+// name the measurement fault from the record. For a browser-derived failure
+// the harness replay in a real browser is the evidence, so the verifier is
+// told to propose one whenever the source establishes the behavior.
+test('a browser-derived verifier proposes a replay without naming the fault from the record', async () => {
+  const rubrics = await loadRubrics()
+  const rationale = 'keyboard 1/0, swipe 1/0, direct jump 0'
+  const request = buildSecondOpinionRequest({
+    target: { kind: 'criterion', id: 'demo-supported-navigation' }, rubrics,
+    browser: { criteria: [{ id: 'demo-supported-navigation', verdict: 'fail', rationale }],
+      probes: [{ id: 'demo-supported-navigation', result: { verdict: 'fail', rationale } }], gates: [] },
+    judging: null, neutral: null, authority: { cli: 'codex', model: 'm' },
+  })
+  assert.match(request.prompt, /do not need to identify the measurement fault from the record/)
+  assert.match(request.prompt, /the harness replay in a real browser decides/)
+  assert.doesNotMatch(request.prompt, /^Uphold unless exact candidate-source lines positively establish the whole requirement and explain a specific fault/m)
+})
+
+test('the replay observation can explain a browser failure to the span auditor', async () => {
+  const { buildSpanAuditRequest } = await import('../evals/agent-runner/and-scene/lib/second-opinion.mjs')
+  const audit = buildSpanAuditRequest({ request: { requirement: 'r', criteria: ['demo-supported-navigation'],
+    failing_record: {} }, answer: { mismeasured_step: 'direct', measurement_fault: 'suspected input' },
+  spans: [], logSpans: [], replay: { plan: {}, observation: { passed: true } } })
+  assert.match(audit.prompt, /by that replay observing the passing behavior in a real browser/)
+})
