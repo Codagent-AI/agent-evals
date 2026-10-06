@@ -40,6 +40,6 @@
     ]
   },
   "changes": {
-    "13.0.0": "Judging protocol changed to cross-family-panel-v1. No criterion changed. Results before 13.0.0 form a different scoring series."
+    "13.0.0": "Judging protocol changed to cross-family-panel-v1, with the shared requirement-question rule in every judge, decider, audit, check, and second-opinion prompt, and a dissent check that confirms only when the cited fact decides the quoted requirement the way the dissent claims. No criterion changed. Results before 13.0.0 form a different scoring series."
   }
 }

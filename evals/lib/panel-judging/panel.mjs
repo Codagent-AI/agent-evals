@@ -1,7 +1,7 @@
 // Cross-family settlement. Suites own prompts, scales, citations and optional audits.
 import { hashJson } from './hash.mjs'
 import { JUDGE_ATTEMPTS, JudgeOutputError, SOURCE_AUDIT_RESULT_SCHEMA, judgeResultSchemaFor,
-  parseSourceAuditOutput, buildContradictionCheckRequest, sourceMaterial, runTiebreak, resolveLineCitedRecord, JUDGE_SCOPE_RULE } from './protocol.mjs'
+  parseSourceAuditOutput, buildContradictionCheckRequest, sourceMaterial, runTiebreak, resolveLineCitedRecord, JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE } from './protocol.mjs'
 
 export const PANEL_PROTOCOL = 'cross-family-panel-v1'
 
@@ -18,15 +18,62 @@ function parse(output, criteria, verdicts) {
   return criteria.map(id => results.find(r => r.id === id))
 }
 
-function effective(vote, checks) {
+// A confirmed contradiction proves the opposite of the vote, which names a
+// verdict only at either end of the job's scale. A middle verdict's opposite is
+// ambiguous, so the panel refuses to guess one.
+function turned(verdict, order) {
+  if (verdict === order[0]) return order.at(-1)
+  if (verdict === order.at(-1)) return order[0]
+  throw new JudgeOutputError(`a confirmed contradiction of the middle verdict ${verdict} names no corrected verdict`)
+}
+
+function effective(vote, checks, order) {
   if (!vote.disputed) return { verdict: vote.verdict, disputed: false }
   const check = checks.find(c => c.stage === 'contradiction-check' && c.id === vote.id && c.panel_index === vote.panel_index)
   if (!check || check.classification === 'insufficient') return { verdict: vote.verdict, disputed: true }
-  return { verdict: check.classification === 'confirmed' ? (vote.verdict === 'pass' ? 'fail' : 'pass') : vote.verdict, disputed: false }
+  return { verdict: check.classification === 'confirmed' ? turned(vote.verdict, order) : vote.verdict, disputed: false }
+}
+
+// Each dissent citation is validated alone so one bad citation cannot discard
+// the valid ones. Suites may validate a single citation directly; otherwise the
+// result is validated with that citation alone. The kept set must still satisfy
+// the suite's whole-result rule, such as the citation kind a verdict requires.
+async function backDissent(vote, request, validateCitations, validateCitation) {
+  const kept = []
+  const dropped = []
+  for (const citation of vote.citations ?? []) {
+    try {
+      const ok = validateCitation ? await validateCitation(citation, vote, request)
+        : await validateCitations({ ...vote, citations: [citation] }, request)
+      if (ok) kept.push(citation)
+      else dropped.push({ citation, reason: 'citation did not validate' })
+    } catch (error) {
+      dropped.push({ citation, reason: error?.message ?? String(error) })
+    }
+  }
+  if (!kept.length) return { kept, dropped, valid: false, error: dropped.length ? 'no valid citation remains' : null }
+  try {
+    return { kept, dropped, valid: Boolean(await validateCitations({ ...vote, citations: kept }, request)), error: null }
+  } catch (error) {
+    return { kept, dropped, valid: false, error: error?.message ?? String(error) }
+  }
+}
+
+function dissentCheckPrompt({ request, scopeRule, id, original, material }) {
+  const schema = judgeResultSchemaFor(SOURCE_AUDIT_RESULT_SCHEMA, [id])
+  return [request.prompt_body ?? request.prompt, scopeRule,
+    ['Check only the dissent\'s stated reason. Confirm only when both hold: the cited material shows what the dissent',
+      'says, and that fact decides the criterion\'s quoted requirement the way the dissent claims. For a lower verdict,',
+      'it must show a clause of the requirement unmet; for a higher verdict, every clause the verdict credits met.',
+      'Contradicted when the material does not show it, or when the fact is accurate but the requirement does not',
+      'depend on it (an assumption, scenario, or element the requirement and its review guidance do not name).',
+      'Insufficient when the material cannot settle it.'].join(' '),
+    'Return confirmed if it holds, contradicted if refuted, insufficient if undecided.',
+    '# BEGIN UNTRUSTED DISSENT', JSON.stringify({ id, rationale: original.rationale, citations: original.citations, material, evidence: request.input_roots?.evidence ? request.prompt_body ?? request.prompt : null }), '# END UNTRUSTED DISSENT', '# Response', `Reply with JSON matching this schema: ${JSON.stringify(schema)}`].join('\n')
 }
 
 function route(votes, checks, order) {
-  const effectiveVotes = votes.map(v => ({ ...v, ...effective(v, checks) }))
+  const effectiveVotes = votes.map(v => ({ ...v, ...effective(v, checks, order) }))
   if (effectiveVotes.some(v => v.disputed)) return { kind: 'decider' }
   const counts = new Map()
   for (const v of effectiveVotes) counts.set(v.verdict, (counts.get(v.verdict) ?? 0) + 1)
@@ -52,12 +99,12 @@ export function resolvePanel({ criteria, order, votes, checks = [], rulings = []
     const decision = route(own, checks, order)
     let verdict = decision.verdict
     let basis = `${decision.kind}-${verdict}`
-    let chosen = own.find(v => effective(v, checks).verdict === verdict)
+    let chosen = own.find(v => effective(v, checks, order).verdict === verdict)
     const ownChecks = checks.filter(c => c.id === id)
     let ruling = null
     if (decision.kind === 'decider') {
       ruling = rulings.find(r => r.id === id)
-      if (!ruling || !own.some(v => effective(v, checks).verdict === (ruling.vote ?? ruling.verdict))) throw new JudgeOutputError('missing or invalid decider ruling')
+      if (!ruling || !own.some(v => effective(v, checks, order).verdict === (ruling.vote ?? ruling.verdict))) throw new JudgeOutputError('missing or invalid decider ruling')
       chosen = ruling.result ?? ruling
       verdict = chosen.verdict
       basis = `decider-${verdict}`
@@ -86,12 +133,17 @@ export function verifyCachedPanelJob(record) {
 }
 
 // audit({request, invoke}) may return the suite's audited runJudgeJob outcome.
-// buildPrompt returns the identical base request, without model authority.
+// buildPrompt returns the identical base request, without model authority; its
+// optional scope_rule replaces the shared scope and requirement-question rules
+// in the panel-owned dissent-check and decider prompts.
+// validateCitation(citation, result, request), when supplied, validates one
+// dissent citation; validateCitations(result, request) validates a whole result.
 export async function runPanelJob({ job, criteria, verdicts, order, panel, decider, buildPrompt, schema,
-  validateCitations = async () => false, audit = null, cache = null }) {
+  validateCitations = async () => false, validateCitation = null, audit = null, cache = null }) {
   if (panel.length !== 3 || panel.filter(p => p.family === 'claude').length !== 1 || panel.filter(p => p.family === 'codex').length !== 2) throw new Error('panel requires one Claude and two Codex judges')
   if (order.length !== verdicts.length || new Set(order).size !== verdicts.length || order.some(v => !verdicts.includes(v))) throw new Error('order must rank every verdict')
   const request = { job, criteria, schema, ...(await buildPrompt({ job, criteria, schema })) }
+  const scopeRule = request.scope_rule ?? [JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE].join('\n')
   if (cache) { try { return { ok: true, ...verifyCachedPanelJob(cache), record: cache, usage_by_stage: {} } } catch { /* stale record */ } }
   const record = { protocol: PANEL_PROTOCOL, job, criteria, verdicts, order, ok: false, fallback_ids: request.requireSourceCitationsFor ?? [], votes: [], checks: [], rulings: [], attempts: [], audit_attempts: [], samples: [] }
   const usage = {}
@@ -161,35 +213,36 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
       if (decision.kind === 'decider') { pending.push(id); continue }
       if (!decision.dissent) continue
       const original = record.votes.find(v => v.id === id && v.panel_index === decision.dissent.panel_index)
-      try {
-        original.citations_valid = Boolean(await validateCitations(original, request))
-      } catch (error) {
-        original.citations_valid = false
+      const backing = await backDissent(original, request, validateCitations, validateCitation)
+      original.citations_valid = backing.valid
+      if (backing.dropped.length) {
+        original.dropped_citations = backing.dropped
+        original.citations = backing.kept
+      }
+      if (backing.error || backing.dropped.length) {
         record.citation_checks ??= []
-        record.citation_checks.push({ id, panel_index: original.panel_index, valid: false, error: error.message })
+        record.citation_checks.push({ id, panel_index: original.panel_index, valid: backing.valid, dropped: backing.dropped.length,
+          ...(backing.error ? { error: backing.error } : {}) })
       }
       if (!original.citations_valid) continue
       const material = await sourceMaterial(request, [original])
       const next = { ...request, criteria: [id], schema: judgeResultSchemaFor(SOURCE_AUDIT_RESULT_SCHEMA, [id]),
         input_roots: null, audit_stage: 'dissent-check',
-        prompt: [request.prompt_body ?? request.prompt, JUDGE_SCOPE_RULE,
-          'Check only whether the dissent\'s stated reason holds against its cited material and the criterion requirement.',
-          'Return confirmed if it holds, contradicted if refuted, insufficient if undecided.',
-          '# BEGIN UNTRUSTED DISSENT', JSON.stringify({ id, rationale: original.rationale, citations: original.citations, material, evidence: request.input_roots?.evidence ? request.prompt_body ?? request.prompt : null }), '# END UNTRUSTED DISSENT', '# Response', `Reply with JSON matching this schema: ${JSON.stringify(judgeResultSchemaFor(SOURCE_AUDIT_RESULT_SCHEMA, [id]))}`].join('\n') }
+        prompt: dissentCheckPrompt({ request, scopeRule, id, original, material }) }
       const [check] = await call(next, decider, 'dissent-check', text => parseSourceAuditOutput(text, [id], job))
       record.checks.push({ ...check, stage: 'dissent-check', panel_index: original.panel_index })
     }
     if (pending.length) {
       // Stable seeded order, with no provider, family, or model in the prompt.
       const shuffled = [...panel.keys()].sort((a, b) => hashJson({ job, criteria, index: a }).localeCompare(hashJson({ job, criteria, index: b })))
-      const blind = shuffled.map((index, n) => ({ label: String.fromCharCode(65 + n), results: record.votes.filter(v => v.panel_index === index).map(vote => ({ id: vote.id, verdict: effective(vote, record.checks).verdict,
-        rationale: effective(vote, record.checks).verdict !== vote.verdict ? `The source contradiction was independently confirmed: ${vote.contradiction.rationale}` : vote.rationale,
+      const blind = shuffled.map((index, n) => ({ label: String.fromCharCode(65 + n), results: record.votes.filter(v => v.panel_index === index).map(vote => ({ id: vote.id, verdict: effective(vote, record.checks, order).verdict,
+        rationale: effective(vote, record.checks, order).verdict !== vote.verdict ? `The source contradiction was independently confirmed: ${vote.contradiction.rationale}` : vote.rationale,
         citations: vote.citations, evidence: vote.evidence })) }))
       const deciderRequest = { ...request, authority: { cli: 'claude', model: decider.model, effort: decider.effort },
-        prompt_body: [request.prompt_body ?? request.prompt, '# Untrusted panel votes', JSON.stringify(blind), 'Rule only a verdict one of these panel judges gave.'].join('\n') }
+        prompt_body: [request.prompt_body ?? request.prompt, '# Untrusted panel votes', JSON.stringify(blind), 'Rule only a verdict one of these panel judges gave.', scopeRule].join('\n') }
       deciderRequest.prompt = deciderRequest.prompt_body
       const validVerdicts = results => {
-        for (const r of results) if (!record.votes.some(v => v.id === r.id && effective(v, record.checks).verdict === r.verdict)) throw new JudgeOutputError('decider verdict was not a panel vote')
+        for (const r of results) if (!record.votes.some(v => v.id === r.id && effective(v, record.checks, order).verdict === r.verdict)) throw new JudgeOutputError('decider verdict was not a panel vote')
       }
       if (request.panel_line_citations) {
         const ruling = await runTiebreak({ request: deciderRequest, criteria: pending, invoke: wrap(decider, 'decider'), validateVerdicts: validVerdicts })

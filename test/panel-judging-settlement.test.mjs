@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { runPanelJob, resolvePanel, verifyCachedPanelJob, PANEL_PROTOCOL } from '../evals/lib/panel-judging/panel.mjs'
+import { REQUIREMENT_QUESTION_RULE, JUDGE_SCOPE_RULE, buildReciteRequest } from '../evals/lib/panel-judging/protocol.mjs'
 
 const result = (verdict, extra = {}) => ({ id: 'x', verdict, rationale: 'reason', citations: ['a'], evidence: ['a'], ...extra })
 const setup = (votes, extra = {}) => ({
@@ -29,6 +30,11 @@ for (const classification of ['confirmed', 'contradicted', 'insufficient']) test
     decider: { model: 'opus', effort: 'medium', invoke: async request => {
       assert.equal(request.usage_phase, 'dissent-check')
       assert.match(request.prompt, /reason/)
+      // The check asks whether the requirement depends on the fact, not only whether it is accurate.
+      assert.ok(request.prompt.includes(REQUIREMENT_QUESTION_RULE))
+      assert.match(request.prompt, /Confirm only when both hold/)
+      assert.match(request.prompt, /the fact is accurate but the requirement does not depend on it/)
+      assert.match(request.prompt, /For a lower verdict, it must show a clause of the requirement unmet; for a higher verdict, every clause the verdict credits met/)
       return JSON.stringify({ results: [{ id: 'x', classification, rationale: 'checked reason', evidence: ['a'] }] })
     } },
   }))
@@ -199,4 +205,122 @@ for (const stage of ['panel', 'audited-panel', 'decider', 'span-audit']) test(`q
   assert.equal(outcome.failure.resumable, true)
   assert.equal(outcome.record.failure.owner, 'evaluation-harness')
   assert.match(outcome.failure.message, /subscription quota stopped/)
+})
+
+const dissentCheck = (classification, seen = []) => ({ model: 'opus', effort: 'medium', invoke: async request => {
+  seen.push(request)
+  if (request.audit_stage !== 'dissent-check') throw new Error('unexpected decider')
+  return JSON.stringify({ results: [{ id: 'x', classification, rationale: 'checked reason', evidence: ['a'] }] })
+} })
+const citedDissent = (options, citations) => {
+  options.panel[2].invoke = async () => JSON.stringify({ results: [result('pass', { citations })] })
+  return options
+}
+const rejectBad = async r => {
+  for (const c of r.citations) if (c === 'bad') throw new Error(`source citation is outside the verified inventory: ${c}`)
+  return r.citations.length > 0
+}
+
+test('an invalid dissent citation is dropped and the remaining valid citation backs the dissent', async () => {
+  const seen = []
+  const outcome = await runPanelJob(citedDissent(setup(['fail', 'fail', 'pass'], { decider: dissentCheck('confirmed', seen), validateCitations: rejectBad }), ['a', 'bad']))
+  assert.equal(outcome.ok, true)
+  assert.equal(outcome.results[0].basis, 'checked-dissent-pass')
+  assert.deepEqual(outcome.results[0].citations, ['a'])
+  const dissent = outcome.record.votes.find(v => v.panel_index === 2)
+  assert.equal(dissent.citations_valid, true)
+  assert.deepEqual(dissent.dropped_citations, [{ citation: 'bad', reason: 'source citation is outside the verified inventory: bad' }])
+  assert.equal(seen.length, 1)
+  assert.ok(!seen[0].prompt.includes('"bad"'))
+  assert.deepEqual(verifyCachedPanelJob(outcome.record).results, outcome.results)
+})
+
+test('a dissent whose every citation is invalid is not backed', async () => {
+  const seen = []
+  const outcome = await runPanelJob(citedDissent(setup(['fail', 'fail', 'pass'], { decider: dissentCheck('confirmed', seen), validateCitations: rejectBad }), ['bad']))
+  assert.equal(outcome.results[0].basis, 'majority-fail')
+  assert.equal(seen.length, 0)
+  const dissent = outcome.record.votes.find(v => v.panel_index === 2)
+  assert.equal(dissent.citations_valid, false)
+  assert.equal(dissent.dropped_citations.length, 1)
+})
+
+test('a suite per-citation validator decides drops and the kept set must still meet the required kind', async () => {
+  const kinds = { span: 'span', file: 'file', bad: null }
+  const validateCitation = async c => kinds[c] ?? (() => { throw new Error('citation does not resolve to a collected file') })()
+  // Whole-result rule: a higher verdict needs a span.
+  const validateCitations = async r => { for (const c of r.citations) await validateCitation(c); if (!r.citations.includes('span')) throw new Error('met/partial must cite an artifact line range'); return true }
+  const backed = await runPanelJob(citedDissent(setup(['fail', 'fail', 'pass'], { decider: dissentCheck('confirmed'), validateCitations, validateCitation }), ['file', 'span', 'bad']))
+  assert.equal(backed.results[0].basis, 'checked-dissent-pass')
+  const vote = backed.record.votes.find(v => v.panel_index === 2)
+  assert.deepEqual(vote.citations, ['file', 'span'])
+  assert.deepEqual(vote.dropped_citations.map(d => d.citation), ['bad'])
+  const unbacked = await runPanelJob(citedDissent(setup(['fail', 'fail', 'pass'], { decider: dissentCheck('confirmed'), validateCitations, validateCitation }), ['file', 'bad']))
+  assert.equal(unbacked.results[0].basis, 'majority-fail')
+  assert.equal(unbacked.record.votes.find(v => v.panel_index === 2).citations_valid, false)
+})
+
+test('a suite scope rule replaces the shared one in the dissent check and decider prompts', async () => {
+  const seen = []
+  const scoped = setup(['missing', 'missing', 'met'], { verdicts: ['met', 'partial', 'missing'], order: ['met', 'partial', 'missing'],
+    buildPrompt: () => ({ prompt: 'definition context', prompt_body: 'definition context', scope_rule: 'DEFINITION RULE' }), decider: dissentCheck('contradicted', seen) })
+  scoped.panel = scoped.panel.map((member, i) => ({ ...member, invoke: async () => JSON.stringify({ results: [result(['missing', 'missing', 'met'][i])] }) }))
+  const outcome = await runPanelJob(scoped)
+  assert.equal(outcome.results[0].basis, 'majority-missing')
+  assert.match(seen[0].prompt, /DEFINITION RULE/)
+  assert.ok(!seen[0].prompt.includes(JUDGE_SCOPE_RULE))
+  const decided = []
+  const split = setup(['met', 'partial', 'missing'], { verdicts: ['met', 'partial', 'missing'], order: ['met', 'partial', 'missing'],
+    buildPrompt: () => ({ prompt: 'definition context', prompt_body: 'definition context', scope_rule: 'DEFINITION RULE' }),
+    decider: { model: 'opus', effort: 'high', invoke: async request => { decided.push(request); return JSON.stringify({ results: [result('partial')] }) } } })
+  split.panel = split.panel.map((member, i) => ({ ...member, invoke: async () => JSON.stringify({ results: [result(['met', 'partial', 'missing'][i])] }) }))
+  await runPanelJob(split)
+  assert.match(decided[0].prompt, /DEFINITION RULE/)
+  const shared = []
+  await runPanelJob(setup(['fail', 'pass', 'pass'], { decider: { model: 'opus', effort: 'medium', invoke: async request => { shared.push(request); return JSON.stringify({ results: [result('pass')] }) } } }))
+  assert.ok(shared[0].prompt.includes(REQUIREMENT_QUESTION_RULE))
+})
+
+const disputedVotes = (verdicts, disputedIndex) => verdicts.map((verdict, i) => ({ ...result(verdict), family: i === 0 ? 'claude' : 'codex', panel_index: i,
+  ...(i === disputedIndex ? { disputed: true, contradiction: { rationale: 'stated contradiction', evidence: ['a'] } } : {}) }))
+const confirmedCheck = index => [{ id: 'x', stage: 'contradiction-check', panel_index: index, classification: 'confirmed', rationale: 'r', evidence: ['a'] }]
+
+test('a confirmed contradiction turns a vote to the opposite end of the job scale', () => {
+  const twoWay = resolvePanel({ criteria: ['x'], order: ['pass', 'fail'], votes: disputedVotes(['pass', 'fail', 'fail'], 0), checks: confirmedCheck(0) })
+  assert.equal(twoWay.results[0].basis, 'consensus-fail')
+  const threeWay = resolvePanel({ criteria: ['x'], order: ['met', 'partial', 'missing'], votes: disputedVotes(['met', 'missing', 'missing'], 0), checks: confirmedCheck(0) })
+  assert.equal(threeWay.results[0].basis, 'consensus-missing')
+  assert.throws(() => resolvePanel({ criteria: ['x'], order: ['met', 'partial', 'missing'], votes: disputedVotes(['partial', 'missing', 'missing'], 0), checks: confirmedCheck(0) }),
+    /contradiction of the middle verdict partial names no corrected verdict/)
+})
+
+test('re-cite asks the decider to change a verdict its lines cannot prove', () => {
+  const recite = buildReciteRequest({ tiebreakRequest: { job: 'job', prompt_body: 'context' }, claims: [{ id: 'x', audit: { rationale: 'missing clause' } }] })
+  assert.match(recite.prompt, /If the lines that would prove your verdict do not exist, change your verdict rather than citing weaker lines\./)
+})
+
+test('definition judging uses a definition scope rule and requirement question, not the implementation scope rule', async () => {
+  const { DEFINITION_SCOPE_RULE, jobPrompt, runDefinitionPanel } = await import('../evals/agent-runner/and-scene-define/lib/judge-jobs.mjs')
+  assert.ok(!DEFINITION_SCOPE_RULE.includes(JUDGE_SCOPE_RULE))
+  assert.doesNotMatch(DEFINITION_SCOPE_RULE, /file deletion|rendering the candidate/)
+  assert.match(DEFINITION_SCOPE_RULE, /Judge only what the cited artifacts establish/)
+  assert.match(DEFINITION_SCOPE_RULE, /An accurate observation or citation decides nothing by itself/)
+  assert.match(DEFINITION_SCOPE_RULE, /must name the part of the item the artifacts do not commit to/)
+  const job = { name: 'coverage:a', kind: 'coverage', criteria: ['i1'],
+    inputs: { artifacts: { 'spec.md': 'one\ntwo' }, gates: [], items: [{ id: 'i1', statement: 's' }] } }
+  assert.ok(jobPrompt(job).startsWith(DEFINITION_SCOPE_RULE))
+  const cite = (start, end) => ({ path: 'spec.md', start_line: start, end_line: end, gate: null, exchange: null })
+  const vote = (verdict, citations) => JSON.stringify({ results: [{ id: 'i1', verdict, rationale: 'r', evidence: ['e'], citations, subject_id: null, added_scope: [] }] })
+  const seen = []
+  const outcome = await runDefinitionPanel({ job,
+    panel: [['claude', vote('missing', [cite(null, null)])], ['codex', vote('missing', [cite(null, null)])], ['codex', vote('met', [cite(1, 2)])]]
+      .map(([family, text], i) => ({ family, model: `m${i}`, effort: 'medium', invoke: async () => text })),
+    decider: { family: 'claude', model: 'opus', effort: 'high', invoke: async request => {
+      seen.push(request)
+      return JSON.stringify({ results: [{ id: 'i1', classification: 'contradicted', rationale: 'checked', evidence: ['e'] }] })
+    } } })
+  assert.equal(outcome.results[0].basis, 'majority-missing')
+  assert.equal(seen[0].audit_stage, 'dissent-check')
+  assert.ok(!seen[0].prompt.includes(JUDGE_SCOPE_RULE))
+  assert.ok(!seen[0].prompt.includes(REQUIREMENT_QUESTION_RULE))
 })

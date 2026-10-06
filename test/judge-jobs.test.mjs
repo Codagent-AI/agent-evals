@@ -19,6 +19,7 @@ import {
   runRobustJudgeJob,
   resolveJudgeSamples,
   JUDGE_SAMPLES,
+  REQUIREMENT_QUESTION_RULE,
   PRODUCT_JUDGE_PROFILE,
   runPanelJob,
   JUDGING_PROTOCOL,
@@ -1257,6 +1258,17 @@ test('the protocol runs three cross-family judges per job', () => {
   assert.equal(JUDGING_PROTOCOL, 'cross-family-panel-v1')
 })
 
+// Successful checks, decider calls, and re-cite cycles are protocol calls, not
+// retries; only a repeated attempt of the same call is.
+test('judge retries count repeated attempts, not successful panel stages', async () => {
+  const { judgeRetries } = await import('../evals/agent-runner/and-scene/lib/judge-jobs.mjs')
+  const panel = [0, 1, 2].map(panel_index => ({ cycle: 1, attempt: 1, ok: true, panel_index }))
+  assert.equal(judgeRetries([...panel, { stage: 'dissent-check', attempt: 1, ok: true },
+    { stage: 'contradiction-check', attempt: 1, ok: true }, { stage: 'tiebreak', attempt: 1, ok: true },
+    { cycle: 2, attempt: 1, ok: true, panel_index: 0 }]), 0)
+  assert.equal(judgeRetries([...panel, { stage: 'decider', attempt: 1, ok: false }, { stage: 'decider', attempt: 2, ok: true }]), 1)
+})
+
 const stageOf = (request) => request.judge_stage ?? request.audit_stage ?? 'primary'
 
 test('a criterion both samples pass is a consensus pass and needs no third sample', async () => {
@@ -1730,6 +1742,7 @@ test('every judge and audit prompt limits judgment to established behavior and p
       assert.match(prompt, /Judge only behavior the cited source and recorded evidence establish/, name)
       assert.match(prompt, /hypothetical input, file deletion, or rendering the candidate does not produce/, name)
       assert.match(prompt, /plain meaning of the fixture requirement/, name)
+      assert.ok(prompt.includes(REQUIREMENT_QUESTION_RULE), name)
     }
   } finally {
     await rm(tree.root, { recursive: true, force: true })

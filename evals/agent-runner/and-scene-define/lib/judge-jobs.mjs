@@ -1,9 +1,14 @@
 // Suite-owned definitions and citations; settlement belongs to the shared panel.
 import { runPanelJob, PANEL_PROTOCOL } from '../../../lib/panel-judging/panel.mjs'
-import { JUDGE_SCOPE_RULE, JudgeOutputError } from '../../../lib/panel-judging/protocol.mjs'
+import { JudgeOutputError } from '../../../lib/panel-judging/protocol.mjs'
 import { JUDGE_PROFILE } from './profiles.mjs'
 export { PANEL_PROTOCOL, JUDGE_PROFILE }
-export const DEFINITION_SCOPE_RULE = `${JUDGE_SCOPE_RULE}\nJudge only what the cited artifacts establish. Add no requirement the item and its anchors do not state. Give undefined terms their plain meaning in the reference.`
+// The definition counterpart of the shared scope and requirement-question rules.
+// The implementation scope rule (deleted files, rendering) does not apply here.
+export const DEFINITION_SCOPE_RULE = [
+  'Judge only what the cited artifacts establish. Add no requirement the item and its anchors do not state. Give undefined terms their plain meaning in the reference.',
+  'Every verdict answers one question: does the criterion\'s requirement hold? For a coverage item the requirement is its statement or intent and its anchors; for any other criterion it is the rule written for it. An accurate observation or citation decides nothing by itself. A verdict that withholds coverage or quality credit must name the part of the item the artifacts do not commit to and the evidence that they do not; a deduction or flag must name the exchange and artifact text that make it. A fact the requirement does not depend on (wording, organization, a scenario its anchors do not state) never decides a verdict.',
+].join('\n')
 const object = properties => ({ type: 'object', additionalProperties: false, properties, required: Object.keys(properties) })
 const string = { type: 'string' }
 const strings = { type: 'array', items: string }
@@ -122,7 +127,8 @@ export async function runDefinitionPanel({ job, panel, decider }) {
   } })
   return runPanelJob({ job: job.name, criteria: job.criteria, verdicts: ['met', 'partial', 'missing'], order: ['met', 'partial', 'missing'],
     panel: panel.map(guard), decider: guard(decider), schema: judgeSchema(job.criteria),
-    buildPrompt: () => ({ prompt, prompt_body: prompt }), validateCitations: r => validateFinding(r, job) })
+    buildPrompt: () => ({ prompt, prompt_body: prompt, scope_rule: DEFINITION_SCOPE_RULE }),
+    validateCitations: r => validateFinding(r, job), validateCitation: c => validateCitation(c, job.inputs) })
 }
 export async function runDiscovery({ job, invoke }) {
   const schema = discoverySchema(job.criteria)

@@ -5,10 +5,10 @@ import { lstat, readFile, readdir, realpath } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 export const JUDGE_ATTEMPTS = 3
-// Every scored job is judged by two independent samples so that no single
-// model sample decides a criterion. A verdict panel judges agree on stands; a
-// disagreement is settled by a third independent sample, and a pass it casts
-// must quote validated lines that a closed-world audit confirms.
+// Sample count of the legacy dual-sample protocol (runRobustJudgeJob): two
+// independent samples, with a disagreement settled by a third whose pass must
+// quote validated lines that a closed-world audit confirms. Scored suites now
+// use the three-judge cross-family panel (panel.mjs) and own their count.
 export const JUDGE_SAMPLES = 2
 
 // Shared by every judge, audit, and check prompt (round-4 audit): splits came
@@ -19,6 +19,11 @@ export const JUDGE_SCOPE_RULE = [
   'review guidance names that scenario. When a criterion uses a term its guidance does not define, apply',
   'the plain meaning of the fixture requirement it traces to.',
 ].join('\n')
+
+// Shared by every judge, decider, audit, and check prompt. A verifier asked only
+// whether a cited fact is accurate can confirm it and uphold a verdict the
+// requirement never depended on; this keeps every call on the requirement.
+export const REQUIREMENT_QUESTION_RULE = 'Every verdict answers one question: is the criterion\'s quoted requirement met? An accurate observation, measurement, or citation decides nothing by itself. A fail must name the part of the requirement that is unmet and the evidence that it is unmet; a fact the requirement does not depend on (which elements a check counted, a state or layout it assumed, a scenario the guidance does not name) never makes a fail.'
 export const JUDGING_PROTOCOL = 'dual-sample-majority-v4'
 const MAX_LINE_CITATIONS = 12
 const MAX_SPAN_LINES = 200
@@ -343,6 +348,7 @@ export async function buildSourceAuditRequest({
     'Each criterion in the rubric contract lists the fixture or eval requirement it traces to. A pass is',
     'confirmed only when the source meets every clause of that requirement, not merely the primary claim.',
     JUDGE_SCOPE_RULE,
+    REQUIREMENT_QUESTION_RULE,
     'Classify every primary result as confirmed, contradicted, or insufficient.',
     '- confirmed: the supplied source proves the primary verdict.',
     '  For a pass, prove the mechanism and every focused executable test required',
@@ -964,6 +970,7 @@ export function buildSpanAuditRequest({ request, passes, spans }) {
       'Do not infer behavior from unquoted files, names, comments, or plausible conventions, and do not',
       'require anything the requirement and its review guidance do not state.',
       JUDGE_SCOPE_RULE,
+      REQUIREMENT_QUESTION_RULE,
       '',
       '# Rubric contract',
       request.rubric_slice ?? '',
@@ -1023,6 +1030,7 @@ export function buildContradictionCheckRequest({ request, claims }) {
       '  the verdict.',
       '- insufficient: the material cannot settle the stated reason.',
       JUDGE_SCOPE_RULE,
+      REQUIREMENT_QUESTION_RULE,
       '',
       '# Rubric contract',
       request.rubric_slice ?? '',
@@ -1072,24 +1080,24 @@ function tiebreakDecisions({ results, spans, outcomes, fallbackIds }) {
     const paths = [...new Set(quoted.map(({ path }) => path))]
     if (result.verdict !== 'pass') {
       return { id: result.id, verdict: 'fail', rationale: result.rationale, citations: paths,
-        evidence: [...result.evidence, ...references, 'judging basis: majority fail (decider)'] }
+        evidence: [...result.evidence, ...references, 'decider ruling: fail'] }
     }
     const outcome = outcomes.get(result.id)
     if (outcome.state === 'contradicted') {
       return { id: result.id, verdict: 'fail', citations: paths,
         rationale: bounded(`the span audit's stated contradiction was confirmed by an independent check: ${outcome.audits.map(({ rationale }) => rationale).join(' | ')}`, MAX_RATIONALE_CHARS),
         evidence: [...outcome.audits.flatMap(({ evidence }) => evidence).map((item) => bounded(`span audit: ${item}`)),
-          ...references, 'judging basis: majority fail (third-sample pass contradiction confirmed by an independent check)'] }
+          ...references, 'decider ruling: fail (the pass\'s span-audit contradiction was confirmed by an independent check)'] }
     }
     if (outcome.state !== 'confirmed' && fallbackIds.includes(result.id)) {
       return { id: result.id, verdict: 'fail', citations: paths,
         rationale: bounded(`The browser could not observe this criterion and the span audit could not confirm the quoted source: ${outcome.audits.at(-1)?.rationale ?? ''}`, MAX_RATIONALE_CHARS),
-        evidence: [...references, 'judging basis: majority fail (unconfirmed browser-fallback pass)'] }
+        evidence: [...references, 'decider ruling: fail (unconfirmed browser-fallback pass)'] }
     }
     return { id: result.id, verdict: 'pass', rationale: result.rationale, citations: paths,
       evidence: [...result.evidence, ...references, outcome.state === 'confirmed'
-        ? 'judging basis: majority pass (decider) confirmed by the closed-world span audit'
-        : 'judging basis: majority pass (decider); the span audit could not confirm or refute it from the quoted lines'] }
+        ? 'decider ruling: pass, confirmed by the closed-world span audit'
+        : 'decider ruling: pass; the span audit could not confirm or refute it from the quoted lines'] }
   })
 }
 
@@ -1103,6 +1111,7 @@ export function buildReciteRequest({ tiebreakRequest, claims }) {
     'The independent auditor sees only the lines you quote. For each criterion below, return your verdict',
     'again with spans that quote every line the requirement depends on, including the complete statement',
     'or block that implements it and any focused test the guidance requires.',
+    'If the lines that would prove your verdict do not exist, change your verdict rather than citing weaker lines.',
     ...claims.map(({ id, audit }) => `- ${id}: ${bounded(audit.rationale, MAX_RATIONALE_CHARS)}`),
   ].join('\n')
   return {

@@ -33,22 +33,32 @@ inputs: `claude-sonnet-5-5` and two `gpt-6-sol` samples, all at pinned medium
 effort. `claude-opus-5-5`, medium, decides Codex-only majorities, three-way
 splits, and unresolved disputes. A unanimous verdict stands. A two-to-one
 majority stands when it includes Claude, except that a higher-credit dissent
-with validated citations gets an Opus check of its stated reason. A confirmed
-dissent stands; otherwise the majority stands.
+with at least one validated citation gets an Opus check of its stated reason.
+Each dissent citation is validated alone; invalid ones are dropped and recorded
+as `dropped_citations` rather than discarding the dissent. The check confirms
+only when the cited material shows what the dissent says and that fact decides
+the quoted requirement the way the dissent claims; an accurate fact the
+requirement does not depend on is contradicted. A confirmed dissent stands;
+otherwise the majority stands.
 
 Each source judge keeps its closed-world source audit and one focused re-cite.
 An audit contradiction marks the vote disputed. Opus checks that same stated
 contradiction; only confirmation turns the vote. An insufficient audit after
 one re-cite leaves the vote standing, except an unconfirmed browser fallback
-pass fails. Judges, audits, and checks retain the shared scope rule and the
-full fixture requirement or eval-owned reason beside each criterion.
+pass fails. Judges, audits, checks, the decider, and browser second opinions
+retain the shared scope rule, the shared requirement-question rule (every
+verdict answers whether the quoted requirement is met; an accurate observation
+decides nothing by itself, and a fail must name the unmet part of the
+requirement), and the full fixture requirement or eval-owned reason beside each
+criterion.
 
 The decider sees unchanged job context and all three votes, labelled A/B/C in
 seeded order without model identities. It must choose a panel verdict. A pass
 requires 1–12 valid line spans, each under 200 lines, in the verified neutral
 source inventory or materialized evidence view, resolving without symlinks.
 A closed-world span audit checks every requirement clause, with one re-cite on
-insufficient evidence. A contradiction withdraws the pass only when Opus
+insufficient evidence; the re-cite tells the decider to change a verdict whose
+proving lines do not exist rather than cite weaker lines. A contradiction withdraws the pass only when Opus
 confirms that same contradiction. A still-insufficient audit leaves the pass
 standing with that recorded, except an unconfirmed browser fallback pass fails.
 Invalid output is retried; exhausted calls leave the job unobserved.
