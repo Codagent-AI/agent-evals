@@ -486,6 +486,7 @@ test('the replay observation can explain a browser failure to the span auditor',
     failing_record: {} }, answer: { mismeasured_step: 'direct', measurement_fault: 'suspected input' },
   spans: [], logSpans: [], replay: { plan: {}, observation: { passed: true } } })
   assert.match(audit.prompt, /by that replay observing the passing behavior in a real browser/)
+  assert.match(audit.prompt, /the failing measurement itself needs no further explanation/)
 })
 
 // A real verifier cited its working-directory path (source/src/...) for a file
