@@ -126,9 +126,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 11.0 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
+test('rubric 11.1 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '11.0.0')
+  assert.equal(rubric.version, '11.1.0')
   assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(
@@ -585,4 +585,8 @@ test('rubric 11.0 scores each omission once and settles the round-3 splits', asy
   assert.match(guidance('verification-warnings'), /a stable hook or selector of that chrome[^.]*says which chrome it is/)
   assert.match(rubric.fallbacks['quality-captions-and-navigation'].guidance.join('\n'), /Captions are met in browse mode/)
   assert.match(rubric.fallbacks['quality-captions-and-navigation'].guidance.join('\n'), /without the previous\/next controls/)
+  // Round 4b: samples split on whether a changed verify script is covered by
+  // the acceptance skill's ban on automated suites.
+  const definition = (id) => rows.find((row) => row.criterion_definitions?.[id]).criterion_definitions[id]
+  assert.match(definition('testing-evidence-final-revision-applicability'), /changed verification or test script counts as explored even though the record does not name that script/)
 })
