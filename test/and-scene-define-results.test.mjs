@@ -23,8 +23,15 @@ test('results explain all statuses, retain detailed judgments and separate usage
     assert.equal(result.evaluation_status, evaluation_status)
     assert.equal(result.observed_error, outcome.observed_error)
     assert.equal(result.resumable, true)
-    assert.deepEqual(result.panel_records, score.panel_records)
-    assert.equal(result.leaked_count, 1)
+    if (evaluation_status === 'complete') {
+      assert.deepEqual(result.panel_records, score.panel_records); assert.equal(result.total, 42)
+      assert.equal(result.leaked_count, 1); assert.equal(result.discovery_ledger.counts.discovered, 1)
+    } else {
+      // A score left by an earlier attempt never leaks into an incomplete result.
+      assert.equal(result.total, null); assert.equal(result.components, null)
+      assert.deepEqual(result.panel_records, []); assert.deepEqual(result.coverage, []); assert.deepEqual(result.gates, []); assert.deepEqual(result.added_scope, [])
+      assert.equal(result.leaked_count, 0); assert.equal(result.discovery_ledger, null)
+    }
     assert.equal(result.workflow_metrics.cost, null)
     assert.equal(result.eval_owned_usage[0].cost, 99)
     assert.ok(result.residual_risk)
@@ -32,7 +39,7 @@ test('results explain all statuses, retain detailed judgments and separate usage
     const html = await readFile(join(runDir, 'report.html'), 'utf8')
     assert.match(html, /&lt;script&gt;/)
     assert.doesNotMatch(html, /<script|<link|src=["']https?:/)
-    assert.match(html, /targeted_checks/)
+    if (evaluation_status === 'complete') assert.match(html, /targeted_checks/)
   }
 })
 test('comparison pairs only identical series and lists all changed candidate components', () => {

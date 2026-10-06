@@ -9,7 +9,7 @@ export async function assembleResult({ runDir, outcome, checkpoint }) {
     try { return await readJson(join(runDir, path), null) }
     catch (error) { throw new Error(`cannot assemble ${path}: ${error.message}`, { cause: error }) }
   }
-  const [score, discovery, contamination, disclosure, reconciliation, metrics, manifest, collection] = await Promise.all(['judges/score.json', 'discovery/ledger.json', 'phases/contamination-audit.json', 'audits/disclosure.json', 'phases/reconciliation.json', 'phases/workflow-metrics.json', 'evidence-manifest.json', 'phases/collection.json'].map(read))
+  const [recordedScore, recordedDiscovery, contamination, disclosure, reconciliation, metrics, manifest, collection] = await Promise.all(['judges/score.json', 'discovery/ledger.json', 'phases/contamination-audit.json', 'audits/disclosure.json', 'phases/reconciliation.json', 'phases/workflow-metrics.json', 'evidence-manifest.json', 'phases/collection.json'].map(read))
   const usage = await readFile(join(runDir, 'phases/eval-owned-usage.jsonl'), 'utf8').catch(error => { if (error.code !== 'ENOENT') throw error; return '' })
   const eval_owned_usage = []; const eval_owned_usage_errors = []
   const lines = usage.split('\n')
@@ -22,6 +22,10 @@ export async function assembleResult({ runDir, outcome, checkpoint }) {
       eval_owned_usage_errors.push({ line: index + 1, error: error.message, truncated: index === lines.length - 1 && !usage.endsWith('\n') })
     }
   }
+  // Scores and the discovery ledger describe only a completed evaluation; files
+  // left by an earlier attempt must not appear in an incomplete result.
+  const complete = outcome.evaluation_status === 'complete'
+  const score = complete ? recordedScore : null; const discovery = complete ? recordedDiscovery : null
   const result = { schema_version: 1, mode: checkpoint?.kind ?? 'candidate', total: null, components: null, coverage: [], quality: [], fidelity: [], gates: [], panel_records: [], added_scope: [], ...score, ...outcome,
     run_id: checkpoint?.run_id ?? outcome.run_id ?? null,
     series_identity: checkpoint?.series_identity ?? null, candidate: checkpoint?.candidate ?? null,
