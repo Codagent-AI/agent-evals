@@ -5,6 +5,11 @@ import { JUDGE_ATTEMPTS, JudgeOutputError, SOURCE_AUDIT_RESULT_SCHEMA, judgeResu
 
 export const PANEL_PROTOCOL = 'cross-family-panel-v1'
 
+export function judgeFailure(error) {
+  return { message: error?.message ?? String(error),
+    ...Object.fromEntries(['code', 'resumable', 'retryable', 'owner'].filter(key => error?.[key] !== undefined).map(key => [key, error[key]])) }
+}
+
 function parse(output, criteria, verdicts) {
   let results
   try { results = JSON.parse(output).results } catch { throw new JudgeOutputError('panel output is not valid JSON') }
@@ -96,33 +101,51 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
       : next.audit_stage === 'tiebreak-span-audit' ? 'span-audit'
       : next.judge_stage === 'tiebreak-recite' ? 'decider-recite' : stage
     usage[callStage] = (usage[callStage] ?? 0) + 1
-    return member.invoke({ ...next, authority: { cli: member.family === 'codex' ? 'codex' : 'claude', model: member.model, effort: member.effort }, usage_phase: callStage })
+    try {
+      return await member.invoke({ ...next, authority: { cli: member.family === 'codex' ? 'codex' : 'claude', model: member.model, effort: member.effort }, usage_phase: callStage })
+    } catch (error) {
+      if (error.retryable === false || error.resumable === true) record.failure = judgeFailure(error)
+      throw error
+    }
   }
   const call = async (next, member, stage, parser) => {
+    let lastError
     for (let attempt = 1; attempt <= JUDGE_ATTEMPTS; attempt++) {
       try {
         const value = await parser(await wrap(member, stage)(next))
         record.attempts.push({ stage, attempt, ok: true })
         return value
       } catch (error) {
-        record.attempts.push({ stage, attempt, ok: false, error: error.message })
+        lastError = error
+        record.attempts.push({ stage, attempt, ok: false, error: error.message, failure: judgeFailure(error) })
         if (error.retryable === false) break
       }
     }
-    throw new JudgeOutputError(`exhausted ${stage}`)
+    const { message, ...metadata } = judgeFailure(lastError)
+    throw Object.assign(new JudgeOutputError(`exhausted ${stage}: ${message}`), { ...metadata, cause: lastError })
   }
-  const done = () => ({ ok: record.ok, results: record.results ?? null, record, usage_by_stage: usage })
+  const done = () => {
+    if (!record.ok) {
+      const last = [...record.attempts, ...record.audit_attempts].findLast(attempt => attempt.ok === false && attempt.error)
+      record.failure ??= last?.failure ?? (last ? { message: last.error, code: 'judge-output', owner: 'evaluation-harness' } : null)
+      if (record.failure) record.error = record.failure.message
+    }
+    return { ok: record.ok, failure: record.ok ? null : record.failure ?? null, results: record.results ?? null, record, usage_by_stage: usage }
+  }
   try {
     const settled = await Promise.allSettled(panel.map(async (member, index) => {
       const stage = index === panel.findIndex(p => p.family === 'claude') ? 'panel-claude' : `panel-codex-${panel.slice(0, index + 1).filter(p => p.family === 'codex').length}`
       if (audit) return audit({ request: { ...request, judge_sample: index + 1 }, invoke: wrap(member, stage) })
       return { ok: true, results: await call(request, member, stage, text => parse(text, criteria, verdicts)), attempts: [], audit_attempts: [] }
     }))
-    const outcomes = settled.map(entry => entry.status === 'fulfilled' ? entry.value : ({ ok: false, results: null, attempts: [{ ok: false, error: entry.reason.message }], audit_attempts: [] }))
+    const outcomes = settled.map(entry => entry.status === 'fulfilled' ? entry.value : ({ ok: false, results: null, failure: judgeFailure(entry.reason), attempts: [{ ok: false, error: entry.reason.message, failure: judgeFailure(entry.reason) }], audit_attempts: [] }))
     record.samples = outcomes
     record.attempts.push(...outcomes.flatMap((o, index) => (o.attempts ?? []).map(a => ({ ...a, panel_index: index }))))
     record.audit_attempts = outcomes.flatMap((o, index) => (o.audit_attempts ?? []).map(a => ({ ...a, panel_index: index })))
-    if (outcomes.some(o => !o.ok)) return done()
+    if (outcomes.some(o => !o.ok)) {
+      record.failure ??= outcomes.find(o => !o.ok)?.failure ?? null
+      return done()
+    }
     record.votes = outcomes.flatMap((o, index) => o.results.map(r => ({ ...r, family: panel[index].family, model: panel[index].model, effort: panel[index].effort, panel_index: index })))
     for (const vote of record.votes) {
       if (!vote.disputed) continue
@@ -138,7 +161,13 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
       if (decision.kind === 'decider') { pending.push(id); continue }
       if (!decision.dissent) continue
       const original = record.votes.find(v => v.id === id && v.panel_index === decision.dissent.panel_index)
-      original.citations_valid = Boolean(await validateCitations(original, request))
+      try {
+        original.citations_valid = Boolean(await validateCitations(original, request))
+      } catch (error) {
+        original.citations_valid = false
+        record.citation_checks ??= []
+        record.citation_checks.push({ id, panel_index: original.panel_index, valid: false, error: error.message })
+      }
       if (!original.citations_valid) continue
       const material = await sourceMaterial(request, [original])
       const next = { ...request, criteria: [id], schema: judgeResultSchemaFor(SOURCE_AUDIT_RESULT_SCHEMA, [id]),
@@ -182,6 +211,6 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
     record.consensus = record.results.map(({ id, basis, votes }) => ({ id, basis, votes }))
     record.dispute_checks = record.checks.filter(check => check.stage === 'contradiction-check').map(check => ({ ...check, sample: check.panel_index + 1 }))
     record.ok = true
-  } catch (error) { record.error = error.message }
+  } catch (error) { record.error = error.message; record.failure = judgeFailure(error) }
   return done()
 }

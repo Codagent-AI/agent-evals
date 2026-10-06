@@ -145,7 +145,7 @@ export function parseJudgeOutput(
   text,
   expectedIds,
   job,
-  { requireSourceCitations = false, requireSourceCitationsFor = [] } = {},
+  { requireSourceCitations = false, requireSourceCitationsFor = [], preserveLineCitations = false } = {},
 ) {
   let payload
   try {
@@ -200,6 +200,13 @@ export function parseJudgeOutput(
         `malformed criterion result from ${job}: ${result.id} source citation path is too long`,
       )
     }
+    let lineCitations = null
+    if (preserveLineCitations && result.citations !== undefined && !Array.isArray(result.citations)) {
+      throw new JudgeOutputError(`${job} has malformed evidence line citations for ${result.id}`)
+    }
+    if (preserveLineCitations && result.citations?.length) {
+      lineCitations = parseLineCitedOutput(JSON.stringify({ results: [result] }), [result.id], job)[0].citations
+    }
     if (seen.has(result.id)) duplicates.push(result.id)
     // A criterion belonging to another component is out of this job's scope,
     // so it is rejected rather than quietly folded into someone else's score.
@@ -211,7 +218,7 @@ export function parseJudgeOutput(
       evidence: result.evidence.map((item) => bounded(item)),
       ...(citationsRequired
         ? { citations: [...new Set(result.citations.map((item) => item.trim()))] }
-        : {}),
+        : preserveLineCitations ? { citations: lineCitations ?? [] } : {}),
     })
   }
   if (duplicates.length > 0) {
@@ -539,6 +546,7 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
         const output = await invoke(attemptRequest)
         const fallbackIds = request.requireSourceCitationsFor ?? []
         const parsed = parseJudgeOutput(output, attemptRequest.criteria, request.job, {
+          preserveLineCitations: request.line_citations === 'evidence-view',
           requireSourceCitations: request.source_audit === true,
           requireSourceCitationsFor: fallbackIds,
         })
@@ -763,7 +771,7 @@ async function listViewFiles(root) {
 
 // Where line citations must point: the verified neutral source for
 // a source job, the materialized evidence view for an evidence job.
-async function lineCitationInventory(request) {
+export async function lineCitationInventory(request) {
   if (isEvidenceJob(request)) {
     const root = request.input_roots?.evidence ?? null
     return { root, kind: 'evidence view', paths: root ? await listViewFiles(root) : [] }
@@ -907,6 +915,11 @@ async function quoteSpans(results, inventory, job) {
     quoted.set(result.id, spans)
   }
   return quoted
+}
+
+export async function validateLineCitations(result, request) {
+  const parsed = parseLineCitedOutput(JSON.stringify({ results: [result] }), [result.id], request.job)
+  return quoteSpans(parsed, await lineCitationInventory(request), request.job)
 }
 
 export function buildSpanAuditRequest({ request, passes, spans }) {
@@ -1301,6 +1314,11 @@ export async function runTiebreak({ request, criteria, invoke, attempts = JUDGE_
 
 // The closed-world packet a sample's audit saw: the files it cited.
 export async function sourceMaterial(request, results) {
+  if (request.input_roots?.evidence) {
+    const material = []
+    for (const result of results) material.push(...(await validateLineCitations(result, request)).get(result.id))
+    return material
+  }
   const sourceRoot = request.input_roots?.source
   if (!sourceRoot) return []
   const files = []

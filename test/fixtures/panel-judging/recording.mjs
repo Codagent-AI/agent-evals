@@ -45,7 +45,7 @@ export async function capture() {
         rationale: 'the delivered source implements this contract', evidence: ['candidate.txt:1-2'],
         citations: request.judge_stage === 'tiebreak'
           ? [{ path: 'candidate.txt', start_line: 1, end_line: 2 }]
-          : ['candidate.txt'],
+          : request.line_citations === 'evidence-view' ? [] : ['candidate.txt'],
       })) })
     },
   })

@@ -25,7 +25,7 @@ test('INT-009: recorded robust jobs reproduce identical results, consensus, hash
     },
     invoke: async request => JSON.stringify({ results: request.criteria.map(id => request.audit_stage
       ? { id, classification: 'confirmed', rationale: 'recorded packet', evidence: ['candidate.txt'] }
-      : { id, verdict: 'pass', rationale: 'recorded packet', evidence: ['candidate.txt'], citations: ['candidate.txt'] }) }),
+      : { id, verdict: 'pass', rationale: 'recorded packet', evidence: ['candidate.txt'], citations: request.line_citations === 'evidence-view' ? [] : ['candidate.txt'] }) }),
   })
   assert.deepEqual(replay.reused_jobs, [])
   assert.deepEqual(replay.failed_jobs, [])

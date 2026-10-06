@@ -9,7 +9,7 @@ async function fixture(t, events, options = {}) {
   const root = await mkdtemp(join(tmpdir(), 'claude-judge-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   const command = join(root, 'claude')
-  await writeFile(command, `#!/usr/bin/env node\nimport fs from 'node:fs';\nconst root = ${JSON.stringify(root)};\nlet n = Number(fs.existsSync(root+'/count') ? fs.readFileSync(root+'/count','utf8') : 0);\nfs.writeFileSync(root+'/count',String(n+1));\nfs.writeFileSync(root+'/args',JSON.stringify({args:process.argv.slice(2),cwd:process.cwd(),env:process.env}));\nprocess.stdin.resume();\nprocess.stdin.on('end',()=>process.stdout.write(${JSON.stringify(events)}[Math.min(n,${events.length - 1})].map(e=>JSON.stringify(e)).join('\\n')+'\\n'));\n`, { mode: 0o755 })
+  await writeFile(command, `#!/usr/bin/env node\nimport fs from 'node:fs';\nconst root = ${JSON.stringify(root)};\nlet n = Number(fs.existsSync(root+'/count') ? fs.readFileSync(root+'/count','utf8') : 0);\nfs.writeFileSync(root+'/count',String(n+1));\nfs.writeFileSync(root+'/args',JSON.stringify({args:process.argv.slice(2),cwd:process.cwd(),env:process.env}));\nprocess.stdin.resume();\nprocess.stdin.on('end',()=>{process.stderr.write(${JSON.stringify(options.stderr ?? '')});process.stdout.write(${JSON.stringify(events)}[Math.min(n,${events.length - 1})].map(e=>JSON.stringify(e)).join('\\n')+'\\n');});\n`, { mode: 0o755 })
   const invoke = createClaudeJudgeInvoker({ runDir: root, command, allowedRoots: [root], ...options })
   return { root, invoke, request: { job: 'test', schema: {}, authority: { model: 'sonnet', effort: 'medium' }, prompt: 'packet', cwd: root } }
 }
@@ -104,4 +104,31 @@ for (const [label, error, waits] of [
     await assert.rejects(invoke(request), e => e.owner === 'evaluation-harness' && e.resumable === true)
     assert.deepEqual(slept, [])
   }
+})
+
+for (const text of ['quota rate limit 429', 'schema is invalid', 'identifier 4290']) test(`successful answer is not a CLI failure: ${text}`, async t => {
+  const { invoke, request } = await fixture(t, [[success[0], { ...success[1], result: text }]])
+  assert.equal(await invoke(request), '{"results":[]}')
+})
+
+test('repeated identified subscription limits stop after bounded waits', async t => {
+  let waits = 0
+  const { root, invoke, request } = await fixture(t, [[{ type: 'result', is_error: true, errors: ['hit your limit'] }]], {
+    detectQuotaReset: () => ({ wait_ms: 1000 }),
+    waitForQuotaReset: async () => { if (++waits > 4) throw new Error('unbounded quota retry'); return { waited: true } },
+  })
+  await assert.rejects(invoke(request), e => e.code === 'claude-quota' && e.resumable === true)
+  assert.equal(waits, 2)
+  assert.equal(await readFile(join(root, 'count'), 'utf8'), '3')
+})
+
+
+test('successful stderr diagnostics do not trigger schema or quota recovery', async t => {
+  const { invoke, request } = await fixture(t, [success], { stderr: 'quota 429 schema invalid warning' })
+  assert.equal(await invoke(request), '{"results":[]}')
+})
+
+test('a numeric error containing 429 is not a rate-limit signal', async t => {
+  const { invoke, request } = await fixture(t, [[{ type: 'result', is_error: true, errors: ['error identifier 4290'] }]])
+  await assert.rejects(invoke(request), error => error.code !== 'claude-quota')
 })

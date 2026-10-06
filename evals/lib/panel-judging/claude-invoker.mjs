@@ -44,6 +44,7 @@ export function createClaudeJudgeInvoker({
       '--setting-sources', '', '--strict-mcp-config', '--disable-slash-commands', '--no-session-persistence',
       '--json-schema', JSON.stringify(request.schema), '--output-format', 'stream-json', '--verbose']
     let capacityWaits = 0
+    let quotaWaits = 0
     try {
       for (let attempt = 1; attempt <= 2; attempt++) {
         const files = await openAttemptFiles(openFile, runtimeDir, stem)
@@ -89,8 +90,9 @@ export function createClaudeJudgeInvoker({
           execution = await runAttempt({ spawnImpl, command, args, options: { cwd, env: judgeEnvironment(env) },
             prompt: request.prompt, files, timeoutMs, killGraceMs, maxStdoutBytes, label: `Claude judge ${request.job}`, observeLine, persistLine })
         } finally { await Promise.all([files.events.close(), files.stderr.close()]) }
-        const diagnostic = [final?.errors, final?.result, final?.subtype?.startsWith('error') ? final.subtype : null, execution.stderr, execution.error?.message].flat().filter(Boolean).join('\n')
+        const diagnostic = [final?.errors, !final?.structured_output ? final?.result : null, final?.subtype?.startsWith('error') ? final.subtype : null, execution.stderr, execution.error?.message].flat().filter(Boolean).join('\n')
         const rejected = !modelOutput && (final?.is_error || final?.subtype?.startsWith('error') || execution.status !== 0 || !final?.structured_output && diagnostic.length > 0)
+        const failed = Boolean(rejected || final?.is_error || final?.subtype?.startsWith('error') || execution.status !== 0 || execution.error)
         const raw = final?.usage
         const categories = { input_tokens: 'input', cache_read_input_tokens: 'cached_input', cache_creation_input_tokens: 'cache_write', output_tokens: 'output' }
         const tokens = raw ? Object.fromEntries(Object.entries(categories).flatMap(([from, to]) => Number.isFinite(raw[from]) ? [[to, raw[from]]] : []))
@@ -106,16 +108,16 @@ export function createClaudeJudgeInvoker({
         await appendFile(usagePath, `${JSON.stringify(entry)}\n`)
         if (execution.writeError) throw harnessError(`Claude judge could not persist attempt evidence: ${execution.writeError.error.message}`)
         if (execution.outputLimitExceeded) throw harnessError('Claude judge exceeded stdout limit')
-        if (/invalid_json_schema|invalid (?:json )?schema|schema.*(?:invalid|reject|validation failed|not supported)/i.test(diagnostic)) throw harnessError(`Claude judge output schema rejected: ${diagnostic}`, { code: 'judge-schema-invalid', retryable: false, resumable: false })
+        if (failed && /invalid_json_schema|invalid (?:json )?schema|schema.*(?:invalid|reject|validation failed|not supported)/i.test(diagnostic)) throw harnessError(`Claude judge output schema rejected: ${diagnostic}`, { code: 'judge-schema-invalid', retryable: false, resumable: false })
         if (rejected && /at capacity/i.test(diagnostic) && capacityWaits < CAPACITY_RETRIES) {
           await sleep(CAPACITY_BASE_DELAY_MS * 2 ** capacityWaits++)
           attempt--
           continue
         }
-        if (/hit your.*limit|usage limit|rate.?limit|quota|429|organization.*limit/i.test(diagnostic)) {
+        if (failed && /hit your.*limit|usage limit|rate.?limit|quota|\b429\b|organization.*limit/i.test(diagnostic)) {
           const audit = `${now().toISOString()} {"cli":"claude","provider":"anthropic"} ${diagnostic.replace(/\n/g, ' ')}`
           const reset = detectQuotaReset({ audit, now: now() })
-          if (reset && reset.wait_ms > 0 && reset.wait_ms <= 6 * 60 * 60 * 1000 + 60000 && (await waitForQuotaReset({ audit, now })).waited) { attempt--; continue }
+          if (quotaWaits < 2 && reset && reset.wait_ms > 0 && reset.wait_ms <= 6 * 60 * 60 * 1000 + 60000 && (await waitForQuotaReset({ audit, now })).waited) { quotaWaits++; attempt--; continue }
           throw harnessError(`Claude judge limit requires resume: ${diagnostic}`, { code: 'claude-quota', resumable: true, retryable: false })
         }
         if (invalidTool) throw harnessError(`Claude judge used forbidden tool: ${invalidTool}`)

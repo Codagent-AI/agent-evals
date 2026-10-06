@@ -1544,11 +1544,11 @@ export async function runEvaluation({
             })
             await saveCheckpoint(checkpointPath, checkpoint)
           },
-          failJob: async ({ id, attempts }) => {
+          failJob: async ({ id, attempts, failure }) => {
             checkpoint = failUnit(checkpoint, {
               phase: 'product-judging',
               unit: id,
-              error: attempts.at(-1)?.error ?? 'judge output exhausted',
+              error: failure?.message ?? attempts.at(-1)?.error ?? 'judge output exhausted',
             })
             await saveCheckpoint(checkpointPath, checkpoint)
           },
@@ -1647,6 +1647,14 @@ export async function runEvaluation({
           ].join(', ')}`,
         )
         error.code = 'judge-output'
+        const failures = Object.values(record.judging?.failures ?? {})
+        const failure = failures.find(failure => failure.code === 'judge-schema-invalid')
+          ?? failures.find(failure => failure.code === 'claude-quota')
+        if (failure) {
+          const { message, ...metadata } = failure
+          Object.assign(error, metadata)
+          error.message += `: ${message}`
+        }
         throw error
       }
       return [{

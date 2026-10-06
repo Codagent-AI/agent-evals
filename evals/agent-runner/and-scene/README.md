@@ -62,7 +62,9 @@ and earlier results stay published. Acceptance `E2E-004` pairs baseline
 rescores under this panel.
 
 Claude source judges use only Read/Grep/Glob inside the evaluation sandbox.
-Evidence and closed-world packets are inlined with no tools. Every judging
+Evidence and closed-world packets are inlined with no tools. Evidence panel
+votes may back a dissent with validated spans in the materialized `packet.txt`,
+which contains the exact inlined packet. Every judging
 run and rescore implies `--mount-claude-auth` and requires readable Claude
 credentials; host rescoring uses the same restricted invoker against neutral
 inputs. Browser second opinions, pricing search, and other single-purpose
@@ -77,7 +79,9 @@ profile too.
 Capacity rejections before model output record zero tokens and back off without
 spending a judge attempt. Schema rejection fails fast. Identified Claude
 subscription limits with an explicit UTC reset within six hours wait and
-retry; other limits remain resumable harness failures.
+retry at most twice per invocation; repeated or other limits remain resumable
+harness failures. Quota and schema error metadata survive into saved job and
+phase outcomes.
 
 `rubric-history.json` records the content hash of every automated rubric
 version; a test fails when the rubric changes without a new version.

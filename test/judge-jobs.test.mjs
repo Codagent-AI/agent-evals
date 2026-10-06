@@ -41,7 +41,7 @@ function judgeOutput(ids, overrides = {}) {
       verdict: 'pass',
       rationale: 'the delivered source implements this contract',
       evidence: ['src/presentation-kit/Scene.tsx:42'],
-      citations: ['src/presentation-kit/Scene.tsx'],
+      citations: ['testing-evidence', 'assumption-handling'].some(job => criteriaForJob(automated, job).includes(id)) ? [] : ['src/presentation-kit/Scene.tsx'],
     })),
     ...overrides,
   })
@@ -1801,4 +1801,69 @@ test('a saved judge record and the judging result keep every dispute\'s check', 
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+for (const job of ['testing-evidence', 'assumption-handling']) test(`evidence-view backed dissent reaches targeted check: ${job}`, async t => {
+  const root = await mkdtemp(join(tmpdir(), 'evidence-dissent-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  await writeFile(join(root, 'packet.txt'), 'candidate exercised the requirement\n')
+  const checks = []
+  const outcome = await runProductJudging({ rubrics, authority,
+    evidenceViews: { [job]: { root, packet: 'candidate exercised the requirement\n' } },
+    invoke: async request => {
+      if (request.audit_stage === 'dissent-check') {
+        checks.push(request)
+        assert.match(request.prompt, /candidate exercised the requirement/)
+        assert.match(request.prompt, /\"line\":1,\"text\":\"candidate exercised the requirement\"/)
+        return auditOutput(request.criteria)
+      }
+      const dissent = request.job === job && request.judge_sample === 3
+      return JSON.stringify({ results: request.criteria.map(id => ({ id, verdict: request.job !== job || dissent ? 'pass' : 'fail',
+        rationale: 'the packet proves the criterion', evidence: ['packet.txt'],
+        ...(request.job === job ? { citations: dissent ? [{ path: 'packet.txt', start_line: 1, end_line: 1 }] : [] } : {}),
+      })) })
+    },
+  })
+  assert.deepEqual(outcome.failed_jobs, [])
+  assert.equal(checks.length, criteriaForJob(automated, job).length)
+  assert.ok(outcome.judges[job].every(r => r.basis === 'checked-dissent-pass'))
+})
+
+test('unexpected panel setup failure stays local and preserves its original cause', async () => {
+  const saved = []
+  const failed = []
+  const outcome = await runProductJudging({ rubrics, authority,
+    startJob: async ({ id }) => { if (id === 'scene-kit') throw new Error('panel setup unavailable') },
+    failJob: async record => failed.push(record), saveJob: async record => saved.push(record),
+    invoke: async ({ criteria }) => judgeOutput(criteria),
+  })
+  assert.deepEqual(outcome.failed_jobs, ['scene-kit'])
+  assert.match(failed[0].attempts.at(-1).error, /panel setup unavailable/)
+  assert.equal(saved.length, PRODUCT_JUDGE_JOB_IDS.length - 1)
+})
+
+test('product judging retains schema rejection and quota recovery metadata', async () => {
+  const outcome = await runProductJudging({ rubrics, authority, invoke: async request => {
+    if (request.job === 'scene-kit') throw Object.assign(new Error('invalid_json_schema'), { code: 'judge-schema-invalid', retryable: false, resumable: false, owner: 'evaluation-harness' })
+    return judgeOutput(request.criteria)
+  } })
+  assert.equal(outcome.failures['scene-kit'].code, 'judge-schema-invalid')
+  assert.equal(outcome.failures['scene-kit'].resumable, false)
+})
+
+import { validateLineCitations } from '../evals/lib/panel-judging/protocol.mjs'
+for (const [name, citations] of [
+  ['outside inventory', [{ path: '../outside.txt', start_line: 1, end_line: 1 }]],
+  ['outside file', [{ path: 'packet.txt', start_line: 1, end_line: 300 }]],
+  ['200-line span', [{ path: 'packet.txt', start_line: 1, end_line: 200 }]],
+  ['too many spans', Array.from({ length: 13 }, () => ({ path: 'packet.txt', start_line: 1, end_line: 1 }))],
+  ['symlink', [{ path: 'linked.txt', start_line: 1, end_line: 1 }]],
+]) test(`evidence citation validation rejects ${name}`, async t => {
+  const root = await mkdtemp(join(tmpdir(), 'evidence-span-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  await writeFile(join(root, 'packet.txt'), 'evidence\n'.repeat(250))
+  await symlink(join(root, 'packet.txt'), join(root, 'linked.txt'))
+  await assert.rejects(validateLineCitations({ id: 'x', verdict: 'pass', rationale: 'reason', evidence: ['packet'], citations }, {
+    job: 'testing-evidence', line_citations: 'evidence-view', input_roots: { evidence: root },
+  }))
 })

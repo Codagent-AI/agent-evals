@@ -109,7 +109,7 @@ async function sourceSetup(t, votes, behavior = {}) {
     } } })
   options.panel = options.panel.map((member, i) => ({ ...member, invoke: async next => next.audit_stage
     ? auditResult(behavior.sourceAudit && i === 0 ? behavior.sourceAudit : 'confirmed')
-    : JSON.stringify({ results: [result(votes[i])] }) }))
+    : JSON.stringify({ results: [result(votes[i], next.line_citations === 'evidence-view' ? { citations: [] } : {})] }) }))
   return { options, seen }
 }
 for (const check of ['confirmed', 'contradicted', 'insufficient']) test(`source audit contradiction ${check}`, async t => {
@@ -181,4 +181,22 @@ test('a confirmed source contradiction supplies a turned fail vote the decider m
   assert.equal(outcome.ok, true)
   assert.equal(outcome.results[0].basis, 'decider-fail')
   assert.match(seen.find(request => request.usage_phase === 'decider').prompt, /"verdict":"fail"/)
+})
+
+for (const stage of ['panel', 'audited-panel', 'decider', 'span-audit']) test(`quota metadata survives ${stage} failure`, async t => {
+  const error = Object.assign(new Error('subscription quota stopped'), { code: 'claude-quota', resumable: true, retryable: false, owner: 'evaluation-harness' })
+  const { options } = await sourceSetup(t, ['fail', 'pass', 'pass'])
+  if (stage === 'panel') { options.audit = null; options.panel[0].invoke = async () => { throw error } }
+  if (stage === 'audited-panel') options.panel[0].invoke = async () => { throw error }
+  if (stage === 'decider') options.decider.invoke = async () => { throw error }
+  if (stage === 'span-audit') {
+    const invoke = options.decider.invoke
+    options.decider.invoke = async request => { if (request.audit_stage) throw error; return invoke(request) }
+  }
+  const outcome = await runPanelJob(options)
+  assert.equal(outcome.ok, false)
+  assert.equal(outcome.failure.code, 'claude-quota')
+  assert.equal(outcome.failure.resumable, true)
+  assert.equal(outcome.record.failure.owner, 'evaluation-harness')
+  assert.match(outcome.failure.message, /subscription quota stopped/)
 })
