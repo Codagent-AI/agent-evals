@@ -126,9 +126,9 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
   }
 })
 
-test('rubric 12.1 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
+test('rubric 12.2 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '12.1.0')
+  assert.equal(rubric.version, '12.2.0')
   assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(
@@ -607,4 +607,16 @@ test('rubric 12.0 defines a missing sample and what proves a compile-time claim'
   // Sanity rescore at 12.0.0: samples failed honest-record because uniform
   // scaling was observed only as the scene fitting the viewport.
   assert.match(definition('testing-evidence-complete-honest-record'), /internal properties a viewer cannot see[^.]*need no separate observation/)
+})
+
+// Round-5 audit: rep-2-a failed skill-failures-fixed-before-success on a
+// strict reading that every check type must be named.
+test('rubric 12.2 credits a general fix-and-rerun gate for skill failures', async () => {
+  const rubric = await automatedRubric()
+  const guidance = rubric.components.flatMap(({ subcomponents }) => subcomponents)
+    .find(({ id }) => id === 'skill-self-verification').review_guidance.join('\n')
+  assert.match(guidance, /credit a general instruction to fix failures and re-run the checks/)
+  assert.match(guidance, /need not name each check type/)
+  assert.match(guidance, /allow completing with a failing check/)
+  assert.match(guidance, /pass\/fail field in a completion report format is not a permission/)
 })

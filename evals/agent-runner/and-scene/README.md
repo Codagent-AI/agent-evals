@@ -55,7 +55,7 @@ that noted; `contradicted` is replicated by a second independent audit, and the
 majority pass is withdrawn only when an independent contradiction check
 confirms that same stated contradiction; the check judges the first audit's
 reason against the quoted lines and the rubric rather than auditing afresh, and
-both are recorded. So every verdict rests on two agreeing signals: a consensus,
+both are recorded; each disputed vote's check is kept as `dispute_checks` in `phases/judges/<job>.json`, `phases/product-judging.json`, and the result's `judging`. So every verdict rests on two agreeing signals: a consensus,
 a majority of votes, or an audit's contradiction confirmed by a check. Every
 judge, audit, and check prompt also carries one shared rule: judge only
 behavior the cited source and recorded evidence establish, never a

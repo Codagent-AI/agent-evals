@@ -1051,6 +1051,7 @@ export async function runProductJudging({
   const reusedJobs = []
   const consensus = {}
   const tiebreaks = {}
+  const disputeChecks = {}
 
   // Sequential by design: the jobs share one judge authority and one rate
   // budget, and a component-local failure must be attributable to its job.
@@ -1088,6 +1089,7 @@ export async function runProductJudging({
         judges[id] = verified
         consensus[id] = reproduced.consensus
         tiebreaks[id] = cached.tiebreak ?? null
+        disputeChecks[id] = cached.dispute_checks ?? []
         attempts[id] = cached.attempts ?? []
         auditAttempts[id] = cached.audit_attempts ?? []
         audits[id] = cached.audit_results ?? null
@@ -1111,6 +1113,7 @@ export async function runProductJudging({
     audits[id] = outcome.audit_results
     consensus[id] = outcome.consensus
     tiebreaks[id] = outcome.tiebreak
+    disputeChecks[id] = outcome.dispute_checks ?? []
     retries[id] = Math.max(0, outcome.attempts.length - JUDGE_SAMPLES)
     if (!outcome.ok) {
       failedJobs.push(id)
@@ -1137,6 +1140,7 @@ export async function runProductJudging({
       samples: outcome.samples,
       consensus: outcome.consensus,
       tiebreak: outcome.tiebreak,
+      dispute_checks: outcome.dispute_checks ?? [],
       authority,
     })
   }
@@ -1156,6 +1160,7 @@ export async function runProductJudging({
     judge_samples: JUDGE_SAMPLES,
     consensus,
     tiebreaks,
+    dispute_checks: disputeChecks,
     authority,
   }
 }

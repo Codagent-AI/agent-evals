@@ -1750,3 +1750,50 @@ test('a third-sample citation prefixed with the neutral source directory resolve
     await rm(tree.root, { recursive: true, force: true })
   }
 })
+
+// Round-5 audit: the saved judge record dropped dispute_checks, so a reader
+// could not see why a disputed vote stood or turned.
+test('a saved judge record and the judging result keep every dispute\'s check', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-dispute-record-'))
+  await mkdir(join(root, 'source/src'), { recursive: true })
+  await writeFile(join(root, 'source/src/nav.ts'), NAV_SOURCE)
+  const neutral = { root, source_root: join(root, 'source'), audit_root: root, requirements_root: join(root, 'r'),
+    manifest: { entries: [{ namespace: 'neutral-source', path: 'source/src/nav.ts' }] } }
+  const disputedId = 'navigation-touch-swipe'
+  const saved = []
+  try {
+    const outcome = await runProductJudging({
+      rubrics, authority, neutral,
+      saveJob: async (record) => saved.push(record),
+      invoke: async (request) => {
+        if (request.audit_stage === 'contradiction-check') {
+          return JSON.stringify({ results: request.criteria.map((id) => ({ id, classification: 'contradicted',
+            rationale: 'the stated reason does not hold under the guidance', evidence: ['src/nav.ts:3'] })) })
+        }
+        if (request.audit_stage === 'source-pass-audit') {
+          return auditOutput(request.criteria, request.judge_sample === 2 && request.job === 'scene-kit'
+            ? { [disputedId]: 'contradicted' } : {})
+        }
+        return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
+          rationale: 'implemented', evidence: ['src/nav.ts'], citations: ['src/nav.ts'] })) })
+      },
+    })
+    const scene = saved.find(({ id }) => id === 'scene-kit')
+    assert.deepEqual(scene.dispute_checks.map(({ id, sample, classification }) => ({ id, sample, classification })),
+      [{ id: disputedId, sample: 2, classification: 'contradicted' }])
+    assert.match(scene.dispute_checks[0].rationale, /does not hold/)
+    assert.deepEqual(outcome.dispute_checks['scene-kit'], scene.dispute_checks)
+    assert.equal(scene.consensus.find(({ id }) => id === disputedId).basis, 'consensus-pass')
+
+    // A reused job keeps its checks too.
+    const reused = await runProductJudging({
+      rubrics, authority, neutral,
+      loadJob: async ({ id }) => saved.find((record) => record.id === id) ?? null,
+      invoke: async () => { throw new Error('a valid cached job is not re-judged') },
+    })
+    assert.ok(reused.reused_jobs.includes('scene-kit'))
+    assert.deepEqual(reused.dispute_checks['scene-kit'], scene.dispute_checks)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
