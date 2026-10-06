@@ -20,6 +20,13 @@
       "hashes": {
         "1": "7db6d596c9b0153975d023cd81c847e27bb157c7eaf656e330b65cf3cbb56306"
       }
+    },
+    "simulated-user-policy": {
+      "path": "hidden/simulated-user-policy.md",
+      "version": 1,
+      "hashes": {
+        "1": "dd144b83082dd1fc27c619aafbb412aec233b159bc2cbbfef26a5ecd64bf8d50"
+      }
     }
   }
 }

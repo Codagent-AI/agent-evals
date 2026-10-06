@@ -115,6 +115,7 @@ test('version checker rejects changed file content and self-consistent hash rewr
   for (const [name, path, text] of [
     ['inventory', 'hidden/inventory.json', '{"inventory_version":1}'],
     ['starting-prompt', 'hidden/starting-prompt.md', 'Prompt'],
+    ['simulated-user-policy', 'hidden/simulated-user-policy.md', 'Policy'],
     ['contamination-patterns', 'contamination-patterns.json', '{"version":1}'],
   ]) {
     await writeFile(join(root, path), text)
@@ -141,7 +142,7 @@ async function versionRepository(t) {
   const root = await mkdtemp(join(tmpdir(), 'define-history-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   await mkdir(join(root, 'hidden'))
-  for (const path of ['versions.json', 'contamination-patterns.json', 'hidden/inventory.json', 'hidden/starting-prompt.md']) await cp(join(suite, path), join(root, path))
+  for (const path of ['versions.json', 'contamination-patterns.json', 'hidden/inventory.json', 'hidden/starting-prompt.md', 'hidden/simulated-user-policy.md']) await cp(join(suite, path), join(root, path))
   const git = (...args) => execFileSync('git', ['-C', root, '-c', 'core.hooksPath=/dev/null', '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
   git('init')
   return { root, git }
