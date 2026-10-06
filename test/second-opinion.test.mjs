@@ -48,7 +48,8 @@ test('malformed verifier output exhausts retries without silently upholding', as
   let calls = 0
   const outcome = await runSecondOpinion({ request: { target: { kind: 'criterion', id: 'demo-supported-navigation' } },
     attempts: 2, invoke: async () => { calls += 1; return '{broken' } })
-  assert.equal(calls, 2)
+  // Two independent verifier samples, two attempts each.
+  assert.equal(calls, 4)
   assert.equal(outcome.ok, false)
   assert.match(outcome.reason, /second-opinion output invalid:/)
   assert.match(outcome.reason, /JSON|Unexpected|property/i)
@@ -97,7 +98,7 @@ test('verifier invocation failure retries and keeps its cause when exhausted', a
   let calls = 0
   const outcome = await runSecondOpinion({ request: { target: { kind: 'criterion', id: 'demo-supported-navigation' } },
     attempts: 3, invoke: async () => { calls += 1; throw new Error('judge transport closed') } })
-  assert.equal(calls, 3)
+  assert.equal(calls, 6)
   assert.equal(outcome.ok, false)
   assert.match(outcome.reason, /judge transport closed/)
 })
@@ -116,7 +117,8 @@ test('audit invocation failure retries and keeps its cause when exhausted', asyn
     if (call.audit_stage) throw 'audit transport closed'
     return JSON.stringify(answer)
   } })
-  assert.equal(calls, 4)
+  // Two verifier samples, then three audit attempts for the first overturn.
+  assert.equal(calls, 5)
   assert.equal(outcome.ok, false)
   assert.match(outcome.reason, /audit transport closed/)
 })
@@ -312,10 +314,11 @@ test('the harness allowlist refuses trivial replays and replays outside the fail
       observations: observed({ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 1 }) }) })
   assert.equal(moved.decision, 'overturn')
   assert.equal(moved.verdict, 'pass')
-  assert.equal(audits.length, 1)
-  const packet = JSON.parse(audits[0].prompt.split('\n').at(-1))
-  assert.deepEqual(packet.replay.plan, { actions: swipe, expect: { type: 'step-index-changes' } })
-  assert.equal(packet.replay.observation.observations.at(-1).stepIndex, 1)
+  // The admitted real-browser replay decides; no model audit follows it.
+  assert.equal(audits.length, 0)
+  assert.equal(moved.confirmed_by, 'browser-replay')
+  assert.deepEqual(moved.replay.actions, swipe)
+  assert.equal(moved.replay.observations.at(-1).stepIndex, 1)
 })
 
 test('a target with no replay allowlist cannot be overturned by replay', async () => {
@@ -418,7 +421,8 @@ test('a non-retryable verifier error is not retried', async () => {
     },
   })
   assert.equal(outcome.ok, false)
-  assert.equal(calls, 1)
+  // Each verifier sample is tried once and never retried.
+  assert.equal(calls, 2)
   assert.match(outcome.reason, /invalid_json_schema/)
 })
 
@@ -509,4 +513,55 @@ test('a verifier citation prefixed with the neutral source directory resolves to
   assert.equal(replays, 1)
   assert.equal(outcome.decision, 'overturn')
   assert.equal(outcome.citations[0].path, 'src/nav.ts')
+})
+
+// Round 4: the same planted evidence was overturned in one run and upheld in
+// another, because one verifier call decided whether a replay ran at all.
+test('two verifier samples run and either admissible replay is tried, the real-browser replay deciding', async () => {
+  const request = await replayRequest('demo-supported-navigation', 'keyboard 1/0, swipe 1/0, direct jump 0')
+  const plan = { actions: [{ type: 'navigate', path: DEMO_PATH }, { type: 'click', selector: '[data-step="5"]' }],
+    expect: { type: 'step-index-equals', value: 4 } }
+  const calls = []
+  let replays = 0
+  const outcome = await runSecondOpinion({ request,
+    invoke: async (call) => {
+      calls.push(call)
+      if (call.audit_stage) throw new Error('a confirmed browser replay needs no model audit')
+      return JSON.stringify(call.verifier_sample === 1 ? uphold : overturnWith(plan))
+    },
+    replay: async () => { replays += 1; return { passed: true, errors: [], trace: plan.actions,
+      observations: observed({ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 4 }) } } })
+  assert.deepEqual(calls.map(({ verifier_sample: sample }) => sample).sort(), [1, 2])
+  assert.equal(replays, 1)
+  assert.equal(outcome.decision, 'overturn')
+  assert.equal(outcome.verdict, 'pass')
+  assert.equal(outcome.replay.observations.at(-1).stepIndex, 4)
+  assert.deepEqual(outcome.samples.map(({ sample, decision }) => [sample, decision]), [[1, 'uphold'], [2, 'overturn']])
+})
+
+test('when neither verifier sample proposes an admissible replay the failure stands', async () => {
+  const request = await replayRequest('demo-supported-navigation', 'keyboard 1/0, swipe 1/0, direct jump 0')
+  let replays = 0
+  const outcome = await runSecondOpinion({ request,
+    invoke: async () => JSON.stringify(uphold),
+    replay: async () => { replays += 1; return { passed: true, observations: [] } } })
+  assert.equal(replays, 0)
+  assert.equal(outcome.decision, 'uphold')
+  assert.equal(outcome.verdict, 'fail')
+  assert.equal(outcome.samples.length, 2)
+})
+
+test('a second sample\'s replay still runs when the first sample\'s replay does not confirm', async () => {
+  const request = await replayRequest('demo-supported-navigation', 'keyboard 1/0, swipe 1/0, direct jump 0')
+  const wrong = { actions: [{ type: 'navigate', path: DEMO_PATH }, { type: 'click', selector: '#missing' }],
+    expect: { type: 'step-index-equals', value: 4 } }
+  const right = { ...wrong, actions: [wrong.actions[0], { type: 'click', selector: '[data-step="5"]' }] }
+  const outcome = await runSecondOpinion({ request,
+    invoke: async (call) => JSON.stringify(overturnWith(call.verifier_sample === 1 ? wrong : right)),
+    replay: async (plan) => (plan.actions[1].selector === '#missing'
+      ? { passed: false, observations: observed({ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 0 }), errors: [], trace: [] }
+      : { passed: true, observations: observed({ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 4 }), errors: [], trace: [] }) })
+  assert.equal(outcome.decision, 'overturn')
+  assert.equal(outcome.samples[0].decision, 'overturn-rejected')
+  assert.equal(outcome.samples[1].decision, 'overturn')
 })

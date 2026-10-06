@@ -450,8 +450,11 @@ export function buildSpanAuditRequest({ request, answer, spans, logSpans, replay
   }
 }
 
-export async function runSecondOpinion({ request, invoke, replay, attempts = JUDGE_ATTEMPTS }) {
-  let answer
+// Two independent verifier samples, so one model call never decides whether a
+// failure gets a replay. Each sample is retried for malformed output.
+export const VERIFIER_SAMPLES = 2
+
+async function verifierSample({ request, invoke, attempts }) {
   let failureReason = 'second-opinion output exhausted'
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     let output
@@ -460,11 +463,61 @@ export async function runSecondOpinion({ request, invoke, replay, attempts = JUD
       if (error?.retryable === false) break
       continue
     }
-    try { answer = parseAnswer(output); break } catch (error) {
+    try { return { answer: parseAnswer(output) } } catch (error) {
       failureReason = `second-opinion output invalid: ${error instanceof Error ? error.message : String(error)}`
     }
   }
-  if (!answer) return { ok: false, reason: failureReason }
+  return { reason: failureReason }
+}
+
+const sampleSummary = (sample, outcome) => ({
+  sample,
+  decision: outcome.decision,
+  rationale: outcome.rationale,
+  mismeasured_step: outcome.mismeasured_step,
+  measurement_fault: outcome.measurement_fault,
+  replay: outcome.replay ?? null,
+  ...(outcome.rejection_reason ? { rejection_reason: outcome.rejection_reason } : {}),
+  ...(outcome.audit ? { audit: outcome.audit } : {}),
+})
+
+// Each sample's overturn is tried in turn; the first one confirmed decides.
+// For a browser-derived failure the admitted real-browser replay decides. A
+// failure no sample overturns stands. A harness fault leaves the opinion
+// pending, as before.
+export async function runSecondOpinion({ request, invoke, replay, attempts = JUDGE_ATTEMPTS, samples = VERIFIER_SAMPLES }) {
+  const drawn = await Promise.all(Array.from({ length: samples }, (_, index) => verifierSample({
+    request: { ...request, verifier_sample: index + 1 }, invoke, attempts })))
+  const missing = drawn.find(({ answer }) => !answer)
+  if (missing) return { ok: false, reason: missing.reason }
+  const outcomes = []
+  const replayed = new Map()
+  for (const [index, { answer }] of drawn.entries()) {
+    const key = JSON.stringify(answer.replay ?? null)
+    const outcome = answer.decision !== 'uphold' && answer.replay && replayed.has(key)
+      ? { ...replayed.get(key), rationale: answer.rationale, mismeasured_step: answer.mismeasured_step,
+          measurement_fault: answer.measurement_fault }
+      : await judgeAnswer({ answer, request, invoke, replay, attempts })
+    if (!outcome.ok) return outcome
+    if (answer.replay) replayed.set(key, outcome)
+    outcomes.push({ sample: index + 1, outcome })
+    if (outcome.decision === 'overturn') break
+  }
+  const decisive = outcomes.find(({ outcome }) => outcome.decision === 'overturn')
+    ?? outcomes.find(({ outcome }) => outcome.decision === 'overturn-rejected')
+    ?? outcomes[0]
+  const recorded = drawn.map(({ answer }, index) => {
+    const found = outcomes.find(({ sample }) => sample === index + 1)
+    return found ? sampleSummary(index + 1, found.outcome)
+      : sampleSummary(index + 1, { decision: answer.decision === 'uphold' ? 'uphold' : 'not-needed',
+        rationale: answer.rationale, mismeasured_step: answer.mismeasured_step,
+        measurement_fault: answer.measurement_fault, replay: answer.replay })
+  })
+  return { ...decisive.outcome, decided_by_sample: decisive.sample, samples: recorded }
+}
+
+async function judgeAnswer({ answer, request, invoke, replay, attempts }) {
+  let failureReason
   const base = { ok: true, raw_verdict: 'fail', rationale: answer.rationale,
     mismeasured_step: answer.mismeasured_step, measurement_fault: answer.measurement_fault,
     citations: answer.citations, log_citations: answer.log_citations,
@@ -482,7 +535,6 @@ export async function runSecondOpinion({ request, invoke, replay, attempts = JUD
   // A browser-derived overturn is confirmed only by a harness replay inside
   // the target's allowlist. The replay runs before the audit so the auditor
   // sees what the browser actually did.
-  let replayEvidence = null
   if (request.browser_derived ?? request.target.kind === 'criterion') {
     const policy = replayPolicy(request)
     if (!answer.replay) return { ...base, decision: 'overturn-rejected', verdict: 'fail',
@@ -510,12 +562,14 @@ export async function runSecondOpinion({ request, invoke, replay, attempts = JUD
     if (!observed.passed) return rejected('browser replay did not confirm the passing behavior')
     const evidenceRefusal = replayEvidenceRefusal(policy, answer.replay, observed)
     if (evidenceRefusal) return rejected(evidenceRefusal)
-    replayEvidence = { plan: answer.replay, observation: { passed: observed.passed,
-      observations: observed.observations, trace: observed.trace ?? [], errors: observed.errors ?? [] } }
     base.replay = replayRecord
+    // The admitted replay reproduced the failing input in a real browser and
+    // observed the passing behavior; with mechanically valid source spans it
+    // decides the overturn without another model call.
+    return { ...base, decision: 'overturn', verdict: 'pass', confirmed_by: 'browser-replay' }
   }
   let auditRequest
-  try { auditRequest = buildSpanAuditRequest({ request, answer, spans, logSpans, replay: replayEvidence }) } catch (error) {
+  try { auditRequest = buildSpanAuditRequest({ request, answer, spans, logSpans }) } catch (error) {
     return { ...base, decision: 'overturn-rejected', verdict: 'fail', rejection_reason: error.message }
   }
   let audit

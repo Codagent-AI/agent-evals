@@ -2,23 +2,29 @@
 
 ## Second opinions on failures
 
-Failed deterministic browser criteria and failed hard gates receive a verifier
-opinion. An overturn requires validated source spans and a confirming span audit.
-For browser-derived failures, the verifier also proposes a bounded interaction
-replay. The harness runs it through `chrome-devtools-axi` against the candidate
-server, including during evaluator-only rescore. The harness decides which
+Failed deterministic browser criteria and failed hard gates receive a second
+opinion from two independent verifier samples, so one model call never decides
+whether a failure is re-examined. Each sample's proposed overturn is tried in
+turn, and the first one confirmed decides; a failure no sample overturns
+stands. Every overturn needs mechanically validated source spans. For
+browser-derived failures, a sample also proposes a bounded interaction replay,
+and the verifier does not need to explain the failed measurement from the
+record. The harness runs the replay through `chrome-devtools-axi` against the
+candidate server, including during evaluator-only rescore, and the real-browser
+replay decides: an admitted replay that observes the passing behavior
+overturns the failure with no further model call. The harness decides which
 replays count: `replayPolicy` in `lib/second-opinion.mjs` admits, per failing
 target, only the input kind that failed and an observation that contradicts the
 failure (a step change, a declared mode change, normative text on the active
 step, a click-through of every step, or the active step's own control marked
-`aria-current`). Step controls never include previous, next, or mode controls. A target without a policy cannot be overturned by replay. The replay runs
-before the span audit, collects page and console failures, and its plan and
-observation go into the audit packet. Its actions, observations, errors, trace,
-and pass result are retained in `phases/second-opinions.json`, the result, and
-the report. A browser or driver fault during replay leaves the opinion pending
-and resumable; only what the candidate page did can reject an overturn. Build
-and serve terminal failures cannot be replayed and use the existing span and
-log audit.
+`aria-current`). Step controls never include previous, next, or mode controls.
+A target without a policy cannot be overturned by replay. The replay collects
+page and console failures. Its actions, observations, errors, trace, and pass
+result, and both verifier samples, are retained in
+`phases/second-opinions.json`, the result, and the report. A browser or driver
+fault during replay leaves the opinion pending and resumable; only what the
+candidate page did can reject an overturn. Build and serve terminal failures,
+and source-judged fallbacks, cannot be replayed and use the span and log audit.
 
 ## Robust judging
 

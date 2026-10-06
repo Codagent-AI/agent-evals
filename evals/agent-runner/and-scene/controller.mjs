@@ -1572,7 +1572,7 @@ export async function runEvaluation({
               judging: record.judging, neutral, authority: { cli: 'codex', model: options.judgeModel, effort: JUDGE_REASONING_EFFORT } })
             const id = `second-opinion:${target.kind}:${target.id}`
             const inputHash = hashJson({ request, probe: record.browser.probes?.find((entry) => entry.id === target.id)?.output_sha256,
-              audit_contract: 'closed-world-spans-replay-allowlist-v2' })
+              audit_contract: 'two-verifier-samples-replay-decides-v3' })
             const inputs = { input_hash: inputHash }
             const artifact = join(directory, `${target.id}.json`)
             const reused = await verifyUnit(checkpoint, { phase: 'product-judging', unit: id,

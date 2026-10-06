@@ -1796,7 +1796,11 @@ test('a browser failure receives a checkpointed audited second opinion before sc
   assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
   const written = await readJson(join(context.runDir, 'result.json'))
   assert.ok(requests.some((request) => !request.audit_stage))
-  assert.ok(requests.some((request) => request.audit_stage))
+  // Two verifier samples; the admitted real-browser replay decides without a model audit.
+  const verifierSamples = requests.filter((request) => !request.audit_stage).map(({ verifier_sample: sample }) => sample)
+  assert.deepEqual([...new Set(verifierSamples)].sort(), [1, 2])
+  assert.equal(verifierSamples.filter((sample) => sample === 1).length, verifierSamples.filter((sample) => sample === 2).length)
+  assert.equal(requests.some((request) => request.audit_stage), false)
   const entry = written.second_opinions.entries.find(({ id }) => id === 'demo-supported-navigation')
   assert.equal(entry?.raw_verdict, 'fail')
   assert.equal(entry?.verdict, 'pass')
@@ -1968,9 +1972,10 @@ test('a failed outline fallback receives a follow-up opinion after the failed re
     },
   })
   assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
-  assert.equal(calls[0].id, 'verification-every-produced-step-renders')
-  assert.equal(calls[1].id, 'demo-nine-step-content-and-order')
-  assert.equal(calls[1].on_behalf_of, 'verification-sample-outline')
+  // Each target gets two verifier samples, in target order.
+  assert.deepEqual([...new Set(calls.map(({ id }) => id))],
+    ['verification-every-produced-step-renders', 'demo-nine-step-content-and-order'])
+  assert.equal(calls.find(({ id }) => id === 'demo-nine-step-content-and-order').on_behalf_of, 'verification-sample-outline')
   assert.equal(fallbackRequest.browser_derived, false)
   assert.equal(fallbackRequest.failing_record.verdict, 'fail')
   assert.equal(replayCalls, 0)
