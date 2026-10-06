@@ -253,6 +253,54 @@ test('INT-008 host rescore uses only manifest evidence, current evaluator inputs
   await writeFile(join(f.options.runDir, 'collected/proposal.md'), 'tampered')
   await assert.rejects(rescoreEvaluation({ ...options, runDir: join(f.options.runDir, '../tampered-rescore') }, deps), /evidence hash mismatch/)
 })
+// A committed copy of the suite whose evaluator inputs differ from the original
+// run: reviewed anchors and a calibrated, re-versioned rubric.
+async function evaluatorSuite(t, rubricChange) {
+  const { cp } = await import('node:fs/promises')
+  const { createHash } = await import('node:crypto')
+  const { SUITE_ROOT } = await import('../evals/agent-runner/and-scene-define/lib/files.mjs')
+  const suiteRoot = await mkdtemp(join(tmpdir(), 'define-suite-')); t.after(() => rm(suiteRoot, { recursive: true, force: true }))
+  await cp(SUITE_ROOT, suiteRoot, { recursive: true, filter: source => !/\/(results|calibration)(\/|$)/.test(source.slice(SUITE_ROOT.length)) })
+  const hash = text => createHash('sha256').update(text).digest('hex')
+  const versions = JSON.parse(await readFile(join(suiteRoot, 'versions.json'), 'utf8'))
+  const inventory = JSON.parse(await readFile(join(suiteRoot, 'hidden/inventory.json'), 'utf8'))
+  inventory.anchors_review = { reviewer: 'test maintainer', date: '2026-10-06', inventory_version: inventory.inventory_version }
+  const inventoryText = JSON.stringify(inventory, null, 2) + '\n'
+  await writeFile(join(suiteRoot, 'hidden/inventory.json'), inventoryText)
+  versions.inputs.inventory.hashes[inventory.inventory_version] = hash(inventoryText)
+  const rubric = rubricChange(JSON.parse(await readFile(join(suiteRoot, 'rubric.json'), 'utf8')))
+  const rubricText = JSON.stringify(rubric, null, 2) + '\n'
+  await writeFile(join(suiteRoot, 'rubric.json'), rubricText)
+  versions.inputs.rubric.version = rubric.rubric_version; versions.inputs.rubric.hashes[rubric.rubric_version] = hash(rubricText)
+  await writeFile(join(suiteRoot, 'versions.json'), JSON.stringify(versions, null, 2) + '\n')
+  repoGit(suiteRoot, ['init', '-q', '--initial-branch=main']); repoGit(suiteRoot, ['add', '--all', '--force']); repoGit(suiteRoot, ['commit', '-q', '-m', 'test: evaluator inputs'])
+  return suiteRoot
+}
+test('INT-008 rescore records the series identity of the real current evaluator inputs', async t => {
+  const f = await fixture(t, 'capped'); await runEvaluation(f.options, f.deps)
+  const original = JSON.parse(await readFile(join(f.options.runDir, 'result.json'), 'utf8'))
+  const suiteRoot = await evaluatorSuite(t, rubric => ({ ...rubric, rubric_version: rubric.rubric_version + 1, pass_threshold: 70 }))
+  const { inspectEvaluatorInputs } = await import('../evals/agent-runner/and-scene-define/lib/preflight.mjs')
+  const { seriesIdentity } = await inspectEvaluatorInputs({ suiteRoot })
+  const calls = []
+  const { result, exitCode } = await rescoreEvaluation({ rescoreFrom: f.options.runDir, runDir: join(f.options.runDir, '../real-rescore'), suiteRoot }, { judges: missingJudges(calls), gateCommand: async () => ({ status: 1, stderr: 'invalid definition' }) })
+  assert.equal(exitCode, 0, result.observed_error); assert.equal(result.evaluation_status, 'complete'); assert.equal(result.definition_verdict, 'fail')
+  const rubricVersion = JSON.parse(await readFile(join(suiteRoot, 'rubric.json'), 'utf8')).rubric_version
+  assert.equal(result.rubric_version, rubricVersion)
+  assert.deepEqual(result.series_identity, seriesIdentity)
+  assert.equal(result.series_identity.rubric.version, rubricVersion)
+  assert.match(result.series_identity.starting_tree_hash, /^[a-f0-9]{40}$/)
+  assert.notDeepEqual(result.series_identity, original.series_identity)
+  assert.deepEqual(result.original.series_identity, original.series_identity); assert.deepEqual(result.original.candidate, original.candidate)
+  assert.equal(result.original.run_id, original.run_id)
+  assert.ok(calls.includes('artifact-quality'))
+  // An uncalibrated current rubric is refused before any output or judge call.
+  const uncalibrated = await evaluatorSuite(t, rubric => ({ ...rubric, rubric_version: rubric.rubric_version + 1, pass_threshold: null }))
+  const before = calls.length
+  await assert.rejects(rescoreEvaluation({ rescoreFrom: f.options.runDir, runDir: join(f.options.runDir, '../uncalibrated-rescore'), suiteRoot: uncalibrated }, { judges: missingJudges(calls) }), /uncalibrated/)
+  assert.equal(calls.length, before)
+  await assert.rejects(readFile(join(f.options.runDir, '../uncalibrated-rescore/run-state.json')), { code: 'ENOENT' })
+})
 test('rescore refuses an original identity that is not the hash-protected or recorded one', async t => {
   const f = await fixture(t, 'capped'); await runEvaluation(f.options, f.deps)
   const source = f.options.runDir

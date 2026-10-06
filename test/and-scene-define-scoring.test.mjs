@@ -88,11 +88,18 @@ test('deterministic score excludes leaks, charges fidelity once, gates fail and 
   assert.equal(scored.evaluation_status, 'complete'); assert.equal(scored.definition_verdict, 'fail')
   assert.equal(scored.components.coverage.score, 60); assert.equal(scored.components.coverage.possible, 94)
   assert.equal(scored.components.fidelity.score, 12); assert.equal(scored.total, 97)
+  // Identical verdicts with opposite discovery decisions: the ledgers differ,
+  // but neither ledger alters the score or the scored coverage it reads.
+  const snapshot = structuredClone(scored)
   const asked = coverage.map(x => ({ id: x.id, asked: true, citations: [] }))
   const ledger = discoveryLedger({ coverage: scored.coverage, asked })
-  assert.equal(ledger.items[0].outcome, 'leaked'); assert.equal(ledger.counts.discovered, 71)
-  assert.equal(discoveryLedger({ coverage: scored.coverage, asked: asked.map(x => ({ ...x, asked: false })) }).counts.inferred, 71)
-  assert.deepEqual(scoreDefinition({ rubric, coverage, quality, fidelity, leaked, gates: [{ passed: false }], discovery: ledger }), scored)
+  const other = discoveryLedger({ coverage: scored.coverage, asked: asked.map(x => ({ ...x, asked: false })) })
+  assert.equal(ledger.items[0].outcome, 'leaked'); assert.equal(ledger.counts.discovered, 71); assert.equal(other.counts.inferred, 71)
+  assert.notDeepEqual(ledger.counts, other.counts); assert.equal(ledger.scoring, false); assert.equal(other.scoring, false)
+  assert.deepEqual(scored, snapshot)
+  const rescored = scoreDefinition({ rubric, coverage, quality, fidelity, leaked, gates: [{ passed: false }] })
+  assert.deepEqual(rescored, scored)
+  assert.equal(rescored.total, snapshot.total); assert.deepEqual(rescored.components, snapshot.components)
   assert.equal(scoreDefinition({ rubric, coverage, quality, fidelity: [], leaked: [], gates: [] }).definition_verdict, 'pass')
 })
 test('quality inputs contain no hidden material; fidelity excludes graded subjects without failing and requires matching exchange', async () => {
