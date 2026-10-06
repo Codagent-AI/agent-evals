@@ -65,14 +65,22 @@ export async function runEvaluation(options, dependencies = {}) {
   const persist = () => saveCheckpoint(statePath, checkpoint)
   const provenance = () => ({ ...checkpoint.identity, materialization: checkpoint.materialization ?? null, schema_version: checkpoint.schema_version })
   async function readState() {
-    const root = join(sandbox.artifactDir, '.runtime/agent-runner-projects')
-    await privatePath(root, runDir)
-    const states = await listRunnerStates(root)
-    if (states.length > 1) throw new Error('multiple Agent Runner runs found; refusing to select or start a duplicate')
-    if (checkpoint.runner_run_id && states.length && states[0].run_id !== checkpoint.runner_run_id) throw new Error('Agent Runner run identity mismatch')
-    const state = await readRunnerState(root, checkpoint.runner_run_id)
-    if (state && state.workflow_name !== 'openspec:change') throw new Error(`unexpected Agent Runner workflow ${state.workflow_name}`)
-    return state
+    try {
+      const root = join(sandbox.artifactDir, '.runtime/agent-runner-projects')
+      await privatePath(root, runDir)
+      const states = await listRunnerStates(root)
+      if (states.length > 1) throw new Error('multiple Agent Runner runs found; refusing to select or start a duplicate')
+      if (checkpoint.runner_run_id && states.length && states[0].run_id !== checkpoint.runner_run_id) throw new Error('Agent Runner run identity mismatch')
+      const state = await readRunnerState(root, checkpoint.runner_run_id)
+      if (state && state.workflow_name !== 'openspec:change') throw new Error(`unexpected Agent Runner workflow ${state.workflow_name}`)
+      return state
+    } catch (error) {
+      // Persisted files can be unavailable or incomplete after interruption.
+      // Retrying only re-reads them; dispatch still requires one valid, inactive
+      // Runner identity and never falls back to a second fresh run.
+      if (checkpoint.workflow_started_at && (error instanceof SyntaxError || ['ENOENT', 'EIO', 'EACCES', 'EBUSY', 'EMFILE', 'ENFILE', 'ESTALE', 'EINTR'].includes(error.code))) error.resumable = true
+      throw error
+    }
   }
   async function saveWorkflow(state, outcome) {
     checkpoint.runner_run_id = state.run_id

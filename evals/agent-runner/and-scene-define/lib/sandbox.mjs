@@ -12,7 +12,8 @@ export function sandboxEnvironment(env = process.env) {
   return Object.fromEntries(['PATH', 'HOME', 'TMPDIR', 'DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_CONFIG'].filter(key => env[key] !== undefined).map(key => [key, env[key]]))
 }
 export class LocalSandbox {
-  constructor({ runDir, runnerDir, skillsDir, env = process.env }) {
+  constructor({ runDir, runnerDir, skillsDir, env = process.env, command = runTimed }) {
+    this.command = command
     this.runDir = resolve(runDir); this.runnerDir = resolve(runnerDir); this.skillsDir = resolve(skillsDir)
     this.artifactDir = join(this.runDir, 'sandbox'); this.exchangeDir = join(this.artifactDir, 'exchange'); this.env = sandboxEnvironment(env)
   }
@@ -29,14 +30,24 @@ export class LocalSandbox {
   }
   plan(profiles, mode) {
     const args = this.args(profiles, mode, true)
-    const output = requireCommand(runTimed('bash', args, { env: this.env, maxBuffer: 16 * 1024 * 1024 }), 'sandbox dry-run').stdout
+    const output = requireCommand(this.command('bash', args, { env: this.env, maxBuffer: 16 * 1024 * 1024 }), 'sandbox dry-run').stdout
     return { command: ['bash', ...args], output }
   }
   async isActive() {
-    const ids = requireCommand(runTimed('docker', ['ps', '--quiet'], { env: this.env }), 'Docker active-run probe').stdout.trim().split('\n').filter(Boolean)
+    const ids = requireCommand(this.command('docker', ['ps', '--quiet'], { env: this.env }), 'Docker active-run probe').stdout.trim().split('\n').filter(Boolean)
     if (!ids.length) return false
-    const containers = JSON.parse(requireCommand(runTimed('docker', ['inspect', ...ids], { env: this.env }), 'Docker active-run inspection').stdout)
-    return containers.some(container => container.Mounts?.some(mount => mount.Source === realpathSync(this.artifactDir)))
+    const containers = JSON.parse(requireCommand(this.command('docker', ['inspect', ...ids], { env: this.env }), 'Docker active-run inspection').stdout)
+    let artifactPath
+    try { artifactPath = realpathSync(this.artifactDir) } catch (error) {
+      if (error.code !== 'ENOENT') throw error
+      // A container can still retain its bind mount after the host directory
+      // disappears. Resolve the parent to keep matching that mount on macOS.
+      try { artifactPath = join(realpathSync(this.runDir), 'sandbox') } catch (parentError) {
+        if (parentError.code !== 'ENOENT') throw parentError
+        artifactPath = this.artifactDir
+      }
+    }
+    return containers.some(container => container.Mounts?.some(mount => mount.Source === artifactPath || mount.Source === this.artifactDir))
   }
   async start(profiles, mode) {
     const log = await open(join(this.runDir, 'logs/sandbox.log'), 'a')

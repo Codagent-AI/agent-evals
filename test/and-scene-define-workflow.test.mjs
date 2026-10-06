@@ -112,3 +112,23 @@ test('effective invocation evidence uses observed CLI identity instead of config
   const invocations = effectiveDefineInvocations({ steps: [{ id: 'design', prefix: 'define/design', agent_invoked: true, session_id: 'native', usage: { cli: 'codex', model: 'observed-model', effort: 'medium', identity: { requested_model: 'configured-model' } } }] })
   assert.deepEqual(invocations[0], { role: 'lead', step: 'design', prefix: 'define/design', session_id: 'native', cli: 'codex', model: 'observed-model', effort: 'medium', observed_identities: [] })
 })
+
+test('failed subprocess diagnostics retain exit status when stderr is empty', async () => {
+  const { requireCommand } = await import('../evals/agent-runner/and-scene-define/lib/subprocess.mjs')
+  assert.throws(() => requireCommand({ ok: false, error: null, stderr: '', status: 17 }, 'Docker availability'), /Docker availability: exit 17/)
+  assert.throws(() => requireCommand({ ok: false, error: null, stderr: ' \n ', status: 3 }, 'Runner help'), /Runner help: exit 3/)
+  assert.throws(() => requireCommand({ ok: false, error: null, stderr: '', status: null, signal: 'SIGTERM' }, 'Runner build'), /Runner build: signal SIGTERM/)
+  assert.throws(() => requireCommand({ ok: false, error: 'spawn failed', stderr: 'secondary', status: null }), /spawn failed/)
+  assert.throws(() => requireCommand({ ok: false, error: null, stderr: 'specific failure\n', status: 1 }), /specific failure/)
+})
+test('active-container lookup tolerates absent artifact directories and still detects their mounts', async t => {
+  const { LocalSandbox } = await import('../evals/agent-runner/and-scene-define/lib/sandbox.mjs')
+  const { realpath } = await import('node:fs/promises')
+  const root = await mkdtemp(join(tmpdir(), 'define-active-')); t.after(() => rm(root, { recursive: true, force: true }))
+  let source = '/unrelated/artifacts'
+  const command = (_command, args) => ({ ok: true, stdout: args[0] === 'ps' ? 'other-container\n' : JSON.stringify([{ Mounts: [{ Source: source }] }]), stderr: '' })
+  const sandbox = new LocalSandbox({ runDir: root, runnerDir: root, skillsDir: root, command })
+  assert.equal(await sandbox.isActive(), false)
+  source = join(await realpath(root), 'sandbox')
+  assert.equal(await sandbox.isActive(), true)
+})

@@ -76,6 +76,9 @@ export function summarizeTimings(timings) {
 }
 
 export function requireCommand(result, label = result.label) {
-  if (!result.ok) throw new Error(`${label}: ${result.error ?? result.stderr.trim() ?? `exit ${result.status}`}`)
+  if (!result.ok) {
+    const reason = result.error || result.stderr?.trim() || (result.signal ? `signal ${result.signal}` : `exit ${result.status}`)
+    throw new Error(`${label}: ${reason}`)
+  }
   return result
 }

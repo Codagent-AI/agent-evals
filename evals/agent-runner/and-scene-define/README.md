@@ -166,6 +166,10 @@ including downtime. Active containers are refused. Inactive unfinished runs use
 the exact saved Runner ID; a capped stop is collected without resuming it. An
 ambiguous crash without recoverable Runner state is refused rather than starting
 a duplicate. `result.json` names the owning failure phase and resumability.
+Filesystem failures or incomplete JSON encountered while reading an already
+started Runner run remain resumable after its evidence is made readable again;
+resumption still requires valid, matching Runner state. Runner's `-v` mount syntax
+cannot represent colons in run or checkout directory paths.
 
 Only six allowlisted files enter `sandbox-input/`: the deterministic starting
 bundle, driver, CLI/session bootstrap scripts, and Runner config/settings. The

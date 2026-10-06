@@ -108,3 +108,38 @@ test('active sandbox refuses resume and a used directory refuses a fresh invocat
   const { result } = await runEvaluation({ ...f.options, resume: true }, f.deps)
   assert.match(result.observed_error, /still active/); assert.equal(f.modes.length, 1)
 })
+
+for (const corruption of ['incomplete JSON', 'missing audit file']) {
+  test(`Runner state read failure (${corruption}) remains resumable without a duplicate`, async t => {
+    const f = await fixture(t)
+    const start = f.deps.sandbox.start.bind(f.deps.sandbox)
+    const session = join(f.options.runDir, 'sandbox/.runtime/agent-runner-projects/project/runs/runner-one')
+    f.deps.sandbox.start = async (...args) => {
+      await start(...args)
+      if (corruption === 'incomplete JSON') await writeFile(join(session, 'state.json'), '{"incomplete":')
+      else await rm(join(session, 'audit.log'))
+    }
+    const { result } = await runEvaluation(f.options, f.deps)
+    assert.equal(result.evaluation_status, 'evaluation-harness-failed')
+    assert.equal(result.owning_phase, 'define-workflow')
+    assert.equal(result.resumable, true)
+    assert.match(result.observed_error, /JSON|ENOENT/)
+    await f.state('interrupted')
+    f.deps.sandbox.start = start
+    f.setNext('capped')
+    await runEvaluation({ ...f.options, resume: true }, f.deps)
+    assert.deepEqual(f.modes, [{ kind: 'fresh' }, { kind: 'resume', runId: 'runner-one' }])
+  })
+}
+test('recovery eligibility does not relax the Runner workflow identity check', async t => {
+  const f = await fixture(t)
+  const start = f.deps.sandbox.start.bind(f.deps.sandbox)
+  f.deps.sandbox.start = async (...args) => {
+    await start(...args)
+    await writeFile(join(f.options.runDir, 'sandbox/.runtime/agent-runner-projects/project/runs/runner-one/state.json'), JSON.stringify({ workflowName: 'other-workflow', currentStep: { stepId: 'define' } }))
+  }
+  const { result } = await runEvaluation(f.options, f.deps)
+  assert.equal(result.resumable, false)
+  assert.match(result.observed_error, /unexpected Agent Runner workflow/)
+  assert.deepEqual(f.modes, [{ kind: 'fresh' }])
+})
