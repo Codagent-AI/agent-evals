@@ -286,6 +286,33 @@ function assertReadableState(state) {
   )
 }
 
+const controlText = (value) => String(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
+
+// Whether a control's accessible name names one step, by its title or number.
+function namesStep(control, index, titles) {
+  const name = controlText(control?.name)
+  const title = controlText(titles[index])
+  return name !== '' && ((title !== '' && name.includes(title))
+    || new RegExp(`^(?:(?:go to|jump to)\\s+)?(?:step\\s+)?${index + 1}(?!\\d)`).test(name))
+}
+
+const namesAnyStep = (control, titles) => titles.some((_, index) => namesStep(control, index, titles))
+
+// Which control belongs to the active step is read from what the controls say
+// (a step number or title), so extra controls in the same row cannot shift
+// it. Position decides only when no control names a step.
+export function marksActiveStep(controls, current, stepIndex, titles = DEMO_CONTRACT.step_titles) {
+  return controls.some((control) => namesAnyStep(control, titles))
+    ? namesStep(current, stepIndex, titles)
+    : controls.indexOf(current) === stepIndex
+}
+
+// The controls that name a step, when any do; otherwise every control.
+export function stepControls(controls, titles = DEMO_CONTRACT.step_titles) {
+  const named = controls.filter((control) => namesAnyStep(control, titles))
+  return named.length > 0 ? named : controls
+}
+
 function overlaps(a, b) {
   return a.some((entry) => b.includes(entry))
 }
@@ -295,6 +322,7 @@ function summarizeControls(controls) {
     name: normalizeEvidence(control?.name ?? ''),
     role: normalizeEvidence(control?.role ?? ''),
     aria_current: control?.ariaCurrent === true,
+    disabled: control?.disabled === true,
     focusable: control?.focusable === true,
   }))
 }
@@ -644,7 +672,7 @@ export async function runBrowserEvaluation({
         && textActiveAt(states, index, contract.step_captions[index], captionExposure) !== 'absent')
       if (heuristicCaption !== -1) return notObserved(`step ${heuristicCaption + 1} caption was chosen by layout`, [],
         ['declared caption selector', 'visible and accessible caption text'])
-      const controls = states[0]?.controls ?? []
+      const controls = stepControls(states[0]?.controls ?? [], contract.step_titles)
       if (controls.length !== states.length) {
         return [false, `navigation exposes ${controls.length} controls for ${states.length} steps`, []]
       }
@@ -906,7 +934,7 @@ export async function runBrowserEvaluation({
         if (current.length !== 1) {
           return [false, `step ${position + 1} marks ${current.length} controls as current, expected 1`, []]
         }
-        if (controls.indexOf(current[0]) !== state.stepIndex) {
+        if (!marksActiveStep(controls, current[0], state.stepIndex, contract.step_titles)) {
           return [false, `step ${position + 1} marks the wrong control as current`, []]
         }
       }
@@ -917,11 +945,15 @@ export async function runBrowserEvaluation({
       const page = await session(PROBE_REQUIREMENTS['demo-focus-and-keyboard-accessibility'])
       const controls = (await page.state()).controls ?? []
       if (controls.length === 0) return [false, 'there are no controls to focus', []]
-      const unfocusable = controls.find(({ focusable }) => focusable !== true)
+      // A control disabled at a boundary (Previous on the first step) is
+      // correctly out of the tab order; only an enabled control must focus.
+      const enabled = controls.filter(({ disabled }) => disabled !== true)
+      if (enabled.length === 0) return [false, 'there are no enabled controls to focus', []]
+      const unfocusable = enabled.find(({ focusable }) => focusable !== true)
       if (unfocusable) return [false, `control ${bounded(unfocusable.name)} is not keyboard focusable`, []]
-      await page.focus(controls[0].name)
+      await page.focus(enabled[0].name)
       const focused = (await page.state()).focused
-      if (focused !== controls[0].name) {
+      if (focused !== enabled[0].name) {
         return [false, `focusing a control left focus on ${bounded(focused)}`, []]
       }
       // A focused button owns its own key handling. Observe global deck
