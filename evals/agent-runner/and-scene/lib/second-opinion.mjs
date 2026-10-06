@@ -95,7 +95,8 @@ const normativeText = (source, step, mode = null) => ({ subject: 'text', source,
 // The harness, not the verifier, decides which browser replay can confirm an
 // overturn. Each policy names the input kind that reproduces the failing
 // measurement and the observation that would contradict it; a target with no
-// policy here cannot be overturned by replay, so its failure stands.
+// policy here can still be overturned, but only through the independent
+// audit of a replay the harness ran (see judgeAnswer).
 export function replayPolicy({ target, failing_record: record }) {
   const rationale = failingRationale(record)
   const step = (pattern) => {
@@ -157,7 +158,21 @@ export function replayPolicy({ target, failing_record: record }) {
 }
 
 export function describeReplayPolicy(policy) {
-  if (!policy) return 'No replay allowlist covers this failure, so a browser replay cannot confirm an overturn and the failure stands.'
+  if (!policy) return AUDITED_REPLAY
+  return `${describeAdmittedReplay(policy)} ${AUDITED_REPLAY}`
+}
+
+// agent-evals #78 rep 2 (live check): telling verifiers that a failure with
+// no preset replay "stands" made both give up on a false focus failure.
+const AUDITED_REPLAY = [
+  `Any other replay that starts by navigating to ${DEMO_PATH} is also run in a real browser. After each action the`,
+  'harness records the step, mode, selected text, every visible control (name, aria-current, disabled, focusable),',
+  'focus, and runtime failures, and an independent auditor decides the overturn from those observations and your',
+  'cited source. Design the replay to exercise the situation the failure names, and propose one whenever you',
+  'overturn.',
+].join(' ')
+
+function describeAdmittedReplay(policy) {
   const base = `Replay allowlist: replay.actions starts with navigate to ${DEMO_PATH}, then only wait and ${policy.inputs.join(' or ')} actions`
   switch (policy.subject) {
     case 'step-change':
@@ -177,7 +192,7 @@ export function describeReplayPolicy(policy) {
 
 // Refuses a plan the policy does not admit before it reaches the browser.
 function replayPlanRefusal(policy, replay) {
-  if (!policy) return 'no replay allowlist covers this target, so the failure stands'
+  if (!policy) return 'no replay allowlist covers this target'
   if (replay.actions[0].path !== DEMO_PATH) return `replay is outside the harness allowlist: it must navigate to ${DEMO_PATH}`
   const rest = replay.actions.slice(1)
   const stray = rest.find((action) => action.type !== 'wait' && !policy.inputs.includes(action.type))
@@ -272,7 +287,7 @@ function replayEvidenceRefusal(policy, replay, observed) {
       return null
     }
     default:
-      return 'no replay allowlist covers this target, so the failure stands'
+      return 'no replay allowlist covers this target'
   }
 }
 
@@ -333,7 +348,7 @@ export function buildSecondOpinionRequest({ target, rubrics, browser, judging, n
     'For an uphold, set unmet_requirement to the part of the quoted requirement the candidate does not meet; otherwise set it to null.',
     'For a terminal overturn, cite both source lines and exact recorded log lines showing the harness fault.',
     JUDGE_SCOPE_RULE,
-    ...(browserDerived ? ['For an overturn, propose replay.actions (1-12 navigate, click, press, keys, swipe, wait actions) and replay.expect (step-index-equals, step-index-changes, step-count-changes, mode-equals, selector-visible, selector-hidden, text-present). The harness checks it in a real browser and accepts only a replay inside its allowlist for this failure.',
+    ...(browserDerived ? ['For an overturn, propose replay.actions (1-12 navigate, click, press, keys, swipe, wait actions) and replay.expect (step-index-equals, step-index-changes, step-count-changes, mode-equals, selector-visible, selector-hidden, text-present). The harness runs it in a real browser.',
       describeReplayPolicy(replayPolicy({ target, failing_record: failingRecord }))] : []),
   ].join('\n')
   return {
@@ -416,7 +431,11 @@ function parseAnswer(text) {
 }
 
 async function validatedSpans(answer, request) {
-  if (!answer.mismeasured_step?.trim() || !answer.measurement_fault?.trim()) throw new Error('missing measurement fault')
+  // A browser-derived verifier is told it need not name the fault from the
+  // record: the replay and its audit carry that. Elsewhere it is required.
+  if (!request.browser_derived && (!answer.mismeasured_step?.trim() || !answer.measurement_fault?.trim())) {
+    throw new Error('missing measurement fault')
+  }
   if (!answer.citations.length || answer.citations.length > 12) throw new Error('source citation count is invalid')
   if (answer.log_citations.length > 6) throw new Error('log citation count is invalid')
   if (request.target.kind === 'terminal' && !answer.log_citations.length) throw new Error('terminal overturn requires a log citation')
@@ -449,17 +468,30 @@ async function validatedSpans(answer, request) {
   if (!kept.length) throw new Error(dropped[0]?.reason ?? 'source citation count is invalid')
   answer.citations = kept
   answer.dropped_citations = dropped
+  // Log citations get the same treatment: a verifier that also cites the
+  // probe's evidence file (live check on agent-evals #78 rep 2) keeps its
+  // opinion. Only a terminal failure must keep a valid recorded log line.
   const logSpans = []
+  const keptLogs = []
   for (const citation of answer.log_citations) {
-    if (citation.artifact !== request.log_artifact) throw new Error('log citation is outside recorded artifact')
+    if (!request.log_artifact || citation.artifact !== request.log_artifact) {
+      dropped.push({ ...citation, reason: 'log citation is outside recorded artifact' })
+      continue
+    }
     const lines = (await readFile(join(request.log_root, citation.artifact), 'utf8')).split('\n')
     if (!Number.isInteger(citation.start_line) || !Number.isInteger(citation.end_line)
       || citation.start_line < 1 || citation.end_line < citation.start_line || citation.end_line > lines.length) {
-      throw new Error('invalid log line range')
+      dropped.push({ ...citation, reason: 'invalid log line range' })
+      continue
     }
+    keptLogs.push(citation)
     logSpans.push({ ...citation, lines: lines.slice(citation.start_line - 1, citation.end_line)
       .map((text, offset) => ({ line: citation.start_line + offset, text })) })
   }
+  if (request.target.kind === 'terminal' && !keptLogs.length) {
+    throw new Error(dropped.find(({ artifact }) => artifact)?.reason ?? 'terminal overturn requires a log citation')
+  }
+  answer.log_citations = keptLogs
   return { spans, logSpans }
 }
 
@@ -518,6 +550,7 @@ const sampleSummary = (sample, outcome) => ({
   sample,
   decision: outcome.decision,
   rationale: outcome.rationale,
+  unmet_requirement: outcome.unmet_requirement ?? null,
   mismeasured_step: outcome.mismeasured_step,
   measurement_fault: outcome.measurement_fault,
   replay: outcome.replay ?? null,
@@ -554,7 +587,8 @@ export async function runSecondOpinion({ request, invoke, replay, attempts = JUD
     const found = outcomes.find(({ sample }) => sample === index + 1)
     return found ? sampleSummary(index + 1, found.outcome)
       : sampleSummary(index + 1, { decision: answer.decision === 'uphold' ? 'uphold' : 'not-needed',
-        rationale: answer.rationale, mismeasured_step: answer.mismeasured_step,
+        rationale: answer.rationale, unmet_requirement: answer.unmet_requirement,
+        mismeasured_step: answer.mismeasured_step,
         measurement_fault: answer.measurement_fault, replay: answer.replay })
   })
   return { ...decisive.outcome, decided_by_sample: decisive.sample, samples: recorded }
@@ -563,6 +597,7 @@ export async function runSecondOpinion({ request, invoke, replay, attempts = JUD
 async function judgeAnswer({ answer, request, invoke, replay, attempts }) {
   let failureReason
   const base = { ok: true, raw_verdict: 'fail', rationale: answer.rationale,
+    unmet_requirement: answer.unmet_requirement ?? null,
     mismeasured_step: answer.mismeasured_step, measurement_fault: answer.measurement_fault,
     citations: answer.citations, log_citations: answer.log_citations,
     replay: answer.replay,
@@ -576,6 +611,7 @@ async function judgeAnswer({ answer, request, invoke, replay, attempts }) {
     return { ...base, decision: 'overturn-rejected', verdict: 'fail', rejection_reason: error.message }
   }
   base.citations = answer.citations
+  base.log_citations = answer.log_citations
   if (answer.dropped_citations?.length) base.dropped_citations = answer.dropped_citations
   // A browser-derived overturn is confirmed by a harness replay in a real
   // browser. A replay inside the target's allowlist decides on its own; any

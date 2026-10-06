@@ -620,3 +620,41 @@ test('the verifier and its audit carry the shared judging scope rule', async () 
     assert.match(prompt, /hypothetical input, file deletion, or rendering the candidate does not produce/)
   }
 })
+
+// Live check on agent-evals #78 rep 2: verifiers told that a failure with no
+// preset replay "stands" gave up on a false focus failure instead of
+// proposing a replay for the audit.
+test('a verifier is invited to propose an audited replay for a failure no allowlist covers', async () => {
+  const rubrics = await loadRubrics()
+  const rationale = 'control Previous step is not keyboard focusable'
+  const request = buildSecondOpinionRequest({ target: { kind: 'criterion', id: 'demo-focus-and-keyboard-accessibility' }, rubrics,
+    browser: { criteria: [{ id: 'demo-focus-and-keyboard-accessibility', verdict: 'fail', rationale }],
+      probes: [{ id: 'demo-focus-and-keyboard-accessibility', result: { verdict: 'fail', rationale } }], gates: [] },
+    judging: null, neutral: null, authority: { cli: 'codex', model: 'm' } })
+  assert.doesNotMatch(request.prompt, /failure stands|cannot confirm an overturn|accepts only a replay inside its allowlist/)
+  assert.match(request.prompt, /independent auditor decides the overturn from those observations/)
+  assert.match(request.prompt, /propose one whenever you overturn/)
+  assert.match(request.prompt, /Decide whether the candidate meets the requirement as quoted/)
+})
+
+// Live check on agent-evals #78 rep 2: verifiers also cited the probe's
+// evidence file as a log, and that one citation discarded correct overturns.
+test('an unusable log citation is dropped for a browser failure but a terminal overturn still needs one', async () => {
+  const request = await replayRequest('demo-supported-navigation', 'keyboard 1/0, swipe 1/0, direct jump 0')
+  const plan = { actions: [{ type: 'navigate', path: DEMO_PATH }, { type: 'click', selector: '[data-step="5"]' }],
+    expect: { type: 'step-index-equals', value: 4 } }
+  const answer = { ...overturnWith(plan),
+    log_citations: [{ artifact: 'evidence/evaluator/browser-probes/demo-supported-navigation.json', start_line: 1, end_line: 1 }] }
+  const outcome = await runSecondOpinion({ request, invoke: confirmingInvoke(request, answer),
+    replay: async () => ({ passed: true, errors: [], trace: [],
+      observations: observed({ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 4 }) }) })
+  assert.equal(outcome.decision, 'overturn')
+  assert.deepEqual(outcome.log_citations, [])
+  assert.match(outcome.dropped_citations[0].reason, /outside recorded artifact/)
+
+  const terminal = { ...request, target: { kind: 'terminal', id: 'verification-build-whole-app' }, browser_derived: false,
+    log_root: request.input_roots.source, log_artifact: 'build.log' }
+  const rejected = await runSecondOpinion({ request: terminal, invoke: confirmingInvoke(terminal, answer) })
+  assert.equal(rejected.decision, 'overturn-rejected')
+  assert.match(rejected.rejection_reason, /outside recorded artifact/)
+})
