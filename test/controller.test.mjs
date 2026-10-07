@@ -1517,6 +1517,51 @@ test('a rescore restores a missing Runner session under the run directory and re
     { source: 'evidence/candidate/artifacts', files: 3 })
 })
 
+// A source scored under an older rubric has no engineering-quality verdicts and
+// no input-hygiene browser evidence. A rescore re-runs the browser probes and
+// every judge job under the current rubric, so its result carries both.
+test('a rescore of an older run scores the engineering-quality component afresh', async () => {
+  const context = await environment()
+  const judged = new Map()
+  let servedIdentity = null
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    controllerChangeName: null,
+    verifyDelivery: async () => {
+      throw new Error('rescore must not rediscover historical artifact paths')
+    },
+    loadRescoreSource: async () => importedRescore(context),
+    browserDriver: browserDemo(),
+    isProcessAlive: () => true,
+    candidateServer: {
+      probe: async () => ({ ok: true, candidate_identity: servedIdentity }),
+      start: async ({ candidate }) => { servedIdentity = candidate; return { pid: 9876, url: 'http://127.0.0.1:4319/' } },
+      stop: async () => {},
+    },
+    judgeInvoke: async (request) => {
+      if (request.job === 'second-opinion') return JSON.stringify({ decision: 'uphold', rationale: 'the recorded failure stands',
+        mismeasured_step: null, measurement_fault: null, citations: [], log_citations: [], replay: null })
+      if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
+      judged.set(request.job, request.criteria)
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
+        rationale: 'fixture evidence', evidence: ['src/index.ts:1'] })) })
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
+  assert.equal(judged.get('engineering-quality')?.length, 14)
+  assert.ok(!judged.get('engineering-quality').some((id) => id.startsWith('input-')))
+  const written = await readJson(join(context.runDir, 'result.json'))
+  const component = written.score.components.find(({ id }) => id === 'engineering-quality')
+  assert.equal(component.points_possible, 8)
+  const criteria = component.subcomponents.flatMap(({ criteria: rows }) => rows)
+  assert.equal(criteria.length, 16)
+  assert.ok(criteria.every(({ verdict }) => verdict === 'pass'), JSON.stringify(criteria))
+  const browser = await readJson(join(context.runDir, 'phases/browser-evaluation.json'))
+  for (const id of ['input-modifier-keys-pass-through', 'input-swipe-from-control-ignored']) {
+    assert.equal(browser.criteria.find((row) => row.id === id)?.verdict, 'pass', id)
+  }
+})
+
 test('a host rescore leaves an existing Agent Runner projects store in the home untouched', async () => {
   const context = await environment()
   await mkdir(join(context.home, '.agent-runner/projects/someone-else'), { recursive: true })
