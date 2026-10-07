@@ -21,7 +21,9 @@ export function judgeSchema(ids) {
 export function discoverySchema(ids) {
   return object({ results: { type: 'array', items: object({ id: { type: 'string', enum: ids }, asked: { type: 'boolean' }, rationale: string, citations }) } })
 }
-export const exchangeIdentity = x => JSON.stringify([x.step, x.step_id, x.attempt, x.turn])
+// Exchange identities appear in criterion ids, which strict judge schemas list as
+// enum values; Codex rejects quotes and backslashes there, so each part is encoded.
+export const exchangeIdentity = x => [x.step, x.step_id, x.attempt, x.turn].map(part => encodeURIComponent(String(part))).join('/')
 export function makeJobs({ inventory, rubric, artifacts, conversation, gates, reference = [], policy = '' }) {
   const graded = inventory.items.filter(x => x.class !== 'preference')
   const jobs = [...new Set(graded.map(x => x.area))].map(area => {

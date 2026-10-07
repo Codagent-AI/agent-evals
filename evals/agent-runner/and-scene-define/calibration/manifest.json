@@ -1,5 +1,5 @@
 {
-  "calibration_set_version": 1,
+  "calibration_set_version": 2,
   "inventory_version": 2,
   "graded_items": 72,
   "change_name": "add-presentation-skill",
@@ -183,7 +183,7 @@
         },
         {
           "path": "reference-degraded-contradictions/expectations.json",
-          "sha256": "381c8ab1609e2481f04fd12a19d4a145977d95c9a7ab0643961cf0d767dfa9d8"
+          "sha256": "813350c4ca885d8a2b8ddac3e6fb4aef550b433742e0a7f2841e22795a5c56bc"
         }
       ]
     },
@@ -325,7 +325,7 @@
         },
         {
           "path": "restructured-degraded-mixed/expectations.json",
-          "sha256": "e702ab26083d5b7803b75556cc6f0501366872e673f565fc594cb5da5a218613"
+          "sha256": "e773043e50cf8b3f927e998f76509cc1080dba18140d6fdfd6fea37ad5b24317"
         }
       ]
     },

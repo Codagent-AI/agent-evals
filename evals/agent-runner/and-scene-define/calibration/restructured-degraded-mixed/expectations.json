@@ -86,12 +86,12 @@
   },
   "conversation": "conversation.jsonl",
   "expected_fidelity": {
-    "fidelity:[\"define.proposal\",\"proposal\",1,1]": "missing",
-    "fidelity:[\"define.proposal\",\"proposal\",1,2]": "met",
-    "fidelity:[\"define.specs\",\"specs\",1,1]": "met",
-    "fidelity:[\"define.specs\",\"specs\",1,2]": "missing",
-    "fidelity:[\"define.design\",\"design\",1,1]": "missing",
-    "fidelity:[\"define.test-plan\",\"test-plan\",1,1]": "missing"
+    "fidelity:define.proposal/proposal/1/1": "missing",
+    "fidelity:define.proposal/proposal/1/2": "met",
+    "fidelity:define.specs/specs/1/1": "met",
+    "fidelity:define.specs/specs/1/2": "missing",
+    "fidelity:define.design/design/1/1": "missing",
+    "fidelity:define.test-plan/test-plan/1/1": "missing"
   },
   "removed_items": [],
   "contradicted_items": [
@@ -124,13 +124,13 @@
   ],
   "planted_fidelity_contradictions": [
     {
-      "exchange": "[\"define.proposal\",\"proposal\",1,2]",
+      "exchange": "define.proposal/proposal/1/2",
       "subject_id": "INV-057",
       "artifact": "specs/presentation-authoring/spec.md",
       "change": "Generated presentations are styled with Tailwind utility classes, installed when the first presentation is created."
     },
     {
-      "exchange": "[\"define.specs\",\"specs\",1,1]",
+      "exchange": "define.specs/specs/1/1",
       "subject_id": "INV-113",
       "artifact": "design.md; specs/release-checks/spec.md",
       "change": "The root URL redirects to the sample; there is no landing page."

@@ -86,12 +86,12 @@
   },
   "conversation": "conversation.jsonl",
   "expected_fidelity": {
-    "fidelity:[\"define.proposal\",\"proposal\",1,1]": "missing",
-    "fidelity:[\"define.proposal\",\"proposal\",1,2]": "met",
-    "fidelity:[\"define.specs\",\"specs\",1,1]": "met",
-    "fidelity:[\"define.specs\",\"specs\",1,2]": "missing",
-    "fidelity:[\"define.design\",\"design\",1,1]": "missing",
-    "fidelity:[\"define.test-plan\",\"test-plan\",1,1]": "missing"
+    "fidelity:define.proposal/proposal/1/1": "missing",
+    "fidelity:define.proposal/proposal/1/2": "met",
+    "fidelity:define.specs/specs/1/1": "met",
+    "fidelity:define.specs/specs/1/2": "missing",
+    "fidelity:define.design/design/1/1": "missing",
+    "fidelity:define.test-plan/test-plan/1/1": "missing"
   },
   "removed_items": [],
   "contradicted_items": [
@@ -127,13 +127,13 @@
   "quality_defects": [],
   "planted_fidelity_contradictions": [
     {
-      "exchange": "[\"define.proposal\",\"proposal\",1,2]",
+      "exchange": "define.proposal/proposal/1/2",
       "subject_id": "INV-115",
       "artifact": "design.md",
       "change": "Routing uses react-router-dom (layout, Routing + registry, Decision 3, dependency set, migration plan)."
     },
     {
-      "exchange": "[\"define.specs\",\"specs\",1,1]",
+      "exchange": "define.specs/specs/1/1",
       "subject_id": "INV-120",
       "artifact": "design.md",
       "change": "The sample's Talk.tsx declares initialMode=\"present\"."

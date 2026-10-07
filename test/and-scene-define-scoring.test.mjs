@@ -7,7 +7,7 @@ import { buildRubric, checkRubric, verifyJudgingInputs, rubricSettings, RUBRIC_S
 import { checkVersions } from '../evals/agent-runner/and-scene-define/lib/versions.mjs'
 import { checkInventory } from '../evals/agent-runner/and-scene-define/lib/inventory.mjs'
 import { scoreDefinition, discoveryLedger } from '../evals/agent-runner/and-scene-define/lib/scoring.mjs'
-import { runDefinitionPanel, judgeSchema, exchangeIdentity, makeJobs } from '../evals/agent-runner/and-scene-define/lib/judge-jobs.mjs'
+import { runDefinitionPanel, judgeSchema, discoverySchema, exchangeIdentity, makeJobs } from '../evals/agent-runner/and-scene-define/lib/judge-jobs.mjs'
 import { assertStrictSchema } from './and-scene-define-helpers.mjs'
 const root = 'evals/agent-runner/and-scene-define'
 const inventory = JSON.parse(await readFile(join(root, 'hidden/inventory.json'), 'utf8'))
@@ -385,4 +385,10 @@ test('a coverage job with one disputed item sends the decider only that item, in
   assert.equal(outcome.ok, true, outcome.record.error)
   assert.deepEqual(seen.map(req => req.schema.properties.results.items.properties.id.enum), [[first.id]])
   assert.deepEqual(outcome.results.map(r => [r.id, r.basis]), [[first.id, 'decider-met'], [second.id, 'consensus-met']])
+})
+test('every judging job with a conversation has a strict schema Codex accepts', () => {
+  const jobs = makeJobs({ inventory, rubric: buildRubric(inventory), artifacts: inputs.artifacts, conversation: [exchange], gates: [] })
+  assert.ok(jobs.some(job => job.kind === 'fidelity') && jobs.some(job => job.kind === 'disclosure'))
+  for (const job of jobs) assertStrictSchema(job.kind === 'discovery' ? discoverySchema(job.criteria) : judgeSchema(job.criteria))
+  assert.equal(exchangeIdentity(exchange), 'define.specs/specs/1/1')
 })
