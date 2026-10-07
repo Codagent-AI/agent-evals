@@ -888,7 +888,7 @@ test('focused source re-judge and its missing-ID retry keep narrowed schemas and
   await mkdir(join(sourceRoot, 'src/presentation-kit'), { recursive: true })
   await writeFile(join(sourceRoot, 'src/presentation-kit/Scene.tsx'), 'export function Scene() { return null }\n')
   const request = buildJudgeRequest({
-    rubrics, job: 'scene-kit', authority, sources: ['src/presentation-kit/Scene.tsx'],
+    rubrics, job: 'scene-kit', authority,
     neutral: { root, source_root: sourceRoot, requirements_root: join(root, 'requirements') },
   })
   const focusedIds = request.criteria.slice(-2)
@@ -1187,10 +1187,10 @@ test('six jobs checkpoint independently and reuse a valid completed output', asy
   )))
 })
 
-test('product judging runs its jobs sequentially through one recorded authority', async () => {
+test('product judging at concurrency 1 runs its jobs sequentially through one recorded authority', async () => {
   const order = []
   const outcome = await runProductJudging({
-    rubrics, authority, evidence: [], sources: [],
+    rubrics, authority, evidence: [], sources: [], concurrency: 1,
     invoke: async ({ job, criteria, authority: recorded }) => {
       assert.ok(PRODUCT_JUDGE_PROFILE.panel.some(member => member.model === recorded.model && member.effort === recorded.effort))
       order.push(`start:${job}`)
@@ -1853,6 +1853,69 @@ test('unexpected panel setup failure stays local and preserves its original caus
   assert.deepEqual(outcome.failed_jobs, ['scene-kit'])
   assert.match(failed[0].attempts.at(-1).error, /panel setup unavailable/)
   assert.equal(saved.length, PRODUCT_JUDGE_JOB_IDS.length - 1)
+})
+
+// Rescores spent most of their time waiting on product judge jobs one at a
+// time; independent jobs now run together without changing what is recorded.
+function staggeredJudge(log) {
+  let inFlight = 0
+  const jobs = new Map()
+  return {
+    invoke: async (request) => {
+      jobs.set(request.job, (jobs.get(request.job) ?? 0) + 1)
+      inFlight += 1
+      log.push({ jobs: [...jobs.values()].filter(Boolean).length, inFlight })
+      // Earlier jobs finish later, so completion order differs from job order.
+      const index = PRODUCT_JUDGE_JOB_IDS.indexOf(request.job)
+      await new Promise((resolve) => setTimeout(resolve, (PRODUCT_JUDGE_JOB_IDS.length - index) * 3))
+      inFlight -= 1
+      jobs.set(request.job, jobs.get(request.job) - 1)
+      if (request.job === 'verification-tooling') throw Object.assign(new Error('invalid_json_schema'), { code: 'judge-schema-invalid', retryable: false, resumable: false, owner: 'evaluation-harness' })
+      if (request.audit_stage) return auditOutput(request.criteria)
+      return judgeOutput(request.criteria)
+    },
+  }
+}
+
+test('product judging runs independent jobs concurrently up to its limit', async () => {
+  const wide = []
+  await runProductJudging({ rubrics, authority, invoke: staggeredJudge(wide).invoke })
+  assert.ok(Math.max(...wide.map(({ jobs }) => jobs)) > 1, 'jobs ran one at a time')
+  const capped = []
+  await runProductJudging({ rubrics, authority, concurrency: 2, invoke: staggeredJudge(capped).invoke })
+  assert.equal(Math.max(...capped.map(({ jobs }) => jobs)), 2)
+})
+
+test('parallel product judging records the same outcome as sequential judging', async () => {
+  const run = async (concurrency) => {
+    const calls = []
+    const saved = []
+    const outcome = await runProductJudging({ rubrics, authority, concurrency,
+      saveJob: async (record) => saved.push(record), invoke: staggeredJudge(calls).invoke })
+    return { outcome, saved: Object.fromEntries(saved.map((record) => [record.id, record])) }
+  }
+  const sequential = await run(1)
+  const parallel = await run(PRODUCT_JUDGE_JOB_IDS.length)
+  assert.deepEqual(parallel.outcome, sequential.outcome)
+  assert.deepEqual(Object.keys(parallel.outcome.judges), PRODUCT_JUDGE_JOB_IDS)
+  assert.deepEqual(parallel.saved, sequential.saved)
+  assert.deepEqual(parallel.outcome.failed_jobs, ['verification-tooling'])
+  assert.equal(Object.keys(parallel.saved).length, PRODUCT_JUDGE_JOB_IDS.length - 1)
+})
+
+test('parallel product judging runs checkpoint callbacks one at a time', async () => {
+  let active = 0
+  let overlap = 0
+  const callback = async () => {
+    active += 1
+    overlap = Math.max(overlap, active)
+    await new Promise((resolve) => setTimeout(resolve, 2))
+    active -= 1
+  }
+  const outcome = await runProductJudging({ rubrics, authority,
+    startJob: callback, saveJob: callback, failJob: callback, invoke: staggeredJudge([]).invoke })
+  assert.deepEqual(outcome.failed_jobs, ['verification-tooling'])
+  assert.equal(overlap, 1)
 })
 
 test('product judging retains schema rejection and quota recovery metadata', async () => {

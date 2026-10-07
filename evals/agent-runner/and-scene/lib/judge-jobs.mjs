@@ -358,6 +358,10 @@ export function buildJudgeRequest({
   }
 }
 
+// Each job's panel already runs its seats together, so three jobs keep about
+// nine judge CLIs in flight.
+export const PRODUCT_JUDGE_CONCURRENCY = 3
+
 export async function runProductJudging({
   rubrics,
   authority,
@@ -372,6 +376,7 @@ export async function runProductJudging({
   saveJob = null,
   failJob = null,
   invoke,
+  concurrency = PRODUCT_JUDGE_CONCURRENCY,
 }) {
   const jobs = productJudgeJobs(rubrics, { mode, notObserved })
   const judges = {}
@@ -388,9 +393,18 @@ export async function runProductJudging({
   const tiebreaks = {}
   const disputeChecks = {}
 
-  // Sequential by design: the jobs share one panel profile and one rate
-  // budget, and a component-local failure must be attributable to its job.
-  for (const { id } of jobs) {
+  // Jobs are independent: each builds its own request from the same inputs, so
+  // they run together up to `concurrency`. Checkpoint callbacks run one at a
+  // time because they rewrite one checkpoint file, each job is checkpointed as
+  // soon as it finishes, and results are recorded in job order so the outcome
+  // does not depend on which job finishes first.
+  let queue = Promise.resolve()
+  const serial = (callback) => {
+    const next = queue.then(callback)
+    queue = next.catch(() => {})
+    return next
+  }
+  const judgeJob = async ({ id }) => {
     const request = buildJudgeRequest({
       rubrics, job: id, authority, evidence, sources, neutral, evidenceViews, notObserved,
     })
@@ -409,20 +423,20 @@ export async function runProductJudging({
       authority: PRODUCT_JUDGE_PROFILE,
       prompt: request.prompt,
     })
-    inputHashes[id] = inputHash
-    const cached = await loadJob?.({ id, inputHash, request })
+    const cached = await serial(() => loadJob?.({ id, inputHash, request }))
     let outcome
+    let reused = false
     if (cached?.results) {
       try {
         const reproduced = verifyCachedPanelJob(cached)
         if (hashJson(cached.criteria) !== hashJson(request.criteria)) throw new Error('cached criteria changed')
         outcome = { ok: true, results: reproduced.results, record: cached }
-        reusedJobs.push(id)
+        reused = true
       } catch { /* stale cache: rerun only this job */ }
     }
     if (!outcome) {
       try {
-        await startJob?.({ id, inputHash, request })
+        await serial(() => startJob?.({ id, inputHash, request }))
         outcome = await runPanelJob({
           job: id, criteria: request.criteria, verdicts: ['pass', 'fail'], order: ['pass', 'fail'],
           panel: PRODUCT_JUDGE_PROFILE.panel.map(member => ({ ...member, invoke })),
@@ -450,6 +464,18 @@ export async function runProductJudging({
       }
     }
     const record = outcome.record ?? {}
+    if (!outcome.ok) {
+      outcome.failure ??= record.failure ?? { message: record.error ?? 'judge output exhausted', code: 'judge-output' }
+      await serial(() => failJob?.({ id, inputHash, failure: outcome.failure, attempts: [...(record.attempts ?? []), ...(record.audit_attempts ?? [])] }))
+    } else if (!reused) {
+      await serial(() => saveJob?.({ ...record, id, inputHash, outputHash: hashJson(outcome.results), authority: PRODUCT_JUDGE_PROFILE }))
+    }
+    return { id, inputHash, outcome, reused }
+  }
+  const recordJob = ({ id, inputHash, outcome, reused }) => {
+    inputHashes[id] = inputHash
+    if (reused) reusedJobs.push(id)
+    const record = outcome.record ?? {}
     judges[id] = outcome.results
     attempts[id] = record.attempts ?? []
     auditAttempts[id] = record.audit_attempts ?? []
@@ -460,13 +486,22 @@ export async function runProductJudging({
     retries[id] = judgeRetries(attempts[id])
     if (!outcome.ok) {
       failedJobs.push(id)
-      failures[id] = outcome.failure ?? record.failure ?? { message: record.error ?? 'judge output exhausted', code: 'judge-output' }
-      await failJob?.({ id, inputHash, failure: failures[id], attempts: [...attempts[id], ...auditAttempts[id]] })
-      continue
+      failures[id] = outcome.failure
+      return
     }
     outputHashes[id] = hashJson(outcome.results)
-    if (!reusedJobs.includes(id)) await saveJob?.({ ...record, id, inputHash, outputHash: outputHashes[id], authority: PRODUCT_JUDGE_PROFILE })
   }
+
+  const judged = new Array(jobs.length)
+  let nextJob = 0
+  const worker = async () => {
+    while (nextJob < jobs.length) {
+      const index = nextJob++
+      judged[index] = await judgeJob(jobs[index])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(concurrency, jobs.length)) }, worker))
+  for (const job of judged) recordJob(job)
 
   return {
     expected_jobs: jobs.map(({ id }) => id),

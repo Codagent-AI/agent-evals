@@ -1394,7 +1394,7 @@ function sampleRecord(outcome) {
 
 export async function runRobustJudgeJob({ request, invoke, samples = JUDGE_SAMPLES, attempts = JUDGE_ATTEMPTS }) {
   // Samples are independent calls with identical inputs, so they run
-  // concurrently; jobs remain sequential in runProductJudging.
+  // concurrently; runProductJudging also runs independent jobs together.
   const outcomes = await Promise.all(Array.from({ length: samples }, (_, index) => runJudgeJob({
     request: { ...request, judge_sample: index + 1, usage_phase: `${request.job}:sample-${index + 1}` },
     invoke,
