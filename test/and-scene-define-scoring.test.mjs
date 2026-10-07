@@ -27,7 +27,7 @@ function members(votes, deciderVote = null, check = 'confirmed', calls = []) {
 }
 test('anchors and generated rubric are pinned; preflight refuses review and calibration gaps', async () => {
   assert.equal(inventory.anchors_review, null)
-  assert.equal(inventory.inventory_version, 3)
+  assert.equal(inventory.inventory_version, 4)
   assert.deepEqual(await checkInventory(), [])
   const broken = structuredClone(inventory); delete broken.items.find(x => x.class === 'mandatory').anchors
   assert.ok((await checkInventory({ inventory: broken })).some(x => /anchors/.test(x)))
@@ -38,7 +38,7 @@ test('anchors and generated rubric are pinned; preflight refuses review and cali
   const stale = structuredClone(rubric); stale.coverage[0].anchors.met = 'changed'
   assert.ok(checkRubric(stale, inventory).length)
   assert.throws(() => verifyJudgingInputs({ inventory, rubric }), /anchors need review/)
-  const reviewed = { ...inventory, anchors_review: { reviewer: 'maintainer', date: '2026-10-06', inventory_version: 3 } }
+  const reviewed = { ...inventory, anchors_review: { reviewer: 'maintainer', date: '2026-10-06', inventory_version: 4 } }
   assert.throws(() => verifyJudgingInputs({ inventory: reviewed, rubric }), /calibration must set/)
   assert.throws(() => verifyJudgingInputs({ inventory: reviewed, rubric: { ...rubric, inventory_version: 1 } }), /inventory version/)
 })

@@ -60,7 +60,7 @@ Every `mandatory` and `acceptable-alternative` item SHALL carry anchors that sta
 - **THEN** preflight fails before any model call and states that the anchors need review
 
 ### Requirement: Independent labelling and reconciliation
-Final classes SHALL come from two independent label sets produced from the same versioned labelling brief by labellers from different model families, neither of which reads the other's labels. A maintainer SHALL reconcile every item on which the labels disagree, and the reconciled inventory SHALL record for each item both labellers' classes and confidence, the final class, the intent and which labeller's intent it was taken from, whether the class was agreed or reconciled, and, for a reconciled item, the reason. Any general rule the maintainer applies across items SHALL be recorded in the inventory.
+Final classes SHALL come from two independent label sets produced from the same versioned labelling brief by labellers from different model families, neither of which reads the other's labels. A maintainer SHALL reconcile every item on which the labels disagree, and the reconciled inventory SHALL record for each item both labellers' classes and confidence, the final class, the intent and which labeller's intent it was taken from or, when a maintainer replaced it, the maintainer's reason, whether the class was agreed or reconciled, and, for a reconciled item, the reason. Any general rule the maintainer applies across items SHALL be recorded in the inventory.
 
 #### Scenario: Labellers disagree
 - **WHEN** the two label sets give an item different classes
@@ -68,6 +68,10 @@ Final classes SHALL come from two independent label sets produced from the same 
 
 #### Scenario: Disagreement left unresolved
 - **WHEN** an item's labels disagree and the reconciled inventory gives no final class or no reason
+- **THEN** the inventory check fails and names the item
+
+#### Scenario: Maintainer intent without a reason
+- **WHEN** an `acceptable-alternative` item's intent was written by a maintainer instead of taken from a labeller, and the inventory records no reason
 - **THEN** the inventory check fails and names the item
 
 ### Requirement: Inventory versioning

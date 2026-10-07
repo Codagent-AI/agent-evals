@@ -49,6 +49,12 @@ reference snapshot, and starting snapshot together. `assertPinnedInventory()` is
 the preflight API: it rejects stale quotes, invalid coverage, input hash changes,
 fixture pin mismatches, and unpinned versions.
 
+An `acceptable-alternative` item's intent is copied verbatim from one labeller
+(`intent_source`). A maintainer may instead write the intent, with
+`intent_source: "maintainer"` and an `intent_reason`; the check rejects a
+maintainer intent without a reason. Inventory version 4 does this for the
+navigation-boundary and production-build render items.
+
 `starting-repo/manifest.json` records the explicit allowlist, neutral rewrites,
 source and output SHA-256 hashes, and Git tree hash. Unlisted fixture files,
 including hidden change artifacts, review guidance, and branded assets, are
@@ -227,7 +233,7 @@ invocation is `evals/agent-runner/and-scene-define/run.sh --calibrate`.
 
 ## Definition judging and calibration prerequisites
 
-Inventory version 3 drafts `met`, `partial`, and `missing` anchors for all 72
+Inventory version 4 drafts `met`, `partial`, and `missing` anchors for all 72
 graded items. `anchors_review` is deliberately null. A maintainer must complete
 **HT-003 (anchor review)** before calibration and record `{ reviewer, date,
 inventory_version }` for the reviewed version, updating the inventory pin using

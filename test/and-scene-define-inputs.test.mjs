@@ -76,6 +76,38 @@ for (const [name, mutate, expected] of [
   })
 }
 
+async function alternative(f, intent) {
+  const item = f.inventory.items[0]
+  const label = { class: 'acceptable-alternative', confidence: 'high' }
+  Object.assign(item, { class: 'acceptable-alternative', intent, intent_source: 'maintainer', labels: { opus: label, codex: label } })
+  f.inventory.counts = { mandatory: 0, 'acceptable-alternative': 1, preference: 0 }
+  for (const input of f.inventory.inputs.labels) {
+    const text = JSON.stringify({ labeller: input.labeller, model: input.model, brief_version: 1, labels: [{ id: item.id, ...label, intent: 'The tool works.' }] })
+    await writeFile(join(f.root, input.path), text)
+    input.sha256 = sha256(text)
+  }
+  return item
+}
+
+test('a maintainer intent with a recorded reason replaces the labellers\' intent', async t => {
+  const f = await fixture(t)
+  const item = await alternative(f, 'The tool works without wrapping.')
+  item.intent_reason = 'The maintainer requires the boundary behavior.'
+  assert.deepEqual(await checkInventory({ hiddenDir: f.root, inventory: f.inventory, reference: f.reference }), [])
+})
+
+test('a maintainer intent without a reason is rejected', async t => {
+  const f = await fixture(t)
+  await alternative(f, 'The tool works without wrapping.')
+  assert.match((await checkInventory({ hiddenDir: f.root, inventory: f.inventory, reference: f.reference })).join('\n'), /INV-001.*maintainer intent.*reason/)
+})
+
+test('an intent reason belongs only to a maintainer intent', async t => {
+  const f = await fixture(t)
+  f.inventory.items[0].intent_reason = 'Stray.'
+  assert.match((await checkInventory({ hiddenDir: f.root, inventory: f.inventory, reference: f.reference })).join('\n'), /INV-001.*intent_reason/)
+})
+
 test('refresh reports stale quotes and new requirements and scenarios', async t => {
   const f = await fixture(t)
   const updated = join(f.root, 'new-reference')

@@ -83,6 +83,8 @@ export async function checkInventory({ suiteRoot = SUITE_ROOT, hiddenDir = join(
     if (item.class === 'acceptable-alternative') {
       if (!nonempty(item.intent) || !nonempty(item.intent_source)) errors.push(`${prefix}: acceptable-alternative requires intent and intent_source`)
     } else if (item.intent != null || item.intent_source != null) errors.push(`${prefix}: intent only belongs to acceptable-alternative`)
+    if (item.intent_source === 'maintainer' && !nonempty(item.intent_reason)) errors.push(`${prefix}: maintainer intent requires intent_reason`)
+    if (item.intent_source !== 'maintainer' && item.intent_reason != null) errors.push(`${prefix}: intent_reason only belongs to a maintainer intent`)
     if (!Array.isArray(item.sources) || !item.sources.length) errors.push(`${prefix}: source quote required`)
     for (const source of item.sources ?? []) {
       const matches = documents.get(source.document)?.filter(section => section.heading === source.heading) ?? []
@@ -98,7 +100,7 @@ export async function checkInventory({ suiteRoot = SUITE_ROOT, hiddenDir = join(
       if (!label || label.class !== item.labels?.[labeller]?.class || label.confidence !== item.labels?.[labeller]?.confidence) errors.push(`${prefix}: ${labeller} label differs from independent input`)
       if (item.intent_source === labeller && item.intent !== label?.intent) errors.push(`${prefix}: intent differs from ${labeller} input`)
     }
-    if (labelSets.size && item.class === 'acceptable-alternative' && !labelSets.has(item.intent_source)) errors.push(`${prefix}: unknown intent source`)
+    if (labelSets.size && item.class === 'acceptable-alternative' && item.intent_source !== 'maintainer' && !labelSets.has(item.intent_source)) errors.push(`${prefix}: unknown intent source`)
     if (originals) {
       const original = originals.items.find(entry => entry.id === item.id)
       if (!original || Object.keys(original).some(field => JSON.stringify(original[field]) !== JSON.stringify(item[field]))) errors.push(`${prefix}: item differs from itemized input`)

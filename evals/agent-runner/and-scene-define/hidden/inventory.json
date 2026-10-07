@@ -1,5 +1,5 @@
 {
-  "inventory_version": 3,
+  "inventory_version": 4,
   "source": {
     "repository": "https://github.com/Codagent-AI/and-scene.git",
     "commit": "ad667a965a0e1ea0b028c36c04d57bf0411d30d9",
@@ -1111,8 +1111,8 @@
         }
       ],
       "class": "acceptable-alternative",
-      "intent": "Navigating past the first or last step behaves predictably and never goes out of range or errors.",
-      "intent_source": "opus",
+      "intent": "Navigating past the first or last step stays on that step, without wrapping around to the other end, going out of range, or erroring.",
+      "intent_source": "maintainer",
       "labels": {
         "opus": {
           "class": "acceptable-alternative",
@@ -1125,10 +1125,11 @@
       },
       "resolution": "agreed",
       "anchors": {
-        "met": "A requirement, scenario, or design decision defines predictable navigation at both ends that never goes out of range or errors, such as clamping so going back on the first step and advancing on the last step stay put. Another mechanism achieving the intent is met (for example, disabling the prev/next controls at the ends and ignoring navigation keys there); a near-miss that does not qualify is a statement only that the final step shows an end card, with no defined behavior for advancing past it or going back from the first step.",
-        "partial": "In-range navigation is defined at one end only, or the artifacts say navigation stays in range without saying what happens at the boundaries.",
-        "missing": "Boundary behavior is absent, only an open question, test-plan only, or a passing mention. Contradiction example: advancing past the last step moves to an empty or undefined step index."
-      }
+        "met": "A requirement, scenario, or design decision defines navigation at both ends that stays on the boundary step: going back on the first step and advancing on the last step leave the presentation where it is, with no wrap-around. Another mechanism achieving this is met (for example, disabling the prev/next controls at the ends and ignoring navigation keys there). A near-miss that does not qualify is a defined wrap-around (advancing on the last step returns to the first), or a statement only that the final step shows an end card, with no defined behavior for advancing past it or going back from the first step.",
+        "partial": "Navigation stays put at one end only, or the artifacts say navigation stays in range without ruling out wrap-around or saying what happens at the boundaries.",
+        "missing": "Boundary behavior is absent, only an open question, test-plan only, or a passing mention. Contradiction examples: advancing past the last step wraps to the first step, or moves to an empty or undefined step index."
+      },
+      "intent_reason": "Maintainer review: a wrap-around at either end is not acceptable, because a presenter who advances past the last step would jump back to the first in front of the audience."
     },
     {
       "id": "INV-032",
@@ -3147,8 +3148,8 @@
         }
       ],
       "class": "acceptable-alternative",
-      "intent": "Automated verification renders every step of the checked presentation(s) in an environment faithful to real viewing and fails on runtime or console errors.",
-      "intent_source": "opus",
+      "intent": "Automated verification renders every step of the checked presentation(s) in a real browser against a production build, and fails on runtime or console errors.",
+      "intent_source": "maintainer",
       "labels": {
         "opus": {
           "class": "acceptable-alternative",
@@ -3161,10 +3162,11 @@
       },
       "resolution": "agreed",
       "anchors": {
-        "met": "A specification requirement, design section, or concrete test-plan gate commits automated verification to load the sample in a real browser (against a built or served app) and advance through every step, failing on runtime or console errors. Any faithful environment counts, for example Puppeteer driving headless Chrome against the production build; Playwright and `vite preview` specifically are not required. A near-miss that does not qualify: mounting each step component in jsdom or happy-dom, or rendering only the first step in a browser.",
-        "partial": "Every step is rendered in a real browser, but error detection is incomplete, for example uncaught exceptions fail the run while console errors are ignored, or errors are only logged; or error detection is complete but coverage of steps is limited to a subset.",
+        "met": "A specification requirement, design section, or concrete test-plan gate commits automated verification to load the sample in a real browser against a production build (a built bundle served by a preview or static server), advance through every step, and fail on runtime or console errors. Any tooling counts, for example Puppeteer driving headless Chrome against a static server of the build output; Playwright and `vite preview` specifically are not required. Near-misses that do not qualify: running the check against the development server, mounting each step component in jsdom or happy-dom, or rendering only the first step in a browser.",
+        "partial": "Every step is rendered in a real browser, but only against the development server or an unspecified server; or error detection is incomplete, for example uncaught exceptions fail the run while console errors are ignored, or errors are only logged; or coverage of steps is limited to a subset.",
         "missing": "No automated multi-step render check exists, or it is mentioned only in passing. Contradiction example: render verification is defined as a manual visual walk-through or a jsdom component smoke test."
-      }
+      },
+      "intent_reason": "Maintainer review: the check must run against a production build, because some defects appear only in the built bundle and a development-server check can pass while the shipped presentation is broken."
     },
     {
       "id": "INV-091",

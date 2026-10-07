@@ -291,7 +291,7 @@ test('--calibrate judges each input three independent times through the candidat
 test('real judging is refused while anchors are unreviewed (HT-003); a dry run makes no calls and writes nothing', async t => {
   const f = await suiteFixture(t, { reviewed: false })
   const { judges, calls } = stubJudges()
-  await assert.rejects(runCalibration({ suiteRoot: f.suiteRoot, calibrationDir: f.calibrationDir, outDir: f.outDir, repoRoot: f.root }, { judges, gateCommand }), /anchors need maintainer review \(HT-003\) for inventory version 3/)
+  await assert.rejects(runCalibration({ suiteRoot: f.suiteRoot, calibrationDir: f.calibrationDir, outDir: f.outDir, repoRoot: f.root }, { judges, gateCommand }), /anchors need maintainer review \(HT-003\) for inventory version 4/)
   assert.equal(calls.length, 0)
   await assert.rejects(readdir(f.outDir), { code: 'ENOENT' })
   assert.throws(() => assertAnchorsReviewed({ inventory_version: 3, anchors_review: { reviewer: 'm', date: '2026-10-06', inventory_version: 2 } }), /HT-003.*version 3/)
