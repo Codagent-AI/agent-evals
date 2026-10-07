@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Input hygiene presentation</title>
+<link rel="icon" href="data:,">
+<style>
+  body { margin: 0; font-family: sans-serif; }
+  [data-presentation] { min-height: 100vh; display: flex; flex-direction: column; }
+  [data-presentation-stage] { position: relative; flex: 1; min-height: 300px; }
+  [data-presentation-stage] > div { position: absolute; width: 60px; height: 30px; border: 1px solid #333; }
+  [data-presentation-mode="present"] [data-presentation-caption] { display: none; }
+  button { min-width: 120px; min-height: 40px; }
+</style>
+</head>
+<body>
+<div id="root" data-presentation data-presentation-mode="present">
+  <h2 id="title" data-presentation-step-title></h2>
+  <div id="stage" data-presentation-stage></div>
+  <p id="caption" data-presentation-caption></p>
+  <nav id="progress" data-presentation-progress aria-label="Progress" data-step-index="0"></nav>
+  <button id="mode" data-presentation-mode-toggle type="button">Browse mode</button>
+</div>
+<script>
+// One deck, several input-hygiene behaviours. The server injects VARIANT and
+// STEPS; nothing here is a candidate.
+//   input-pass             modified arrows and swipes from controls are ignored
+//   input-modifier-fail    a modified arrow navigates like a plain one
+//   input-modifier-prevent Control+ArrowLeft has its default prevented
+//   input-modifier-stop    a window capture listener stops Meta+ArrowRight and prevents its default
+//   input-modifier-unload  Alt+ArrowLeft leaves the document, as history back does
+//   input-two-steps        a deck with no middle step
+//   input-swipe-fail       a touch swipe that starts on a control navigates
+//   input-swipe-pointer    only a pointer swipe that starts on a control navigates
+//   input-swipe-stop       controls stop their own gestures, so the deck never sees them
+//   input-no-controls      no interactive control in either mode
+const variant = window.VARIANT
+const steps = variant === 'input-two-steps' ? window.STEPS.slice(0, 2) : window.STEPS
+const root = document.getElementById('root')
+const progress = document.getElementById('progress')
+const modeButton = document.getElementById('mode')
+progress.setAttribute('data-step-count', String(steps.length))
+let index = 0
+let mode = 'present'
+
+function render() {
+  root.setAttribute('data-presentation-mode', mode)
+  progress.setAttribute('data-step-index', String(index))
+  document.getElementById('title').textContent = steps[index].title
+  document.getElementById('caption').textContent = steps[index].caption
+  modeButton.textContent = mode === 'present' ? 'Browse mode' : 'Present mode'
+  const stage = document.getElementById('stage')
+  stage.replaceChildren(...['stage-anchor', ...steps.slice(0, index + 1).map((_, n) => `card-${n}`)].map((id, n) => {
+    const entity = document.createElement('div')
+    entity.setAttribute('data-layout-id', id)
+    entity.style.left = `${n * 70}px`
+    return entity
+  }))
+  ;[...progress.children].forEach((dot, n) => {
+    if (n === index) dot.setAttribute('aria-current', 'step')
+    else dot.removeAttribute('aria-current')
+  })
+}
+
+function go(next) {
+  index = Math.max(0, Math.min(steps.length - 1, next))
+  render()
+}
+
+function toggleMode() {
+  mode = mode === 'present' ? 'browse' : 'present'
+  render()
+}
+
+if (variant === 'input-no-controls') {
+  modeButton.remove()
+} else {
+  progress.append(...steps.map((step, n) => {
+    const dot = document.createElement('button')
+    dot.type = 'button'
+    dot.setAttribute('data-presentation-progress-dot', '')
+    dot.setAttribute('aria-label', `Step ${n + 1}: ${step.title}`)
+    dot.addEventListener('click', () => go(n))
+    return dot
+  }))
+  modeButton.addEventListener('click', toggleMode)
+}
+
+if (variant === 'input-modifier-stop') {
+  // Registered before any instrumentation, in the capture phase, and hides
+  // the keydown from every later listener.
+  window.addEventListener('keydown', (event) => {
+    if (event.metaKey && event.key === 'ArrowRight') {
+      event.stopImmediatePropagation()
+      event.preventDefault()
+    }
+  }, true)
+}
+
+document.addEventListener('keydown', (event) => {
+  const modified = event.altKey || event.ctrlKey || event.metaKey
+  if (variant === 'input-modifier-prevent' && event.ctrlKey && event.key === 'ArrowLeft') {
+    event.preventDefault()
+    return
+  }
+  if (variant === 'input-modifier-unload' && event.altKey && event.key === 'ArrowLeft') {
+    location.href = '/'
+    return
+  }
+  if (modified && variant !== 'input-modifier-fail') return
+  if (event.target.closest('button')) return
+  if (event.key === 'p') { toggleMode(); return }
+  if (event.key === 'ArrowRight') go(index + 1)
+  if (event.key === 'ArrowLeft') go(index - 1)
+})
+
+// A deck swipe; a gesture that starts on a control belongs to the control
+// unless the variant forgets to check.
+const fromControl = (event) => Boolean(event.target.closest && event.target.closest('button'))
+const touchIgnoresControls = variant !== 'input-swipe-fail' && variant !== 'input-swipe-stop'
+const pointerIgnoresControls = variant !== 'input-swipe-pointer' && variant !== 'input-swipe-stop'
+let touchStart = null
+root.addEventListener('touchstart', (event) => {
+  touchStart = touchIgnoresControls && fromControl(event) ? null : event.touches[0].clientX
+})
+root.addEventListener('touchend', (event) => {
+  if (touchStart === null) return
+  const delta = event.changedTouches[0].clientX - touchStart
+  if (Math.abs(delta) > 40) go(index + (delta < 0 ? 1 : -1))
+  touchStart = null
+})
+let pointerStart = null
+root.addEventListener('pointerdown', (event) => {
+  pointerStart = pointerIgnoresControls && fromControl(event) ? null : event.clientX
+})
+root.addEventListener('pointerup', (event) => {
+  if (pointerStart === null) return
+  const delta = event.clientX - pointerStart
+  if (Math.abs(delta) > 40) go(index + (delta < 0 ? 1 : -1))
+  pointerStart = null
+})
+if (variant === 'input-swipe-stop') {
+  // Each control keeps its own gestures from reaching the deck.
+  for (const control of root.querySelectorAll('button')) {
+    for (const type of ['touchstart', 'touchend', 'pointerdown', 'pointerup']) {
+      control.addEventListener(type, (event) => event.stopPropagation())
+    }
+  }
+}
+render()
+</script>
+</body>
+</html>

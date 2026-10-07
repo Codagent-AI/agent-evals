@@ -12,13 +12,6 @@ import {
   WORKFLOW_RELATIVE_PATH,
 } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
 import { DEMO_CONTRACT } from '../evals/agent-runner/and-scene/lib/demo-contract.mjs'
-import { INTERIM_UNIMPLEMENTED_PROBES } from '../evals/agent-runner/and-scene/lib/browser-eval.mjs'
-
-// INTERIM: the input-hygiene probes are always not observed until they are
-// implemented, so a browser run always asks demo-integration for their
-// fallback verdicts. These fixtures have no neutral source root to audit a
-// fallback pass against, so their stand-in judges fail those two instead.
-const interimProbe = (id) => INTERIM_UNIMPLEMENTED_PROBES.includes(id)
 
 const workflowYaml = `name: implement-change
 params:
@@ -374,7 +367,7 @@ async function evaluate(context, extra = [], overrides = {}) {
         return JSON.stringify({
           results: request.criteria.map((id) => ({
             id,
-            verdict: interimProbe(id) ? 'fail' : 'pass',
+            verdict: 'pass',
             rationale: 'controller fixture evidence supports this criterion',
             evidence: ['controller-fixture:verified'],
           })),
@@ -393,6 +386,7 @@ function browserDemo({ captions = DEMO_CONTRACT.step_captions } = {}) {
   let index = 0
   let mode = 'present'
   let viewport = { width: 1280, height: 720 }
+  let keydowns = []
   return {
     async routes() { return [DEMO_CONTRACT.route] },
     async open() { index = 0; mode = 'present'; viewport = { width: 1280, height: 720 } },
@@ -435,12 +429,31 @@ function browserDemo({ captions = DEMO_CONTRACT.step_captions } = {}) {
         focused: null,
       }
     },
-    async press(key) {
+    // Modified arrows pass through to the browser, and a swipe that starts on
+    // one of the deck's controls leaves the deck alone.
+    async press(key, { modifiers = [] } = {}) {
+      if (modifiers.length > 0) {
+        keydowns.push({ key, altKey: modifiers.includes('Alt'), ctrlKey: modifiers.includes('Control'),
+          metaKey: modifiers.includes('Meta'), shiftKey: false, prevented: false, preventDefaultCalls: 0 })
+        return
+      }
       if (key === 'ArrowRight') index = Math.min(DEMO_CONTRACT.step_count - 1, index + 1)
       if (key === 'ArrowLeft') index = Math.max(0, index - 1)
     },
-    async swipe(direction) {
+    async swipe(direction, { selector = null } = {}) {
+      if (selector !== null) return true
       await this.press(direction === 'left' ? 'ArrowRight' : 'ArrowLeft')
+      return true
+    },
+    async installKeyInstrumentation() { keydowns = []; return { installed: true } },
+    async readKeyInstrumentation({ reset = false } = {}) {
+      const read = { installed: true, unloaded: false, url: `http://demo/${DEMO_CONTRACT.route}`, keydowns: [...keydowns] }
+      if (reset) keydowns = []
+      return read
+    },
+    async controlTargets() {
+      return { controls: [{ kind: 'mode', name: 'Browse mode', selector: '#mode', hook: '[data-presentation-mode-toggle]',
+        position: null }], looked_for: ['[data-presentation-mode-toggle]'] }
     },
     async activate(name) { index = Number(name.replace('Step ', '')) - 1 },
     async focus() {},
@@ -1586,7 +1599,7 @@ test('rescore checks browser failures while a reference baseline does not', asyn
           mismeasured_step: null, measurement_fault: null, citations: [], log_citations: [], replay: null })
       }
       if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
-      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: interimProbe(id) ? 'fail' : 'pass',
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
         rationale: 'fixture source supports this criterion', evidence: ['src/index.ts'] })) })
     },
   })
@@ -1601,7 +1614,7 @@ test('rescore checks browser failures while a reference baseline does not', asyn
     judgeInvoke: async (request) => {
       if (request.job === 'second-opinion') referenceChecks += 1
       if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
-      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: interimProbe(id) ? 'fail' : 'pass',
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
         rationale: 'fixture source supports this criterion', evidence: ['src/index.ts'] })) })
     },
   })
@@ -1650,7 +1663,7 @@ test('rescore starts the candidate server and confirms a browser overturn by rep
           citations: [{ path: 'src/index.ts', start_line: 1, end_line: 1 }], log_citations: [],
           replay: DIRECT_JUMP_REPLAY })
       if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
-      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: interimProbe(id) ? 'fail' : 'pass',
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
         rationale: 'fixture evidence', evidence: ['src/index.ts'] })) })
     },
   })
@@ -1794,7 +1807,7 @@ test('a browser failure receives a checkpointed audited second opinion before sc
       if (request.audit_stage) return JSON.stringify({ results: request.criteria.map((id) => ({
         id, classification: 'confirmed', rationale: 'source confirms the behavior', evidence: ['src/index.ts'],
       })) })
-      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: interimProbe(id) ? 'fail' : 'pass',
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
         rationale: 'controller fixture evidence supports this criterion', evidence: ['src/index.ts'],
         citations: ['src/index.ts'] })) })
     },

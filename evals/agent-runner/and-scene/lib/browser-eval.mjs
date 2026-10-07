@@ -48,17 +48,6 @@ export const DETERMINISTIC_BROWSER_CRITERIA = [
   'input-swipe-from-control-ignored',
 ]
 
-// INTERIM (issue #77 slice S1): the engineering-quality input-hygiene criteria
-// are registered so the rubric, scorer, and fallback judge cover them, but
-// their probes are not implemented yet. Each is recorded as not observed with
-// this reason, so its declared demo-integration fallback judge decides it. The
-// probe slice replaces these placeholders with real probes.
-export const INTERIM_UNIMPLEMENTED_PROBES = Object.freeze([
-  'input-modifier-keys-pass-through',
-  'input-swipe-from-control-ignored',
-])
-const INTERIM_PROBE_REASON = 'probe not yet implemented; the declared fallback judge decides this criterion'
-
 const PROBE_REQUIREMENTS = {
   'demo-route-and-registration': { mode: 'browse', position: 0 },
   'demo-nine-step-content-and-order': { mode: 'browse', position: 0 },
@@ -74,10 +63,12 @@ const PROBE_REQUIREMENTS = {
   'demo-mode-interaction-reliability': { mode: 'present', position: 0 },
   'demo-control-semantics': { mode: 'browse', position: 0 },
   'demo-focus-and-keyboard-accessibility': { mode: 'browse', position: 0 },
-  // INTERIM: the placeholders only open and read the deck where every other
-  // probe can; the real probes start from a middle step.
-  'input-modifier-keys-pass-through': { mode: 'browse', position: 0 },
-  'input-swipe-from-control-ignored': { mode: 'browse', position: 0 },
+  // The input-hygiene probes start from a step that is neither the first nor
+  // the last: this one on the nine-step deck, or the nearest middle step on a
+  // shorter one. Present mode is where deck keys and swipes navigate; the
+  // swipe probe moves to browse mode only when present mode exposes no control.
+  'input-modifier-keys-pass-through': { mode: 'present', position: 4 },
+  'input-swipe-from-control-ignored': { mode: 'present', position: 4 },
 }
 
 const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
@@ -237,6 +228,51 @@ function conventionsSought(states) {
 
 function notObserved(rationale, evidence = [], lookedFor = ENTITY_CONVENTIONS) {
   return { not_observed: true, rationale, evidence, looked_for: lookedFor }
+}
+
+// Held one at a time while pressing each arrow key, with the keydown flag that
+// shows each was held.
+const MODIFIERS = ['Alt', 'Control', 'Meta']
+const MODIFIER_FLAGS = { Alt: 'altKey', Control: 'ctrlKey', Meta: 'metaKey' }
+
+// What the swipe-from-control probe looks for when the driver does not report
+// its own conventions.
+const SWIPE_CONTROL_CONVENTIONS = [
+  'presentation mode control', 'previous and next controls', 'step controls',
+]
+
+function noMiddleStep(count, consequence) {
+  return notObserved(
+    `the deck has ${count} step${count === 1 ? '' : 's'} and no step that is neither the first nor the last, so ${consequence}`,
+    [],
+    ['a step that is neither the first nor the last'],
+  )
+}
+
+// Which control a swipe starts on. A control whose activation leaves the step
+// where it is comes first: the mode control, then the active step's own step
+// control. Otherwise Previous or Next, then another step control, whose own
+// activation target is recorded so that landing there is not mistaken for a
+// swipe. Only a control with a selector can be swiped from.
+function chooseSwipeControl(controls, start, titles = DEMO_CONTRACT.step_titles) {
+  const usable = (Array.isArray(controls) ? controls : [])
+    .filter((control) => typeof control?.selector === 'string' && control.selector.trim().length > 0)
+  const mode = usable.find(({ kind }) => kind === 'mode')
+  if (mode) return { control: mode, target: null }
+  const steps = usable.filter(({ kind }) => kind === 'step')
+  const named = steps.some((control) => namesAnyStep(control, titles))
+  const targetOf = (control) => {
+    const target = named
+      ? titles.findIndex((_, index) => namesStep(control, index, titles))
+      : (Number.isInteger(control.position) ? control.position : steps.indexOf(control))
+    return target >= 0 ? target : null
+  }
+  const own = steps.find((control) => targetOf(control) === start)
+  if (own) return { control: own, target: start }
+  const directional = usable.find(({ kind }) => kind === 'previous' || kind === 'next')
+  if (directional) return { control: directional, target: start + (directional.kind === 'next' ? 1 : -1) }
+  if (steps[0]) return { control: steps[0], target: targetOf(steps[0]) }
+  return null
 }
 
 class UnobservedPrecondition extends Error {
@@ -502,6 +538,25 @@ export async function runBrowserEvaluation({
         }
       },
     })
+  }
+
+  // The probe's middle step: its declared start position on a deck long
+  // enough, else the nearest step that is neither the first nor the last.
+  // Null when the deck has no such step.
+  async function middleStep(id) {
+    const { mode, position } = PROBE_REQUIREMENTS[id]
+    const page = await session({ mode, position: 0 })
+    const count = await stepCountOf(await page.state())
+    return { count, middle: count >= 3 ? Math.min(position, count - 2) : null }
+  }
+
+  // A driver without a probe's primitives cannot observe it. That is the
+  // harness's shortcoming, never the candidate's.
+  function requireDriver(page, methods) {
+    const missing = methods.filter((method) => typeof page[method] !== 'function')
+    if (missing.length > 0) {
+      throw browserInfrastructureFailure(`the browser driver does not provide ${missing.join(', ')}`)
+    }
   }
 
   async function stepCountOf(state) {
@@ -983,19 +1038,197 @@ export async function runBrowserEvaluation({
       return [after === before + 1, `focus succeeded and keyboard navigation moved ${before} → ${after}`, []]
     },
 
-    // INTERIM placeholders; see INTERIM_UNIMPLEMENTED_PROBES. Each retains the
-    // bounded observation of the opened deck like any other not-observed
-    // record, and never records a verdict: only a harness failure escapes.
-    ...Object.fromEntries(INTERIM_UNIMPLEMENTED_PROBES.map((id) => [
-      id, async () => {
+    // Modified arrows belong to the browser and the operating system: Alt+Left
+    // is history back, Control and Meta arrows move between words, tabs, and
+    // spaces. Six presses from a middle step, each with one modifier held. The
+    // keydown instrumentation wraps KeyboardEvent.prototype.preventDefault, so
+    // a page that stops propagation still shows its preventDefault call.
+    // chrome-devtools-axi offers no init-script primitive, so the
+    // instrumentation is installed into the loaded document before the first
+    // press rather than before the page's own scripts run; a page that wraps
+    // preventDefault itself is out of its reach.
+    'input-modifier-keys-pass-through': async () => {
+      const { mode } = PROBE_REQUIREMENTS['input-modifier-keys-pass-through']
+      const { count, middle } = await middleStep('input-modifier-keys-pass-through')
+      if (middle === null) return noMiddleStep(count, 'modified arrow keys were not pressed')
+      const start = async () => {
+        const page = await session({ mode, position: middle })
+        requireDriver(page, ['installKeyInstrumentation', 'readKeyInstrumentation'])
+        await page.installKeyInstrumentation()
+        return page
+      }
+      // The press already counted; only re-establishing the starting step
+      // remains, and failing to is the harness's fault, never the page's.
+      const reestablish = async (reason) => {
         try {
-          await (await session(PROBE_REQUIREMENTS[id])).state()
+          return await start()
         } catch (error) {
-          if (error?.owner === 'evaluation-harness') throw error
+          throw browserInfrastructureFailure(
+            `the presentation could not be reloaded at step index ${middle} after ${reason}: ${bounded(error?.message)}`,
+          )
         }
-        return notObserved(INTERIM_PROBE_REASON, [], [])
-      },
-    ])),
+      }
+      let page = await start()
+      const presses = []
+      for (const modifier of MODIFIERS) {
+        for (const key of ['ArrowRight', 'ArrowLeft']) {
+          const chord = `${modifier}+${key}`
+          // A document that left only after the previous press was read
+          // belongs to that press.
+          if ((await page.readKeyInstrumentation({ reset: true })).unloaded) {
+            const previous = presses.at(-1)
+            if (previous) Object.assign(previous, { unloaded: true, step_after: null, reestablished: true })
+            page = await reestablish(previous
+              ? `${previous.modifier}+${previous.key} left the document` : 'the document left before the first press')
+            await page.readKeyInstrumentation({ reset: true })
+          }
+          const before = (await page.state()).stepIndex
+          await page.press(key, { modifiers: [modifier] })
+          let reading = await page.readKeyInstrumentation()
+          let after = null
+          if (!reading.unloaded) {
+            try {
+              after = (await page.state()).stepIndex
+            } catch (error) {
+              // A read that lands on the document replacing this one is the
+              // press leaving the document, not an unreadable presentation.
+              const again = await page.readKeyInstrumentation()
+              if (!again.unloaded) throw error
+              reading = { ...again, keydowns: reading.keydowns }
+            }
+          }
+          if (!reading.unloaded) {
+            // A second read also catches a document that left after the state
+            // read, and a default the page prevented once dispatch was over.
+            const confirmed = await page.readKeyInstrumentation()
+            reading = confirmed.unloaded ? { ...confirmed, keydowns: reading.keydowns } : confirmed
+          }
+          const keydowns = (reading.keydowns ?? []).filter((entry) => (
+            entry?.key === key && entry?.[MODIFIER_FLAGS[modifier]] === true
+          ))
+          const press = {
+            key,
+            modifier,
+            step_before: before,
+            step_after: reading.unloaded ? null : after,
+            prevented: keydowns.some(({ prevented }) => prevented === true),
+            prevent_default_calls: keydowns.reduce((sum, { preventDefaultCalls }) => (
+              sum + (Number.isInteger(preventDefaultCalls) ? preventDefaultCalls : 0)), 0),
+            keydown_observed: keydowns.length > 0,
+            unloaded: reading.unloaded === true,
+            reestablished: false,
+          }
+          presses.push(press)
+          // Leaving the document is the shortcut reaching the browser, so the
+          // press passes through; a step change is a failure already recorded.
+          // Either way the next press starts from the same middle step.
+          if (press.unloaded || press.step_after !== press.step_before) {
+            press.reestablished = true
+            page = await reestablish(press.unloaded ? `${chord} left the document` : `${chord} changed the step`)
+          }
+        }
+      }
+      const failing = presses.find((press) => (
+        press.prevented || (!press.unloaded && press.step_after !== press.step_before)))
+      const failure = failing ? {
+        key: failing.key,
+        modifier: failing.modifier,
+        reason: !failing.unloaded && failing.step_after !== failing.step_before ? 'step-changed' : 'prevented-default',
+        step_before: failing.step_before,
+        step_after: failing.step_after,
+      } : null
+      const describe = (press) => `${press.modifier}+${press.key} ${press.step_before}→${press.unloaded ? 'unloaded' : press.step_after}${press.prevented ? ' (default prevented)' : ''}`
+      return [
+        failure === null,
+        failure === null
+          ? `modified arrow presses from step index ${middle} passed through: ${presses.map(describe).join(', ')}`
+          : (failure.reason === 'step-changed'
+            ? `${failure.modifier}+${failure.key} moved the deck from step index ${failure.step_before} to ${failure.step_after}`
+            : `the page prevented the default of ${failure.modifier}+${failure.key} at step index ${failure.step_before}`),
+        [],
+        { modifier_keys: { mode, start_step: middle, instrumentation: 'installed-before-first-press', presses, failure } },
+      ]
+    },
+
+    // A swipe that starts on one of the presentation's own controls belongs to
+    // that control, so it must not navigate the deck. The swipe starts at the
+    // control's centre and travels the existing swipe's distance and pacing,
+    // as touch events and then, when the step stays put, as pointer events.
+    'input-swipe-from-control-ignored': async () => {
+      const id = 'input-swipe-from-control-ignored'
+      const { mode: preferredMode } = PROBE_REQUIREMENTS[id]
+      const { count, middle } = await middleStep(id)
+      if (middle === null) return noMiddleStep(count, 'no swipe was started on a control')
+      const lookedFor = []
+      let chosen = null
+      for (const mode of [preferredMode, preferredMode === 'present' ? 'browse' : 'present']) {
+        const page = await session({ mode, position: middle })
+        requireDriver(page, ['controlTargets'])
+        const discovered = await page.controlTargets()
+        for (const convention of discovered?.looked_for ?? []) {
+          if (!lookedFor.includes(convention)) lookedFor.push(convention)
+        }
+        const choice = chooseSwipeControl(discovered?.controls ?? [], middle, contract.step_titles)
+        if (choice) {
+          chosen = { mode, page, ...choice, discovered: (discovered.controls ?? []).length }
+          break
+        }
+      }
+      if (!chosen) {
+        return notObserved('no interactive control was discovered inside the presentation in either mode', [],
+          lookedFor.length > 0 ? lookedFor : SWIPE_CONTROL_CONVENTIONS)
+      }
+      const { mode, control, target } = chosen
+      // A swipe travels away from the control's own target, so a step the
+      // swipe reaches is never mistaken for the control's activation.
+      const direction = target !== null && target > middle ? 'right' : 'left'
+      const attempts = []
+      let page = chosen.page
+      for (const input of ['touch', 'pointer']) {
+        const last = attempts.at(-1)
+        if (last?.changed && !last.exempt) break
+        if (last?.changed) page = await session({ mode, position: middle })
+        const before = (await page.state()).stepIndex
+        const dispatched = await page.swipe(direction, { input, selector: control.selector })
+        if (dispatched === false) {
+          throw browserInfrastructureFailure(
+            `the discovered ${control.kind} control ${bounded(control.selector)} could not be found to start a swipe on`,
+          )
+        }
+        const after = (await page.state()).stepIndex
+        const changed = after !== before
+        attempts.push({ input, step_before: before, step_after: after, changed,
+          exempt: changed && target !== null && after === target })
+      }
+      const failing = attempts.find(({ changed, exempt }) => changed && !exempt)
+      const observation = {
+        mode,
+        start_step: middle,
+        direction,
+        control: {
+          kind: control.kind,
+          name: normalizeEvidence(control.name ?? ''),
+          selector: normalizeEvidence(control.selector),
+          hook: control.hook == null ? null : normalizeEvidence(control.hook),
+          activation_target: target,
+        },
+        controls_discovered: chosen.discovered,
+        inputs_tried: attempts.map(({ input }) => input),
+        attempts,
+        failure: failing
+          ? { input: failing.input, step_before: failing.step_before, step_after: failing.step_after }
+          : null,
+      }
+      const swiped = attempts.map(({ input, step_before: before, step_after: after }) => `${input} ${before}→${after}`).join(', ')
+      return [
+        !failing,
+        failing
+          ? `a ${failing.input} swipe ${direction} starting on the ${control.kind} control ${bounded(control.selector)} in ${mode} mode moved the deck from step index ${failing.step_before} to ${failing.step_after}`
+          : `swipes ${direction} starting on the ${control.kind} control ${bounded(control.selector)} in ${mode} mode left the deck on its step (${swiped})`,
+        [],
+        { swipe_from_control: observation },
+      ]
+    },
   }
 
   const criteria = []

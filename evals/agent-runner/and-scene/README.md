@@ -631,9 +631,16 @@ deterministic browser probes for modified arrow keys and swipes that start on a
 control), verification tooling robustness (3), skill instructions and templates
 (1.5), and presentation code and tests (1.5). The fourteen source-reviewed
 criteria belong to a focused `engineering-quality` judge job that runs for
-candidates and the reference. Both browser probes declare the
-`demo-integration` fallback judge; until they are implemented they are recorded
-as not observed and that judge decides them. The points come from demo
+candidates and the reference. Both browser probes start from a middle step in
+present mode. The modifier probe presses ArrowRight and ArrowLeft holding Alt,
+Control, and Meta in turn, and fails a step change or a prevented default; its
+keydown instrumentation is installed before the first press, since
+chrome-devtools-axi has no init-script primitive. A press that leaves the
+document passes through, and the probe reloads and continues. The swipe probe
+swipes from the mode control (or, failing that, a step or Previous/Next
+control) in whichever mode exposes one, as touch and then pointer events. Each
+declares the `demo-integration` fallback judge, which decides it only when the
+deck has no middle step or, for the swipe, no discoverable control. The points come from demo
 technical quality and scene-kit correctness, cut from 24 to 20 each (canonical
 content 5→4, navigation and modes 5→4, runtime reliability 4→3, code
 boundaries 3→2; step model 4→3, entity transitions 7→6, modes and navigation

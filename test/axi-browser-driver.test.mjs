@@ -815,6 +815,32 @@ test('the AXI driver keeps previous, next, and mode controls out of the step con
   assert.match(source, /data-presentation-mode-toggle/)
 })
 
+test('the AXI driver reports each discovered control with a selector and the conventions it looked for', async () => {
+  const { createAxiBrowserDriver, BrowserDriverError } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
+  const discovered = [{ kind: 'mode', name: 'Browse mode', selector: '#mode', hook: '[data-presentation-mode-toggle]', position: null }]
+  let stdout = `${JSON.stringify(discovered)}\n`
+  const calls = []
+  const driver = createAxiBrowserDriver({
+    baseUrl: 'http://127.0.0.1:4319/',
+    command: async (args, input) => {
+      calls.push(input)
+      return { status: 0, stdout, stderr: '' }
+    },
+  })
+  const targets = await driver.controlTargets()
+  assert.deepEqual(targets.controls, discovered)
+  assert.ok(targets.looked_for.includes('[data-presentation-mode-toggle]'))
+  assert.ok(targets.looked_for.includes('accessible step name'))
+  const source = calls.at(-1)
+  // Discovery is the same as every other probe's, and a regex escape survives.
+  assert.match(source, /modeToggle\(readMode\(\) === 'present' \? 'browse' : 'present'\)/)
+  assert.match(source, /\/\^\(previous\|prev\|back\)\\b\/i/)
+  assert.doesNotMatch(source, /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/)
+
+  stdout = `${JSON.stringify({ not: 'a list' })}\n`
+  await assert.rejects(() => driver.controlTargets(), BrowserDriverError)
+})
+
 // agent-evals #78 rep 2: `\b` inside a page-script template literal became a
 // backspace, so "Previous step" never matched as directional and shifted the
 // step controls. Every generated script is checked for that class of escape.

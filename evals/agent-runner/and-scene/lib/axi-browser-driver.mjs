@@ -1285,6 +1285,76 @@ console.log(JSON.stringify(true));
 `)
     },
 
+    // The presentation's own interactive controls that the existing discovery
+    // recognises: its mode control, its Previous and Next controls, and its
+    // step controls. Each carries the convention that found it and a selector
+    // that addresses it alone, so a probe can start a gesture on it and a
+    // replay can address the same control in a fresh document: the control's
+    // own id, else its hook when that matches it alone, else its element path.
+    // An ambiguous mode, Previous, or Next match is left out rather than
+    // guessed. `looked_for` lists every convention searched.
+    async controlTargets() {
+      const targets = await run(`
+const targets = await page.eval(() => {
+  const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
+${navigationDiscoverySource()}
+  const addresses = (selector, element) => {
+    try {
+      const matches = document.querySelectorAll(selector);
+      return matches.length === 1 && matches[0] === element;
+    } catch {
+      return false;
+    }
+  };
+  const selectorFor = (element, hook) => {
+    const own = element.id ? '#' + CSS.escape(element.id) : null;
+    if (own && addresses(own, element)) return own;
+    if (typeof hook === 'string' && hook.startsWith('[') && addresses(hook, element)) return hook;
+    const parts = [];
+    for (let node = element; node && node !== document.documentElement; node = node.parentElement) {
+      const id = node.id ? '#' + CSS.escape(node.id) : null;
+      if (id && addresses(id, node)) return [id, ...parts].join(' > ');
+      const tag = node.tagName.toLowerCase();
+      const siblings = [...node.parentElement.children].filter((child) => child.tagName === node.tagName);
+      parts.unshift(siblings.length > 1 ? tag + ':nth-of-type(' + (siblings.indexOf(node) + 1) + ')' : tag);
+    }
+    return ['html', ...parts].join(' > ');
+  };
+  const describe = (element, kind, hook, position = null) => ({
+    kind,
+    name: accessibleName(element),
+    selector: selectorFor(element, hook),
+    hook: hook || null,
+    position,
+  });
+  const found = [];
+  const mode = modeToggle(readMode() === 'present' ? 'browse' : 'present');
+  if (mode && mode !== 'ambiguous') found.push(describe(mode, 'mode', matchedSelectors.mode_toggle));
+  for (const [kind, selectors, pattern] of [
+    ['previous', ${JSON.stringify(PREVIOUS_SELECTORS)}, /^(previous|prev|back)\\b/i],
+    ['next', ${JSON.stringify(NEXT_SELECTORS)}, /^next\\b/i],
+  ]) {
+    const matches = findDirectionalControls(selectors, pattern, kind);
+    if (matches.length === 1) found.push(describe(matches[0], kind, matchedSelectors[kind]));
+  }
+  controls.forEach((control, position) => {
+    found.push(describe(control, 'step', matchedSelectors.controls, position));
+  });
+  return found;
+});
+console.log(JSON.stringify(targets));
+`)
+      if (!Array.isArray(targets)) throw new BrowserDriverError('control discovery returned an invalid reading')
+      return {
+        controls: targets,
+        looked_for: [
+          ...MODE_TOGGLE_SELECTORS, 'accessible mode name',
+          ...PREVIOUS_SELECTORS, ...NEXT_SELECTORS, 'accessible directional name',
+          ...PROGRESS_SELECTORS, EXPLICIT_CONTROL_SELECTOR, 'accessible step name',
+        ],
+      }
+    },
+
     // A finger's swipe spans many frames, so a page sees its touchstart, then
     // its touchmoves, then its touchend, each in its own task. A presentation
     // that records the touch start in state committed after a render, as
