@@ -446,9 +446,18 @@
     },
     "verification-step-error-fails": {
       "owner": "fixture",
-      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
-      "heading": "Scenario: Step error fails verification",
-      "quote": "verification fails and identifies the failing step"
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Scenario: Step error fails verification",
+          "quote": "verification fails and identifies the failing step"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Verification (`npm run verify` → `scripts/verify.mjs`)",
+          "quote": "reads the step count from a `data-step-count` hook on the chrome, then steps through every step (`ArrowRight`), checking the `data-step-index` advances"
+        }
+      ]
     },
     "quality-project-local-screenshot-helper": {
       "owner": "fixture",
@@ -1024,7 +1033,8 @@
             "Fail an instruction-governed scaffold criterion when its instruction is missing, ambiguous, or contradicts the scenario, or when a delivered helper script or template implements that branch differently. A generic instruction such as scaffold if needed does not state a branch.",
             "For skill-template-path-resolution, credit an explicit instruction or helper that resolves template paths from the directory containing SKILL.md rather than from the caller's working directory.",
             "For skill-empty-directory-scaffold, require that the bootstrap template contains the build setup, scene kit, and presentation index with the required dependency set, that SKILL.md directs a full scaffold and dependency installation for an empty or unscaffolded target, and a test that materializes the bootstrap template in a fresh temporary location and builds it, as the fixture test plan's integration coverage describes. Any materialization pattern counts, including creating a temporary directory and copying the template into a new app path inside it; a test name or filename alone is not that test.",
-            "For skill-scaffold-style-neutral, inspect the bootstrap template's dependencies and styles: credit a scaffold that adds no styling framework and defines no default presentation colors, fonts, spacing scale, card or button styles, borders, shadows, or theme tokens."
+            "For skill-scaffold-style-neutral, inspect the bootstrap template's dependencies and styles: credit a scaffold that adds no styling framework and defines no default presentation colors, fonts, spacing scale, card or button styles, borders, shadows, or theme tokens.",
+            "For skill-empty-directory-scaffold, the scene kit in the bootstrap template is a snapshot of the canonical src/presentation-kit/, which the fixture requires to stay aligned with it. Fail when a non-test scene-kit file in the bootstrap template differs in behavior or public types from its canonical counterpart. Cite both files. Formatting-only differences do not fail."
           ]
         },
         {
@@ -1058,7 +1068,8 @@
           "review_guidance": [
             "The normative skill instructions are the implementation of the agent's completion gate. Credit explicit instructions that require build, render, and browser composition checks before success and require fixing and rerunning failures before completion.",
             "Do not require an automated agent-remediation loop or interaction transcript; the verification tooling itself is scored separately for its executable technical behavior.",
-            "For skill-failures-fixed-before-success, credit a general instruction to fix failures and re-run the checks, together with a rule against reporting success while a build or render failure remains; fixing visual composition findings and re-inspecting satisfies the visual check. Do not fail it for a failure mode of a check tool the instructions do not mention. It need not name each check type. Fail it when the instructions allow completing with a failing check, or name a failure type that may be reported instead of fixed. A pass/fail field in a completion report format is not a permission to complete with a failing check."
+            "For skill-failures-fixed-before-success, credit a general instruction to fix failures and re-run the checks, together with a rule against reporting success while a build or render failure remains; fixing visual composition findings and re-inspecting satisfies the visual check. Do not fail it for a failure mode of a check tool the instructions do not mention. It need not name each check type. Fail it when the instructions allow completing with a failing check, or name a failure type that may be reported instead of fixed. A pass/fail field in a completion report format is not a permission to complete with a failing check.",
+            "For skill-checks-run-before-done, the fixture's self-verify requirement says that the visual composition check inspects the first step, the last step, and any dense or key steps, and that responsive-sensitive presentations are also checked at a narrow viewport. Fail when the instructions' visual composition check never directs a narrow-viewport check for a responsive-sensitive presentation. The project-local screenshot helper need not capture the narrow viewport, because the fixture defines it at a standard desktop viewport; any browser view satisfies the narrow check."
           ]
         }
       ]
@@ -1097,7 +1108,8 @@
             "For verification-preview-process-ownership, credit either of these mechanisms: (a) the verifier picks a fresh port it reserved itself (for example an ephemeral port), starts the preview on it with a strict port, and takes readiness from the spawned child's own announcement of that address, with the child exiting before readiness rejecting it; or (b) readiness polling of the preview address is raced against the spawned child's exit, so the child's exit at any point before readiness fails verification.",
             "Fail verification-preview-process-ownership when readiness comes from HTTP polling of a fixed or reused port and the only ownership check is the child's liveness sampled before each request or after a fixed delay: a stale server already listening there answers before the child's exit is observed. A strict port alone is likewise insufficient.",
             "For verification-console-page-error-fails, the source must fail on both console errors and uncaught page errors and report the step. Executable evidence needs one representative browser-error test, either a console error or a page error, that asserts a non-zero exit and the offending step, as the fixture's end-to-end plan describes; separate tests for each error kind are not required.",
-            "For verification-step-error-fails, require a test of a step that fails to render or advance that asserts a non-zero exit and the offending step."
+            "For verification-step-error-fails, require a test of a step that fails to render or advance that asserts a non-zero exit and the offending step.",
+            "For verification-step-error-fails, the verifier must not treat a missing, zero, or non-numeric data-step-count or data-step-index as progress. Fail when the transition check converts an absent or non-numeric hook into a number that still satisfies its comparison (for example Number(null) === 0 on the first step). Also fail when an unreadable step count makes the verifier step through no steps and still pass. Cite the comparison. The inspect helper's handling of the same hooks is scored by engineering-inspect-fails-loudly, not here."
           ]
         },
         {

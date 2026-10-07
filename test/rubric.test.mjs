@@ -643,6 +643,36 @@ test('rubric 12.2 credits a general fix-and-rerun gate for skill failures', asyn
   assert.match(guidance, /pass\/fail field in a completion report format is not a permission/)
 })
 
+// Issue #77 class A coverage audit (openspec/changes/eval-validator/class-a-coverage.md):
+// proposals P5, P6, and P7 restate fixture requirements the existing guidance missed.
+test('rubric 13.0 adds the class A coverage guidance for narrow viewports, kit parity, and step hooks', async () => {
+  const rubric = await automatedRubric()
+  const rows = rubric.components.flatMap(({ subcomponents }) => subcomponents)
+  const lines = (id) => rows.find((row) => row.id === id).review_guidance
+  const line = (id, prefix) => lines(id).find((item) => item.startsWith(prefix))
+
+  const p5 = line('skill-self-verification', 'For skill-checks-run-before-done, the fixture')
+  assert.ok(p5, 'P5 guidance on skill-self-verification')
+  assert.match(p5, /responsive-sensitive presentations are also checked at a narrow viewport/)
+  assert.match(p5, /Fail when the instructions' visual composition check never directs a narrow-viewport check/)
+  assert.match(p5, /screenshot helper need not capture the narrow viewport/)
+
+  const p6 = line('skill-scaffolding', 'For skill-empty-directory-scaffold, the scene kit in the bootstrap template')
+  assert.ok(p6, 'P6 guidance on skill-scaffolding')
+  assert.match(p6, /snapshot of the canonical src\/presentation-kit\//)
+  assert.match(p6, /differs in behavior or public types from its canonical counterpart/)
+  assert.match(p6, /Formatting-only differences do not fail/)
+
+  const p7 = line('verification-addressing-and-errors', 'For verification-step-error-fails, the verifier must not')
+  assert.ok(p7, 'P7 guidance on verification-addressing-and-errors')
+  assert.match(p7, /missing, zero, or non-numeric data-step-count or data-step-index as progress/)
+  assert.match(p7, /Number\(null\) === 0/)
+  assert.match(p7, /unreadable step count makes the verifier step through no steps and still pass/)
+  // The inspect helper stays with the engineering criterion; P7 judges verify only.
+  assert.match(p7, /inspect helper's handling of the same hooks is scored by engineering-inspect-fails-loudly, not here/)
+  assert.ok(!lines('verification-addressing-and-errors').some((item) => /engineering-inspect-fails-loudly/.test(item) && item !== p7))
+})
+
 // Issue #77: engineering quality a good implementation has even though the
 // fixture's planning documents do not require it.
 const ENGINEERING_ROWS = [
