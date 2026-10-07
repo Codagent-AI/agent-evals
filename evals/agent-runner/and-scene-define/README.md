@@ -253,9 +253,9 @@ through the builder, so calibration can record proposed values there:
 
 | Setting | Field in `rubric.json` | Provisional default |
 | --- | --- | --- |
-| Component points (sum to 100) | `components` | coverage 60, artifact_quality 25, fidelity 15 |
+| Component points (sum to 100) | `components` | coverage 70, artifact_quality 15, fidelity 15 |
 | Item weight per class | `weights` | mandatory 2, acceptable-alternative 1 |
-| Quality criterion points (sum to artifact_quality) | `quality[].points` | 6.25 each |
+| Quality criterion points (sum to artifact_quality) | `quality[].points` | 3 each |
 | Fidelity deduction and floor | `fidelity.deduction_per_exchange`, `fidelity.floor` | 3 per contradicted exchange, floor 0 |
 | Restructured-reference tolerance | `calibration.restructured_tolerance_items` | 3 (total coverage weight lost) |
 | Repeat-judging spread limit | `calibration.max_spread` | 5 total-score points |

@@ -115,8 +115,7 @@ across presentations.
   the matching registry entry, `React.lazy`-loaded inside `<Suspense>`; unknown →
   `Landing` (or a simple not-found).
 - `presentations/index.ts` is an **explicit** array of
-  `{ slug, title, load: () => import('./<dir>/Talk') }`. Adding a presentation =
-  new folder + one registry line. Chosen over `import.meta.glob` so registration
+  `{ slug, title, load: () => import('./<dir>/Talk') }`. Chosen over `import.meta.glob` so registration
   is deterministic and diffable in review.
 - `Landing.tsx` enumerates the registry (replaces the placeholder `App.tsx`).
 

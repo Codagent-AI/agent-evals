@@ -198,7 +198,7 @@ Every judge prompt carries the shared scope rule (`JUDGE_SCOPE_RULE`, adapted to
 |---|---|---|
 | coverage × inventory area | collected artifacts; that area's mandatory and acceptable-alternative items (statement, intent, class, anchors, and each source quote with its reference heading) | per-item `met` / `partial` / `missing` with artifact citations |
 | fidelity | collected artifacts; preference items; conversation | contradictions of the simulated user's answers about preference items or matters outside the inventory, citing artifact and exchange; added-scope list |
-| artifact quality | collected artifacts only | the four quality criteria with citations |
+| artifact quality | collected artifacts only | the five countable quality criteria with citations |
 | discovery | conversation; mandatory and acceptable-alternative items | per-item asked yes/no, with a cited exchange when yes |
 | disclosure audit | conversation; the reference (as the simulated user saw it); policy; mandatory and acceptable-alternative items | flags citing exchanges; inventory items named per over-disclosure flag |
 
@@ -227,7 +227,7 @@ The scorer is deterministic code over the validated verdicts. Discovery outcomes
 
 `rubric.json` declares:
 - its version and the inventory version it applies to;
-- components and points: coverage 60, artifact quality 25, fidelity 15 (provisional);
+- components and points: coverage 70, artifact quality 15, fidelity 15 (provisional). Artifact quality is five narrow, countable criteria, 3 points each: observable scenario outcomes, design agrees with the specifications, test plan agrees with the specifications, decisions state a reason, and every requirement has a planned check. Each criterion's `met`, `partial`, and `missing` are set by a count of what the judge lists, because broad quality questions split the panel and the decider settled those close calls inconsistently across repeats (calibration attempt 6);
 - per-item weights: mandatory 2, acceptable-alternative 1;
 - verdict values: `met` 1, `partial` 0.5, `missing` 0. `partial` means the artifacts commit to the item's intent but leave out or weaken part of what the item requires;
 - leaked items: an item the disclosure audit marks leaked is dropped from both earned and possible coverage points, and coverage is scaled to its 60 points over the remaining items;

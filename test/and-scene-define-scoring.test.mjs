@@ -109,7 +109,7 @@ test('deterministic score excludes leaks, charges fidelity once, gates fail and 
   const fidelity = [result('fidelity:exchange', 'met')]
   const scored = scoreDefinition({ rubric, coverage, quality, fidelity, leaked, gates: [{ passed: false }] })
   assert.equal(scored.evaluation_status, 'complete'); assert.equal(scored.definition_verdict, 'fail')
-  assert.equal(scored.components.coverage.score, 60); assert.equal(scored.components.coverage.possible, 94)
+  assert.equal(scored.components.coverage.score, 70); assert.equal(scored.components.coverage.possible, 94)
   assert.equal(scored.components.fidelity.score, 12); assert.equal(scored.total, 97)
   // Identical verdicts with opposite discovery decisions: the ledgers differ,
   // but neither ledger alters the score or the scored coverage it reads.
@@ -136,7 +136,7 @@ test('a run where every graded item leaked has no coverage score and no verdict 
   assert.match(scored.verdict_unavailable, /every graded item leaked/)
   assert.equal(scored.components.coverage.score, null); assert.equal(scored.components.coverage.possible, 0)
   assert.equal(scored.total, null)
-  assert.equal(scored.components.artifact_quality.score, 25)
+  assert.equal(scored.components.artifact_quality.score, 15)
   assert.equal(scoreDefinition({ rubric, coverage, quality, fidelity: [], leaked, gates: [{ passed: false }] }).definition_verdict, 'fail')
 })
 test('quality inputs contain no hidden material; fidelity excludes graded subjects without failing and requires matching exchange', async () => {
@@ -280,7 +280,7 @@ test('failed gates retain complete/fail diagnostics without a calibrated thresho
   assert.equal(uncalibrated.evaluation_status, 'complete')
   assert.equal(uncalibrated.definition_verdict, null)
   assert.match(uncalibrated.verdict_unavailable, /pass threshold not set \(calibration pending\)/)
-  assert.equal(uncalibrated.total, 100); assert.equal(uncalibrated.components.coverage.score, 60)
+  assert.equal(uncalibrated.total, 100); assert.equal(uncalibrated.components.coverage.score, 70)
   const calibrated = scoreDefinition({ ...data, rubric: { ...rubric, pass_threshold: 70 }, gates: [{ passed: true }] })
   assert.equal(calibrated.definition_verdict, 'pass'); assert.equal(calibrated.verdict_unavailable, undefined)
 })
@@ -297,9 +297,9 @@ test('rubric pins concrete quality, fidelity and reference-shape examples', () =
 })
 test('committed rubric pins provisional settings and calibration limits as defaults', async () => {
   const rubric = JSON.parse(await readFile(join(root, 'rubric.json'), 'utf8'))
-  assert.deepEqual(rubric.components, { coverage: 60, artifact_quality: 25, fidelity: 15 })
+  assert.deepEqual(rubric.components, { coverage: 70, artifact_quality: 15, fidelity: 15 })
   assert.deepEqual(rubric.weights, { mandatory: 2, 'acceptable-alternative': 1 })
-  assert.ok(rubric.quality.every(x => x.points === 6.25))
+  assert.ok(rubric.quality.every(x => x.points === 3))
   assert.equal(rubric.fidelity.deduction_per_exchange, 3)
   assert.equal(rubric.pass_threshold, null)
   assert.equal(rubric.calibration.restructured_tolerance_items, 3)
@@ -311,7 +311,7 @@ test('committed rubric pins provisional settings and calibration limits as defau
   assert.deepEqual(await checkVersions(), [])
 })
 test('recorded calibrated settings round-trip while coverage criteria stay generated from the inventory', () => {
-  const quality_points = Object.fromEntries(buildRubric(inventory).quality.map((x, n) => [x.id, [10, 8, 6, 6][n]]))
+  const quality_points = Object.fromEntries(buildRubric(inventory).quality.map((x, n) => [x.id, [10, 8, 6, 3, 3][n]]))
   const settings = { rubric_version: 4, provisional: true, components: { coverage: 50, artifact_quality: 30, fidelity: 20 }, weights: { mandatory: 3, 'acceptable-alternative': 1.5 }, quality_points,
     fidelity: { deduction_per_exchange: 4, floor: 2 }, calibration: { restructured_tolerance_items: 4, max_spread: 6, provisional: false, note: 'Calibrated by E2E-003.', expected_fail: ['variant-a'], approval: 'awaiting HT-002' },
     pass_threshold: 72, calibration_evidence: { report: 'calibration/run/report.html', input_hashes: { reference: 'abc' } } }
@@ -320,7 +320,7 @@ test('recorded calibrated settings round-trip while coverage criteria stay gener
   assert.deepEqual(rubricSettings(rubric), settings)
   assert.equal(rubric.coverage.find(x => x.class === 'mandatory').weight, 3)
   assert.equal(rubric.coverage.find(x => x.class === 'acceptable-alternative').weight, 1.5)
-  assert.deepEqual(rubric.quality.map(x => x.points), [10, 8, 6, 6])
+  assert.deepEqual(rubric.quality.map(x => x.points), [10, 8, 6, 3, 3])
   assert.equal(rubric.fidelity.deduction_per_exchange, 4); assert.equal(rubric.fidelity.floor, 2)
   assert.equal(rubric.pass_threshold, 72); assert.equal(rubric.calibration.approval, 'awaiting HT-002')
   // Scoring follows the recorded settings.

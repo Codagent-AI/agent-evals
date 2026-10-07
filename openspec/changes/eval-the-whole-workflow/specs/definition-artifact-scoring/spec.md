@@ -66,7 +66,7 @@ The report SHALL list scope the definition adds beyond the inventory, with citat
 - **THEN** the report lists it as added scope and it does not change the score
 
 ### Requirement: Artifact quality
-The artifact-quality component SHALL judge the definition independently of the hidden reference: specification scenarios that are observable and testable, consistency across the proposal, specifications, design, and test plan, design decisions stated with their rationale, and a test plan that covers the specified requirements. Artifact-quality judges SHALL NOT receive the inventory or the hidden reference.
+The artifact-quality component SHALL judge the definition independently of the hidden reference through narrow, countable criteria: specification scenarios whose outcomes are observable, a design that does not contradict the specifications, test-plan expectations that do not contradict the specifications, design decisions that state a reason, and a planned check for every specification requirement. Each criterion's `met`, `partial`, and `missing` SHALL be defined by a count of the instances the judge lists, so that its verdict does not rest on an overall impression. Artifact-quality judges SHALL NOT receive the inventory or the hidden reference.
 
 #### Scenario: Quality judging is reference-independent
 - **WHEN** an artifact-quality judge job runs
@@ -74,7 +74,7 @@ The artifact-quality component SHALL judge the definition independently of the h
 
 #### Scenario: Untestable scenario
 - **WHEN** a specification scenario's outcome cannot be observed or tested
-- **THEN** the testable-scenarios criterion is not fully met and the verdict cites that scenario
+- **THEN** the observable-outcomes criterion is not fully met and the verdict cites that scenario
 
 ### Requirement: Eval-owned judges
 Judging SHALL be performed by eval-owned judges under a pinned judge profile, split into focused jobs for coverage by inventory area, fidelity, and artifact quality. Each scoring job SHALL be judged independently by a cross-family panel of three judges with identical inputs: one Claude-family judge and two independent Codex-family samples, each with a pinned CLI, model, and effort. A verdict SHALL be settled as follows:

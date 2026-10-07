@@ -50,14 +50,14 @@ test('stability reports total spread and every item whose verdict differs across
   const result = stability([scored(90, {}), scored(84, { [C]: 'partial' }), scored(88, {})])
   assert.deepEqual(result.totals, [90, 84, 88]); assert.equal(result.spread, 6)
   assert.deepEqual(result.differing_items, [{ id: C, verdicts: ['met', 'partial', 'met'] }])
-  assert.equal(result.items_differing, 1); assert.equal(result.items_judged, 8)
+  assert.equal(result.items_differing, 1); assert.equal(result.items_judged, 9)
 })
 
 test('basis shares count each settled criterion by its settlement basis', () => {
   const result = basisShares([scored(90, { [B]: 'missing' }, { bases: { [A]: 'majority-met', [B]: 'decider-missing', [C]: 'checked-dissent-met' } })])
-  assert.equal(result.total, 8)
-  assert.deepEqual(result.counts, { majority: 1, decider: 1, 'checked-dissent': 1, consensus: 5 })
-  assert.equal(result.shares.consensus, 0.625)
+  assert.equal(result.total, 9)
+  assert.deepEqual(result.counts, { majority: 1, decider: 1, 'checked-dissent': 1, consensus: 6 })
+  assert.equal(result.shares.consensus, 0.6667)
 })
 
 test('family distributions sit beside the expected distribution and expose leniency', () => {

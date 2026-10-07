@@ -79,10 +79,11 @@
     "INV-118": "partial"
   },
   "expected_quality": {
-    "quality:testable-scenarios": "met",
-    "quality:consistency": "met",
-    "quality:rationale": "met",
-    "quality:test-plan": "met"
+    "quality:observable-outcomes": "met",
+    "quality:design-matches-specs": "met",
+    "quality:test-plan-matches-specs": "met",
+    "quality:decision-rationale": "met",
+    "quality:requirements-tested": "met"
   },
   "conversation": null,
   "removed_items": [

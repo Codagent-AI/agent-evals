@@ -1,5 +1,5 @@
 {
-  "calibration_set_version": 2,
+  "calibration_set_version": 3,
   "inventory_version": 2,
   "graded_items": 72,
   "change_name": "add-presentation-skill",
@@ -49,7 +49,7 @@
         },
         {
           "path": "reference/expectations.json",
-          "sha256": "4e712adc6ece3eb6be0ef8f357b6a5558a2188c0e253088127b789f1ff8c83cf"
+          "sha256": "fa25c9678ad4a288e017062f5acdade54da0b9cd94c1095cf16546bd2673f45a"
         }
       ]
     },
@@ -91,11 +91,11 @@
         },
         {
           "path": "restructured/collected/test-plan.md",
-          "sha256": "6893d54fd49dd3e002c95b3dc34c78a0e5c5939b946bb9eb886d8e558cee70fb"
+          "sha256": "2c502eea74abcc436df04c989454cbb7896183ce52419e813fb5c0c8405e8892"
         },
         {
           "path": "restructured/expectations.json",
-          "sha256": "8fee98c58239f888bf11f07f58e09df35bfc7f0b6094d3ed3f81b0ab0949ad2a"
+          "sha256": "9f2e5f50a4aba39436c78b9003ad6bd9b84e118cffd8752aab5cfab3777aa466"
         }
       ]
     },
@@ -113,7 +113,7 @@
       "files": [
         {
           "path": "reference-degraded-mandatory/collected/design.md",
-          "sha256": "185205e0e0887d439b4c6aa13da44d2555e09819b7191eb58fb06ea66be2dfd2"
+          "sha256": "1b56e232132892a466417338b1d9e3dfbb560a405ac73fc452e29eea2db0f408"
         },
         {
           "path": "reference-degraded-mandatory/collected/proposal.md",
@@ -125,7 +125,7 @@
         },
         {
           "path": "reference-degraded-mandatory/collected/specs/presentation-skill/spec.md",
-          "sha256": "4a3d66d712361d40b51a38f780d2c6ad258a6c22c187144a43b3c4350a038e75"
+          "sha256": "5208c12632a3a1552fc8ad52d88f6769f55020d66e09ae1f39ecd99415b47925"
         },
         {
           "path": "reference-degraded-mandatory/collected/specs/presentation-verification/spec.md",
@@ -137,7 +137,7 @@
         },
         {
           "path": "reference-degraded-mandatory/expectations.json",
-          "sha256": "ac8a9de1ba201ec0539ed4911586a08a6dedc421d2c8e4b26e37feb5fc2a0941"
+          "sha256": "0d718dc008f227847a3b32312bfcf9cb624ce6f2e00cccade4665c6983f20df2"
         }
       ]
     },
@@ -183,7 +183,7 @@
         },
         {
           "path": "reference-degraded-contradictions/expectations.json",
-          "sha256": "813350c4ca885d8a2b8ddac3e6fb4aef550b433742e0a7f2841e22795a5c56bc"
+          "sha256": "63afa4c31b16d4c2671eb79d319a1d7a542caec5a460a7602d343167e44e4e37"
         }
       ]
     },
@@ -201,7 +201,7 @@
       "files": [
         {
           "path": "reference-degraded-scope-quality/collected/design.md",
-          "sha256": "9327254e9086a266f8394af509ef4308471ef7ae67d8a38620bcf5f4ed025829"
+          "sha256": "d0998d56efadb4e94db16179418731f27d5db6726d3c64294cc3835dbae29b01"
         },
         {
           "path": "reference-degraded-scope-quality/collected/proposal.md",
@@ -229,7 +229,7 @@
         },
         {
           "path": "reference-degraded-scope-quality/expectations.json",
-          "sha256": "cf31959bdaa6248a8c21c569387f5ee88409cbdc1a2fe147b3c82ae8b17af805"
+          "sha256": "98d20fa56b5936e9c682a75ac56ac7d7665d92d6b65f4e13ff244a8d67b323e6"
         }
       ]
     },
@@ -247,7 +247,7 @@
       "files": [
         {
           "path": "restructured-degraded-mandatory/collected/design.md",
-          "sha256": "b16a64df5071f075692c50f6f033e52b6342a33be3a42f2cc22cbfb8f8f64345"
+          "sha256": "2fa509dd1a7a392519c12ef7f31b3ded23a418b8ae8d66c5031b852f7fac4f62"
         },
         {
           "path": "restructured-degraded-mandatory/collected/proposal.md",
@@ -271,11 +271,11 @@
         },
         {
           "path": "restructured-degraded-mandatory/collected/test-plan.md",
-          "sha256": "79bf5dcdb965a64da321dcfd9b4ea00af27b909ac47a63e09857bfef7e338a83"
+          "sha256": "e6818efac9b189cab03eaec27489f51d24a2b54c3e0a8a1c0f4bfb221cb1bf5e"
         },
         {
           "path": "restructured-degraded-mandatory/expectations.json",
-          "sha256": "984779636347f88de2e5e37afbf82cf5391a748fc71da63207b94b3a6bd4f212"
+          "sha256": "c1a8ef569afd1cefcfa8ef206add17fd6525a3b2311e5a91df3d58bbf9a14060"
         }
       ]
     },
@@ -317,7 +317,7 @@
         },
         {
           "path": "restructured-degraded-mixed/collected/test-plan.md",
-          "sha256": "a3203d29ae5a44f935e7a7ad232a175c2424ec25e633ae24bc3640792de4818c"
+          "sha256": "1ca7a6744bea37680bd9fedb28112f928dfd4022d31e262c88e44ea596dacd12"
         },
         {
           "path": "restructured-degraded-mixed/conversation.jsonl",
@@ -325,7 +325,7 @@
         },
         {
           "path": "restructured-degraded-mixed/expectations.json",
-          "sha256": "e773043e50cf8b3f927e998f76509cc1080dba18140d6fdfd6fea37ad5b24317"
+          "sha256": "d06de2d03bbae18f72ca3742bdb41477947e5feaa5b77bd927d22c5c7f679d44"
         }
       ]
     },
@@ -367,11 +367,11 @@
         },
         {
           "path": "restructured-degraded-quality/collected/test-plan.md",
-          "sha256": "53b731646c45526cd628bd54d13fecb10818adcb3a4407eca34bd504186de2fc"
+          "sha256": "6e5ee498d091829f9c26070d4ea1d4acc86115be9fb9aa243fc359ac5bfc9375"
         },
         {
           "path": "restructured-degraded-quality/expectations.json",
-          "sha256": "c84dc0dab5eab1094eec43f227a5a260cca9b545a0db95cb13d691a3e8256f20"
+          "sha256": "41581e04779bff97310eaae92b6132f3610f4afc0beec2fb170709ec28499d53"
         }
       ]
     }

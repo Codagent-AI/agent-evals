@@ -79,10 +79,11 @@
     "INV-118": "met"
   },
   "expected_quality": {
-    "quality:testable-scenarios": "partial",
-    "quality:consistency": "partial",
-    "quality:rationale": "missing",
-    "quality:test-plan": "missing"
+    "quality:observable-outcomes": "partial",
+    "quality:design-matches-specs": "partial",
+    "quality:test-plan-matches-specs": "met",
+    "quality:decision-rationale": "missing",
+    "quality:requirements-tested": "missing"
   },
   "conversation": null,
   "removed_items": [
@@ -94,24 +95,24 @@
   "collateral_items": [],
   "quality_defects": [
     {
-      "criterion": "quality:testable-scenarios",
+      "criterion": "quality:observable-outcomes",
       "where": "specs/scene-runtime (Window resize), specs/viewer-controls (Present mode keeps attention on the diagram), specs/presentation-authoring (Composition flags are resolved)",
       "defect": "THEN clauses read \"continues to look right\", \"feels focused and uncluttered\", and \"makes the layout acceptable\". The requirement text still carries each commitment, so coverage is unchanged."
     },
     {
-      "criterion": "quality:consistency",
+      "criterion": "quality:design-matches-specs",
       "where": "design.md vs specs/presentation-authoring/spec.md",
       "defect": "The design registers presentations in `src/registry.ts` while the specification requires a hand-edited `src/presentations.json` manifest."
     },
     {
-      "criterion": "quality:rationale",
+      "criterion": "quality:decision-rationale",
       "where": "design.md (Decisions)",
       "defect": "All twelve decisions are bare labels with no reason and no alternatives."
     },
     {
-      "criterion": "quality:test-plan",
+      "criterion": "quality:requirements-tested",
       "where": "test-plan.md",
-      "defect": "IC-3, RC-2, and AR-3 are removed: captures and warnings, every failure path, cleanup, and all viewer behavior (modes, navigation, continuity, fit) have no planned check."
+      "defect": "IC-3, RC-2, and AR-3 are removed, and the plan no longer assigns viewer input or cleanup to unit tests: Viewing modes, Moving between steps, Sequence ends, and Cleanup have no planned check."
     }
   ],
   "planted_fidelity_contradictions": [],

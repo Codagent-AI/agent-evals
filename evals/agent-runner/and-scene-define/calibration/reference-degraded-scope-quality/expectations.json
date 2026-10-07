@@ -79,10 +79,11 @@
     "INV-118": "partial"
   },
   "expected_quality": {
-    "quality:testable-scenarios": "partial",
-    "quality:consistency": "missing",
-    "quality:rationale": "missing",
-    "quality:test-plan": "missing"
+    "quality:observable-outcomes": "partial",
+    "quality:design-matches-specs": "partial",
+    "quality:test-plan-matches-specs": "partial",
+    "quality:decision-rationale": "missing",
+    "quality:requirements-tested": "missing"
   },
   "conversation": null,
   "removed_items": [],
@@ -108,22 +109,27 @@
   "collateral_items": [],
   "quality_defects": [
     {
-      "criterion": "quality:testable-scenarios",
+      "criterion": "quality:observable-outcomes",
       "where": "specs/evolving-scene-presentations/spec.md",
       "defect": "Three scenarios end in unobservable outcomes: \"feels seamless\" (Grouped steps update in place), \"can be styled nicely\" (Kit primitives expose style hooks), \"looks good at any size\" (Uniform scaling on resize). Their requirement text still commits to the behavior, so coverage is unchanged."
     },
     {
-      "criterion": "quality:consistency",
-      "where": "design.md vs specs/evolving-scene-presentations/spec.md; test-plan.md vs specs/presentation-verification/spec.md",
-      "defect": "The design canvas is 960 × 540 while the specification requires 880 × 380; E2E-001 advances through twelve sample steps while the specification defines nine."
+      "criterion": "quality:design-matches-specs",
+      "where": "design.md vs specs/evolving-scene-presentations/spec.md",
+      "defect": "The design canvas is 960 × 540 while the specification requires 880 × 380."
     },
     {
-      "criterion": "quality:rationale",
+      "criterion": "quality:test-plan-matches-specs",
+      "where": "test-plan.md vs specs/presentation-verification/spec.md",
+      "defect": "E2E-001 advances through twelve sample steps while the specification defines nine."
+    },
+    {
+      "criterion": "quality:decision-rationale",
       "where": "design.md (Decisions)",
-      "defect": "All ten decisions are bare statements with no rationale or alternatives."
+      "defect": "All ten decisions are bare statements with no rationale or alternatives, and the reasons the reference gives elsewhere in the design (consistent output, deterministic registration, Playwright fidelity) are removed."
     },
     {
-      "criterion": "quality:test-plan",
+      "criterion": "quality:requirements-tested",
       "where": "test-plan.md",
       "defect": "E2E-002 and AT-003 are removed: no tests cover modes, navigation, boundaries, entity transitions, or verification failure paths, and none cover export, editing, or publishing."
     }

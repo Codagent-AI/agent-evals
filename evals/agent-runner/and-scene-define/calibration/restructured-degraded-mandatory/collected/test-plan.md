@@ -33,7 +33,7 @@ paid effects.
 ### RC-1: The sample passes
 - Requirements: Release-check command; Bundled sample; Browser render pass; Outcome and cleanup.
 - Journey: `npm run release-check` in a clean checkout.
-- Checks: the whole app builds; the sample is in the manifest and its nine chapters, headlines, and bodies match `sample-outline.json` in order; the server, readiness probe, and browser URLs all use `127.0.0.1`; all nine `aria-valuenow` values are observed with no console or page errors; the summary reads `PASS` and the exit status is 0.
+- Checks: the whole app builds; the sample is in the manifest and its nine steps, headlines, and bodies match `sample-outline.json` in order; the server, readiness probe, and browser URLs all use `127.0.0.1`; all nine `aria-valuenow` values are observed with no console or page errors; the summary reads `PASS` and the exit status is 0.
 - Runs on: every pull request.
 
 ### RC-2: Each failure is reported precisely

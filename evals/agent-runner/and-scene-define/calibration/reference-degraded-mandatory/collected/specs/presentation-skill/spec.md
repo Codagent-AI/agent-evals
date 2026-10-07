@@ -24,7 +24,7 @@ Before creating or modifying a presentation, the skill SHALL ensure the project 
 
 1. **Build setup** — a Vite + React + TypeScript app with a working `npm run build`.
 2. **Scene kit** — the reusable, presentation-agnostic engine: the `Step`/`Scene` step contract, the stage/host that mounts the active step and runs entity morphs, the present/browse navigation, and the chrome (captions, table of contents) and fit-scale canvas.
-3. **Presentation index** — the registry that maps each presentation to its own route so that multiple presentations coexist.
+3. **Presentation index** — the registry that maps each presentation to its own route.
 
 Detection is contract-level, keyed on the presence of these anchors rather than a byte-identical scaffold, so cosmetic differences (file naming, formatting, extra dependencies) do not trigger re-scaffolding. When scaffolding, the skill SHALL NOT assume the required dependencies are already installed.
 

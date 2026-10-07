@@ -79,10 +79,11 @@
     "INV-118": "met"
   },
   "expected_quality": {
-    "quality:testable-scenarios": "met",
-    "quality:consistency": "partial",
-    "quality:rationale": "met",
-    "quality:test-plan": "met"
+    "quality:observable-outcomes": "met",
+    "quality:design-matches-specs": "met",
+    "quality:test-plan-matches-specs": "partial",
+    "quality:decision-rationale": "met",
+    "quality:requirements-tested": "partial"
   },
   "conversation": "conversation.jsonl",
   "expected_fidelity": {
@@ -117,9 +118,14 @@
   "collateral_items": [],
   "quality_defects": [
     {
-      "criterion": "quality:consistency",
-      "where": "test-plan.md (AR-3, RC-2) vs specs/viewer-controls and specs/release-checks",
-      "defect": "AR-3 still expects the step to survive mode switches, and RC-2 still expects FAIL to name the failed check; neither matches the changed specifications."
+      "criterion": "quality:test-plan-matches-specs",
+      "where": "test-plan.md (AR-3) vs specs/viewer-controls",
+      "defect": "AR-3 still expects the step to survive mode switches; the changed specification restarts at the first step of the current chapter. RC-2 still expects FAIL to name the failed check, which only adds detail to the specified FAIL summary and is not a contradiction."
+    },
+    {
+      "criterion": "quality:requirements-tested",
+      "where": "test-plan.md vs specs/viewer-controls (In-place visual editing)",
+      "defect": "The added in-place visual editing requirement has no planned check."
     }
   ],
   "planted_fidelity_contradictions": [
