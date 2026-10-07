@@ -71,11 +71,15 @@ The exchange directory and Agent Runner's runtime state are writable by the eval
 - **THEN** the run ends `evaluation-harness-failed` and identifies the exchange
 
 ### Requirement: Simulated-user boundary
-The simulated user, the judges, and the suite's hidden data SHALL run and reside outside the evaluated environment, and the external-user exchange SHALL carry only the conversation. Preflight SHALL verify that the evaluated environment's mounts are exactly the staged sandbox input, the run's sandbox working directory, the Agent Skills checkout, and the selected CLIs' credential files, and SHALL fail with `evaluation_status=evaluation-harness-failed` when any other host path would be mounted. The simulated user and judges are eval-owned and SHALL NOT be subject to the contamination audit.
+The simulated user, the judges, and the suite's hidden data SHALL run and reside outside the evaluated environment, and the external-user exchange SHALL carry only the conversation. Preflight SHALL verify that the evaluated environment's mounts are exactly the staged sandbox input, the run's sandbox working directory, the Agent Skills checkout, and the selected CLIs' credential files, and SHALL fail with `evaluation_status=evaluation-harness-failed` when any other host path would be mounted. When a selected Claude CLI has no host credentials file, a Claude setup-token passed by name SHALL replace that file; preflight SHALL fail before any model call when neither exists, and no other host environment variable SHALL reach the evaluated environment. The simulated user and judges are eval-owned and SHALL NOT be subject to the contamination audit.
 
 #### Scenario: Unexpected mount
 - **WHEN** the planned sandbox invocation would mount a host path outside the allowed set, such as the suite directory or the Agent Runner source
 - **THEN** preflight fails before any model call and identifies the path
+
+#### Scenario: Claude login held only in the macOS Keychain
+- **WHEN** a selected Claude CLI has no host credentials file and a Claude setup-token is set
+- **THEN** the planned sandbox invocation forwards the token by name without mounting a Claude credentials file, and no other host secret is forwarded
 
 ### Requirement: Residual-risk statement
 Every result and report SHALL state that the evaluated sandbox has network access and the hidden reference is publicly reachable, so contamination is detected by audit rather than prevented, that the exchange and audit evidence are writable by the evaluated agent and checked by reconciliation rather than protected, and SHALL name an enforced outbound-network allowlist and a private fixture as open hardening options.

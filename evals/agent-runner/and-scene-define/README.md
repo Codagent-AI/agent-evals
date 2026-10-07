@@ -149,7 +149,11 @@ Run `run.sh --help` before constructing a new invocation. Node 22, Git, and Go
 are needed on the host: preflight builds a temporary Runner from the selected
 checkout to probe `--external-user`, then deletes the binary. Dry runs do not
 need Docker or host evaluator auth, but the real Runner script requires each
-selected CLI's credential file to exist. They verify clean checkouts, workflow
+selected CLI's credential file to exist. A Claude login kept in the macOS
+Keychain has no `~/.claude/.credentials.json`; export a `claude setup-token`
+token as `CLAUDE_CODE_OAUTH_TOKEN` instead, which the sandbox receives by name,
+for example
+`export CLAUDE_CODE_OAUTH_TOKEN="$(sed -n 's/^CLAUDE_CODE_OAUTH_TOKEN=//p' ~/codagent/agent-runner/.sandbox-secrets.env)"`. They verify clean checkouts, workflow
 steps, plugin manifests, snapshot and inventory pins, mount isolation, and the
 canary check; they start no container and make no model call.
 
@@ -164,7 +168,8 @@ evals/agent-runner/and-scene-define/run.sh --dry-run \
 ```
 
 Use `--run-agent` with the same options for a paid candidate. That mode also
-checks Docker availability and host Claude/Codex auth. Use an unused directory;
+checks Docker availability and host Claude/Codex auth (`claude auth status`
+for the host Claude login, which may live in the Keychain). Use an unused directory;
 even a dry run reserves its directory. `--resume --run-dir` reuses the exact
 existing directory and requires identical profiles, evaluator inputs, candidate
 commits/workflow hashes, and time limit. The original deadline survives resume,
@@ -183,8 +188,8 @@ script obtains its own input directory without evaluator paths or patterns.
 Preflight regenerates these inputs on resume and refuses changed hashes. Every
 Docker command is checked: the build container may mount Runner source, while
 the command container receives only input, sandbox artifacts, the Skills checkout,
-selected credential files, and the Runner binary's named volume. Host settings
-and GitHub credentials are excluded. The inherited canary checker rejects tracked
+selected credential files (or the Claude setup-token by name), and the Runner
+binary's named volume. Host settings and GitHub credentials are excluded. The inherited canary checker rejects tracked
 symlinks in a Skills checkout; such a checkout must be corrected before a run.
 The Docker image is not canary-scanned; this gap is retained in preflight evidence.
 

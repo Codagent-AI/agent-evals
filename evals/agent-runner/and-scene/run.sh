@@ -451,8 +451,12 @@ if [[ "$RUN_AGENT" == 1 ]]; then
       AUTH_ARGS+=(--mount-claude-auth)
       MOUNT_CLAUDE_AUTH=1
     fi
-    if [[ ! -r "$HOME/.claude/.credentials.json" ]]; then
-      echo "Cross-family judging requires Claude auth at $HOME/.claude/.credentials.json; forward it with --mount-claude-auth (implied for judging)." >&2
+    # Without the file (a macOS Keychain login), sandbox-run.sh forwards a
+    # `claude setup-token` token from the environment or its secrets file.
+    claude_secrets="${SANDBOX_SECRETS_FILE:-$AGENT_RUNNER_DIR/.sandbox-secrets.env}"
+    if [[ ! -r "$HOME/.claude/.credentials.json" && -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]] &&
+      ! { [[ -r "$claude_secrets" ]] && grep -Eq '^[[:space:]]*(export[[:space:]]+)?CLAUDE_CODE_OAUTH_TOKEN=.' "$claude_secrets"; }; then
+      echo "Cross-family judging requires Claude auth: $HOME/.claude/.credentials.json, or CLAUDE_CODE_OAUTH_TOKEN (from claude setup-token) in the environment or $claude_secrets; it is forwarded with --mount-claude-auth (implied for judging)." >&2
       exit 2
     fi
   fi

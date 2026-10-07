@@ -65,7 +65,9 @@ async function run(args, options = {}) {
     ...process.env,
     HOME: options.home,
     SANDBOX_SECRETS_FILE: join(options.dir, 'missing.env'),
+    ...options.env,
   }
+  if (!options.env?.CLAUDE_CODE_OAUTH_TOKEN) delete env.CLAUDE_CODE_OAUTH_TOKEN
   const result = spawnSync('bash', [runScript, ...args], { cwd: root, env, encoding: 'utf8' })
   return { ...result, output: result.stdout + result.stderr }
 }
@@ -678,6 +680,27 @@ test('every judging run requires Claude auth even with Codex-only implementation
   const missing = await scored(context, codexProfiles)
   assert.equal(missing.status, 2)
   assert.match(missing.output, /Cross-family judging requires Claude auth/)
+})
+
+test('judging accepts a Claude setup-token instead of the credentials file', async () => {
+  const context = await setup()
+  await rm(join(context.home, '.claude/.credentials.json'))
+
+  const fromEnv = await scored({ ...context, env: { CLAUDE_CODE_OAUTH_TOKEN: 'token-value' } }, profileArgs)
+  assert.equal(fromEnv.status, 0, fromEnv.output)
+  assert.match(fromEnv.output, /--mount-claude-auth/)
+  assert.ok(!fromEnv.output.includes('token-value'), fromEnv.output)
+
+  // sandbox-run.sh loads the Runner's secrets file, so a token there also counts.
+  const secrets = join(context.dir, 'sandbox-secrets.env')
+  await writeFile(secrets, 'GITHUB_TOKEN=x\nexport CLAUDE_CODE_OAUTH_TOKEN=token-value\n')
+  const fromSecrets = await scored({ ...context, env: { SANDBOX_SECRETS_FILE: secrets } }, profileArgs)
+  assert.equal(fromSecrets.status, 0, fromSecrets.output)
+
+  await writeFile(secrets, 'GITHUB_TOKEN=x\n')
+  const missing = await scored({ ...context, env: { SANDBOX_SECRETS_FILE: secrets } }, profileArgs)
+  assert.equal(missing.status, 2)
+  assert.match(missing.output, /CLAUDE_CODE_OAUTH_TOKEN/)
 })
 
 test('sandbox judging mounts the shared panel modules read-only at their resolved import path', async () => {

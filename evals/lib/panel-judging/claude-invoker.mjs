@@ -8,6 +8,10 @@ const inside = (root, path) => {
   const offset = relative(root, path)
   return offset === '' || (offset !== '..' && !offset.startsWith(`..${sep}`) && !isAbsolute(offset))
 }
+// Without ~/.claude/.credentials.json (a macOS Keychain login), a sandbox
+// authenticates Claude with a `claude setup-token` token; only Claude judges get it.
+const claudeJudgeEnvironment = env => ({ ...judgeEnvironment(env),
+  ...(typeof env?.CLAUDE_CODE_OAUTH_TOKEN === 'string' ? { CLAUDE_CODE_OAUTH_TOKEN: env.CLAUDE_CODE_OAUTH_TOKEN } : {}) })
 const harnessError = (message, extra = {}) => Object.assign(new Error(message), { owner: 'evaluation-harness', ...extra })
 
 export function createClaudeJudgeInvoker({
@@ -87,7 +91,7 @@ export function createClaudeJudgeInvoker({
         }
         let execution
         try {
-          execution = await runAttempt({ spawnImpl, command, args, options: { cwd, env: judgeEnvironment(env) },
+          execution = await runAttempt({ spawnImpl, command, args, options: { cwd, env: claudeJudgeEnvironment(env) },
             prompt: request.prompt, files, timeoutMs, killGraceMs, maxStdoutBytes, label: `Claude judge ${request.job}`, observeLine, persistLine })
         } finally { await Promise.all([files.events.close(), files.stderr.close()]) }
         const diagnostic = [final?.errors, !final?.structured_output ? final?.result : null, final?.subtype?.startsWith('error') ? final.subtype : null, execution.stderr, execution.error?.message].flat().filter(Boolean).join('\n')

@@ -8,8 +8,10 @@ import { writeTextAtomic } from './persistence.mjs'
 import { runTimed, requireCommand } from './subprocess.mjs'
 export const STAGED_FILES = ['starting-repo.bundle', 'sandbox-driver.sh', 'bootstrap-agent-skills.sh', 'prepare-agent-session-state.sh', 'runner-config.yaml', 'runner-settings.yaml']
 // No inherited host behaviour/configuration or GitHub secrets reach Docker.
+// sandbox-run.sh forwards the Claude setup-token by name only when no Claude
+// credentials file exists (a macOS Keychain login).
 export function sandboxEnvironment(env = process.env) {
-  return Object.fromEntries(['PATH', 'HOME', 'TMPDIR', 'DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_CONFIG'].filter(key => env[key] !== undefined).map(key => [key, env[key]]))
+  return Object.fromEntries(['PATH', 'HOME', 'TMPDIR', 'DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_CONFIG', 'CLAUDE_CODE_OAUTH_TOKEN'].filter(key => env[key] !== undefined).map(key => [key, env[key]]))
 }
 export class LocalSandbox {
   constructor({ runDir, runnerDir, skillsDir, env = process.env, command = runTimed }) {

@@ -88,16 +88,21 @@ export async function inspectInputs({ profiles, runnerDir, skillsDir, suiteRoot 
   } finally { await rm(probeDir, { recursive: true, force: true }) }
   verifyCapabilities(runnerHelp, sandboxHelp)
   if (!dryRun) requireCommand(command('docker', ['info'], { env }), 'Docker availability')
-  const credentials = selectedCredentials(profiles, home)
-  for (const path of credentials) await regularAuth(path)
+  // A macOS Keychain login has no Claude credentials file; sandbox-run.sh then
+  // forwards a `claude setup-token` token by name instead.
+  const claudeFile = join(home, '.claude/.credentials.json')
+  const claudeToken = selectedCredentials(profiles, home).includes(claudeFile) && !(await lstat(claudeFile).catch(() => null))?.isFile() && Boolean(env.CLAUDE_CODE_OAUTH_TOKEN)
+  const credentials = selectedCredentials(profiles, home).filter(path => !(claudeToken && path === claudeFile))
+  for (const path of credentials) await regularAuth(path).catch(error => { throw path === claudeFile ? new Error(`${error.message}, or set CLAUDE_CODE_OAUTH_TOKEN from claude setup-token`) : error })
   if (!dryRun) {
-    if (!env.CLAUDE_CODE_OAUTH_TOKEN && !env.CLAUDE_CODE_API_KEY && !env.ANTHROPIC_API_KEY) await regularAuth(join(home, '.claude/.credentials.json'))
+    // Host judges and the simulated user use the host CLIs' own logins.
     await regularAuth(join(home, '.codex/auth.json'))
     for (const cli of ['claude', 'codex']) requireCommand(command(cli, ['--version'], { env }), `host ${cli} availability`)
+    requireCommand(command('claude', ['auth', 'status'], { env }), 'host claude login')
   }
   const { seriesIdentity } = await inspectEvaluatorInputs({ suiteRoot, dryRun, rubricChecks })
   const candidate = { profiles, agent_runner_commit: runnerCommit, workflow_hashes: { 'openspec:change': sha256(change), 'core:define-change': sha256(define) }, agent_skills_commit: skillsCommit }
-  return { seriesIdentity, candidate, credentials, requiredSkills: skills }
+  return { seriesIdentity, candidate, credentials, forwardedEnv: claudeToken ? ['CLAUDE_CODE_OAUTH_TOKEN'] : [], requiredSkills: skills }
 }
 
 // Host-only evaluator identity: no Runner, sandbox, credentials, or CLI probes.

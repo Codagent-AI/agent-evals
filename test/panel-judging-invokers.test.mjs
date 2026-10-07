@@ -141,6 +141,21 @@ test('host judge keeps the login identity the Claude CLI needs on macOS', async 
   assert.equal(env.GH_TOKEN, undefined)
 })
 
+test('a Claude judge receives a setup-token login without persisting it', async t => {
+  const token = 'sk-ant-oat-judge-token-value'
+  const { root, invoke, request } = await fixture(t, [success], { env: { HOME: '/home/judge', PATH: process.env.PATH, CLAUDE_CODE_OAUTH_TOKEN: token, ANTHROPIC_API_KEY: 'other-secret' } })
+  await invoke(request)
+  const { env } = JSON.parse(await readFile(join(root, 'args'), 'utf8'))
+  assert.equal(env.CLAUDE_CODE_OAUTH_TOKEN, token)
+  assert.equal(env.ANTHROPIC_API_KEY, undefined)
+  await invoke.readUsageEntries()
+  // The stub's own argument dump is test scaffolding; everything else is the invoker's.
+  const { readdir } = await import('node:fs/promises')
+  const files = (await readdir(root, { recursive: true, withFileTypes: true })).filter(entry => entry.isFile() && !['args', 'claude', 'count'].includes(entry.name))
+  assert.ok(files.length > 0)
+  for (const entry of files) assert.ok(!(await readFile(join(entry.parentPath, entry.name), 'utf8')).includes(token), entry.name)
+})
+
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { runAttempt } from '../evals/lib/panel-judging/codex-invoker.mjs'

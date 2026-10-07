@@ -91,8 +91,12 @@ Claude source judges use only Read/Grep/Glob inside the evaluation sandbox.
 Evidence and closed-world packets are inlined with no tools. Evidence panel
 votes may back a dissent with validated spans in the materialized `packet.txt`,
 which contains the exact inlined packet. Every judging
-run and rescore implies `--mount-claude-auth` and requires readable Claude
-credentials; host rescoring uses the same restricted invoker against neutral
+run and rescore in the sandbox implies `--mount-claude-auth` and requires
+`~/.claude/.credentials.json` or, for a login kept in the macOS Keychain, a
+`claude setup-token` token as `CLAUDE_CODE_OAUTH_TOKEN` in the environment or
+the Runner's `.sandbox-secrets.env` (this needs an Agent Runner whose
+`sandbox-run.sh` forwards the token when the file is absent). Host rescoring
+uses the host `claude` login and the same restricted invoker against neutral
 inputs. Browser second opinions, pricing search, and other single-purpose
 calls retain their Codex authority. Fixture calibration exercises the same
 panel settlement with canned invokers; an injected live invoker uses the

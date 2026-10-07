@@ -21,6 +21,19 @@ test('preflight names missing Runner flags and workflow steps', () => {
   assert.throws(() => verifyWorkflow('steps:\n  - id: proposal\n', ['proposal', 'specs'], 'core:define-change'), /specs/)
   assert.throws(() => verifyWorkflow('prompt: |\n  - id: specs\n', ['specs'], 'core:define-change'), /steps/)
 })
+test('mount preflight admits a forwarded variable by name only when expected', () => {
+  const options = { inputDir: '/run/input', artifactDir: '/run/sandbox', skillsDir: '/skills', runnerDir: '/runner', credentialFiles: [] }
+  const command = 'docker run -e HOME=/workspace/home -e CLAUDE_CODE_OAUTH_TOKEN -v /run/input:/eval-input:ro -v /run/sandbox:/artifacts -v /skills:/agent-skills:ro --mount type=volume,source=runner-bin,target=/workspace/bin image bash -lc run'
+  assert.throws(() => verifyMountPlan(command, options), /CLAUDE_CODE_OAUTH_TOKEN/)
+  assert.equal(verifyMountPlan(command, { ...options, forwardedEnv: ['CLAUDE_CODE_OAUTH_TOKEN'] }).length, 1)
+  assert.throws(() => verifyMountPlan(command.replace('CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN=value'), { ...options, forwardedEnv: ['CLAUDE_CODE_OAUTH_TOKEN'] }), /CLAUDE_CODE_OAUTH_TOKEN/)
+})
+
+test('the sandbox launcher sees a Claude setup-token but no other host secret', async () => {
+  const { sandboxEnvironment } = await import('../evals/agent-runner/and-scene-define/lib/sandbox.mjs')
+  assert.deepEqual(sandboxEnvironment({ PATH: '/bin', CLAUDE_CODE_OAUTH_TOKEN: 'token-value', GITHUB_TOKEN: 'x', ANTHROPIC_API_KEY: 'y' }), { PATH: '/bin', CLAUDE_CODE_OAUTH_TOKEN: 'token-value' })
+})
+
 test('mount preflight inspects build and command containers, modes, and environment', () => {
   const options = { inputDir: '/run/input', artifactDir: '/run/sandbox', skillsDir: '/skills', runnerDir: '/runner', credentialFiles: ['/home/.codex/auth.json'] }
   const build = 'docker run -v /runner:/agent-runner-source:ro --mount type=volume,source=runner-bin,target=/workspace/bin image bash -lc build'
@@ -85,10 +98,9 @@ test('sandbox driver creates the pinned repository, preserves all CLI sessions, 
   assert.equal(await readFile(join(home, 'runner-argv'), 'utf8'), '--resume\nexisting-run\n--until\ndefine\n')
 })
 
-test('full preflight rejects pinned hash changes before any agent can start', async t => {
+async function preflightFixture(t) {
   const { cp } = await import('node:fs/promises')
   const { SUITE_ROOT } = await import('../evals/agent-runner/and-scene-define/lib/files.mjs')
-  const { inspectInputs } = await import('../evals/agent-runner/and-scene-define/lib/preflight.mjs')
   const root = await mkdtemp(join(tmpdir(), 'define-pins-')); t.after(() => rm(root, { recursive: true, force: true }))
   const runner = join(root, 'runner'); const skills = join(root, 'skills'); const suite = join(root, 'suite'); const home = join(root, 'home')
   for (const dir of [join(runner, 'workflows/openspec'), join(runner, 'workflows/core'), join(skills, '.claude-plugin'), join(skills, '.codex-plugin'), join(skills, '.cursor-plugin'), join(home, '.codex'), join(home, '.cursor')]) await mkdir(dir, { recursive: true })
@@ -100,11 +112,42 @@ test('full preflight rejects pinned hash changes before any agent can start', as
   for (const path of [join(home, '.codex/auth.json'), join(home, '.cursor/auth.json')]) await writeFile(path, '{}')
   await cp(SUITE_ROOT, suite, { recursive: true })
   for (const repo of [runner, skills, suite]) { repoGit(repo, ['init', '--initial-branch=main']); repoGit(repo, ['add', '.']); repoGit(repo, ['commit', '-m', 'test: input fixture']) }
-  await writeFile(join(suite, 'hidden/starting-prompt.md'), 'altered under the same pin')
   const calls = []
   const command = (command, args) => { calls.push([command, args]); return { ok: true, stdout: '--external-user --auth-only --hide-source --no-default-secrets --input-dir --artifact-dir', stderr: '' } }
+  return { runner, skills, suite, home, calls, command }
+}
+
+test('full preflight rejects pinned hash changes before any agent can start', async t => {
+  const { inspectInputs } = await import('../evals/agent-runner/and-scene-define/lib/preflight.mjs')
+  const { runner, skills, suite, home, calls, command } = await preflightFixture(t)
+  await writeFile(join(suite, 'hidden/starting-prompt.md'), 'altered under the same pin')
   await assert.rejects(inspectInputs({ profiles, runnerDir: runner, skillsDir: skills, suiteRoot: suite, home, dryRun: true, command }), /hash mismatch|content hash differs/)
   assert.ok(!calls.some(([name]) => ['docker', 'claude', 'codex', 'cursor'].includes(name)))
+})
+
+test('a Claude agent without a credentials file is forwarded a setup-token instead', async t => {
+  const { inspectInputs } = await import('../evals/agent-runner/and-scene-define/lib/preflight.mjs')
+  const { runner, skills, suite, home, command } = await preflightFixture(t)
+  const claudeProfiles = { ...profiles, crosscheck: { cli: 'claude', model: 'claude-opus-5-5', effort: 'high' } }
+  const inputs = { profiles: claudeProfiles, runnerDir: runner, skillsDir: skills, suiteRoot: suite, home, dryRun: true, command, rubricChecks: async () => {} }
+  const inspected = await inspectInputs({ ...inputs, env: { CLAUDE_CODE_OAUTH_TOKEN: 'token-value' } })
+  assert.deepEqual(inspected.credentials, [join(home, '.codex/auth.json')])
+  assert.deepEqual(inspected.forwardedEnv, ['CLAUDE_CODE_OAUTH_TOKEN'])
+  await assert.rejects(inspectInputs({ ...inputs, env: {} }), /\.claude\/\.credentials\.json.*CLAUDE_CODE_OAUTH_TOKEN/)
+  await mkdir(join(home, '.claude')); await writeFile(join(home, '.claude/.credentials.json'), '{}')
+  const withFile = await inspectInputs({ ...inputs, env: { CLAUDE_CODE_OAUTH_TOKEN: 'token-value' } })
+  assert.deepEqual(withFile.credentials, [join(home, '.codex/auth.json'), join(home, '.claude/.credentials.json')])
+  assert.deepEqual(withFile.forwardedEnv, [])
+})
+
+test('host judges check the host Claude login instead of a credentials file', async t => {
+  const { inspectInputs } = await import('../evals/agent-runner/and-scene-define/lib/preflight.mjs')
+  const { runner, skills, suite, home, calls, command } = await preflightFixture(t)
+  const inputs = { profiles, runnerDir: runner, skillsDir: skills, suiteRoot: suite, home, dryRun: false, env: {}, rubricChecks: async () => {} }
+  await inspectInputs({ ...inputs, command })
+  assert.ok(calls.some(([name, args]) => name === 'claude' && args.join(' ') === 'auth status'))
+  const loggedOut = (name, args) => name === 'claude' && args[0] === 'auth' ? { ok: false, stdout: '', stderr: 'not logged in', status: 1 } : command(name, args)
+  await assert.rejects(inspectInputs({ ...inputs, command: loggedOut }), /host claude login/)
 })
 
 test('effective invocation evidence uses observed CLI identity instead of configured profiles', async () => {

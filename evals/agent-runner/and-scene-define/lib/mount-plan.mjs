@@ -24,7 +24,7 @@ export function shellWords(line) {
   return words
 }
 const ENV_ALLOWLIST = new Set(['CI', 'HOME', 'AGENT_RUNNER_SOURCE_COMMIT', 'AGENT_RUNNER_SOURCE_DIRTY', 'AGENT_RUNNER_DEV_AUDIT', 'AGENT_RUNNER_AUDIT_SMOKE'])
-export function verifyMountPlan(text, { inputDir, artifactDir, skillsDir, runnerDir, credentialFiles = [] }) {
+export function verifyMountPlan(text, { inputDir, artifactDir, skillsDir, runnerDir, credentialFiles = [], forwardedEnv = [] }) {
   const allowed = new Map([[canonical(inputDir), { target: '/eval-input', ro: true }], [canonical(artifactDir), { target: '/artifacts', ro: false }], [canonical(skillsDir), { target: '/agent-skills', ro: true }], ...credentialFiles.map(path => [canonical(path), { target: `/host-home/${path.includes('/.claude/') ? 'claude/.credentials.json' : path.includes('/.cursor/') ? 'cursor/auth.json' : 'codex/auth.json'}`, ro: true }])])
   const containers = []
   for (const line of text.split('\n')) {
@@ -46,7 +46,8 @@ export function verifyMountPlan(text, { inputDir, artifactDir, skillsDir, runner
       if (flag === '-e' || flag === '--env' || flag.startsWith('--env=')) {
         const value = flag.startsWith('--env=') ? flag.slice(6) : argv[++i]
         const name = value?.split('=')[0]
-        if (!ENV_ALLOWLIST.has(name)) throw new Error(`mount plan: forbidden environment ${name}`)
+        // A forwarded secret is passed by name, so its value never appears in the plan.
+        if (!ENV_ALLOWLIST.has(name) && !(forwardedEnv.includes(name) && value === name)) throw new Error(`mount plan: forbidden environment ${name}`)
         env.push(value); continue
       }
       if (flag === '-v' || flag === '--volume' || flag.startsWith('--volume=')) {

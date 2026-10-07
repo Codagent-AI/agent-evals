@@ -37,8 +37,8 @@ async function privatePath(path, boundary = dirname(resolve(path))) {
     if (probe === resolve(boundary) || probe === dirname(probe)) break
   }
 }
-async function checkSandboxInputs({ sandbox, plan, inputDir, runnerDir, skillsDir, credentials }) {
-  verifyMountPlan(plan.output, { inputDir, artifactDir: sandbox.artifactDir, runnerDir, skillsDir, credentialFiles: credentials })
+async function checkSandboxInputs({ sandbox, plan, inputDir, runnerDir, skillsDir, credentials, forwardedEnv }) {
+  verifyMountPlan(plan.output, { inputDir, artifactDir: sandbox.artifactDir, runnerDir, skillsDir, credentialFiles: credentials, forwardedEnv })
   const matches = await scanCanaries({ stagedDir: inputDir, skillsDir, credentialFiles: credentials })
   if (matches.length) throw new Error(`canary check failed: ${matches.map(match => `${match.file} (${match.pattern})`).join(', ')}`)
 }
@@ -142,7 +142,7 @@ export async function runEvaluation(options, dependencies = {}) {
       }
       await sandbox.stage(inputDir)
       const plan = await sandbox.plan(options.profiles, { kind: 'fresh' })
-      await safetyCheck({ sandbox, plan, inputDir, ...options, credentials: inspected.credentials })
+      await safetyCheck({ sandbox, plan, inputDir, ...options, credentials: inspected.credentials, forwardedEnv: inspected.forwardedEnv })
       checkpoint.plan = plan
       const path = join(runDir, 'phases/preflight.json')
       await writeJsonAtomic(path, { series_identity: inspected.seriesIdentity, candidate: inspected.candidate, planned_invocation: plan, checks: ['profiles', 'Runner capabilities', 'workflow steps', 'skills', 'auth', 'pins', 'inventory', 'mounts', 'canaries'], image_canary_scan: 'not performed: Runner image contains generic tooling' })
