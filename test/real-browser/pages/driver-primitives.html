@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Driver primitives</title>
+<style>
+  body { margin: 0; font-family: sans-serif; }
+  [data-presentation] { min-height: 100vh; display: flex; flex-direction: column; }
+  [data-presentation-stage] { flex: 1; min-height: 300px; }
+  #mode { position: absolute; left: 100px; top: 200px; width: 120px; height: 40px; }
+</style>
+</head>
+<body>
+<div id="root" data-presentation data-presentation-mode="present">
+  <div id="stage" data-presentation-stage></div>
+  <nav id="progress" data-step-index="1" data-step-count="3"></nav>
+  <button id="mode" data-presentation-mode-toggle type="button">Browse mode</button>
+</div>
+<script>
+// A page for the browser driver's own primitives, not a presentation under
+// evaluation. It logs what reaches it so a test can compare.
+window.keyLog = []
+window.inputLog = []
+// Registered before any instrumentation can be: in the capture phase on the
+// window, Meta+ArrowRight is hidden from every later listener and prevented.
+window.addEventListener('keydown', (event) => {
+  if (event.metaKey && event.key === 'ArrowRight') {
+    event.stopImmediatePropagation()
+    event.stopPropagation()
+    event.preventDefault()
+  }
+}, true)
+document.addEventListener('keydown', (event) => {
+  window.keyLog.push({ key: event.key, altKey: event.altKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey })
+  if (event.ctrlKey && event.key === 'ArrowLeft') event.preventDefault()
+  // A shortcut the browser would own, played here by the page leaving itself.
+  if (event.altKey && event.key === 'ArrowLeft') location.assign('/')
+})
+for (const type of ['touchstart', 'touchmove', 'touchend', 'pointerdown', 'pointermove', 'pointerup']) {
+  document.addEventListener(type, (event) => {
+    const x = event.changedTouches ? event.changedTouches[0].clientX : event.clientX
+    window.inputLog.push({ type, target: event.target.id, x })
+  }, true)
+}
+</script>
+</body>
+</html>

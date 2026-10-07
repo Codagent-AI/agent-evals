@@ -8,7 +8,10 @@ import { DEMO_CONTRACT } from '../../evals/agent-runner/and-scene/lib/demo-contr
 
 const variant = process.argv[2]
 const steps = DEMO_CONTRACT.step_titles.map((title, index) => ({ title, caption: DEMO_CONTRACT.step_captions[index] }))
-const page = (await readFile(new URL('./pages/presentation.html', import.meta.url), 'utf8'))
+// The driver-primitives variant serves its own page, which exercises the
+// browser driver rather than the evaluator.
+const pageFile = variant === 'driver-primitives' ? 'driver-primitives.html' : 'presentation.html'
+const page = (await readFile(new URL(`./pages/${pageFile}`, import.meta.url), 'utf8'))
   .replace('<script>', `<script>window.VARIANT=${JSON.stringify(variant)};window.STEPS=${JSON.stringify(steps)};</script>\n<script>`)
 
 const server = createServer((request, response) => {

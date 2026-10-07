@@ -847,3 +847,207 @@ test('generated page scripts carry no control characters from lost regex escapes
   for (const name of ['Previous step', 'Next step', 'Back', 'prev']) assert.ok(directional.test(name), name)
   for (const name of ['1: You have a topic', 'Step 3', 'Preview']) assert.ok(!directional.test(name), name)
 })
+
+test('the AXI driver presses a key while holding the requested modifiers', async () => {
+  // chrome-devtools-axi delivers "Alt+ArrowRight" as one keydown with altKey
+  // set, so a chord is the key named after its modifiers.
+  assert.match(await emitted((driver) => driver.press('ArrowRight', { modifiers: ['Alt'] })),
+    /page\.press\("Alt\+ArrowRight"\)/)
+  assert.match(await emitted((driver) => driver.press('ArrowLeft', { modifiers: ['Meta', 'Control'] })),
+    /page\.press\("Control\+Meta\+ArrowLeft"\)/)
+  assert.match(await emitted((driver) => driver.press('ArrowLeft', { modifiers: [] })),
+    /page\.press\("ArrowLeft"\)/)
+  assert.match(await emitted((driver) => driver.press('ArrowLeft')), /page\.press\("ArrowLeft"\)/)
+  for (const modifiers of [['Shift'], ['Ctrl'], ['alt'], ['Alt', 'Alt'], 'Alt', [null]]) {
+    await assert.rejects(emitted((driver) => driver.press('ArrowRight', { modifiers })),
+      (error) => error.code === 'browser-driver-failed', JSON.stringify(modifiers))
+  }
+})
+
+// The page callback of one emitted evaluation, as source.
+const callbackOf = (phase) => phase.slice(0, phase.indexOf(')) && dispatched;'))
+
+// Runs a swipe's first event against a fake page in which the element matched
+// by the selector is a 100×40 button centred at (150, 220).
+function runSwipeStart(source, { hitInside = true, found = true } = {}) {
+  const dispatched = []
+  const child = { id: 'label', dispatchEvent: (event) => dispatched.push(['label', event]) }
+  const button = {
+    id: 'mode',
+    getBoundingClientRect: () => ({ left: 100, top: 200, right: 200, bottom: 240, width: 100, height: 40 }),
+    contains: (node) => node === button || node === child,
+    dispatchEvent: (event) => dispatched.push(['mode', event]),
+  }
+  const window = { innerWidth: 1280, innerHeight: 720 }
+  const selectors = []
+  const context = {
+    window,
+    document: {
+      querySelector: (selector) => { selectors.push(selector); return found ? button : null },
+      elementFromPoint: () => (hitInside ? child : { id: 'overlay' }),
+    },
+    Touch: class { constructor(init) { Object.assign(this, init) } },
+    TouchEvent: class { constructor(type, init) { this.type = type; Object.assign(this, init) } },
+    PointerEvent: class { constructor(type, init) { this.type = type; Object.assign(this, init) } },
+    requestAnimationFrame: () => {},
+  }
+  const returned = runInNewContext(`(${source})()`, context)
+  return { returned, dispatched, selectors, swipe: window.__andSceneSwipe }
+}
+
+test('the AXI driver can start a swipe at the centre of an element and keep that element as its target', async () => {
+  for (const input of ['touch', 'pointer']) {
+    const phases = evaluations(await emitted((driver) => driver.swipe('left', { input, selector: '#mode' })))
+    assert.equal(phases.length, 6, input)
+    const started = runSwipeStart(callbackOf(phases[0]), { hitInside: false })
+    assert.equal(started.returned, true, input)
+    assert.deepEqual(started.selectors, ['#mode'], input)
+    // The finger lands at the element's centre and the element is the target.
+    assert.equal(started.swipe.startX, 150, input)
+    assert.equal(started.swipe.y, 220, input)
+    assert.equal(started.swipe.target.id, 'mode', input)
+    assert.equal(started.dispatched[0][0], 'mode', input)
+    assert.equal(started.dispatched[0][1].type, input === 'touch' ? 'touchstart' : 'pointerdown', input)
+    assert.equal((input === 'touch' ? started.dispatched[0][1].changedTouches[0] : started.dispatched[0][1]).clientX, 150)
+    // A finger on the element's label is still on the element.
+    assert.equal(runSwipeStart(callbackOf(phases[0])).swipe.target.id, 'label', input)
+    for (const phase of phases.slice(1)) {
+      assert.match(phase, /const \{ target, startX, y \} = swipe;/)
+      assert.doesNotMatch(phase, /querySelector|elementFromPoint/)
+    }
+  }
+  // Same distance, path, and pacing as the stage swipe.
+  const source = await emitted((driver) => driver.swipe('right', { selector: '#mode' }))
+  assert.deepEqual(evaluations(source).map((phase) => Number(phase.match(/clientX: startX \+ (-?[\d.]+)/)[1])),
+    [0, 40, 80, 120, 160, 200])
+  assert.equal(source.match(/while \(!\(await page\.eval\(\(\) => Boolean\(window\.__andSceneSwipe\?\.frame\?\.rendered\)\)\)\)/g).length, 5)
+})
+
+test('the AXI driver reports a swipe whose start element is missing without waiting on a frame', async () => {
+  const source = await emitted((driver) => driver.swipe('left', { selector: '#gone' }))
+  const started = runSwipeStart(callbackOf(evaluations(source)[0]), { found: false })
+  assert.equal(started.returned, false)
+  assert.equal(started.dispatched.length, 0)
+  // The script stops dispatching rather than waiting on a frame nobody asked for.
+  assert.match(source, /if \(!dispatched\) break swipe;/)
+  for (const selector of ['', 7]) {
+    await assert.rejects(emitted((driver) => driver.swipe('left', { selector })),
+      (error) => error.code === 'browser-driver-failed', String(selector))
+  }
+})
+
+// A fake page for the keydown instrumentation: an event target with capture
+// and bubble listeners, a KeyboardEvent whose preventDefault is inherited, and
+// task queues for timers and page lifecycle events.
+function fakeKeyboardPage() {
+  const listeners = []
+  const timers = []
+  class Event {
+    constructor(type, init = {}) { this.type = type; Object.assign(this, init); this.defaultPrevented = false }
+    preventDefault() { this.defaultPrevented = true }
+    stopPropagation() { this.stopped = true }
+    stopImmediatePropagation() { this.stopped = true; this.immediate = true }
+  }
+  class KeyboardEvent extends Event {}
+  const window = {
+    location: { href: 'http://127.0.0.1:4319/how-to-make-a-presentation' },
+    addEventListener: (type, listener, capture) => listeners.push({ type, listener, capture: capture === true }),
+  }
+  const context = { window, KeyboardEvent, Event, location: window.location, setTimeout: (callback) => timers.push(callback) }
+  return {
+    context,
+    listen: (listener, capture) => listeners.push({ type: 'keydown', listener, capture }),
+    dispatch(type, init) {
+      const event = type === 'pagehide' ? new Event(type) : new KeyboardEvent(type, init)
+      for (const phase of [true, false]) {
+        for (const entry of listeners.filter((candidate) => candidate.type === type && candidate.capture === phase)) {
+          if (event.immediate) break
+          entry.listener(event)
+        }
+        if (event.stopped) break
+      }
+      while (timers.length) timers.shift()()
+      return event
+    },
+  }
+}
+
+// Runs an emitted script against a fake page. Page callbacks share the fake
+// page's globals, so they run as the browser would run them.
+async function runAgainst(page, script) {
+  let stdout = ''
+  const context = { ...page.context,
+    page: { eval: async (callback) => callback() },
+    console: { log: (line) => { stdout += `${line}\n` } } }
+  await runInNewContext(`(async () => {\n${script}\n})()`, context)
+  return { status: 0, stdout }
+}
+
+test('the AXI driver counts a prevented keydown default even when the page stops propagation', async () => {
+  const { createAxiBrowserDriver } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
+  const page = fakeKeyboardPage()
+  const scripts = []
+  // The fake adapter runs each emitted page callback against the fake page.
+  const driver = createAxiBrowserDriver({ baseUrl: 'http://127.0.0.1:4319/', command: async (args, input) => {
+    scripts.push(input)
+    return runAgainst(page, input)
+  } })
+  // A page listener that ran before the instrumentation, in the capture phase,
+  // and hides the keydown from every later listener.
+  page.listen((event) => {
+    if (event.metaKey && event.key === 'ArrowRight') { event.stopImmediatePropagation(); event.preventDefault() }
+  }, true)
+  page.listen((event) => { if (event.ctrlKey) event.preventDefault() }, false)
+
+  const installed = await driver.installKeyInstrumentation()
+  assert.equal(installed.installed, true)
+  assert.match(scripts[0], /KeyboardEvent\.prototype/)
+  assert.match(scripts[0], /'pagehide'/)
+  page.dispatch('keydown', { key: 'ArrowRight', metaKey: true, altKey: false, ctrlKey: false, shiftKey: false })
+  page.dispatch('keydown', { key: 'ArrowLeft', ctrlKey: true, altKey: false, metaKey: false, shiftKey: false })
+  page.dispatch('keydown', { key: 'ArrowRight', altKey: true, ctrlKey: false, metaKey: false, shiftKey: false })
+  page.dispatch('keyup', { key: 'ArrowRight', ctrlKey: true })
+
+  const read = await driver.readKeyInstrumentation({ reset: true })
+  assert.equal(read.installed, true)
+  assert.equal(read.unloaded, false)
+  assert.equal(read.url, 'http://127.0.0.1:4319/how-to-make-a-presentation')
+  assert.deepEqual(read.keydowns.map(({ key, altKey, ctrlKey, metaKey, prevented }) => (
+    { key, altKey, ctrlKey, metaKey, prevented })), [
+    { key: 'ArrowRight', altKey: false, ctrlKey: false, metaKey: true, prevented: true },
+    { key: 'ArrowLeft', altKey: false, ctrlKey: true, metaKey: false, prevented: true },
+    { key: 'ArrowRight', altKey: true, ctrlKey: false, metaKey: false, prevented: false },
+  ])
+  assert.deepEqual(read.keydowns.map(({ preventDefaultCalls }) => preventDefaultCalls), [1, 1, 0])
+  assert.deepEqual((await driver.readKeyInstrumentation()).keydowns, [])
+
+  // A page lifecycle unload is reported, and a reinstall starts clean without
+  // wrapping preventDefault twice.
+  page.dispatch('pagehide')
+  assert.equal((await driver.readKeyInstrumentation()).unloaded, true)
+  await driver.installKeyInstrumentation()
+  page.dispatch('keydown', { key: 'ArrowLeft', ctrlKey: true, altKey: false, metaKey: false, shiftKey: false })
+  const again = await driver.readKeyInstrumentation()
+  assert.equal(again.unloaded, false)
+  assert.deepEqual(again.keydowns.map(({ preventDefaultCalls }) => preventDefaultCalls), [1])
+})
+
+test('the AXI driver reports an unload when the instrumented document has been replaced', async () => {
+  const { createAxiBrowserDriver } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
+  let page = fakeKeyboardPage()
+  const driver = createAxiBrowserDriver({ baseUrl: 'http://127.0.0.1:4319/', command: async (_args, input) => runAgainst(page, input) })
+  // Never installed: nothing to report as unloaded.
+  assert.deepEqual(await driver.readKeyInstrumentation(),
+    { installed: false, unloaded: false, url: 'http://127.0.0.1:4319/how-to-make-a-presentation', keydowns: [] })
+  await driver.installKeyInstrumentation()
+  // A press navigated away: the new document carries no instrumentation.
+  page = fakeKeyboardPage()
+  page.context.location.href = 'http://127.0.0.1:4319/'
+  const replaced = await driver.readKeyInstrumentation()
+  assert.equal(replaced.installed, false)
+  assert.equal(replaced.unloaded, true)
+  assert.equal(replaced.url, 'http://127.0.0.1:4319/')
+  await driver.installKeyInstrumentation()
+  assert.deepEqual(await driver.readKeyInstrumentation(),
+    { installed: true, unloaded: false, url: 'http://127.0.0.1:4319/', keydowns: [] })
+})
