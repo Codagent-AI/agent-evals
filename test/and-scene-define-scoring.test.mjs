@@ -7,7 +7,7 @@ import { buildRubric, checkRubric, verifyJudgingInputs, rubricSettings, RUBRIC_S
 import { checkVersions } from '../evals/agent-runner/and-scene-define/lib/versions.mjs'
 import { checkInventory } from '../evals/agent-runner/and-scene-define/lib/inventory.mjs'
 import { scoreDefinition, discoveryLedger } from '../evals/agent-runner/and-scene-define/lib/scoring.mjs'
-import { runDefinitionPanel, judgeSchema, discoverySchema, exchangeIdentity, makeJobs } from '../evals/agent-runner/and-scene-define/lib/judge-jobs.mjs'
+import { runDefinitionPanel, judgeSchema, discoverySchema, exchangeIdentity, makeJobs, jobPrompt } from '../evals/agent-runner/and-scene-define/lib/judge-jobs.mjs'
 import { assertStrictSchema } from './and-scene-define-helpers.mjs'
 const root = 'evals/agent-runner/and-scene-define'
 const inventory = JSON.parse(await readFile(join(root, 'hidden/inventory.json'), 'utf8'))
@@ -391,4 +391,20 @@ test('every judging job with a conversation has a strict schema Codex accepts', 
   assert.ok(jobs.some(job => job.kind === 'fidelity') && jobs.some(job => job.kind === 'disclosure'))
   for (const job of jobs) assertStrictSchema(job.kind === 'discovery' ? discoverySchema(job.criteria) : judgeSchema(job.criteria))
   assert.equal(exchangeIdentity(exchange), 'define.specs/specs/1/1')
+})
+test('a fidelity deduction citing its line span and exchange in one citation is split into both and scored', async () => {
+  const jobs = makeJobs({ inventory, rubric: buildRubric(inventory), artifacts: inputs.artifacts, conversation: [exchange], gates: [] })
+  const fidelity = jobs.find(x => x.kind === 'fidelity')
+  assert.match(jobPrompt(fidelity), /Fidelity deductions cite the line span and the exchange as two separate citations/)
+  const preference = inventory.items.find(x => x.class === 'preference')
+  const judges = members(['met', 'met', 'met'])
+  // Judges often put the span and its exchange in one object; it names two targets.
+  for (const judge of judges.panel) judge.invoke = async req => JSON.stringify({ results: req.criteria.map(id => ({ ...result(id, 'met', [{ ...citation, exchange: exchangeIdentity(exchange) }]), subject_id: preference.id })) })
+  const outcome = await runDefinitionPanel({ job: fidelity, ...judges })
+  assert.equal(outcome.ok, true, JSON.stringify(outcome.failure))
+  assert.equal(outcome.results[0].verdict, 'met')
+  assert.ok(outcome.record.votes.every(v => JSON.stringify(v.citations) === JSON.stringify([citation, exchangeCitation]) && v.dropped_citations === undefined))
+  // Each half is still validated on its own: a wrong exchange is dropped, leaving no matching exchange.
+  for (const judge of judges.panel) judge.invoke = async req => JSON.stringify({ results: req.criteria.map(id => ({ ...result(id, 'met', [{ ...citation, exchange: 'wrong' }]), subject_id: preference.id })) })
+  assert.equal((await runDefinitionPanel({ job: fidelity, ...judges })).ok, false)
 })

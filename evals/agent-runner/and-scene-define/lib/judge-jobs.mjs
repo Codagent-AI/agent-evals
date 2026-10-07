@@ -49,7 +49,7 @@ const rules = {
 export function jobPrompt(job) {
   const lineNumbered = Object.fromEntries(Object.entries(job.inputs.artifacts ?? {}).map(([path, text]) => [path, text.split('\n').map((line, n) => `${n + 1}: ${line}`).join('\n')]))
   return [DEFINITION_SCOPE_RULE, rules[job.kind],
-    'met/partial findings cite {path,start_line,end_line,gate:null,exchange:null}. Missing coverage/quality findings cite inspected collected file names (null line numbers), or a failed required-artifact gate. Every other field is null unless it is the citation target. Fidelity needs both a line span and its exchange. Discovery and disclosure flags need exchange identities. No citations may refer to hidden inputs. Supply every criterion exactly once. Use empty added_scope unless this is fidelity.',
+    'met/partial findings cite {path,start_line,end_line,gate:null,exchange:null}. Missing coverage/quality findings cite inspected collected file names (null line numbers), or a failed required-artifact gate. Every other field is null unless it is the citation target. Fidelity deductions cite the line span and the exchange as two separate citations: {path,start_line,end_line,gate:null,exchange:null} and {path:null,start_line:null,end_line:null,gate:null,exchange}. Discovery and disclosure flags need exchange identities. No citations may refer to hidden inputs. Supply every criterion exactly once. Use empty added_scope unless this is fidelity.',
     '# BEGIN UNTRUSTED JOB INPUTS', JSON.stringify({ ...job.inputs, ...(job.inputs.artifacts ? { artifacts: lineNumbered } : {}), conversation: job.inputs.conversation?.map(x => ({ ...x, exchange_identity: exchangeIdentity(x) })) }), '# END UNTRUSTED JOB INPUTS',
     `Criteria: ${JSON.stringify(job.criteria)}`].join('\n')
 }
@@ -110,10 +110,16 @@ export function excludedGradedContradictions(record) {
 }
 // Drop-and-keep: each citation is validated on its own; invalid ones are
 // removed and recorded, and the verdict's requirements apply to those kept.
+// Judges often cite an artifact and an exchange in one object. It names two
+// targets, so it is split into one citation per target before validation.
+function splitTargets(citation) {
+  if (!citation || typeof citation !== 'object' || citation.path == null || citation.exchange == null || citation.gate !== null) return [citation]
+  return [{ ...citation, exchange: null }, { path: null, start_line: null, end_line: null, gate: null, exchange: citation.exchange }]
+}
 function keepValidCitations(citations, inputs) {
   if (!Array.isArray(citations)) bad('missing citations')
   const kept = []; const dropped = []
-  for (const citation of citations) {
+  for (const citation of citations.flatMap(splitTargets)) {
     try { validateCitation(citation, inputs); kept.push(citation) }
     catch (error) { if (!(error instanceof JudgeOutputError)) throw error; dropped.push({ citation, reason: error.message }) }
   }
