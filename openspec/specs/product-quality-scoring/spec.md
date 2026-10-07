@@ -8,10 +8,11 @@ The evaluation SHALL calculate a candidate implementation-quality score out of 1
 
 | Candidate component | Points |
 |---|---:|
-| Demo presentation technical quality | 24 |
-| Scene kit correctness | 24 |
+| Demo presentation technical quality | 20 |
+| Scene kit correctness | 20 |
 | Presentation skill correctness | 7 |
 | Verification tool correctness | 7 |
+| Engineering quality beyond the spec | 8 |
 | Testing-evidence quality | 4 |
 | Assumption-handling quality | 4 |
 | Human review | 30 |
@@ -24,17 +25,18 @@ The reference baseline SHALL be evaluated only on the components shared with the
 
 | Reference component | Applicability | Points |
 |---|---|---:|
-| Demo presentation technical quality | Applicable | 24 |
-| Scene kit correctness | Applicable | 24 |
+| Demo presentation technical quality | Applicable | 20 |
+| Scene kit correctness | Applicable | 20 |
 | Presentation skill correctness | Applicable | 7 |
 | Verification tool correctness | Applicable | 7 |
+| Engineering quality beyond the spec | Applicable | 8 |
 | Testing-evidence quality | Not applicable | 0 |
 | Assumption-handling quality | Not applicable | 0 |
 | Human review | Applicable | 30 |
 
 The reference SHALL therefore have a score denominator of 92 without rescaling. Before its human review is complete, it SHALL report an applicable automated subtotal out of 62. After human review, it SHALL report its score out of 92 without an official candidate pass/fail verdict. Candidate reports SHALL retain the candidate's official score out of 100 and SHALL separately compare the candidate and reference on the shared 92 points.
 
-When the user explicitly approves a post-run technical adjudication, the harness SHALL preserve the raw automated criterion and component scores, record the approver, time, rationale, consequential findings, and replacement scores for exactly the four shared technical components, and recalculate the automated subtotal using those four replacement scores plus the unchanged raw scores of every other applicable automated component. It MAY additionally replace exactly the two workflow-quality component scores and/or explicitly adjudicate all four observed hard-gate verdicts when the technical review found a deterministic harness defect. It SHALL preserve every raw gate verdict, record the prior and revised gate sets, recalculate the official candidate score from the revised subtotal and applicable human-review score, recalculate the complete pass contract and product verdict, and recalculate the shared-92 comparison using only the four shared replacement scores and applicable human-review scores. An adjudication SHALL NOT masquerade as a new automated judge result or silently replace the raw score or gate evidence. For each gate whose verdict the adjudication changes, the harness SHALL preserve the gate's original rationale and evidence as raw fields and SHALL set its current rationale and evidence to the adjudication's, so a revised verdict is never recorded or reported beside the rationale of the verdict it replaced. Reports SHALL render the revised gate record as current and label the preserved harness output as raw adjudication data.
+When the user explicitly approves a post-run technical adjudication, the harness SHALL preserve the raw automated criterion and component scores, record the approver, time, rationale, consequential findings, and replacement scores for exactly the five shared technical components, and recalculate the automated subtotal using those five replacement scores plus the unchanged raw scores of every other applicable automated component. It MAY additionally replace exactly the two workflow-quality component scores and/or explicitly adjudicate all four observed hard-gate verdicts when the technical review found a deterministic harness defect. It SHALL preserve every raw gate verdict, record the prior and revised gate sets, recalculate the official candidate score from the revised subtotal and applicable human-review score, recalculate the complete pass contract and product verdict, and recalculate the shared-92 comparison using only the five shared replacement scores and applicable human-review scores. An adjudication SHALL NOT masquerade as a new automated judge result or silently replace the raw score or gate evidence. For each gate whose verdict the adjudication changes, the harness SHALL preserve the gate's original rationale and evidence as raw fields and SHALL set its current rationale and evidence to the adjudication's, so a revised verdict is never recorded or reported beside the rationale of the verdict it replaced. Reports SHALL render the revised gate record as current and label the preserved harness output as raw adjudication data.
 
 #### Scenario: A deterministic hard gate is technically adjudicated
 - **WHEN** a user-approved technical review proves that a harness defect produced an incorrect observed gate verdict
@@ -49,7 +51,7 @@ When the user explicitly approves a post-run technical adjudication, the harness
 - **AND** the report shows the revised record as current and labels the harness output as raw adjudication data
 
 #### Scenario: Complete product score
-- **WHEN** all six automated candidate components and human review have completed successfully
+- **WHEN** all seven automated candidate components and human review have completed successfully
 - **THEN** the evaluator reports every component score and their sum out of 100
 
 #### Scenario: Human review is pending
@@ -98,22 +100,22 @@ When the user explicitly approves a post-run technical adjudication, the harness
 - **AND** it separately reports candidate-versus-reference component and total differences on the shared 92 points
 
 #### Scenario: User approves technical adjudication
-- **WHEN** the user explicitly approves revised scores for all four shared technical components after independently reviewing a completed candidate
+- **WHEN** the user explicitly approves revised scores for all five shared technical components after independently reviewing a completed candidate
 - **THEN** the harness preserves the raw automated score and records the approved adjudication separately
 - **AND** it recalculates the automated subtotal from the approved shared replacements and unchanged non-shared scores
 - **AND** it recalculates the official score and shared-92 comparison from their applicable components
 
 ### Requirement: Demo presentation technical quality
-The evaluation SHALL score the delivered demo presentation out of 24 using the following rubric. Deterministic browser evaluation SHALL inspect the built, running demo. LLM source review SHALL inspect the delivered source and supporting evidence. The LLM SHALL assess technical implementation and SHALL NOT assess visual taste, perceived motion quality, or responsive aesthetics, which belong to human review.
+The evaluation SHALL score the delivered demo presentation out of 20 using the following rubric. Deterministic browser evaluation SHALL inspect the built, running demo. LLM source review SHALL inspect the delivered source and supporting evidence. The LLM SHALL assess technical implementation and SHALL NOT assess visual taste, perceived motion quality, or responsive aesthetics, which belong to human review.
 
 | Subcomponent | Points | Evaluator | Criteria |
 |---|---:|---|---|
-| Canonical content, routing, and technical structure | 5 | Deterministic browser | `demo-route-and-registration`, `demo-nine-step-content-and-order`, `demo-required-scene-content`, `demo-evolving-scene-structure`, `quality-captions-and-navigation` |
-| Navigation, modes, boundaries, and controls | 5 | Deterministic browser | `demo-present-mode-behavior`, `demo-browse-mode-behavior`, `demo-mode-position-preservation`, `demo-supported-navigation`, `demo-navigation-boundaries-and-control-keys` |
-| Runtime reliability and accessibility baseline | 4 | Deterministic browser | `demo-step-and-transition-reliability`, `demo-mode-interaction-reliability`, `demo-control-semantics`, `demo-focus-and-keyboard-accessibility` |
+| Canonical content, routing, and technical structure | 4 | Deterministic browser | `demo-route-and-registration`, `demo-nine-step-content-and-order`, `demo-required-scene-content`, `demo-evolving-scene-structure`, `quality-captions-and-navigation` |
+| Navigation, modes, boundaries, and controls | 4 | Deterministic browser | `demo-present-mode-behavior`, `demo-browse-mode-behavior`, `demo-mode-position-preservation`, `demo-supported-navigation`, `demo-navigation-boundaries-and-control-keys` |
+| Runtime reliability and accessibility baseline | 3 | Deterministic browser | `demo-step-and-transition-reliability`, `demo-mode-interaction-reliability`, `demo-control-semantics`, `demo-focus-and-keyboard-accessibility` |
 | Uses scene-kit APIs without bypassing or duplicating them | 4 | LLM source review | `demo-scene-kit-api-use` |
 | Uses stable identities and appropriate grouped-scene architecture | 3 | LLM source review | `demo-stable-identity-and-grouping` |
-| Maintains clear boundaries and scope discipline | 3 | LLM source review | `demo-clear-code-boundaries`, `quality-active-chrome-and-attribution-local`, `demo-scope-discipline` |
+| Maintains clear boundaries and scope discipline | 2 | LLM source review | `demo-clear-code-boundaries`, `quality-active-chrome-and-attribution-local`, `demo-scope-discipline` |
 
 The deterministic evaluator SHALL preserve the presentation's initial mode when opening it. Before traversing captions and canonical content, it SHALL explicitly enter browse mode. Before a mode-specific probe, it SHALL explicitly enter that probe's required present or browse mode. It SHALL NOT treat captions intentionally hidden in present mode as missing content. It SHALL change modes through a presentation-exposed mode control when one is discoverable, and SHALL fall back to a keyboard shortcut only when no such control exists. When a presentation exposes more than one mode control, the evaluator SHALL select the control for the mode it is establishing; when it cannot identify exactly one such control, it SHALL raise a resumable harness failure rather than record the unchanged mode as a product deduction. The evaluator SHALL read a presentation's declared mode from a `data-presentation-mode` attribute, or failing that from a `data-mode` attribute on the element carrying the `data-step-count` hook or one containing it, whose value is `present` or `browse`, and SHALL ignore either attribute with any other value and a `data-mode` anywhere else. When a presentation declares no such mode, the evaluator SHALL infer browse mode from a visible caption or table of contents, and SHALL NOT count an element carrying a recognised title hook or the step-marker hook (`data-presentation-marker`) as a caption unless it carries an explicit caption hook. An inferred mode is a heuristic reading under "Deterministic criteria fail only on positive evidence": it MAY position the demo and support a `pass`, but a `fail` SHALL NOT rest on it.
 
@@ -370,7 +372,7 @@ Deterministic source facts supplied to an LLM source judge SHALL be treated as l
 - **THEN** the retained artifact contains the text escaped at most once
 
 ### Requirement: Scene kit correctness
-The evaluation SHALL score the reusable scene kit out of 24 using LLM review of delivered source and structured browser evidence. The judge SHALL assess implementation of the technical contracts rather than the aesthetic quality of the demo that uses them.
+The evaluation SHALL score the reusable scene kit out of 20 using LLM review of delivered source and structured browser evidence. The judge SHALL assess implementation of the technical contracts rather than the aesthetic quality of the demo that uses them.
 
 For transition sequencing, the judge SHALL require persisting motion and newcomer delay to share one settlement contract or executable proof that newcomers wait until continuing entities settle; the presence of timing constants or named primitives alone SHALL NOT earn credit. Sharing or importing a timing value SHALL be insufficient unless persistent motion consumes that exact configuration, or newcomer admission waits on an observable completion signal from persistent motion. Newcomer sequencing SHALL follow the fixture design's timing mechanism: a newcomer entry delay at least as long as the continuing layout transition, applied to the newcomer only, SHALL satisfy `entity-newcomer-after-settle`; the same delay applied to the continuing motion, an entry that can start early, or no entry motion SHALL fail it. A step id SHALL be stable only when it survives inserting, removing, or reordering steps; a position-derived id fails `scene-step-narration-and-identity`. Newcomer timing SHALL be judged on the visible entry, so a zero-delay wrapper around an inner node whose entry is delayed past the layout transition passes. A warning SHALL identify an element by its visible text, or for a textless element by its accessible name, a stable hook, or a selector path. In present mode the marker is a visible indicator of the active step's position or section beside the title. Uniform fit SHALL be judged at the eval-owned reference viewports 1280×720 and 390×844 in both modes. Touch navigation SHALL be judged against the fixture scenario only: a horizontal swipe to the left advances one step and a swipe to the right goes back one step. The judge SHALL NOT require rejection of vertical scrolling or multi-touch gestures, which the fixture does not state.
 
@@ -378,11 +380,11 @@ The step number SHALL count as on screen only when it is rendered visibly; an `a
 
 | Subcomponent | Points | Criteria |
 |---|---:|---|
-| Step model, stable identity, and typed boundary | 4 | `scene-step-narration-and-identity`, `scene-order-derived-numbering`, `scene-typed-payload-boundary` |
-| Entity transitions and persistent grouped scenes | 7 | `entity-persisting-morph`, `entity-newcomer-after-settle`, `entity-departing-exit`, `grouped-scene-updates-in-place`, `grouped-continuing-entities-not-newcomers`, `grouped-intentional-composition` |
-| Present/browse modes, navigation, controls, and boundaries | 6 | `mode-present-title-focused`, `mode-browse-reading-focused`, `mode-toggle-preserves-position`, `navigation-keyboard`, `navigation-touch-swipe`, `navigation-direct-jump`, `navigation-active-state`, `navigation-controls-keep-keys`, `navigation-clamp-start`, `navigation-clamp-end` |
+| Step model, stable identity, and typed boundary | 3 | `scene-step-narration-and-identity`, `scene-order-derived-numbering`, `scene-typed-payload-boundary` |
+| Entity transitions and persistent grouped scenes | 6 | `entity-persisting-morph`, `entity-newcomer-after-settle`, `entity-departing-exit`, `grouped-scene-updates-in-place`, `grouped-continuing-entities-not-newcomers`, `grouped-intentional-composition` |
+| Present/browse modes, navigation, controls, and boundaries | 5 | `mode-present-title-focused`, `mode-browse-reading-focused`, `mode-toggle-preserves-position`, `navigation-keyboard`, `navigation-touch-swipe`, `navigation-direct-jump`, `navigation-active-state`, `navigation-controls-keep-keys`, `navigation-clamp-start`, `navigation-clamp-end` |
 | Fixed-canvas behavior | 2 | `canvas-uniform-scaling`, `canvas-default-dimensions` |
-| Style ownership, hooks, framework neutrality, and attribution | 5 | `style-kit-hooks`, `style-unstyled-kit-output`, `style-framework-optional`, `style-coordinate-heavy-diagrams`, `attribution-default-link`, `attribution-styling-hook`, `attribution-top-left-opt-in` |
+| Style ownership, hooks, framework neutrality, and attribution | 4 | `style-kit-hooks`, `style-unstyled-kit-output`, `style-framework-optional`, `style-coordinate-heavy-diagrams`, `attribution-default-link`, `attribution-styling-hook`, `attribution-top-left-opt-in` |
 
 #### Scenario: Scene-kit contracts are scored
 - **WHEN** the LLM judge evaluates the reusable scene kit
@@ -504,7 +506,7 @@ The revised rubric SHALL classify each of the 68 legacy rubric criteria exactly 
 | Replaced by testing-evidence quality | 2 | `quality-visual-composition-inspected`, `quality-visual-warnings-reviewed` |
 | Removed from scoring | 3 | `skill-optional-ascii-mockup`, `quality-builds-clean`, `quality-renders-without-errors` |
 
-The replaced concerns SHALL remain observable through the testing-evidence criteria and SHALL NOT be scored under their legacy identifiers. The revised rubric SHALL additionally define four testing-evidence and four assumption-handling criteria, each assigned exactly once to its focused judge.
+The replaced concerns SHALL remain observable through the testing-evidence criteria and SHALL NOT be scored under their legacy identifiers. The revised rubric SHALL additionally define four testing-evidence and four assumption-handling criteria, each assigned exactly once to its focused judge. It SHALL additionally define the sixteen engineering-quality criteria listed by the engineering-quality-scoring capability, each assigned exactly once to the engineering-quality component and none counted among the 68 legacy criteria.
 
 #### Scenario: Existing criteria are completely classified
 - **WHEN** the revised rubric is validated
@@ -535,6 +537,11 @@ The replaced concerns SHALL remain observable through the testing-evidence crite
 - **THEN** the applicable hard gate determines pass eligibility
 - **AND** no duplicate point criterion awards or deducts points for the same baseline outcome
 
+#### Scenario: Engineering-quality criteria are classified
+- **WHEN** the revised rubric is validated
+- **THEN** each of the sixteen engineering-quality criteria appears exactly once, under the engineering-quality component
+- **AND** none is counted among the 68 legacy criteria or duplicates an existing criterion identifier
+
 ### Requirement: Hard gates and official pass
 The evaluation SHALL apply the following four product hard gates separately from point scoring.
 
@@ -545,9 +552,9 @@ The evaluation SHALL apply the following four product hard gates separately from
 | `verification-every-produced-step-renders` | Every produced step renders without runtime or console errors |
 | `verification-clear-outcome` | Verification produces an unambiguous machine-readable pass/fail result |
 
-An official candidate pass SHALL require all of the following: a total score of at least 70 out of 100; at least 15 out of 24 for demo technical quality; at least 15 out of 24 for scene-kit correctness; at least 15 out of 30 for human review; no individual human rating of 1; all four hard gates passing; and successful completion of the evaluation phases required to establish those results. The presentation-skill, verification-tool, testing-evidence, and assumption-handling components SHALL have no separate minimum scores.
+An official candidate pass SHALL require all of the following: a total score of at least 70 out of 100; at least 12.5 out of 20 for demo technical quality; at least 12.5 out of 20 for scene-kit correctness; at least 15 out of 30 for human review; no individual human rating of 1; all four hard gates passing; and successful completion of the evaluation phases required to establish those results. The presentation-skill, verification-tool, engineering-quality, testing-evidence, and assumption-handling components SHALL have no separate minimum scores.
 
-Before human review, a complete candidate automated result SHALL pass automated eligibility only when the automated subtotal is at least 40 out of 70, both 15-out-of-24 automated component floors are met, and all four hard gates pass. The 40-point threshold SHALL equal the 70-point official threshold minus the maximum 30 human-review points. A failed automated eligibility requirement SHALL conclusively fail the candidate without human review or an official score. An incomplete automated score, floor, or gate SHALL leave automated eligibility unavailable and SHALL NOT be converted into a product failure.
+Before human review, a complete candidate automated result SHALL pass automated eligibility only when the automated subtotal is at least 40 out of 70, both 12.5-out-of-20 automated component floors are met, and all four hard gates pass. The 40-point threshold SHALL equal the 70-point official threshold minus the maximum 30 human-review points. A failed automated eligibility requirement SHALL conclusively fail the candidate without human review or an official score. An incomplete automated score, floor, or gate SHALL leave automated eligibility unavailable and SHALL NOT be converted into a product failure.
 
 `verification-sample-outline` SHALL be derived during scoring from the final verdicts of `demo-route-and-registration` and `demo-nine-step-content-and-order`: it SHALL pass when both final verdicts are `pass`, fail when either is `fail`, and remain unobserved only while either is unresolved. A criterion's final verdict SHALL be its owner's verdict or, when not observed, its fallback judge's verdict, after any second opinion. The result SHALL retain the browser evaluator's raw outline gate beside the derived gate. The raw gate SHALL pass when both inputs pass, fail only when an input has a definite `fail`, and be unobserved otherwise; a not-observed input SHALL never produce a raw outline failure. Every hard gate SHALL be applied using its second-opinion verdict when it received one, under the failure-second-opinion capability.
 
@@ -568,7 +575,7 @@ The reference baseline SHALL NOT receive an official candidate pass/fail verdict
 - **THEN** the official candidate pass verdict is false
 
 #### Scenario: Candidate has no points in a floorless component
-- **WHEN** a candidate earns zero points for presentation skill, verification, testing evidence, or assumption handling but otherwise satisfies the pass contract
+- **WHEN** a candidate earns zero points for presentation skill, verification, engineering quality, testing evidence, or assumption handling but otherwise satisfies the pass contract
 - **THEN** that component creates no additional independent gate
 
 #### Scenario: Hard gate fails
@@ -577,7 +584,7 @@ The reference baseline SHALL NOT receive an official candidate pass/fail verdict
 - **AND** the evaluator still reports the numerical score supported by available evidence
 
 #### Scenario: Automated component floor fails before human review
-- **WHEN** complete automated scoring misses either 15-out-of-24 automated component floor
+- **WHEN** complete automated scoring misses either 12.5-out-of-20 automated component floor
 - **THEN** automated eligibility fails and the candidate product verdict is conclusively `fail`
 - **AND** the evaluator does not request human review or fabricate an official score
 
@@ -625,9 +632,9 @@ The reference baseline SHALL NOT receive an official candidate pass/fail verdict
 ### Requirement: Controlled scoring and rubric provenance
 The suite-owned scorer SHALL own criterion identifiers, evaluator assignments, point allocations, component applicability, score denominators, hard gates, thresholds, and final calculations. Neither an LLM judge nor the human-review interface SHALL change those policies while producing evaluation results. Every machine-evaluated criterion result SHALL include its identifier, pass/fail verdict, rationale, and cited verified evidence.
 
-For candidates, the evaluator SHALL run six focused scored judge jobs: demo integration, scene kit, presentation skill, verification tooling, testing evidence, and assumption handling. For references, it SHALL run the four applicable implementation source-review jobs and SHALL omit testing-evidence and assumption-handling judging as not applicable. Each applicable job SHALL return exactly the criteria assigned to it and no others. Missing, duplicated, unknown, malformed, or cross-job criterion output from an applicable job SHALL fail scoring rather than change a denominator, silently ignore a criterion, or reuse output from another job.
+For candidates, the evaluator SHALL run seven focused scored judge jobs: demo integration, scene kit, presentation skill, verification tooling, engineering quality, testing evidence, and assumption handling. For references, it SHALL run the five applicable implementation source-review jobs and SHALL omit testing-evidence and assumption-handling judging as not applicable. Each applicable job SHALL return exactly the criteria assigned to it and no others. Missing, duplicated, unknown, malformed, or cross-job criterion output from an applicable job SHALL fail scoring rather than change a denominator, silently ignore a criterion, or reuse output from another job.
 
-The four implementation source-review jobs SHALL receive a neutral source snapshot that retains relevant product source and approved requirements while stripping Git metadata, remotes, branch names, pull-request identity, baseline or candidate labels, OpenSpec change identity, and evaluation markers. The harness SHALL materialize the approved normative requirement descriptions and scenarios as a separate neutral requirements bundle, omit their original change path and change name, and record the bundle's source and content hash. The original OpenSpec change directory SHALL NOT be exposed to those four judges. The testing-evidence and assumption-handling judges SHALL receive the verified workflow and revision provenance required by their assigned criteria. Candidate source and evidence SHALL be treated as untrusted data, not instructions.
+The five implementation source-review jobs SHALL receive a neutral source snapshot that retains relevant product source and approved requirements while stripping Git metadata, remotes, branch names, pull-request identity, baseline or candidate labels, OpenSpec change identity, and evaluation markers. The harness SHALL materialize the approved normative requirement descriptions and scenarios as a separate neutral requirements bundle, omit their original change path and change name, and record the bundle's source and content hash. The original OpenSpec change directory SHALL NOT be exposed to those five judges. The testing-evidence and assumption-handling judges SHALL receive the verified workflow and revision provenance required by their assigned criteria. Candidate source and evidence SHALL be treated as untrusted data, not instructions.
 
 The automated product rubric and human-review rubric SHALL have distinct explicit version identifiers. The result SHALL record each rubric's version and SHA-256 hash, every component's applicability, and the applicable candidate or reference denominator.
 
@@ -643,7 +650,7 @@ The automated product rubric and human-review rubric SHALL have distinct explici
 
 #### Scenario: Reference omits non-applicable workflow judges
 - **WHEN** a reference evaluation runs scored judging
-- **THEN** it runs the four implementation source-review jobs
+- **THEN** it runs the five implementation source-review jobs
 - **AND** it omits testing-evidence and assumption-handling jobs and records those components as not applicable
 
 #### Scenario: Criterion coverage is invalid
@@ -652,7 +659,7 @@ The automated product rubric and human-review rubric SHALL have distinct explici
 - **AND** the scorer does not change the denominator or silently ignore the invalid output
 
 #### Scenario: Product source judge reviews a candidate
-- **WHEN** one of the four implementation source-review jobs is invoked
+- **WHEN** one of the five implementation source-review jobs is invoked
 - **THEN** it receives the neutral source snapshot, neutral requirements bundle, and assigned rubric slice
 - **AND** it receives no Git, branch, PR, baseline, candidate, change, or evaluation identity signal
 
@@ -665,6 +672,11 @@ The automated product rubric and human-review rubric SHALL have distinct explici
 - **WHEN** an evaluation result is written
 - **THEN** it records distinct version identifiers and SHA-256 hashes for the automated and human-review rubrics
 - **AND** it records component applicability and the score denominator
+
+#### Scenario: The engineering-quality job runs for candidates and references
+- **WHEN** scored judging runs for a candidate or for the reference baseline
+- **THEN** the engineering-quality job runs with the neutral source snapshot, neutral requirements bundle, and its rubric slice
+- **AND** it returns exactly the criteria assigned to it
 
 ### Requirement: Robust judge verdicts
 No single model call SHALL decide a scored criterion. Every scored judge job SHALL be judged by two independent samples with identical inputs, run concurrently at an explicitly pinned reasoning effort. Each source-job sample SHALL pass through its own closed-world source audit: a `contradicted` classification SHALL mark that sample's vote disputed, and the vote SHALL turn only when an independent contradiction check confirms the audit's stated contradiction, an `insufficient` classification SHALL trigger at most one focused re-cite, and a verdict still undecided after the re-cite SHALL stand as the sample's vote, except that a browser-fallback pass SHALL then fail because it must be proven from source. A verdict both samples agree on, with neither vote disputed, SHALL stand, pass or fail. A criterion the samples disagree on, or whose vote either sample's audit disputed, SHALL be settled by a third independent sample that receives the job's unchanged context and never sees the first two verdicts; its vote decides the majority.
