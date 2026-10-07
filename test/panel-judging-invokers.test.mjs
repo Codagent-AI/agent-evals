@@ -35,6 +35,16 @@ test('sandbox permits only read tools in approved roots', async t => {
   assert.equal(args[args.indexOf('--allowedTools') + 1], 'Read,Grep,Glob')
   await assert.rejects(invoke({ ...request, cwd: tmpdir() }), /approved/)
 })
+test('sandbox creates an approved workspace root that no earlier job has created', async t => {
+  const { root, request } = await fixture(t, [success])
+  const workspace = join(root, '.runtime', 'judge-workspace')
+  const invoke = createClaudeJudgeInvoker({ runDir: root, command: join(root, 'claude'), allowedRoots: [workspace], mode: 'in-sandbox' })
+  await invoke({ ...request, cwd: workspace, input_roots: { source: workspace } })
+  const { cwd } = JSON.parse(await readFile(join(root, 'args'), 'utf8'))
+  assert.equal(cwd, await realpath(workspace))
+  // Only an approved root itself is created, never a path beneath one.
+  await assert.rejects(invoke({ ...request, cwd: join(workspace, 'missing'), input_roots: { source: workspace } }), /ENOENT/)
+})
 for (const event of [{ type: 'system', subtype: 'init', tools: ['Bash'] }, { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input: {} }] } }]) test('unexpected tool is rejected', async t => {
   const { invoke, request } = await fixture(t, [[event, ...success]])
   await assert.rejects(invoke(request), /tool/)

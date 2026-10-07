@@ -220,7 +220,11 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
     record.attempts.push(...outcomes.flatMap((o, index) => (o.attempts ?? []).map(a => ({ ...a, panel_index: index }))))
     record.audit_attempts = outcomes.flatMap((o, index) => (o.audit_attempts ?? []).map(a => ({ ...a, panel_index: index })))
     if (outcomes.some(o => !o.ok)) {
-      record.failure ??= outcomes.find(o => !o.ok)?.failure ?? null
+      // Name the failed seat's own last error: another seat may have recorded,
+      // and recovered from, a later one.
+      const failed = outcomes.find(o => !o.ok)
+      const last = [...(failed.attempts ?? []), ...(failed.audit_attempts ?? [])].findLast(attempt => attempt.ok === false && attempt.error)
+      record.failure ??= failed.failure ?? last?.failure ?? (last ? { message: last.error, code: 'judge-output', owner: 'evaluation-harness' } : null)
       return done()
     }
     record.votes = outcomes.flatMap((o, index) => o.results.map(r => ({ ...r, family: panel[index].family, model: panel[index].model, effort: panel[index].effort, panel_index: index })))

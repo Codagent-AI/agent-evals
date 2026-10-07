@@ -788,7 +788,10 @@ async function listViewFiles(root) {
 export async function lineCitationInventory(request) {
   if (isEvidenceJob(request)) {
     const root = request.input_roots?.evidence ?? null
-    return { root, kind: 'evidence view', paths: root ? await listViewFiles(root) : [] }
+    const paths = root ? await listViewFiles(root) : []
+    // A panel cited only the bounded packet.txt it was given; screenshots and
+    // raw candidate files beside it would overflow the decider's packet.
+    return { root, kind: 'evidence view', paths: request.panel_line_citations && paths.includes('packet.txt') ? ['packet.txt'] : paths }
   }
   return {
     root: request.input_roots?.source ?? null,

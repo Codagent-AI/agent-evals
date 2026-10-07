@@ -89,6 +89,16 @@ test('exhausted judge and decider leave job unobserved; schema failure is not re
   assert.equal(calls, 1)
 })
 
+test('a failed panel seat reports its own error, not one another seat recovered from', async () => {
+  const outcome = await runPanelJob(setup(['pass', 'pass', 'pass'], {
+    audit: async ({ request }) => request.judge_sample === 1
+      ? { ok: false, results: null, attempts: [{ cycle: 1, attempt: 1, ok: true, error: null }], audit_attempts: [{ cycle: 1, attempt: 1, ok: false, error: 'workspace missing' }] }
+      : { ok: true, results: [result('pass')], attempts: [{ cycle: 1, attempt: 1, ok: true, error: null }], audit_attempts: [{ cycle: 1, attempt: 1, ok: false, error: 'recovered on re-cite' }, { cycle: 2, attempt: 1, ok: true, error: null }] },
+  }))
+  assert.equal(outcome.ok, false)
+  assert.equal(outcome.failure.message, 'workspace missing')
+})
+
 // INT-010: use real neutral files and the existing closed-world/span mechanics.
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -178,6 +188,28 @@ test('evidence decider receives line-numbered files inlined without a tools inst
   assert.doesNotMatch(request.prompt, /You may read/)
 })
 
+
+test('an evidence decider inlines only the packet the panel saw, not other view files', async t => {
+  const { MAX_AUDIT_PACKET_CHARS } = await import('../evals/lib/panel-judging/protocol.mjs')
+  const { options, seen } = await sourceSetup(t, ['fail', 'pass', 'pass'])
+  const build = options.buildPrompt
+  const view = join((build()).cwd, 'view')
+  await mkdir(join(view, 'candidate'), { recursive: true })
+  await writeFile(join(view, 'packet.txt'), 'mechanism\nfocused test\n')
+  // Screenshots and raw candidate files sit beside the packet in the view.
+  await writeFile(join(view, 'candidate/step-01.png'), 'x'.repeat(MAX_AUDIT_PACKET_CHARS + 1))
+  await writeFile(join(view, 'index.json'), '{"secret":"not in the packet"}')
+  options.buildPrompt = () => ({ ...build(), source_audit: false, line_citations: 'evidence-view', input_roots: { evidence: view } })
+  const decide = options.decider.invoke
+  options.decider.invoke = async next => next.judge_stage === 'tiebreak'
+    ? (seen.push(next), JSON.stringify({ results: [{ id: 'x', verdict: 'pass', rationale: 'packet proves it', evidence: ['packet'], citations: [{ path: 'packet.txt', start_line: 1, end_line: 2 }] }] }))
+    : decide(next)
+  const outcome = await runPanelJob(options)
+  assert.equal(outcome.ok, true, outcome.record.error)
+  const request = seen.find(r => r.judge_stage === 'tiebreak')
+  assert.match(request.prompt, /"path":"packet.txt"/)
+  assert.doesNotMatch(request.prompt, /step-01\.png|not in the packet/)
+})
 
 test('a confirmed source contradiction supplies a turned fail vote the decider may choose', async t => {
   const { options, seen } = await sourceSetup(t, ['pass', 'pass', 'pass'], {

@@ -34,6 +34,9 @@ export function createClaudeJudgeInvoker({
     if (mode === 'in-sandbox' && request.cwd) {
       const requested = resolve(request.cwd)
       if (!allowedRoots.some(root => inside(resolve(root), requested))) throw harnessError(`Claude judge cwd is not an approved read-only root: ${requested}`)
+      // Seats start together, so a Codex seat may not have created the shared
+      // workspace yet. Create an approved root itself, never a path beneath one.
+      if (allowedRoots.some(root => resolve(root) === requested)) await mkdir(requested, { recursive: true })
       const canonical = await realpath(requested)
       const approved = await Promise.all(allowedRoots.map(root => realpath(root).catch(() => null)))
       if (!approved.some(root => root && inside(root, canonical))) throw harnessError('Claude judge cwd escapes approved read-only root')
