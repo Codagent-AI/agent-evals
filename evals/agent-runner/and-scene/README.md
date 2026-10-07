@@ -332,7 +332,8 @@ evals/agent-runner/and-scene/run.sh \
 
 Host mode needs `node`, `npm`, `chrome-devtools-axi`, `codex` (or
 `AND_SCENE_CODEX_COMMAND`), and `claude` (or `AND_SCENE_CLAUDE_COMMAND`) on
-`PATH`, plus either a DevTools endpoint in
+`PATH`, logged in as usual (no `~/.claude/.credentials.json` is needed, since
+the host CLI may keep its login in the macOS Keychain), plus either a DevTools endpoint in
 `CHROME_DEVTOOLS_AXI_BROWSER_URL` or a Chrome or Chromium binary (`CHROME_PATH`,
 the macOS Google Chrome app, `chromium`, or `google-chrome`). With a binary, the
 controller starts headless Chrome on `AND_SCENE_HOST_DEVTOOLS_PORT` (default

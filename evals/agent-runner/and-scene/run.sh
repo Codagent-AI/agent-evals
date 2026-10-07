@@ -444,13 +444,17 @@ if [[ "$RUN_AGENT" == 1 ]]; then
     CANDIDATE_REF="$REFERENCE_REF"
   fi
 
-  if [[ "$MOUNT_CLAUDE_AUTH" != 1 ]]; then
-    AUTH_ARGS+=(--mount-claude-auth)
-    MOUNT_CLAUDE_AUTH=1
-  fi
-  if [[ ! -r "$HOME/.claude/.credentials.json" ]]; then
-    echo "Cross-family judging requires Claude auth at $HOME/.claude/.credentials.json; forward it with --mount-claude-auth (implied for judging)." >&2
-    exit 2
+  # A host rescore calls the host's own claude, which may keep its login in the
+  # macOS Keychain; only a sandboxed run needs the credentials file forwarded.
+  if [[ "$HOST" != 1 ]]; then
+    if [[ "$MOUNT_CLAUDE_AUTH" != 1 ]]; then
+      AUTH_ARGS+=(--mount-claude-auth)
+      MOUNT_CLAUDE_AUTH=1
+    fi
+    if [[ ! -r "$HOME/.claude/.credentials.json" ]]; then
+      echo "Cross-family judging requires Claude auth at $HOME/.claude/.credentials.json; forward it with --mount-claude-auth (implied for judging)." >&2
+      exit 2
+    fi
   fi
 
   # Scored judging uses Claude and Codex; single-purpose checks remain Codex.

@@ -644,6 +644,20 @@ test('a host rescore runs the controller directly without the sandbox', async ()
   assert.ok(!result.output.includes('--lead-cli'), result.output)
 })
 
+test('a host rescore uses the host Claude login and needs no Claude credentials file', async () => {
+  const context = await setup({ dirty: true })
+  const source = join(context.dir, 'completed-candidate')
+  await mkdir(source)
+  // macOS keeps the Claude Code login in the Keychain, which the host CLI reads.
+  await rm(join(context.home, '.claude/.credentials.json'))
+
+  const result = await scored(context, ['--rescore-from', source, '--host'])
+
+  assert.equal(result.status, 0, result.output)
+  assert.doesNotMatch(result.output, /Cross-family judging requires Claude auth/)
+  assert.ok(!result.output.includes('--mount-claude-auth'), result.output)
+})
+
 test('host mode is refused outside an evaluator-only rescore', async () => {
   const context = await setup()
 
