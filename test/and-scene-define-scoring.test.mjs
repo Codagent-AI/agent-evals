@@ -26,8 +26,8 @@ function members(votes, deciderVote = null, check = 'confirmed', calls = []) {
   } } }
 }
 test('anchors and generated rubric are pinned; preflight refuses review and calibration gaps', async () => {
-  assert.equal(inventory.anchors_review, null)
-  assert.equal(inventory.inventory_version, 4)
+  assert.deepEqual(inventory.anchors_review, { reviewer: 'Paul Caplan', date: '2026-10-06', inventory_version: 5 })
+  assert.equal(inventory.inventory_version, 5)
   assert.deepEqual(await checkInventory(), [])
   const broken = structuredClone(inventory); delete broken.items.find(x => x.class === 'mandatory').anchors
   assert.ok((await checkInventory({ inventory: broken })).some(x => /anchors/.test(x)))
@@ -37,10 +37,10 @@ test('anchors and generated rubric are pinned; preflight refuses review and cali
   assert.deepEqual(checkRubric(rubric, inventory), [])
   const stale = structuredClone(rubric); stale.coverage[0].anchors.met = 'changed'
   assert.ok(checkRubric(stale, inventory).length)
-  assert.throws(() => verifyJudgingInputs({ inventory, rubric }), /anchors need review/)
-  const reviewed = { ...inventory, anchors_review: { reviewer: 'maintainer', date: '2026-10-06', inventory_version: 4 } }
-  assert.throws(() => verifyJudgingInputs({ inventory: reviewed, rubric }), /calibration must set/)
-  assert.throws(() => verifyJudgingInputs({ inventory: reviewed, rubric: { ...rubric, inventory_version: 1 } }), /inventory version/)
+  assert.throws(() => verifyJudgingInputs({ inventory: { ...inventory, anchors_review: null }, rubric }), /anchors need review/)
+  assert.throws(() => verifyJudgingInputs({ inventory: { ...inventory, anchors_review: { ...inventory.anchors_review, inventory_version: 4 } }, rubric }), /anchors need review/)
+  assert.throws(() => verifyJudgingInputs({ inventory, rubric }), /calibration must set/)
+  assert.throws(() => verifyJudgingInputs({ inventory, rubric: { ...rubric, inventory_version: 1 } }), /inventory version/)
 })
 for (const [votes, ruling, classification, expected, basis, extra] of [
   [['met','met','met'],null,'confirmed','met','consensus',0],

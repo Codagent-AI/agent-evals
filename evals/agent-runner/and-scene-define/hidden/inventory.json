@@ -1,5 +1,5 @@
 {
-  "inventory_version": 4,
+  "inventory_version": 5,
   "source": {
     "repository": "https://github.com/Codagent-AI/and-scene.git",
     "commit": "ad667a965a0e1ea0b028c36c04d57bf0411d30d9",
@@ -5044,5 +5044,9 @@
       "reason": "AT-001 through AT-004 exercise obligations already itemized from the specs; they add no new product obligation."
     }
   ],
-  "anchors_review": null
+  "anchors_review": {
+    "reviewer": "Paul Caplan",
+    "date": "2026-10-06",
+    "inventory_version": 5
+  }
 }

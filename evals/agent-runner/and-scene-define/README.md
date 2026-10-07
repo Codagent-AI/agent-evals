@@ -52,8 +52,8 @@ fixture pin mismatches, and unpinned versions.
 An `acceptable-alternative` item's intent is copied verbatim from one labeller
 (`intent_source`). A maintainer may instead write the intent, with
 `intent_source: "maintainer"` and an `intent_reason`; the check rejects a
-maintainer intent without a reason. Inventory version 4 does this for the
-navigation-boundary and production-build render items.
+maintainer intent without a reason. Inventory versions 4 and later do this for
+the navigation-boundary and production-build render items.
 
 `starting-repo/manifest.json` records the explicit allowlist, neutral rewrites,
 source and output SHA-256 hashes, and Git tree hash. Unlisted fixture files,
@@ -238,11 +238,13 @@ invocation is `evals/agent-runner/and-scene-define/run.sh --calibrate`.
 
 ## Definition judging and calibration prerequisites
 
-Inventory version 4 drafts `met`, `partial`, and `missing` anchors for all 72
-graded items. `anchors_review` is deliberately null. A maintainer must complete
-**HT-003 (anchor review)** before calibration and record `{ reviewer, date,
-inventory_version }` for the reviewed version, updating the inventory pin using
-the versioning rules above. Preference items have no coverage anchors.
+Inventory version 4 drafted `met`, `partial`, and `missing` anchors for all 72
+graded items. The maintainer approved them in **HT-003 (anchor review)**, and
+inventory version 5 records that review as `anchors_review: { reviewer, date,
+inventory_version }`; the anchors themselves are unchanged. Any later change to
+the anchors needs a new inventory version and a new review, recorded the same
+way under the versioning rules above, before calibration or a candidate run.
+Preference items have no coverage anchors.
 
 `rubric.json` is generated from the inventory. Its coverage criteria and
 anchors, quality and fidelity wording, guidance, and gates are always
