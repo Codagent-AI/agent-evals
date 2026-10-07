@@ -143,7 +143,8 @@ test('a result without the engineering-quality component lacks complete shared s
     baseline: result({ runId: 'baseline-1', mode: 'reference-baseline', official: 84, components: fullShared(false), human: 30 }),
   })
   assert.equal(comparison.comparable, false)
-  assert.match(comparison.reason, /complete shared component scores/)
+  assert.match(comparison.reason, /baseline has no engineering-quality component score/)
+  assert.match(comparison.reason, /re-judged with --rescore-from/)
 })
 
 test('workflow-quality components are excluded from the shared comparison', () => {
@@ -238,4 +239,28 @@ test('baseline implementation metrics stay not applicable rather than zero', () 
   assert.equal(comparison.implementation_cost.baseline, null)
   assert.equal(comparison.implementation_cost.candidate, 4.5)
   assert.equal(comparison.implementation_cost.delta, null)
+})
+
+test('a rubric-version refusal says the older run must be re-judged with --rescore-from', () => {
+  const baseline = result({
+    runId: 'baseline-1',
+    mode: 'reference-baseline',
+    rubrics: { ...RUBRICS, automated: { ...RUBRICS.automated, version: '1.9.0' } },
+  })
+
+  const comparison = compareToBaseline({ candidate: result(), baseline })
+
+  assert.match(comparison.reason, /re-judged with --rescore-from/)
+})
+
+test('a rubric-hash refusal says the run must be re-judged with --rescore-from', () => {
+  const baseline = result({
+    runId: 'baseline-1',
+    mode: 'reference-baseline',
+    rubrics: { ...RUBRICS, automated: { ...RUBRICS.automated, sha256: 'c'.repeat(64) } },
+  })
+
+  const comparison = compareToBaseline({ candidate: result(), baseline })
+
+  assert.match(comparison.reason, /re-judged with --rescore-from/)
 })

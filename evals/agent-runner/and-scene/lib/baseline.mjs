@@ -18,6 +18,7 @@ export const SHARED_COMPONENT_IDS = [
   'engineering-quality',
 ]
 export const SHARED_SCORE_DENOMINATOR = 92
+const RESCORE_HINT = 'the run scored under the other automated rubric must be re-judged with --rescore-from before the two compare'
 
 function refuse(reason) {
   return {
@@ -42,11 +43,12 @@ function rubricMismatch(candidate, baseline) {
     if (left?.rubric_id !== right?.rubric_id) {
       return `${label} rubric identifier differs: candidate ${left?.rubric_id ?? 'unknown'}, baseline ${right?.rubric_id ?? 'unknown'}`
     }
+    const hint = kind === 'automated' ? `; ${RESCORE_HINT}` : ''
     if (left?.version !== right?.version) {
-      return `${label} rubric version differs: candidate ${left?.version ?? 'unknown'}, baseline ${right?.version ?? 'unknown'}`
+      return `${label} rubric version differs: candidate ${left?.version ?? 'unknown'}, baseline ${right?.version ?? 'unknown'}${hint}`
     }
     if (left?.sha256 !== right?.sha256) {
-      return `${label} rubric hash differs between the candidate and the baseline`
+      return `${label} rubric hash differs between the candidate and the baseline${hint}`
     }
   }
   return null
@@ -94,6 +96,10 @@ export function compareToBaseline({ candidate, baseline }) {
       return refuse(`the ${label} has no official score to compare`)
     }
     const components = sharedComponentsOf(result)
+    const absent = SHARED_COMPONENT_IDS.filter((id) => !components.some((component) => component.id === id))
+    if (absent.length > 0) {
+      return refuse(`the ${label} has no ${absent.join(', ')} component score; it was scored under an older automated rubric and must be re-judged with --rescore-from`)
+    }
     if (components.length !== SHARED_COMPONENT_IDS.length
       || components.some(({ applicable, points_awarded }) => applicable === false || !Number.isFinite(points_awarded))) {
       return refuse(`the ${label} does not have complete shared component scores`)

@@ -119,3 +119,48 @@ test('score.mjs refuses an exhausted required judge instead of fabricating zeroe
     /required judge jobs failed: testing-evidence/,
   )
 })
+
+// A run judged under automated rubric 12.x has no engineering-quality job and
+// no input-hygiene browser results. The refusal says how to recover.
+test('score.mjs tells the user to re-judge a run judged under an older rubric', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-score-'))
+  const inputs = await durableInputs(root, allJobs.filter((job) => job !== 'engineering-quality'))
+
+  await assert.rejects(
+    run(process.execPath, [
+      command,
+      '--browser-evaluation', inputs.browser,
+      '--judging', inputs.judging,
+      '--output', join(root, 'score.json'),
+    ]),
+    (error) => {
+      assert.match(error.stderr, /no verdicts for engineering-quality/)
+      assert.match(error.stderr, new RegExp(`automated rubric ${automated.version.replaceAll('.', '\\.')}`))
+      assert.match(error.stderr, /re-judged with --rescore-from/)
+      assert.doesNotMatch(error.stderr, /required judge jobs failed/)
+      return true
+    },
+  )
+})
+
+test('score.mjs tells the user to re-judge a browser evaluation without the current probes', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-score-'))
+  const inputs = await durableInputs(root)
+  const browser = JSON.parse(await readFile(inputs.browser, 'utf8'))
+  browser.criteria = browser.criteria.filter(({ id }) => !id.startsWith('input-'))
+  await writeJsonAtomic(inputs.browser, browser)
+
+  await assert.rejects(
+    run(process.execPath, [
+      command,
+      '--browser-evaluation', inputs.browser,
+      '--judging', inputs.judging,
+      '--output', join(root, 'score.json'),
+    ]),
+    (error) => {
+      assert.match(error.stderr, /no results for input-modifier-keys-pass-through, input-swipe-from-control-ignored/)
+      assert.match(error.stderr, /re-judged with --rescore-from/)
+      return true
+    },
+  )
+})
