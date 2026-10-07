@@ -842,6 +842,59 @@ test('a swipe-from-control failure is overturned by an admitted replay from the 
   }
 })
 
+// The input-hygiene entries are admitted on the same terms as the existing
+// ones: an admitted replay skips only the source audit. The overturn still
+// needs a valid cited source span, a replay that opens the demo route, and a
+// replay that completes with its expected observation and no product failure.
+test('an admitted input-hygiene replay still needs a valid span and a clean, passing replay', async () => {
+  const navigate = { type: 'navigate', path: DEMO_PATH }
+  const admitted = [
+    [MODIFIER_ID, ALT_RIGHT_CHANGED, { actions: [navigate, right(), right(['Alt'])],
+      expect: { type: 'step-index-equals', value: 1 } }, [null, 0, 1, 1]],
+    [CONTROL_SWIPE_ID, swipeFromControl([attempt('touch', 4, 5)]), { actions: [navigate, right(),
+      { type: 'click', selector: '#browse' }, swipeFrom(MODE_CONTROL)], expect: { type: 'step-index-equals', value: 1 } },
+    [null, 0, 1, 1, 1]],
+  ]
+  for (const [id, observations, plan, steps] of admitted) {
+    const request = await inputRequest(id, observations)
+    const states = steps.map((stepIndex) => ({ stepIndex, mode: id === CONTROL_SWIPE_ID && stepIndex !== null ? 'browse' : 'present' }))
+    // The baseline: this replay is admitted and decides on its own.
+    const accepted = await runSecondOpinion({ request, invoke: confirmingInvoke(request, overturnWith(plan)),
+      replay: async () => ({ passed: true, errors: [], trace: [], observations: observed(...states) }) })
+    assert.equal(accepted.confirmed_by, 'browser-replay', `${id}: ${accepted.allowlist_refusal ?? accepted.rejection_reason}`)
+
+    // No valid cited span: rejected before the replay runs.
+    let replays = 0
+    const unsupported = await runSecondOpinion({ request,
+      invoke: confirmingInvoke(request, { ...overturnWith(plan),
+        citations: [{ path: 'handler.js', start_line: 1, end_line: 999 }, { path: 'missing.js', start_line: 1, end_line: 1 }] }),
+      replay: async () => { replays += 1; return { passed: true, errors: [], trace: [], observations: observed(...states) } } })
+    assert.equal(unsupported.decision, 'overturn-rejected', id)
+    assert.match(unsupported.rejection_reason, /invalid source line range|outside verified inventory/, id)
+    assert.equal(replays, 0, id)
+
+    // A replay that does not open the demo route is refused without running.
+    const elsewhere = { ...plan, actions: [{ type: 'navigate', path: '/' }, ...plan.actions.slice(1)] }
+    const offRoute = await runSecondOpinion({ request, invoke: confirmingInvoke(request, overturnWith(elsewhere)),
+      replay: async () => { replays += 1; return { passed: true, errors: [], trace: [], observations: observed(...states) } } })
+    assert.equal(offRoute.decision, 'overturn-rejected', id)
+    assert.equal(replays, 0, id)
+
+    // A product failure during the replay, or an unmet expectation, rejects it.
+    for (const [result, reason] of [
+      [{ passed: true, product_failure: 'the page crashed' }, /browser replay failed: the page crashed/],
+      [{ passed: false }, /did not confirm the passing behavior/],
+    ]) {
+      const audits = []
+      const outcome = await runSecondOpinion({ request, invoke: confirmingInvoke(request, overturnWith(plan), audits),
+        replay: async () => ({ errors: [], trace: [], observations: observed(...states), ...result }) })
+      assert.equal(outcome.decision, 'overturn-rejected', id)
+      assert.match(outcome.rejection_reason, reason, id)
+      assert.equal(audits.length, 0, id)
+    }
+  }
+})
+
 test('a swipe-from-control replay outside the admitted entry goes to the audited path', async () => {
   const request = await inputRequest(CONTROL_SWIPE_ID, touchFromModeControl)
   const lead = [{ type: 'navigate', path: DEMO_PATH }, right(), { type: 'click', selector: '#browse' }]

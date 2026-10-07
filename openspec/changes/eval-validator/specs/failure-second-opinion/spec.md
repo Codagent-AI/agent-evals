@@ -33,7 +33,7 @@ The verifier SHALL use the same judge authority and invocation path as the other
 ## ADDED Requirements
 
 ### Requirement: Input-hygiene probe overturns
-The harness's replay allowlist SHALL contain these entries, admitted on the same terms as the existing entries:
+The harness's replay allowlist SHALL contain these entries, admitted on the same terms as the existing entries. An admitted replay from one of them decides the overturn without the source audit, as any admitted replay does, but the overturn SHALL still meet every other "Overturn acceptance" condition: it cites candidate source, at least one cited span is valid, and the replay opens the demo route and completes in a real browser with its observed result matching the expected observation and no product failure. An overturn with no valid cited span SHALL be rejected before its replay runs:
 
 | Target and recorded failure | Admitted inputs | Admitted expectation and harness check |
 | --- | --- | --- |
@@ -48,6 +48,10 @@ The harness SHALL NOT overturn an `input-modifier-keys-pass-through` failure tha
 - **WHEN** the probe recorded that Alt+ArrowRight changed the step, and the verifier's replay leaves the first step, presses Alt+ArrowRight, and expects the step to stay unchanged
 - **AND** the replay observes exactly that, and the cited spans are valid
 - **THEN** the overturn is accepted as confirmed by browser replay
+
+#### Scenario: An admitted input-hygiene replay without a valid cited span
+- **WHEN** a verifier's overturn of `input-swipe-from-control-ignored` carries a replay inside the admitted entry, but every source span it cites is outside the verified source inventory or has an invalid line range
+- **THEN** the harness rejects the overturn without running the replay, and the failure stands
 
 #### Scenario: A prevented-default failure cannot be overturned
 - **WHEN** `input-modifier-keys-pass-through` failed because the page prevented the default of Control+ArrowLeft
