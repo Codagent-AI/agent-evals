@@ -1077,3 +1077,51 @@ test('the AXI driver reports an unload when the instrumented document has been r
   assert.deepEqual(await driver.readKeyInstrumentation(),
     { installed: true, unloaded: false, url: 'http://127.0.0.1:4319/', keydowns: [] })
 })
+
+// A verifier replay can press a key holding modifiers and start a swipe on a
+// selector; the replay script dispatches them as the driver's own press and
+// swipe do.
+test('browser replay presses a modified key and starts a swipe on its selector', async () => {
+  const { createAxiBrowserDriver } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
+  const scripts = []
+  const driver = createAxiBrowserDriver({ baseUrl: 'http://127.0.0.1:4319/',
+    command: async (args, input) => {
+      scripts.push(input)
+      if (args[0] === 'console') return { status: 0, stdout: '<no console messages found>\n' }
+      return { status: 0, stdout: `${JSON.stringify({ observations: [null, 0, 1, 1, 1].map((stepIndex) => ({
+        stepIndex, stepCount: 9, mode: 'browse', modeBasis: 'declared', visible: false, text: '',
+      })), trace: [] })}\n` }
+    } })
+  const outcome = await driver.replay([{ type: 'navigate', path: '/how-to-make-a-presentation' },
+    { type: 'press', key: 'ArrowRight', modifiers: null },
+    { type: 'press', key: 'ArrowRight', modifiers: ['Meta', 'Alt'] },
+    { type: 'swipe', direction: 'left', input: 'pointer', selector: '[data-presentation-mode-toggle]' }],
+  { type: 'step-index-equals', value: 1 })
+  assert.equal(outcome.passed, true)
+  const script = scripts.find((input) => input?.includes('const observations'))
+  assert.match(script, /page\.press\("ArrowRight"\)/)
+  assert.match(script, /page\.press\("Alt\+Meta\+ArrowRight"\)/)
+  assert.match(script, /document\.querySelector\("\[data-presentation-mode-toggle\]"\)/)
+  assert.match(script, /pointerdown/)
+  // A start element that matches nothing ends the replay as product evidence.
+  assert.match(script, /productFailure = 'replay swipe start target was not found'; break replay;/)
+  // A stage swipe keeps its stage start.
+  scripts.length = 0
+  await driver.replay([{ type: 'navigate', path: '/how-to-make-a-presentation' },
+    { type: 'swipe', direction: 'left', input: 'touch', selector: null }], { type: 'step-index-changes' }).catch(() => {})
+  assert.doesNotMatch(scripts.find((input) => input?.includes('const observations')), /swipe start target/)
+})
+
+test('a replay swipe whose start element is missing is a failed replay', async () => {
+  const { createAxiBrowserDriver } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
+  const origin = 'http://127.0.0.1:4319'
+  const driver = createAxiBrowserDriver({ baseUrl: `${origin}/`, command: async (args) => (args[0] === 'console'
+    ? { status: 0, stdout: '<no console messages found>\n' }
+    : { status: 0, stdout: `${JSON.stringify({ observations: [null, 1].map((stepIndex) => ({ stepIndex, stepCount: 9,
+      mode: 'browse', visible: false, text: '', origin })), trace: [],
+    product_failure: 'replay swipe start target was not found' })}\n` }) })
+  const outcome = await driver.replay([{ type: 'navigate', path: '/how-to-make-a-presentation' },
+    { type: 'swipe', direction: 'left', input: 'touch', selector: '#gone' }], { type: 'step-index-equals', value: 1 })
+  assert.equal(outcome.passed, false)
+  assert.equal(outcome.product_failure, 'replay swipe start target was not found')
+})

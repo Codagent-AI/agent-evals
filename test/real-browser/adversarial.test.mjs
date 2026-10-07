@@ -79,6 +79,20 @@ test('(r) source-plausible navigation is not overturned when browser replay stay
     } finally { await close() }
   })
 
+// Since agent-evals #82 a replay outside the target's allowlist still runs in
+// the browser, but it never decides on its own: the independent span audit
+// does, from what the harness observed. An auditor that rejects whatever it
+// is shown stands in for that audit here.
+function contradicting(request, replay, audits) {
+  const proposed = proposing(request, replay)
+  return async (call) => {
+    if (!call.audit_stage) return proposed(call)
+    audits.push(call)
+    return JSON.stringify({ results: [{ id: request.target.id, classification: 'contradicted',
+      rationale: 'the replay does not exercise keyboard navigation', evidence: ['replay'] }] })
+  }
+}
+
 test('(r) a trivial or wrong-input replay cannot overturn the real keyboard failure',
   { timeout: 600_000 }, async () => {
     const result = await evaluate('r')
@@ -87,33 +101,85 @@ test('(r) a trivial or wrong-input replay cannot overturn the real keyboard fail
     const { baseUrl, close } = await serve('r')
     try {
       const driver = createAxiBrowserDriver({ baseUrl })
-      let replays = 0
-      const replay = ({ actions, expect }) => { replays += 1; return driver.replay(actions, expect) }
+      const replay = ({ actions, expect }) => driver.replay(actions, expect)
       const request = replayRequest({ kind: 'criterion', id: KEYBOARD_ID }, probe)
-      const refused = [
+      const outside = [
         // Holding still on the first step is what the broken deck already does.
         { actions: [{ type: 'navigate', path: DEMO_PATH }], expect: { type: 'step-index-equals', value: 0 } },
         { actions: [{ type: 'navigate', path: DEMO_PATH }], expect: { type: 'selector-visible', selector: 'body' } },
         // Keyboard failed. A click or a swipe that does move the deck is a
-        // different input and cannot confirm keyboard navigation.
+        // different input and cannot confirm keyboard navigation alone.
         { actions: [{ type: 'navigate', path: DEMO_PATH }, { type: 'click', selector: '[data-presentation-progress-dot]:nth-child(2)' }],
           expect: { type: 'step-index-changes' } },
         { actions: [{ type: 'navigate', path: DEMO_PATH }, { type: 'swipe', direction: 'left', input: 'touch' }],
           expect: { type: 'step-index-changes' } },
       ]
-      for (const plan of refused) {
-        const outcome = await runSecondOpinion({ request, replay, invoke: proposing(request, plan) })
+      for (const plan of outside) {
+        const audits = []
+        const outcome = await runSecondOpinion({ request, replay, invoke: contradicting(request, plan, audits) })
         assert.equal(outcome.decision, 'overturn-rejected', JSON.stringify(plan))
-        assert.match(outcome.rejection_reason, /allowlist/, JSON.stringify(plan))
+        assert.notEqual(outcome.confirmed_by, 'browser-replay', JSON.stringify(plan))
+        // A replay the page passes reaches the audit with the harness's
+        // observations, flagged as outside the allowlist; one it fails is
+        // rejected without one.
+        if (outcome.replay.passed) {
+          assert.match(outcome.allowlist_refusal, /allowlist/, JSON.stringify(plan))
+          assert.equal(audits.length, 1, JSON.stringify(plan))
+          assert.match(audits[0].prompt, /proposed and the harness ran in a real browser/)
+        } else {
+          assert.equal(audits.length, 0, JSON.stringify(plan))
+        }
       }
-      assert.equal(replays, 0)
-      // The one admitted input reaches the browser, which shows the deck stuck.
-      const pressed = await runSecondOpinion({ request, replay, invoke: proposing(request, {
+      // The admitted input reaches the browser, which shows the deck stuck.
+      const audits = []
+      const pressed = await runSecondOpinion({ request, replay, invoke: contradicting(request, {
         actions: [{ type: 'navigate', path: DEMO_PATH }, { type: 'press', key: 'ArrowRight' }],
-        expect: { type: 'step-index-changes' } }) })
-      assert.equal(replays, 1)
+        expect: { type: 'step-index-changes' } }, audits) })
       assert.equal(pressed.decision, 'overturn-rejected')
+      assert.match(pressed.rejection_reason, /did not confirm the passing behavior/)
       assert.equal(pressed.replay.observations.at(-1).stepIndex, 0)
+      assert.equal(audits.length, 0)
+    } finally { await close() }
+  })
+
+// Variant (a) is a correct deck except for input hygiene: its key handler
+// ignores modifiers, so a modified arrow moves it, and a touch swipe that
+// starts on one of its controls reaches its root's swipe handler. Admitted
+// replays built from the recorded failures reach the browser and are
+// rejected there.
+test('(a) admitted input-hygiene replays cannot overturn a deck that a modified key or a control swipe moves',
+  { timeout: 600_000 }, async () => {
+    const result = await evaluate('a')
+    const probe = (id) => {
+      const record = result.probes.find((entry) => entry.id === id)
+      assert.equal(record.result.verdict, 'fail', record.result.rationale)
+      return record
+    }
+    const modifierProbe = probe('input-modifier-keys-pass-through')
+    const swipeProbe = probe('input-swipe-from-control-ignored')
+    const { failure: pressed } = modifierProbe.result.observations.modifier_keys
+    assert.equal(pressed.reason, 'step-changed')
+    const { control, mode, failure: swiped } = swipeProbe.result.observations.swipe_from_control
+    assert.equal(mode, 'present')
+    const { baseUrl, close } = await serve('a')
+    try {
+      const driver = createAxiBrowserDriver({ baseUrl })
+      const replay = ({ actions, expect }) => driver.replay(actions, expect)
+      const right = { type: 'press', key: 'ArrowRight', modifiers: null }
+      for (const [record, actions] of [
+        [modifierProbe, [right, { type: 'press', key: pressed.key, modifiers: [pressed.modifier] }]],
+        [swipeProbe, [right, { type: 'swipe', direction: 'left', input: swiped.input, selector: control.selector }]],
+      ]) {
+        const request = replayRequest({ kind: 'criterion', id: record.id }, record)
+        const audits = []
+        const outcome = await runSecondOpinion({ request, replay, invoke: contradicting(request, {
+          actions: [{ type: 'navigate', path: DEMO_PATH }, ...actions],
+          expect: { type: 'step-index-equals', value: 1 } }, audits) })
+        assert.equal(outcome.decision, 'overturn-rejected', record.id)
+        assert.match(outcome.rejection_reason, /did not confirm the passing behavior/, record.id)
+        assert.notEqual(outcome.replay.observations.at(-1).stepIndex, 1, record.id)
+        assert.equal(audits.length, 0, record.id)
+      }
     } finally { await close() }
   })
 

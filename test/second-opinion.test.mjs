@@ -6,7 +6,8 @@ import { test } from 'node:test'
 
 import { loadRubrics } from '../evals/agent-runner/and-scene/lib/rubric.mjs'
 import {
-  buildSecondOpinionRequest, outlineFollowUpTargets, runSecondOpinion, secondOpinionTargets, validReplay,
+  SECOND_OPINION_SCHEMA, buildSecondOpinionRequest, outlineFollowUpTargets, runSecondOpinion, secondOpinionTargets,
+  validReplay,
 } from '../evals/agent-runner/and-scene/lib/second-opinion.mjs'
 
 const uphold = { decision: 'uphold', rationale: 'the recorded failure stands', mismeasured_step: null,
@@ -657,4 +658,268 @@ test('an unusable log citation is dropped for a browser failure but a terminal o
   const rejected = await runSecondOpinion({ request: terminal, invoke: confirmingInvoke(terminal, answer) })
   assert.equal(rejected.decision, 'overturn-rejected')
   assert.match(rejected.rejection_reason, /outside recorded artifact/)
+})
+
+// Input-hygiene probes (eval-validator). A replay may press a key while
+// holding modifiers and start a swipe on a selector; strict structured output
+// needs both as required, nullable fields.
+test('the replay schema carries nullable press modifiers and a nullable swipe start selector', () => {
+  const actions = SECOND_OPINION_SCHEMA.properties.replay.anyOf[1].properties.actions.items.anyOf
+  const variant = (type) => actions.find(({ properties }) => properties.type.enum[0] === type)
+  const press = variant('press')
+  assert.deepEqual(press.required.sort(), ['key', 'modifiers', 'type'])
+  const modifiers = press.properties.modifiers.anyOf
+  assert.ok(modifiers.some(({ type }) => type === 'null'))
+  assert.deepEqual(modifiers.find(({ type }) => type === 'array').items.enum, ['Alt', 'Control', 'Meta'])
+  const swipe = variant('swipe')
+  assert.deepEqual(swipe.required.sort(), ['direction', 'input', 'selector', 'type'])
+  assert.deepEqual(swipe.properties.selector.type, ['string', 'null'])
+})
+
+test('a replay may press a key holding modifiers and start a swipe on a selector', () => {
+  const plan = (...actions) => ({ actions: [{ type: 'navigate', path: DEMO_PATH }, ...actions],
+    expect: { type: 'step-index-changes' } })
+  for (const action of [
+    { type: 'press', key: 'ArrowRight' },
+    { type: 'press', key: 'ArrowRight', modifiers: null },
+    { type: 'press', key: 'ArrowRight', modifiers: [] },
+    { type: 'press', key: 'ArrowRight', modifiers: ['Alt'] },
+    { type: 'press', key: 'ArrowLeft', modifiers: ['Control', 'Meta'] },
+    { type: 'swipe', direction: 'left', input: 'touch' },
+    { type: 'swipe', direction: 'left', input: 'touch', selector: null },
+    { type: 'swipe', direction: 'right', input: 'pointer', selector: '[data-mode-toggle]' },
+  ]) assert.equal(validReplay(plan(action)), true, JSON.stringify(action))
+  for (const action of [
+    { type: 'press', key: 'ArrowRight', modifiers: ['Shift'] },
+    { type: 'press', key: 'ArrowRight', modifiers: ['alt'] },
+    { type: 'press', key: 'ArrowRight', modifiers: ['Alt', 'Alt'] },
+    { type: 'press', key: 'ArrowRight', modifiers: 'Alt' },
+    { type: 'press', key: 'ArrowRight', modifiers: ['Alt', 'Control', 'Meta', 'Alt'] },
+    { type: 'swipe', direction: 'left', input: 'touch', selector: '' },
+    { type: 'swipe', direction: 'left', input: 'touch', selector: 7 },
+    { type: 'click', selector: '#next', modifiers: ['Alt'] },
+  ]) assert.equal(validReplay(plan(action)), false, JSON.stringify(action))
+})
+
+const MODIFIER_ID = 'input-modifier-keys-pass-through'
+const CONTROL_SWIPE_ID = 'input-swipe-from-control-ignored'
+
+async function inputRequest(id, observations) {
+  const request = await replayRequest(id, 'input hygiene failed')
+  request.failing_record.result.observations = observations
+  return request
+}
+
+const modifierPress = (key, modifier, before, after, extra = {}) => ({ key, modifier, step_before: before,
+  step_after: after, prevented: false, unloaded: false, ...extra })
+const modifierKeys = (...presses) => ({ modifier_keys: { mode: 'present', start_step: 4, presses } })
+const ALT_RIGHT_CHANGED = modifierKeys(modifierPress('ArrowRight', 'Alt', 4, 5),
+  modifierPress('ArrowLeft', 'Alt', 4, 4), modifierPress('ArrowRight', 'Control', 4, 4))
+const right = (modifiers = null) => ({ type: 'press', key: 'ArrowRight', modifiers })
+
+test('a modifier-key step change is overturned by an admitted replay that holds the step', async () => {
+  const request = await inputRequest(MODIFIER_ID, ALT_RIGHT_CHANGED)
+  const plan = { actions: [{ type: 'navigate', path: DEMO_PATH }, right(), right(), right(['Alt']), right(['Alt'])],
+    expect: { type: 'step-index-equals', value: 2 } }
+  const audits = []
+  const outcome = await runSecondOpinion({ request, invoke: confirmingInvoke(request, overturnWith(plan), audits),
+    replay: async () => ({ passed: true, errors: [], trace: [],
+      observations: observed({ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 1 }, { stepIndex: 2 },
+        { stepIndex: 2 }, { stepIndex: 2 }) }) })
+  assert.equal(outcome.decision, 'overturn', outcome.rejection_reason ?? outcome.allowlist_refusal)
+  assert.equal(outcome.confirmed_by, 'browser-replay')
+  assert.equal(audits.length, 0)
+})
+
+test('a modifier-key replay outside the admitted entry goes to the audited path', async () => {
+  const request = await inputRequest(MODIFIER_ID, ALT_RIGHT_CHANGED)
+  const navigate = { type: 'navigate', path: DEMO_PATH }
+  const cases = [
+    // The recorded failure is Alt+ArrowRight; Control+ArrowRight is another press.
+    [[navigate, right(), right(['Control'])], [null, 0, 1, 1], 1],
+    // An unmodified press after the modified one can undo what it did.
+    [[navigate, right(), right(['Alt']), { type: 'press', key: 'ArrowLeft', modifiers: null }], [null, 0, 1, 2, 1], 1],
+    // Never leaving the first step cannot show the press being ignored.
+    [[navigate, right(['Alt'])], [null, 0, 0], 0],
+    // A step that moved and came back is not a step that held.
+    [[navigate, right(), right(['Alt']), { type: 'press', key: 'ArrowLeft', modifiers: ['Alt'] }], [null, 0, 1, 2, 1], 1],
+    // Only presses can confirm a modifier-key failure.
+    [[navigate, right(), { type: 'click', selector: '#next' }, right(['Alt'])], [null, 0, 1, 2, 2], 2],
+    // No modified press at all.
+    [[navigate, right(), right()], [null, 0, 1, 2], 2],
+  ]
+  for (const [actions, steps, value] of cases) {
+    const plan = { actions, expect: { type: 'step-index-equals', value } }
+    const audits = []
+    const outcome = await runSecondOpinion({ request, invoke: contradictingInvoke(request, overturnWith(plan), audits),
+      replay: async () => ({ passed: true, errors: [], trace: [],
+        observations: observed(...steps.map((stepIndex) => ({ stepIndex }))) }) })
+    assert.equal(outcome.decision, 'overturn-rejected', JSON.stringify(actions))
+    assert.equal(audits.length, 1, JSON.stringify(actions))
+    assert.match(outcome.allowlist_refusal, /allowlist/, JSON.stringify(actions))
+    const confirmed = await runSecondOpinion({ request, invoke: confirmingInvoke(request, overturnWith(plan)),
+      replay: async () => ({ passed: true, errors: [], trace: [],
+        observations: observed(...steps.map((stepIndex) => ({ stepIndex }))) }) })
+    assert.equal(confirmed.confirmed_by, 'audited-browser-replay', JSON.stringify(actions))
+  }
+  // No modified press changed the step, so no entry admits a replay.
+  // An unloaded press passed through to the browser.
+  const unchanged = await inputRequest(MODIFIER_ID, modifierKeys(modifierPress('ArrowRight', 'Alt', 4, 4),
+    modifierPress('ArrowLeft', 'Alt', 4, null, { unloaded: true })))
+  const audits = []
+  const plan = { actions: [navigate, right(), right(['Alt'])], expect: { type: 'step-index-equals', value: 1 } }
+  const outcome = await runSecondOpinion({ request: unchanged, invoke: contradictingInvoke(unchanged, overturnWith(plan), audits),
+    replay: async () => ({ passed: true, errors: [], trace: [], observations: observed({ stepIndex: null },
+      { stepIndex: 0 }, { stepIndex: 1 }, { stepIndex: 1 }) }) })
+  assert.match(outcome.allowlist_refusal, /no replay allowlist/)
+  assert.equal(audits.length, 1)
+})
+
+test('a prevented-default modifier failure is rejected before any replay or audit', async () => {
+  const prevented = modifierKeys(modifierPress('ArrowLeft', 'Control', 4, 4, { prevented: true }),
+    modifierPress('ArrowRight', 'Alt', 4, 4))
+  // A step change alongside the prevented default does not open a way in.
+  const both = modifierKeys(modifierPress('ArrowRight', 'Alt', 4, 5),
+    modifierPress('ArrowLeft', 'Control', 4, 4, { prevented: true }))
+  const admitted = { actions: [{ type: 'navigate', path: DEMO_PATH }, right(), right(['Alt'])],
+    expect: { type: 'step-index-equals', value: 1 } }
+  const audited = { actions: [{ type: 'navigate', path: DEMO_PATH }, right(),
+    { type: 'press', key: 'ArrowLeft', modifiers: ['Control'] }], expect: { type: 'step-index-equals', value: 1 } }
+  for (const observations of [prevented, both]) {
+    const request = await inputRequest(MODIFIER_ID, observations)
+    for (const plan of [admitted, audited]) {
+      let replays = 0
+      const audits = []
+      const outcome = await runSecondOpinion({ request, invoke: confirmingInvoke(request, overturnWith(plan), audits),
+        replay: async () => { replays += 1
+          return { passed: true, errors: [], trace: [], observations: observed({ stepIndex: null },
+            { stepIndex: 0 }, { stepIndex: 1 }, { stepIndex: 1 }) } } })
+      assert.equal(outcome.ok, true)
+      assert.equal(outcome.decision, 'overturn-rejected')
+      assert.equal(outcome.verdict, 'fail')
+      assert.match(outcome.rejection_reason, /prevented/)
+      assert.equal(replays, 0)
+      assert.equal(audits.length, 0)
+    }
+  }
+  // An uphold is still an uphold.
+  const request = await inputRequest(MODIFIER_ID, prevented)
+  const upheld = await runSecondOpinion({ request, invoke: async () => JSON.stringify(uphold) })
+  assert.equal(upheld.decision, 'uphold')
+})
+
+const MODE_CONTROL = '[data-presentation-mode-toggle]'
+const swipeFromControl = (attempts) => {
+  const failing = attempts.find(({ changed, exempt }) => changed && !exempt)
+  return { swipe_from_control: { mode: 'browse', start_step: 4, direction: 'left',
+    control: { kind: 'mode', name: 'Present', selector: MODE_CONTROL, hook: MODE_CONTROL, activation_target: null },
+    controls_discovered: 3, inputs_tried: attempts.map(({ input }) => input), attempts,
+    failure: failing ? { input: failing.input, step_before: failing.step_before, step_after: failing.step_after } : null } }
+}
+const attempt = (input, before, after, exempt = false) => ({ input, step_before: before, step_after: after,
+  changed: before !== after, exempt })
+const touchFromModeControl = swipeFromControl([attempt('touch', 4, 5)])
+const swipeFrom = (selector, input = 'touch') => ({ type: 'swipe', direction: 'left', input, selector })
+
+test('a swipe-from-control failure is overturned by an admitted replay from the recorded control', async () => {
+  for (const [observations, input] of [[touchFromModeControl, 'touch'],
+    // Touch left the step alone, so the recorded failure is the pointer path.
+    [swipeFromControl([attempt('touch', 4, 4), attempt('pointer', 4, 5)]), 'pointer'],
+    // Touch reached the control's own activation target, which is exempt.
+    [swipeFromControl([attempt('touch', 4, 6, true), attempt('pointer', 4, 5)]), 'pointer']]) {
+    const request = await inputRequest(CONTROL_SWIPE_ID, observations)
+    const plan = { actions: [{ type: 'navigate', path: DEMO_PATH }, right(), right(),
+      { type: 'click', selector: '#browse' }, { type: 'wait', ms: 100 }, swipeFrom(MODE_CONTROL, input)],
+    expect: { type: 'step-index-equals', value: 2 } }
+    const audits = []
+    const outcome = await runSecondOpinion({ request, invoke: confirmingInvoke(request, overturnWith(plan), audits),
+      replay: async () => ({ passed: true, errors: [], trace: [], observations: observed({ stepIndex: null },
+        { stepIndex: 0 }, { stepIndex: 1 }, { stepIndex: 2 }, { stepIndex: 2, mode: 'browse' },
+        { stepIndex: 2, mode: 'browse' }, { stepIndex: 2, mode: 'browse' }) }) })
+    assert.equal(outcome.decision, 'overturn', outcome.allowlist_refusal ?? outcome.rejection_reason)
+    assert.equal(outcome.confirmed_by, 'browser-replay', input)
+    assert.equal(audits.length, 0, input)
+  }
+})
+
+test('a swipe-from-control replay outside the admitted entry goes to the audited path', async () => {
+  const request = await inputRequest(CONTROL_SWIPE_ID, touchFromModeControl)
+  const lead = [{ type: 'navigate', path: DEMO_PATH }, right(), { type: 'click', selector: '#browse' }]
+  const leadSteps = [{ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 1 }, { stepIndex: 1, mode: 'browse' }]
+  const cases = [
+    // The recorded failure was by touch; the same swipe by pointer is another input.
+    [[...lead, swipeFrom(MODE_CONTROL, 'pointer')], 1],
+    // From the stage rather than the recorded control.
+    [[...lead, swipeFrom('[data-presentation-stage]')], 1],
+    [[...lead, { type: 'swipe', direction: 'left', input: 'touch', selector: null }], 1],
+    // The swipe must be the last input.
+    [[...lead, swipeFrom(MODE_CONTROL), { type: 'click', selector: '#browse' }], 1],
+    // Two swipes are not one.
+    [[...lead, swipeFrom(MODE_CONTROL), swipeFrom(MODE_CONTROL)], 1],
+    // A modified press is not how the mode or step is established.
+    [[{ type: 'navigate', path: DEMO_PATH }, right(['Alt']), right(), swipeFrom(MODE_CONTROL)], 1],
+  ]
+  for (const [actions, value] of cases) {
+    const steps = [...leadSteps, ...actions.slice(3).map(() => ({ stepIndex: 1, mode: 'browse' }))]
+    const plan = { actions, expect: { type: 'step-index-equals', value } }
+    const audits = []
+    const outcome = await runSecondOpinion({ request, invoke: contradictingInvoke(request, overturnWith(plan), audits),
+      replay: async () => ({ passed: true, errors: [], trace: [], observations: observed(...steps) }) })
+    assert.equal(outcome.decision, 'overturn-rejected', JSON.stringify(actions))
+    assert.equal(audits.length, 1, JSON.stringify(actions))
+    assert.match(outcome.allowlist_refusal, /allowlist/, JSON.stringify(actions))
+  }
+  // The recorded control was used in browse mode; a swipe in present mode is elsewhere.
+  const plan = { actions: [...lead, swipeFrom(MODE_CONTROL)], expect: { type: 'step-index-equals', value: 1 } }
+  const audits = []
+  const presentMode = await runSecondOpinion({ request, invoke: contradictingInvoke(request, overturnWith(plan), audits),
+    replay: async () => ({ passed: true, errors: [], trace: [], observations: observed({ stepIndex: null },
+      { stepIndex: 0 }, { stepIndex: 1 }, { stepIndex: 1, mode: 'present' }, { stepIndex: 1, mode: 'present' }) }) })
+  assert.match(presentMode.allowlist_refusal, /mode/)
+  assert.equal(audits.length, 1)
+  // A swipe from the first step proves nothing about leaving a step alone.
+  const firstStep = { actions: [{ type: 'navigate', path: DEMO_PATH }, { type: 'click', selector: '#browse' },
+    swipeFrom(MODE_CONTROL)], expect: { type: 'step-index-equals', value: 0 } }
+  const stayed = await runSecondOpinion({ request, invoke: contradictingInvoke(request, overturnWith(firstStep)),
+    replay: async () => ({ passed: true, errors: [], trace: [], observations: observed({ stepIndex: null },
+      { stepIndex: 0 }, { stepIndex: 0, mode: 'browse' }, { stepIndex: 0, mode: 'browse' }) }) })
+  assert.match(stayed.allowlist_refusal, /allowlist/)
+})
+
+test('a swipe whose start selector matches nothing is a failed replay, never a pass', async () => {
+  const request = await inputRequest(CONTROL_SWIPE_ID, touchFromModeControl)
+  const plan = { actions: [{ type: 'navigate', path: DEMO_PATH }, right(), swipeFrom(MODE_CONTROL)],
+    expect: { type: 'step-index-equals', value: 1 } }
+  const outcome = await runSecondOpinion({ request, invoke: confirmingInvoke(request, overturnWith(plan)),
+    replay: async () => ({ passed: false, product_failure: 'replay swipe start target was not found', errors: [],
+      trace: [], observations: observed({ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 1 }) }) })
+  assert.equal(outcome.decision, 'overturn-rejected')
+  assert.match(outcome.rejection_reason, /swipe start target was not found/)
+})
+
+test('the verifier is told it may hold modifiers and start a swipe on a selector', async () => {
+  const rubrics = await loadRubrics()
+  const rationale = 'keyboard 1/0, swipe 1/0, direct jump 0'
+  const request = buildSecondOpinionRequest({ target: { kind: 'criterion', id: 'demo-supported-navigation' }, rubrics,
+    browser: { criteria: [{ id: 'demo-supported-navigation', verdict: 'fail', rationale }],
+      probes: [{ id: 'demo-supported-navigation', result: { verdict: 'fail', rationale } }], gates: [] },
+    judging: null, neutral: null, authority: { cli: 'codex', model: 'm' } })
+  assert.match(request.prompt, /modifiers/)
+  assert.match(request.prompt, /Alt, Control, Meta/)
+  assert.match(request.prompt, /swipe[^.]*selector/)
+})
+
+test('a verifier is told a prevented-default failure cannot be overturned', async () => {
+  const rubrics = await loadRubrics()
+  const id = MODIFIER_ID
+  const probe = { id, result: { id, verdict: 'fail', rationale: 'Control+ArrowLeft default prevented',
+    observations: modifierKeys(modifierPress('ArrowLeft', 'Control', 4, 4, { prevented: true })) } }
+  const build = (record) => buildSecondOpinionRequest({ target: { kind: 'criterion', id }, rubrics,
+    browser: { criteria: [{ id, verdict: 'fail', rationale: record.result.rationale }], probes: [record], gates: [] },
+    judging: null, neutral: null, authority: { cli: 'codex', model: 'm' } })
+  assert.match(build(probe).prompt, /rejects any overturn of this failure/)
+  const moved = { id, result: { ...probe.result, observations: ALT_RIGHT_CHANGED } }
+  const prompt = build(moved).prompt
+  assert.doesNotMatch(prompt, /rejects any overturn/)
+  assert.match(prompt, /ArrowRight holding Alt/)
 })

@@ -116,3 +116,33 @@ test('a prevented default is counted though the page stops propagation, and an u
       assert.deepEqual(again.keydowns.filter(({ key }) => key === 'ArrowLeft').map(({ prevented }) => prevented), [true])
     })
   })
+
+test('a verifier replay presses modified keys and starts a swipe on its selector', { timeout: 300_000 }, async () => {
+  await withPage(async (driver) => {
+    const route = `/${DEMO_CONTRACT.route}`
+    const outcome = await driver.replay([{ type: 'navigate', path: route },
+      { type: 'press', key: 'ArrowRight', modifiers: ['Alt'] },
+      { type: 'press', key: 'ArrowDown', modifiers: ['Control', 'Alt'] },
+      { type: 'press', key: 'ArrowRight', modifiers: null },
+      { type: 'swipe', direction: 'left', input: 'pointer', selector: '#mode' }],
+    { type: 'step-index-equals', value: 1 })
+    assert.equal(outcome.passed, true, JSON.stringify(outcome))
+    assert.deepEqual(pageValue('window.keyLog.filter((entry) => entry.key.startsWith("Arrow"))'), [
+      { key: 'ArrowRight', altKey: true, ctrlKey: false, metaKey: false },
+      { key: 'ArrowDown', altKey: true, ctrlKey: true, metaKey: false },
+      { key: 'ArrowRight', altKey: false, ctrlKey: false, metaKey: false },
+    ])
+    const log = pageValue('window.inputLog')
+    assert.deepEqual(log.map(({ type }) => type), ['pointerdown', 'pointermove', 'pointermove', 'pointermove',
+      'pointermove', 'pointerup'])
+    assert.ok(log.every(({ target }) => target === 'mode'), JSON.stringify(log))
+    assert.equal(log[0].x, 160)
+
+    const missing = await driver.replay([{ type: 'navigate', path: route },
+      { type: 'swipe', direction: 'left', input: 'touch', selector: '#missing' }],
+    { type: 'step-index-equals', value: 1 })
+    assert.equal(missing.passed, false)
+    assert.equal(missing.product_failure, 'replay swipe start target was not found')
+    assert.deepEqual(pageValue('window.inputLog'), [])
+  })
+})

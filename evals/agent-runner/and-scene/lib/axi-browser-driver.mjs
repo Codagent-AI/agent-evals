@@ -628,18 +628,25 @@ export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {
             if (!node) return false;
             node.click(); return true;
           }))) { productFailure = 'replay click target was not found'; break replay; }`
-          case 'press': return `await page.press(${JSON.stringify(action.key)});`
+          // A chord names the key after its modifiers, as press() does.
+          case 'press': return `await page.press(${JSON.stringify([...PRESS_MODIFIERS
+            .filter((modifier) => action.modifiers?.includes(modifier)), action.key].join('+'))});`
           case 'keys': return `await page.type(${JSON.stringify(action.text)});`
           case 'wait': return sleepSource(action.ms)
           case 'swipe': {
             const sign = action.direction === 'left' ? -1 : 1
+            const selector = action.selector ?? null
             const source = action.input === 'pointer' ? pointerSwipeEventSource : swipeEventSource
             const names = action.input === 'pointer'
               ? ['pointerdown', 'pointermove', 'pointerup'] : ['touchstart', 'touchmove', 'touchend']
-            const phases = [source(names[0], sign, 0),
+            const phases = [source(names[0], sign, 0, selector),
               ...Array.from({ length: SWIPE_MOVES }, (_, index) =>
                 source(names[1], sign, (index + 1) / (SWIPE_MOVES + 1))), source(names[2], sign, 1)]
-            return phases.map((phase) => `await page.eval(${phase});`).join(`\n${swipeFrameWaitSource()}\n`)
+            // A start element that matches nothing is what the candidate page
+            // did, so it ends the replay as product evidence, never a pass.
+            return phases.map((phase, index) => (index === 0 && selector !== null
+              ? `if (!(await page.eval(${phase}))) { productFailure = 'replay swipe start target was not found'; break replay; }`
+              : `await page.eval(${phase});`)).join(`\n${swipeFrameWaitSource()}\n`)
           }
         }
       }
