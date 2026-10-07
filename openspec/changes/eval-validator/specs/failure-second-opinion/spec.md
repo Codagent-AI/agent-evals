@@ -38,7 +38,7 @@ The harness's replay allowlist SHALL contain these entries, admitted on the same
 | Target and recorded failure | Admitted inputs | Admitted expectation and harness check |
 | --- | --- | --- |
 | `input-modifier-keys-pass-through`, when a modified press changed the step | unmodified `press` of `ArrowRight` to leave the first step, then `press` of the recorded key holding the recorded modifier | `step-index-equals` with the step before the first modified press; at least one modified press SHALL use the key and modifier of the recorded failing observation, no unmodified press SHALL follow a modified press, and the final step SHALL equal that step |
-| `input-swipe-from-control-ignored` | unmodified `press` of `ArrowRight` to leave the first step, `press` or `click` to establish the recorded mode, then one `swipe` that starts on a selector matching the recorded control | `step-index-equals` with the step before the swipe; the swipe SHALL start on an element matching the recorded control in the recorded mode, SHALL be the last input action, and the final step SHALL equal that step |
+| `input-swipe-from-control-ignored` | unmodified `press` of `ArrowRight` to leave the first step, `press` or `click` to establish the recorded mode, then one `swipe` that starts on a selector matching the recorded control and uses the input path of the recorded failing observation | `step-index-equals` with the step before the swipe; the swipe SHALL start on an element matching the recorded control in the recorded mode, SHALL use the touch or pointer input path that changed the step in the recorded failure, SHALL be the last input action, and the final step SHALL equal that step |
 
 A replay outside these entries SHALL follow the existing audited-replay path.
 
@@ -53,6 +53,10 @@ The harness SHALL NOT overturn an `input-modifier-keys-pass-through` failure tha
 - **WHEN** `input-modifier-keys-pass-through` failed because the page prevented the default of Control+ArrowLeft
 - **AND** a verifier proposes an overturn whose replay shows that the step does not change
 - **THEN** the harness rejects the overturn without running the replay or an audit, and the failure stands
+
+#### Scenario: A swipe replay that uses a different input path
+- **WHEN** the probe recorded that a touch swipe starting on the mode control changed the step, and a verifier's replay performs the same swipe by pointer
+- **THEN** the replay is outside the admitted entry and can confirm an overturn only through the audited-replay path
 
 #### Scenario: A swipe replay that does not start on the recorded control
 - **WHEN** a verifier's replay for `input-swipe-from-control-ignored` swipes from the stage rather than from the recorded control

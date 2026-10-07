@@ -26,10 +26,11 @@ Each criterion tests one quality with at most three closely related clauses. A b
 
 ### A new judge job, not spread across existing jobs
 
-The fourteen LLM criteria form one new `engineering-quality` job. The alternative was to add each criterion to the existing job whose source area it touches. That was rejected for three reasons:
+The fourteen LLM criteria form one new `engineering-quality` job. The alternative was to add each criterion to the existing job whose source area it touches. That was rejected for two reasons:
 - the existing jobs' prompts stay unchanged, so their guidance and calibration history stay valid;
-- the cost of the new criteria can be measured on its own;
-- the new job can be the fallback judge for the swipe probe.
+- the cost of the new criteria can be measured on its own.
+
+Both browser probes still declare `demo-integration` as their fallback, as the existing rule and `lib/rubric.mjs` require of every deterministic browser criterion. The engineering-quality job therefore always judges exactly fourteen criteria.
 
 It is a source-review job, so it receives the neutral snapshot and the requirements bundle, and it runs for the reference too. Its judging protocol is whatever the other implementation source-review jobs use. On main that is the robust-verdict protocol; on eval-the-whole-workflow it is the cross-family panel. Wire it through the same code path rather than naming a protocol.
 
@@ -62,15 +63,15 @@ Every judge, audit, and second-opinion verifier receives an eval-owned criterion
 **Modifier keys.**
 - Move to a middle step. Press ArrowRight and ArrowLeft holding each of Alt, Control, and Meta: six presses.
 - Read the prevented-default count from the instrumentation, which wraps `KeyboardEvent.prototype.preventDefault`, so a page that stops propagation cannot hide the call.
-- Listen for `pagehide`. If the document unloads, raise a resumable harness failure.
-- Retain each press's key, modifier, step before and after, and prevented flag.
-- The criterion is never not-observed and has no fallback.
+- Listen for `pagehide`. An unload means the shortcut reached the browser, which is the desired behaviour, so record the press as passing through, reload the presentation, return to the starting step, and continue. Raise a resumable harness failure only when the reload or the return fails.
+- Retain each press's key, modifier, step before and after, prevented flag, and unload flag.
+- Record not observed only for a deck with no middle step. The fallback judge is `demo-integration`.
 
 **Swipe from a control.**
 - Use the existing control discovery. Prefer a control whose activation doesn't change the step, such as the mode control. Fall back to a step control only when nothing else is available, and then exempt a resulting step equal to that control's target.
-- Move to a middle step, then swipe horizontally with one touch from the control's centre, over the existing swipe probe's distance.
-- Retain the control, the mode, and the steps before and after.
-- Record not observed, with the conventions looked for, only when no control can be discovered. The fallback judge is the `engineering-quality` job.
+- Move to a middle step, then swipe horizontally with one finger from the control's centre, over the existing swipe probe's distance and pacing: touch events first, then pointer events if the step did not change.
+- Retain the control's selector or hook, the mode, the input paths tried, and the steps before and after each.
+- Record not observed, with the conventions looked for, only when no control can be discovered. The fallback judge is `demo-integration`.
 
 Add both criteria to `DETERMINISTIC_BROWSER_CRITERIA` and `PROBE_REQUIREMENTS`. Give each focused real-browser regression pages under `test/real-browser/` covering pass, fail, the stopped-propagation case, and not observed.
 
@@ -79,7 +80,7 @@ Add both criteria to `DETERMINISTIC_BROWSER_CRITERIA` and `PROBE_REQUIREMENTS`. 
 PR #82 changed overturn handling. A replay inside a target's admitted entry decides on its own (`confirmed_by: 'browser-replay'`). Any other replay that the page passes goes to an independent span audit (`confirmed_by: 'audited-browser-replay'`). Main's spec text still says "no allowlist entry ... stands", which is stale. The runner-evals-strategy session is correcting it separately, so this change adds a new requirement rather than modifying that text.
 
 - **Schema.** Add an optional `modifiers` field (any of `Alt`, `Control`, `Meta`) on `press`, and an optional start `selector` on `swipe`. The schema must stay valid under OpenAI strict structured output, so represent absent values as nullable required fields or something else strict mode accepts.
-- **Policy.** Add the two admitted entries in `replayPolicy`, and the plan and evidence checks in `replayPlanRefusal` and `replayEvidenceRefusal`.
+- **Policy.** Add the two admitted entries in `replayPolicy`, and the plan and evidence checks in `replayPlanRefusal` and `replayEvidenceRefusal`. The admitted swipe must use the input path, touch or pointer, that changed the step in the recorded failure; a different path goes to the audited path.
 - **Prevented-default refusal.** No replay expectation can observe a prevented default, so an audited replay could otherwise overturn a real defect. Add a harness check before any replay or audit: when the target is `input-modifier-keys-pass-through` and its failing record includes a prevented default, reject the overturn with that reason. This is code, not prompt guidance.
 
 ### Rubric version
@@ -88,7 +89,7 @@ Bump to the next major version after main's at merge time. The eval-the-whole-wo
 
 ### Re-weighting check
 
-Before finalizing, re-weight the existing criterion verdicts from the current baseline runs and the #78 run under the new points and floors. This is arithmetic over recorded results, with no model calls. The engineering-quality component is unscored for those runs, so report the four changed components and whether any run's floor status or 40/70 eligibility would change at the new weights, excluding the new component. Record the table in `openspec/changes/eval-validator/reweight-check.md`. If a known run's eligibility flips, stop and surface it before merging.
+Before finalizing, re-weight the existing criterion verdicts from the current baseline runs and the #78 run under the new points and floors. This is arithmetic over recorded results, with no model calls. The engineering-quality component is unscored for those runs, so report the demo technical quality and scene kit correctness components, the automated subtotal, and whether any run's floor status or 40/70 eligibility would change at the new weights, excluding the new component. Record the table in `openspec/changes/eval-validator/reweight-check.md`. If a known run's eligibility flips, stop and surface it before merging.
 
 ### Class A audit
 
@@ -109,7 +110,8 @@ Use test-driven development, then run `npm run check`. At minimum, the tests cov
 - rubric validation: component sums, floors, sixteen classified criteria, eval-owned reasons, and the traceability of concrete values;
 - scorer arithmetic and eligibility at the new floors;
 - judge-job coverage for candidates (seven jobs) and references (five);
-- fallback coverage for the swipe probe;
+- fallback coverage: both probes declare `demo-integration`, and a not-observed probe joins that job's expected set;
+- the modifier probe's unload handling, including the failed-reload harness failure;
 - both probes against real-browser pages;
 - replay schema strictness, and acceptance and refusal for both admitted entries;
 - the prevented-default overturn refusal on both the admitted and the audited path;

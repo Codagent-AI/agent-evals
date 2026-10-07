@@ -30,18 +30,20 @@ The component SHALL apply to both candidates and the reference baseline. The sco
 - **THEN** each engineering-quality criterion is recorded with owner `eval` and a reason that states its pass condition
 
 ### Requirement: Engineering-quality judge job
-The evaluator SHALL run a focused `engineering-quality` source-review judge job. The job SHALL return exactly the fourteen LLM-judged engineering-quality criteria, plus `input-swipe-from-control-ignored` only in a run where that criterion was recorded as not observed. The job SHALL receive the same neutral source snapshot, neutral requirements bundle, and untrusted-data handling as the other implementation source-review jobs, and SHALL use the same judging protocol they use. It SHALL be the declared fallback judge for `input-swipe-from-control-ignored`. `input-modifier-keys-pass-through` SHALL have no fallback judge.
+The evaluator SHALL run a focused `engineering-quality` source-review judge job. The job SHALL return exactly the fourteen LLM-judged engineering-quality criteria. The job SHALL receive the same neutral source snapshot, neutral requirements bundle, and untrusted-data handling as the other implementation source-review jobs, and SHALL use the same judging protocol they use. Like every other deterministic browser criterion, `input-modifier-keys-pass-through` and `input-swipe-from-control-ignored` SHALL each declare the `demo-integration` judge as their fallback.
 
 #### Scenario: The job returns exactly its criteria
-- **WHEN** the engineering-quality job completes in a run where both input-hygiene probes were observed
-- **THEN** it returns exactly the fourteen LLM-judged engineering-quality criteria
+- **WHEN** the engineering-quality job completes
+- **THEN** it returns exactly the fourteen LLM-judged engineering-quality criteria, whether or not either input-hygiene probe was observed
 
-#### Scenario: The job also answers a not-observed swipe probe
+#### Scenario: A not-observed input-hygiene probe falls back to demo integration
 - **WHEN** `input-swipe-from-control-ignored` is recorded as not observed
-- **THEN** the engineering-quality job's expected criterion set also includes that criterion
+- **THEN** the demo-integration judge's expected criterion set includes that criterion, and the engineering-quality job's does not
 
 ### Requirement: Modifier-key shortcuts pass through
-The deterministic browser evaluator SHALL score `input-modifier-keys-pass-through`. From a step that is neither the first nor the last, it SHALL press `ArrowRight` and `ArrowLeft` while holding each of Alt, Control, and Meta in turn. It SHALL detect a prevented default by instrumenting `KeyboardEvent.prototype.preventDefault` before the page's scripts run, so that a page that stops propagation cannot hide the call. The criterion SHALL fail when any modified press changes the step index, or when the page calls `preventDefault` on a modified press's keydown, and SHALL pass otherwise. If the page leaves its document during the probe, for example through history navigation, the evaluator SHALL raise a resumable harness failure rather than record a verdict. The criterion SHALL never be recorded as not observed.
+The deterministic browser evaluator SHALL score `input-modifier-keys-pass-through`. From a step that is neither the first nor the last, it SHALL press `ArrowRight` and `ArrowLeft` while holding each of Alt, Control, and Meta in turn. It SHALL detect a prevented default by instrumenting `KeyboardEvent.prototype.preventDefault` before the page's scripts run, so that a page that stops propagation cannot hide the call. The criterion SHALL fail when any modified press changes the step index, or when the page calls `preventDefault` on a modified press's keydown, and SHALL pass otherwise. For each press, the retained observation SHALL record the key, the modifier, the step before and after, whether the page prevented the default, and whether the document unloaded.
+
+A modified press that makes the browser leave the presentation document, for example Alt+ArrowLeft navigating history, shows that the page let the shortcut through. The evaluator SHALL record that press as passing through, reload the presentation, return to the step the press started from, and continue with the remaining presses. It SHALL raise a resumable harness failure only when the presentation cannot be reloaded or the starting step cannot be re-established. The criterion SHALL be recorded as not observed only when the deck has no step that is neither the first nor the last, and the record SHALL say so.
 
 #### Scenario: Alt+Arrow changes the slide
 - **WHEN** pressing Alt+ArrowRight on a middle step advances the deck
@@ -55,8 +57,12 @@ The deterministic browser evaluator SHALL score `input-modifier-keys-pass-throug
 - **WHEN** the page's keydown handler calls `stopPropagation` and `preventDefault` on Meta+ArrowRight
 - **THEN** the prevented default is still detected and the criterion fails
 
-#### Scenario: The probe loses the page
-- **WHEN** a modified press navigates the browser away from the presentation document
+#### Scenario: A modified press leaves the document
+- **WHEN** Alt+ArrowLeft makes the browser navigate back, away from the presentation document, and the page did not prevent the default
+- **THEN** the evaluator records that press as passing through with the unload retained, reloads the presentation at the starting step, and continues the probe
+
+#### Scenario: The presentation cannot be reloaded after an unload
+- **WHEN** a modified press leaves the document and the presentation then fails to load
 - **THEN** the evaluator raises a resumable harness failure and records no verdict
 
 #### Scenario: Modified keys are ignored
@@ -64,13 +70,13 @@ The deterministic browser evaluator SHALL score `input-modifier-keys-pass-throug
 - **THEN** `input-modifier-keys-pass-through` passes
 
 ### Requirement: Swipes that start on a control do not navigate
-The deterministic browser evaluator SHALL score `input-swipe-from-control-ignored`. In whichever mode exposes an interactive control inside the presentation, it SHALL perform a predominantly horizontal single-touch swipe that starts on such a control, from a step that is neither the first nor the last. It SHALL prefer a control whose activation does not change the step, such as a mode control.
+The deterministic browser evaluator SHALL score `input-swipe-from-control-ignored`. In whichever mode exposes an interactive control inside the presentation, it SHALL perform a predominantly horizontal single-touch swipe that starts on such a control, from a step that is neither the first nor the last. It SHALL prefer a control whose activation does not change the step, such as a mode control. It SHALL deliver the swipe as touch events and, when the step does not change, again as pointer events, with the same pacing as the existing touch-swipe check.
 
-The criterion SHALL fail when the swipe changes the step index. There is one exception: when the only control available is a step control, a resulting step equal to that control's own activation target SHALL NOT count as a failure. The criterion SHALL pass when the step does not change. It SHALL be recorded as not observed only when the evaluator discovers no interactive control in either mode under any convention it recognises, and the record SHALL state the conventions looked for. Its declared fallback judge is the `engineering-quality` job.
+The criterion SHALL fail when the swipe changes the step index under either input path. There is one exception: when the only control available is a step control, a resulting step equal to that control's own activation target SHALL NOT count as a failure. The criterion SHALL pass when the step does not change. It SHALL be recorded as not observed only when the evaluator discovers no interactive control in either mode under any convention it recognises, and the record SHALL state the conventions looked for. Its declared fallback judge is the `demo-integration` job. The retained observation SHALL record the control's selector or hook, the mode, the input paths tried, and the step before and after each.
 
 #### Scenario: A swipe starting on the mode control changes the slide
 - **WHEN** a horizontal swipe that starts on the mode control advances the deck
-- **THEN** `input-swipe-from-control-ignored` fails, and the retained observation names the control and the steps before and after
+- **THEN** `input-swipe-from-control-ignored` fails, and the retained observation names the control, the mode, the input path, and the steps before and after
 
 #### Scenario: A swipe on a step button lands on that button's step
 - **WHEN** the only discoverable controls are step buttons, and a swipe that starts on the button for step 6 leaves the deck on step 6
@@ -82,7 +88,7 @@ The criterion SHALL fail when the swipe changes the step index. There is one exc
 
 #### Scenario: No control is discoverable
 - **WHEN** the evaluator finds no interactive control in either mode
-- **THEN** the criterion is recorded as not observed and resolved by the engineering-quality fallback judge
+- **THEN** the criterion is recorded as not observed and resolved by the demo-integration fallback judge
 
 ### Requirement: Preview terminated on every exit path
 `engineering-preview-terminated-on-every-exit` SHALL pass only when the delivered verify and inspect scripts terminate and await the preview server process itself on every exit path, including success, a browser launch failure, and an error after the preview started. This applies to the repository copies and the skill's bootstrap template copies. Killing only an `npm` or `npx` wrapper while the server keeps running SHALL fail the criterion. A preview started through Vite's `preview()` API and closed on every exit path SHALL satisfy the criterion.
