@@ -15,6 +15,7 @@ export const SHARED_COMPONENT_IDS = [
   'scene-kit-correctness',
   'presentation-skill-correctness',
   'verification-tool-correctness',
+  'engineering-quality',
 ]
 export const SHARED_SCORE_DENOMINATOR = 92
 

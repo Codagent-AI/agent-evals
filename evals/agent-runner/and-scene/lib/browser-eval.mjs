@@ -44,7 +44,20 @@ export const DETERMINISTIC_BROWSER_CRITERIA = [
   'demo-mode-interaction-reliability',
   'demo-control-semantics',
   'demo-focus-and-keyboard-accessibility',
+  'input-modifier-keys-pass-through',
+  'input-swipe-from-control-ignored',
 ]
+
+// INTERIM (issue #77 slice S1): the engineering-quality input-hygiene criteria
+// are registered so the rubric, scorer, and fallback judge cover them, but
+// their probes are not implemented yet. Each is recorded as not observed with
+// this reason, so its declared demo-integration fallback judge decides it. The
+// probe slice replaces these placeholders with real probes.
+export const INTERIM_UNIMPLEMENTED_PROBES = Object.freeze([
+  'input-modifier-keys-pass-through',
+  'input-swipe-from-control-ignored',
+])
+const INTERIM_PROBE_REASON = 'probe not yet implemented; the declared fallback judge decides this criterion'
 
 const PROBE_REQUIREMENTS = {
   'demo-route-and-registration': { mode: 'browse', position: 0 },
@@ -61,6 +74,10 @@ const PROBE_REQUIREMENTS = {
   'demo-mode-interaction-reliability': { mode: 'present', position: 0 },
   'demo-control-semantics': { mode: 'browse', position: 0 },
   'demo-focus-and-keyboard-accessibility': { mode: 'browse', position: 0 },
+  // INTERIM: the placeholders only open and read the deck where every other
+  // probe can; the real probes start from a middle step.
+  'input-modifier-keys-pass-through': { mode: 'browse', position: 0 },
+  'input-swipe-from-control-ignored': { mode: 'browse', position: 0 },
 }
 
 const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
@@ -965,6 +982,20 @@ export async function runBrowserEvaluation({
       const after = (await keyboardPage.state()).stepIndex
       return [after === before + 1, `focus succeeded and keyboard navigation moved ${before} → ${after}`, []]
     },
+
+    // INTERIM placeholders; see INTERIM_UNIMPLEMENTED_PROBES. Each retains the
+    // bounded observation of the opened deck like any other not-observed
+    // record, and never records a verdict: only a harness failure escapes.
+    ...Object.fromEntries(INTERIM_UNIMPLEMENTED_PROBES.map((id) => [
+      id, async () => {
+        try {
+          await (await session(PROBE_REQUIREMENTS[id])).state()
+        } catch (error) {
+          if (error?.owner === 'evaluation-harness') throw error
+        }
+        return notObserved(INTERIM_PROBE_REASON, [], [])
+      },
+    ])),
   }
 
   const criteria = []

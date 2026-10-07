@@ -12,6 +12,13 @@ import {
   WORKFLOW_RELATIVE_PATH,
 } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
 import { DEMO_CONTRACT } from '../evals/agent-runner/and-scene/lib/demo-contract.mjs'
+import { INTERIM_UNIMPLEMENTED_PROBES } from '../evals/agent-runner/and-scene/lib/browser-eval.mjs'
+
+// INTERIM: the input-hygiene probes are always not observed until they are
+// implemented, so a browser run always asks demo-integration for their
+// fallback verdicts. These fixtures have no neutral source root to audit a
+// fallback pass against, so their stand-in judges fail those two instead.
+const interimProbe = (id) => INTERIM_UNIMPLEMENTED_PROBES.includes(id)
 
 const workflowYaml = `name: implement-change
 params:
@@ -367,7 +374,7 @@ async function evaluate(context, extra = [], overrides = {}) {
         return JSON.stringify({
           results: request.criteria.map((id) => ({
             id,
-            verdict: 'pass',
+            verdict: interimProbe(id) ? 'fail' : 'pass',
             rationale: 'controller fixture evidence supports this criterion',
             evidence: ['controller-fixture:verified'],
           })),
@@ -1358,7 +1365,7 @@ test('completed judge units are rehashed and reused while identity-sensitive pha
 
   const judging = await readJson(join(context.runDir, 'phases/product-judging.json'))
   assert.deepEqual(judging.reused_jobs.sort(), [
-    'assumption-handling', 'demo-integration', 'presentation-skill',
+    'assumption-handling', 'demo-integration', 'engineering-quality', 'presentation-skill',
     'scene-kit', 'testing-evidence', 'verification-tooling',
   ])
   assert.ok(result.completed.includes('agent-runner'))
@@ -1401,8 +1408,8 @@ test('exhausted required judge output is a harness failure that preserves other 
   // The scene-kit job owns every scene-kit criterion, so its surviving
   // checkpoint keeps a complete component score while another job fails.
   const sceneKit = score.components.find(({ id }) => id === 'scene-kit-correctness')
-  assert.equal(sceneKit.points_awarded, 24)
-  assert.equal(sceneKit.points_observed, 24)
+  assert.equal(sceneKit.points_awarded, 20)
+  assert.equal(sceneKit.points_observed, 20)
 })
 
 test('fresh collisions and legacy checkpoint-only runs are not silently resumed', async () => {
@@ -1579,7 +1586,7 @@ test('rescore checks browser failures while a reference baseline does not', asyn
           mismeasured_step: null, measurement_fault: null, citations: [], log_citations: [], replay: null })
       }
       if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
-      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: interimProbe(id) ? 'fail' : 'pass',
         rationale: 'fixture source supports this criterion', evidence: ['src/index.ts'] })) })
     },
   })
@@ -1594,7 +1601,7 @@ test('rescore checks browser failures while a reference baseline does not', asyn
     judgeInvoke: async (request) => {
       if (request.job === 'second-opinion') referenceChecks += 1
       if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
-      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: interimProbe(id) ? 'fail' : 'pass',
         rationale: 'fixture source supports this criterion', evidence: ['src/index.ts'] })) })
     },
   })
@@ -1643,7 +1650,7 @@ test('rescore starts the candidate server and confirms a browser overturn by rep
           citations: [{ path: 'src/index.ts', start_line: 1, end_line: 1 }], log_citations: [],
           replay: DIRECT_JUMP_REPLAY })
       if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
-      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: interimProbe(id) ? 'fail' : 'pass',
         rationale: 'fixture evidence', evidence: ['src/index.ts'] })) })
     },
   })
@@ -1746,7 +1753,7 @@ test('browser probes are durable hashed evaluator-owned work units even when a p
   assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
   const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
   const units = state.phases['browser-evaluation'].units
-  assert.equal(Object.keys(units).length, 14)
+  assert.equal(Object.keys(units).length, 16)
   assert.ok(Object.values(units).every(({ state: unitState }) => unitState === 'complete'))
   for (const [id, unit] of Object.entries(units)) {
     assert.equal(unit.outputs.length, 1, id)
@@ -1787,7 +1794,7 @@ test('a browser failure receives a checkpointed audited second opinion before sc
       if (request.audit_stage) return JSON.stringify({ results: request.criteria.map((id) => ({
         id, classification: 'confirmed', rationale: 'source confirms the behavior', evidence: ['src/index.ts'],
       })) })
-      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: interimProbe(id) ? 'fail' : 'pass',
         rationale: 'controller fixture evidence supports this criterion', evidence: ['src/index.ts'],
         citations: ['src/index.ts'] })) })
     },

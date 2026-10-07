@@ -22,6 +22,7 @@ export const JUDGE_JOBS = [
   'scene-kit',
   'presentation-skill',
   'verification-tooling',
+  'engineering-quality',
   'testing-evidence',
   'assumption-handling',
 ]
@@ -41,11 +42,40 @@ export const WORKFLOW_QUALITY_CRITERION_IDS = Object.freeze({
   ],
 })
 
+// Engineering quality beyond the spec (issue #77) is fixed input to the
+// classification check, like the workflow-quality criteria: every one of these
+// is eval-owned, belongs to the engineering-quality component, and is never a
+// legacy criterion. The two input-hygiene probes are browser-owned; the rest
+// belong to the focused engineering-quality judge.
+export const ENGINEERING_QUALITY_CRITERION_IDS = Object.freeze({
+  'deterministic-browser': [
+    'input-modifier-keys-pass-through',
+    'input-swipe-from-control-ignored',
+  ],
+  'engineering-quality': [
+    'engineering-preview-terminated-on-every-exit',
+    'engineering-preview-readiness-bounded',
+    'engineering-bootstrap-scripts-generic',
+    'engineering-inspect-fails-loudly',
+    'engineering-checks-read-rendered-page',
+    'engineering-diagnostics-cover-presentation',
+    'engineering-templates-build-at-destination',
+    'engineering-skill-description-triggers',
+    'engineering-skill-out-of-scope-redirects',
+    'engineering-skill-completion-report',
+    'engineering-presentation-css-scoped',
+    'engineering-typed-kit-primitives',
+    'engineering-tests-wait-on-state',
+    'engineering-tests-isolate-resources',
+  ],
+})
+
 const COMPONENT_POLICY = [
-  ['demo-technical-quality', 24, 15],
-  ['scene-kit-correctness', 24, 15],
+  ['demo-technical-quality', 20, 12.5],
+  ['scene-kit-correctness', 20, 12.5],
   ['presentation-skill-correctness', 7, null],
   ['verification-tool-correctness', 7, null],
+  ['engineering-quality', 8, null],
   ['testing-evidence-quality', 4, null],
   ['assumption-handling-quality', 4, null],
 ]
@@ -259,7 +289,7 @@ export function validateAutomatedRubric(rubric) {
   }
   const componentPolicy = rubric.components.map(({ id, points, floor = null }) => [id, points, floor])
   if (JSON.stringify(componentPolicy) !== JSON.stringify(COMPONENT_POLICY)) {
-    errors.push('components must use the approved 24/24/7/7/4/4 allocation and floors')
+    errors.push('components must use the approved 20/20/7/7/8/4/4 allocation and floors')
   }
   const referencePoints = rubric.components
     .filter((component) => componentApplicable(component, 'reference-baseline'))
@@ -322,6 +352,25 @@ export function validateAutomatedRubric(rubric) {
     const actual = criteriaForJob(rubric, job)
     if (JSON.stringify(actual) !== JSON.stringify(expected)) {
       errors.push(`${job} must own exactly its four approved workflow-quality criteria`)
+    }
+  }
+  const engineeringRows = rows.filter(({ component }) => component === 'engineering-quality')
+  const engineeringOwners = (evaluatorOrJob) => engineeringRows
+    .filter(({ evaluator, job }) => (job ?? evaluator) === evaluatorOrJob)
+    .map(({ id }) => id)
+  if (
+    JSON.stringify(engineeringOwners('deterministic-browser')) !== JSON.stringify(ENGINEERING_QUALITY_CRITERION_IDS['deterministic-browser'])
+    || JSON.stringify(engineeringOwners('engineering-quality')) !== JSON.stringify(ENGINEERING_QUALITY_CRITERION_IDS['engineering-quality'])
+    || JSON.stringify(criteriaForJob(rubric, 'engineering-quality')) !== JSON.stringify(ENGINEERING_QUALITY_CRITERION_IDS['engineering-quality'])
+    || engineeringRows.length !== Object.values(ENGINEERING_QUALITY_CRITERION_IDS).flat().length
+  ) {
+    errors.push('engineering-quality must own exactly its approved criteria')
+  }
+  // Judges and second-opinion verifiers read an eval-owned reason as the
+  // criterion's requirement, so none of these may trace to the fixture.
+  for (const id of Object.values(ENGINEERING_QUALITY_CRITERION_IDS).flat()) {
+    if (rubric.criterion_sources?.[id] && rubric.criterion_sources[id].owner !== 'eval') {
+      errors.push(`criterion ${id} must be eval-owned`)
     }
   }
   for (const job of DEFINED_CRITERIA_JOBS) {

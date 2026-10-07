@@ -313,14 +313,32 @@ test('the deterministic browser evaluator owns exactly the rubric-assigned demo 
     [...DETERMINISTIC_BROWSER_CRITERIA].sort(),
     [...deterministicCriteria(automated.rubric)].sort(),
   )
-  assert.equal(DETERMINISTIC_BROWSER_CRITERIA.length, 14)
+  assert.equal(DETERMINISTIC_BROWSER_CRITERIA.length, 16)
+})
+
+// Interim: the input-hygiene probes are registered with the rubric but not yet
+// implemented, so they are recorded as not observed and resolved by their
+// declared demo-integration fallback judge. The probe slice replaces this.
+const INTERIM_PROBES = ['input-modifier-keys-pass-through', 'input-swipe-from-control-ignored']
+
+test('the input-hygiene probes are recorded as not observed until they are implemented', async () => {
+  const result = await evaluate()
+  for (const id of INTERIM_PROBES) {
+    const entry = result.criteria.find((criterion) => criterion.id === id)
+    assert.equal(entry.verdict, null, id)
+    assert.equal(entry.outcome, 'not-observed', id)
+    assert.equal(entry.observed, false, id)
+    assert.match(entry.rationale, /probe not yet implemented/, id)
+  }
 })
 
 test('a conforming built demo passes every deterministic criterion and hard gate', async () => {
   const result = await evaluate()
 
   assert.deepEqual(result.criteria.map(({ id }) => id), DETERMINISTIC_BROWSER_CRITERIA)
-  assert.deepEqual([...new Set(result.criteria.map(({ verdict }) => verdict))], ['pass'])
+  assert.deepEqual([...new Set(result.criteria
+    .filter(({ id }) => !INTERIM_PROBES.includes(id))
+    .map(({ verdict }) => verdict))], ['pass'])
   assert.deepEqual([...new Set(result.gates.map(({ verdict }) => verdict))], ['pass'])
   assert.equal(result.gates.length, 4)
 })
@@ -552,7 +570,9 @@ test('fixed-canvas fitting is no longer measured deterministically at an extreme
 
   assert.ok(!DETERMINISTIC_BROWSER_CRITERIA.includes('canvas-uniform-scaling'))
   assert.equal(verdictOf(result, 'canvas-uniform-scaling'), undefined)
-  assert.deepEqual([...new Set(result.criteria.map(({ verdict }) => verdict))], ['pass'])
+  assert.deepEqual([...new Set(result.criteria
+    .filter(({ id }) => !INTERIM_PROBES.includes(id))
+    .map(({ verdict }) => verdict))], ['pass'])
 })
 
 test('direct-jump navigation enters browse mode when present mode intentionally hides its controls', async () => {
@@ -763,7 +783,8 @@ test('every emitted result carries a verdict, rationale, and cited evidence', as
   const result = await evaluate()
 
   for (const entry of [...result.criteria, ...result.gates]) {
-    assert.ok(['pass', 'fail'].includes(entry.verdict), entry.id)
+    if (INTERIM_PROBES.includes(entry.id)) assert.equal(entry.verdict, null, entry.id)
+    else assert.ok(['pass', 'fail'].includes(entry.verdict), entry.id)
     assert.ok(entry.rationale.length > 0, entry.id)
     assert.ok(Array.isArray(entry.evidence), entry.id)
   }
@@ -858,7 +879,9 @@ test('build and verification gates come from their own phase results', async () 
   const failedBuild = await evaluate({}, { build: { ok: false, log: 'tsc exited 2' } })
   assert.equal(verdictOf(failedBuild, 'verification-build-whole-app'), 'fail')
   // A failing gate never silently drags down the scored criteria.
-  assert.deepEqual([...new Set(failedBuild.criteria.map(({ verdict }) => verdict))], ['pass'])
+  assert.deepEqual([...new Set(failedBuild.criteria
+    .filter(({ id }) => !INTERIM_PROBES.includes(id))
+    .map(({ verdict }) => verdict))], ['pass'])
 
   const unclearOutcome = await evaluate({}, {
     verification: { machine_readable: false, passed: null },

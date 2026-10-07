@@ -14,12 +14,13 @@ function result({
   official = 80,
   rubrics = RUBRICS,
   components = [
-    { id: 'demo-technical-quality', title: 'Demo', applicable: true, points_awarded: 20, points_possible: 24, subcomponents: [
+    { id: 'demo-technical-quality', title: 'Demo', applicable: true, points_awarded: 16, points_possible: 20, subcomponents: [
       { id: 'demo-contract', title: 'Contract', points_awarded: 10, points_possible: 12 },
     ] },
-    { id: 'scene-kit-correctness', title: 'Scene kit', applicable: true, points_awarded: 20, points_possible: 24, subcomponents: [] },
+    { id: 'scene-kit-correctness', title: 'Scene kit', applicable: true, points_awarded: 16, points_possible: 20, subcomponents: [] },
     { id: 'presentation-skill-correctness', title: 'Skill', applicable: true, points_awarded: 6, points_possible: 7, subcomponents: [] },
     { id: 'verification-tool-correctness', title: 'Verification', applicable: true, points_awarded: 6, points_possible: 7, subcomponents: [] },
+    { id: 'engineering-quality', title: 'Engineering', applicable: true, points_awarded: 8, points_possible: 8, subcomponents: [] },
     { id: 'testing-evidence-quality', title: 'Evidence', applicable: mode !== 'reference-baseline', points_awarded: mode === 'reference-baseline' ? null : 2, points_possible: mode === 'reference-baseline' ? 0 : 4, subcomponents: [] },
     { id: 'assumption-handling-quality', title: 'Assumptions', applicable: mode !== 'reference-baseline', points_awarded: mode === 'reference-baseline' ? null : 2, points_possible: mode === 'reference-baseline' ? 0 : 4, subcomponents: [] },
   ],
@@ -46,10 +47,11 @@ function result({
 
 test('a candidate and baseline scored by the same rubrics compare on shared 92 points', () => {
   const fullShared = [
-    { id: 'demo-technical-quality', title: 'Demo', applicable: true, points_awarded: 24, points_possible: 24, subcomponents: [] },
-    { id: 'scene-kit-correctness', title: 'Scene kit', applicable: true, points_awarded: 24, points_possible: 24, subcomponents: [] },
+    { id: 'demo-technical-quality', title: 'Demo', applicable: true, points_awarded: 20, points_possible: 20, subcomponents: [] },
+    { id: 'scene-kit-correctness', title: 'Scene kit', applicable: true, points_awarded: 20, points_possible: 20, subcomponents: [] },
     { id: 'presentation-skill-correctness', title: 'Skill', applicable: true, points_awarded: 7, points_possible: 7, subcomponents: [] },
     { id: 'verification-tool-correctness', title: 'Verification', applicable: true, points_awarded: 7, points_possible: 7, subcomponents: [] },
+    { id: 'engineering-quality', title: 'Engineering', applicable: true, points_awarded: 8, points_possible: 8, subcomponents: [] },
   ]
   const comparison = compareToBaseline({
     candidate: result({ official: 80 }),
@@ -71,20 +73,22 @@ test('shared-score deltas are projected without floating-point noise', () => {
     mode: 'reference-baseline',
     official: 92,
     components: [
-      { id: 'demo-technical-quality', applicable: true, points_awarded: 24, points_possible: 24, subcomponents: [] },
-      { id: 'scene-kit-correctness', applicable: true, points_awarded: 24, points_possible: 24, subcomponents: [] },
+      { id: 'demo-technical-quality', applicable: true, points_awarded: 20, points_possible: 20, subcomponents: [] },
+      { id: 'scene-kit-correctness', applicable: true, points_awarded: 20, points_possible: 20, subcomponents: [] },
       { id: 'presentation-skill-correctness', applicable: true, points_awarded: 7, points_possible: 7, subcomponents: [] },
       { id: 'verification-tool-correctness', applicable: true, points_awarded: 7, points_possible: 7, subcomponents: [] },
+      { id: 'engineering-quality', applicable: true, points_awarded: 8, points_possible: 8, subcomponents: [] },
     ],
     human: 30,
   })
   const candidate = result({
     official: 88.4,
     components: [
-      { id: 'demo-technical-quality', applicable: true, points_awarded: 23, points_possible: 24, subcomponents: [] },
-      { id: 'scene-kit-correctness', applicable: true, points_awarded: 23.4, points_possible: 24, subcomponents: [] },
+      { id: 'demo-technical-quality', applicable: true, points_awarded: 19, points_possible: 20, subcomponents: [] },
+      { id: 'scene-kit-correctness', applicable: true, points_awarded: 19.4, points_possible: 20, subcomponents: [] },
       { id: 'presentation-skill-correctness', applicable: true, points_awarded: 7, points_possible: 7, subcomponents: [] },
       { id: 'verification-tool-correctness', applicable: true, points_awarded: 6.5, points_possible: 7, subcomponents: [] },
+      { id: 'engineering-quality', applicable: true, points_awarded: 8, points_possible: 8, subcomponents: [] },
     ],
     human: 20.5,
   })
@@ -101,12 +105,13 @@ test('component and subcomponent deltas are reported per identifier', () => {
     mode: 'reference-baseline',
     official: 92,
     components: [
-      { id: 'demo-technical-quality', title: 'Demo', applicable: true, points_awarded: 24, points_possible: 24, subcomponents: [
+      { id: 'demo-technical-quality', title: 'Demo', applicable: true, points_awarded: 20, points_possible: 20, subcomponents: [
         { id: 'demo-contract', title: 'Contract', points_awarded: 12, points_possible: 12 },
       ] },
-      { id: 'scene-kit-correctness', title: 'Scene kit', applicable: true, points_awarded: 24, points_possible: 24, subcomponents: [] },
+      { id: 'scene-kit-correctness', title: 'Scene kit', applicable: true, points_awarded: 20, points_possible: 20, subcomponents: [] },
       { id: 'presentation-skill-correctness', title: 'Skill', applicable: true, points_awarded: 7, points_possible: 7, subcomponents: [] },
       { id: 'verification-tool-correctness', title: 'Verification', applicable: true, points_awarded: 7, points_possible: 7, subcomponents: [] },
+      { id: 'engineering-quality', title: 'Engineering', applicable: true, points_awarded: 8, points_possible: 8, subcomponents: [] },
     ],
     human: 30,
   })
@@ -114,14 +119,31 @@ test('component and subcomponent deltas are reported per identifier', () => {
   const comparison = compareToBaseline({ candidate: result(), baseline })
 
   assert.deepEqual(comparison.components, [
-    { id: 'demo-technical-quality', title: 'Demo', points_possible: 24, baseline: 24, candidate: 20, delta: -4 },
-    { id: 'scene-kit-correctness', title: 'Scene kit', points_possible: 24, baseline: 24, candidate: 20, delta: -4 },
+    { id: 'demo-technical-quality', title: 'Demo', points_possible: 20, baseline: 20, candidate: 16, delta: -4 },
+    { id: 'scene-kit-correctness', title: 'Scene kit', points_possible: 20, baseline: 20, candidate: 16, delta: -4 },
     { id: 'presentation-skill-correctness', title: 'Skill', points_possible: 7, baseline: 7, candidate: 6, delta: -1 },
     { id: 'verification-tool-correctness', title: 'Verification', points_possible: 7, baseline: 7, candidate: 6, delta: -1 },
+    { id: 'engineering-quality', title: 'Engineering', points_possible: 8, baseline: 8, candidate: 8, delta: 0 },
   ])
   assert.deepEqual(comparison.subcomponents, [
     { id: 'demo-contract', title: 'Contract', points_possible: 12, baseline: 12, candidate: 10, delta: -2 },
   ])
+})
+
+test('a result without the engineering-quality component lacks complete shared scores', () => {
+  const fullShared = (engineering) => [
+    { id: 'demo-technical-quality', applicable: true, points_awarded: 20, points_possible: 20, subcomponents: [] },
+    { id: 'scene-kit-correctness', applicable: true, points_awarded: 20, points_possible: 20, subcomponents: [] },
+    { id: 'presentation-skill-correctness', applicable: true, points_awarded: 7, points_possible: 7, subcomponents: [] },
+    { id: 'verification-tool-correctness', applicable: true, points_awarded: 7, points_possible: 7, subcomponents: [] },
+    ...(engineering ? [{ id: 'engineering-quality', applicable: true, points_awarded: 8, points_possible: 8, subcomponents: [] }] : []),
+  ]
+  const comparison = compareToBaseline({
+    candidate: result(),
+    baseline: result({ runId: 'baseline-1', mode: 'reference-baseline', official: 84, components: fullShared(false), human: 30 }),
+  })
+  assert.equal(comparison.comparable, false)
+  assert.match(comparison.reason, /complete shared component scores/)
 })
 
 test('workflow-quality components are excluded from the shared comparison', () => {

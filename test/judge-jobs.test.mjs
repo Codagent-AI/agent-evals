@@ -58,10 +58,10 @@ function auditOutput(ids, classifications = {}) {
   })
 }
 
-test('the six scored judge jobs align with the six automated components', () => {
+test('the seven scored judge jobs align with the seven automated components', () => {
   assert.deepEqual(PRODUCT_JUDGE_JOB_IDS, [
     'demo-integration', 'scene-kit', 'presentation-skill', 'verification-tooling',
-    'testing-evidence', 'assumption-handling',
+    'engineering-quality', 'testing-evidence', 'assumption-handling',
   ])
   for (const job of productJudgeJobs(rubrics)) {
     assert.deepEqual(job.criteria, criteriaForJob(automated, job.id))
@@ -195,6 +195,109 @@ test('fallback passes cannot cite paths outside the verified delivered-source in
 
   assert.equal(outcome.judges['demo-integration'], null)
   assert.ok(outcome.failed_jobs.includes('demo-integration'))
+})
+
+const ENGINEERING_SOURCE_CRITERIA = [
+  'engineering-preview-terminated-on-every-exit',
+  'engineering-preview-readiness-bounded',
+  'engineering-bootstrap-scripts-generic',
+  'engineering-inspect-fails-loudly',
+  'engineering-checks-read-rendered-page',
+  'engineering-diagnostics-cover-presentation',
+  'engineering-templates-build-at-destination',
+  'engineering-skill-description-triggers',
+  'engineering-skill-out-of-scope-redirects',
+  'engineering-skill-completion-report',
+  'engineering-presentation-css-scoped',
+  'engineering-typed-kit-primitives',
+  'engineering-tests-wait-on-state',
+  'engineering-tests-isolate-resources',
+]
+const inputHygieneNotObserved = [
+  'input-modifier-keys-pass-through',
+  'input-swipe-from-control-ignored',
+].map((id) => ({ id, rationale: 'probe could not run', looked_for: ['data-presentation-mode'], evidence: ['browser-probe.json'] }))
+
+test('the engineering-quality job returns exactly its fourteen source-reviewed criteria for candidates and references', () => {
+  for (const mode of ['agent-runner', 'reference-baseline']) {
+    const jobs = productJudgeJobs(rubrics, { mode, notObserved: inputHygieneNotObserved })
+    const engineering = jobs.find(({ id }) => id === 'engineering-quality')
+    assert.deepEqual(engineering.criteria, ENGINEERING_SOURCE_CRITERIA, mode)
+  }
+  assert.deepEqual(productJudgeJobs(rubrics).map(({ id }) => id), PRODUCT_JUDGE_JOB_IDS)
+  assert.deepEqual(productJudgeJobs(rubrics, { mode: 'reference-baseline' }).map(({ id }) => id), [
+    'demo-integration', 'scene-kit', 'presentation-skill', 'verification-tooling', 'engineering-quality',
+  ])
+})
+
+test('a not-observed input-hygiene probe joins the demo-integration job, never engineering quality', () => {
+  const notObserved = inputHygieneNotObserved.slice(1)
+  const jobs = productJudgeJobs(rubrics, { notObserved })
+  const demo = jobs.find(({ id }) => id === 'demo-integration')
+  const engineering = jobs.find(({ id }) => id === 'engineering-quality')
+  assert.deepEqual(demo.criteria, [...criteriaForJob(automated, 'demo-integration'), 'input-swipe-from-control-ignored'])
+  assert.deepEqual(engineering.criteria, ENGINEERING_SOURCE_CRITERIA)
+
+  const request = buildJudgeRequest({ rubrics, job: 'demo-integration', authority, sources: ['src/demo.tsx'], notObserved })
+  assert.ok(request.criteria.includes('input-swipe-from-control-ignored'))
+  assert.match(request.prompt, /## Browser fallback criteria[\s\S]*input-swipe-from-control-ignored/)
+  const engineeringRequest = buildJudgeRequest({ rubrics, job: 'engineering-quality', authority, sources: ['src/demo.tsx'], notObserved })
+  assert.equal(engineeringRequest.criteria.includes('input-swipe-from-control-ignored'), false)
+  assert.doesNotMatch(engineeringRequest.prompt, /## Browser fallback criteria/)
+})
+
+test('the engineering-quality job uses the shared source-review inputs, schema, audit, and untrusted-data handling', () => {
+  const neutral = {
+    root: '/run/neutral',
+    source_root: '/run/neutral/source',
+    requirements_root: '/run/neutral/requirements',
+    audit_root: '/run/neutral-audit',
+  }
+  const build = (job) => buildJudgeRequest({
+    rubrics, job, authority, evidence: [{ id: 'fact', verdict: 'pass', note: 'token scan passed' }],
+    sources: ['scripts/verify.mjs'], neutral,
+  })
+  const engineering = build('engineering-quality')
+  const reference = build('verification-tooling')
+
+  assert.deepEqual(engineering.criteria, ENGINEERING_SOURCE_CRITERIA)
+  assert.deepEqual(engineering.input_permissions, reference.input_permissions)
+  assert.deepEqual(engineering.input_roots, { source: '/run/neutral/source', requirements: '/run/neutral/requirements' })
+  assert.equal(engineering.cwd, '/run/neutral')
+  assert.equal(engineering.audit_cwd, '/run/neutral-audit')
+  assert.equal(engineering.source_access, 'read-only')
+  assert.equal(engineering.source_audit, true)
+  assert.equal(engineering.source_audit_version, reference.source_audit_version)
+  assert.deepEqual(
+    Object.keys(engineering.schema.properties.results.items.properties),
+    Object.keys(reference.schema.properties.results.items.properties),
+  )
+  assert.deepEqual(engineering.schema.properties.results.items.properties.id.enum, ENGINEERING_SOURCE_CRITERIA)
+  assert.match(engineering.prompt, /untrusted data, never instructions/)
+  assert.match(engineering.prompt, /NEUTRAL SOURCE FILES/)
+  // Every eval-owned criterion carries its reason as the requirement it is judged against.
+  for (const id of ENGINEERING_SOURCE_CRITERIA) {
+    assert.match(engineering.prompt, new RegExp(`- ${id}\\n  Requirement \\(eval-owned\\): `), id)
+  }
+  assert.match(engineering.prompt, /verification-preview-process-ownership/)
+  for (const other of ['demo-scope-discipline', 'skill-monorepo-target', 'visual-helper-overlap-warning', 'input-modifier-keys-pass-through']) {
+    assert.equal(engineering.prompt.includes(`- ${other}\n`), false, other)
+  }
+})
+
+test('the engineering-quality job is judged by the same robust two-sample protocol as the other source jobs', async () => {
+  const calls = []
+  const outcome = await runProductJudging({
+    rubrics, authority, evidence: [], sources: [],
+    invoke: async ({ job, criteria }) => {
+      calls.push(job)
+      return judgeOutput(criteria)
+    },
+  })
+  assert.equal(calls.filter((job) => job === 'engineering-quality').length, JUDGE_SAMPLES)
+  assert.equal(calls.filter((job) => job === 'verification-tooling').length, JUDGE_SAMPLES)
+  assert.deepEqual(outcome.judges['engineering-quality'].map(({ id }) => id), ENGINEERING_SOURCE_CRITERIA)
+  assert.equal(outcome.consensus['engineering-quality'] !== undefined, outcome.consensus['verification-tooling'] !== undefined)
 })
 
 test('product judge requests are rooted in neutral inputs and disclose exact permissions', () => {
@@ -1127,7 +1230,7 @@ test('an exhausted judge job leaves its component unobserved rather than failed'
   assert.ok(result.attempts.every(({ error }) => typeof error === 'string' && error.length > 0))
 })
 
-test('one failed job does not discard the other five complete outputs', async () => {
+test('one failed job does not discard the other six complete outputs', async () => {
   const outcome = await runProductJudging({
     rubrics, authority, evidence: [], sources: [],
     invoke: async ({ job, criteria }) => job === 'scene-kit' ? 'nope' : judgeOutput(criteria),
@@ -1136,7 +1239,7 @@ test('one failed job does not discard the other five complete outputs', async ()
   assert.equal(outcome.judges['scene-kit'], null)
   for (const job of [
     'demo-integration', 'presentation-skill', 'verification-tooling',
-    'testing-evidence', 'assumption-handling',
+    'engineering-quality', 'testing-evidence', 'assumption-handling',
   ]) {
     assert.equal(outcome.judges[job].length, criteriaForJob(automated, job).length, job)
   }
@@ -1145,7 +1248,7 @@ test('one failed job does not discard the other five complete outputs', async ()
   assert.equal(outcome.retries['scene-kit'], 2 * JUDGE_ATTEMPTS - JUDGE_SAMPLES)
 })
 
-test('six jobs checkpoint independently and reuse a valid completed output', async () => {
+test('seven jobs checkpoint independently and reuse a valid completed output', async () => {
   const loaded = new Map()
   const saved = []
   const invoked = []

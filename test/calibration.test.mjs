@@ -37,14 +37,14 @@ test('the known-good reference scores all 62 applicable automated points and ope
   assert.equal('second_opinions' in result, false)
 })
 
-test('reference runs four applicable jobs while candidate calibration runs all six', async () => {
+test('reference runs five applicable jobs while candidate calibration runs all seven', async () => {
   const outDir = await out()
   const ledger = await runCalibration({ rubrics, outDir })
 
   const reference = ledger.cases.find(({ id }) => id === 'reference')
   assert.deepEqual(
     Object.keys(reference.judging.judges).sort(),
-    ['demo-integration', 'presentation-skill', 'scene-kit', 'verification-tooling'],
+    ['demo-integration', 'engineering-quality', 'presentation-skill', 'scene-kit', 'verification-tooling'],
   )
   assert.deepEqual(reference.judging.failed_jobs, [])
 
@@ -52,7 +52,7 @@ test('reference runs four applicable jobs while candidate calibration runs all s
   assert.deepEqual(
     Object.keys(candidate.judging.judges).sort(),
     [
-      'assumption-handling', 'demo-integration', 'presentation-skill',
+      'assumption-handling', 'demo-integration', 'engineering-quality', 'presentation-skill',
       'scene-kit', 'testing-evidence', 'verification-tooling',
     ],
   )
@@ -226,4 +226,27 @@ test('each testing-evidence criterion has its own calibration case', () => {
     cases.find(({ id }) => id === 'visual-warning-disposition-regression').fail_criteria,
     ['testing-evidence-complete-honest-record'],
   )
+})
+
+test('engineering quality is calibrated as a floorless component, including a browser-probe regression', async () => {
+  const cases = calibrationCases(rubrics.automated.rubric)
+  const component = cases.find(({ id }) => id === 'engineering-quality-regression')
+  assert.equal(component.fail_criteria.length, 16)
+  assert.equal(component.expected_official_pass, true)
+  const probe = cases.find(({ id }) => id === 'input-hygiene-probe-regression')
+  assert.deepEqual(probe.target, { kind: 'component', id: 'engineering-quality' })
+  assert.deepEqual(probe.fail_criteria, ['input-modifier-keys-pass-through'])
+  assert.equal(probe.expected_official_pass, true)
+  const leak = cases.find(({ id }) => id === 'preview-termination-regression')
+  assert.deepEqual(leak.target, { kind: 'component', id: 'engineering-quality' })
+  assert.deepEqual(leak.fail_criteria, ['engineering-preview-terminated-on-every-exit'])
+
+  const ledger = await runCalibration({ rubrics, outDir: await out(), cases: [
+    cases.find(({ id }) => id === 'reference'), component, probe, leak,
+  ] })
+  assert.equal(ledger.passed, true, JSON.stringify(ledger.failures, null, 2))
+  // A failed input-hygiene probe costs engineering quality only, never the demo component.
+  const observed = ledger.cases.find(({ id }) => id === 'input-hygiene-probe-regression')
+  assert.equal(observed.automated_subtotal, 69)
+  assert.deepEqual(observed.unintended_regressions, [])
 })

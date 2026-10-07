@@ -22,6 +22,7 @@ const allJobs = [
   'scene-kit',
   'presentation-skill',
   'verification-tooling',
+  'engineering-quality',
   'testing-evidence',
   'assumption-handling',
 ]
@@ -81,7 +82,7 @@ test('score.mjs rescoring produces the candidate 70/100 applicability contract',
 })
 
 test('score.mjs rescoring produces the reference 62/92 N/A contract', async () => {
-  const score = await rescore('reference-baseline', allJobs.slice(0, 4))
+  const score = await rescore('reference-baseline', allJobs.slice(0, 5))
 
   assert.equal(score.automated_subtotal.points, 62)
   assert.equal(score.automated_subtotal.possible, 62)
