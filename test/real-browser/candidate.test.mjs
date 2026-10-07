@@ -21,8 +21,17 @@ const REVISION = '6b576c657b0814c6f47352adc78cff2ecb30572d'
 const baseUrl = process.env.AND_SCENE_CANDIDATE_URL
 
 // The candidate hides every step title from readers, which fails the step
-// content, present mode, and sample outline checks; everything else conforms.
-const FAILING = new Set(['demo-nine-step-content-and-order', 'demo-present-mode-behavior', 'verification-sample-outline'])
+// content, present mode, and sample outline checks. Its keydown handler in
+// src/presentation-kit/usePresentationNav.ts ignores modifiers and prevents
+// every arrow default, and its swipe handler listens on the whole stage, so
+// both input-hygiene probes fail too; everything else conforms.
+const FAILING = new Set([
+  'demo-nine-step-content-and-order',
+  'demo-present-mode-behavior',
+  'verification-sample-outline',
+  'input-modifier-keys-pass-through',
+  'input-swipe-from-control-ignored',
+])
 const EXPECTED = [
   'demo-route-and-registration',
   'demo-nine-step-content-and-order',
@@ -40,6 +49,8 @@ const EXPECTED = [
   'demo-focus-and-keyboard-accessibility',
   'verification-sample-outline',
   'verification-every-produced-step-renders',
+  'input-modifier-keys-pass-through',
+  'input-swipe-from-control-ignored',
 ]
 
 test('repetition 3 receives exactly its known browser verdicts', { skip: !baseUrl && 'set AND_SCENE_CANDIDATE_URL to a served build of repetition 3', timeout: 900_000 }, async () => {
@@ -57,4 +68,23 @@ test('repetition 3 receives exactly its known browser verdicts', { skip: !baseUr
     return entry?.verdict === expected ? [] : [`${id}: expected ${expected}, got ${entry?.verdict ?? 'not observed'} (${entry?.rationale ?? ''})`]
   })
   assert.deepEqual(differences, [])
+
+  // The first modified press moves the deck, and every modified press has its
+  // default prevented.
+  const modifier = entries.get('input-modifier-keys-pass-through').observations.modifier_keys
+  assert.equal(modifier.mode, 'present')
+  assert.deepEqual(modifier.failure,
+    { key: 'ArrowRight', modifier: 'Alt', reason: 'step-changed', prevented: true, step_before: 4, step_after: 5 })
+  assert.equal(modifier.presses.length, 6)
+  assert.ok(modifier.presses.every(({ prevented }) => prevented === true), JSON.stringify(modifier.presses))
+
+  // A touch swipe left starting on the mode control in present mode moves the deck.
+  const swipe = entries.get('input-swipe-from-control-ignored').observations.swipe_from_control
+  assert.equal(swipe.mode, 'present')
+  assert.equal(swipe.direction, 'left')
+  assert.equal(swipe.control.kind, 'mode')
+  assert.equal(swipe.control.selector, '[data-presentation-mode-toggle]')
+  assert.equal(swipe.failure.input, 'touch')
+  assert.equal(swipe.failure.step_before, 4)
+  assert.equal(swipe.failure.step_after, 5)
 })
