@@ -72,21 +72,21 @@ test('a modified arrow that navigates fails the modifier probe', { timeout: 600_
   const entry = criterion(await evaluate('input-modifier-fail', [MODIFIER_PROBE]), MODIFIER_PROBE)
   assert.equal(entry.verdict, 'fail')
   assert.deepEqual(entry.observations.modifier_keys.failure,
-    { key: 'ArrowRight', modifier: 'Alt', reason: 'step-changed', step_before: 4, step_after: 5 })
+    { key: 'ArrowRight', modifier: 'Alt', reason: 'step-changed', prevented: false, step_before: 4, step_after: 5 })
 })
 
 test('a prevented default on Control+ArrowLeft fails the modifier probe', { timeout: 600_000 }, async () => {
   const entry = criterion(await evaluate('input-modifier-prevent', [MODIFIER_PROBE]), MODIFIER_PROBE)
   assert.equal(entry.verdict, 'fail')
   assert.deepEqual(entry.observations.modifier_keys.failure,
-    { key: 'ArrowLeft', modifier: 'Control', reason: 'prevented-default', step_before: 4, step_after: 4 })
+    { key: 'ArrowLeft', modifier: 'Control', reason: 'prevented-default', prevented: true, step_before: 4, step_after: 4 })
 })
 
 test('a prevented default hidden behind stopped propagation still fails the modifier probe', { timeout: 600_000 }, async () => {
   const entry = criterion(await evaluate('input-modifier-stop', [MODIFIER_PROBE]), MODIFIER_PROBE)
   assert.equal(entry.verdict, 'fail')
   assert.deepEqual(entry.observations.modifier_keys.failure,
-    { key: 'ArrowRight', modifier: 'Meta', reason: 'prevented-default', step_before: 4, step_after: 4 })
+    { key: 'ArrowRight', modifier: 'Meta', reason: 'prevented-default', prevented: true, step_before: 4, step_after: 4 })
 })
 
 test('a modified press that leaves the document passes through and the probe continues', { timeout: 600_000 }, async () => {

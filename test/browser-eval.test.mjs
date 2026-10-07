@@ -1289,7 +1289,7 @@ test('a modified arrow that changes the step fails, naming the key, modifier, an
   assert.match(entry.rationale, /Alt\+ArrowRight moved the deck from step index 4 to 5/)
   const observed = entry.observations.modifier_keys
   assert.deepEqual(observed.failure,
-    { key: 'ArrowRight', modifier: 'Alt', reason: 'step-changed', step_before: 4, step_after: 5 })
+    { key: 'ArrowRight', modifier: 'Alt', reason: 'step-changed', prevented: false, step_before: 4, step_after: 5 })
   assert.equal(observed.presses[0].reestablished, true)
   // The probe returns to its middle step, so every later press starts there.
   assert.ok(observed.presses.slice(1).every(({ step_before }) => step_before === 4))
@@ -1304,6 +1304,21 @@ test('a prevented default on a modified arrow fails although the step stays put'
   assert.equal(press.prevent_default_calls, 1)
   assert.equal(press.step_after, press.step_before)
   assert.equal(entry.observations.modifier_keys.failure.reason, 'prevented-default')
+  assert.equal(entry.observations.modifier_keys.failure.prevented, true)
+})
+
+// A press can both move the deck and have its default prevented, as a
+// keydown handler that navigates and calls preventDefault does. The failure
+// summary records both facts, so a reader of it alone sees the prevented
+// default that keeps the failure from being overturned.
+test('a modified arrow that navigates with its default prevented records both in the failure', async () => {
+  const entry = criterionOf(await evaluate({
+    modifiedArrowsNavigate: ['Alt+ArrowRight'], preventsModified: ['Alt+ArrowRight'],
+  }), MODIFIER_PROBE)
+  assert.equal(entry.verdict, 'fail')
+  assert.match(entry.rationale, /Alt\+ArrowRight moved the deck from step index 4 to 5 and the page prevented its default/)
+  assert.deepEqual(entry.observations.modifier_keys.failure,
+    { key: 'ArrowRight', modifier: 'Alt', reason: 'step-changed', prevented: true, step_before: 4, step_after: 5 })
 })
 
 test('a prevented default the page hid by stopping propagation still fails the probe', async () => {
@@ -1312,7 +1327,7 @@ test('a prevented default the page hid by stopping propagation still fails the p
   const entry = criterionOf(await evaluate({ preventsModified: ['Meta+ArrowRight'] }), MODIFIER_PROBE)
   assert.equal(entry.verdict, 'fail')
   assert.deepEqual(entry.observations.modifier_keys.failure,
-    { key: 'ArrowRight', modifier: 'Meta', reason: 'prevented-default', step_before: 4, step_after: 4 })
+    { key: 'ArrowRight', modifier: 'Meta', reason: 'prevented-default', prevented: true, step_before: 4, step_after: 4 })
 })
 
 test('a modified press that leaves the document passes through, and the probe reloads and continues', async () => {

@@ -1134,6 +1134,9 @@ export async function runBrowserEvaluation({
         key: failing.key,
         modifier: failing.modifier,
         reason: !failing.unloaded && failing.step_after !== failing.step_before ? 'step-changed' : 'prevented-default',
+        // A press that changed the step may also have had its default
+        // prevented; the summary keeps both facts.
+        prevented: failing.prevented === true,
         step_before: failing.step_before,
         step_after: failing.step_after,
       } : null
@@ -1143,7 +1146,7 @@ export async function runBrowserEvaluation({
         failure === null
           ? `modified arrow presses from step index ${middle} passed through: ${presses.map(describe).join(', ')}`
           : (failure.reason === 'step-changed'
-            ? `${failure.modifier}+${failure.key} moved the deck from step index ${failure.step_before} to ${failure.step_after}`
+            ? `${failure.modifier}+${failure.key} moved the deck from step index ${failure.step_before} to ${failure.step_after}${failure.prevented ? ' and the page prevented its default' : ''}`
             : `the page prevented the default of ${failure.modifier}+${failure.key} at step index ${failure.step_before}`),
         [],
         { modifier_keys: { mode, start_step: middle, instrumentation: 'installed-before-first-press', presses, failure } },
