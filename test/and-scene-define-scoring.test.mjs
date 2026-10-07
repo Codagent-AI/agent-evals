@@ -370,3 +370,19 @@ test('a definition contradicting a stated mandatory item is scored only under co
   assert.equal(f.checkpoint().phases['gates-and-judging'].units.fidelity.state, 'complete')
   assert.ok(JSON.parse(await readFile(join(f.runDir, 'discovery/ledger.json'), 'utf8')).counts)
 })
+test('a coverage job with one disputed item sends the decider only that item, in a schema scoped to it', async () => {
+  const [first, second] = inventory.items.filter(x => x.class === 'mandatory')
+  const pair = { name: 'coverage:pair', kind: 'coverage', criteria: [first.id, second.id], inputs: { ...inputs, items: [first, second] } }
+  const seen = []
+  const panel = ['partial', 'met', 'met'].map((verdict, n) => ({ family: n ? 'codex' : 'claude', model: 'stub', effort: 'high',
+    invoke: async req => JSON.stringify({ results: req.criteria.map(id => result(id, id === first.id ? verdict : 'met')) }) }))
+  // Like a real model, the decider answers every criterion its schema allows.
+  const decider = { family: 'claude', model: 'stub-decider', effort: 'high', invoke: async req => {
+    seen.push(req)
+    return JSON.stringify({ results: req.schema.properties.results.items.properties.id.enum.map(id => result(id, 'met')) })
+  } }
+  const outcome = await runDefinitionPanel({ job: pair, panel, decider })
+  assert.equal(outcome.ok, true, outcome.record.error)
+  assert.deepEqual(seen.map(req => req.schema.properties.results.items.properties.id.enum), [[first.id]])
+  assert.deepEqual(outcome.results.map(r => [r.id, r.basis]), [[first.id, 'decider-met'], [second.id, 'consensus-met']])
+})

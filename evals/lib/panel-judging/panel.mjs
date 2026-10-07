@@ -100,6 +100,14 @@ function deciderRequestFor({ job, criteria, request, record, order, decider, sco
   return deciderRequest
 }
 
+// The batched decider answers only the disputed criteria: its schema and an
+// explicit instruction are narrowed to them, as the line-cited tiebreak does.
+function batchedDeciderRequest(deciderRequest, pending) {
+  const prompt = [deciderRequest.prompt_body, `Return results for exactly these criterion IDs and no others: ${pending.join(', ')}`].join('\n')
+  return { ...deciderRequest, criteria: pending, prompt_body: prompt, prompt,
+    ...(deciderRequest.schema?.properties?.results?.items?.properties ? { schema: judgeResultSchemaFor(deciderRequest.schema, pending) } : {}) }
+}
+
 function validDeciderVerdicts(record, order, results) {
   for (const r of results) if (!record.votes.some(v => v.id === r.id && effective(v, record.checks, order).verdict === r.verdict)) throw new JudgeOutputError('decider verdict was not a panel vote')
 }
@@ -269,7 +277,7 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
         if (!ruling.ok) return done()
         record.rulings = ruling.decisions
       } else {
-        record.rulings = await call({ ...deciderRequest, criteria: pending }, decider, 'decider', async text => {
+        record.rulings = await call(batchedDeciderRequest(deciderRequest, pending), decider, 'decider', async text => {
           const results = parse(text, pending, verdicts)
           validVerdicts(results)
           for (const r of results) if (!(await validateCitations(r, request))) throw new JudgeOutputError('invalid decider citations')
@@ -316,7 +324,7 @@ export async function rerunDecider({ record, decider, buildPrompt, schema, valid
   const pending = (record.rulings ?? []).map(r => r.id)
   if (pending.length) {
     const deciderRequest = deciderRequestFor({ job, criteria, request, record, order, decider, scopeRule })
-    const results = await call({ ...deciderRequest, criteria: pending }, 'decider-rerun', async text => {
+    const results = await call(batchedDeciderRequest(deciderRequest, pending), 'decider-rerun', async text => {
       const parsed = parse(text, pending, verdicts)
       validDeciderVerdicts(record, order, parsed)
       for (const r of parsed) if (!(await validateCitations(r, request))) throw new JudgeOutputError('invalid decider citations')

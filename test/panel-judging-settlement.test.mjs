@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { runPanelJob, resolvePanel, verifyCachedPanelJob, PANEL_PROTOCOL } from '../evals/lib/panel-judging/panel.mjs'
+import { runPanelJob, rerunDecider, resolvePanel, verifyCachedPanelJob, PANEL_PROTOCOL } from '../evals/lib/panel-judging/panel.mjs'
 import { REQUIREMENT_QUESTION_RULE, JUDGE_SCOPE_RULE, buildReciteRequest } from '../evals/lib/panel-judging/protocol.mjs'
 
 const result = (verdict, extra = {}) => ({ id: 'x', verdict, rationale: 'reason', citations: ['a'], evidence: ['a'], ...extra })
@@ -355,4 +355,31 @@ test('definition judging uses a definition scope rule and requirement question, 
   assert.equal(seen[0].audit_stage, 'dissent-check')
   assert.ok(!seen[0].prompt.includes(JUDGE_SCOPE_RULE))
   assert.ok(!seen[0].prompt.includes(REQUIREMENT_QUESTION_RULE))
+})
+// A real decider answers every criterion its schema and prompt ask for, so the
+// batched decider must be scoped to the disputed criteria, not the whole job.
+const scopedSchema = { type: 'object', properties: { results: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, verdict: { type: 'string' } } } } } }
+const schemaFollowingDecider = seen => ({ model: 'opus', effort: 'medium', invoke: async request => {
+  seen.push(request)
+  const ids = request.schema.properties.results.items.properties.id.enum ?? ['x', 'y']
+  return JSON.stringify({ results: ids.map(id => result('pass', { id })) })
+} })
+const partlyDisputed = (extra = {}) => ({ ...setup([], extra), criteria: ['x', 'y'], schema: scopedSchema,
+  buildPrompt: () => ({ prompt: 'unchanged context', prompt_body: 'unchanged context' }),
+  panel: ['fail', 'pass', 'pass'].map((verdict, i) => ({ family: i === 0 ? 'claude' : 'codex', model: `m${i}`, effort: 'medium',
+    invoke: async () => JSON.stringify({ results: [result(verdict), result('pass', { id: 'y' })] }) })), ...extra })
+test('a batched decider rules only on the disputed criteria of a partly disputed job', async () => {
+  const seen = []
+  const outcome = await runPanelJob(partlyDisputed({ decider: schemaFollowingDecider(seen) }))
+  assert.equal(outcome.ok, true, outcome.record.error)
+  assert.equal(seen.length, 1)
+  assert.deepEqual(seen[0].criteria, ['x'])
+  assert.deepEqual(seen[0].schema.properties.results.items.properties.id.enum, ['x'])
+  assert.match(seen[0].prompt, /Return results for exactly these criterion IDs and no others: x$/m)
+  assert.deepEqual(outcome.results.map(r => [r.id, r.basis]), [['x', 'decider-pass'], ['y', 'consensus-pass']])
+  const reseen = []
+  const rerun = await rerunDecider({ record: outcome.record, decider: schemaFollowingDecider(reseen), buildPrompt: partlyDisputed().buildPrompt, schema: scopedSchema, validateCitations: async () => true })
+  assert.deepEqual(rerun.rulings, [{ id: 'x', recorded: 'pass', rerun: 'pass', flipped: false }])
+  assert.equal(reseen[0].prompt, seen[0].prompt)
+  assert.deepEqual(reseen[0].schema, seen[0].schema)
 })
