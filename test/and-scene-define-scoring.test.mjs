@@ -408,3 +408,18 @@ test('a fidelity deduction citing its line span and exchange in one citation is 
   for (const judge of judges.panel) judge.invoke = async req => JSON.stringify({ results: req.criteria.map(id => ({ ...result(id, 'met', [{ ...citation, exchange: 'wrong' }]), subject_id: preference.id })) })
   assert.equal((await runDefinitionPanel({ job: fidelity, ...judges })).ok, false)
 })
+test('a citation path carrying the reference change directory resolves to the collected file it names', async () => {
+  assert.match(jobPrompt(job), /A citation path is exactly a key of artifacts/)
+  const judges = members(['met', 'met', 'met'])
+  // Item source quotes name reference documents under openspec/changes/<change>/; judges sometimes copy that prefix.
+  const prefixed = { ...citation, path: `openspec/changes/create-and-scene/${citation.path}` }
+  for (const judge of judges.panel) judge.invoke = async req => JSON.stringify({ results: req.criteria.map(id => result(id, 'met', [prefixed])) })
+  const outcome = await runDefinitionPanel({ job, ...judges })
+  assert.equal(outcome.ok, true, JSON.stringify(outcome.failure))
+  assert.ok(outcome.record.votes.every(v => JSON.stringify(v.citations) === JSON.stringify([citation])))
+  // Only that prefix is removed, and only when what remains is a collected file.
+  for (const path of ['openspec/changes/create-and-scene/missing.md', `other/${citation.path}`, `openspec/${citation.path}`]) {
+    for (const judge of judges.panel) judge.invoke = async req => JSON.stringify({ results: req.criteria.map(id => result(id, 'met', [{ ...citation, path }])) })
+    assert.equal((await runDefinitionPanel({ job, ...judges })).ok, false, path)
+  }
+})

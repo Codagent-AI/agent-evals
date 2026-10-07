@@ -49,7 +49,7 @@ const rules = {
 export function jobPrompt(job) {
   const lineNumbered = Object.fromEntries(Object.entries(job.inputs.artifacts ?? {}).map(([path, text]) => [path, text.split('\n').map((line, n) => `${n + 1}: ${line}`).join('\n')]))
   return [DEFINITION_SCOPE_RULE, rules[job.kind],
-    'met/partial findings cite {path,start_line,end_line,gate:null,exchange:null}. Missing coverage/quality findings cite inspected collected file names (null line numbers), or a failed required-artifact gate. Every other field is null unless it is the citation target. Fidelity deductions cite the line span and the exchange as two separate citations: {path,start_line,end_line,gate:null,exchange:null} and {path:null,start_line:null,end_line:null,gate:null,exchange}. Discovery and disclosure flags need exchange identities. No citations may refer to hidden inputs. Supply every criterion exactly once. Use empty added_scope unless this is fidelity.',
+    'met/partial findings cite {path,start_line,end_line,gate:null,exchange:null}. Missing coverage/quality findings cite inspected collected file names (null line numbers), or a failed required-artifact gate. Every other field is null unless it is the citation target. A citation path is exactly a key of artifacts; source-quote documents are reference paths, never citation paths. Fidelity deductions cite the line span and the exchange as two separate citations: {path,start_line,end_line,gate:null,exchange:null} and {path:null,start_line:null,end_line:null,gate:null,exchange}. Discovery and disclosure flags need exchange identities. No citations may refer to hidden inputs. Supply every criterion exactly once. Use empty added_scope unless this is fidelity.',
     '# BEGIN UNTRUSTED JOB INPUTS', JSON.stringify({ ...job.inputs, ...(job.inputs.artifacts ? { artifacts: lineNumbered } : {}), conversation: job.inputs.conversation?.map(x => ({ ...x, exchange_identity: exchangeIdentity(x) })) }), '# END UNTRUSTED JOB INPUTS',
     `Criteria: ${JSON.stringify(job.criteria)}`].join('\n')
 }
@@ -116,10 +116,17 @@ function splitTargets(citation) {
   if (!citation || typeof citation !== 'object' || citation.path == null || citation.exchange == null || citation.gate !== null) return [citation]
   return [{ ...citation, exchange: null }, { path: null, start_line: null, end_line: null, gate: null, exchange: citation.exchange }]
 }
+// Item source quotes name reference documents under openspec/changes/<change>/,
+// and judges sometimes copy that directory into a citation path. The prefix is
+// removed only when what remains is a collected file.
+function collectedPath(citation, inputs) {
+  const relative = typeof citation?.path === 'string' && !Object.hasOwn(inputs.artifacts ?? {}, citation.path) && citation.path.match(/^openspec\/changes\/[^/]+\/(.+)$/)?.[1]
+  return relative && Object.hasOwn(inputs.artifacts ?? {}, relative) ? { ...citation, path: relative } : citation
+}
 function keepValidCitations(citations, inputs) {
   if (!Array.isArray(citations)) bad('missing citations')
   const kept = []; const dropped = []
-  for (const citation of citations.flatMap(splitTargets)) {
+  for (const citation of citations.flatMap(splitTargets).map(c => collectedPath(c, inputs))) {
     try { validateCitation(citation, inputs); kept.push(citation) }
     catch (error) { if (!(error instanceof JudgeOutputError)) throw error; dropped.push({ citation, reason: error.message }) }
   }
