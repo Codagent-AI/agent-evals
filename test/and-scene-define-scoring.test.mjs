@@ -392,6 +392,12 @@ test('every judging job with a conversation has a strict schema Codex accepts', 
   for (const job of jobs) assertStrictSchema(job.kind === 'discovery' ? discoverySchema(job.criteria) : judgeSchema(job.criteria))
   assert.equal(exchangeIdentity(exchange), 'define.specs/specs/1/1')
 })
+test('every verdict, including a fidelity finding of no contradiction, must carry evidence', () => {
+  const jobs = makeJobs({ inventory, rubric: buildRubric(inventory), artifacts: inputs.artifacts, conversation: [exchange], gates: [] })
+  const fidelity = jobs.find(job => job.kind === 'fidelity')
+  assert.deepEqual(judgeSchema(fidelity.criteria).properties.results.items.properties.evidence, { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } })
+  assert.match(jobPrompt(fidelity), /including missing fidelity findings, gives at least one evidence sentence/)
+})
 test('a fidelity deduction citing its line span and exchange in one citation is split into both and scored', async () => {
   const jobs = makeJobs({ inventory, rubric: buildRubric(inventory), artifacts: inputs.artifacts, conversation: [exchange], gates: [] })
   const fidelity = jobs.find(x => x.kind === 'fidelity')

@@ -11,12 +11,11 @@ export const DEFINITION_SCOPE_RULE = [
 ].join('\n')
 const object = properties => ({ type: 'object', additionalProperties: false, properties, required: Object.keys(properties) })
 const string = { type: 'string' }
-const strings = { type: 'array', items: string }
 export const CITATION_SCHEMA = object({ path: { type: ['string', 'null'] }, start_line: { type: ['integer', 'null'] }, end_line: { type: ['integer', 'null'] }, gate: { type: ['string', 'null'] }, exchange: { type: ['string', 'null'] } })
 const citations = { type: 'array', items: CITATION_SCHEMA }
 const addedScope = { type: 'array', items: object({ description: string, citations }) }
 export function judgeSchema(ids) {
-  return object({ results: { type: 'array', items: object({ id: { type: 'string', enum: ids }, verdict: { type: 'string', enum: ['met', 'partial', 'missing'] }, rationale: string, evidence: strings, citations, subject_id: { type: ['string', 'null'] }, added_scope: addedScope }) } })
+  return object({ results: { type: 'array', items: object({ id: { type: 'string', enum: ids }, verdict: { type: 'string', enum: ['met', 'partial', 'missing'] }, rationale: string, evidence: { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } }, citations, subject_id: { type: ['string', 'null'] }, added_scope: addedScope }) } })
 }
 export function discoverySchema(ids) {
   return object({ results: { type: 'array', items: object({ id: { type: 'string', enum: ids }, asked: { type: 'boolean' }, rationale: string, citations }) } })
@@ -49,7 +48,7 @@ const rules = {
 export function jobPrompt(job) {
   const lineNumbered = Object.fromEntries(Object.entries(job.inputs.artifacts ?? {}).map(([path, text]) => [path, text.split('\n').map((line, n) => `${n + 1}: ${line}`).join('\n')]))
   return [DEFINITION_SCOPE_RULE, rules[job.kind],
-    'met/partial findings cite {path,start_line,end_line,gate:null,exchange:null}. Missing coverage/quality findings cite inspected collected file names (null line numbers), or a failed required-artifact gate. Every other field is null unless it is the citation target. A citation path is exactly a key of artifacts; source-quote documents are reference paths, never citation paths. Fidelity deductions cite the line span and the exchange as two separate citations: {path,start_line,end_line,gate:null,exchange:null} and {path:null,start_line:null,end_line:null,gate:null,exchange}. Discovery and disclosure flags need exchange identities. No citations may refer to hidden inputs. Supply every criterion exactly once. Use empty added_scope unless this is fidelity.',
+    'met/partial findings cite {path,start_line,end_line,gate:null,exchange:null}. Missing coverage/quality findings cite inspected collected file names (null line numbers), or a failed required-artifact gate. Every other field is null unless it is the citation target. A citation path is exactly a key of artifacts; source-quote documents are reference paths, never citation paths. Fidelity deductions cite the line span and the exchange as two separate citations: {path,start_line,end_line,gate:null,exchange:null} and {path:null,start_line:null,end_line:null,gate:null,exchange}. Discovery and disclosure flags need exchange identities. No citations may refer to hidden inputs. Supply every criterion exactly once. Every verdict, including missing fidelity findings, gives at least one evidence sentence stating what was checked. Use empty added_scope unless this is fidelity.',
     '# BEGIN UNTRUSTED JOB INPUTS', JSON.stringify({ ...job.inputs, ...(job.inputs.artifacts ? { artifacts: lineNumbered } : {}), conversation: job.inputs.conversation?.map(x => ({ ...x, exchange_identity: exchangeIdentity(x) })) }), '# END UNTRUSTED JOB INPUTS',
     `Criteria: ${JSON.stringify(job.criteria)}`].join('\n')
 }
