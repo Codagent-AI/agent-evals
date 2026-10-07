@@ -334,9 +334,23 @@
     },
     "skill-empty-directory-scaffold": {
       "owner": "fixture",
-      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
-      "heading": "Scenario: Empty or fully unscaffolded directory",
-      "quote": "it performs a full scaffold (build setup, scene kit, and presentation index) and installs the required dependencies before creating the presentation"
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Empty or fully unscaffolded directory",
+          "quote": "it performs a full scaffold (build setup, scene kit, and presentation index) and installs the required dependencies before creating the presentation"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Self-bootstrapping scaffold",
+          "quote": "It SHALL install the runtime and build dependencies needed for React, Vite, TypeScript, Motion, Lucide icons, linting, and render verification"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Risks / Trade-offs",
+          "quote": "Install Chromium in the verify step"
+        }
+      ]
     },
     "skill-already-scaffolded": {
       "owner": "fixture",
@@ -1034,7 +1048,8 @@
             "For skill-template-path-resolution, credit an explicit instruction or helper that resolves template paths from the directory containing SKILL.md rather than from the caller's working directory.",
             "For skill-empty-directory-scaffold, require that the bootstrap template contains the build setup, scene kit, and presentation index with the required dependency set, that SKILL.md directs a full scaffold and dependency installation for an empty or unscaffolded target, and a test that materializes the bootstrap template in a fresh temporary location and builds it, as the fixture test plan's integration coverage describes. Any materialization pattern counts, including creating a temporary directory and copying the template into a new app path inside it; a test name or filename alone is not that test.",
             "For skill-scaffold-style-neutral, inspect the bootstrap template's dependencies and styles: credit a scaffold that adds no styling framework and defines no default presentation colors, fonts, spacing scale, card or button styles, borders, shadows, or theme tokens.",
-            "For skill-empty-directory-scaffold, the scene kit in the bootstrap template is a snapshot of the canonical src/presentation-kit/, which the fixture requires to stay aligned with it. Fail when a non-test scene-kit file in the bootstrap template differs in behavior or public types from its canonical counterpart. Cite both files. Formatting-only differences do not fail."
+            "For skill-empty-directory-scaffold, the scene kit in the bootstrap template is a snapshot of the canonical src/presentation-kit/, which the fixture requires to stay aligned with it. Fail when a non-test scene-kit file in the bootstrap template differs in behavior or public types from its canonical counterpart. Cite both files. Formatting-only differences do not fail.",
+            "For skill-empty-directory-scaffold, the dependencies needed for render verification include the Playwright Chromium browser, which the fixture design installs in the verify step. Credit SKILL.md, the bootstrap scripts, or the verify step when they install Chromium or check that it is available before the render check. Fail when none of them installs it or checks for it."
           ]
         },
         {

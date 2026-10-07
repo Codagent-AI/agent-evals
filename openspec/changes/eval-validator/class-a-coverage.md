@@ -2,7 +2,9 @@
 
 This audit checks each item in agent-evals#77's "Already required by the spec (class A)" section against automated rubric 12.4.0 (`evals/agent-runner/and-scene/automated-rubric.json`). It also checks item 2a, item 3's drift clause, item 4's verify clause, item 5, and item 7's narrow-viewport clause.
 
-**Outcome (2026-10-06).** The maintainer adopted P5, P6 and P7; they are applied as `review_guidance` lines in automated rubric 13.0.0. P1, P2, P3 and P4 are not adopted in this change and are deferred follow-ups (see "Deferred proposals"). The open gaps stay open.
+**Outcome (2026-10-06).** The maintainer adopted P5, P6 and P7; they are applied as `review_guidance` lines in automated rubric 13.0.0. P1, P2, P3 and P4 are not adopted in this change and are deferred follow-ups (see "Deferred proposals"). The open gaps stay open, except B7.
+
+**B7 (2026-10-07).** After review, Paul decided to adopt the optional B7 guidance (Chromium installation) for consistency with P5–P7. It is applied in automated rubric 13.0.0.
 
 Each item gets one of three dispositions:
 
@@ -37,7 +39,7 @@ Proposed guidance only restates or applies text the fixture already contains, an
 | B4 | Missing E2E-001; incomplete E2E-002 fault cases | (a) | hard gates, `verification-*-fails`, new `engineering-preview-terminated-on-every-exit` |
 | B5 | Bootstrap verify doesn't step through | (a): the fixture requires only a first-step render here | `skill-checks-run-before-done`, new `engineering-bootstrap-scripts-generic` |
 | B6 | No narrow viewport | **(b) P5**, adopted | `skill-checks-run-before-done` |
-| B7 | Chromium install missing | (c), with optional text | none |
+| B7 | Chromium install missing | **(b)**, adopted by Paul's decision after review | `skill-empty-directory-scaffold` |
 | 2a | Keys hijacked on focused controls (Space, contenteditable) | (a); contenteditable deliberately excluded | `navigation-controls-keep-keys` |
 | 3 (drift) | Bootstrap copy drifted from root copy | kit **(b) P6**, adopted; scripts (c) | `skill-empty-directory-scaffold` |
 | 4 (verify) | Verify passes on missing, zero, or NaN step hooks; non-advancing step | (a) for the non-advancing test, **(b) P7**, adopted, for hook coercion | `verification-step-error-fails` |
@@ -188,15 +190,17 @@ Fixture support:
 - spec, "Self-verify before reporting completion": "The visual composition check SHALL inspect screenshots or an equivalent browser view of the first step, the last step, and any dense/key steps; responsive-sensitive presentations SHALL also be checked at a narrow viewport."
 - fixture `AGENTS.md`: "also inspect a narrow viewport when the presentation is responsive-sensitive".
 
-### B7. Chromium install missing: (c) open gap, optional text for Paul's decision
+### B7. Chromium install missing: (b) adopted by Paul's decision after review
 
 The fixture does support it:
 - spec, "Self-bootstrapping scaffold": "It SHALL install the runtime and build dependencies needed for … render verification";
 - design, Risks: "Playwright browser in Docker/CI → Install Chromium in the verify step".
 
-However, this change's design deliberately dropped "browser installation in tests" from the engineering criteria. Adding it under a class A criterion should be Paul's call. If wanted, append to `skill-scaffolding.review_guidance`:
+This change's design had deliberately dropped "browser installation in tests" from the engineering criteria, so the audit first recorded B7 as an open gap with optional text for Paul's decision. After review, Paul adopted it, for consistency with adopting the P5–P7 guidance, which restates fixture requirements in the same way. The design records the reversal. Applied in rubric 13.0.0, appended to `skill-scaffolding.review_guidance`, with both fixture passages added to the criterion's sources:
 
-> For skill-empty-directory-scaffold, the dependencies needed for render verification include the Playwright Chromium browser. Credit SKILL.md or the bootstrap scripts when they install it or check that it is available before the render check. Fail when neither installs nor checks for it.
+> For skill-empty-directory-scaffold, the dependencies needed for render verification include the Playwright Chromium browser, which the fixture design installs in the verify step. Credit SKILL.md, the bootstrap scripts, or the verify step when they install Chromium or check that it is available before the render check. Fail when none of them installs it or checks for it.
+
+The adopted text also credits the verify step, because the fixture design places the installation there.
 
 ## Additional items
 
@@ -277,9 +281,9 @@ P7 names the `data-step-count` and `data-step-index` hooks, which the rubric's t
 | P5 | `skill-self-verification` | `skill-checks-run-before-done` (narrow viewport for responsive-sensitive) | recommended | adopted, rubric 13.0.0 |
 | P6 | `skill-scaffolding` | `skill-empty-directory-scaffold` (template kit parity) | recommended | adopted, rubric 13.0.0 |
 | P7 | `verification-addressing-and-errors` | `verification-step-error-fails` (no hook coercion) | recommended | adopted, rubric 13.0.0 |
-| (B7) | `skill-scaffolding` | `skill-empty-directory-scaffold` (Chromium install) | Paul's decision; the design dropped it | open gap |
+| B7 | `skill-scaffolding` | `skill-empty-directory-scaffold` (Chromium install) | Paul's decision after review | adopted, rubric 13.0.0 |
 
-All P1–P7 texts restate fixture requirements and introduce no new eval-owned values. P5, P6 and P7 ship with the rubric 13.0.0 bump, so the re-weighting check's verdict basis shifts further for rescored runs; that check used recorded 6.0.0/7.0.0 verdicts, not a rescore.
+All P1–P7 texts and the B7 text restate fixture requirements and introduce no new eval-owned values. P5, P6, P7 and B7 ship with the rubric 13.0.0 bump, so the re-weighting check's verdict basis shifts further for rescored runs; that check used recorded 6.0.0/7.0.0 verdicts, not a rescore.
 
 ## Deferred proposals
 
@@ -299,6 +303,5 @@ These are follow-ups, not part of this change:
 | A5 exiting scene `isActive` | The fixture defines no active-scene signal. |
 | A10 optional payload crash | A plain bug; scored only where the demo hits it (item 12 policy). |
 | B3 router or registry unit test | The test plan doesn't inventory unit tests; behaviour is already covered. |
-| B7 Chromium installation | Fixture-supported, but this change's design deliberately dropped it. Needs Paul's decision. |
 | Item 3, script drift | The only source is `AGENTS.md`, and the bootstrap copies must legitimately differ from the root copies. |
 | Item 7, chrome overflow at narrow width without a canvas-fit failure | Covered only by human review. Automating it needs a new browser probe, which is out of scope. |

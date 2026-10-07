@@ -647,12 +647,14 @@ boundaries 3→2; step model 4→3, entity transitions 7→6, modes and navigati
 6→5, style and attribution 5→4). Their floors move from 15 to 12.5, keeping the
 same 62.5% ratio. The 70 automated points, the 100-point total, the 40/70
 eligibility threshold, and the reference's shared 92 are unchanged. The issue's
-class A coverage audit also adds three guidance lines that restate fixture
+class A coverage audit also adds four guidance lines that restate fixture
 requirements: `skill-checks-run-before-done` requires a narrow-viewport check
 for responsive-sensitive presentations, `skill-empty-directory-scaffold` fails
 a bootstrap scene kit that differs in behavior or public types from the
-canonical kit, and `verification-step-error-fails` fails a verifier that reads
-missing or non-numeric step hooks as progress. Scores are
+canonical kit and fails a delivery that never installs the Playwright Chromium
+browser or checks that it is available before the render check, and
+`verification-step-error-fails` fails a verifier that reads missing or
+non-numeric step hooks as progress. Scores are
 not comparable with 12.x results until those runs are re-judged with
 `--rescore-from`.
 

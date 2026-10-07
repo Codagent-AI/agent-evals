@@ -24,6 +24,8 @@ Each criterion tests one quality with at most three closely related clauses. A b
 - "completion gates do not contradict";
 - the hardcoded browser path and browser installation in tests.
 
+**Reversal (2026-10-07).** Browser installation is still not an engineering criterion, but after review Paul decided to score it as the class A item it is (B7 in `class-a-coverage.md`). The fixture requires the scaffold to install the dependencies render verification needs, and its design installs Chromium in the verify step. Dropping it while adopting the P5–P7 guidance, which restates fixture requirements in the same way, was inconsistent. `skill-empty-directory-scaffold` now carries review guidance that fails a delivery in which neither SKILL.md, the bootstrap scripts, nor the verify step installs Playwright Chromium or checks that it is available before the render check.
+
 ### A new judge job, not spread across existing jobs
 
 The fourteen LLM criteria form one new `engineering-quality` job. The alternative was to add each criterion to the existing job whose source area it touches. That was rejected for two reasons:

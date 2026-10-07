@@ -673,6 +673,27 @@ test('rubric 13.0 adds the class A coverage guidance for narrow viewports, kit p
   assert.ok(!lines('verification-addressing-and-errors').some((item) => /engineering-inspect-fails-loudly/.test(item) && item !== p7))
 })
 
+// Issue #77 class A item B7, adopted by Paul's decision after review: the
+// scaffold's render-verification dependencies include the Playwright Chromium
+// browser, which the fixture design installs in the verify step.
+test('rubric 13.0 fails a scaffold that never installs or checks for the Chromium browser', async () => {
+  const rubric = await automatedRubric()
+  const rows = rubric.components.flatMap(({ subcomponents }) => subcomponents)
+  const b7 = rows.find((row) => row.id === 'skill-scaffolding').review_guidance
+    .find((item) => item.startsWith('For skill-empty-directory-scaffold, the dependencies needed for render verification'))
+  assert.ok(b7, 'B7 guidance on skill-scaffolding')
+  assert.match(b7, /Playwright Chromium browser/)
+  assert.match(b7, /Credit SKILL\.md, the bootstrap scripts, or the verify step when they install Chromium or check that it is available before the render check/)
+  assert.match(b7, /Fail when none of them installs it or checks for it/)
+
+  const citations = rubric.criterion_sources['skill-empty-directory-scaffold'].sources
+  assert.ok(citations?.some(({ document, quote }) => (
+    document === 'openspec/changes/create-and-scene/specs/presentation-skill/spec.md' && /render verification/.test(quote))))
+  assert.ok(citations?.some(({ document, heading, quote }) => (
+    document === 'openspec/changes/create-and-scene/design.md' && heading === 'Risks / Trade-offs'
+      && /Install Chromium in the verify step/.test(quote))))
+})
+
 // Issue #77: engineering quality a good implementation has even though the
 // fixture's planning documents do not require it.
 const ENGINEERING_ROWS = [
