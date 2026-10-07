@@ -867,3 +867,29 @@ test('rubric validation keeps the engineering-quality criteria classified and ev
   subcomponent(misweighted, 'engineering-input-hygiene').points = 3
   assert.match(validateAutomatedRubric(misweighted).join('\n'), /approved 20\/20\/7\/7\/8\/4\/4 allocation and floors/)
 })
+
+test('rubric validation rejects an engineering criterion moved across a subcomponent boundary', async () => {
+  const rubric = await automatedRubric()
+  const subcomponent = (copy, id) => engineeringComponent(copy).subcomponents.find((row) => row.id === id)
+  const id = 'engineering-templates-build-at-destination'
+
+  // Moving the first criterion of one subcomponent to the end of the previous
+  // one keeps the flattened criterion order but changes its point share.
+  const moved = structuredClone(rubric)
+  const from = subcomponent(moved, 'engineering-skill-instructions-and-templates')
+  const to = subcomponent(moved, 'engineering-verification-tooling-robustness')
+  assert.equal(from.criteria.shift(), id)
+  to.criteria.push(id)
+
+  const before = rubricCriteria(rubric).find((row) => row.id === id)
+  const after = rubricCriteria(moved).find((row) => row.id === id)
+  assert.notEqual(after.criterion_points, before.criterion_points)
+  assert.match(
+    validateAutomatedRubric(moved).join('\n'),
+    /subcomponent engineering-verification-tooling-robustness must own exactly its approved engineering-quality criteria/,
+  )
+  assert.match(
+    validateAutomatedRubric(moved).join('\n'),
+    /subcomponent engineering-skill-instructions-and-templates must own exactly its approved engineering-quality criteria/,
+  )
+})
