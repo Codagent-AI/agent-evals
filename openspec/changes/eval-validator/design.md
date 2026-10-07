@@ -107,7 +107,7 @@ Check each item in issue #77's "Already required by the spec (class A)" section 
 - **Softer judgments.** LLM-judged engineering quality is softer than spec compliance. Narrow criteria with explicit fail cases, plus the "don't reward" rule in guidance, limit judge drift.
 - **Easier floors.** The demo and scene-kit floors become 12.5 out of 20 instead of 15 out of 24. The ratio is unchanged, and the re-weighting check shows the effect on known runs.
 - **Merge conflicts.** Expect textual conflicts in `lib/judge-jobs.mjs` with `feat/parallel-judge-jobs` and `eval-the-whole-workflow`.
-- **Spec merge.** Commit 5fe2a6d on `feat/parallel-judge-jobs` rewrites main's failure-second-opinion "Verifier inputs and answer" and "Overturn acceptance" to match #82. This change's delta modifies "Verifier inputs and answer", so whichever branch lands second merges that requirement's text, keeping 5fe2a6d's wording and this change's extended action-grammar sentence. That sentence is unchanged in 5fe2a6d.
+- **Spec merge.** Commit 13b8585 on `feat/parallel-judge-jobs` (PR #85) rewrites main's failure-second-opinion "Verifier inputs and answer" and "Overturn acceptance" to match #82. This change's delta modifies "Verifier inputs and answer", and archiving a delta copied from main's older text would revert 13b8585's update. The delta's requirement text is therefore 13b8585's, with only the action-grammar sentence extended; its scenario headers are unchanged from main's. If this change is archived before PR #85 merges, the archive also brings in 13b8585's wording for that requirement. The delta does not modify "Overturn acceptance".
 
 ## Verification
 
