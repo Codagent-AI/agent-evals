@@ -119,15 +119,18 @@ export function preventedModifierDefault({ target, failing_record: record }) {
 }
 
 // The recorded swipe-from-control failure: the control's selector, the mode it
-// was used in, and the input path (touch or pointer) whose swipe changed the
-// step to somewhere other than the control's own activation target.
+// was used in, the swipe direction, and the input path (touch or pointer) whose
+// swipe changed the step to somewhere other than the control's own activation
+// target.
 function controlSwipeFailure(record) {
-  const { control, mode, failure } = probeObservations(record).swipe_from_control ?? {}
+  const { control, mode, direction, failure } = probeObservations(record).swipe_from_control ?? {}
   const selector = control?.selector
   return typeof selector === 'string' && selector.trim() && ['touch', 'pointer'].includes(failure?.input)
+    && ['left', 'right'].includes(direction)
     && Number.isInteger(failure.step_before) && Number.isInteger(failure.step_after)
     && failure.step_before !== failure.step_after
-    ? { selector: selector.trim(), mode: typeof mode === 'string' ? mode : null, input: failure.input } : null
+    ? { selector: selector.trim(), mode: typeof mode === 'string' ? mode : null, direction, input: failure.input }
+    : null
 }
 
 const stepChange = (input, extra = {}) => ({ subject: 'step-change', input, inputs: [INPUT_ACTIONS[input]],
@@ -246,7 +249,7 @@ function describeAdmittedReplay(policy) {
     case 'modifier-press':
       return `${base}: unmodified ArrowRight presses to leave the first step, then presses of ${policy.chords.map(({ key, modifier }) => `${key} holding ${modifier}`).join(' or ')} (modifiers lists that one modifier), with no unmodified press after a modified one; replay.expect is step-index-equals with the step before the first modified press, and the step must not change.`
     case 'control-swipe':
-      return `${base}: unmodified presses of ArrowRight to leave the first step, presses or clicks to establish ${policy.mode ? `${policy.mode} mode` : 'the recorded mode'}, then one ${policy.input} swipe whose selector is ${JSON.stringify(policy.selector)} as the last input; replay.expect is step-index-equals with the step before the swipe, and the step must not change.`
+      return `${base}: unmodified presses of ArrowRight to leave the first step, presses or clicks to establish ${policy.mode ? `${policy.mode} mode` : 'the recorded mode'}, then one ${policy.input} swipe ${policy.direction} whose selector is ${JSON.stringify(policy.selector)} as the last input; replay.expect is step-index-equals with the step before the swipe, and the step must not change.`
     default:
       return base
   }
@@ -281,6 +284,9 @@ function replayPlanRefusal(policy, replay) {
     }
     if (swipes[0].input !== policy.input) {
       return `replay is outside the harness allowlist: the swipe must use the recorded ${policy.input} input`
+    }
+    if (swipes[0].direction !== policy.direction) {
+      return `replay is outside the harness allowlist: the swipe must travel in the recorded ${policy.direction} direction`
     }
     if (!hasSelector(swipes[0]) || swipes[0].selector.trim() !== policy.selector) {
       return 'replay is outside the harness allowlist: the swipe must start on the recorded control'

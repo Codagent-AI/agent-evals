@@ -7,7 +7,7 @@ import { test } from 'node:test'
 import { loadRubrics } from '../evals/agent-runner/and-scene/lib/rubric.mjs'
 import {
   SECOND_OPINION_SCHEMA, buildSecondOpinionRequest, outlineFollowUpTargets, runSecondOpinion, secondOpinionTargets,
-  validReplay,
+  describeReplayPolicy, replayPolicy, validReplay,
 } from '../evals/agent-runner/and-scene/lib/second-opinion.mjs'
 
 const uphold = { decision: 'uphold', rationale: 'the recorded failure stands', mismeasured_step: null,
@@ -809,9 +809,9 @@ test('a prevented-default modifier failure is rejected before any replay or audi
 })
 
 const MODE_CONTROL = '[data-presentation-mode-toggle]'
-const swipeFromControl = (attempts) => {
+const swipeFromControl = (attempts, direction = 'left') => {
   const failing = attempts.find(({ changed, exempt }) => changed && !exempt)
-  return { swipe_from_control: { mode: 'browse', start_step: 4, direction: 'left',
+  return { swipe_from_control: { mode: 'browse', start_step: 4, direction,
     control: { kind: 'mode', name: 'Present', selector: MODE_CONTROL, hook: MODE_CONTROL, activation_target: null },
     controls_discovered: 3, inputs_tried: attempts.map(({ input }) => input), attempts,
     failure: failing ? { input: failing.input, step_before: failing.step_before, step_after: failing.step_after } : null } }
@@ -819,7 +819,7 @@ const swipeFromControl = (attempts) => {
 const attempt = (input, before, after, exempt = false) => ({ input, step_before: before, step_after: after,
   changed: before !== after, exempt })
 const touchFromModeControl = swipeFromControl([attempt('touch', 4, 5)])
-const swipeFrom = (selector, input = 'touch') => ({ type: 'swipe', direction: 'left', input, selector })
+const swipeFrom = (selector, input = 'touch', direction = 'left') => ({ type: 'swipe', direction, input, selector })
 
 test('a swipe-from-control failure is overturned by an admitted replay from the recorded control', async () => {
   for (const [observations, input] of [[touchFromModeControl, 'touch'],
@@ -909,6 +909,8 @@ test('a swipe-from-control replay outside the admitted entry goes to the audited
     [[...lead, swipeFrom(MODE_CONTROL), { type: 'click', selector: '#browse' }], 1],
     // Two swipes are not one.
     [[...lead, swipeFrom(MODE_CONTROL), swipeFrom(MODE_CONTROL)], 1],
+    // The recorded failure swiped left; a right swipe from the same control is another gesture.
+    [[...lead, swipeFrom(MODE_CONTROL, 'touch', 'right')], 1],
     // A modified press is not how the mode or step is established.
     [[{ type: 'navigate', path: DEMO_PATH }, right(['Alt']), right(), swipeFrom(MODE_CONTROL)], 1],
   ]
@@ -937,6 +939,36 @@ test('a swipe-from-control replay outside the admitted entry goes to the audited
     replay: async () => ({ passed: true, errors: [], trace: [], observations: observed({ stepIndex: null },
       { stepIndex: 0 }, { stepIndex: 0, mode: 'browse' }, { stepIndex: 0, mode: 'browse' }) }) })
   assert.match(stayed.allowlist_refusal, /allowlist/)
+})
+
+test('an admitted swipe-from-control replay must repeat the recorded swipe direction', async () => {
+  const lead = [{ type: 'navigate', path: DEMO_PATH }, right(), { type: 'click', selector: '#browse' }]
+  const steps = [{ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 1 }, { stepIndex: 1, mode: 'browse' },
+    { stepIndex: 1, mode: 'browse' }]
+  const recordedRight = swipeFromControl([attempt('touch', 4, 3)], 'right')
+  const request = await inputRequest(CONTROL_SWIPE_ID, recordedRight)
+  const run = (direction, audits) => runSecondOpinion({ request,
+    invoke: (audits ? contradictingInvoke : confirmingInvoke)(request, overturnWith({
+      actions: [...lead, swipeFrom(MODE_CONTROL, 'touch', direction)], expect: { type: 'step-index-equals', value: 1 } }), audits),
+    replay: async () => ({ passed: true, errors: [], trace: [], observations: observed(...steps) }) })
+
+  const same = await run('right')
+  assert.equal(same.confirmed_by, 'browser-replay', same.allowlist_refusal ?? same.rejection_reason)
+
+  const audits = []
+  const opposite = await run('left', audits)
+  assert.equal(opposite.decision, 'overturn-rejected')
+  assert.match(opposite.allowlist_refusal, /recorded right direction/)
+  assert.equal(audits.length, 1)
+
+  // A record without a usable direction admits no replay.
+  const undirected = structuredClone(recordedRight)
+  delete undirected.swipe_from_control.direction
+  const policy = replayPolicy({ target: { kind: 'criterion', id: CONTROL_SWIPE_ID },
+    failing_record: { result: { observations: undirected } } })
+  assert.equal(policy, null)
+  assert.match(describeReplayPolicy(replayPolicy({ target: { kind: 'criterion', id: CONTROL_SWIPE_ID },
+    failing_record: { result: { observations: recordedRight } } })), /one touch swipe right whose selector/)
 })
 
 test('a swipe whose start selector matches nothing is a failed replay, never a pass', async () => {
