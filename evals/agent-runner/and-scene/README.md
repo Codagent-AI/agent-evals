@@ -382,7 +382,8 @@ Calibration asserts that:
   stays a product regression rather than becoming a harness failure — collateral
   damage to any other component or gate fails the case just as surely as a
   target that never moved;
-- the four product judge jobs all run and none fails; and
+- every applicable product judge job runs and none fails — five
+  source-review jobs for the reference, seven jobs for a candidate; and
 - synthetic human answers exercise rating validation, the 30-point arithmetic,
   the human gates, resume at the first unanswered question, refusal of an edited
   saved review, and report rendering.
@@ -619,6 +620,28 @@ is judged against those user-visible behaviors, whatever testing approach the
 candidate took, never against a fixed test-plan case list. Each testing-evidence
 criterion's definition comes from `criterion_definitions` in the automated
 rubric and is shown to the judge beside its identifier.
+
+Automated rubric 13.0.0 adds an 8-point "Engineering quality beyond the spec"
+component (`engineering-quality`, issue #77). The implementation validator
+mostly enforces engineering qualities the fixture's planning documents never
+state, so before 13.0.0 a candidate that skipped that work lost nothing. The
+component has no floor and sixteen narrow, eval-owned criteria whose recorded
+reasons state their full pass conditions: input hygiene (2 points, two
+deterministic browser probes for modified arrow keys and swipes that start on a
+control), verification tooling robustness (3), skill instructions and templates
+(1.5), and presentation code and tests (1.5). The fourteen source-reviewed
+criteria belong to a focused `engineering-quality` judge job that runs for
+candidates and the reference. Both browser probes declare the
+`demo-integration` fallback judge; until they are implemented they are recorded
+as not observed and that judge decides them. The points come from demo
+technical quality and scene-kit correctness, cut from 24 to 20 each (canonical
+content 5→4, navigation and modes 5→4, runtime reliability 4→3, code
+boundaries 3→2; step model 4→3, entity transitions 7→6, modes and navigation
+6→5, style and attribution 5→4). Their floors move from 15 to 12.5, keeping the
+same 62.5% ratio. The 70 automated points, the 100-point total, the 40/70
+eligibility threshold, and the reference's shared 92 are unchanged. Scores are
+not comparable with 12.x results until those runs are re-judged with
+`--rescore-from`.
 
 Automated rubric 10.0.0 defines the terms the round-2 audit found judges
 splitting on: a stable step id survives insertion and reordering, a warning
@@ -870,7 +893,7 @@ reference score uses `not-applicable` and the `REFERENCE — COMPLETE` headline.
 
 Execution status and product quality are independent. A failed workflow or
 harness never becomes a product failure. A complete automated score below 40 of
-70, either automated component below its 15-of-24 floor, or any failed hard gate
+70, either automated component below its 12.5-of-20 floor, or any failed hard gate
 does become a conclusive product failure because human review cannot make that
 candidate pass. A durably recorded product verdict survives a later harness
 failure — reported as `PASS — HARNESS FAILURE` or `FAIL — HARNESS FAILURE`. A
@@ -893,17 +916,18 @@ excluding `.runtime`.
 
 ## Scoring
 
-The candidate score is 100 points: 24 for demo presentation technical quality,
-24 for scene-kit correctness, 7 for presentation-skill correctness, 7 for
-verification-tool correctness, 4 for testing-evidence quality, 4 for
-assumption-handling quality, and 30 for human review. A reference applies only
-the four shared automated components and human review, for an unscaled
-denominator of 92. Runner health, workflow
+The candidate score is 100 points: 20 for demo presentation technical quality,
+20 for scene-kit correctness, 7 for presentation-skill correctness, 7 for
+verification-tool correctness, 8 for engineering quality beyond the spec, 4 for
+testing-evidence quality, 4 for assumption-handling quality, and 30 for human
+review. A reference applies only the five shared automated components and human
+review, for an unscaled denominator of 92; a technical adjudication replaces
+exactly those five shared component scores. Runner health, workflow
 completion, evidence collection, judge execution, cost, timing, retries, and
 evidence repair award and deduct no product points; they are recorded
 diagnostically. Until a human review exists, a run reports its automated
 subtotal out of 70 and no official total. A complete automated result must score
-at least 40 of 70, meet both automated 15-of-24 component floors, and pass all
+at least 40 of 70, meet both automated 12.5-of-20 component floors, and pass all
 four hard gates to proceed to human review. A failed requirement produces
 `evaluation_status=complete` and `product_verdict=fail` without inventing an
 official score. Incomplete automated evidence instead produces the owning
@@ -954,10 +978,11 @@ model calls on identical evidence.
 Four hard gates sit outside the point total: `verification-build-whole-app`,
 `verification-sample-outline`, `verification-every-produced-step-renders`, and
 `verification-clear-outcome`. A failed gate ends automated eligibility without
-erasing the numerical score. An official pass needs at least 70 overall, 15 of
-24 for demo quality, 15 of 24 for scene-kit correctness, 15 of 30 for human
-review, no individual human rating of 1, all four gates, and every required
-phase complete.
+erasing the numerical score. An official pass needs at least 70 overall, 12.5
+of 20 for demo quality, 12.5 of 20 for scene-kit correctness, 15 of 30 for
+human review, no individual human rating of 1, all four gates, and every
+required phase complete. Presentation skill, verification tooling, engineering
+quality, testing evidence, and assumption handling have no floor.
 
 Judges are given the bounded list of delivered source paths alongside the
 deterministic source evidence. When no candidate source is available they are
