@@ -6,20 +6,36 @@ Failed deterministic browser criteria and failed hard gates receive a second
 opinion from two independent verifier samples, so one model call never decides
 whether a failure is re-examined. Each sample's proposed overturn is tried in
 turn, and the first one confirmed decides; a failure no sample overturns
-stands. Every overturn needs mechanically validated source spans. For
-browser-derived failures, a sample also proposes a bounded interaction replay,
-and the verifier does not need to explain the failed measurement from the
-record. The harness runs the replay through `chrome-devtools-axi` against the
-candidate server, including during evaluator-only rescore, and the real-browser
-replay decides: an admitted replay that observes the passing behavior
-overturns the failure with no further model call. The harness decides which
-replays count: `replayPolicy` in `lib/second-opinion.mjs` admits, per failing
-target, only the input kind that failed and an observation that contradicts the
-failure (a step change, a declared mode change, normative text on the active
-step, a click-through of every step, or the active step's own control marked
-`aria-current`). Step controls never include previous, next, or mode controls.
-A target without a policy cannot be overturned by replay. The replay collects
-page and console failures. Its actions, observations, errors, trace, and pass
+stands. Every overturn needs at least one mechanically validated source span;
+a citation outside the source inventory or with a bad line range is dropped
+and recorded, not fatal to the opinion.
+
+A probe is a fixed script written before any candidate existed, so a layout it
+did not anticipate can make it report a failure the requirement does not
+support. The verifier therefore judges the requirement as quoted, not the probe:
+a failure that comes only from a probe assumption the requirement does not
+make (which elements count as step controls, which state it checks, a layout it
+expected) is overturned, and an uphold names the part of the requirement the
+candidate does not meet.
+
+For browser-derived failures, a sample also proposes a bounded interaction
+replay on the demo route, and the verifier does not need to explain the failed
+measurement from the record. The harness runs the replay through
+`chrome-devtools-axi` against the candidate server, including during
+evaluator-only rescore. After each action it records the step, mode, selected
+text, every visible control (name, `aria-current`, disabled, focusable), focus,
+and page and console failures. A replay must pass its own expectation to count.
+`replayPolicy` in `lib/second-opinion.mjs` admits, per known failure shape, the
+input kind that failed and an observation that contradicts it (a step change, a
+declared mode change, normative text on the active step, a click-through of
+every step, or the active step's own control marked `aria-current`); such a
+replay overturns the failure with no further model call. Any other passing
+replay, including one for a failure shape no policy anticipated, goes to the
+independent span auditor with the harness observations, which confirms only
+when the source and the observed page show the requirement met in the situation
+the failure describes. Runtime failures in a replay that must render cleanly
+always reject. Step controls never include previous, next, or mode controls.
+The replay's actions, observations, errors, trace, and pass
 result, and both verifier samples, are retained in
 `phases/second-opinions.json`, the result, and the report. A browser or driver
 fault during replay leaves the opinion pending and resumable; only what the

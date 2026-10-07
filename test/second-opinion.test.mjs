@@ -270,43 +270,68 @@ function confirmingInvoke(request, answer, audits = []) {
   }
 }
 
+// An auditor that rejects whatever it is shown. A replay outside the
+// allowlist is decided by this independent audit, so a stub that confirms
+// everything would say nothing about the guard.
+function contradictingInvoke(request, answer, audits = []) {
+  return async (call) => {
+    if (!call.audit_stage) return JSON.stringify(answer)
+    audits.push(call)
+    return JSON.stringify({ results: [{ id: request.target.id, classification: 'contradicted',
+      rationale: 'the replay does not exercise the failing behavior', evidence: ['replay'] }] })
+  }
+}
+
 const observed = (...states) => states.map((state) => ({ stepCount: 9, mode: 'present', modeBasis: 'declared',
   visible: false, text: '', ...state }))
 
-test('the harness allowlist refuses trivial replays and replays outside the failing input kind', async () => {
-  // Only swipe failed, so only a swipe that moves the step can confirm the overturn.
+test('a replay outside the allowlist is decided by the independent audit, never on its own', async () => {
+  // Only swipe failed, so only a swipe that moves the step decides alone.
   const request = await replayRequest('demo-supported-navigation', 'keyboard 1/0, swipe 0/0, direct jump 4')
-  let replays = 0
-  const replay = async () => { replays += 1
-    return { passed: true, observations: observed({ stepIndex: null }, { stepIndex: 0 }), trace: [], errors: [] } }
-  const refused = [
+  const replay = async () => ({ passed: true, observations: observed({ stepIndex: null }, { stepIndex: 0 }), trace: [], errors: [] })
+  const outside = [
     { actions: [{ type: 'navigate', path: DEMO_PATH }], expect: { type: 'step-index-equals', value: 0 } },
     { actions: [{ type: 'navigate', path: DEMO_PATH }], expect: { type: 'selector-visible', selector: 'body' } },
     { actions: [{ type: 'navigate', path: DEMO_PATH }, { type: 'click', selector: '#next' }],
       expect: { type: 'step-index-changes' } },
     { actions: [{ type: 'navigate', path: DEMO_PATH }, { type: 'press', key: 'ArrowRight' }],
       expect: { type: 'step-index-changes' } },
-    { actions: [{ type: 'navigate', path: '/elsewhere' }, { type: 'swipe', direction: 'left', input: 'touch' }],
-      expect: { type: 'step-index-changes' } },
     { actions: [{ type: 'navigate', path: DEMO_PATH }, { type: 'swipe', direction: 'left', input: 'touch' }],
       expect: { type: 'mode-equals', value: 'present' } },
   ]
-  for (const plan of refused) {
-    const outcome = await runSecondOpinion({ request, replay, invoke: confirmingInvoke(request, overturnWith(plan)) })
-    assert.equal(outcome.ok, true, JSON.stringify(plan))
+  for (const plan of outside) {
+    const audits = []
+    const outcome = await runSecondOpinion({ request, replay, invoke: contradictingInvoke(request, overturnWith(plan), audits) })
     assert.equal(outcome.decision, 'overturn-rejected', JSON.stringify(plan))
-    assert.match(outcome.rejection_reason, /allowlist/, JSON.stringify(plan))
+    assert.equal(audits.length, 1, JSON.stringify(plan))
+    assert.match(audits[0].prompt, /proposed and the harness ran in a real browser/)
+    assert.match(outcome.allowlist_refusal, /allowlist/, JSON.stringify(plan))
+    assert.notEqual(outcome.confirmed_by, 'browser-replay')
   }
-  assert.equal(replays, 0, 'a refused plan never reaches the browser')
+  const audited = await runSecondOpinion({ request, replay,
+    invoke: confirmingInvoke(request, overturnWith(outside[3])) })
+  assert.equal(audited.decision, 'overturn')
+  assert.equal(audited.confirmed_by, 'audited-browser-replay')
 
-  // A swipe whose expected index is the index it started from proves nothing.
+  let replays = 0
+  const elsewhere = await runSecondOpinion({ request,
+    replay: async () => { replays += 1; return { passed: true, observations: [], trace: [], errors: [] } },
+    invoke: confirmingInvoke(request, overturnWith({ actions: [{ type: 'navigate', path: '/elsewhere' },
+      { type: 'swipe', direction: 'left', input: 'touch' }], expect: { type: 'step-index-changes' } })) })
+  assert.equal(elsewhere.decision, 'overturn-rejected')
+  assert.match(elsewhere.rejection_reason, /must navigate/)
+  assert.equal(replays, 0, 'a replay off the demo route never reaches the browser')
+
+  // A swipe whose expected index is the index it started from proves nothing
+  // alone; it goes to the audit.
   const swipe = [{ type: 'navigate', path: DEMO_PATH }, { type: 'swipe', direction: 'left', input: 'touch' }]
+  const stayedAudits = []
   const stayed = await runSecondOpinion({ request,
-    invoke: confirmingInvoke(request, overturnWith({ actions: swipe, expect: { type: 'step-index-equals', value: 0 } })),
+    invoke: contradictingInvoke(request, overturnWith({ actions: swipe, expect: { type: 'step-index-equals', value: 0 } }), stayedAudits),
     replay: async () => ({ passed: true, errors: [], trace: [],
       observations: observed({ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 0 }) }) })
   assert.equal(stayed.decision, 'overturn-rejected')
-  assert.match(stayed.rejection_reason, /allowlist/)
+  assert.equal(stayedAudits.length, 1)
 
   const audits = []
   const moved = await runSecondOpinion({ request,
@@ -322,21 +347,31 @@ test('the harness allowlist refuses trivial replays and replays outside the fail
   assert.equal(moved.replay.observations.at(-1).stepIndex, 1)
 })
 
-test('a target with no replay allowlist cannot be overturned by replay', async () => {
+// agent-evals #78 rep 2: a failure shape no allowlist anticipated (a disabled
+// Previous button reported as unfocusable) could never be overturned.
+test('a failure with no replay allowlist is overturned only when the audit confirms the replay', async () => {
   const plan = { actions: [{ type: 'navigate', path: DEMO_PATH }, { type: 'press', key: 'ArrowRight' }],
     expect: { type: 'step-index-changes' } }
   for (const [id, rationale] of [
     ['demo-navigation-boundaries-and-control-keys', 'start clamp 0, end clamp 8→8'],
     ['demo-supported-navigation', 'keyboard 0/0, swipe 0/0, direct jump 4'],
-    ['demo-supported-navigation', 'navigation did not advance'],
+    ['demo-focus-and-keyboard-accessibility', 'control Previous step is not keyboard focusable'],
   ]) {
     const request = await replayRequest(id, rationale)
-    let replays = 0
-    const outcome = await runSecondOpinion({ request, invoke: confirmingInvoke(request, overturnWith(plan)),
-      replay: async () => { replays += 1; return { passed: true, observations: [], trace: [], errors: [] } } })
-    assert.equal(outcome.decision, 'overturn-rejected', id)
-    assert.match(outcome.rejection_reason, /no replay allowlist/, id)
-    assert.equal(replays, 0, id)
+    const replay = async () => ({ passed: true, trace: [], errors: [],
+      observations: observed({ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 1 }) })
+    const audits = []
+    const rejected = await runSecondOpinion({ request, replay, invoke: contradictingInvoke(request, overturnWith(plan), audits) })
+    assert.equal(rejected.decision, 'overturn-rejected', id)
+    assert.equal(audits.length, 1, id)
+    assert.match(rejected.allowlist_refusal, /no replay allowlist/, id)
+    const confirmed = await runSecondOpinion({ request, replay, invoke: confirmingInvoke(request, overturnWith(plan)) })
+    assert.equal(confirmed.decision, 'overturn', id)
+    assert.equal(confirmed.confirmed_by, 'audited-browser-replay', id)
+    const failing = await runSecondOpinion({ request, invoke: confirmingInvoke(request, overturnWith(plan)),
+      replay: async () => ({ passed: false, trace: [], errors: [], observations: observed({ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 0 }) }) })
+    assert.equal(failing.decision, 'overturn-rejected', id)
+    assert.match(failing.rejection_reason, /did not confirm the passing behavior/, id)
   }
 })
 
@@ -345,15 +380,15 @@ test('a title overturn needs the normative title in an element that tracks the a
   const title = 'The skill interviews you'
   const plan = { actions: [{ type: 'navigate', path: DEMO_PATH }, { type: 'press', key: 'ArrowRight' }],
     expect: { type: 'text-present', selector: 'h2', text: title } }
-  const persistent = await runSecondOpinion({ request, invoke: confirmingInvoke(request, overturnWith(plan)),
+  const persistent = await runSecondOpinion({ request, invoke: contradictingInvoke(request, overturnWith(plan)),
     replay: async () => ({ passed: true, errors: [], trace: [], observations: observed({ stepIndex: null },
       { stepIndex: 0, visible: true, text: title }, { stepIndex: 1, visible: true, text: title }) }) })
   assert.equal(persistent.decision, 'overturn-rejected')
   const wrongText = await runSecondOpinion({ request,
-    invoke: confirmingInvoke(request, overturnWith({ ...plan, expect: { ...plan.expect, text: 'interviews' } })),
+    invoke: contradictingInvoke(request, overturnWith({ ...plan, expect: { ...plan.expect, text: 'interviews' } })),
     replay: async () => ({ passed: true, errors: [], trace: [], observations: [] }) })
   assert.equal(wrongText.decision, 'overturn-rejected')
-  assert.match(wrongText.rejection_reason, /allowlist/)
+  assert.match(wrongText.allowlist_refusal, /allowlist/)
   const active = await runSecondOpinion({ request, invoke: confirmingInvoke(request, overturnWith(plan)),
     replay: async () => ({ passed: true, errors: [], trace: [], observations: observed({ stepIndex: null },
       { stepIndex: 0, visible: true, text: 'You have a topic' }, { stepIndex: 1, visible: true, text: title }) }) })
@@ -367,7 +402,7 @@ test('the renders gate replay must step through every produced step without runt
     ...Array.from({ length: 8 }, () => ({ type: 'press', key: 'ArrowRight' }))]
   const plan = { actions, expect: { type: 'step-index-changes' } }
   const every = observed({ stepIndex: null }, ...Array.from({ length: 9 }, (_, stepIndex) => ({ stepIndex })))
-  const run = (result) => runSecondOpinion({ request, invoke: confirmingInvoke(request, overturnWith(plan)),
+  const run = (result) => runSecondOpinion({ request, invoke: contradictingInvoke(request, overturnWith(plan)),
     replay: async () => ({ passed: true, trace: [], ...result }) })
   const erroring = await run({ observations: every, errors: ['TypeError: boom'] })
   assert.equal(erroring.decision, 'overturn-rejected')
@@ -377,7 +412,12 @@ test('the renders gate replay must step through every produced step without runt
   const partial = await run({ errors: [], observations: observed({ stepIndex: null }, { stepIndex: 0 },
     ...Array.from({ length: 8 }, () => ({ stepIndex: 1 }))) })
   assert.equal(partial.decision, 'overturn-rejected')
-  assert.match(partial.rejection_reason, /every produced step/)
+  assert.match(partial.allowlist_refusal, /every produced step/)
+  // Runtime failures stay a rejection even when the audit would confirm.
+  const confirmedErrors = await runSecondOpinion({ request, invoke: confirmingInvoke(request, overturnWith(plan)),
+    replay: async () => ({ passed: true, trace: [], observations: every, errors: ['TypeError: boom'] }) })
+  assert.equal(confirmedErrors.decision, 'overturn-rejected')
+  assert.match(confirmedErrors.rejection_reason, /runtime or console failure/)
   const clean = await run({ observations: every, errors: [] })
   assert.equal(clean.decision, 'overturn')
 })
@@ -439,10 +479,10 @@ test('a control-count failure can be overturned by clicking through every step',
     replay: async () => ({ passed: true, trace: [], errors: [], observations: every }) })
   assert.equal(confirmed.decision, 'overturn')
   const keyed = await runSecondOpinion({ request,
-    invoke: confirmingInvoke(request, overturnWith({ ...plan, actions: [plan.actions[0], { type: 'press', key: 'ArrowRight' }] })),
+    invoke: contradictingInvoke(request, overturnWith({ ...plan, actions: [plan.actions[0], { type: 'press', key: 'ArrowRight' }] })),
     replay: async () => ({ passed: true, trace: [], errors: [], observations: every }) })
   assert.equal(keyed.decision, 'overturn-rejected')
-  assert.match(keyed.rejection_reason, /allowlist/)
+  assert.match(keyed.allowlist_refusal, /allowlist/)
 })
 
 test('a wrong-current-control failure is overturned only by the active step\'s current control', async () => {
@@ -450,8 +490,8 @@ test('a wrong-current-control failure is overturned only by the active step\'s c
   const plan = { actions: [{ type: 'navigate', path: DEMO_PATH }, { type: 'click', selector: '[data-step="2"]' },
     { type: 'click', selector: '[data-step="1"]' }],
     expect: { type: 'text-present', selector: '[aria-current="step"]', text: 'You have a topic' } }
-  const run = (observations, candidate = plan) => runSecondOpinion({ request,
-    invoke: confirmingInvoke(request, overturnWith(candidate)),
+  const run = (observations, candidate = plan, invoke = confirmingInvoke) => runSecondOpinion({ request,
+    invoke: invoke(request, overturnWith(candidate)),
     replay: async () => ({ passed: true, trace: [], errors: [], observations }) })
   const tracking = await run(observed({ stepIndex: null },
     { stepIndex: 0, visible: true, text: 'You have a topic' },
@@ -460,11 +500,12 @@ test('a wrong-current-control failure is overturned only by the active step\'s c
   assert.equal(tracking.decision, 'overturn')
   const stuck = await run(observed({ stepIndex: null },
     { stepIndex: 0, visible: true, text: 'Previous' }, { stepIndex: 1, visible: true, text: 'Previous' },
-    { stepIndex: 0, visible: true, text: 'Previous' }))
+    { stepIndex: 0, visible: true, text: 'Previous' }), plan, contradictingInvoke)
   assert.equal(stuck.decision, 'overturn-rejected')
-  const unscoped = await run([], { ...plan, expect: { ...plan.expect, selector: 'h2' } })
+  assert.match(stuck.allowlist_refusal, /control marked current/)
+  const unscoped = await run([], { ...plan, expect: { ...plan.expect, selector: 'h2' } }, contradictingInvoke)
   assert.equal(unscoped.decision, 'overturn-rejected')
-  assert.match(unscoped.rejection_reason, /aria-current/)
+  assert.match(unscoped.allowlist_refusal, /aria-current/)
 })
 
 // A planted false direct-jump fail was upheld because the verifier could not
@@ -580,4 +621,42 @@ test('the verifier and its audit carry the shared judging scope rule', async () 
     assert.match(prompt, /hypothetical input, file deletion, or rendering the candidate does not produce/)
     assert.ok(prompt.includes(REQUIREMENT_QUESTION_RULE))
   }
+})
+
+// Live check on agent-evals #78 rep 2: verifiers told that a failure with no
+// preset replay "stands" gave up on a false focus failure instead of
+// proposing a replay for the audit.
+test('a verifier is invited to propose an audited replay for a failure no allowlist covers', async () => {
+  const rubrics = await loadRubrics()
+  const rationale = 'control Previous step is not keyboard focusable'
+  const request = buildSecondOpinionRequest({ target: { kind: 'criterion', id: 'demo-focus-and-keyboard-accessibility' }, rubrics,
+    browser: { criteria: [{ id: 'demo-focus-and-keyboard-accessibility', verdict: 'fail', rationale }],
+      probes: [{ id: 'demo-focus-and-keyboard-accessibility', result: { verdict: 'fail', rationale } }], gates: [] },
+    judging: null, neutral: null, authority: { cli: 'codex', model: 'm' } })
+  assert.doesNotMatch(request.prompt, /failure stands|cannot confirm an overturn|accepts only a replay inside its allowlist/)
+  assert.match(request.prompt, /independent auditor decides the overturn from those observations/)
+  assert.match(request.prompt, /propose one whenever you overturn/)
+  assert.match(request.prompt, /Decide whether the candidate meets the requirement as quoted/)
+})
+
+// Live check on agent-evals #78 rep 2: verifiers also cited the probe's
+// evidence file as a log, and that one citation discarded correct overturns.
+test('an unusable log citation is dropped for a browser failure but a terminal overturn still needs one', async () => {
+  const request = await replayRequest('demo-supported-navigation', 'keyboard 1/0, swipe 1/0, direct jump 0')
+  const plan = { actions: [{ type: 'navigate', path: DEMO_PATH }, { type: 'click', selector: '[data-step="5"]' }],
+    expect: { type: 'step-index-equals', value: 4 } }
+  const answer = { ...overturnWith(plan),
+    log_citations: [{ artifact: 'evidence/evaluator/browser-probes/demo-supported-navigation.json', start_line: 1, end_line: 1 }] }
+  const outcome = await runSecondOpinion({ request, invoke: confirmingInvoke(request, answer),
+    replay: async () => ({ passed: true, errors: [], trace: [],
+      observations: observed({ stepIndex: null }, { stepIndex: 0 }, { stepIndex: 4 }) }) })
+  assert.equal(outcome.decision, 'overturn')
+  assert.deepEqual(outcome.log_citations, [])
+  assert.match(outcome.dropped_citations[0].reason, /outside recorded artifact/)
+
+  const terminal = { ...request, target: { kind: 'terminal', id: 'verification-build-whole-app' }, browser_derived: false,
+    log_root: request.input_roots.source, log_artifact: 'build.log' }
+  const rejected = await runSecondOpinion({ request: terminal, invoke: confirmingInvoke(terminal, answer) })
+  assert.equal(rejected.decision, 'overturn-rejected')
+  assert.match(rejected.rejection_reason, /outside recorded artifact/)
 })

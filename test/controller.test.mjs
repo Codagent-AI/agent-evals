@@ -1800,7 +1800,10 @@ test('a browser failure receives a checkpointed audited second opinion before sc
   const verifierSamples = requests.filter((request) => !request.audit_stage).map(({ verifier_sample: sample }) => sample)
   assert.deepEqual([...new Set(verifierSamples)].sort(), [1, 2])
   assert.equal(verifierSamples.filter((sample) => sample === 1).length, verifierSamples.filter((sample) => sample === 2).length)
-  assert.equal(requests.some((request) => request.audit_stage), false)
+  // Other failures in this fixture reuse the same replay outside their
+  // allowlists, so they reach the audit; the admitted one never does.
+  assert.equal(requests.some((request) => request.audit_stage
+    && request.criteria.includes('demo-supported-navigation')), false)
   const entry = written.second_opinions.entries.find(({ id }) => id === 'demo-supported-navigation')
   assert.equal(entry?.raw_verdict, 'fail')
   assert.equal(entry?.verdict, 'pass')
