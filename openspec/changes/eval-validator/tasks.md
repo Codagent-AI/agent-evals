@@ -1,4 +1,4 @@
-- [ ] Implement the change described by these files:
+- [x] Implement the change described by these files:
   - [proposal.md](proposal.md)
   - [specs/engineering-quality-scoring/spec.md](specs/engineering-quality-scoring/spec.md)
   - [specs/product-quality-scoring/spec.md](specs/product-quality-scoring/spec.md)
