@@ -64,7 +64,7 @@ test('collection freezes files and records SHA-256 and HEAD', async t => {
   assert.equal(await readFile(join(root, 'collected/proposal.md'), 'utf8'), 'proposal')
 })
 test('define metrics attribute children to crosscheck and retain incomplete costs and usage', () => {
-  const text = JSON.stringify({ schema_version: 3, run_id: 'r', workflow: 'openspec:change', history_complete: false, steps: [
+  const text = JSON.stringify({ schema_version: 3, run_id: 'r', workflow: 'change', history_complete: false, steps: [
     { id: 'proposal', prefix: 'define/proposal', agent_invoked: true, cli: 'codex', session_id: 'lead', duration_ms: 10, usage: { status: 'unavailable', reason: 'partial' } },
     { id: 'crosscheck', prefix: 'define/proposal/call-agent', kind: 'agent-call', target_name: 'crosscheck', agent_invoked: true, cli: 'cursor', session_id: 'child', duration_ms: 5, estimated_api_cost_usd: 1, usage: { status: 'collected', tokens: { input: 2 }, completeness: { history: 'partial' } } },
   ] })

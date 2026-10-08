@@ -12,7 +12,7 @@ import { createCheckpoint, beginUnit, completeUnit, failUnit, verifyUnit, loadCh
 import { hashJson, writeJsonAtomic, readJson, hashFile } from './lib/persistence.mjs'
 import { readRunnerState, listRunnerStates, classifyDefineState } from './lib/runner-state.mjs'
 import { runResponder } from './lib/responder.mjs'
-import { ingestDefineMetrics, effectiveDefineInvocations } from './lib/runner-metrics.mjs'
+import { ingestDefineMetrics, effectiveDefineInvocations, RUNNER_WORKFLOW_NAME } from './lib/runner-metrics.mjs'
 import { collectArtifacts } from './lib/collection.mjs'
 import { collectEvidence, loadEvidence } from './lib/evidence.mjs'
 import { reconcileConversation } from './lib/reconciliation.mjs'
@@ -80,7 +80,7 @@ export async function runEvaluation(options, dependencies = {}) {
       if (states.length > 1) throw new Error('multiple Agent Runner runs found; refusing to select or start a duplicate')
       if (checkpoint.runner_run_id && states.length && states[0].run_id !== checkpoint.runner_run_id) throw new Error('Agent Runner run identity mismatch')
       const state = await readRunnerState(root, checkpoint.runner_run_id)
-      if (state && state.workflow_name !== 'openspec:change') throw new Error(`unexpected Agent Runner workflow ${state.workflow_name}`)
+      if (state && (state.workflow_name !== RUNNER_WORKFLOW_NAME || !/^builtin:openspec\/change-v[0-9.]+\.yaml$/.test(state.workflowFile ?? ''))) throw new Error(`unexpected Agent Runner workflow ${state.workflow_name} (${state.workflowFile ?? 'no workflow file'})`)
       return state
     } catch (error) {
       // Persisted files can be unavailable or incomplete after interruption.
