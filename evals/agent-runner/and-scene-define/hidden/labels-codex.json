@@ -1,0 +1,847 @@
+{
+  "labeller": "codex",
+  "model": "gpt-6",
+  "brief_version": 1,
+  "labels": [
+    {
+      "id": "INV-001",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "The prompt explicitly asks for one diagram evolving through a sequence of steps rather than separate slides. Ordered named states are a direct realization of that model.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-002",
+      "class": "acceptable-alternative",
+      "intent": "Represent an ordered sequence of distinguishable steps and associate each step with its active diagram state.",
+      "rationale": "The requested sequence needs identifiable states, but section/era labels and a particular stable-id schema are optional organizational choices.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-003",
+      "class": "acceptable-alternative",
+      "intent": "Provide narration for every step that remains useful for both live presenting and independent browsing.",
+      "rationale": "The prompt requires captions and two viewing modes. Separate one-line titles and paragraph-length captions are one reasonable way to serve those modes.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-004",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The prompt does not require on-screen step numbering. Correctly maintained manual numbers or an interface without numbers would also satisfy it.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-005",
+      "class": "preference",
+      "intent": null,
+      "rationale": "Strongly typed grouped payloads and a cast-free component boundary are internal API choices. The prompt requires reusable components and working output, without specifying TypeScript or this typing discipline.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-006",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "The prompt describes elements moving and being relabeled within one evolving diagram. Preserving entity continuity while those changes occur is central to that behavior.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-007",
+      "class": "acceptable-alternative",
+      "intent": "Introduce new entities in a visually coherent transition while maintaining continuity of existing entities.",
+      "rationale": "Elements appearing is explicit, but waiting until all existing entities settle is a chosen animation sequence. Concurrent or otherwise intelligibly coordinated entrances can satisfy the prompt.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-008",
+      "class": "acceptable-alternative",
+      "intent": "When a later diagram state omits an entity, remove it coherently without leaving stale content visible.",
+      "rationale": "Rendering the active scene correctly requires honoring removals when they occur. An animated exit is a particular transition treatment that the prompt does not explicitly require.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-009",
+      "class": "acceptable-alternative",
+      "intent": "Preserve visual continuity across successive states of the same evolving diagram.",
+      "rationale": "A single evolving diagram is required, but shared scene groups and retaining the same component instance are implementation mechanisms. Other state and rendering architectures can preserve the same continuity.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-010",
+      "class": "acceptable-alternative",
+      "intent": "Treat continuing entities as the same entities through a transition rather than presenting them as newly introduced content.",
+      "rationale": "The prompt implies continuity as elements move and change labels. Layout projection and a specific separation of newcomer fade wrappers are optional mechanisms.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-011",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "Reusable scene components must render authored diagram compositions correctly while elements evolve. Breaking readable, intentional stacking just to accommodate an implementation pattern would make the generated diagram incorrect.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-012",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The prompt asks for reusable scene components, without specifying an unstyled kit. A reusable kit with sensible visual defaults can fully meet the request.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-013",
+      "class": "acceptable-alternative",
+      "intent": "Allow reusable scene components and presentation controls to support suitable visual customization across generated presentations.",
+      "rationale": "Reuse across topics and layouts calls for adaptable visuals. DOM hooks and exclusively presentation-owned CSS are particular ways to provide that adaptability.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-014",
+      "class": "preference",
+      "intent": null,
+      "rationale": "A styling-framework dependency is an architectural choice that the starting prompt does not constrain. Reusable components can be implemented with or without one.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-015",
+      "class": "acceptable-alternative",
+      "intent": "Support diagram compositions with deliberately positioned entities and transitions between their step-specific states.",
+      "rationale": "Elements moving within evolving diagrams requires expressive positioning. Literal coordinates, raw motion elements, and layout ids are particular authoring mechanisms.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-016",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The prompt does not ask for repository attribution. Its presence, destination, default behavior, and corner placement are incidental branding choices.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-017",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The exact attribution wording is not implied by the prompt.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-018",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The prompt does not require an attribution element or a dedicated hook for styling one. Presentations can be complete without this feature.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-019",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The prompt makes no request about header branding. A tasteful optional or default brand would not inherently make the presentation incorrect.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-020",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "The prompt explicitly says viewers should switch between presenting and browsing the presentation.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-021",
+      "class": "preference",
+      "intent": null,
+      "rationale": "Viewers must be able to switch modes, but author control over the initial mode is not requested. A sensible fixed initial mode can satisfy the prompt.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-022",
+      "class": "acceptable-alternative",
+      "intent": "Provide a mode suited to live delivery with clear step narration and a diagram-focused presentation.",
+      "rationale": "A presenting mode needs a useful delivery experience. Hiding all captions, contents, and previous/next controls while showing exactly a marker and one-line title is one possible layout.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-023",
+      "class": "acceptable-alternative",
+      "intent": "Provide a mode for independent reading in which step narration and usable navigation are available.",
+      "rationale": "Browsing is explicitly requested. The exact collection of titles, multi-line text, indicators, and a wide-screen table of contents is a reference layout choice.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-024",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "Switching the view mode should preserve the viewer's place in the requested step sequence. An unexpected reset would undermine the basic runtime switching behavior.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-025",
+      "class": "acceptable-alternative",
+      "intent": "Provide conventional keyboard access to forward and backward step navigation.",
+      "rationale": "A browser presentation should support ordinary keyboard use, particularly during live delivery. The full set of Space and paging aliases is not fixed by the prompt.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-026",
+      "class": "preference",
+      "intent": null,
+      "rationale": "Responsive viewing and step navigation can be served by accessible touch controls without horizontal gestures. The prompt does not require swiping.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-027",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The prompt requires movement through steps, which previous/next navigation can provide. Direct jumps through a progress indicator are an additional convenience.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-028",
+      "class": "preference",
+      "intent": null,
+      "rationale": "Section organization, a table of contents, and jumping specifically to section starts are not implied by the requested browsing mode.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-029",
+      "class": "acceptable-alternative",
+      "intent": "Make the current position understandable to viewers and expose current-state semantics for any applicable navigation controls.",
+      "rationale": "Usable browsing requires understandable navigation state. Progress indicators, table-of-contents entries, and CSS hooks are particular ways to expose it.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-030",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "Normal interactive controls must retain their keyboard behavior in a browser presentation. Moving the scene as an unintended side effect of operating a focused control is a correctness defect.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-031",
+      "class": "acceptable-alternative",
+      "intent": "Handle navigation at the first and last steps predictably without entering an invalid or blank presentation state.",
+      "rationale": "Robust step navigation needs defined endpoint behavior. Clamping is reasonable, but a clearly communicated loop or completion behavior could also meet the prompt.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-032",
+      "class": "acceptable-alternative",
+      "intent": "Keep the diagram readable, compositionally coherent, and capable of clean entity transitions across screen sizes.",
+      "rationale": "The prompt explicitly requires the presentation to look right at different sizes. A uniformly scaled fixed canvas is one solution; responsive layouts can also work.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-033",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The prompt gives no canvas dimensions. Other dimensions or a responsive canvas can satisfy it.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-034",
+      "class": "acceptable-alternative",
+      "intent": "Fit the scene appropriately within the available space in both presenting and browsing modes.",
+      "rationale": "Responsive layout must work in both requested modes. Separate fit-geometry definitions are a specific implementation technique.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-035",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The prompt does not prescribe an interview format. Batched questions or generating from the supplied topic can be reasonable skill workflows.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-036",
+      "class": "acceptable-alternative",
+      "intent": "Develop a coherent narrative and visual plan from the topic, with content and diagram states for the presentation steps.",
+      "rationale": "Turning a topic into a presentation requires deciding the story and its visuals. Obtaining the style and every step description through user gathering is one way to make those decisions.",
+      "confidence": "low"
+    },
+    {
+      "id": "INV-037",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The prompt asks for a skill that turns a topic into a presentation, allowing it to supply sensible style and step details. Requiring questions for every omitted detail is an additional interaction policy.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-038",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "A skill that turns a topic into a presentation must be able to generate missing details rather than require the user to specify every step. Letting the user build with partial detail is central to that request.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-039",
+      "class": "preference",
+      "intent": null,
+      "rationale": "Proceeding directly from a complete prompt is sensible, but the starting prompt does not prescribe whether additional useful questions may be asked.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-040",
+      "class": "preference",
+      "intent": null,
+      "rationale": "ASCII mockups and confirming layouts before building are optional authoring aids. Neither is needed for a complete topic-to-presentation skill.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-041",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "The prompt explicitly requires the skill to work in a project without the reusable components already set up. Detecting and supplying missing prerequisites in an appropriate location is necessary.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-042",
+      "class": "acceptable-alternative",
+      "intent": "Provide a working application build setup capable of producing the generated browser presentation.",
+      "rationale": "Building generated presentations is required. Vite, React, TypeScript, and the exact npm command are specific stack choices.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-043",
+      "class": "acceptable-alternative",
+      "intent": "Provide reusable, topic-independent scene infrastructure for step states, evolving entities, captions, navigation, viewing modes, and responsive rendering.",
+      "rationale": "These core behaviors follow directly from the prompt. A particular stage contract, table of contents, and fit-scaled canvas are implementation choices within that infrastructure.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-044",
+      "class": "preference",
+      "intent": null,
+      "rationale": "An explicit presentation registry with a route for each entry is not necessary to generate browser presentations. Standalone outputs can meet the prompt without a shared presentation index.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-045",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "A skill intended to work in existing projects must recognize compatible infrastructure by its behavior. Replacing it merely because formatting or names differ would be an avoidable robustness defect.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-046",
+      "class": "acceptable-alternative",
+      "intent": "Ensure all runtime, build, and verification dependencies required by the chosen implementation are available when bootstrapping.",
+      "rationale": "Working without existing setup requires a complete dependency installation. The reference's particular framework, motion, icon, linting, and browser libraries are not prescribed.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-047",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The prompt does not require an unstyled or framework-neutral scaffold. A functioning scaffold with reusable default styling would also satisfy it.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-048",
+      "class": "acceptable-alternative",
+      "intent": "Locate required bootstrap and authoring resources reliably regardless of the invocation working directory.",
+      "rationale": "The skill must work in projects that have not been set up, which requires reliable access to its resources. Resolving everything relative to SKILL.md is one mechanism.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-049",
+      "class": "acceptable-alternative",
+      "intent": "In an unprepared project, supply everything needed to build, run, and verify a generated presentation before declaring it ready.",
+      "rationale": "Bootstrapping from missing infrastructure is explicit. The three-anchor structure and presentation index are choices within a complete setup.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-050",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "When compatible infrastructure already exists, the skill should use it. Re-scaffolding a functioning project unnecessarily risks disrupting the setup the prompt expects the skill to build on.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-051",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "Supporting projects with missing setup requires filling gaps while preserving working infrastructure. Replacing already usable parts would be an avoidable integration defect.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-052",
+      "class": "acceptable-alternative",
+      "intent": "Integrate presentation infrastructure into a monorepo in an appropriate application location without disrupting the repository's existing workspace structure.",
+      "rationale": "Working in existing projects implies respecting their structure. A self-contained presentations/ app is one suitable location, rather than a required directory name.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-053",
+      "class": "preference",
+      "intent": null,
+      "rationale": "Scaffolding at the root is a location choice. A standalone presentation app in a suitable subdirectory can be equally complete in an empty or standalone repository.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-054",
+      "class": "acceptable-alternative",
+      "intent": "Choose a safe scaffold target in an existing project and resolve material target ambiguity before making disruptive changes.",
+      "rationale": "Bootstrapping must protect existing project contents. Mandatory confirmation for every non-empty project is one policy; clear prior authorization and an unambiguous safe target can also suffice.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-055",
+      "class": "acceptable-alternative",
+      "intent": "Produce an accessible browser presentation as a coherent output that can coexist with existing project content.",
+      "rationale": "The generated result must be usable and must preserve existing work. A dedicated folder, route, and shared registry are particular packaging mechanisms.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-056",
+      "class": "acceptable-alternative",
+      "intent": "Keep presentation-specific visual choices configurable without making reusable scene infrastructure depend on one presentation's design.",
+      "rationale": "The prompt requires reusable scene components. Presentation-owned CSS, host themes, component parameters, or other separation mechanisms can maintain that reuse.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-057",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The starting prompt does not choose a styling method. Plain CSS and framework-based styling can both produce the required browser presentation.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-058",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "Generating a presentation in an existing project must not destroy other presentations or make them inaccessible. Preserving existing work is an obvious robustness requirement.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-059",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The prompt explicitly requests generation from a topic, without asking for a dedicated editing capability. Modifying existing presentations is useful but its absence need not make generation incomplete.",
+      "confidence": "low"
+    },
+    {
+      "id": "INV-060",
+      "class": "acceptable-alternative",
+      "intent": "If a request involves editing existing presentation content, identify the intended target before applying changes.",
+      "rationale": "Protecting existing work is required for a project-integrating skill. Listing all presentations and asking a particular question is only one way to resolve an ambiguous target.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-061",
+      "class": "preference",
+      "intent": null,
+      "rationale": "A specialized modification dialogue that avoids the creation flow is not requested. Other effective editing procedures, or a skill focused on generation, can satisfy the starting prompt.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-062",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "The prompt requires the skill to check that generated output builds and renders, and requires the presentation to look right. Verifying those properties before claiming completion is necessary.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-063",
+      "class": "acceptable-alternative",
+      "intent": "Inspect enough rendered steps and viewport sizes to establish visual coherence and catch significant layout and responsive defects.",
+      "rationale": "Visual and responsive correctness is required. The exact first/last/dense-step sampling rule is one reasonable inspection strategy.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-064",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "Checking the generated build and render must affect whether the skill reports success. Known failures must be fixed and the result rechecked before completion.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-065",
+      "class": "acceptable-alternative",
+      "intent": "Run browser inspection using reliably available tooling and dependencies, and obtain settled views with relevant diagnostics accessible for review.",
+      "rationale": "Reliable build and render checking is explicit. Preferring a particular local helper and placing temporary scripts under the project root are tooling arrangements rather than required outcomes.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-066",
+      "class": "acceptable-alternative",
+      "intent": "Ensure generated presentation code builds successfully without compilation or applicable type-checking errors.",
+      "rationale": "Clean builds are directly requested. npm run build and a typed implementation are particular choices for realizing them.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-067",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "A generated browser presentation must open and render its initial state without runtime or console errors. The prompt explicitly calls for checking rendering.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-068",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "The prompt explicitly assigns a caption to each step and asks viewers to move through steps. Forward and backward navigation is a basic realization of that movement.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-069",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "Every generated presentation must use the explicitly requested evolving-diagram model. Generating independent slides would contradict the core request.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-070",
+      "class": "acceptable-alternative",
+      "intent": "Ensure important diagram content and presentation controls remain readable, fit the available display area, and avoid accidental obstructive collisions.",
+      "rationale": "Looking right across screen sizes includes basic composition correctness. A fixed canvas and particular chrome components are optional ways to arrange it.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-071",
+      "class": "acceptable-alternative",
+      "intent": "Review evidence of possible visual defects, correct actual readability and navigation-state problems, and distinguish intentional composition from accidental collisions.",
+      "rationale": "The requested visual correctness makes actual defects relevant. A helper warning workflow and explicit overlap markers are one way to review and resolve them.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-072",
+      "class": "acceptable-alternative",
+      "intent": "Make displayed controls legible and distinguish the current navigation state, keeping presentation-specific visual choices adaptable for reuse.",
+      "rationale": "The requested browser interaction needs usable controls. Attribution, presentation-owned CSS, and a kit with no visual defaults are optional parts of the reference solution.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-073",
+      "class": "acceptable-alternative",
+      "intent": "Verify the complete generated application build and fail on errors in any included presentation or required application infrastructure.",
+      "rationale": "Checking that generated output builds requires a complete relevant application build. A shared index and a specific npm script are implementation choices.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-074",
+      "class": "acceptable-alternative",
+      "intent": "Include a working sample in the repository that users can access as a reference presentation.",
+      "rationale": "The prompt asks for a sample presentation made using the skill. Committing it and registering it through a particular application registry are packaging choices.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-075",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "The prompt explicitly says to use the skill to make the sample. Building the sample by an unrelated process would fail that instruction.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-076",
+      "class": "acceptable-alternative",
+      "intent": "Make the sample teach how to use the presentation skill through the kind of presentation the skill produces.",
+      "rationale": "The sample's instructional topic and production by the skill are explicit. Its exact title and closing self-reference reveal are narrative choices.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-077",
+      "class": "acceptable-alternative",
+      "intent": "Make the instructional sample demonstrate the same evolving-diagram presentation model required of generated presentations.",
+      "rationale": "The sample must be a presentation of the requested kind. A top conversation row, accumulating tray, reveal frame, and never-moving entities are particular compositions.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-078",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The prompt does not prescribe a step count, section count, era names, or canonical outline. A different instructional sequence can explain the skill fully.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-079",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The exact opening title, caption, and you/prompt visual are sample content choices. Another opening can explain the skill's topic input.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-080",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The prompt does not require an interviewing workflow or this particular explanatory beat. Its exact wording, nodes, arrow, and question chip are incidental sample choices.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-081",
+      "class": "preference",
+      "intent": null,
+      "rationale": "A complete sample can explain the presentation model without depicting gathered answers as cards in a tray. This precise beat, wording, and placement of morph information are not required.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-082",
+      "class": "preference",
+      "intent": null,
+      "rationale": "Growing a stationary card tray is a sample storytelling choice. The prompt permits other sequences and compositions, including moving existing entities.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-083",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The sample is not required to devote a step to specifying depth. The exact caption, ghost card, and partial/full control are optional ways to explain author input.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-084",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The product must use reusable scene components, but the instructional sample need not depict that internals detail through a particular beat. A scene-kit socket, tray treatment, title, and caption are sample choices.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-085",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The skill must check builds and rendering, but the sample need not teach that behavior in a dedicated pipeline beat. The exact verification node, green check, title, and caption are optional explanatory content.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-086",
+      "class": "preference",
+      "intent": null,
+      "rationale": "A modification loop is not explicitly requested for the skill or sample. The edited card, modify arc, title, and caption are optional narrative choices.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-087",
+      "class": "preference",
+      "intent": null,
+      "rationale": "Using the skill to produce the sample is required, but announcing that fact in a closing reveal is optional. Another ending can explain how to use the skill.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-088",
+      "class": "acceptable-alternative",
+      "intent": "Automatically confirm that the required instructional sample is present, usable, and has the intended step content in the intended order.",
+      "rationale": "Verifying the generated sample supports the explicit sample and automation requests. Matching nine reference steps and their verbatim titles and captions is unnecessary.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-089",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "The requested sample is a required deliverable. A check intended to verify that sample cannot correctly pass when it is absent.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-090",
+      "class": "acceptable-alternative",
+      "intent": "Exercise every sample step and its navigation in a rendering environment faithful to the browser presentation, detecting runtime and console errors.",
+      "rationale": "The requested automatic verification should cover the step sequence rather than only an initial successful render. A production preview and a particular browser execution arrangement are mechanisms.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-091",
+      "class": "acceptable-alternative",
+      "intent": "Use a consistently reachable preview endpoint for server startup, readiness checks, and browser navigation across supported environments.",
+      "rationale": "Reliable automated rendering requires the browser to reach the preview server. IPv4 loopback is one solution; another consistently configured host can also work.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-092",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "Runtime errors or failed transitions contradict the required rendering and navigation behavior. Automatic verification must fail and give enough step context to diagnose the problem.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-093",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "A way to verify presentations automatically needs a clear machine-detectable outcome and actionable failure reporting. Non-zero failure status is the ordinary command-line realization.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-094",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "An automatic verifier must clean up servers it owns even after failure. Leaked processes would make repeated checking unreliable and interfere with the user's environment.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-095",
+      "class": "acceptable-alternative",
+      "intent": "Provide repeatable access to rendered step layouts for checking visual correctness, with inspection results available to the author.",
+      "rationale": "The prompt requires correct appearance and rendering checks. A separate project-local per-step screenshot helper, production preview, desktop size, and artifact directory are particular inspection arrangements.",
+      "confidence": "low"
+    },
+    {
+      "id": "INV-096",
+      "class": "acceptable-alternative",
+      "intent": "When capturing or assessing a step's final rendered appearance, wait until its transition has completed.",
+      "rationale": "Meaningful visual checks must assess the intended settled layout. A configured fixed settle interval is one way to establish readiness.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-097",
+      "class": "preference",
+      "intent": null,
+      "rationale": "Visual correctness is required, but an automatic overlap-warning detector with element-level diagnostics is optional. Browser inspection or other layout checks can establish correctness without it.",
+      "confidence": "low"
+    },
+    {
+      "id": "INV-098",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The prompt does not require an overlap detector or subtree exemption markers. Intentional readable overlap can be supported and reviewed through other mechanisms.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-099",
+      "class": "preference",
+      "intent": null,
+      "rationale": "Readable active navigation matters, but automatically warning about visual similarity is an optional diagnostic feature. Other verification can catch an unusable active state.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-100",
+      "class": "preference",
+      "intent": null,
+      "rationale": "Attribution is not requested, so warnings about its presence, size, appearance, or styling hook are not required.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-101",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The prompt does not prescribe whether visual artifacts inform manual review or automated pass/fail checks. Either can be appropriate when it reliably establishes correctness.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-102",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "Adding an agent skill that creates browser-based presentations from a topic is the prompt's direct request.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-103",
+      "class": "acceptable-alternative",
+      "intent": "Supply reusable scene-building resources that the skill uses to generate presentations across topics and projects.",
+      "rationale": "Reusable scene components are explicit. React, templates, and scripts are a particular mix of resources for satisfying that requirement.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-104",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "The prompt explicitly asks for build/render checking, a generated sample, and a way to verify presentations automatically. A verification flow covering that output is required.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-105",
+      "class": "preference",
+      "intent": null,
+      "rationale": "Export formats are not requested, but a harmless optional export feature would not inherently make the browser presentation incomplete or incorrect. The prompt does not explicitly prohibit exports.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-106",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "A general-purpose visual editor would add a substantial separate product and authoring workflow beyond the requested agent skill. Treating that expansion as required scope would reasonably draw objection.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-107",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "A production hosting or publishing workflow adds operational scope beyond generating and verifying browser presentations. The prompt gives no request for that expansion.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-108",
+      "class": "mandatory",
+      "intent": null,
+      "rationale": "The prompt requires successful builds, rendering, and automatic verification. Subjective taste scores as the primary verification mechanism would not establish those objective requirements.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-109",
+      "class": "acceptable-alternative",
+      "intent": "Provide an agent procedure that uses reusable scene infrastructure and includes checks for generated output quality.",
+      "rationale": "The prompt asks for both a skill and reusable components, so supporting infrastructure must accompany the procedure. The exact hybrid packaging of templates and scripts can vary.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-110",
+      "class": "acceptable-alternative",
+      "intent": "Provide a documented, repeatable automation interface that checks the relevant application build and presentation step rendering.",
+      "rationale": "Automatic verification is explicit. One npm run verify entry point is convenient, but other commands or a small orchestrated set of checks can satisfy it.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-111",
+      "class": "acceptable-alternative",
+      "intent": "Verify rendered presentation behavior in an environment that accurately exercises browser layout, transitions, and runtime failures.",
+      "rationale": "Actual browser presentation rendering needs a faithful check. Playwright, Chromium, and vite preview are one tooling combination rather than mandated technologies.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-112",
+      "class": "acceptable-alternative",
+      "intent": "Let verification enumerate the presentation steps and determine which step is active reliably.",
+      "rationale": "Automatic checks of the evolving sequence need observable progress. Dedicated count/index data attributes are one option; semantic UI state or another supported interface can work.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-113",
+      "class": "preference",
+      "intent": null,
+      "rationale": "A root landing page, slug routes, and an unknown-path fallback describe an optional multi-presentation application shell. Standalone browser presentations can satisfy the prompt.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-114",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The prompt does not require a shared registry, manual entries, or lazy loaders. Auto-discovery or independently accessible presentation outputs can be reasonable.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-115",
+      "class": "preference",
+      "intent": null,
+      "rationale": "A pathname switch with no routing dependency is an implementation choice. The starting prompt does not constrain routing libraries.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-116",
+      "class": "acceptable-alternative",
+      "intent": "Provide reusable, topic-independent building blocks for expressing diagram entities and their evolving relationships.",
+      "rationale": "The prompt directly asks for reusable scene components. The exact box/label/arrow/frame/emphasis/symbol-chip set and parameter interface can vary.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-117",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The prompt does not require icons, Lucide, or an icon-as-component API. Other glyph techniques or presentations without icons can satisfy it.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-118",
+      "class": "acceptable-alternative",
+      "intent": "Ensure bootstrapped projects receive compatible, working reusable scene infrastructure as the skill and its components evolve.",
+      "rationale": "Working in projects without setup requires a dependable distribution of the scene components. A snapshot in templates, its canonical source location, and parity tests are one maintenance mechanism.",
+      "confidence": "medium"
+    },
+    {
+      "id": "INV-119",
+      "class": "preference",
+      "intent": null,
+      "rationale": "Runtime mode switching is required, but the exact P shortcut is not implied. A mode control or another accessible interaction can provide switching.",
+      "confidence": "high"
+    },
+    {
+      "id": "INV-120",
+      "class": "preference",
+      "intent": null,
+      "rationale": "The prompt specifies both modes without selecting an initial mode for the sample. Opening in either mode can be correct.",
+      "confidence": "high"
+    }
+  ]
+}

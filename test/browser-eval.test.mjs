@@ -63,6 +63,8 @@ function createDemo(knobs = {}) {
     stateUnreadable = false,
     unreadableAtIndex = null,
     controlsReversed = false,
+    leadingPreviousControl = false,
+    currentMarksNextStep = false,
     viewport = { width: 1280, height: 720 },
     canvasFitsNarrow = true,
     canvasUniform = true,
@@ -163,10 +165,16 @@ function createDemo(knobs = {}) {
               const list = Array.from({ length: controlCount }, (_, position) => ({
                 name: `Step ${position + 1}`,
                 role: 'button',
-                ariaCurrent: ariaCurrent && position === index,
+                ariaCurrent: ariaCurrent && position === (currentMarksNextStep ? (index + 1) % controlCount : index),
                 focusable,
               }))
-              return controlsReversed ? list.reverse() : list
+              const ordered = controlsReversed ? list.reverse() : list
+              // agent-evals #78 rep 2: Previous shares the row with the step
+              // buttons and is disabled on the first step.
+              return leadingPreviousControl
+                ? [{ name: 'Previous step', role: 'button', ariaCurrent: false,
+                    disabled: index === 0, focusable: index !== 0 }, ...ordered]
+                : ordered
             })(),
         focused,
         viewport: currentViewport,
@@ -812,6 +820,26 @@ test('runtime failures fail the every-step-renders gate', async () => {
 
   assert.equal(verdictOf(result, 'verification-every-produced-step-renders'), 'fail')
   assert.ok(result.failures.length > 0)
+})
+
+test('an extra Previous control in the step row does not fail control, focus, or navigation checks', async () => {
+  const result = await evaluate({ leadingPreviousControl: true })
+
+  assert.equal(verdictOf(result, 'demo-control-semantics'), 'pass')
+  assert.equal(verdictOf(result, 'demo-focus-and-keyboard-accessibility'), 'pass')
+  assert.equal(verdictOf(result, 'quality-captions-and-navigation'), 'pass')
+})
+
+test('the current-step check still fails a row that marks the wrong named control', async () => {
+  const result = await evaluate({ leadingPreviousControl: true, currentMarksNextStep: true })
+
+  assert.equal(verdictOf(result, 'demo-control-semantics'), 'fail')
+})
+
+test('an enabled control that cannot take focus still fails beside a disabled one', async () => {
+  const result = await evaluate({ leadingPreviousControl: true, focusable: false })
+
+  assert.equal(verdictOf(result, 'demo-focus-and-keyboard-accessibility'), 'fail')
 })
 
 test('focusability and global keyboard navigation are observed independently', async () => {

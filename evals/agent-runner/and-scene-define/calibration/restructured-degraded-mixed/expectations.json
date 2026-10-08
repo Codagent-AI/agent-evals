@@ -1,0 +1,148 @@
+{
+  "input_id": "restructured-degraded-mixed",
+  "description": "The restructured reference with a mixed set of faults: a mode switch now restarts the current chapter (contradicting a mandatory item), a browser visual editor is added (excluded scope), and the release-check summary no longer names the failed check (weakened). Stale test-plan expectations make the artifacts inconsistent. The artifacts also make Tailwind the default styling and redirect the root URL to the sample, contradicting two simulated-user answers in conversation.jsonl.",
+  "base": "restructured",
+  "variant": "degraded",
+  "expected": {
+    "INV-001": "met",
+    "INV-002": "met",
+    "INV-003": "met",
+    "INV-006": "met",
+    "INV-007": "met",
+    "INV-008": "met",
+    "INV-009": "met",
+    "INV-010": "met",
+    "INV-013": "met",
+    "INV-015": "met",
+    "INV-020": "met",
+    "INV-022": "met",
+    "INV-023": "met",
+    "INV-024": "missing",
+    "INV-025": "met",
+    "INV-029": "met",
+    "INV-030": "met",
+    "INV-031": "met",
+    "INV-032": "met",
+    "INV-034": "met",
+    "INV-036": "met",
+    "INV-038": "met",
+    "INV-041": "met",
+    "INV-042": "met",
+    "INV-043": "met",
+    "INV-044": "met",
+    "INV-045": "met",
+    "INV-046": "met",
+    "INV-048": "met",
+    "INV-049": "met",
+    "INV-050": "met",
+    "INV-051": "met",
+    "INV-054": "met",
+    "INV-055": "met",
+    "INV-056": "met",
+    "INV-058": "met",
+    "INV-062": "met",
+    "INV-063": "met",
+    "INV-064": "met",
+    "INV-066": "met",
+    "INV-067": "met",
+    "INV-068": "met",
+    "INV-069": "met",
+    "INV-070": "met",
+    "INV-071": "met",
+    "INV-072": "met",
+    "INV-073": "met",
+    "INV-074": "met",
+    "INV-075": "met",
+    "INV-076": "met",
+    "INV-077": "met",
+    "INV-088": "met",
+    "INV-089": "met",
+    "INV-090": "met",
+    "INV-092": "met",
+    "INV-093": "partial",
+    "INV-094": "met",
+    "INV-095": "met",
+    "INV-096": "met",
+    "INV-102": "met",
+    "INV-103": "met",
+    "INV-104": "met",
+    "INV-105": "met",
+    "INV-106": "missing",
+    "INV-107": "met",
+    "INV-108": "met",
+    "INV-109": "met",
+    "INV-110": "met",
+    "INV-111": "met",
+    "INV-112": "met",
+    "INV-116": "met",
+    "INV-118": "met"
+  },
+  "expected_quality": {
+    "quality:observable-outcomes": "met",
+    "quality:design-matches-specs": "met",
+    "quality:test-plan-matches-specs": "partial",
+    "quality:decision-rationale": "met",
+    "quality:requirements-tested": "partial"
+  },
+  "conversation": "conversation.jsonl",
+  "expected_fidelity": {
+    "fidelity:define.proposal/proposal/1/1": "missing",
+    "fidelity:define.proposal/proposal/1/2": "met",
+    "fidelity:define.specs/specs/1/1": "met",
+    "fidelity:define.specs/specs/1/2": "missing",
+    "fidelity:define.design/design/1/1": "missing",
+    "fidelity:define.test-plan/test-plan/1/1": "missing"
+  },
+  "removed_items": [],
+  "contradicted_items": [
+    {
+      "item": "INV-024",
+      "where": "specs/viewer-controls/spec.md (Viewing modes)",
+      "change": "Changing mode restarts at the first step of the current chapter."
+    }
+  ],
+  "added_scope": [
+    {
+      "item": "INV-106",
+      "where": "proposal.md; specs/viewer-controls/spec.md (In-place visual editing)",
+      "change": "A browse-mode visual editor that drags entities, retypes narration, and saves to source; the non-goal is removed."
+    }
+  ],
+  "weakened_items": [
+    {
+      "item": "INV-093",
+      "change": "The summary still reads PASS or FAIL with a non-zero exit on failure, but no longer names the failed check."
+    }
+  ],
+  "collateral_items": [],
+  "quality_defects": [
+    {
+      "criterion": "quality:test-plan-matches-specs",
+      "where": "test-plan.md (AR-3) vs specs/viewer-controls",
+      "defect": "AR-3 still expects the step to survive mode switches; the changed specification restarts at the first step of the current chapter. RC-2 still expects FAIL to name the failed check, which only adds detail to the specified FAIL summary and is not a contradiction."
+    },
+    {
+      "criterion": "quality:requirements-tested",
+      "where": "test-plan.md vs specs/viewer-controls (In-place visual editing)",
+      "defect": "The added in-place visual editing requirement has no planned check."
+    }
+  ],
+  "planted_fidelity_contradictions": [
+    {
+      "exchange": "define.proposal/proposal/1/2",
+      "subject_id": "INV-057",
+      "artifact": "specs/presentation-authoring/spec.md",
+      "change": "Generated presentations are styled with Tailwind utility classes, installed when the first presentation is created."
+    },
+    {
+      "exchange": "define.specs/specs/1/1",
+      "subject_id": "INV-113",
+      "artifact": "design.md; specs/release-checks/spec.md",
+      "change": "The root URL redirects to the sample; there is no landing page."
+    }
+  ],
+  "notes": [
+    "Exchange 4 concerns a graded item (INV-031); the artifacts respect it and coverage, not fidelity, would own any contradiction.",
+    "INV-074 stays met: the sample is still listed in the manifest and reachable (now via the root redirect)."
+  ]
+}

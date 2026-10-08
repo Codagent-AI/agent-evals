@@ -1,0 +1,161 @@
+{
+  "version": 1,
+  "patterns": [
+    {
+      "id": "fixture-repository",
+      "kind": "locator",
+      "type": "literal",
+      "value": "Codagent-AI/and-scene"
+    },
+    {
+      "id": "fixture-url",
+      "kind": "locator",
+      "type": "literal",
+      "value": "https://github.com/Codagent-AI/and-scene"
+    },
+    {
+      "id": "eval-repository",
+      "kind": "locator",
+      "type": "literal",
+      "value": "Codagent-AI/agent-evals"
+    },
+    {
+      "id": "eval-url",
+      "kind": "locator",
+      "type": "literal",
+      "value": "https://github.com/Codagent-AI/agent-evals"
+    },
+    {
+      "id": "reference-skill",
+      "kind": "locator",
+      "type": "literal",
+      "value": "and-scene:presentation"
+    },
+    {
+      "id": "reference-skill-path",
+      "kind": "locator",
+      "type": "literal",
+      "value": "and-scene/skills/presentation"
+    },
+    {
+      "id": "reference-plugin-path",
+      "kind": "locator",
+      "type": "regex",
+      "value": "^.*(?:plugins|marketplaces)/[^\\r\\n]*and-scene(?:/|\\b).*$"
+    },
+    {
+      "id": "hidden-change",
+      "kind": "locator",
+      "type": "literal",
+      "value": "openspec/changes/create-and-scene"
+    },
+    {
+      "id": "suite-name",
+      "kind": "locator",
+      "type": "literal",
+      "value": "and-scene-define"
+    },
+    {
+      "id": "hidden-reference-path",
+      "kind": "locator",
+      "type": "literal",
+      "value": "hidden/reference/"
+    },
+    {
+      "id": "hidden-inventory-path",
+      "kind": "locator",
+      "type": "literal",
+      "value": "hidden/inventory.json"
+    },
+    {
+      "id": "hidden-items-path",
+      "kind": "locator",
+      "type": "literal",
+      "value": "hidden/items.json"
+    },
+    {
+      "id": "hidden-labels-path",
+      "kind": "locator",
+      "type": "literal",
+      "value": "hidden/labels-"
+    },
+    {
+      "id": "hidden-brief-path",
+      "kind": "locator",
+      "type": "literal",
+      "value": "hidden/labelling-brief.md"
+    },
+    {
+      "id": "hidden-prompt-path",
+      "kind": "locator",
+      "type": "literal",
+      "value": "hidden/starting-prompt.md"
+    },
+    {
+      "id": "hidden-policy-path",
+      "kind": "locator",
+      "type": "literal",
+      "value": "hidden/simulated-user-policy.md"
+    },
+    {
+      "id": "exchange-file",
+      "kind": "locator",
+      "type": "regex",
+      "value": "^.*\\bexchange/[^\\r\\n/]+\\.(?:request|reply)\\.json(?:\\b|$).*$"
+    },
+    {
+      "id": "external-user-log",
+      "kind": "locator",
+      "type": "literal",
+      "value": "external-user/exchanges.jsonl"
+    },
+    {
+      "id": "artifacts-runtime",
+      "kind": "locator",
+      "type": "literal",
+      "value": "/artifacts/.runtime"
+    },
+    {
+      "id": "relative-runtime",
+      "kind": "locator",
+      "type": "literal",
+      "value": "../.runtime"
+    },
+    {
+      "id": "staged-input",
+      "kind": "locator",
+      "type": "literal",
+      "value": "eval-input"
+    },
+    {
+      "id": "reference-sample-title",
+      "kind": "canary",
+      "type": "literal",
+      "value": "How to Use This Skill to Make a Presentation"
+    },
+    {
+      "id": "reference-canvas-dimensions",
+      "kind": "canary",
+      "type": "literal",
+      "value": "DESIGN_W=880"
+    },
+    {
+      "id": "reference-sample-caption",
+      "kind": "canary",
+      "type": "literal",
+      "value": "It starts with you, a topic, and mild overconfidence."
+    },
+    {
+      "id": "hidden-citation-path",
+      "kind": "locator",
+      "type": "literal",
+      "value": "hidden/citation-supplements/"
+    },
+    {
+      "id": "hidden-reference-manifest",
+      "kind": "locator",
+      "type": "literal",
+      "value": "hidden/reference.json"
+    }
+  ]
+}

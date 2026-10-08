@@ -3,7 +3,8 @@
 // Every score-affecting artifact is written to a same-directory temporary file
 // and atomically renamed, so an interrupted run never leaves a half-written
 // checkpoint that resume would treat as complete.
-import { createHash } from 'node:crypto'
+import { hashString, hashJson } from '../../../lib/panel-judging/hash.mjs'
+export { hashString, hashJson } from '../../../lib/panel-judging/hash.mjs'
 import { open, readFile, rename, unlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
@@ -12,26 +13,6 @@ let counter = 0
 function stagingPath(target) {
   counter += 1
   return join(dirname(target), `.${process.pid}-${counter}.tmp`)
-}
-
-export function hashString(value) {
-  return createHash('sha256').update(value).digest('hex')
-}
-
-// Canonicalize before hashing so a checkpoint fingerprint depends on values,
-// not on the key order a caller happened to build the object with.
-function canonicalize(value) {
-  if (Array.isArray(value)) return value.map(canonicalize)
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]),
-    )
-  }
-  return value
-}
-
-export function hashJson(value) {
-  return hashString(JSON.stringify(canonicalize(value)))
 }
 
 export async function hashFile(path) {

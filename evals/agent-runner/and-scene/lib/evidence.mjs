@@ -1647,6 +1647,8 @@ export async function materializeEvidenceJudgeViews({
       .sort((left, right) => TESTING_PACKET_ROLES.indexOf(left.role) - TESTING_PACKET_ROLES.indexOf(right.role)),
   })
 
+  await writeFile(join(testingRoot, 'packet.txt'), testingPacket)
+
   // Pass records reached this view as referenced session material before they
   // had a role of their own, so they stay here.
   // Packet order under the character budget: the decision records first.
@@ -1695,6 +1697,8 @@ export async function materializeEvidenceJudgeViews({
     index: assumptionIndex,
     artifacts: assumptionArtifacts,
   })
+
+  await writeFile(join(assumptionRoot, 'packet.txt'), assumptionPacket)
 
   return {
     'testing-evidence': {

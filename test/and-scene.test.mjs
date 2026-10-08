@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chmod, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -65,7 +65,9 @@ async function run(args, options = {}) {
     ...process.env,
     HOME: options.home,
     SANDBOX_SECRETS_FILE: join(options.dir, 'missing.env'),
+    ...options.env,
   }
+  if (!options.env?.CLAUDE_CODE_OAUTH_TOKEN) delete env.CLAUDE_CODE_OAUTH_TOKEN
   const result = spawnSync('bash', [runScript, ...args], { cwd: root, env, encoding: 'utf8' })
   return { ...result, output: result.stdout + result.stderr }
 }
@@ -386,7 +388,7 @@ test('an evaluator-only rescore mounts a completed run read-only and invokes no 
   assert.ok(!result.output.includes('bootstrap-agent-skills.sh'), result.output)
   assert.ok(!result.output.includes('--lead-cli'), result.output)
   assert.ok(!result.output.includes('--change-name'), result.output)
-  assert.ok(!result.output.includes('--mount-claude-auth'), result.output)
+  assert.ok(result.output.includes('--mount-claude-auth'), result.output)
   assert.ok(result.output.includes('--mount-codex-auth'), result.output)
 })
 
@@ -599,9 +601,11 @@ test('help documents the exact fixture pin, role profiles, and validator option'
   assert.ok(!result.stdout.includes('--calibration-record'))
 })
 
-test('calibration runs the reference and degraded mutations without Docker or Agent Runner', async () => {
+test('calibration runs the reference and degraded mutations without Docker, Agent Runner, or Claude auth', async () => {
   const context = await setup()
   const artifacts = join(context.dir, 'calibration')
+  // Calibration judges with fixture invokers on the host and never calls Claude.
+  await rm(join(context.home, '.claude/.credentials.json'))
 
   const result = await run(['--calibrate', '--artifact-dir', artifacts], context)
 
@@ -634,9 +638,26 @@ test('a host rescore runs the controller directly without the sandbox', async ()
   assert.match(result.output, /controller\.mjs --run-dir .*\/run --run-id run /)
   assert.match(result.output, /--rescore-from .*completed-candidate/)
   assert.match(result.output, /AND_SCENE_CODEX_COMMAND=/)
+  // The judge invoker defaults to the sandbox's real CLI path, so a host run
+  // names the host Claude explicitly.
+  assert.match(result.output, /AND_SCENE_CLAUDE_COMMAND=/)
   assert.ok(!result.output.includes('/rescore-source'), result.output)
   assert.ok(!result.output.includes('--docker-run-arg'), result.output)
   assert.ok(!result.output.includes('--lead-cli'), result.output)
+})
+
+test('a host rescore uses the host Claude login and needs no Claude credentials file', async () => {
+  const context = await setup({ dirty: true })
+  const source = join(context.dir, 'completed-candidate')
+  await mkdir(source)
+  // macOS keeps the Claude Code login in the Keychain, which the host CLI reads.
+  await rm(join(context.home, '.claude/.credentials.json'))
+
+  const result = await scored(context, ['--rescore-from', source, '--host'])
+
+  assert.equal(result.status, 0, result.output)
+  assert.doesNotMatch(result.output, /Cross-family judging requires Claude auth/)
+  assert.ok(!result.output.includes('--mount-claude-auth'), result.output)
 })
 
 test('host mode is refused outside an evaluator-only rescore', async () => {
@@ -646,4 +667,45 @@ test('host mode is refused outside an evaluator-only rescore', async () => {
 
   assert.notEqual(result.status, 0)
   assert.match(result.output, /--host is supported only with --run-agent --rescore-from/)
+})
+
+
+test('every judging run requires Claude auth even with Codex-only implementation profiles', async () => {
+  const context = await setup()
+  const codexProfiles = profileArgs.map(value => value === 'claude' ? 'codex' : value)
+  const planned = await scored(context, codexProfiles)
+  assert.equal(planned.status, 0, planned.output)
+  assert.match(planned.output, /--mount-claude-auth/)
+  await rm(join(context.home, '.claude/.credentials.json'))
+  const missing = await scored(context, codexProfiles)
+  assert.equal(missing.status, 2)
+  assert.match(missing.output, /Cross-family judging requires Claude auth/)
+})
+
+test('judging accepts a Claude setup-token instead of the credentials file', async () => {
+  const context = await setup()
+  await rm(join(context.home, '.claude/.credentials.json'))
+
+  const fromEnv = await scored({ ...context, env: { CLAUDE_CODE_OAUTH_TOKEN: 'token-value' } }, profileArgs)
+  assert.equal(fromEnv.status, 0, fromEnv.output)
+  assert.match(fromEnv.output, /--mount-claude-auth/)
+  assert.ok(!fromEnv.output.includes('token-value'), fromEnv.output)
+
+  // sandbox-run.sh loads the Runner's secrets file, so a token there also counts.
+  const secrets = join(context.dir, 'sandbox-secrets.env')
+  await writeFile(secrets, 'GITHUB_TOKEN=x\nexport CLAUDE_CODE_OAUTH_TOKEN=token-value\n')
+  const fromSecrets = await scored({ ...context, env: { SANDBOX_SECRETS_FILE: secrets } }, profileArgs)
+  assert.equal(fromSecrets.status, 0, fromSecrets.output)
+
+  await writeFile(secrets, 'GITHUB_TOKEN=x\n')
+  const missing = await scored({ ...context, env: { SANDBOX_SECRETS_FILE: secrets } }, profileArgs)
+  assert.equal(missing.status, 2)
+  assert.match(missing.output, /CLAUDE_CODE_OAUTH_TOKEN/)
+})
+
+test('sandbox judging mounts the shared panel modules read-only at their resolved import path', async () => {
+  const context = await setup()
+  const result = await scored(context, profileArgs)
+  assert.equal(result.status, 0, result.output)
+  assert.match(result.output, /source=.*evals\/lib\/panel-judging\\,target=\/lib\/panel-judging\\,readonly/)
 })

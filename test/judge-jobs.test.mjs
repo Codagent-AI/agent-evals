@@ -19,6 +19,9 @@ import {
   runRobustJudgeJob,
   resolveJudgeSamples,
   JUDGE_SAMPLES,
+  REQUIREMENT_QUESTION_RULE,
+  PRODUCT_JUDGE_PROFILE,
+  runPanelJob,
   JUDGING_PROTOCOL,
 } from '../evals/agent-runner/and-scene/lib/judge-jobs.mjs'
 import { criteriaForJob, loadRubrics } from '../evals/agent-runner/and-scene/lib/rubric.mjs'
@@ -39,7 +42,7 @@ function judgeOutput(ids, overrides = {}) {
       verdict: 'pass',
       rationale: 'the delivered source implements this contract',
       evidence: ['src/presentation-kit/Scene.tsx:42'],
-      citations: ['src/presentation-kit/Scene.tsx'],
+      citations: ['testing-evidence', 'assumption-handling'].some(job => criteriaForJob(automated, job).includes(id)) ? [] : ['src/presentation-kit/Scene.tsx'],
     })),
     ...overrides,
   })
@@ -885,7 +888,7 @@ test('focused source re-judge and its missing-ID retry keep narrowed schemas and
   await mkdir(join(sourceRoot, 'src/presentation-kit'), { recursive: true })
   await writeFile(join(sourceRoot, 'src/presentation-kit/Scene.tsx'), 'export function Scene() { return null }\n')
   const request = buildJudgeRequest({
-    rubrics, job: 'scene-kit', authority, sources: ['src/presentation-kit/Scene.tsx'],
+    rubrics, job: 'scene-kit', authority,
     neutral: { root, source_root: sourceRoot, requirements_root: join(root, 'requirements') },
   })
   const focusedIds = request.criteria.slice(-2)
@@ -1141,8 +1144,8 @@ test('one failed job does not discard the other five complete outputs', async ()
     assert.equal(outcome.judges[job].length, criteriaForJob(automated, job).length, job)
   }
   assert.deepEqual(outcome.failed_jobs, ['scene-kit'])
-  // Two samples of three attempts each.
-  assert.equal(outcome.retries['scene-kit'], 2 * JUDGE_ATTEMPTS - JUDGE_SAMPLES)
+  // Three panel judges of three attempts each.
+  assert.equal(outcome.retries['scene-kit'], 3 * JUDGE_ATTEMPTS - JUDGE_SAMPLES)
 })
 
 test('six jobs checkpoint independently and reuse a valid completed output', async () => {
@@ -1151,10 +1154,13 @@ test('six jobs checkpoint independently and reuse a valid completed output', asy
   const invoked = []
   const sceneCriteria = criteriaForJob(automated, 'scene-kit')
   const sampleResults = JSON.parse(judgeOutput(sceneCriteria)).results
-  const samples = [1, 2].map(() => ({ ok: true, results: sampleResults, attempts: [], audit_results: null, audit_attempts: [] }))
-  const { results: sceneResults } = resolveJudgeSamples({ criteria: sceneCriteria, samples })
-  loaded.set('scene-kit', { protocol: JUDGING_PROTOCOL, results: sceneResults, samples, tiebreak: null,
-    attempts: [{ attempt: 1, ok: true, error: null }] })
+  const cached = await runPanelJob({ job: 'scene-kit', criteria: sceneCriteria,
+    verdicts: ['pass', 'fail'], order: ['pass', 'fail'], schema: {},
+    buildPrompt: () => ({ prompt: 'test' }),
+    panel: PRODUCT_JUDGE_PROFILE.panel.map(member => ({ ...member, invoke: async () => JSON.stringify({ results: sampleResults }) })),
+    decider: PRODUCT_JUDGE_PROFILE.decider,
+  })
+  loaded.set('scene-kit', cached.record)
 
   const outcome = await runProductJudging({
     rubrics,
@@ -1181,12 +1187,12 @@ test('six jobs checkpoint independently and reuse a valid completed output', asy
   )))
 })
 
-test('product judging runs its jobs sequentially through one recorded authority', async () => {
+test('product judging at concurrency 1 runs its jobs sequentially through one recorded authority', async () => {
   const order = []
   const outcome = await runProductJudging({
-    rubrics, authority, evidence: [], sources: [],
+    rubrics, authority, evidence: [], sources: [], concurrency: 1,
     invoke: async ({ job, criteria, authority: recorded }) => {
-      assert.deepEqual(recorded, authority)
+      assert.ok(PRODUCT_JUDGE_PROFILE.panel.some(member => member.model === recorded.model && member.effort === recorded.effort))
       order.push(`start:${job}`)
       await new Promise((resolve) => setImmediate(resolve))
       order.push(`end:${job}`)
@@ -1195,8 +1201,8 @@ test('product judging runs its jobs sequentially through one recorded authority'
   })
 
   // Jobs never interleave; a job's independent samples run concurrently.
-  assert.deepEqual(order, PRODUCT_JUDGE_JOB_IDS.flatMap((id) => [`start:${id}`, `start:${id}`, `end:${id}`, `end:${id}`]))
-  assert.deepEqual(outcome.authority, authority)
+  assert.deepEqual(order, PRODUCT_JUDGE_JOB_IDS.flatMap((id) => [`start:${id}`, `start:${id}`, `start:${id}`, `end:${id}`, `end:${id}`, `end:${id}`]))
+  assert.deepEqual(outcome.authority, PRODUCT_JUDGE_PROFILE)
   assert.deepEqual(outcome.failed_jobs, [])
 })
 
@@ -1247,9 +1253,20 @@ const NAV_SOURCE = [
   'export const swipe = (dx) => (dx < 0 ? next() : prev())',
 ].join('\n')
 
-test('the protocol runs two independent samples per job and a third only on disagreement', () => {
-  assert.equal(JUDGE_SAMPLES, 2)
-  assert.match(JUDGING_PROTOCOL, /dual-sample-majority/)
+test('the protocol runs three cross-family judges per job', () => {
+  assert.equal(JUDGE_SAMPLES, 3)
+  assert.equal(JUDGING_PROTOCOL, 'cross-family-panel-v1')
+})
+
+// Successful checks, decider calls, and re-cite cycles are protocol calls, not
+// retries; only a repeated attempt of the same call is.
+test('judge retries count repeated attempts, not successful panel stages', async () => {
+  const { judgeRetries } = await import('../evals/agent-runner/and-scene/lib/judge-jobs.mjs')
+  const panel = [0, 1, 2].map(panel_index => ({ cycle: 1, attempt: 1, ok: true, panel_index }))
+  assert.equal(judgeRetries([...panel, { stage: 'dissent-check', attempt: 1, ok: true },
+    { stage: 'contradiction-check', attempt: 1, ok: true }, { stage: 'tiebreak', attempt: 1, ok: true },
+    { cycle: 2, attempt: 1, ok: true, panel_index: 0 }]), 0)
+  assert.equal(judgeRetries([...panel, { stage: 'decider', attempt: 1, ok: false }, { stage: 'decider', attempt: 2, ok: true }]), 1)
 })
 
 const stageOf = (request) => request.judge_stage ?? request.audit_stage ?? 'primary'
@@ -1582,8 +1599,8 @@ test('a cached single-sample judge output is not reused under the dual-sample pr
   const scene = saved.find(({ id }) => id === 'scene-kit')
   assert.equal(scene.protocol, JUDGING_PROTOCOL)
   assert.equal(scene.samples.length, JUDGE_SAMPLES)
-  assert.ok(scene.consensus.every(({ basis }) => basis === 'consensus-pass'))
-  assert.deepEqual(outcome.consensus['scene-kit'], scene.consensus)
+  assert.ok(scene.results.every(({ basis }) => basis === 'consensus-pass'))
+  assert.deepEqual(outcome.consensus['scene-kit'], scene.results.map(({ id, basis, votes }) => ({ id, basis, votes })))
 })
 
 test('a cached record that does not reproduce from its samples is re-judged', async () => {
@@ -1725,6 +1742,7 @@ test('every judge and audit prompt limits judgment to established behavior and p
       assert.match(prompt, /Judge only behavior the cited source and recorded evidence establish/, name)
       assert.match(prompt, /hypothetical input, file deletion, or rendering the candidate does not produce/, name)
       assert.match(prompt, /plain meaning of the fixture requirement/, name)
+      assert.ok(prompt.includes(REQUIREMENT_QUESTION_RULE), name)
     }
   } finally {
     await rm(tree.root, { recursive: true, force: true })
@@ -1796,4 +1814,171 @@ test('a saved judge record and the judging result keep every dispute\'s check', 
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+for (const job of ['testing-evidence', 'assumption-handling']) test(`evidence-view backed dissent reaches targeted check: ${job}`, async t => {
+  const root = await mkdtemp(join(tmpdir(), 'evidence-dissent-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  await writeFile(join(root, 'packet.txt'), 'candidate exercised the requirement\n')
+  const checks = []
+  const outcome = await runProductJudging({ rubrics, authority,
+    evidenceViews: { [job]: { root, packet: 'candidate exercised the requirement\n' } },
+    invoke: async request => {
+      if (request.audit_stage === 'dissent-check') {
+        checks.push(request)
+        assert.match(request.prompt, /candidate exercised the requirement/)
+        assert.match(request.prompt, /\"line\":1,\"text\":\"candidate exercised the requirement\"/)
+        return auditOutput(request.criteria)
+      }
+      const dissent = request.job === job && request.judge_sample === 3
+      return JSON.stringify({ results: request.criteria.map(id => ({ id, verdict: request.job !== job || dissent ? 'pass' : 'fail',
+        rationale: 'the packet proves the criterion', evidence: ['packet.txt'],
+        ...(request.job === job ? { citations: dissent ? [{ path: 'packet.txt', start_line: 1, end_line: 1 }] : [] } : {}),
+      })) })
+    },
+  })
+  assert.deepEqual(outcome.failed_jobs, [])
+  assert.equal(checks.length, criteriaForJob(automated, job).length)
+  assert.ok(outcome.judges[job].every(r => r.basis === 'checked-dissent-pass'))
+})
+
+test('unexpected panel setup failure stays local and preserves its original cause', async () => {
+  const saved = []
+  const failed = []
+  const outcome = await runProductJudging({ rubrics, authority,
+    startJob: async ({ id }) => { if (id === 'scene-kit') throw new Error('panel setup unavailable') },
+    failJob: async record => failed.push(record), saveJob: async record => saved.push(record),
+    invoke: async ({ criteria }) => judgeOutput(criteria),
+  })
+  assert.deepEqual(outcome.failed_jobs, ['scene-kit'])
+  assert.match(failed[0].attempts.at(-1).error, /panel setup unavailable/)
+  assert.equal(saved.length, PRODUCT_JUDGE_JOB_IDS.length - 1)
+})
+
+// Rescores spent most of their time waiting on product judge jobs one at a
+// time; independent jobs now run together without changing what is recorded.
+function staggeredJudge(log) {
+  let inFlight = 0
+  const jobs = new Map()
+  return {
+    invoke: async (request) => {
+      jobs.set(request.job, (jobs.get(request.job) ?? 0) + 1)
+      inFlight += 1
+      log.push({ jobs: [...jobs.values()].filter(Boolean).length, inFlight })
+      // Earlier jobs finish later, so completion order differs from job order.
+      const index = PRODUCT_JUDGE_JOB_IDS.indexOf(request.job)
+      await new Promise((resolve) => setTimeout(resolve, (PRODUCT_JUDGE_JOB_IDS.length - index) * 3))
+      inFlight -= 1
+      jobs.set(request.job, jobs.get(request.job) - 1)
+      if (request.job === 'verification-tooling') throw Object.assign(new Error('invalid_json_schema'), { code: 'judge-schema-invalid', retryable: false, resumable: false, owner: 'evaluation-harness' })
+      if (request.audit_stage) return auditOutput(request.criteria)
+      return judgeOutput(request.criteria)
+    },
+  }
+}
+
+test('product judging runs independent jobs concurrently up to its limit', async () => {
+  const wide = []
+  await runProductJudging({ rubrics, authority, invoke: staggeredJudge(wide).invoke })
+  assert.ok(Math.max(...wide.map(({ jobs }) => jobs)) > 1, 'jobs ran one at a time')
+  const capped = []
+  await runProductJudging({ rubrics, authority, concurrency: 2, invoke: staggeredJudge(capped).invoke })
+  assert.equal(Math.max(...capped.map(({ jobs }) => jobs)), 2)
+})
+
+test('parallel product judging records the same outcome as sequential judging', async () => {
+  const run = async (concurrency) => {
+    const calls = []
+    const saved = []
+    const outcome = await runProductJudging({ rubrics, authority, concurrency,
+      saveJob: async (record) => saved.push(record), invoke: staggeredJudge(calls).invoke })
+    return { outcome, saved: Object.fromEntries(saved.map((record) => [record.id, record])) }
+  }
+  const sequential = await run(1)
+  const parallel = await run(PRODUCT_JUDGE_JOB_IDS.length)
+  assert.deepEqual(parallel.outcome, sequential.outcome)
+  assert.deepEqual(Object.keys(parallel.outcome.judges), PRODUCT_JUDGE_JOB_IDS)
+  assert.deepEqual(parallel.saved, sequential.saved)
+  assert.deepEqual(parallel.outcome.failed_jobs, ['verification-tooling'])
+  assert.equal(Object.keys(parallel.saved).length, PRODUCT_JUDGE_JOB_IDS.length - 1)
+})
+
+test('parallel product judging runs checkpoint callbacks one at a time', async () => {
+  let active = 0
+  let overlap = 0
+  const callback = async () => {
+    active += 1
+    overlap = Math.max(overlap, active)
+    await new Promise((resolve) => setTimeout(resolve, 2))
+    active -= 1
+  }
+  const outcome = await runProductJudging({ rubrics, authority,
+    startJob: callback, saveJob: callback, failJob: callback, invoke: staggeredJudge([]).invoke })
+  assert.deepEqual(outcome.failed_jobs, ['verification-tooling'])
+  assert.equal(overlap, 1)
+})
+
+test('a failed checkpoint callback stops new jobs and reports only after every worker settles', async () => {
+  let settled = false
+  const late = []
+  const run = runProductJudging({ rubrics, authority, concurrency: 3, invoke: staggeredJudge([]).invoke,
+    saveJob: async ({ id }) => {
+      if (settled) late.push(id)
+      if (id === PRODUCT_JUDGE_JOB_IDS.at(-1)) throw new Error('checkpoint disk full')
+    },
+  })
+  await assert.rejects(run, /checkpoint disk full/)
+  settled = true
+  await new Promise((resolve) => setTimeout(resolve, PRODUCT_JUDGE_JOB_IDS.length * 10))
+  assert.deepEqual(late, [])
+})
+
+test('product judging retains schema rejection and quota recovery metadata', async () => {
+  const outcome = await runProductJudging({ rubrics, authority, invoke: async request => {
+    if (request.job === 'scene-kit') throw Object.assign(new Error('invalid_json_schema'), { code: 'judge-schema-invalid', retryable: false, resumable: false, owner: 'evaluation-harness' })
+    return judgeOutput(request.criteria)
+  } })
+  assert.equal(outcome.failures['scene-kit'].code, 'judge-schema-invalid')
+  assert.equal(outcome.failures['scene-kit'].resumable, false)
+})
+
+import { citationTarget, JudgeOutputError, validateLineCitations } from '../evals/lib/panel-judging/protocol.mjs'
+for (const [name, citations, expectedMessage] of [
+  ['outside inventory', [{ path: '../outside.txt', start_line: 1, end_line: 1 }], /outside the verified evidence view: \.\.\/outside\.txt$/],
+  ['outside file', [{ path: 'packet.txt', start_line: 300, end_line: 300 }], /invalid line range: packet\.txt:300-300$/],
+  ['200-line span', [{ path: 'packet.txt', start_line: 1, end_line: 200 }], /invalid line range: packet\.txt:1-200$/],
+  ['too many spans', Array.from({ length: 13 }, () => ({ path: 'packet.txt', start_line: 1, end_line: 1 })), /malformed line citations for x$/],
+  ['symlink', [{ path: 'linked.txt', start_line: 1, end_line: 1 }], /outside the verified evidence view: linked\.txt$/],
+]) test(`evidence citation validation rejects ${name}`, async t => {
+  const root = await mkdtemp(join(tmpdir(), 'evidence-span-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  await writeFile(join(root, 'packet.txt'), 'evidence\n'.repeat(250))
+  await symlink(join(root, 'packet.txt'), join(root, 'linked.txt'))
+  await assert.rejects(validateLineCitations({ id: 'x', verdict: 'pass', rationale: 'reason', evidence: ['packet'], citations }, {
+    job: 'testing-evidence', line_citations: 'evidence-view', input_roots: { evidence: root },
+  }), error => error instanceof JudgeOutputError && error.code === 'judge-output' && expectedMessage.test(error.message))
+  if (name === 'symlink') {
+    // Evidence inventories exclude symlinks; also exercise the target guard directly.
+    await assert.rejects(citationTarget(root, 'linked.txt'), error =>
+      error instanceof JudgeOutputError && error.code === 'judge-output'
+      && /source citation is a symbolic link: linked\.txt$/.test(error.message))
+  }
+})
+
+test('evidence citation validation accepts in-range spans at the length and count limits', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'evidence-span-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  await writeFile(join(root, 'packet.txt'), 'evidence\n'.repeat(250))
+  const request = { job: 'testing-evidence', line_citations: 'evidence-view', input_roots: { evidence: root } }
+  const result = { id: 'x', verdict: 'pass', rationale: 'reason', evidence: ['packet'] }
+  const quoted = await validateLineCitations({ ...result, citations: [{ path: 'packet.txt', start_line: 1, end_line: 199 }] }, request)
+  assert.deepEqual(quoted.get('x'), [{
+    path: 'packet.txt', start_line: 1, end_line: 199,
+    lines: Array.from({ length: 199 }, (_, index) => ({ line: index + 1, text: 'evidence' })),
+  }])
+  const citations = Array.from({ length: 12 }, (_, index) => ({ path: 'packet.txt', start_line: index + 1, end_line: index + 1 }))
+  const counted = await validateLineCitations({ ...result, citations }, request)
+  assert.deepEqual(counted.get('x'), citations.map(citation => ({
+    ...citation, lines: [{ line: citation.start_line, text: 'evidence' }],
+  })))
 })

@@ -128,7 +128,7 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
 
 test('rubric 12.3 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '12.3.0')
+  assert.equal(rubric.version, '13.0.0')
   assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(
@@ -611,6 +611,17 @@ test('rubric 12.0 defines a missing sample and what proves a compile-time claim'
 
 // Round-5 audit: rep-2-a failed skill-failures-fixed-before-success on a
 // strict reading that every check type must be named.
+// #78 rep 2: judges split on a presentation whose own CSS moved the kit's
+// bottom-right default attribution to the top right and hid it in present mode.
+test('rubric 12.4 judges attribution-default-link on the kit default only', async () => {
+  const rubric = await automatedRubric()
+  const guidance = rubric.components.flatMap(({ subcomponents }) => subcomponents)
+    .flatMap(({ review_guidance = [] }) => review_guidance)
+    .filter((line) => line.startsWith('For attribution-default-link')).join('\n')
+  assert.match(guidance, /Judge the kit's default only/)
+  assert.match(guidance, /moves the link away from the bottom-right or hides it in present mode does not fail this criterion/)
+})
+
 test('rubric 12.2 credits a general fix-and-rerun gate for skill failures', async () => {
   const rubric = await automatedRubric()
   const guidance = rubric.components.flatMap(({ subcomponents }) => subcomponents)

@@ -58,7 +58,7 @@ import {
   readEvidenceProjectionInputs,
   writeResultArtifacts,
 } from './lib/result.mjs'
-import { JUDGE_REASONING_EFFORT, createCodexJudgeInvoker } from './lib/judge-invoker.mjs'
+import { JUDGE_REASONING_EFFORT, createSuiteJudgeInvoker } from './lib/judge-invoker.mjs'
 import { hideValidatorFromAgents } from './lib/validator-availability.mjs'
 import { runProductJudging } from './lib/judge-jobs.mjs'
 import {
@@ -1544,11 +1544,11 @@ export async function runEvaluation({
             })
             await saveCheckpoint(checkpointPath, checkpoint)
           },
-          failJob: async ({ id, attempts }) => {
+          failJob: async ({ id, attempts, failure }) => {
             checkpoint = failUnit(checkpoint, {
               phase: 'product-judging',
               unit: id,
-              error: attempts.at(-1)?.error ?? 'judge output exhausted',
+              error: failure?.message ?? attempts.at(-1)?.error ?? 'judge output exhausted',
             })
             await saveCheckpoint(checkpointPath, checkpoint)
           },
@@ -1572,7 +1572,7 @@ export async function runEvaluation({
               judging: record.judging, neutral, authority: { cli: 'codex', model: options.judgeModel, effort: JUDGE_REASONING_EFFORT } })
             const id = `second-opinion:${target.kind}:${target.id}`
             const inputHash = hashJson({ request, probe: record.browser.probes?.find((entry) => entry.id === target.id)?.output_sha256,
-              audit_contract: 'two-verifier-samples-replay-decides-v3' })
+              audit_contract: 'two-verifier-samples-audited-replay-v4' })
             const inputs = { input_hash: inputHash }
             const artifact = join(directory, `${target.id}.json`)
             const reused = await verifyUnit(checkpoint, { phase: 'product-judging', unit: id,
@@ -1647,6 +1647,14 @@ export async function runEvaluation({
           ].join(', ')}`,
         )
         error.code = 'judge-output'
+        const failures = Object.values(record.judging?.failures ?? {})
+        const failure = failures.find(failure => failure.code === 'judge-schema-invalid')
+          ?? failures.find(failure => failure.code === 'claude-quota')
+        if (failure) {
+          const { message, ...metadata } = failure
+          Object.assign(error, metadata)
+          error.message += `: ${message}`
+        }
         throw error
       }
       return [{
@@ -2060,7 +2068,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       : null,
     releaseBrowser: hostBrowser ? () => hostBrowser.release() : null,
     judgeInvoke: productionRunDir
-      ? createCodexJudgeInvoker({
+      ? createSuiteJudgeInvoker({
           runDir: productionRunDir,
           candidateWorktree,
           // run.sh --host points this at the host CLI; the sandbox default
