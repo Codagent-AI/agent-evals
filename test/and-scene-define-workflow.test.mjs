@@ -129,7 +129,10 @@ test('a Claude agent without a credentials file is forwarded a setup-token inste
   const { inspectInputs } = await import('../evals/agent-runner/and-scene-define/lib/preflight.mjs')
   const { runner, skills, suite, home, command } = await preflightFixture(t)
   const claudeProfiles = { ...profiles, crosscheck: { cli: 'claude', model: 'claude-opus-5-5', effort: 'high' } }
-  const inputs = { profiles: claudeProfiles, runnerDir: runner, skillsDir: skills, suiteRoot: suite, home, dryRun: true, command, rubricChecks: async () => {} }
+  // The token is relied on only when the Runner's sandbox help says it forwards it.
+  const forwarding = (name, args) => ({ ...command(name, args), stdout: `${command(name, args).stdout} CLAUDE_CODE_OAUTH_TOKEN` })
+  await assert.rejects(inspectInputs({ profiles: claudeProfiles, runnerDir: runner, skillsDir: skills, suiteRoot: suite, home, dryRun: true, command, rubricChecks: async () => {}, env: { CLAUDE_CODE_OAUTH_TOKEN: 'token-value' } }), /sandbox capability: .*does not forward CLAUDE_CODE_OAUTH_TOKEN/)
+  const inputs = { profiles: claudeProfiles, runnerDir: runner, skillsDir: skills, suiteRoot: suite, home, dryRun: true, command: forwarding, rubricChecks: async () => {} }
   const inspected = await inspectInputs({ ...inputs, env: { CLAUDE_CODE_OAUTH_TOKEN: 'token-value' } })
   assert.deepEqual(inspected.credentials, [join(home, '.codex/auth.json')])
   assert.deepEqual(inspected.forwardedEnv, ['CLAUDE_CODE_OAUTH_TOKEN'])

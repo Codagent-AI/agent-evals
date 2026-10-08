@@ -288,7 +288,11 @@ test('--calibrate judges each input three independent times through the candidat
 // waits briefly so concurrently judged repeats overlap.
 function steadyJudges({ failOn } = {}) {
   let inFlight = 0; let peak = 0; const started = []
-  const inputOf = prompt => prompt.match(/CALIBRATION-INPUT (\S+?)(\\n|\s)/)[1]
+  const inputOf = prompt => {
+    const marker = prompt.match(/CALIBRATION-INPUT (\S+?)(\\n|\s)/)
+    if (!marker) throw new Error('no CALIBRATION-INPUT marker in the judge prompt')
+    return marker[1]
+  }
   const answer = async (id, criteria, verdictOf) => {
     inFlight++; peak = Math.max(peak, inFlight); started.push(id)
     try {
@@ -321,7 +325,10 @@ test('a failed repeat stops new calibration work, lets in-flight repeats finish,
   const f = await suiteFixture(t)
   // Inputs run in set order, so two workers take degraded's first two repeats.
   const { judges, stats } = steadyJudges({ failOn: 'degraded' })
-  await assert.rejects(runCalibration({ suiteRoot: f.suiteRoot, calibrationDir: f.calibrationDir, outDir: f.outDir, repoRoot: f.root, concurrency: 2 }, { judges, gateCommand }), /judge down for degraded/)
+  const lines = []
+  await assert.rejects(runCalibration({ suiteRoot: f.suiteRoot, calibrationDir: f.calibrationDir, outDir: f.outDir, repoRoot: f.root, concurrency: 2 }, { judges, gateCommand, log: line => lines.push(line) }), /judge down for degraded/)
+  // Both concurrent failures are logged, not only the first.
+  assert.equal(lines.filter(x => /^calibration failed: degraded repeat \d: .*judge down/.test(x)).length, 2)
   assert.equal(stats.inFlight, 0)
   assert.deepEqual([...new Set(stats.started)], ['degraded'])
   await assert.rejects(readFile(join(f.outDir, 'calibration-report.json')), { code: 'ENOENT' })

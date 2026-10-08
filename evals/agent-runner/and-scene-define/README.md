@@ -475,7 +475,8 @@ runs are listed under `unscored` with their status and owning phase.
 ## Publication
 
 Only complete, scored candidate results enter
-`evals/agent-runner/and-scene-define/results/<run-id>/`. The snapshot contains
+`evals/agent-runner/and-scene-define/results/<run-id>/`. A run with a failed gate
+is published like any other scored run, with the failed gate in its result. The snapshot contains
 `result.json`, `report.html`, `collected/`, `conversation.jsonl`,
 `discovery/ledger.json`, and `artifact-manifest.json` with SHA-256 hashes.
 Runtime/session state, credentials, raw judge output and full logs are excluded.

@@ -169,9 +169,14 @@ export async function runCalibration(options, dependencies = {}) {
         results[index][repeat - 1] = scored
         if (repeat === 1) {
           log(`re-running the decider on ${input.input_id} repeat 1`)
-          rerunsByInput[index] = await rerunDeciders({ input, runDir, suiteRoot, scored, judges, reruns: options.deciderReruns ?? DECIDER_RERUNS })
+          try { rerunsByInput[index] = await rerunDeciders({ input, runDir, suiteRoot, scored, judges, reruns: options.deciderReruns ?? DECIDER_RERUNS }) }
+          catch (error) { throw Object.assign(error, { message: `decider re-run for ${input.input_id} repeat 1: ${error.message}` }) }
         }
-      } catch (error) { failure ??= error }
+      } catch (error) {
+        // Every failure is logged as it happens; the first one fails the calibration.
+        log(`calibration failed: ${input.input_id} repeat ${repeat}: ${error.message}`)
+        failure ??= error
+      }
     }
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, worker))
