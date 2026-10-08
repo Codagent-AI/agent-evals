@@ -55,7 +55,10 @@ export async function capture() {
   })
   return { replay, replay_score: score(replay), protocol: jobs.JUDGING_PROTOCOL,
     exports: Object.fromEntries(Object.entries(modules).map(([name, module]) => [name, Object.keys(module)])),
-    records, outcome, score: score(outcome),
+    // Jobs run concurrently and are saved as each finishes; each record is
+    // stored under its job id, so compare them in job order.
+    records: records.sort((a, b) => outcome.expected_jobs.indexOf(a.id) - outcome.expected_jobs.indexOf(b.id)),
+    outcome, score: score(outcome),
     prompts: prompts.sort((a, b) => {
       const left = JSON.stringify(a)
       const right = JSON.stringify(b)
