@@ -334,7 +334,7 @@ refuses, and an output directory under `results/` is refused.
 
 ```sh
 evals/agent-runner/and-scene-define/run.sh --calibrate --dry-run
-evals/agent-runner/and-scene-define/run.sh --calibrate [--out DIR] [--repeats N] [--rescore-input ID]
+evals/agent-runner/and-scene-define/run.sh --calibrate [--out DIR] [--repeats N] [--concurrency N] [--rescore-input ID]
 ```
 
 - `--dry-run` loads the set, verifies `manifest.json` hashes and expectations,
@@ -346,6 +346,11 @@ evals/agent-runner/and-scene-define/run.sh --calibrate [--out DIR] [--repeats N]
   candidate `gates-and-judging` phase (OpenSpec gates, coverage per area,
   quality, and fidelity when the input has a conversation). No judged unit is
   reused between repeats. Inputs have no disclosure audit, so nothing is leaked.
+- `--concurrency` is how many repeats are judged at once (default 6, at
+  least 1). Each repeat's panel already runs its three judges together, so the
+  default keeps about eighteen judge CLIs in flight. The report is the same
+  whatever order repeats finish in. After a failed repeat no new repeat
+  starts, and the calibration fails once in-flight repeats finish.
 - For each input's first repeat, the decider alone is re-run 3 times on every
   recorded panel record that reached it: the batched decider ruling and every
   targeted dissent check, rebuilt exactly as the panel built them

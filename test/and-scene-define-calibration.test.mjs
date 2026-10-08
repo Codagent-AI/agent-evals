@@ -256,7 +256,8 @@ const gateCommand = async () => ({ status: 0, stdout: '', stderr: '' })
 test('--calibrate judges each input three independent times through the candidate judging path and reports every diagnostic', async t => {
   const f = await suiteFixture(t)
   const { judges, calls } = stubJudges()
-  const { report, exitCode } = await runCalibration({ suiteRoot: f.suiteRoot, calibrationDir: f.calibrationDir, outDir: f.outDir, repeats: 3, repoRoot: f.root }, { judges, gateCommand })
+  // The script keys votes to call order, so judge one repeat at a time.
+  const { report, exitCode } = await runCalibration({ suiteRoot: f.suiteRoot, calibrationDir: f.calibrationDir, outDir: f.outDir, repeats: 3, repoRoot: f.root, concurrency: 1 }, { judges, gateCommand })
   // Each input: one coverage job and one quality job, three panel judges, three repeats, no reuse.
   for (const id of ['reference', 'restructured', 'degraded']) {
     assert.equal(calls.filter(x => x.input === id && x.who !== 'decider').length, 3 * 2 * 3, id)
@@ -288,6 +289,50 @@ test('--calibrate judges each input three independent times through the candidat
   assert.deepEqual((await readdir(join(f.outDir, 'inputs/reference'))).sort(), ['repeat-1', 'repeat-2', 'repeat-3'])
 })
 
+// Order-independent panel: every vote depends only on the input, and each call
+// waits briefly so concurrently judged repeats overlap.
+function steadyJudges({ failOn } = {}) {
+  let inFlight = 0; let peak = 0; const started = []
+  const inputOf = prompt => prompt.match(/CALIBRATION-INPUT (\S+?)(\\n|\s)/)[1]
+  const answer = async (id, criteria, verdictOf) => {
+    inFlight++; peak = Math.max(peak, inFlight); started.push(id)
+    try {
+      await new Promise(done => setTimeout(done, 5))
+      if (id === failOn) throw Object.assign(new Error(`judge down for ${id}`), { retryable: false })
+      return JSON.stringify({ results: criteria.map(c => vote(c, verdictOf(c))) })
+    } finally { inFlight-- }
+  }
+  const verdictOf = id => c => c.startsWith('quality:') ? (id === 'degraded' ? 'missing' : 'met') : (id === 'degraded' && c === A ? 'missing' : 'met')
+  const panel = [0, 1, 2].map(n => ({ family: n ? 'codex' : 'claude', model: n ? 'stub-codex' : 'stub-claude', effort: 'high', invoke: req => answer(inputOf(req.prompt), req.criteria, verdictOf(inputOf(req.prompt))) }))
+  const decider = { family: 'claude', model: 'stub-decider', effort: 'high', invoke: req => answer(inputOf(req.prompt), req.criteria, verdictOf(inputOf(req.prompt))) }
+  return { judges: { panel, decider }, stats: { get peak() { return peak }, get inFlight() { return inFlight }, started } }
+}
+
+test('calibration judges several repeats at once and reports them in input and repeat order', async t => {
+  const sequential = await suiteFixture(t)
+  const one = await runCalibration({ suiteRoot: sequential.suiteRoot, calibrationDir: sequential.calibrationDir, outDir: sequential.outDir, repoRoot: sequential.root, concurrency: 1 }, { judges: steadyJudges().judges, gateCommand })
+  const f = await suiteFixture(t)
+  const { judges, stats } = steadyJudges()
+  const many = await runCalibration({ suiteRoot: f.suiteRoot, calibrationDir: f.calibrationDir, outDir: f.outDir, repoRoot: f.root, concurrency: 4 }, { judges, gateCommand })
+  // Three panel seats per job; more than one job in flight means repeats overlapped.
+  assert.ok(stats.peak > 3, `peak in-flight judge calls ${stats.peak}`)
+  assert.deepEqual(many.report.inputs.map(x => x.input_id), one.report.inputs.map(x => x.input_id))
+  assert.deepEqual(many.report.inputs.map(x => x.scores.per_repeat), one.report.inputs.map(x => x.scores.per_repeat))
+  assert.deepEqual(many.report.failures, one.report.failures)
+  assert.deepEqual(many.report.threshold, one.report.threshold)
+  for (const id of ['reference', 'restructured', 'degraded']) assert.deepEqual((await readdir(join(f.outDir, 'inputs', id))).sort(), ['repeat-1', 'repeat-2', 'repeat-3'])
+})
+
+test('a failed repeat stops new calibration work, lets in-flight repeats finish, and fails the calibration', async t => {
+  const f = await suiteFixture(t)
+  // Inputs run in set order, so two workers take degraded's first two repeats.
+  const { judges, stats } = steadyJudges({ failOn: 'degraded' })
+  await assert.rejects(runCalibration({ suiteRoot: f.suiteRoot, calibrationDir: f.calibrationDir, outDir: f.outDir, repoRoot: f.root, concurrency: 2 }, { judges, gateCommand }), /judge down for degraded/)
+  assert.equal(stats.inFlight, 0)
+  assert.deepEqual([...new Set(stats.started)], ['degraded'])
+  await assert.rejects(readFile(join(f.outDir, 'calibration-report.json')), { code: 'ENOENT' })
+})
+
 test('real judging is refused while anchors are unreviewed (HT-003); a dry run makes no calls and writes nothing', async t => {
   const f = await suiteFixture(t, { reviewed: false })
   const { judges, calls } = stubJudges()
@@ -308,6 +353,9 @@ test('calibrate arguments: at least three repeats, host-only default output, one
   assert.equal(parseCalibrateArguments(['--calibrate', '--repeats', '5', '--dry-run'], { now }).repeats, 5)
   assert.equal(parseCalibrateArguments(['--calibrate', '--dry-run'], { now }).dryRun, true)
   assert.throws(() => parseCalibrateArguments(['--calibrate', '--repeats', '2']), /at least 3/)
+  assert.equal(options.concurrency, 6)
+  assert.equal(parseCalibrateArguments(['--calibrate', '--concurrency', '2'], { now }).concurrency, 2)
+  assert.throws(() => parseCalibrateArguments(['--calibrate', '--concurrency', '0']), /--concurrency must be an integer of at least 1/)
   assert.throws(() => parseCalibrateArguments(['--calibrate', '--run-agent']), /exactly one mode/)
   assert.throws(() => parseArguments(['--calibrate']), /run\.sh \(calibrate\.mjs\)/)
 })

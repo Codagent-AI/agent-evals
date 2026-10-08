@@ -3,7 +3,8 @@
 //
 // Each calibration input is judged `--repeats` times (at least 3) through the
 // same gates-and-judging phase a candidate run uses, every repeat in its own
-// fresh run directory so no judged unit is reused. The decider alone is then
+// fresh run directory so no judged unit is reused. Up to `--concurrency`
+// repeats are judged at once. The decider alone is then
 // re-run 3 times on each first-repeat panel record that went to it, and the
 // report (lib/calibration.mjs) is written to the output directory together
 // with the eval-owned usage ledger.
@@ -26,6 +27,9 @@ import { loadCalibrationSet, aggregateCalibration, renderCalibrationMarkdown, MI
 
 export const REPO_ROOT = resolve(SUITE_ROOT, '../../..')
 export const DEFAULT_CALIBRATION_DIR = join(SUITE_ROOT, 'calibration')
+// Each repeat's panel already runs its three seats together, so six repeats
+// keep about eighteen judge CLIs in flight.
+export const CALIBRATION_CONCURRENCY = 6
 export const calibrationOutputRoot = (repoRoot = REPO_ROOT) => join(repoRoot, 'artifacts/evals/and-scene-define-calibration')
 
 export const CALIBRATE_HELP = `Usage: evals/agent-runner/and-scene-define/run.sh --calibrate [options]
@@ -35,6 +39,7 @@ Maintainer diagnostic only: never published, never required by candidate runs.
 Options:
   --out DIR                Output directory (default artifacts/evals/and-scene-define-calibration/<timestamp>).
   --repeats N              Judgings per input, at least ${MIN_REPEATS} (default ${MIN_REPEATS}).
+  --concurrency N          Repeats judged at once, at least 1 (default ${CALIBRATION_CONCURRENCY}).
   --rescore-input ID       Input whose two identical judgings are diffed per item (default reference).
   --calibration-dir DIR    Calibration set (default the suite's calibration/).
   --dry-run                Load and validate the set and print the plan; no model calls.
@@ -42,7 +47,7 @@ Real judging requires reviewed anchors (HT-003) in hidden/inventory.json.`
 
 export function parseCalibrateArguments(argv, { now = new Date(), repoRoot = REPO_ROOT } = {}) {
   if (argv.includes('--help') || argv.includes('-h')) return { help: true }
-  const options = { repeats: MIN_REPEATS, dryRun: false, calibrationDir: DEFAULT_CALIBRATION_DIR, rescoreInput: null }
+  const options = { repeats: MIN_REPEATS, concurrency: CALIBRATION_CONCURRENCY, dryRun: false, calibrationDir: DEFAULT_CALIBRATION_DIR, rescoreInput: null }
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index]
     if (arg === '--calibrate') continue
@@ -54,6 +59,9 @@ export function parseCalibrateArguments(argv, { now = new Date(), repoRoot = REP
     else if (arg === '--repeats') {
       if (!/^\d+$/.test(value) || Number(value) < MIN_REPEATS) throw new Error(`--repeats must be an integer of at least ${MIN_REPEATS}`)
       options.repeats = Number(value)
+    } else if (arg === '--concurrency') {
+      if (!/^\d+$/.test(value) || Number(value) < 1) throw new Error('--concurrency must be an integer of at least 1')
+      options.concurrency = Number(value)
     } else if (arg === '--rescore-input') options.rescoreInput = value
     else if (arg === '--calibration-dir') options.calibrationDir = resolve(value)
     else throw new Error(`unknown calibrate option ${arg}`)
@@ -140,20 +148,36 @@ export async function runCalibration(options, dependencies = {}) {
   // One judge authority for the whole calibration so the eval-owned usage
   // ledger lands in the output directory, never in a candidate run.
   const judges = dependencies.judges ?? createDefinitionJudges({ runDir: outDir })
-  const judged = []; const reruns = []
-  for (const input of set.inputs) {
-    const results = []
-    for (let repeat = 1; repeat <= repeats; repeat++) {
-      log(`judging ${input.input_id} repeat ${repeat}/${repeats}`)
-      const runDir = join(outDir, 'inputs', input.input_id.replace(/[^A-Za-z0-9._-]/g, '-'), `repeat-${repeat}`)
-      results.push(await judgeRepeat({ input, runDir, suiteRoot, judges, gateCommand: dependencies.gateCommand, repeat }))
-      if (repeat === 1) {
-        log(`re-running the decider on ${input.input_id} repeat 1`)
-        reruns.push(...await rerunDeciders({ input, runDir, suiteRoot, scored: results[0], judges, reruns: options.deciderReruns ?? DECIDER_RERUNS }))
-      }
+  // Repeats are independent: each has its own run directory and checkpoint,
+  // and the shared usage ledger is append-only. Results are stored by input
+  // and repeat, so the report does not depend on which repeat finishes first.
+  // After a failure no new repeat starts; in-flight repeats finish first so no
+  // judge call outlives the calibration.
+  const concurrency = options.concurrency ?? CALIBRATION_CONCURRENCY
+  if (!Number.isInteger(concurrency) || concurrency < 1) throw new Error('calibration concurrency must be an integer of at least 1')
+  const tasks = set.inputs.flatMap((input, index) => Array.from({ length: repeats }, (_, n) => ({ index, input, repeat: n + 1 })))
+  const results = set.inputs.map(() => [])
+  const rerunsByInput = set.inputs.map(() => [])
+  let next = 0; let failure = null
+  const worker = async () => {
+    while (!failure && next < tasks.length) {
+      const { index, input, repeat } = tasks[next++]
+      try {
+        log(`judging ${input.input_id} repeat ${repeat}/${repeats}`)
+        const runDir = join(outDir, 'inputs', input.input_id.replace(/[^A-Za-z0-9._-]/g, '-'), `repeat-${repeat}`)
+        const scored = await judgeRepeat({ input, runDir, suiteRoot, judges, gateCommand: dependencies.gateCommand, repeat })
+        results[index][repeat - 1] = scored
+        if (repeat === 1) {
+          log(`re-running the decider on ${input.input_id} repeat 1`)
+          rerunsByInput[index] = await rerunDeciders({ input, runDir, suiteRoot, scored, judges, reruns: options.deciderReruns ?? DECIDER_RERUNS })
+        }
+      } catch (error) { failure ??= error }
     }
-    judged.push({ input_id: input.input_id, description: input.expectations.description ?? null, expectations: input.expectations, input_hash: input.input_hash, repeats: results })
   }
+  await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, worker))
+  if (failure) throw failure
+  const judged = set.inputs.map((input, index) => ({ input_id: input.input_id, description: input.expectations.description ?? null, expectations: input.expectations, input_hash: input.input_hash, repeats: results[index] }))
+  const reruns = rerunsByInput.flat()
   const report = aggregateCalibration({ inputs: judged, rubric, reruns, rescoreInput: options.rescoreInput, judgeProfile: JUDGE_PROFILE, panelProtocol: PANEL_PROTOCOL, usage: await usageSummary(outDir), outDir })
   await writeJsonAtomic(join(outDir, 'calibration-report.json'), report)
   await writeFile(join(outDir, 'calibration-report.md'), renderCalibrationMarkdown(report))
