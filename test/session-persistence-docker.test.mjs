@@ -27,12 +27,17 @@ function container(artifacts, command) {
 
 test('replacement containers reuse only their own mounted agent sessions', {
   skip: !dockerAvailable,
-}, async () => {
+}, async t => {
   const dir = await makeTempDir(join(tmpdir(), 'agent-evals-session-docker-'))
   const firstArtifacts = join(dir, 'evaluation-a')
   const secondArtifacts = join(dir, 'evaluation-b')
   await mkdir(firstArtifacts)
   await mkdir(secondArtifacts)
+  // The containers create owner-only state the host user cannot remove, so
+  // delete it from inside a container before the host-side cleanup runs.
+  t.after(() => {
+    for (const artifacts of [firstArtifacts, secondArtifacts]) container(artifacts, 'rm -rf /artifacts/.runtime')
+  })
 
   const first = container(firstArtifacts, [
     '/eval-input/prepare-agent-session-state.sh /artifacts/.runtime/agent-session-state',
