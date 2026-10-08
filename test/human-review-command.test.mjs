@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -171,7 +172,7 @@ function servers({
 }
 
 async function root() {
-  return mkdtemp(join(tmpdir(), 'agent-evals-human-review-'))
+  return makeTempDir(join(tmpdir(), 'agent-evals-human-review-'))
 }
 
 test('a pending run is opened with its evaluated candidate served and its URL printed', async () => {

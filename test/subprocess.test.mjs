@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -54,7 +55,7 @@ test('an injected executor replaces the real subprocess while keeping timing', (
 })
 
 test('a logged command streams output without the spawnSync buffer limit', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-subprocess-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-subprocess-'))
   const outputPath = join(dir, 'agent-runner.log')
   const bytes = 2 * 1024 * 1024
 

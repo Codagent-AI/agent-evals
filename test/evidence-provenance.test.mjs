@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -22,7 +23,7 @@ const FINAL_SHA = 'f'.repeat(40)
 const BASELINE_SHA = 'b'.repeat(40)
 
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-evidence-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-evidence-'))
   const worktree = join(root, 'candidate')
   const sessionDir = join(root, 'session')
   const runDir = join(root, 'run')

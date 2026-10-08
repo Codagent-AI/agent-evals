@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
@@ -34,7 +35,7 @@ async function writeCandidate(rootDir, overrides = {}) {
 }
 
 test('deterministic evaluator passes a contract-complete candidate', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'and-scene-deterministic-'))
+  const dir = await makeTempDir(join(tmpdir(), 'and-scene-deterministic-'))
   await writeCandidate(dir)
   const results = await runDeterministicChecks(dir)
   assert.ok(results.length >= 7)
@@ -48,7 +49,7 @@ test('every source-evidence id addresses a scored criterion or a hard gate', asy
     ...rubricCriteria(automated.rubric).map(({ id }) => id),
     ...automated.rubric.gates.map(({ id }) => id),
   ])
-  const dir = await mkdtemp(join(tmpdir(), 'and-scene-source-evidence-ids-'))
+  const dir = await makeTempDir(join(tmpdir(), 'and-scene-source-evidence-ids-'))
   await writeCandidate(dir)
 
   const results = await runDeterministicChecks(dir)
@@ -58,7 +59,7 @@ test('every source-evidence id addresses a scored criterion or a hard gate', asy
 })
 
 test('deterministic evaluator fails safely when candidate text exceeds its scan budget', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'and-scene-deterministic-budget-'))
+  const dir = await makeTempDir(join(tmpdir(), 'and-scene-deterministic-budget-'))
   await writeCandidate(dir, {
     'src/presentations/oversized.md': 'x'.repeat(600 * 1024),
   })
@@ -70,7 +71,7 @@ test('deterministic evaluator fails safely when candidate text exceeds its scan 
 })
 
 test('deterministic evaluator accepts the project-local helper in the scaffold template', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'and-scene-template-helper-'))
+  const dir = await makeTempDir(join(tmpdir(), 'and-scene-template-helper-'))
   await writeCandidate(dir)
   const rootHelper = join(dir, 'scripts/screenshot.mjs')
   const templateHelper = join(dir, 'skills/presentation/templates/bootstrap/scripts/inspect-presentation.mjs')
@@ -85,7 +86,7 @@ test('deterministic evaluator accepts the project-local helper in the scaffold t
 })
 
 test('active-state evidence accepts a namespaced stable hook without duplicating aria-current in the helper', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'and-scene-namespaced-active-'))
+  const dir = await makeTempDir(join(tmpdir(), 'and-scene-namespaced-active-'))
   await writeCandidate(dir, {
     'src/presentation-kit/Toc.tsx': 'aria-current data-presentation-active',
     'scripts/screenshot.mjs': [
@@ -112,7 +113,7 @@ test('deterministic evaluator catches known sample, loopback, attribution, activ
     ['visual-helper-attribution-warning', { 'scripts/screenshot.mjs': 'playwright data-allow-overlap overlap warning getComputedStyle active inactive aria-current warning' }],
   ]
   for (const [expectedFailure, override] of mutations) {
-    const dir = await mkdtemp(join(tmpdir(), 'and-scene-mutant-'))
+    const dir = await makeTempDir(join(tmpdir(), 'and-scene-mutant-'))
     await writeCandidate(dir, override)
     const results = await runDeterministicChecks(dir)
     assert.equal(results.find(({ id }) => id === expectedFailure)?.verdict, 'fail', expectedFailure)
@@ -120,7 +121,7 @@ test('deterministic evaluator catches known sample, loopback, attribution, activ
 })
 
 test('deterministic sample check requires browser evidence in canonical title order', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'and-scene-order-'))
+  const dir = await makeTempDir(join(tmpdir(), 'and-scene-order-'))
   await writeCandidate(dir)
   const manifest = join(dir, 'screenshot-manifest.json')
   await writeFile(manifest, `${JSON.stringify({
@@ -141,7 +142,7 @@ test('deterministic sample check requires browser evidence in canonical title or
 
 test('source-evidence collection reports the scanned files alongside the evidence', async () => {
   const { collectSourceEvidence } = await import('../evals/agent-runner/and-scene/deterministic-checks.mjs')
-  const dir = await mkdtemp(join(tmpdir(), 'and-scene-source-collect-'))
+  const dir = await makeTempDir(join(tmpdir(), 'and-scene-source-collect-'))
   await writeCandidate(dir)
 
   const collected = await collectSourceEvidence(dir)
@@ -155,7 +156,7 @@ test('source-evidence collection reports the scanned files alongside the evidenc
 
 test('an unreadable candidate tree yields no source files rather than throwing', async () => {
   const { collectSourceEvidence } = await import('../evals/agent-runner/and-scene/deterministic-checks.mjs')
-  const dir = await mkdtemp(join(tmpdir(), 'and-scene-source-empty-'))
+  const dir = await makeTempDir(join(tmpdir(), 'and-scene-source-empty-'))
 
   const collected = await collectSourceEvidence(dir)
 
@@ -165,7 +166,7 @@ test('an unreadable candidate tree yields no source files rather than throwing',
 // Round-0 baseline repetition 2 linked its default attribution to a guessed
 // github.com/and-scene/and-scene, which is not the and-scene repository.
 test('the attribution fact names a wrong GitHub target instead of only reporting it missing', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'and-scene-attribution-target-'))
+  const dir = await makeTempDir(join(tmpdir(), 'and-scene-attribution-target-'))
   await writeCandidate(dir, {
     'src/presentation-kit/Attribution.tsx': 'made by and-scene https://github.com/and-scene/and-scene',
   })
@@ -178,7 +179,7 @@ test('the attribution fact names a wrong GitHub target instead of only reporting
 })
 
 test('the attribution fact does not accept the repository URL as a prefix of another repository', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'and-scene-attribution-prefix-'))
+  const dir = await makeTempDir(join(tmpdir(), 'and-scene-attribution-prefix-'))
   await writeCandidate(dir, {
     'src/presentation-kit/Attribution.tsx': 'made by and-scene https://github.com/Codagent-AI/and-scene-fork',
   })

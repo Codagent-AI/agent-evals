@@ -1,12 +1,13 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdtemp, writeFile, readFile, rm, realpath } from 'node:fs/promises'
+import { writeFile, readFile, rm, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { createClaudeJudgeInvoker } from '../evals/lib/panel-judging/claude-invoker.mjs'
 
 async function fixture(t, events, options = {}) {
-  const root = await mkdtemp(join(tmpdir(), 'claude-judge-'))
+  const root = await makeTempDir(join(tmpdir(), 'claude-judge-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   const command = join(root, 'claude')
   await writeFile(command, `#!/usr/bin/env node\nimport fs from 'node:fs';\nconst root = ${JSON.stringify(root)};\nlet n = Number(fs.existsSync(root+'/count') ? fs.readFileSync(root+'/count','utf8') : 0);\nfs.writeFileSync(root+'/count',String(n+1));\nfs.writeFileSync(root+'/args',JSON.stringify({args:process.argv.slice(2),cwd:process.cwd(),env:process.env}));\nprocess.stdin.resume();\nprocess.stdin.on('end',()=>{process.stderr.write(${JSON.stringify(options.stderr ?? '')});process.stdout.write(${JSON.stringify(events)}[Math.min(n,${events.length - 1})].map(e=>JSON.stringify(e)).join('\\n')+'\\n');});\n`, { mode: 0o755 })

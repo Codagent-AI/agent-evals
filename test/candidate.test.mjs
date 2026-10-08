@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -94,7 +95,7 @@ async function repository({
   taskIndex = '- [Demo task](tasks/01-demo.md)\n',
   testPlan = null,
 } = {}) {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-candidate-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-candidate-'))
   const source = join(root, 'source')
   await mkdir(source)
   git(source, 'init', '-q')

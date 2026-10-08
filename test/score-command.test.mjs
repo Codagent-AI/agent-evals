@@ -1,6 +1,7 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { mkdtemp, readFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -57,7 +58,7 @@ async function durableInputs(root, jobs = allJobs) {
 }
 
 async function rescore(mode, jobs = allJobs) {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-score-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-score-'))
   const inputs = await durableInputs(root, jobs)
   const output = join(root, 'score.json')
   await run(process.execPath, [
@@ -101,7 +102,7 @@ test('score.mjs rescoring produces the reference 62/92 N/A contract', async () =
 })
 
 test('score.mjs refuses an exhausted required judge instead of fabricating zeroes', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-score-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-score-'))
   const inputs = await durableInputs(root)
   const judging = JSON.parse(await readFile(inputs.judging, 'utf8'))
   judging.judges['testing-evidence'] = null
@@ -124,7 +125,7 @@ test('score.mjs refuses an exhausted required judge instead of fabricating zeroe
 // panel series) has no engineering-quality job and no input-hygiene browser
 // results. The refusal says how to recover.
 test('score.mjs tells the user to re-judge a run judged under an older rubric', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-score-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-score-'))
   const inputs = await durableInputs(root, allJobs.filter((job) => job !== 'engineering-quality'))
 
   await assert.rejects(
@@ -145,7 +146,7 @@ test('score.mjs tells the user to re-judge a run judged under an older rubric', 
 })
 
 test('score.mjs tells the user to re-judge a browser evaluation without the current probes', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-score-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-score-'))
   const inputs = await durableInputs(root)
   const browser = JSON.parse(await readFile(inputs.browser, 'utf8'))
   browser.criteria = browser.criteria.filter(({ id }) => !id.startsWith('input-'))

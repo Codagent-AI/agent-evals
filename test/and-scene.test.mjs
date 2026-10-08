@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { chmod, mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises'
+import { chmod, mkdir, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -30,7 +31,7 @@ function git(cwd, ...args) {
 // The scored path now requires a clean Agent Runner worktree containing
 // core implement-change-v1.0, so the fixture runner directory is a real Git checkout.
 async function setup({ workflow = 'name: implement-change\n', dirty = false } = {}) {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-'))
   const runner = join(dir, 'agent-runner')
   const agentSkills = join(dir, 'agent-skills')
   const sandbox = join(runner, 'scripts/sandbox-run.sh')
@@ -518,7 +519,9 @@ bash -n -c "$1"
 const repairPolicy = join(root, 'evals/agent-runner/and-scene/evidence-repair.sh')
 
 test('evidence repair runs at most once and deducts no product points', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'evidence-repair-'))
+  const dir = await makeTempDir(join(tmpdir(), 'evidence-repair-'))
+  const repairTmp = join(dir, 'tmp')
+  await mkdir(repairTmp)
   const manifest = join(dir, 'manifest.json')
   const helper = join(dir, 'screenshot.mjs')
   await writeFile(helper, 'original helper\n')
@@ -540,14 +543,16 @@ ensure_complete_evidence capture repair ${JSON.stringify(manifest)} ${JSON.strin
 printf '%s %s %s %s %s\\n' "$captures" "$repairs" "$EVIDENCE_REPAIR_ATTEMPTED" \
   "$EVIDENCE_REPAIR_SUCCEEDED" "${'${EVIDENCE_REPAIR_PENALTY-unset}'}"
 `
-  const result = spawnSync('bash', ['-c', script], { encoding: 'utf8' })
+  const result = spawnSync('bash', ['-c', script], { encoding: 'utf8', env: { ...process.env, TMPDIR: repairTmp } })
   assert.equal(result.status, 0, result.stderr)
   // The repair is recorded diagnostically; it carries no penalty at all.
   assert.equal(result.stdout.trim(), '2 1 true true unset')
 })
 
 test('evidence repair may edit only its temporary helper copy', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'evidence-repair-isolation-'))
+  const dir = await makeTempDir(join(tmpdir(), 'evidence-repair-isolation-'))
+  const repairTmp = join(dir, 'tmp')
+  await mkdir(repairTmp)
   const manifest = join(dir, 'manifest.json')
   const helper = join(dir, 'screenshot.mjs')
   await writeFile(helper, 'original helper\n')
@@ -561,13 +566,14 @@ repair() {
 }
 ensure_complete_evidence capture repair ${JSON.stringify(manifest)} ${JSON.stringify(helper)} || true
 `
-  const result = spawnSync('bash', ['-c', script], { encoding: 'utf8' })
+  const result = spawnSync('bash', ['-c', script], { encoding: 'utf8', env: { ...process.env, TMPDIR: repairTmp } })
   assert.equal(result.status, 0, result.stderr)
 
   const workspace = result.stdout.trim().split('\n').pop()
   assert.equal(await readFile(helper, 'utf8'), 'original helper\n')
   assert.equal(await readFile(join(workspace, 'screenshot.mjs'), 'utf8'), 'repaired helper\n')
   assert.notEqual(dirname(workspace), dirname(helper))
+  assert.equal(dirname(workspace), repairTmp)
 })
 
 test('screenshot helper uses the spec contract and reports complete coverage', async () => {

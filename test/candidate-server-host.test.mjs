@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -16,7 +17,7 @@ const SUITE_DIR = join(
 )
 
 async function runDirectory({ build = true } = {}) {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-host-server-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-host-server-'))
   if (build) {
     await mkdir(join(dir, '.runtime/candidate-worktree/dist/assets'), { recursive: true })
     await writeFile(join(dir, '.runtime/candidate-worktree/dist/index.html'), '<h1>and-scene</h1>\n')
@@ -207,7 +208,7 @@ test('the real server refuses to start without a build directory', async () => {
 // Host rescores on a 16 GB machine: an idle headless Chrome held through the
 // whole run grew to about 9 GB. The host browser now starts on demand with
 // memory-limiting flags and is released after each browser phase.
-test('the host browser starts lean on demand and releases its process and profile', async () => {
+test('the host browser starts lean on demand and releases its process and profile', async t => {
   const { createHostBrowser, HOST_CHROME_FLAGS } = await import('../evals/agent-runner/and-scene/lib/host-browser.mjs')
   const { EventEmitter } = await import('node:events')
   const { access } = await import('node:fs/promises')
@@ -240,6 +241,7 @@ test('the host browser starts lean on demand and releases its process and profil
     fetchImpl: async () => ({ ok: true }),
     axi: async (args) => { axi.push(args.join(' ')) },
   })
+  t.after(() => browser.release())
 
   await browser.ensure()
   await browser.ensure()
@@ -268,7 +270,7 @@ test('the host browser starts lean on demand and releases its process and profil
 
 // A sanity rescore failed its browser phase when Chrome's helpers were still
 // writing the profile while it was removed.
-test('releasing the host browser never fails the phase that used it', async () => {
+test('releasing the host browser never fails the phase that used it', async t => {
   const { createHostBrowser } = await import('../evals/agent-runner/and-scene/lib/host-browser.mjs')
   const { EventEmitter } = await import('node:events')
   const removals = []
@@ -276,7 +278,10 @@ test('releasing the host browser never fails the phase that used it', async () =
   let chrome = null
   const browser = createHostBrowser({
     chromePath: '/fake/chrome', port: 9556, env: {},
-    spawnImpl: () => {
+    spawnImpl: (_command, args) => {
+      const profile = args.find(arg => arg.startsWith('--user-data-dir=')).slice('--user-data-dir='.length)
+      // This test deliberately makes product cleanup fail; remove only its own profile.
+      t.after(() => rm(profile, { recursive: true, force: true, maxRetries: 3 }))
       chrome = new EventEmitter()
       chrome.pid = 5151
       chrome.exitCode = null
@@ -297,6 +302,7 @@ test('releasing the host browser never fails the phase that used it', async () =
     },
     sleep: async () => {},
   })
+  t.after(() => browser.release())
   await browser.ensure()
   await browser.release()
   assert.ok(removals.length >= 1)

@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -559,7 +560,7 @@ test('source citations support multi-file claims while remaining bounded', () =>
 })
 
 test('source audit receives only the exact cited files and primary claims', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
   await mkdir(join(sourceRoot, 'src'), { recursive: true })
   await writeFile(join(sourceRoot, 'src/nav.ts'), 'const touchStartX = 10\\n')
@@ -619,7 +620,7 @@ test('source judges may cite only durable source and never ephemeral tool output
 })
 
 test('source audit rejects citation paths outside the neutral source root', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
   await mkdir(sourceRoot, { recursive: true })
 
@@ -649,7 +650,7 @@ test('source audit rejects citation paths outside the neutral source root', asyn
 })
 
 test('source audit rejects symlinks before reading a cited file', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
   const outside = join(root, 'outside-secret.txt')
   await mkdir(sourceRoot, { recursive: true })
@@ -682,7 +683,7 @@ test('source audit rejects symlinks before reading a cited file', async () => {
 })
 
 test('source audit never truncates a cited file before judging its mechanism', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
   const content = `${'const filler = 0\\n'.repeat(3000)}export const CRITICAL_MECHANISM = true\n`
   await mkdir(sourceRoot, { recursive: true })
@@ -777,7 +778,7 @@ test('strict parsing rejects every shape of malformed judge output', () => {
 })
 
 test('a judge job retries locally once and succeeds on the second attempt', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
   await mkdir(join(sourceRoot, 'src/presentation-kit'), { recursive: true })
   await writeFile(
@@ -820,7 +821,7 @@ test('a judge job retries locally once and succeeds on the second attempt', asyn
 })
 
 test('source judge credit requires primary and closed-world audit agreement', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
   await mkdir(join(sourceRoot, 'src'), { recursive: true })
   await writeFile(join(sourceRoot, 'src/nav.ts'), [
@@ -878,7 +879,7 @@ test('source judge credit requires primary and closed-world audit agreement', as
 })
 
 test('a contradicted source audit marks either primary verdict disputed instead of reversing it', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
   await mkdir(join(sourceRoot, 'src'), { recursive: true })
   await writeFile(join(sourceRoot, 'src/nav.ts'), 'export const directJump = true\n')
@@ -931,7 +932,7 @@ test('a contradicted source audit marks either primary verdict disputed instead 
 })
 
 test('insufficient audit citations trigger a focused re-judge instead of a product failure', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
   await mkdir(join(sourceRoot, 'src'), { recursive: true })
   await writeFile(join(sourceRoot, 'src/nav.ts'), 'export const horizontal = true\n')
@@ -994,7 +995,7 @@ test('insufficient audit citations trigger a focused re-judge instead of a produ
 })
 
 test('focused source re-judge and its missing-ID retry keep narrowed schemas and audit guidance', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
   await mkdir(join(sourceRoot, 'src/presentation-kit'), { recursive: true })
   await writeFile(join(sourceRoot, 'src/presentation-kit/Scene.tsx'), 'export function Scene() { return null }\n')
@@ -1041,7 +1042,7 @@ test('focused source re-judge and its missing-ID retry keep narrowed schemas and
 })
 
 test('an insufficient primary fail is re-judged instead of charged to the candidate', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
   await mkdir(join(sourceRoot, 'src'), { recursive: true })
   await writeFile(join(sourceRoot, 'src/nav.ts'), 'export const directJump = true\n')
@@ -1101,7 +1102,7 @@ test('an insufficient primary fail is re-judged instead of charged to the candid
 // never contradicted anything. A sample now re-cites once; an audit that still
 // cannot decide leaves the sample's own verdict as its vote.
 test('a sample re-cites once and a verdict still unproven after that stands as its vote', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
   await mkdir(join(sourceRoot, 'src'), { recursive: true })
   await writeFile(join(sourceRoot, 'src/scene.ts'), 'export const stableIdentity = true\n')
@@ -1139,7 +1140,7 @@ test('a sample re-cites once and a verdict still unproven after that stands as i
 })
 
 test('a browser-fallback pass the source audit cannot confirm after a re-cite is a fail', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
   await mkdir(join(sourceRoot, 'src'), { recursive: true })
   await writeFile(join(sourceRoot, 'src/demo.tsx'), 'export const demo = true\n')
@@ -1167,7 +1168,7 @@ test('a browser-fallback pass the source audit cannot confirm after a re-cite is
 })
 
 test('a focused citation retry preserves already contradicted criteria', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-source-audit-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-source-audit-'))
   const sourceRoot = join(root, 'source')
   await mkdir(join(sourceRoot, 'src'), { recursive: true })
   await writeFile(join(sourceRoot, 'src/nav.ts'), 'export const horizontalOnly = true\n')
@@ -1322,7 +1323,7 @@ test('product judging at concurrency 1 runs its jobs sequentially through one re
 // criterion both samples agree on stands; a disagreement goes to a third sample whose pass must
 // quote validated source lines that a closed-world audit confirms.
 async function neutralTree(files) {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-robust-judge-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-robust-judge-'))
   const sourceRoot = join(root, 'source')
   for (const [path, text] of Object.entries(files)) {
     await mkdir(join(sourceRoot, path, '..'), { recursive: true })
@@ -1639,7 +1640,7 @@ test('a job is unresolved when either sample exhausts, never decided by one samp
 })
 
 test('an evidence-job third sample validates its line citations against the evidence view', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-evidence-tiebreak-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-evidence-tiebreak-'))
   await mkdir(join(root, 'candidate'), { recursive: true })
   await writeFile(join(root, 'index.json'), '{}\n')
   await writeFile(join(root, 'candidate/handoff.md'), '# Handoff\nU3 remains open: decide narrow readability.\n')
@@ -1883,7 +1884,7 @@ test('a third-sample citation prefixed with the neutral source directory resolve
 // Round-5 audit: the saved judge record dropped dispute_checks, so a reader
 // could not see why a disputed vote stood or turned.
 test('a saved judge record and the judging result keep every dispute\'s check', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-dispute-record-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-dispute-record-'))
   await mkdir(join(root, 'source/src'), { recursive: true })
   await writeFile(join(root, 'source/src/nav.ts'), NAV_SOURCE)
   const neutral = { root, source_root: join(root, 'source'), audit_root: root, requirements_root: join(root, 'r'),
@@ -1928,7 +1929,7 @@ test('a saved judge record and the judging result keep every dispute\'s check', 
 })
 
 for (const job of ['testing-evidence', 'assumption-handling']) test(`evidence-view backed dissent reaches targeted check: ${job}`, async t => {
-  const root = await mkdtemp(join(tmpdir(), 'evidence-dissent-'))
+  const root = await makeTempDir(join(tmpdir(), 'evidence-dissent-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   await writeFile(join(root, 'packet.txt'), 'candidate exercised the requirement\n')
   const checks = []
@@ -2068,7 +2069,7 @@ for (const [name, citations, expectedMessage] of [
   ['too many spans', Array.from({ length: 13 }, () => ({ path: 'packet.txt', start_line: 1, end_line: 1 })), /malformed line citations for x$/],
   ['symlink', [{ path: 'linked.txt', start_line: 1, end_line: 1 }], /outside the verified evidence view: linked\.txt$/],
 ]) test(`evidence citation validation rejects ${name}`, async t => {
-  const root = await mkdtemp(join(tmpdir(), 'evidence-span-'))
+  const root = await makeTempDir(join(tmpdir(), 'evidence-span-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   await writeFile(join(root, 'packet.txt'), 'evidence\n'.repeat(250))
   await symlink(join(root, 'packet.txt'), join(root, 'linked.txt'))
@@ -2084,7 +2085,7 @@ for (const [name, citations, expectedMessage] of [
 })
 
 test('evidence citation validation accepts in-range spans at the length and count limits', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'evidence-span-'))
+  const root = await makeTempDir(join(tmpdir(), 'evidence-span-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   await writeFile(join(root, 'packet.txt'), 'evidence\n'.repeat(250))
   const request = { job: 'testing-evidence', line_citations: 'evidence-view', input_roots: { evidence: root } }
@@ -2111,7 +2112,7 @@ test('a dispute on all fourteen engineering-quality criteria settles through the
   const job = 'engineering-quality'
   const criteria = criteriaForJob(automated, job)
   assert.equal(criteria.length, 14)
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-engineering-decider-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-engineering-decider-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   // Representative delivered files: 300 lines of about 50 characters each.
   const files = [

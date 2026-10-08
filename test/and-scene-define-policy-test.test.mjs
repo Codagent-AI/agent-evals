@@ -1,11 +1,12 @@
+import { makeTempDir } from './temp-dir.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, rm, readFile } from 'node:fs/promises'
+import { rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { POLICY_CASES, runPolicyTest, assessPolicyReply } from '../evals/agent-runner/and-scene-define/policy-test.mjs'
 test('policy diagnostic has all disclosure and decision cases and three trials', async t => {
-  const outputDir = await mkdtemp(join(tmpdir(), 'policy-test-')); t.after(() => rm(outputDir, { recursive: true, force: true }))
+  const outputDir = await makeTempDir(join(tmpdir(), 'policy-test-')); t.after(() => rm(outputDir, { recursive: true, force: true }))
   assert.equal(POLICY_CASES.length, 10)
   let calls = 0
   const report = await runPolicyTest({ outputDir, invoke: async ({ request }) => {

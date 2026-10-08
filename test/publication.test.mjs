@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -30,7 +31,7 @@ function git(cwd, ...args) {
 // A disposable agent-evals working tree with a real configured upstream, so the
 // publication path exercises an ordinary `git push` rather than a stand-in.
 async function disposableRepo() {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-publish-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-publish-'))
   const remote = join(dir, 'remote.git')
   const repo = join(dir, 'repo')
   git(dir, 'init', '--bare', '-q', '-b', 'main', remote)

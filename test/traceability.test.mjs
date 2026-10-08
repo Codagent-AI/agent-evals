@@ -1,6 +1,7 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -128,7 +129,7 @@ test('traceability accepts values backed by a multi-citation source on guidance,
 })
 
 test('snapshot refresh copies fixture files with their git blob ids only at the fixture pin', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'fixture-snapshot-'))
+  const directory = await makeTempDir(join(tmpdir(), 'fixture-snapshot-'))
   const checkout = join(directory, 'checkout')
   const snapshot = join(directory, 'snapshot')
   await mkdir(join(checkout, 'openspec/changes/create-and-scene/specs'), { recursive: true })

@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -17,7 +18,7 @@ const {
 // Agent Runner lays out run state as
 // <projects>/<encoded-project>/runs/<session-id>/state.json.
 async function projects(runs) {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-runner-state-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-runner-state-'))
   for (const [sessionId, state] of Object.entries(runs)) {
     const sessionDir = join(dir, 'encoded-project', 'runs', sessionId)
     await mkdir(sessionDir, { recursive: true })
@@ -222,7 +223,7 @@ test('malformed run state is skipped rather than failing discovery', async () =>
 // environment override, so the persistent run-directory store is linked into
 // the ephemeral container home.
 async function homes() {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-projects-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-projects-'))
   const runDir = join(dir, 'run')
   const home = join(dir, 'home')
   await mkdir(join(runDir, '.runtime/agent-runner-projects'), { recursive: true })

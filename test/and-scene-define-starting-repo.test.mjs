@@ -1,7 +1,8 @@
+import { makeTempDir } from './temp-dir.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, mkdir, readFile, writeFile, rm, readdir, symlink } from 'node:fs/promises'
+import { mkdir, readFile, writeFile, rm, readdir, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { materialize, verifySnapshot } from '../evals/agent-runner/and-scene-define/lib/starting-repo.mjs'
@@ -9,7 +10,7 @@ import { scanCanaries } from '../evals/agent-runner/and-scene-define/lib/canary.
 const suiteRoot = resolve('evals/agent-runner/and-scene-define')
 const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' }).trim()
 async function temporary(t) {
-  const root = await mkdtemp(join(tmpdir(), 'define-start-'))
+  const root = await makeTempDir(join(tmpdir(), 'define-start-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   return root
 }
