@@ -1,0 +1,1250 @@
+{
+  "scoring": false,
+  "counts": {
+    "discovered": 61,
+    "inferred": 8,
+    "missed": 2,
+    "asked-not-captured": 1,
+    "leaked": 0
+  },
+  "items": [
+    {
+      "id": "INV-001",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/1"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-002",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/1"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/2"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-003",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/1"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-006",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-007",
+      "asked": false,
+      "citations": [],
+      "coverage_verdict": "met",
+      "outcome": "inferred"
+    },
+    {
+      "id": "INV-008",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/1"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-009",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-010",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-013",
+      "asked": false,
+      "citations": [],
+      "coverage_verdict": "missing",
+      "outcome": "missed"
+    },
+    {
+      "id": "INV-015",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/1"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-020",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-022",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-023",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-024",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/3"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-025",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/3"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-029",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/3"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-030",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.approach-review/approach-review/1/1"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-031",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/3"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.approach-review/approach-review/1/1"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-032",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/1"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-034",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/3"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-036",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-038",
+      "asked": false,
+      "citations": [],
+      "coverage_verdict": "met",
+      "outcome": "inferred"
+    },
+    {
+      "id": "INV-041",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-042",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-043",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/3"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-044",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/1"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-045",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/4"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-046",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-048",
+      "asked": false,
+      "citations": [],
+      "coverage_verdict": "partial",
+      "outcome": "inferred"
+    },
+    {
+      "id": "INV-049",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-050",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/4"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-051",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/4"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-054",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/3"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-055",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/4"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/1"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-056",
+      "asked": false,
+      "citations": [],
+      "coverage_verdict": "missing",
+      "outcome": "missed"
+    },
+    {
+      "id": "INV-058",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.approach-review/approach-review/1/1"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-062",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-063",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/5"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-064",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-066",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.approach-review/approach-review/1/1"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-067",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/5"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-068",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/3"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-069",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-070",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-071",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        }
+      ],
+      "coverage_verdict": "missing",
+      "outcome": "asked-not-captured"
+    },
+    {
+      "id": "INV-072",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/3"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-073",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/5"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-074",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/3"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-075",
+      "asked": false,
+      "citations": [],
+      "coverage_verdict": "met",
+      "outcome": "inferred"
+    },
+    {
+      "id": "INV-076",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-077",
+      "asked": false,
+      "citations": [],
+      "coverage_verdict": "met",
+      "outcome": "inferred"
+    },
+    {
+      "id": "INV-088",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/5"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-089",
+      "asked": false,
+      "citations": [],
+      "coverage_verdict": "met",
+      "outcome": "inferred"
+    },
+    {
+      "id": "INV-090",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/5"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-092",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/5"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-093",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/5"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.design/design/1/1"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-094",
+      "asked": false,
+      "citations": [],
+      "coverage_verdict": "met",
+      "outcome": "inferred"
+    },
+    {
+      "id": "INV-095",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/5"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-096",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.design/design/1/1"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.approach-review/approach-review/1/1"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-102",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/1"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-103",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/3"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/1"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-104",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-105",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/1"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/3"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-106",
+      "asked": false,
+      "citations": [],
+      "coverage_verdict": "met",
+      "outcome": "inferred"
+    },
+    {
+      "id": "INV-107",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/3"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-108",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/3"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-109",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/3"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-110",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/5"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-111",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-112",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.design/design/1/1"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.approach-review/approach-review/1/1"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-116",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/1"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    },
+    {
+      "id": "INV-118",
+      "asked": true,
+      "citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/3"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "outcome": "discovered"
+    }
+  ]
+}
