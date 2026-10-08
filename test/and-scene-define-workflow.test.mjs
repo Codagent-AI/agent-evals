@@ -13,7 +13,14 @@ test('profiles require every field and reject Cursor leads before dispatch', () 
   assert.deepEqual(validateProfiles(profiles), profiles)
   assert.throws(() => validateProfiles({ ...profiles, lead: { cli: 'codex' } }), /lead.model/)
   assert.throws(() => validateProfiles({ ...profiles, lead: { ...profiles.lead, cli: 'cursor' } }), /claude or codex/)
-  assert.match(runnerConfig(profiles), /active_profile: eval/)
+})
+test('the Runner config is a global default profile with no active_profile', () => {
+  const config = runnerConfig(profiles)
+  // Runner refuses active_profile in a global config and selects the default profile set.
+  assert.doesNotMatch(config, /active_profile/)
+  assert.match(config, /^profiles:\n {2}default:\n {4}agents:\n/)
+  assert.match(config, /lead:\n {8}default_mode: interactive\n {8}cli: "codex"\n {8}model: "gpt-6"\n {8}effort: "high"/)
+  assert.match(config, /crosscheck:\n {8}default_mode: autonomous\n {8}cli: "cursor"\n {8}model: "opus"\n {8}effort: "high"/)
 })
 test('preflight names missing Runner flags and workflow steps', () => {
   assert.throws(() => verifyCapabilities('help', '--auth-only --hide-source'), /--external-user/)
