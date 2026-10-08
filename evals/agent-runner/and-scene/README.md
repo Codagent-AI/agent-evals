@@ -920,6 +920,65 @@ no question and reruns no evaluation: it resumes at the recorded stage, reuses a
 existing result commit rather than creating a second one, and retries only the
 unfinished push.
 
+## Experiment baseline
+
+The experiment baseline records the published repetitions that represent the current
+Agent Runner configuration, their common identity, score and resource summaries, a
+frozen anchor, and replacement history. It is separate from the reference baseline
+used by `--reference-baseline` and `result.json.baseline`.
+
+Run these commands from the repository root (each accepts `--record <path>` to use a
+separate record file):
+
+```sh
+node evals/agent-runner/and-scene/experiments.mjs baseline set evals/agent-runner/and-scene/results/<run-id> --source manual --reason "initial baseline"
+node evals/agent-runner/and-scene/experiments.mjs baseline add-rep evals/agent-runner/and-scene/results/<control-run-id>
+node evals/agent-runner/and-scene/experiments.mjs baseline anchor --from-current --reason "initial anchor"
+node evals/agent-runner/and-scene/experiments.mjs baseline show
+```
+
+`set` accepts one or more result directories and requires a complete human review
+of their median repetition. It replaces `current`, preserving the old value in
+`history`. `add-rep` appends one control repetition and recomputes the median and
+summaries. If the median moves away from the reviewed repetition, the record and
+`show` flag the divergence; `anchor` then requires a fresh `set` that includes
+that median's review. `anchor` freezes a copy of `current`; replacing it archives
+the old anchor. A `profile-change` set clears and archives any anchor.
+For a rescored result without a complete review, `set` and `add-rep` look through
+the rescore's source chain in sibling published result directories. They carry the
+first complete review only when its human rubric sha256 matches the rescore's,
+then recompute the official score from rescored automated points and awarded human
+points. The record and `show` name the review source. An unavailable review or
+rubric mismatch leaves a rescored median ineligible for `set`.
+
+Only schema-8 and schema-9 Agent Runner candidate results are admitted. Every repetition must
+have the same runner commit; `--allow-mismatch <reason>` cannot waive this rule.
+It can waive differences in the skills commit, workflow settings, fixture commit,
+configured role profiles, or rubrics. The waived fields and reason are saved on
+the repetition. Observed models are recorded but do not affect identity.
+Infrastructure failures must be rerun. Product failures, including those without
+an automated score, are kept. An unscored failure ranks below scored repetitions
+and makes the score summary incomplete. A rescore and its source cannot both be
+counted; rebuild with `set` using only the corrected result directory.
+
+The summary computes each metric only when every repetition has a complete value.
+Otherwise it reports the missing run ids, including for tokens, active time, and
+cost. The identity cannot compare the agent-evals or Agent Validator revisions
+because `result.json` does not yet record them; keep repetitions from the same
+factory evaluation when possible and note relevant differences in the reason.
+
+Exit code 0 means success, including `show` and `--help`; 1 means an admission
+refusal; 2 means a usage, invalid-record, or I/O error. Refusals are JSON lines
+on stderr. Writes are atomic and the record is intended for git review.
+
+The first baseline is seeded manually after the factory has saved all three
+agent-evals#67 result directories. Run `set` with those three directories,
+`--source profile-change`, and a reason describing the profile change. Check
+that rep 2 is the reviewed median, then run `anchor --from-current` with a
+reason. Commit the resulting `experiments/baseline.json` separately.
+If rep 2 was rescored, use its rescored directory. Its prior review carries over
+from the published source directory when the human rubric still matches.
+
 ## Outcomes
 
 `evaluation_status` is exactly one of `complete`, `pending-human-review`,
