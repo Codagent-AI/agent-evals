@@ -128,7 +128,7 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
 
 test('rubric 12.3 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '12.4.0')
+  assert.equal(rubric.version, '13.0.0')
   assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(

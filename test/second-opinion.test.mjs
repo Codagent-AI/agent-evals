@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { REQUIREMENT_QUESTION_RULE } from '../evals/lib/panel-judging/protocol.mjs'
 
 import { loadRubrics } from '../evals/agent-runner/and-scene/lib/rubric.mjs'
 import {
@@ -618,6 +619,7 @@ test('the verifier and its audit carry the shared judging scope rule', async () 
   const audit = buildSpanAuditRequest({ request, answer: { mismeasured_step: 's', measurement_fault: 'f' }, spans: [], logSpans: [] })
   for (const prompt of [request.prompt, audit.prompt]) {
     assert.match(prompt, /hypothetical input, file deletion, or rendering the candidate does not produce/)
+    assert.ok(prompt.includes(REQUIREMENT_QUESTION_RULE))
   }
 })
 

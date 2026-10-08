@@ -484,9 +484,11 @@ test('Codex judge invoker still force-kills a stopped call whose descendant outl
   })
 
   assert.equal(await invoke({ job: 'scene-kit', schema: {}, prompt: 'x' }), '{}')
+  // The group is force-killed as Codex exits, not by a later grace timer.
+  assert.deepEqual(spawnImpl.calls[0].child.kills, ['SIGTERM', 'SIGKILL'])
   await new Promise((resolve) => setTimeout(resolve, 60))
   assert.deepEqual(spawnImpl.calls[0].child.kills, ['SIGTERM', 'SIGKILL'])
-  // The settled attempt's evidence files are closed; the late kill is not noted.
+  // The grace period never elapsed, so no overdue kill is noted.
   assert.doesNotMatch(
     await readFile(join(runDir, '.runtime/judge/01-scene-kit.stderr.log'), 'utf8'),
     /sent SIGKILL/,
@@ -717,4 +719,13 @@ test('the judge reasoning effort is pinned explicitly rather than left to the CL
   await invoke({ job: 'scene-kit', authority: { model: 'm' }, schema: {}, prompt: 'y' })
   assert.ok(spawnImpl.calls[0].args.includes('model_reasoning_effort="medium"'))
   assert.ok(spawnImpl.calls[1].args.includes('model_reasoning_effort="medium"'))
+})
+
+// Inside the sandbox `claude` is Agent Runner's yolo wrapper, which sources the
+// sandbox env and skips permissions. The in-sandbox judge bypasses it.
+test('in-sandbox Claude judge resolves the real CLI, not the sandbox wrapper', async () => {
+  const { sandboxClaudeCommand } = await import('../evals/agent-runner/and-scene/lib/judge-invoker.mjs')
+  assert.equal(sandboxClaudeCommand({}), '/usr/bin/claude')
+  assert.equal(sandboxClaudeCommand({ SANDBOX_REAL_CLAUDE: '/opt/claude' }), '/opt/claude')
+  assert.equal(sandboxClaudeCommand({ SANDBOX_REAL_CLAUDE: '/opt/claude', AND_SCENE_CLAUDE_COMMAND: '/stub/claude' }), '/stub/claude')
 })

@@ -1789,7 +1789,7 @@ test('a browser failure receives a checkpointed audited second opinion before sc
       })) })
       return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
         rationale: 'controller fixture evidence supports this criterion', evidence: ['src/index.ts'],
-        citations: ['src/index.ts'] })) })
+        citations: request.line_citations === 'evidence-view' ? [] : ['src/index.ts'] })) })
     },
   }
   const result = await evaluate(context, profiles, dependencies)
@@ -1912,7 +1912,7 @@ test('an inferred mode mismatch reaches fallback judging and the derived outline
       if (request.job === 'demo-integration') judgeCriteria.push(...request.criteria)
       return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
         rationale: 'source supports this criterion', evidence: ['src/index.ts'],
-        citations: ['src/index.ts'] })) })
+        citations: request.line_citations === 'evidence-view' ? [] : ['src/index.ts'] })) })
     },
   })
   assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
@@ -1971,7 +1971,7 @@ test('a failed outline fallback receives a follow-up opinion after the failed re
       })) })
       return JSON.stringify({ results: request.criteria.map((id) => ({ id,
         verdict: id === 'demo-nine-step-content-and-order' ? 'fail' : 'pass',
-        rationale: 'fixture source result', evidence: ['src/index.ts'], citations: ['src/index.ts'] })) })
+        rationale: 'fixture source result', evidence: ['src/index.ts'], citations: request.line_citations === 'evidence-view' ? [] : ['src/index.ts'] })) })
     },
   })
   assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
@@ -2141,4 +2141,25 @@ test('published result reports the leaf of the last nested workflow step', async
     'verify-change', 'sub:verify-change', 'run-validator',
   ])
   assert.deepEqual(written.workflow.observed_steps.at(-1).step_path, ['verify-change'])
+})
+
+for (const [code, resumable] of [['claude-quota', true], ['judge-schema-invalid', false]]) test(`judge ${code} survives into the durable harness outcome`, async () => {
+  const context = await environment()
+  const result = await evaluate(context, profiles, {
+    judgeInvoke: async request => {
+      if (request.job === 'testing-evidence') throw Object.assign(new Error(`original ${code} diagnostic`), {
+        code, resumable, retryable: false, owner: 'evaluation-harness',
+      })
+      if (!Array.isArray(request.criteria)) return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
+      return JSON.stringify({ results: request.criteria.map(id => ({ id, verdict: 'pass', rationale: 'fixture proof', evidence: ['fixture'] })) })
+    },
+  })
+  assert.equal(result.outcome.evaluation_status, 'evaluation-harness-failed')
+  assert.equal(result.outcome.failure.code, code)
+  assert.equal(result.outcome.resumable, resumable)
+  assert.match(result.outcome.failure.reason, new RegExp(`original ${code} diagnostic`))
+  const judging = await readJson(join(context.runDir, 'phases/product-judging.json'))
+  assert.equal(judging.failures['testing-evidence'].code, code)
+  const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
+  assert.match(state.phases['product-judging'].units['testing-evidence'].error, new RegExp(`original ${code} diagnostic`))
 })

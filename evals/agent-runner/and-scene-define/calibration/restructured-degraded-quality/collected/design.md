@@ -1,0 +1,133 @@
+## Overview
+
+The repository is a small Vite, React 19, and TypeScript app with a single
+plain-CSS page, no router, and no styling framework; `react`, `react-dom`,
+`motion`, and `lucide-react` are already dependencies. This design adds four
+parts that work together:
+
+- a **scene runtime** that every presentation imports and that knows nothing
+  about any particular topic;
+- a **`presentation` skill** whose procedure collects a brief, readies the
+  project, writes or edits a presentation, and checks its own output;
+- a **bundled sample**, produced by the skill, that explains the skill;
+- a **release check**, `npm run release-check`, and a capture command for
+  visual review.
+
+Specifications: `scene-runtime`, `viewer-controls`, `presentation-authoring`,
+and `release-checks`.
+
+## Architecture
+
+```
+src/
+  main.tsx                    # reads location.pathname; "/" → Landing, "/<slug>" → lazy entry, else NotFound
+  Landing.tsx                 # lists manifest entries; marks the sample as "Example"
+  NotFound.tsx                # plain message with a link back to "/"
+  registry.ts                 # exported array: [{ slug, title, load }]
+  scene-runtime/              # canonical runtime source (the only copy humans edit)
+    index.ts                  # public surface: Presentation, Positioned, useEntity, primitives, types
+    contract.ts               # Step<S>, Chapter, PresentationProps<S>
+    Presentation.tsx          # owns the step index and mode; mounts the scene once
+    SceneRoot.tsx             # SVG viewBox canvas + ResizeObserver fit; sets data-settled
+    continuity.ts             # keyed FLIP for continuing entities; dissolve before reveal
+    RevealLayer.tsx           # staggered entrance for newcomers
+    input.ts                  # keys, swipe, P/N shortcuts, focus guard, clamping
+    chrome/                   # LowerThird, SidePanel, ProgressBar (role="progressbar"), Outline, Attribution, LiveRegion
+    primitives/               # Node, Text, Connector, Enclosure, Highlight, Badge
+  presentations/
+    how-to-make-a-presentation/
+      entry.tsx               # <Presentation steps=… chapters=… initialMode="browse" />
+      steps.ts, entities.ts, talk.module.css
+      brief.md, completion-report.md   # provenance of the skill run that produced the sample
+skills/presentation/
+  SKILL.md                    # procedure and definition of done
+  bootstrap.mjs               # generated: embeds every template inline
+scripts/
+  release-check/index.mjs     # build → sample conformance → render pass
+  release-check/sample-outline.json
+  release-check/static-server.mjs
+  capture.mjs                 # per-step captures and advisory warnings
+  sync-templates.mjs          # regenerates bootstrap.mjs from src/scene-runtime
+```
+
+### Runtime flow
+
+`Presentation` holds the current index and mode. It renders `SceneRoot` once
+and passes `steps[index].state` down; the scene component is never keyed by
+step, so React updates it instead of remounting. `continuity.ts` compares the
+entity ids of the outgoing and incoming states: continuing ids are animated
+with FLIP, dropped ids dissolve and unmount, and only then does `RevealLayer`
+stagger in new ids. When every running animation has reported completion,
+`SceneRoot` sets `data-settled="true"`; it clears the attribute on the next
+change. Chrome reads narration from the current step; a missing `headline` is
+derived from the first sentence of `body`.
+
+### Skill procedure (`skills/presentation/SKILL.md`)
+
+1. **Brief**: ask one question per turn for whatever the prompt lacks; derive
+   style directions from existing stylesheets; offer "build now" after each
+   batch of step answers; optionally sketch pivotal steps in ASCII.
+2. **Readiness**: probe the three pieces (build tooling, scene runtime,
+   manifest); choose root, `presentations/`, or a plan for approval; run
+   `bootstrap.mjs` from the skill's own directory for whatever is missing.
+3. **Write**: create `src/presentations/<slug>/` and one manifest entry, or
+   make a scoped edit to an identified presentation.
+4. **Check**: build, first-step render, capture review, `review-log.md`; repeat
+   until clean.
+
+Monorepo detection uses `workspaces` in `package.json`, a
+`pnpm-workspace.yaml`, or a `packages/` or `apps/` directory.
+
+## Decisions
+
+1. Single persistent scene.
+2. Keyed FLIP for continuing entities; dissolve-then-reveal for the rest.
+3. SVG `viewBox` canvas.
+4. Styling through a slot class map.
+5. Generic primitives: `Node`, `Text`, `Connector`, `Enclosure`, `Highlight`,
+   `Badge`, plus `Positioned` and `useEntity`.
+6. Hand-edited registry and a pathname switch.
+7. Hybrid skill.
+8. Puppeteer and headless Chrome over the production bundle.
+9. ARIA progressbar as the tooling interface.
+10. One generated bootstrap script; `scripts/sync-templates.mjs` keeps it in
+    parity with `src/scene-runtime/`, checked by a unit test and the release
+    check.
+11. Icons from `lucide-react`.
+12. `P` toggles mode; the sample opens in browse mode.
+
+## Risks and Mitigations
+
+- **`foreignObject` text rendering differences between browsers.** The render
+  pass runs in Chrome; captures at two sizes catch clipping early.
+- **Puppeteer download size in CI.** Cache the browser between runs; the cost is
+  accepted for a faithful render.
+- **Monorepo detection is a heuristic.** The plan-approval step in non-empty
+  projects lets the user correct a wrong target before anything is written.
+- **Self-check time inside the skill.** The skill runs the build and first-step
+  render on every iteration and the capture review once the build is clean,
+  and never reports success with a failing check.
+- **Process leaks when the release check is interrupted.** The server and
+  browser are tracked and stopped in a `finally` block and in `SIGINT` and
+  `SIGTERM` handlers.
+
+## Rollout
+
+1. Add Puppeteer; keep the runtime free of styling frameworks.
+2. Build `src/scene-runtime/` and its tests.
+3. Add `main.tsx` routing, `Landing.tsx`, `NotFound.tsx`, and the manifest.
+4. Write `skills/presentation/SKILL.md`, `scripts/sync-templates.mjs`, and the
+   generated `bootstrap.mjs`.
+5. Run the skill on the sample brief to produce the sample; commit its output,
+   brief, and completion report.
+6. Add `scripts/release-check/` and `scripts/capture.mjs` with their npm
+   scripts, then run `npm run release-check`.
+
+Reverting the branch removes everything; there is no data to migrate.
+
+## Open Questions
+
+- Whether the skill should be named `presentation` or something longer is
+  undecided; renaming the directory is cheap.
+- The exact list of monorepo signals may be extended during implementation; the
+  placement behavior is fixed.

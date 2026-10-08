@@ -70,10 +70,40 @@ consult `run.sh --help` before constructing an unfamiliar invocation.
   output and are excluded from Validator reviews. Do not edit them to change a
   past result; correct erroneous publication with a later revert.
 - Implementation metrics come from Agent Runner's `run-metrics.json`; retain
-  its completeness/provenance rather than inventing totals. Eval-owned Codex
-  judge usage lives separately in `phases/eval-owned-usage.jsonl` and is not
+  its completeness/provenance rather than inventing totals. Eval-owned Claude and Codex
+  panel, decider, and audit usage lives separately in `phases/eval-owned-usage.jsonl` and is not
   implementation cost.
 
 ## Commit messages
 
 Use `type: lowercase description` with one of: `fix`, `feat`, `chore`, `refactor`, `test`, or `docs`.
+
+## Maintaining the Agent Runner `and-scene-define` inputs
+
+The pinned-input runbook is
+[`evals/agent-runner/and-scene-define/README.md`](evals/agent-runner/and-scene-define/README.md).
+Run `scripts/check-inventory.mjs` from that suite via Node to verify the reference,
+inventory, and versions. Keep `hidden/`, citation supplements, `calibration/`,
+and contamination patterns on the host. Materialize only the allowlisted
+starting tree; the starting repository has no remote and needs no GitHub credential.
+
+
+## Running the Agent Runner `and-scene-define` suite
+
+Run from the repository root; consult
+[`evals/agent-runner/and-scene-define/README.md`](evals/agent-runner/and-scene-define/README.md)
+and `run.sh --help` before constructing an invocation.
+
+- Start with `--dry-run`; paid candidates use `--run-agent` with lead and
+  crosscheck profiles and a clean Agent Runner `main` checkout (it includes the
+  external-user mode, `--auth-only`, and `--hide-source`). Evaluator inputs remain on the host.
+- Resume in the exact run directory with unchanged profiles and pinned inputs.
+  Publication failures resume delivery alone, using the existing result commit.
+- `--rescore-from <run-dir> --run-dir <new-dir>` verifies retained manifest hashes
+  and runs current host evaluators without Docker or Runner. Rescores never publish.
+- Compare with `node evals/agent-runner/and-scene-define/compare.mjs <run-dir>...`.
+  Only identical series are paired; changing evaluator/fixture inputs starts a new series.
+- Read `result.json` first; publication errors live in `publication.json` and
+  `run-state.json`. Workflow metrics and eval-owned usage remain separate.
+- `results/**` are historical output excluded from Validator reviews. Never edit
+  them to change a past result; use a later revert for erroneous publication.

@@ -1,0 +1,11 @@
+{
+  "steps": [
+    {
+      "id": "proposal",
+      "prefix": "proposal",
+      "agent_invoked": true,
+      "cli": "claude",
+      "session_id": "clean-claude"
+    }
+  ]
+}

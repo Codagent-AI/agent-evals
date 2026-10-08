@@ -1,0 +1,297 @@
+{
+  "input_id": "restructured",
+  "description": "The reference rewritten from scratch: four renamed capabilities (scene-runtime, viewer-controls, presentation-authoring, release-checks), merged and split requirements, new wording throughout, and swapped mechanisms for every acceptable alternative whose mechanism can change. Every requirement is kept.",
+  "base": "reference",
+  "variant": "reference",
+  "expected": {
+    "INV-001": "met",
+    "INV-002": "met",
+    "INV-003": "met",
+    "INV-006": "met",
+    "INV-007": "met",
+    "INV-008": "met",
+    "INV-009": "met",
+    "INV-010": "met",
+    "INV-013": "met",
+    "INV-015": "met",
+    "INV-020": "met",
+    "INV-022": "met",
+    "INV-023": "met",
+    "INV-024": "met",
+    "INV-025": "met",
+    "INV-029": "met",
+    "INV-030": "met",
+    "INV-031": "met",
+    "INV-032": "met",
+    "INV-034": "met",
+    "INV-036": "met",
+    "INV-038": "met",
+    "INV-041": "met",
+    "INV-042": "met",
+    "INV-043": "met",
+    "INV-044": "met",
+    "INV-045": "met",
+    "INV-046": "met",
+    "INV-048": "met",
+    "INV-049": "met",
+    "INV-050": "met",
+    "INV-051": "met",
+    "INV-054": "met",
+    "INV-055": "met",
+    "INV-056": "met",
+    "INV-058": "met",
+    "INV-062": "met",
+    "INV-063": "met",
+    "INV-064": "met",
+    "INV-066": "met",
+    "INV-067": "met",
+    "INV-068": "met",
+    "INV-069": "met",
+    "INV-070": "met",
+    "INV-071": "met",
+    "INV-072": "met",
+    "INV-073": "met",
+    "INV-074": "met",
+    "INV-075": "met",
+    "INV-076": "met",
+    "INV-077": "met",
+    "INV-088": "met",
+    "INV-089": "met",
+    "INV-090": "met",
+    "INV-092": "met",
+    "INV-093": "met",
+    "INV-094": "met",
+    "INV-095": "met",
+    "INV-096": "met",
+    "INV-102": "met",
+    "INV-103": "met",
+    "INV-104": "met",
+    "INV-105": "met",
+    "INV-106": "met",
+    "INV-107": "met",
+    "INV-108": "met",
+    "INV-109": "met",
+    "INV-110": "met",
+    "INV-111": "met",
+    "INV-112": "met",
+    "INV-116": "met",
+    "INV-118": "met"
+  },
+  "expected_quality": {
+    "quality:observable-outcomes": "met",
+    "quality:design-matches-specs": "met",
+    "quality:test-plan-matches-specs": "met",
+    "quality:decision-rationale": "met",
+    "quality:requirements-tested": "met"
+  },
+  "conversation": null,
+  "removed_items": [],
+  "contradicted_items": [],
+  "added_scope": [],
+  "weakened_items": [],
+  "collateral_items": [],
+  "quality_defects": [],
+  "planted_fidelity_contradictions": [],
+  "swapped_alternatives": [
+    {
+      "item": "INV-002",
+      "mechanism": "Sections come from a per-presentation chapter list naming each chapter's first step id, not a per-step section/era label."
+    },
+    {
+      "item": "INV-003",
+      "mechanism": "A required reader `body` plus an optional speaker `headline` that falls back to the body's first sentence, instead of two mandatory texts."
+    },
+    {
+      "item": "INV-007",
+      "mechanism": "Newcomers are revealed one after another on a separate reveal layer that never alters continuing entities' paths, instead of waiting for persisting entities to settle."
+    },
+    {
+      "item": "INV-008",
+      "mechanism": "Dropped entities dissolve and are removed from the document before newcomers are revealed."
+    },
+    {
+      "item": "INV-009",
+      "mechanism": "One scene instance is mounted per presentation and fed each step's state; there are no scene groups."
+    },
+    {
+      "item": "INV-010",
+      "mechanism": "Continuing entities are matched by key and animated with FLIP measurement rather than layout projection."
+    },
+    {
+      "item": "INV-013",
+      "mechanism": "A `classNames` slot map passed to `<Presentation>` instead of stable class/data DOM hooks."
+    },
+    {
+      "item": "INV-015",
+      "mechanism": "A `Positioned` primitive with explicit per-step coordinates and `useEntity(id)` for custom elements, instead of raw motion elements with layout ids."
+    },
+    {
+      "item": "INV-022",
+      "mechanism": "Present mode shows a lower-third headline strip with a step counter; the body goes to a separate presenter-notes window."
+    },
+    {
+      "item": "INV-023",
+      "mechanism": "Browse mode uses a side panel with clickable progress segments and a chapter outline that collapses into a menu below 720px."
+    },
+    {
+      "item": "INV-025",
+      "mechanism": "ArrowRight/ArrowDown/Space forward and ArrowLeft/ArrowUp/Shift+Space back, instead of PageDown/PageUp."
+    },
+    {
+      "item": "INV-029",
+      "mechanism": "`aria-current=\"step\"`, a polite live-region announcement, and a `current` slot class."
+    },
+    {
+      "item": "INV-031",
+      "mechanism": "Clamped ends with an edge nudge at the start and an \"End\" marker at the finish."
+    },
+    {
+      "item": "INV-032",
+      "mechanism": "An SVG `viewBox` with `preserveAspectRatio` scales the fixed coordinate space, instead of a computed transform."
+    },
+    {
+      "item": "INV-034",
+      "mechanism": "The fit is measured from the active mode's stage region with a ResizeObserver, instead of fixed per-mode geometry constants."
+    },
+    {
+      "item": "INV-036",
+      "mechanism": "The look is chosen from style directions derived from the host's stylesheets (or three neutral directions)."
+    },
+    {
+      "item": "INV-038",
+      "mechanism": "A \"build now\" checkpoint after each batch of answers drafts undescribed steps as `TODO` placeholders."
+    },
+    {
+      "item": "INV-044",
+      "mechanism": "A hand-edited `src/presentations.json` manifest instead of a TypeScript registry module."
+    },
+    {
+      "item": "INV-045",
+      "mechanism": "Readiness is decided by capability probes (build script, resolvable `Presentation` export, parseable manifest) instead of anchor presence."
+    },
+    {
+      "item": "INV-046",
+      "mechanism": "Puppeteer replaces Playwright as the browser-check dependency."
+    },
+    {
+      "item": "INV-048",
+      "mechanism": "All templates are embedded in one `bootstrap.mjs`, run via the skill directory's absolute path, so no template lookup is needed."
+    },
+    {
+      "item": "INV-054",
+      "mechanism": "A written plan naming the target and every file is shown and nothing is written before approval, instead of stating the target and confirming."
+    },
+    {
+      "item": "INV-056",
+      "mechanism": "A CSS Module colocated with each presentation."
+    },
+    {
+      "item": "INV-063",
+      "mechanism": "Every step at 1440×900 plus first, last, and two densest steps at 390×844, always rather than only for responsive-sensitive presentations."
+    },
+    {
+      "item": "INV-066",
+      "mechanism": "`tsc --noEmit` followed by `vite build` instead of `npm run build`."
+    },
+    {
+      "item": "INV-070",
+      "mechanism": "Automated bounding-box flags for canvas overflow and chrome intersections plus manual review."
+    },
+    {
+      "item": "INV-071",
+      "mechanism": "Each warning's resolution is recorded in `review-log.md`; acceptance requires a written reason and `data-overlap-ok`."
+    },
+    {
+      "item": "INV-074",
+      "mechanism": "The sample is linked from the landing page as the example."
+    },
+    {
+      "item": "INV-088",
+      "mechanism": "The expected outline lives in `sample-outline.json` and is compared with the sample's step metadata."
+    },
+    {
+      "item": "INV-090",
+      "mechanism": "Headless Chrome via Puppeteer against a Node static server over `dist/`, instead of Playwright against `vite preview`."
+    },
+    {
+      "item": "INV-096",
+      "mechanism": "Captures wait for a runtime `data-settled=\"true\"` signal instead of a configured settle interval."
+    },
+    {
+      "item": "INV-111",
+      "mechanism": "Puppeteer and headless Chrome over the built bundle instead of Playwright/Chromium over `vite preview`."
+    },
+    {
+      "item": "INV-112",
+      "mechanism": "Step count and current step are read from an ARIA `role=\"progressbar\"` (`aria-valuemax`/`aria-valuenow`) instead of `data-step-count`/`data-step-index`."
+    },
+    {
+      "item": "INV-118",
+      "mechanism": "A generated bootstrap script with per-file content hashes checked by a unit test and the release check, instead of a manually synced snapshot."
+    }
+  ],
+  "unswapped_alternatives": [
+    {
+      "item": "INV-042",
+      "reason": "The Vite + React + TypeScript stack is fixed by the starting repository; only the build command changed (see INV-066)."
+    },
+    {
+      "item": "INV-043",
+      "reason": "Defined by the capabilities the runtime provides, which are kept."
+    },
+    {
+      "item": "INV-049",
+      "reason": "Behavior, not mechanism."
+    },
+    {
+      "item": "INV-055",
+      "reason": "Own folder, own route, one registration is intrinsic; the registration format changed under INV-044."
+    },
+    {
+      "item": "INV-072",
+      "reason": "Behavior; delivered through the slot map (INV-013)."
+    },
+    {
+      "item": "INV-073",
+      "reason": "Behavior, not mechanism."
+    },
+    {
+      "item": "INV-076",
+      "reason": "Normative sample value."
+    },
+    {
+      "item": "INV-077",
+      "reason": "Normative sample value."
+    },
+    {
+      "item": "INV-089",
+      "reason": "Behavior, not mechanism."
+    },
+    {
+      "item": "INV-095",
+      "reason": "The project-local capture helper is the mechanism; only its command and output path changed."
+    },
+    {
+      "item": "INV-103",
+      "reason": "Scope statement."
+    },
+    {
+      "item": "INV-109",
+      "reason": "The hybrid decision is the intent itself."
+    },
+    {
+      "item": "INV-110",
+      "reason": "Renamed only (`npm run release-check`); still one documented entry point."
+    },
+    {
+      "item": "INV-116",
+      "reason": "Primitives renamed (Node, Text, Connector, Enclosure, Highlight, Badge); same mechanism."
+    }
+  ],
+  "notes": [
+    "Expected verdicts are all met, two more than the reference: the release-checks specification commits to stopping the server and browser after every run (INV-094, test-plan-only in the reference), and the template-parity hash check is a design decision (INV-118).",
+    "INV-075 is stated more firmly than in the reference: the sample is produced by running the skill, which exists first, and the brief and completion report are committed as evidence.",
+    "Only the normative sample values (title, chapter names, headlines, bodies, 880 × 380, \"made by and-scene\", 127.0.0.1) repeat reference text verbatim; no other sentence shares more than eight consecutive words with the reference.",
+    "Preference items are kept, so the input also serves as a fidelity-neutral baseline."
+  ]
+}

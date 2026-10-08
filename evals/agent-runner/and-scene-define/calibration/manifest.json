@@ -1,0 +1,370 @@
+{
+  "calibration_set_version": 4,
+  "inventory_version": 2,
+  "graded_items": 72,
+  "change_name": "add-presentation-skill",
+  "layout": "<input_id>/collected/ mirrors a run's collected/ directory (the change directory contents); <input_id>/expectations.json holds expected verdicts; <input_id>/conversation.jsonl, when present, mirrors a run's conversation.jsonl.",
+  "host_only": true,
+  "real_candidates": {
+    "directory": "real-candidates/",
+    "inputs": []
+  },
+  "inputs": [
+    {
+      "input_id": "reference",
+      "base": null,
+      "variant": "reference",
+      "expected_counts": {
+        "met": 70,
+        "partial": 1,
+        "missing": 1
+      },
+      "has_conversation": false,
+      "files": [
+        {
+          "path": "reference/collected/design.md",
+          "sha256": "ffb241de8740bd45d2fe79074d5167e15c0aa43f6dc56f4e68fd9c4a25c2bf4e"
+        },
+        {
+          "path": "reference/collected/proposal.md",
+          "sha256": "995418b9e59b0c3d25051c4bca64acc29b2c23a670921874dd07d3f6b7cc0c5d"
+        },
+        {
+          "path": "reference/collected/specs/evolving-scene-presentations/spec.md",
+          "sha256": "371380260a0528b2d3cbb32fafee0bb182b9f1f648c784a749e8e95192f8c5e2"
+        },
+        {
+          "path": "reference/collected/specs/presentation-skill/spec.md",
+          "sha256": "0b0f9c73051e56b31c0a21d41b312ae6d02c8afeacfabafde20be1764eee04bb"
+        },
+        {
+          "path": "reference/collected/specs/presentation-verification/spec.md",
+          "sha256": "151847d9d2da5ea4f3fb9594be231c0c2d093fe3736339bae1ba346bcc6dbd63"
+        },
+        {
+          "path": "reference/collected/test-plan.md",
+          "sha256": "9318e2acdd83538964a3a5f42d45eab2eaf999369aed1708f286d8987627ef1c"
+        },
+        {
+          "path": "reference/expectations.json",
+          "sha256": "4e44b212d82d02c1942c1ca99d2c55c7d9189056dd683ecb092fd60bfe23508c"
+        }
+      ]
+    },
+    {
+      "input_id": "restructured",
+      "base": "reference",
+      "variant": "reference",
+      "expected_counts": {
+        "met": 72,
+        "partial": 0,
+        "missing": 0
+      },
+      "has_conversation": false,
+      "files": [
+        {
+          "path": "restructured/collected/design.md",
+          "sha256": "d57d7a3214d1ec59420ad30e4af6c10fa3550dd393ae9fc38270f13b7dd9bf90"
+        },
+        {
+          "path": "restructured/collected/proposal.md",
+          "sha256": "c71e72ee085e50ffc146181c3449c4578b655643bde90f4e86c9164cccdd7d8a"
+        },
+        {
+          "path": "restructured/collected/specs/presentation-authoring/spec.md",
+          "sha256": "03076acdf656f3d04a1a9cfcb850efd7cb177f758d7e0e89ccd9391077f04bdd"
+        },
+        {
+          "path": "restructured/collected/specs/release-checks/spec.md",
+          "sha256": "59c9e40eb158f4ed51ec3668c9a4482ad99f8bdc73bfe2f57957b5f629dafb9e"
+        },
+        {
+          "path": "restructured/collected/specs/scene-runtime/spec.md",
+          "sha256": "846122452c37a55e2970f30d4e445018183af51a321e899236fb2e161779f2aa"
+        },
+        {
+          "path": "restructured/collected/specs/viewer-controls/spec.md",
+          "sha256": "635c9d31d205ef5e3c1b27f264eb7a859bda722dfdbf25ea6c254a88fad909ea"
+        },
+        {
+          "path": "restructured/collected/test-plan.md",
+          "sha256": "2c502eea74abcc436df04c989454cbb7896183ce52419e813fb5c0c8405e8892"
+        },
+        {
+          "path": "restructured/expectations.json",
+          "sha256": "587d59616f8dc6588b931dd315d49567dc7b422cf01ac29f178116ed8539309b"
+        }
+      ]
+    },
+    {
+      "input_id": "reference-degraded-mandatory",
+      "base": "reference",
+      "variant": "degraded",
+      "expected_counts": {
+        "met": 63,
+        "partial": 4,
+        "missing": 5
+      },
+      "has_conversation": false,
+      "files": [
+        {
+          "path": "reference-degraded-mandatory/collected/design.md",
+          "sha256": "1b56e232132892a466417338b1d9e3dfbb560a405ac73fc452e29eea2db0f408"
+        },
+        {
+          "path": "reference-degraded-mandatory/collected/proposal.md",
+          "sha256": "995418b9e59b0c3d25051c4bca64acc29b2c23a670921874dd07d3f6b7cc0c5d"
+        },
+        {
+          "path": "reference-degraded-mandatory/collected/specs/evolving-scene-presentations/spec.md",
+          "sha256": "723466306de68db12a5584b76b9c81813c6f1ea4171a9ea10b150d155f41825d"
+        },
+        {
+          "path": "reference-degraded-mandatory/collected/specs/presentation-skill/spec.md",
+          "sha256": "5208c12632a3a1552fc8ad52d88f6769f55020d66e09ae1f39ecd99415b47925"
+        },
+        {
+          "path": "reference-degraded-mandatory/collected/specs/presentation-verification/spec.md",
+          "sha256": "0374d7a2e489611bfde3f7e60f08e7c48830da949b446b23a405e5813b777368"
+        },
+        {
+          "path": "reference-degraded-mandatory/collected/test-plan.md",
+          "sha256": "077ab6bd84541a8f153ef8472af1779091c84f3159017cc247846b78da36180d"
+        },
+        {
+          "path": "reference-degraded-mandatory/expectations.json",
+          "sha256": "ee8d533513fdf3574fd9daf502b5df897f29e9294b6445eb1d92836ec43b1e52"
+        }
+      ]
+    },
+    {
+      "input_id": "reference-degraded-contradictions",
+      "base": "reference",
+      "variant": "degraded",
+      "expected_counts": {
+        "met": 65,
+        "partial": 1,
+        "missing": 6
+      },
+      "has_conversation": true,
+      "files": [
+        {
+          "path": "reference-degraded-contradictions/collected/design.md",
+          "sha256": "67437ec0380ea7ab3e9c95909c1c6a78cb216744719f56c3278a7b10999afed7"
+        },
+        {
+          "path": "reference-degraded-contradictions/collected/proposal.md",
+          "sha256": "995418b9e59b0c3d25051c4bca64acc29b2c23a670921874dd07d3f6b7cc0c5d"
+        },
+        {
+          "path": "reference-degraded-contradictions/collected/specs/evolving-scene-presentations/spec.md",
+          "sha256": "2945e8e73b6765fe322ad6d35af3c7bcb1ce89723ce4d3a25e5de8b2ba62e46c"
+        },
+        {
+          "path": "reference-degraded-contradictions/collected/specs/presentation-skill/spec.md",
+          "sha256": "f7dfac82a8c0607b1e847a507c45768b88a464b16db406212912e2338e9604c0"
+        },
+        {
+          "path": "reference-degraded-contradictions/collected/specs/presentation-verification/spec.md",
+          "sha256": "151847d9d2da5ea4f3fb9594be231c0c2d093fe3736339bae1ba346bcc6dbd63"
+        },
+        {
+          "path": "reference-degraded-contradictions/collected/test-plan.md",
+          "sha256": "44bc141ef0f712e1adfd5cbd5754d9151c29b9d0011fe2f063f25e05c294bbf2"
+        },
+        {
+          "path": "reference-degraded-contradictions/conversation.jsonl",
+          "sha256": "c5832b8ad0d0f308bd288b9e9143a891ab291235be90d639d6fd32a59ec23021"
+        },
+        {
+          "path": "reference-degraded-contradictions/expectations.json",
+          "sha256": "b118804fcacbe9fef44e8b9abda4c6e667d57a81d9fe04723bf05f42f50ae7a9"
+        }
+      ]
+    },
+    {
+      "input_id": "reference-degraded-scope-quality",
+      "base": "reference",
+      "variant": "degraded",
+      "expected_counts": {
+        "met": 67,
+        "partial": 1,
+        "missing": 4
+      },
+      "has_conversation": false,
+      "files": [
+        {
+          "path": "reference-degraded-scope-quality/collected/design.md",
+          "sha256": "d0998d56efadb4e94db16179418731f27d5db6726d3c64294cc3835dbae29b01"
+        },
+        {
+          "path": "reference-degraded-scope-quality/collected/proposal.md",
+          "sha256": "3285612137cb09cd408d0e73d0dc36163f8a2fa7c561acd1bf7db60e3d7b1a91"
+        },
+        {
+          "path": "reference-degraded-scope-quality/collected/specs/evolving-scene-presentations/spec.md",
+          "sha256": "e488d25d374edd7799e31dfa6741c17190d783691e98f71dde09c42e846cf158"
+        },
+        {
+          "path": "reference-degraded-scope-quality/collected/specs/presentation-delivery/spec.md",
+          "sha256": "9ce5a38d9f36931939d714335cbabe6728dd9a9bef9f2e7c3207fd67853f9c1e"
+        },
+        {
+          "path": "reference-degraded-scope-quality/collected/specs/presentation-skill/spec.md",
+          "sha256": "0b0f9c73051e56b31c0a21d41b312ae6d02c8afeacfabafde20be1764eee04bb"
+        },
+        {
+          "path": "reference-degraded-scope-quality/collected/specs/presentation-verification/spec.md",
+          "sha256": "151847d9d2da5ea4f3fb9594be231c0c2d093fe3736339bae1ba346bcc6dbd63"
+        },
+        {
+          "path": "reference-degraded-scope-quality/collected/test-plan.md",
+          "sha256": "8343657f741998d7b9077aca8e41b7e19d40886b1ed720e52ecda810912411f2"
+        },
+        {
+          "path": "reference-degraded-scope-quality/expectations.json",
+          "sha256": "7f2aa4f28ad5761339ddce60c21698bf7713feef9ebde071ae0d03b778e184ba"
+        }
+      ]
+    },
+    {
+      "input_id": "restructured-degraded-mandatory",
+      "base": "restructured",
+      "variant": "degraded",
+      "expected_counts": {
+        "met": 67,
+        "partial": 0,
+        "missing": 5
+      },
+      "has_conversation": false,
+      "files": [
+        {
+          "path": "restructured-degraded-mandatory/collected/design.md",
+          "sha256": "2fa509dd1a7a392519c12ef7f31b3ded23a418b8ae8d66c5031b852f7fac4f62"
+        },
+        {
+          "path": "restructured-degraded-mandatory/collected/proposal.md",
+          "sha256": "45caec64fa62a0801e65336c3f99b348cbdca81dae567d135926f45e61dba2d2"
+        },
+        {
+          "path": "restructured-degraded-mandatory/collected/specs/presentation-authoring/spec.md",
+          "sha256": "08999de92b3bf9c97ce202f8ac22d2c67d0503f2ee1a5ea9006a37fe64d24066"
+        },
+        {
+          "path": "restructured-degraded-mandatory/collected/specs/release-checks/spec.md",
+          "sha256": "60047d8276c1e883c5067651395dfe249fbf0ec028ec89dd5195545830f2d5dd"
+        },
+        {
+          "path": "restructured-degraded-mandatory/collected/specs/scene-runtime/spec.md",
+          "sha256": "846122452c37a55e2970f30d4e445018183af51a321e899236fb2e161779f2aa"
+        },
+        {
+          "path": "restructured-degraded-mandatory/collected/specs/viewer-controls/spec.md",
+          "sha256": "fd6d626a239772d86a704942a167094e0ffe898ce7712a9082e244731e64bd97"
+        },
+        {
+          "path": "restructured-degraded-mandatory/collected/test-plan.md",
+          "sha256": "e6818efac9b189cab03eaec27489f51d24a2b54c3e0a8a1c0f4bfb221cb1bf5e"
+        },
+        {
+          "path": "restructured-degraded-mandatory/expectations.json",
+          "sha256": "8b9d2b8b539a7a61ff61fdbf8bb1dc61c98677b25a71e140c9971e0671976faf"
+        }
+      ]
+    },
+    {
+      "input_id": "restructured-degraded-mixed",
+      "base": "restructured",
+      "variant": "degraded",
+      "expected_counts": {
+        "met": 69,
+        "partial": 1,
+        "missing": 2
+      },
+      "has_conversation": true,
+      "files": [
+        {
+          "path": "restructured-degraded-mixed/collected/design.md",
+          "sha256": "93330de7e51c97f573c21baf9c7c7cb4a3ca31fb2bd36a762404a319ac97dea0"
+        },
+        {
+          "path": "restructured-degraded-mixed/collected/proposal.md",
+          "sha256": "be84436a0b380196ebdde77c48a77304261b498cf45f8d10399c5e55b7a83b01"
+        },
+        {
+          "path": "restructured-degraded-mixed/collected/specs/presentation-authoring/spec.md",
+          "sha256": "a81bb27969ef5ad9f04d2e15464793f3186c683bd6a55d84092658823c626b3b"
+        },
+        {
+          "path": "restructured-degraded-mixed/collected/specs/release-checks/spec.md",
+          "sha256": "da592e00a280b9febb1e79a6bafb1bb3f66e1b77d183596d37b0dd4195317cb0"
+        },
+        {
+          "path": "restructured-degraded-mixed/collected/specs/scene-runtime/spec.md",
+          "sha256": "846122452c37a55e2970f30d4e445018183af51a321e899236fb2e161779f2aa"
+        },
+        {
+          "path": "restructured-degraded-mixed/collected/specs/viewer-controls/spec.md",
+          "sha256": "ea25779c9db441889615be94e225f525442f329d57cb68cd4c4c1a4468a59858"
+        },
+        {
+          "path": "restructured-degraded-mixed/collected/test-plan.md",
+          "sha256": "1ca7a6744bea37680bd9fedb28112f928dfd4022d31e262c88e44ea596dacd12"
+        },
+        {
+          "path": "restructured-degraded-mixed/conversation.jsonl",
+          "sha256": "f21e1ede2daa35e83e2ca9909b1bb9fc47856411afa6098b6db3f766cebc2914"
+        },
+        {
+          "path": "restructured-degraded-mixed/expectations.json",
+          "sha256": "7f7b6e273838720c0ea7bb43987e7832ea0b80ca6fc5bd8baec3c45f6facd1f9"
+        }
+      ]
+    },
+    {
+      "input_id": "restructured-degraded-quality",
+      "base": "restructured",
+      "variant": "degraded",
+      "expected_counts": {
+        "met": 71,
+        "partial": 0,
+        "missing": 1
+      },
+      "has_conversation": false,
+      "files": [
+        {
+          "path": "restructured-degraded-quality/collected/design.md",
+          "sha256": "266f22f46bdd5e7f65a50d6b0c62094b2aed48253ee7a9cab7827c43263394e0"
+        },
+        {
+          "path": "restructured-degraded-quality/collected/proposal.md",
+          "sha256": "c71e72ee085e50ffc146181c3449c4578b655643bde90f4e86c9164cccdd7d8a"
+        },
+        {
+          "path": "restructured-degraded-quality/collected/specs/presentation-authoring/spec.md",
+          "sha256": "12cc3991e5026008746c36d9fec1e492d13f6f1a8775b3dc406cda8426311837"
+        },
+        {
+          "path": "restructured-degraded-quality/collected/specs/release-checks/spec.md",
+          "sha256": "aad5f26a88cf25a1e5aa1ddc9146b8a4200a7a6f66aff8c493670a7a10808b2a"
+        },
+        {
+          "path": "restructured-degraded-quality/collected/specs/scene-runtime/spec.md",
+          "sha256": "7a62032b1bc11033dfef9d826aac161335b0f39a87ae8125f15a131d8b2d9f3e"
+        },
+        {
+          "path": "restructured-degraded-quality/collected/specs/viewer-controls/spec.md",
+          "sha256": "f106b864d1ad2eb16a12df136aa42d9a92cf231d84eaad4a57025d647585186a"
+        },
+        {
+          "path": "restructured-degraded-quality/collected/test-plan.md",
+          "sha256": "6e5ee498d091829f9c26070d4ea1d4acc86115be9fb9aa243fc359ac5bfc9375"
+        },
+        {
+          "path": "restructured-degraded-quality/expectations.json",
+          "sha256": "e07f628feb399601bb40485ba148f4ef18b58b838daaac39dfd11a1ddf3b71ce"
+        }
+      ]
+    }
+  ]
+}
