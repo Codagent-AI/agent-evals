@@ -893,3 +893,16 @@ test('rubric validation rejects an engineering criterion moved across a subcompo
     /subcomponent engineering-skill-instructions-and-templates must own exactly its approved engineering-quality criteria/,
   )
 })
+
+test('rubric validation rejects engineering points moved between subcomponents', async () => {
+  const moved = structuredClone(await automatedRubric())
+  const subcomponent = (id) => engineeringComponent(moved).subcomponents.find((row) => row.id === id)
+  // The component total and criterion membership stay the same, but each
+  // criterion's share of the points changes.
+  subcomponent('engineering-verification-tooling-robustness').points -= 0.5
+  subcomponent('engineering-presentation-code-and-tests').points += 0.5
+  assert.match(
+    validateAutomatedRubric(moved).join('\n'),
+    /subcomponent engineering-verification-tooling-robustness must award its approved 3 points/,
+  )
+})

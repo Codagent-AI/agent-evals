@@ -77,6 +77,15 @@ export const ENGINEERING_QUALITY_SUBCOMPONENT_CRITERIA = Object.freeze({
   ],
 })
 
+// A criterion's points are its subcomponent's points divided among its
+// criteria, so a transfer between subcomponents changes every share.
+export const ENGINEERING_QUALITY_SUBCOMPONENT_POINTS = Object.freeze({
+  'engineering-input-hygiene': 2,
+  'engineering-verification-tooling-robustness': 3,
+  'engineering-skill-instructions-and-templates': 1.5,
+  'engineering-presentation-code-and-tests': 1.5,
+})
+
 export const ENGINEERING_QUALITY_CRITERION_IDS = Object.freeze({
   'deterministic-browser': ENGINEERING_QUALITY_SUBCOMPONENT_CRITERIA['engineering-input-hygiene'],
   'engineering-quality': Object.entries(ENGINEERING_QUALITY_SUBCOMPONENT_CRITERIA)
@@ -391,6 +400,10 @@ export function validateAutomatedRubric(rubric) {
     const approved = ENGINEERING_QUALITY_SUBCOMPONENT_CRITERIA[subcomponent.id]
     if (approved && JSON.stringify(subcomponent.criteria) !== JSON.stringify(approved)) {
       errors.push(`subcomponent ${subcomponent.id} must own exactly its approved engineering-quality criteria`)
+    }
+    const points = ENGINEERING_QUALITY_SUBCOMPONENT_POINTS[subcomponent.id]
+    if (points !== undefined && subcomponent.points !== points) {
+      errors.push(`subcomponent ${subcomponent.id} must award its approved ${points} points`)
     }
   }
   // Judges and second-opinion verifiers read an eval-owned reason as the
