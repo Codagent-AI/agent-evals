@@ -1,0 +1,137 @@
+{
+  "input_id": "reference-degraded-scope-quality",
+  "description": "The reference with three excluded scopes added as committed features (PDF/PNG export, an in-browser visual editor, GitHub Pages publishing) in a new presentation-delivery capability, plus quality defects: vague untestable scenarios, a design canvas that contradicts the specification, a test plan that says twelve sample steps, design decisions stripped of rationale, and test-plan gaps (no navigation/mode, failure-path, or delivery tests).",
+  "base": "reference",
+  "expected_outcome": "fail",
+  "expected_fail_mark": "proposed",
+  "expected": {
+    "INV-001": "met",
+    "INV-002": "met",
+    "INV-003": "met",
+    "INV-006": "met",
+    "INV-007": "met",
+    "INV-008": "met",
+    "INV-009": "met",
+    "INV-010": "met",
+    "INV-013": "met",
+    "INV-015": "met",
+    "INV-020": "met",
+    "INV-022": "met",
+    "INV-023": "met",
+    "INV-024": "met",
+    "INV-025": "met",
+    "INV-029": "met",
+    "INV-030": "met",
+    "INV-031": "met",
+    "INV-032": "met",
+    "INV-034": "met",
+    "INV-036": "met",
+    "INV-038": "met",
+    "INV-041": "met",
+    "INV-042": "met",
+    "INV-043": "met",
+    "INV-044": "met",
+    "INV-045": "met",
+    "INV-046": "met",
+    "INV-048": "met",
+    "INV-049": "met",
+    "INV-050": "met",
+    "INV-051": "met",
+    "INV-054": "met",
+    "INV-055": "met",
+    "INV-056": "met",
+    "INV-058": "met",
+    "INV-062": "met",
+    "INV-063": "met",
+    "INV-064": "met",
+    "INV-066": "met",
+    "INV-067": "met",
+    "INV-068": "met",
+    "INV-069": "met",
+    "INV-070": "met",
+    "INV-071": "met",
+    "INV-072": "met",
+    "INV-073": "met",
+    "INV-074": "met",
+    "INV-075": "met",
+    "INV-076": "met",
+    "INV-077": "met",
+    "INV-088": "met",
+    "INV-089": "met",
+    "INV-090": "met",
+    "INV-092": "met",
+    "INV-093": "met",
+    "INV-094": "missing",
+    "INV-095": "met",
+    "INV-096": "met",
+    "INV-102": "met",
+    "INV-103": "met",
+    "INV-104": "met",
+    "INV-105": "missing",
+    "INV-106": "missing",
+    "INV-107": "missing",
+    "INV-108": "met",
+    "INV-109": "met",
+    "INV-110": "met",
+    "INV-111": "met",
+    "INV-112": "met",
+    "INV-116": "met",
+    "INV-118": "partial"
+  },
+  "expected_quality": {
+    "quality:testable-scenarios": "partial",
+    "quality:consistency": "missing",
+    "quality:rationale": "missing",
+    "quality:test-plan": "missing"
+  },
+  "conversation": null,
+  "removed_items": [],
+  "contradicted_items": [],
+  "added_scope": [
+    {
+      "item": "INV-105",
+      "where": "proposal.md; specs/presentation-delivery/spec.md (Export); design.md",
+      "change": "PDF and per-step PNG export via `npm run export`; Out of Scope no longer excludes it."
+    },
+    {
+      "item": "INV-106",
+      "where": "proposal.md; specs/presentation-delivery/spec.md (Visual editor); design.md",
+      "change": "Browse-mode visual editor that saves back to step files."
+    },
+    {
+      "item": "INV-107",
+      "where": "proposal.md; specs/presentation-delivery/spec.md (Publishing); design.md",
+      "change": "GitHub Pages workflow publishing every presentation on push to main."
+    }
+  ],
+  "weakened_items": [],
+  "collateral_items": [],
+  "quality_defects": [
+    {
+      "criterion": "quality:testable-scenarios",
+      "where": "specs/evolving-scene-presentations/spec.md",
+      "defect": "Three scenarios end in unobservable outcomes: \"feels seamless\" (Grouped steps update in place), \"can be styled nicely\" (Kit primitives expose style hooks), \"looks good at any size\" (Uniform scaling on resize). Their requirement text still commits to the behavior, so coverage is unchanged."
+    },
+    {
+      "criterion": "quality:consistency",
+      "where": "design.md vs specs/evolving-scene-presentations/spec.md; test-plan.md vs specs/presentation-verification/spec.md",
+      "defect": "The design canvas is 960 × 540 while the specification requires 880 × 380; E2E-001 advances through twelve sample steps while the specification defines nine."
+    },
+    {
+      "criterion": "quality:rationale",
+      "where": "design.md (Decisions)",
+      "defect": "All ten decisions are bare statements with no rationale or alternatives."
+    },
+    {
+      "criterion": "quality:test-plan",
+      "where": "test-plan.md",
+      "defect": "E2E-002 and AT-003 are removed: no tests cover modes, navigation, boundaries, entity transitions, or verification failure paths, and none cover export, editing, or publishing."
+    }
+  ],
+  "planted_fidelity_contradictions": [],
+  "notes": [
+    "INV-094 is expected missing even in the reference: the only commitment to cleaning up preview processes is in test-plan.md (E2E-002), and coverage never credits a test-plan-only mention.",
+    "INV-118 is expected partial in the reference: design Decision 5 and its drift risk keep the template snapshot in sync, but enforcement only catches drift that breaks rendering; the file-parity check appears only in test-plan.md (INT-001).",
+    "INV-108 is untouched: subjective taste scoring is still excluded."
+  ]
+}

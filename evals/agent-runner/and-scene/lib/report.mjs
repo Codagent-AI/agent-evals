@@ -494,6 +494,14 @@ function criteriaSection(result) {
   return section('Automated criteria', summary + table(['Criterion', 'Subcomponent', 'Verdict', 'Rationale', 'Evidence'], rows))
 }
 
+function panelSection(result) {
+  if (result.judging?.judging_protocol !== 'cross-family-panel-v1') return ''
+  const rows = Object.entries(result.judging.judges ?? {}).flatMap(([job, results]) =>
+    (results ?? []).map(({ id, verdict, basis, votes }) => [job, id, verdict, basis,
+      (votes ?? []).map(vote => `${vote.family} (${vote.model}): ${vote.verdict}`).join(' | ')]))
+  return section('Panel criterion verdicts', table(['Job', 'Criterion', 'Verdict', 'Basis', 'Panel votes'], rows))
+}
+
 function overturnedFailuresSection(result) {
   const opinions = result.second_opinions
   if (!opinions) return ''
@@ -719,6 +727,7 @@ export function renderReport(result, { current = null } = {}) {
       ),
     ),
     criteriaSection(result),
+    panelSection(result),
     humanSection(result),
     humanReviewSupersessionSection(result),
     deliverySection(result),

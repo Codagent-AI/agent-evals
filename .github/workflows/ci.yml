@@ -10,8 +10,14 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # A hung test must not hold the job for GitHub's six-hour default.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          # and-scene-define's version check compares versions.json with its
+          # committed history and refuses shallow clones by design.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22

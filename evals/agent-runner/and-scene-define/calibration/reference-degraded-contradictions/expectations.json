@@ -1,0 +1,149 @@
+{
+  "input_id": "reference-degraded-contradictions",
+  "description": "The reference rewritten so it commits to the opposite of several graded items (departing entities linger dimmed; navigation keys override focused controls; fully scaffolded projects are re-scaffolded from templates; one repair attempt, then success is reported with known issues), consistently across artifacts. The design also adopts react-router-dom and opens the sample in present mode, contradicting two simulated-user answers in conversation.jsonl.",
+  "base": "reference",
+  "expected_outcome": "fail",
+  "expected_fail_mark": "proposed",
+  "expected": {
+    "INV-001": "met",
+    "INV-002": "met",
+    "INV-003": "met",
+    "INV-006": "met",
+    "INV-007": "met",
+    "INV-008": "missing",
+    "INV-009": "met",
+    "INV-010": "met",
+    "INV-013": "met",
+    "INV-015": "met",
+    "INV-020": "met",
+    "INV-022": "met",
+    "INV-023": "met",
+    "INV-024": "met",
+    "INV-025": "met",
+    "INV-029": "met",
+    "INV-030": "missing",
+    "INV-031": "met",
+    "INV-032": "met",
+    "INV-034": "met",
+    "INV-036": "met",
+    "INV-038": "met",
+    "INV-041": "met",
+    "INV-042": "met",
+    "INV-043": "met",
+    "INV-044": "met",
+    "INV-045": "missing",
+    "INV-046": "met",
+    "INV-048": "met",
+    "INV-049": "met",
+    "INV-050": "missing",
+    "INV-051": "met",
+    "INV-054": "met",
+    "INV-055": "met",
+    "INV-056": "met",
+    "INV-058": "met",
+    "INV-062": "met",
+    "INV-063": "met",
+    "INV-064": "missing",
+    "INV-066": "met",
+    "INV-067": "met",
+    "INV-068": "met",
+    "INV-069": "met",
+    "INV-070": "met",
+    "INV-071": "met",
+    "INV-072": "met",
+    "INV-073": "met",
+    "INV-074": "met",
+    "INV-075": "met",
+    "INV-076": "met",
+    "INV-077": "met",
+    "INV-088": "met",
+    "INV-089": "met",
+    "INV-090": "met",
+    "INV-092": "met",
+    "INV-093": "met",
+    "INV-094": "missing",
+    "INV-095": "met",
+    "INV-096": "met",
+    "INV-102": "met",
+    "INV-103": "met",
+    "INV-104": "met",
+    "INV-105": "met",
+    "INV-106": "met",
+    "INV-107": "met",
+    "INV-108": "met",
+    "INV-109": "met",
+    "INV-110": "met",
+    "INV-111": "met",
+    "INV-112": "met",
+    "INV-116": "met",
+    "INV-118": "partial"
+  },
+  "expected_quality": {
+    "quality:testable-scenarios": "met",
+    "quality:consistency": "met",
+    "quality:rationale": "met",
+    "quality:test-plan": "met"
+  },
+  "conversation": "conversation.jsonl",
+  "expected_fidelity": {
+    "fidelity:[\"define.proposal\",\"proposal\",1,1]": "missing",
+    "fidelity:[\"define.proposal\",\"proposal\",1,2]": "met",
+    "fidelity:[\"define.specs\",\"specs\",1,1]": "met",
+    "fidelity:[\"define.specs\",\"specs\",1,2]": "missing",
+    "fidelity:[\"define.design\",\"design\",1,1]": "missing",
+    "fidelity:[\"define.test-plan\",\"test-plan\",1,1]": "missing"
+  },
+  "removed_items": [],
+  "contradicted_items": [
+    {
+      "item": "INV-008",
+      "where": "specs/evolving-scene-presentations/spec.md (Stable entities morph across steps)",
+      "change": "Departing entities stay on stage at reduced opacity until their section ends."
+    },
+    {
+      "item": "INV-030",
+      "where": "specs/evolving-scene-presentations/spec.md (Step navigation); design.md (Nav)",
+      "change": "Navigation keys are captured at the window level and advance even while a control has focus."
+    },
+    {
+      "item": "INV-045",
+      "where": "specs/presentation-skill/spec.md (Self-bootstrapping scaffold)",
+      "change": "Detection compares anchors with the template snapshot and treats any difference as stale."
+    },
+    {
+      "item": "INV-050",
+      "where": "specs/presentation-skill/spec.md (Already scaffolded); design.md (Scaffold target resolution)",
+      "change": "A fully scaffolded project has its build setup and scene kit overwritten from templates."
+    },
+    {
+      "item": "INV-064",
+      "where": "specs/presentation-skill/spec.md (Self-verify before reporting completion); design.md",
+      "change": "One repair attempt, then completion is reported with failing checks listed as known issues."
+    }
+  ],
+  "added_scope": [],
+  "weakened_items": [],
+  "collateral_items": [],
+  "quality_defects": [],
+  "planted_fidelity_contradictions": [
+    {
+      "exchange": "[\"define.proposal\",\"proposal\",1,2]",
+      "subject_id": "INV-115",
+      "artifact": "design.md",
+      "change": "Routing uses react-router-dom (layout, Routing + registry, Decision 3, dependency set, migration plan)."
+    },
+    {
+      "exchange": "[\"define.specs\",\"specs\",1,1]",
+      "subject_id": "INV-120",
+      "artifact": "design.md",
+      "change": "The sample's Talk.tsx declares initialMode=\"present\"."
+    }
+  ],
+  "notes": [
+    "INV-094 is expected missing even in the reference: the only commitment to cleaning up preview processes is in test-plan.md (E2E-002), and coverage never credits a test-plan-only mention.",
+    "INV-118 is expected partial in the reference: design Decision 5 and its drift risk keep the template snapshot in sync, but enforcement only catches drift that breaks rendering; the file-parity check appears only in test-plan.md (INT-001).",
+    "Exchange 4 (880 × 380) and both approvals are respected; they are fidelity negatives.",
+    "Borderline, expected met: INV-051. The partial-scaffold scenario still leaves present anchors undisturbed, although the stale-template detection rule sits in tension with it.",
+    "The two answers were given in response to direct questions, so they are not disclosure leaks."
+  ]
+}

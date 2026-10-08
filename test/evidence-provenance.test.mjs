@@ -159,6 +159,9 @@ test('evidence shaped like the exploratory prepare-acceptance output is complete
     contradictions: { items: [] },
     lineage: { final_sha: FINAL_SHA, accepted: true },
   })
+  for (const view of Object.values(views)) {
+    assert.equal(await readFile(join(context.runDir, view.root, 'packet.txt'), 'utf8'), view.packet)
+  }
   const packet = views['testing-evidence'].packet
   // The current exploration log leads the bounded testing packet.
   assert.ok(packet.indexOf('(exploration-log)') > 0)

@@ -1,0 +1,18 @@
+You are running in the "change" workflow: Use for a substantial or higher-risk change in an OpenSpec project when you need the full proposal, specification, design, test plan, task breakdown, and acceptance lifecycle. It manages repository-local OpenSpec artifacts while guiding implementation, evidence-based acceptance, human review, archival, and pull-request finalization.
+
+The current step is "proposal".
+
+Before doing anything else, announce that you are starting this step.
+
+Help the user write the proposal for OpenSpec change "add-presentation-skill". Use any intake context supplied above as what the user already told an agent; if none was supplied, first ask what the change is about and do not guess. Intake context is prior factual context only: it is not approval of a direction, authorization to write, or a substitute for confirmation required by the codagent:propose skill. You MUST use the codagent:propose skill and write the proposal to `openspec/changes/add-presentation-skill/proposal.md`.
+
+Keep every OpenSpec definition and planning artifact under the repository-local `openspec/changes/add-presentation-skill/` directory.
+
+The crosscheck review is skipped in this run: do not use the codagent:call-agent skill or request an adversarial review. Treat the proposal review as having produced no findings.
+
+Follow codagent:call-agent's verification and user-facing reporting rules. Discuss every consequential finding with the user. Do not modify the proposal or any other file in response to review feedback until you have presented your assessment and received the user's explicit confirmation about which changes to make. Apply only the changes the user confirms.
+
+Keep this phase interactive through the proposal review. Once the user approves the final proposal content or tells you to write it, complete the approved edits and continue to the next step without asking them to review the written artifact again.
+
+
+When you or the user determine this step is complete, run `touch /private/tmp/claude-501/-Users-paul-codagent-agent-evals-eval-the-whole-workflow/4e09bf5b-5dc6-4bfb-9ba0-9667049154cc/scratchpad/poc-target-claude-20261004T023042Z/.step-complete` with your shell tool as your final action when the step is done. Run that exact command with no extra arguments as the final action before finishing the current response. Do not merely say that the step is complete.

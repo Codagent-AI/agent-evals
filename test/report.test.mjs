@@ -701,6 +701,20 @@ test('escapeHtml neutralizes every markup-significant character', () => {
   assert.equal(escapeHtml(4.5), '4.5')
 })
 
+test('report shows per-criterion panel basis and family-labelled votes', () => {
+  const html = renderReport(result({ judging: { judging_protocol: 'cross-family-panel-v1', judges: {
+    'scene-kit': [{ id: 'navigation', verdict: 'pass', basis: 'majority-pass', votes: [
+      { family: 'claude', model: 'claude-sonnet-5-5', verdict: 'pass' },
+      { family: 'codex', model: 'gpt-6-sol', verdict: 'pass' },
+      { family: 'codex', model: 'gpt-6-sol', verdict: 'fail' },
+    ] }],
+  } } }))
+  assert.match(html, /Panel criterion verdicts/)
+  assert.match(html, /majority-pass/)
+  assert.match(html, /claude \(claude-sonnet-5-5\): pass/)
+  assert.match(html, /codex \(gpt-6-sol\): fail/)
+})
+
 test('the engineering-quality component renders with its points, no floor, subcomponents, and criteria', async () => {
   const rubrics = await loadRubrics()
   const automated = rubrics.automated.rubric

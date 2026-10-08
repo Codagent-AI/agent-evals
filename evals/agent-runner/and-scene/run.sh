@@ -64,8 +64,8 @@ Runs the and-scene evaluation through Agent Runner's sandbox adapter.
 
 Credential posture: a candidate run requires GitHub credentials that can push
 the unique eval/and-scene/<run-id> branch and create or update its draft pull
-request. No host credentials are inherited by default except the agent auth
-mounts required by selected profiles. Pass only short-lived, repo-scoped
+request. No host credentials are inherited by default except the auth mounts
+required by selected profiles and the Claude/Codex judging panel. Pass only short-lived, repo-scoped
 credentials with --env (for example --env GITHUB_TOKEN), or use the sandbox
 runner's default .sandbox-secrets.env file. Credentials remain in the ephemeral
 container home and are never written into the persistent run directory.
@@ -102,7 +102,8 @@ Options:
                           creates a branch, or changes candidate contents.
   --host                 With --rescore-from only: run the evaluator on this
                           host instead of the Docker sandbox. Needs node, npm,
-                          codex (or AND_SCENE_CODEX_COMMAND), chrome-devtools-axi,
+                          codex (or AND_SCENE_CODEX_COMMAND), claude (or
+                          AND_SCENE_CLAUDE_COMMAND), chrome-devtools-axi,
                           and either CHROME_DEVTOOLS_AXI_BROWSER_URL or a local
                           Chrome/Chromium (CHROME_PATH) to start headless.
   --reference-baseline   Evaluate an existing candidate without invoking Agent
@@ -315,7 +316,8 @@ if [[ "$HOST" == 1 && ( "$RUN_AGENT" != 1 || -z "$RESCORE_FROM" ) ]]; then
 fi
 
 # Calibration runs entirely on the host: no sandbox, no Agent Runner checkout,
-# no credentials. It is handled before every check those things require.
+# no credentials. Its judges are suite fixtures, so it makes no Claude or Codex
+# call. It is handled before every check those things require.
 if [[ "$CALIBRATE" == 1 ]]; then
   if [[ -z "$ARTIFACT_DIR" ]]; then
     ARTIFACT_DIR="$EVALS_ROOT/artifacts/evals/and-scene-calibration/$(timestamp)"
@@ -442,7 +444,24 @@ if [[ "$RUN_AGENT" == 1 ]]; then
     CANDIDATE_REF="$REFERENCE_REF"
   fi
 
-  # Eval-owned judging always runs through Codex.
+  # A host rescore calls the host's own claude, which may keep its login in the
+  # macOS Keychain; only a sandboxed run needs the credentials file forwarded.
+  if [[ "$HOST" != 1 ]]; then
+    if [[ "$MOUNT_CLAUDE_AUTH" != 1 ]]; then
+      AUTH_ARGS+=(--mount-claude-auth)
+      MOUNT_CLAUDE_AUTH=1
+    fi
+    # Without the file (a macOS Keychain login), sandbox-run.sh forwards a
+    # `claude setup-token` token from the environment or its secrets file.
+    claude_secrets="${SANDBOX_SECRETS_FILE:-$AGENT_RUNNER_DIR/.sandbox-secrets.env}"
+    if [[ ! -r "$HOME/.claude/.credentials.json" && -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]] &&
+      ! { [[ -r "$claude_secrets" ]] && grep -Eq '^[[:space:]]*(export[[:space:]]+)?CLAUDE_CODE_OAUTH_TOKEN=.' "$claude_secrets"; }; then
+      echo "Cross-family judging requires Claude auth: $HOME/.claude/.credentials.json, or CLAUDE_CODE_OAUTH_TOKEN (from claude setup-token) in the environment or $claude_secrets; it is forwarded with --mount-claude-auth (implied for judging)." >&2
+      exit 2
+    fi
+  fi
+
+  # Scored judging uses Claude and Codex; single-purpose checks remain Codex.
   if [[ "$MOUNT_CODEX_AUTH" != 1 ]]; then
     AUTH_ARGS+=(--mount-codex-auth)
     MOUNT_CODEX_AUTH=1
@@ -482,10 +501,12 @@ export AND_SCENE_RUN_ID
 ENV_ARGS+=(--env AND_SCENE_RUN_ID)
 
 # An evaluator-only rescore can run on the host: it invokes no Agent Runner and
-# no implementation agent, only the build, the browser evaluator, and Codex
+# no implementation agent, only the build, the browser evaluator, and panel
 # judges, which run read-only against this run's own neutral inputs.
 if [[ "$HOST" == 1 ]]; then
   host_codex="${AND_SCENE_CODEX_COMMAND:-$(command -v codex || true)}"
+  # The Claude judge invoker defaults to the sandbox's real CLI path.
+  host_claude="${AND_SCENE_CLAUDE_COMMAND:-$(command -v claude || true)}"
   host_command=(node "$SUITE_DIR/controller.mjs" --run-dir "$ARTIFACT_DIR" --run-id "$AND_SCENE_RUN_ID"
     --agent-runner-dir "$AGENT_RUNNER_DIR" --repo "$REPO" --fixture-ref "$FIXTURE_REF"
     --judge-model "$JUDGE_MODEL" --rescore-from "$RESCORE_FROM")
@@ -493,7 +514,7 @@ if [[ "$HOST" == 1 ]]; then
     host_command+=(--change-name "$CHANGE_NAME")
   fi
   if [[ "$DRY_RUN" == 1 ]]; then
-    printf 'AND_SCENE_CODEX_COMMAND=%q ' "$host_codex"
+    printf 'AND_SCENE_CODEX_COMMAND=%q AND_SCENE_CLAUDE_COMMAND=%q ' "$host_codex" "$host_claude"
     printf '%q ' "${host_command[@]}"
     printf '\n'
     exit 0
@@ -506,6 +527,10 @@ if [[ "$HOST" == 1 ]]; then
   done
   if [[ -z "$host_codex" || ! -x "$host_codex" ]]; then
     echo "Host rescore requires codex on PATH or AND_SCENE_CODEX_COMMAND." >&2
+    exit 2
+  fi
+  if [[ -z "$host_claude" || ! -x "$host_claude" ]]; then
+    echo "Host rescore requires claude on PATH or AND_SCENE_CLAUDE_COMMAND." >&2
     exit 2
   fi
   # The controller starts this Chrome only for browser phases, with
@@ -527,7 +552,7 @@ if [[ "$HOST" == 1 ]]; then
     export AND_SCENE_HOST_DEVTOOLS_PORT="${AND_SCENE_HOST_DEVTOOLS_PORT:-9333}"
   fi
   mkdir -p "$ARTIFACT_DIR"
-  export AND_SCENE_CODEX_COMMAND="$host_codex" AGENT_RUNNER_NO_TUI=1
+  export AND_SCENE_CODEX_COMMAND="$host_codex" AND_SCENE_CLAUDE_COMMAND="$host_claude" AGENT_RUNNER_NO_TUI=1
   if [[ " ${NODE_OPTIONS:-} " != *" --dns-result-order="* ]]; then
     export NODE_OPTIONS="${NODE_OPTIONS:-} --dns-result-order=ipv4first"
   fi
@@ -780,6 +805,12 @@ AGENT
 )
 
 sandbox_args=(--artifact-dir "$ARTIFACT_DIR" --input-dir "$SUITE_DIR")
+# Suite imports ../../../lib/panel-judging from /eval-input/lib. Keep this
+# eval-owned code available at the same resolved path inside the sandbox.
+sandbox_args+=(
+  --docker-run-arg --mount
+  --docker-run-arg "type=bind,source=$EVALS_ROOT/evals/lib/panel-judging,target=/lib/panel-judging,readonly"
+)
 # Codex's read-only sandbox uses Linux user namespaces. Docker's default
 # seccomp profile blocks their creation, which prevents source judges from
 # inspecting even the neutral read-only checkout. The outer Agent Runner

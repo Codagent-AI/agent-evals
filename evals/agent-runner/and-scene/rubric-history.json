@@ -39,7 +39,10 @@
       "f2e5d2edbf5ed8558873ca7791703756114c09d51579201c470b850e055c1c77"
     ],
     "13.0.0": [
-      "aaa65465394565536e9f809c27d829164bc06cb56eede85da75b6c1798b4314d"
+      "4120a38136cf742ca82082a918dedeeee273654535744bf73d4ff9fd689f44d3"
     ]
+  },
+  "changes": {
+    "13.0.0": "Judging protocol changed to cross-family-panel-v1, with the shared requirement-question rule in every judge, decider, audit, check, and second-opinion prompt, and a dissent check that confirms only when the cited fact decides the quoted requirement the way the dissent claims. It also carries the 12.4.0 attribution guidance. No criterion changed. Results before 13.0.0 form a different scoring series."
   }
 }
