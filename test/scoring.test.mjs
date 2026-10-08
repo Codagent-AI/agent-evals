@@ -12,6 +12,7 @@ const JOBS = [
   'scene-kit',
   'presentation-skill',
   'verification-tooling',
+  'engineering-quality',
   'testing-evidence',
   'assumption-handling',
 ]
@@ -63,10 +64,11 @@ test('an all-pass automated evaluation scores the full 70-point subtotal', () =>
   assert.deepEqual(
     result.components.map(({ id, points_awarded }) => [id, points_awarded]),
     [
-      ['demo-technical-quality', 24],
-      ['scene-kit-correctness', 24],
+      ['demo-technical-quality', 20],
+      ['scene-kit-correctness', 20],
       ['presentation-skill-correctness', 7],
       ['verification-tool-correctness', 7],
+      ['engineering-quality', 8],
       ['testing-evidence-quality', 4],
       ['assumption-handling-quality', 4],
     ],
@@ -95,7 +97,7 @@ test('a not-observed scene criterion is resolved by its declared fallback judge'
   assert.equal(criterion.verdict_source, 'fallback')
   assert.equal(criterion.fallback_job, 'demo-integration')
   assert.equal(result.fallback.criteria, 1)
-  assert.equal(result.fallback.points, 1)
+  assert.equal(result.fallback.points, 0.8)
 })
 
 test('a pending human review reports the subtotal but no official total or verdict', () => {
@@ -110,22 +112,27 @@ test('a pending human review reports the subtotal but no official total or verdi
   assert.deepEqual(result.incomplete, ['human-review'])
 })
 
+function engineeringCriteria() {
+  return automated.components.find(({ id }) => id === 'engineering-quality')
+    .subcomponents.flatMap(({ criteria }) => criteria)
+}
+
 test('an automated subtotal of exactly 40 remains eligible for human review', () => {
   const failures = [
     ...criteriaForJob(automated, 'presentation-skill'),
     ...criteriaForJob(automated, 'verification-tooling'),
     ...criteriaForJob(automated, 'testing-evidence'),
     ...criteriaForJob(automated, 'assumption-handling'),
-    ...subcomponentCriteria('demo-technical-quality', 'demo-canonical-content'),
-    ...subcomponentCriteria('demo-technical-quality', 'demo-code-boundaries'),
+    ...engineeringCriteria(),
   ]
 
   const result = scoreProduct(inputs({ failures }))
 
   assert.equal(result.automated_subtotal.points, 40)
-  assert.equal(component(result, 'demo-technical-quality').points_awarded, 16)
-  assert.equal(result.automated_pass, false)
-  assert.ok(result.automated_failures.some(({ id }) => id === 'verification-sample-outline'))
+  assert.equal(component(result, 'demo-technical-quality').points_awarded, 20)
+  assert.equal(component(result, 'engineering-quality').points_awarded, 0)
+  assert.equal(result.automated_pass, true)
+  assert.deepEqual(result.automated_failures, [])
 })
 
 test('a complete automated subtotal below 40 fails before human review', () => {
@@ -134,16 +141,15 @@ test('a complete automated subtotal below 40 fails before human review', () => {
     ...criteriaForJob(automated, 'verification-tooling'),
     ...criteriaForJob(automated, 'testing-evidence'),
     ...criteriaForJob(automated, 'assumption-handling'),
-    ...subcomponentCriteria('demo-technical-quality', 'demo-canonical-content'),
-    ...subcomponentCriteria('demo-technical-quality', 'demo-code-boundaries'),
+    ...engineeringCriteria(),
     subcomponentCriteria('scene-kit-correctness', 'scene-step-model')[0],
   ]
 
   const result = scoreProduct(inputs({ failures }))
 
-  assert.ok(result.automated_subtotal.points < 40)
-  assert.ok(component(result, 'demo-technical-quality').points_awarded >= 15)
-  assert.ok(component(result, 'scene-kit-correctness').points_awarded >= 15)
+  assert.equal(result.automated_subtotal.points, 39)
+  assert.ok(component(result, 'demo-technical-quality').points_awarded >= 12.5)
+  assert.ok(component(result, 'scene-kit-correctness').points_awarded >= 12.5)
   assert.equal(result.automated_pass, false)
   assert.deepEqual(result.automated_failures.filter(({ rule }) => rule !== 'hard-gate'), [{
     rule: 'automated-total',
@@ -181,24 +187,78 @@ test('a completed human review produces the official 100-point score and pass ve
 })
 
 test('a subcomponent divides its points equally among its criteria without rounding', () => {
-  const result = scoreProduct(inputs({ failures: ['entity-departing-exit'] }))
-  const transitions = component(result, 'scene-kit-correctness')
-    .subcomponents.find(({ id }) => id === 'scene-entity-transitions')
+  const result = scoreProduct(inputs({ failures: ['attribution-top-left-opt-in'] }))
+  const style = component(result, 'scene-kit-correctness')
+    .subcomponents.find(({ id }) => id === 'scene-style-and-attribution')
 
-  assert.equal(transitions.points_possible, 7)
-  // Five of six criteria pass, so the row is worth exactly 35/6 — not a rounded
-  // 5.83, and not a float built by adding five separate 7/6 shares.
-  assert.equal(transitions.points_awarded, 35 / 6)
-  assert.equal(transitions.criteria.find(({ id }) => id === 'entity-departing-exit').points_awarded, 0)
-  assert.equal(component(result, 'scene-kit-correctness').points_awarded, 24 - 7 / 6)
-  assert.equal(result.automated_subtotal.points, 70 - 7 / 6)
+  assert.equal(style.points_possible, 4)
+  // Six of seven criteria pass, so the row is worth exactly 24/7 — not a
+  // rounded 3.43, and not a float built by adding six separate 4/7 shares.
+  assert.equal(style.points_awarded, 24 / 7)
+  assert.equal(style.criteria.find(({ id }) => id === 'attribution-top-left-opt-in').points_awarded, 0)
+  assert.equal(component(result, 'scene-kit-correctness').points_awarded, 136 / 7)
+  assert.equal(result.automated_subtotal.points, 486 / 7)
+})
+
+test('engineering quality splits fractional subcomponent points equally across its criteria', () => {
+  const result = scoreProduct(inputs({ failures: [
+    'engineering-skill-out-of-scope-redirects', 'engineering-tests-wait-on-state',
+    'input-swipe-from-control-ignored', 'engineering-inspect-fails-loudly',
+  ] }))
+  const engineering = component(result, 'engineering-quality')
+  const row = (id) => engineering.subcomponents.find((subcomponent) => subcomponent.id === id)
+
+  assert.equal(engineering.points_possible, 8)
+  assert.equal(engineering.floor, null)
+  assert.equal(row('engineering-input-hygiene').points_awarded, 1)
+  assert.equal(row('engineering-verification-tooling-robustness').points_awarded, 2.5)
+  assert.equal(row('engineering-skill-instructions-and-templates').points_awarded, 1.125)
+  assert.equal(row('engineering-presentation-code-and-tests').points_awarded, 1.125)
+  assert.equal(engineering.points_awarded, 5.75)
+  assert.equal(result.automated_subtotal.points, 67.75)
+  assert.equal(result.automated_subtotal.possible, 70)
+})
+
+test('both automated floors hold at exactly 12.5 of 20 and fail just below it', () => {
+  const demoAtFloor = [
+    ...subcomponentCriteria('demo-technical-quality', 'demo-runtime-reliability').slice(0, 2),
+    ...subcomponentCriteria('demo-technical-quality', 'demo-scene-kit-integration'),
+    ...subcomponentCriteria('demo-technical-quality', 'demo-code-boundaries'),
+  ]
+  const kitAtFloor = [
+    ...subcomponentCriteria('scene-kit-correctness', 'scene-step-model'),
+    ...subcomponentCriteria('scene-kit-correctness', 'scene-entity-transitions').slice(0, 4),
+    subcomponentCriteria('scene-kit-correctness', 'scene-modes-and-navigation')[0],
+  ]
+  const atFloor = scoreProduct(inputs({ failures: [...demoAtFloor, ...kitAtFloor], humanReview: fullHumanReview }))
+  assert.equal(component(atFloor, 'demo-technical-quality').points_awarded, 12.5)
+  assert.equal(component(atFloor, 'scene-kit-correctness').points_awarded, 12.5)
+  assert.equal(component(atFloor, 'demo-technical-quality').floor, 12.5)
+  assert.equal(component(atFloor, 'scene-kit-correctness').floor, 12.5)
+  assert.equal(atFloor.automated_subtotal.points, 55)
+  assert.deepEqual(atFloor.automated_failures, [])
+  assert.equal(atFloor.automated_pass, true)
+  assert.equal(atFloor.official_pass, true)
+
+  const belowFloor = scoreProduct(inputs({
+    failures: [
+      ...demoAtFloor, ...kitAtFloor,
+      subcomponentCriteria('demo-technical-quality', 'demo-runtime-reliability')[2],
+      subcomponentCriteria('scene-kit-correctness', 'scene-modes-and-navigation')[1],
+    ],
+  }))
+  assert.equal(belowFloor.automated_pass, false)
+  assert.deepEqual(
+    belowFloor.automated_failures.filter(({ rule }) => rule === 'component-floor').map(({ id, required }) => [id, required]),
+    [['demo-technical-quality', 12.5], ['scene-kit-correctness', 12.5]],
+  )
 })
 
 test('every criterion result records its identifier, verdict, rationale, and cited evidence', () => {
   const result = scoreProduct(inputs())
   const criteria = result.components.flatMap((entry) => entry.subcomponents.flatMap(({ criteria: rows }) => rows))
 
-  assert.equal(criteria.length, 85)
+  assert.equal(criteria.length, 101)
   assert.ok(criteria.every(({ id, verdict, rationale, evidence }) => (
     typeof id === 'string' && ['pass', 'fail'].includes(verdict)
       && rationale.length > 0 && Array.isArray(evidence)
@@ -211,6 +271,7 @@ test('a total below the pass threshold fails the official verdict', () => {
     ...criteriaForJob(automated, 'presentation-skill'),
     ...criteriaForJob(automated, 'verification-tooling'),
     ...criteriaForJob(automated, 'scene-kit').slice(0, 20),
+    ...engineeringCriteria(),
   ]
   const result = scoreProduct(inputs({ failures, humanReview: fullHumanReview }))
 
@@ -224,7 +285,7 @@ test('missing a component floor fails the official verdict even above the total 
     failures: deterministicCriteria(automated),
     humanReview: fullHumanReview,
   }))
-  assert.ok(component(demoFloor, 'demo-technical-quality').points_awarded < 15)
+  assert.ok(component(demoFloor, 'demo-technical-quality').points_awarded < 12.5)
   assert.ok(demoFloor.official_score >= 70)
   assert.equal(demoFloor.official_pass, false)
   assert.ok(demoFloor.pass_failures.some((entry) => entry.rule === 'component-floor'))
@@ -233,7 +294,7 @@ test('missing a component floor fails the official verdict even above the total 
     failures: criteriaForJob(automated, 'scene-kit').slice(0, 24),
     humanReview: fullHumanReview,
   }))
-  assert.ok(component(kitFloor, 'scene-kit-correctness').points_awarded < 15)
+  assert.ok(component(kitFloor, 'scene-kit-correctness').points_awarded < 12.5)
   assert.equal(kitFloor.official_pass, false)
 
   const humanFloor = scoreProduct(inputs({
@@ -332,12 +393,12 @@ test('unobserved evaluator output leaves its component incomplete instead of fai
   assert.equal(component(result, 'scene-kit-correctness').complete, false)
   assert.equal(component(result, 'scene-kit-correctness').points_awarded, null)
   // Components with complete evidence keep their scores.
-  assert.equal(component(result, 'demo-technical-quality').points_awarded, 24)
-  assert.equal(result.automated_subtotal.points, 46)
+  assert.equal(component(result, 'demo-technical-quality').points_awarded, 20)
+  assert.equal(result.automated_subtotal.points, 50)
   assert.equal(result.automated_subtotal.possible, 70)
   assert.equal(result.automated_subtotal.complete, false)
   // The observed subtotal is never rescaled to hide the missing evidence.
-  assert.equal(result.automated_subtotal.observed_possible, 46)
+  assert.equal(result.automated_subtotal.observed_possible, 50)
   assert.equal(result.official_score, null)
   assert.equal(result.official_pass, null)
   assert.equal(result.automated_pass, null)
@@ -351,10 +412,10 @@ test('a partially observed component keeps its deterministic score and marks jud
 
   assert.equal(demo.complete, false)
   assert.equal(demo.points_awarded, null)
-  assert.equal(demo.points_observed, 14)
+  assert.equal(demo.points_observed, 11)
   assert.equal(
     demo.subcomponents.find(({ id }) => id === 'demo-canonical-content').points_awarded,
-    5,
+    4,
   )
   assert.equal(demo.subcomponents.find(({ id }) => id === 'demo-code-boundaries').points_awarded, null)
 })
@@ -438,6 +499,20 @@ test('a reference baseline excludes workflow-quality components without rescalin
   }
 })
 
+test('the reference scores engineering quality within its shared 62 automated points', () => {
+  const baseline = scoreProduct({ ...inputs({ humanReview: fullHumanReview }), mode: 'reference-baseline' })
+  const engineering = component(baseline, 'engineering-quality')
+
+  assert.equal(engineering.applicable, true)
+  assert.equal(engineering.points_possible, 8)
+  assert.equal(engineering.points_awarded, 8)
+  assert.deepEqual(
+    baseline.components.filter(({ applicable }) => applicable).map(({ id }) => id),
+    ['demo-technical-quality', 'scene-kit-correctness', 'presentation-skill-correctness',
+      'verification-tool-correctness', 'engineering-quality'],
+  )
+})
+
 test('a pending reference reports 62 automated points but no final reference score', () => {
   const baseline = scoreProduct({ ...inputs(), mode: 'reference-baseline' })
 
@@ -457,6 +532,16 @@ test('floorless workflow-quality components can score zero without creating a pa
 
   assert.equal(component(result, 'testing-evidence-quality').points_awarded, 0)
   assert.equal(component(result, 'assumption-handling-quality').points_awarded, 0)
+  assert.equal(result.official_score, 92)
+  assert.equal(result.official_pass, true)
+  assert.equal(result.pass_failures.some(({ rule }) => rule === 'component-floor'), false)
+})
+
+test('engineering quality can score zero without creating a pass gate', () => {
+  const result = scoreProduct(inputs({ failures: engineeringCriteria(), humanReview: fullHumanReview }))
+
+  assert.equal(component(result, 'engineering-quality').points_awarded, 0)
+  assert.equal(result.automated_pass, true)
   assert.equal(result.official_score, 92)
   assert.equal(result.official_pass, true)
   assert.equal(result.pass_failures.some(({ rule }) => rule === 'component-floor'), false)

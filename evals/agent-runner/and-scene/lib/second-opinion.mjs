@@ -14,13 +14,17 @@ const closedVariant = (type, fields) => ({
   required: ['type', ...Object.keys(fields)],
   properties: { type: { type: 'string', enum: [type] }, ...fields },
 })
+// A press may hold modifiers and a swipe may start on a selector. Strict mode
+// has no optional fields, so an unused one is required and null.
+const PRESS_MODIFIERS = ['Alt', 'Control', 'Meta']
 const REPLAY_ACTION_SCHEMAS = [
   closedVariant('navigate', { path: { type: 'string' } }),
   closedVariant('click', { selector: { type: 'string' } }),
-  closedVariant('press', { key: { type: 'string' } }),
+  closedVariant('press', { key: { type: 'string' }, modifiers: { anyOf: [{ type: 'null' },
+    { type: 'array', maxItems: PRESS_MODIFIERS.length, items: { type: 'string', enum: PRESS_MODIFIERS } }] } }),
   closedVariant('keys', { text: { type: 'string' } }),
   closedVariant('swipe', { direction: { type: 'string', enum: ['left', 'right'] },
-    input: { type: 'string', enum: ['touch', 'pointer'] } }),
+    input: { type: 'string', enum: ['touch', 'pointer'] }, selector: { type: ['string', 'null'] } }),
   closedVariant('wait', { ms: { type: 'integer' } }),
 ]
 const REPLAY_EXPECT_SCHEMAS = [
@@ -85,6 +89,48 @@ const normalized = (text) => String(text ?? '').replace(/\s+/g, ' ').trim()
 function failingRationale(record) {
   const rationale = record?.result?.rationale ?? record?.rationale
   return typeof rationale === 'string' ? rationale : ''
+}
+
+const MODIFIER_KEYS_ID = 'input-modifier-keys-pass-through'
+const CONTROL_SWIPE_ID = 'input-swipe-from-control-ignored'
+const isModified = (action) => Array.isArray(action?.modifiers) && action.modifiers.length > 0
+const hasSelector = (action) => typeof action?.selector === 'string'
+const middleStep = (entry) => Number.isInteger(entry?.stepIndex) && Number.isInteger(entry?.stepCount)
+  && entry.stepIndex > 0 && entry.stepIndex < entry.stepCount - 1
+
+// The input-hygiene probes retain their observations on the criterion, which
+// the probe record also spreads into its outputs.
+function probeObservations(record) {
+  const observations = record?.result?.observations ?? record?.outputs ?? record?.observations
+  return observations && typeof observations === 'object' ? observations : {}
+}
+
+// Each modified press the modifier-key probe made: key, modifier, step_before,
+// step_after (null once the document unloaded), prevented, and unloaded.
+function modifierPresses(record) {
+  const presses = probeObservations(record).modifier_keys?.presses
+  return Array.isArray(presses) ? presses.filter((press) => press && typeof press === 'object') : []
+}
+
+// No replay observation can show whether a page prevented a default, so a
+// failure the probe recorded on one stands whatever a replay shows.
+export function preventedModifierDefault({ target, failing_record: record }) {
+  return target?.id === MODIFIER_KEYS_ID && modifierPresses(record).some(({ prevented }) => prevented === true)
+}
+
+// The recorded swipe-from-control failure: the control's selector, the mode it
+// was used in, the swipe direction, and the input path (touch or pointer) whose
+// swipe changed the step to somewhere other than the control's own activation
+// target.
+function controlSwipeFailure(record) {
+  const { control, mode, direction, failure } = probeObservations(record).swipe_from_control ?? {}
+  const selector = control?.selector
+  return typeof selector === 'string' && selector.trim() && ['touch', 'pointer'].includes(failure?.input)
+    && ['left', 'right'].includes(direction)
+    && Number.isInteger(failure.step_before) && Number.isInteger(failure.step_after)
+    && failure.step_before !== failure.step_after
+    ? { selector: selector.trim(), mode: typeof mode === 'string' ? mode : null, direction, input: failure.input }
+    : null
 }
 
 const stepChange = (input, extra = {}) => ({ subject: 'step-change', input, inputs: [INPUT_ACTIONS[input]],
@@ -152,6 +198,21 @@ export function replayPolicy({ target, failing_record: record }) {
       return index === null ? null : { subject: 'current-control', step: index, inputs: ['click', 'press'],
         expect: ['text-present'] }
     }
+    case MODIFIER_KEYS_ID: {
+      // Admitted only when a modified press changed the step; an unloaded
+      // page reached the browser's own shortcut, which is the passing case.
+      const chords = modifierPresses(record).filter((press) => press.unloaded !== true
+        && typeof press.key === 'string' && PRESS_MODIFIERS.includes(press.modifier)
+        && Number.isInteger(press.step_before) && Number.isInteger(press.step_after)
+        && press.step_before !== press.step_after)
+        .map(({ key, modifier }) => ({ key, modifier }))
+      return chords.length ? { subject: 'modifier-press', inputs: ['press'], expect: ['step-index-equals'], chords } : null
+    }
+    case CONTROL_SWIPE_ID: {
+      const failure = controlSwipeFailure(record)
+      return failure ? { subject: 'control-swipe', inputs: ['press', 'click', 'swipe'], expect: ['step-index-equals'],
+        ...failure } : null
+    }
     default:
       return null
   }
@@ -185,6 +246,10 @@ function describeAdmittedReplay(policy) {
       return `${base}; replay.expect is step-index-changes. The replay must visit every produced step${policy.clean ? ' and report no runtime or console failures' : ''}.`
     case 'current-control':
       return `${base}; replay.expect is text-present whose selector selects the control marked aria-current and whose text is the label that control shows on step ${policy.step + 1} (its normative title or its step number). The replay must end on step ${policy.step + 1} and show that the current control changes with the active step.`
+    case 'modifier-press':
+      return `${base}: unmodified ArrowRight presses to leave the first step, then presses of ${policy.chords.map(({ key, modifier }) => `${key} holding ${modifier}`).join(' or ')} (modifiers lists that one modifier), with no unmodified press after a modified one; replay.expect is step-index-equals with the step before the first modified press, and the step must not change.`
+    case 'control-swipe':
+      return `${base}: unmodified presses of ArrowRight to leave the first step, presses or clicks to establish ${policy.mode ? `${policy.mode} mode` : 'the recorded mode'}, then one ${policy.input} swipe ${policy.direction} whose selector is ${JSON.stringify(policy.selector)} as the last input; replay.expect is step-index-equals with the step before the swipe, and the step must not change.`
     default:
       return base
   }
@@ -199,6 +264,36 @@ function replayPlanRefusal(policy, replay) {
   if (stray) return `replay is outside the harness allowlist: ${stray.type} actions cannot confirm this failure`
   if (!rest.some((action) => policy.inputs.includes(action.type))) {
     return `replay is outside the harness allowlist: it needs a ${policy.inputs.join(' or ')} action`
+  }
+  if (policy.subject === 'modifier-press') {
+    const first = rest.findIndex(isModified)
+    if (first === -1) return 'replay is outside the harness allowlist: it needs a press holding the recorded modifier'
+    if (rest.some((action) => isModified(action) && !(action.modifiers.length === 1
+      && policy.chords.some(({ key, modifier }) => action.key === key && action.modifiers[0] === modifier)))) {
+      return 'replay is outside the harness allowlist: a modified press must repeat the recorded key and modifier'
+    }
+    if (rest.some((action, index) => action.type === 'press' && !isModified(action)
+      && (index > first || action.key !== 'ArrowRight'))) {
+      return 'replay is outside the harness allowlist: only unmodified ArrowRight presses may precede the modified press'
+    }
+  } else if (policy.subject === 'control-swipe') {
+    const inputs = rest.filter((action) => action.type !== 'wait')
+    const swipes = inputs.filter((action) => action.type === 'swipe')
+    if (swipes.length !== 1 || inputs.at(-1) !== swipes[0]) {
+      return 'replay is outside the harness allowlist: one swipe must be the last input'
+    }
+    if (swipes[0].input !== policy.input) {
+      return `replay is outside the harness allowlist: the swipe must use the recorded ${policy.input} input`
+    }
+    if (swipes[0].direction !== policy.direction) {
+      return `replay is outside the harness allowlist: the swipe must travel in the recorded ${policy.direction} direction`
+    }
+    if (!hasSelector(swipes[0]) || swipes[0].selector.trim() !== policy.selector) {
+      return 'replay is outside the harness allowlist: the swipe must start on the recorded control'
+    }
+    if (inputs.some(isModified)) return 'replay is outside the harness allowlist: presses must not hold modifiers'
+  } else if (rest.some((action) => isModified(action) || (action.type === 'swipe' && hasSelector(action)))) {
+    return 'replay is outside the harness allowlist: modified presses and swipes from a selector cannot confirm this failure'
   }
   if (policy.subject === 'step-change' && policy.input === 'keyboard'
     && rest.some((action) => action.type === 'press' && !NAVIGATION_KEYS.includes(action.key))) {
@@ -231,7 +326,26 @@ function replayEvidenceRefusal(policy, replay, observed) {
   }
   const first = replay.actions.findIndex((action, index) => index > 0 && policy.inputs.includes(action.type))
   const before = observations[first]
+  // The step before the modified press or the swipe must hold to the end.
+  const held = (from, what) => {
+    const start = observations[from]
+    if (!middleStep(start)) return `replay is outside the harness allowlist: the ${what} must start on a step that is neither the first nor the last`
+    if (replay.expect.type !== 'step-index-equals' || replay.expect.value !== start.stepIndex
+      || observations.slice(from + 1).some((entry) => entry?.stepIndex !== start.stepIndex)) {
+      return `replay is outside the harness allowlist: the step before the ${what} must hold to the end`
+    }
+    return null
+  }
   switch (policy.subject) {
+    case 'modifier-press':
+      return held(replay.actions.findIndex(isModified), 'modified press')
+    case 'control-swipe': {
+      const swipe = replay.actions.findIndex((action) => action.type === 'swipe')
+      if (policy.mode && observations[swipe]?.mode !== policy.mode) {
+        return `replay is outside the harness allowlist: the swipe must start in the recorded ${policy.mode} mode`
+      }
+      return held(swipe, 'swipe')
+    }
     case 'step-change':
       if (!Number.isInteger(before?.stepIndex) || !Number.isInteger(last?.stepIndex)
         || last.stepIndex === before.stepIndex
@@ -349,8 +463,10 @@ export function buildSecondOpinionRequest({ target, rubrics, browser, judging, n
     'For a terminal overturn, cite both source lines and exact recorded log lines showing the harness fault.',
     JUDGE_SCOPE_RULE,
     REQUIREMENT_QUESTION_RULE,
-    ...(browserDerived ? ['For an overturn, propose replay.actions (1-12 navigate, click, press, keys, swipe, wait actions) and replay.expect (step-index-equals, step-index-changes, step-count-changes, mode-equals, selector-visible, selector-hidden, text-present). The harness runs it in a real browser.',
+    ...(browserDerived ? ['For an overturn, propose replay.actions (1-12 navigate, click, press, keys, swipe, wait actions; a press may hold modifiers, any of Alt, Control, Meta, and a swipe may start on the element a selector matches instead of the stage; set an unused modifiers or selector to null) and replay.expect (step-index-equals, step-index-changes, step-count-changes, mode-equals, selector-visible, selector-hidden, text-present). The harness runs it in a real browser.',
       describeReplayPolicy(replayPolicy({ target, failing_record: failingRecord }))] : []),
+    ...(preventedModifierDefault({ target, failing_record: failingRecord })
+      ? ['The probe recorded a prevented default on a modified press. No replay can observe a prevented default, so the harness rejects any overturn of this failure.'] : []),
   ].join('\n')
   return {
     job: 'second-opinion', criteria: [target.id], target, schema: SECOND_OPINION_SCHEMA,
@@ -375,12 +491,20 @@ export function validReplay(replay) {
     navigate: ['path'], click: ['selector'], press: ['key'], keys: ['text'],
     swipe: ['direction', 'input'], wait: ['ms'],
   }
+  // Fields a verifier may leave out or set to null.
+  const optional = { press: ['modifiers'], swipe: ['selector'] }
   if (replay.actions.some((action) => {
     const fields = shapes[action?.type]
-    if (!fields || Object.keys(action).sort().join(',') !== ['type', ...fields].sort().join(',')) return true
+    if (!fields || typeof action !== 'object' || Array.isArray(action)) return true
+    const keys = Object.keys(action).filter((key) => !optional[action.type]?.includes(key))
+    if (keys.sort().join(',') !== ['type', ...fields].sort().join(',')) return true
     if (action.type === 'wait') return !Number.isInteger(action.ms) || action.ms < 0 || action.ms > 2000
     if (action.type === 'swipe') return !['left', 'right'].includes(action.direction)
       || !['touch', 'pointer'].includes(action.input)
+      || (action.selector != null && (typeof action.selector !== 'string' || !action.selector.trim()))
+    if (action.type === 'press' && action.modifiers != null && (!Array.isArray(action.modifiers)
+      || new Set(action.modifiers).size !== action.modifiers.length
+      || action.modifiers.some((modifier) => !PRESS_MODIFIERS.includes(modifier)))) return true
     if (action.type === 'navigate') return typeof action.path !== 'string' || !action.path.startsWith('/')
       || action.path.startsWith('//') || action.path.includes('..') || action.path.includes('\\')
     return typeof action[fields[0]] !== 'string' || !action[fields[0]].trim()
@@ -605,6 +729,8 @@ async function judgeAnswer({ answer, request, invoke, replay, attempts }) {
     replay: answer.replay,
     on_behalf_of: request.target.on_behalf_of ?? null }
   if (answer.decision === 'uphold') return { ...base, decision: 'uphold', verdict: 'fail' }
+  if (preventedModifierDefault(request)) return { ...base, decision: 'overturn-rejected', verdict: 'fail',
+    rejection_reason: 'the probe recorded a prevented default on a modified press, which no browser replay can observe' }
   if (answer.replay !== null && !validReplay(answer.replay)) return { ...base,
     decision: 'overturn-rejected', verdict: 'fail', rejection_reason: 'browser replay is malformed' }
   let spans

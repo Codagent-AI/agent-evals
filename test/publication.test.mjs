@@ -507,10 +507,11 @@ test('a completed publication can be superseded only by a validated technical ad
     automated_subtotal: { points: 67.9, possible: 70, observed_possible: 70, complete: true },
     score: {
       components: [
-        { id: 'demo-technical-quality', points_awarded: 23, points_possible: 24, floor: 15 },
-        { id: 'scene-kit-correctness', points_awarded: 23.4, points_possible: 24, floor: 15 },
+        { id: 'demo-technical-quality', points_awarded: 19, points_possible: 20, floor: 12.5 },
+        { id: 'scene-kit-correctness', points_awarded: 19.4, points_possible: 20, floor: 12.5 },
         { id: 'presentation-skill-correctness', points_awarded: 7, points_possible: 7, floor: null },
         { id: 'verification-tool-correctness', points_awarded: 6.5, points_possible: 7, floor: null },
+        { id: 'engineering-quality', points_awarded: 8, points_possible: 8, floor: null },
         { id: 'testing-evidence-quality', points_awarded: 4, points_possible: 4, floor: null },
         { id: 'assumption-handling-quality', points_awarded: 4, points_possible: 4, floor: null },
       ],
@@ -530,10 +531,11 @@ test('a completed publication can be superseded only by a validated technical ad
     approved_at: '2026-07-28T20:00:00.000Z',
     rationale: 'Independent robustness review.',
     component_scores: {
-      'demo-technical-quality': 24,
-      'scene-kit-correctness': 22.5,
+      'demo-technical-quality': 20,
+      'scene-kit-correctness': 18.5,
       'presentation-skill-correctness': 6,
       'verification-tool-correctness': 5.5,
+      'engineering-quality': 8,
     },
     findings: ['reviewed source and runtime evidence'],
   })
@@ -553,10 +555,11 @@ test('a completed publication can be superseded only by a validated technical ad
     approved_at: '2026-07-28T22:00:00.000Z',
     rationale: 'Fresh rubric review superseded the provisional adjudication.',
     component_scores: {
-      'demo-technical-quality': 23,
-      'scene-kit-correctness': 637 / 30,
+      'demo-technical-quality': 19,
+      'scene-kit-correctness': 517 / 30,
       'presentation-skill-correctness': 41 / 8,
       'verification-tool-correctness': 13 / 3,
+      'engineering-quality': 8,
     },
     workflow_component_scores: {
       'testing-evidence-quality': 4,

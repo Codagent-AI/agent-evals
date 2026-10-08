@@ -64,6 +64,7 @@ function completeJudging() {
       'scene-kit',
       'presentation-skill',
       'verification-tooling',
+      'engineering-quality',
       'testing-evidence',
       'assumption-handling',
     ],
@@ -72,6 +73,7 @@ function completeJudging() {
       'scene-kit',
       'presentation-skill',
       'verification-tooling',
+      'engineering-quality',
       'testing-evidence',
       'assumption-handling',
     ].map((id) => [id, [{ id: `${id}-criterion`, verdict: 'pass' }]])),
@@ -166,10 +168,11 @@ test('a complete reference result records the 92-point denominator and N/A compo
   const referenceScore = score({
     official: 92,
     components: [
-      { ...component('demo-technical-quality', 24), applicable: true, points_possible: 24 },
-      { ...component('scene-kit-correctness', 24), applicable: true, points_possible: 24 },
+      { ...component('demo-technical-quality', 20), applicable: true, points_possible: 20 },
+      { ...component('scene-kit-correctness', 20), applicable: true, points_possible: 20 },
       { ...component('presentation-skill-correctness', 7), applicable: true, points_possible: 7 },
       { ...component('verification-tool-correctness', 7), applicable: true, points_possible: 7 },
+      { ...component('engineering-quality', 8), applicable: true, points_possible: 8 },
       {
         ...component('testing-evidence-quality', 0),
         applicable: false,

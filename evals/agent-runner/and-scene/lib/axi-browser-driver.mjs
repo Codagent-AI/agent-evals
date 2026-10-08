@@ -4,6 +4,7 @@
 // adapter translates that API into the deliberately tiny driver consumed by
 // browser-eval.mjs, keeping browser mechanics out of scoring logic.
 import { spawnSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 
 import { isBrowserInfrastructureDiagnostic } from './browser-diagnostics.mjs'
 import { validReplay } from './second-opinion.mjs'
@@ -341,6 +342,27 @@ function swipeTargetSource(sign) {
   window.__andSceneSwipe = { target, startX, y };`
 }
 
+// A swipe that starts on a given element: the finger lands at the element's
+// centre, so the element (or the part of it under the finger, such as a
+// button's label) is the target, and the swipe travels its full distance from
+// there. A probe asks this to see whether a gesture that starts on one of the
+// presentation's own controls is mistaken for a navigation swipe. When the
+// element is missing, nothing is dispatched and the event reports false.
+function elementSwipeTargetSource(selector) {
+  return `const element = document.querySelector(${JSON.stringify(selector)});
+  if (!element) return false;
+  const rect = element.getBoundingClientRect();
+  const startX = rect.left + rect.width / 2;
+  const y = rect.top + rect.height / 2;
+  const hit = document.elementFromPoint(startX, y);
+  const target = hit && element.contains(hit) ? hit : element;
+  window.__andSceneSwipe = { target, startX, y };`
+}
+
+function swipeStartSource(sign, selector) {
+  return selector === null ? swipeTargetSource(sign) : elementSwipeTargetSource(selector)
+}
+
 // One touch event of a single-finger horizontal swipe, as a page callback.
 // The finger lands on whatever element is under it at the vertical middle of
 // the stage (or the presentation when it has no stage), just as a real touch
@@ -349,11 +371,11 @@ function swipeTargetSource(sign) {
 // frame, which the driving script waits on before the next event. Every value
 // is embedded at its use site: the callback must not read the driving script's
 // scope.
-function swipeEventSource(type, sign, progress) {
+function swipeEventSource(type, sign, progress, selector = null) {
   const begin = type === 'touchstart'
   const end = type === 'touchend'
   return `() => {
-  ${begin ? swipeTargetSource(sign) : `const swipe = window.__andSceneSwipe;
+  ${begin ? swipeStartSource(sign, selector) : `const swipe = window.__andSceneSwipe;
   if (!swipe) return false;
   const { target, startX, y } = swipe;`}
   const touch = new Touch({
@@ -381,11 +403,11 @@ function swipeEventSource(type, sign, progress) {
 }`
 }
 
-function pointerSwipeEventSource(type, sign, progress) {
+function pointerSwipeEventSource(type, sign, progress, selector = null) {
   const begin = type === 'pointerdown'
   const end = type === 'pointerup'
   return `() => {
-  ${begin ? swipeTargetSource(sign) : `const swipe = window.__andSceneSwipe;
+  ${begin ? swipeStartSource(sign, selector) : `const swipe = window.__andSceneSwipe;
   if (!swipe) return false;
   const { target, startX, y } = swipe;`}
   target.dispatchEvent(new PointerEvent(${JSON.stringify(type)}, {
@@ -421,6 +443,93 @@ function swipeFrameWaitSource() {
 }`
 }
 
+// Modifiers a probe may hold while pressing a key, in the order a chord names
+// them. chrome-devtools-axi presses "Alt+ArrowRight" as an Alt keydown, then
+// an ArrowRight keydown with altKey set, then both keyups.
+const PRESS_MODIFIERS = ['Alt', 'Control', 'Meta']
+// Keydowns retained per document between reads; a probe reads after each press.
+const MAX_KEYDOWN_RECORDS = 200
+const KEY_INSTRUMENTATION_READ_TIMEOUT_MS = 2000
+
+// Instruments the page's keydowns so a probe can tell whether the page
+// prevented a key's default. The wrapper sits on KeyboardEvent.prototype, so a
+// handler that stops propagation before any listener of ours runs still calls
+// through it, and a capture listener on the window adds what the event itself
+// reports once dispatch is over, which covers a page that cached Event's own
+// preventDefault. Every keydown is recorded with its key, modifier flags,
+// whether its default was prevented, and how many times the wrapper was
+// called; the modifier's own keydown of a chord is recorded too.
+//
+// chrome-devtools-axi has no portable primitive that runs a script before a
+// document's own scripts (no init script, and no navigation hook in every
+// build), so this is installed into the loaded document, before the probe's
+// first key press. A page whose scripts already replaced or wrapped
+// preventDefault, or that registered a window capture listener calling
+// stopImmediatePropagation and then a cached preventDefault, is out of reach.
+//
+// A pagehide marks the document as unloaded. A document that replaced it
+// carries none of this state, which the driver reads as an unload too.
+// Installing again, for example after a reload, starts a fresh record without
+// wrapping the method twice.
+function keyInstrumentationInstallSource(token) {
+  return `() => {
+  window.__andSceneKeys = { token: ${JSON.stringify(token)}, unloaded: false, keydowns: [] };
+  if (!window.__andSceneKeysWired) {
+    window.__andSceneKeysWired = true;
+    const records = new WeakMap();
+    const recordFor = (event) => {
+      let record = records.get(event);
+      if (!record) {
+        record = {
+          key: String(event.key),
+          altKey: Boolean(event.altKey),
+          ctrlKey: Boolean(event.ctrlKey),
+          metaKey: Boolean(event.metaKey),
+          shiftKey: Boolean(event.shiftKey),
+          prevented: false,
+          preventDefaultCalls: 0,
+        };
+        records.set(event, record);
+        const state = window.__andSceneKeys;
+        if (state && state.keydowns.length < ${MAX_KEYDOWN_RECORDS}) state.keydowns.push(record);
+      }
+      return record;
+    };
+    const original = KeyboardEvent.prototype.preventDefault;
+    Object.defineProperty(KeyboardEvent.prototype, 'preventDefault', {
+      configurable: true,
+      writable: true,
+      value: function preventDefault() {
+        if (this && this.type === 'keydown') {
+          const record = recordFor(this);
+          record.prevented = true;
+          record.preventDefaultCalls += 1;
+        }
+        return original.apply(this, arguments);
+      },
+    });
+    window.addEventListener('keydown', (event) => {
+      const record = recordFor(event);
+      setTimeout(() => { if (event.defaultPrevented) record.prevented = true; });
+    }, true);
+    window.addEventListener('pagehide', () => {
+      if (window.__andSceneKeys) window.__andSceneKeys.unloaded = true;
+    });
+  }
+  return true;
+}`
+}
+
+function keyInstrumentationReadSource(reset) {
+  return `() => {
+  const state = window.__andSceneKeys;
+  const keydowns = state ? state.keydowns.map((record) => ({ ...record })) : [];
+  if (state && ${reset}) state.keydowns = [];
+  return { token: state ? state.token : null, unloaded: Boolean(state && state.unloaded),
+    url: String(location.href), keydowns };
+}`
+}
+
 function waitForSelectorSource(selector, timeout) {
   const probe = JSON.stringify(`!!document.querySelector(${JSON.stringify(selector)})`)
   return `{
@@ -435,6 +544,9 @@ function waitForSelectorSource(selector, timeout) {
 
 export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {}) {
   const base = new URL(baseUrl)
+  // The token of the keydown instrumentation last installed, which tells a
+  // document that replaced the instrumented one from the instrumented one.
+  let keyInstrumentationToken = null
 
   async function invoke(args, input = '') {
     const result = await command(args, input)
@@ -516,18 +628,25 @@ export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {
             if (!node) return false;
             node.click(); return true;
           }))) { productFailure = 'replay click target was not found'; break replay; }`
-          case 'press': return `await page.press(${JSON.stringify(action.key)});`
+          // A chord names the key after its modifiers, as press() does.
+          case 'press': return `await page.press(${JSON.stringify([...PRESS_MODIFIERS
+            .filter((modifier) => action.modifiers?.includes(modifier)), action.key].join('+'))});`
           case 'keys': return `await page.type(${JSON.stringify(action.text)});`
           case 'wait': return sleepSource(action.ms)
           case 'swipe': {
             const sign = action.direction === 'left' ? -1 : 1
+            const selector = action.selector ?? null
             const source = action.input === 'pointer' ? pointerSwipeEventSource : swipeEventSource
             const names = action.input === 'pointer'
               ? ['pointerdown', 'pointermove', 'pointerup'] : ['touchstart', 'touchmove', 'touchend']
-            const phases = [source(names[0], sign, 0),
+            const phases = [source(names[0], sign, 0, selector),
               ...Array.from({ length: SWIPE_MOVES }, (_, index) =>
                 source(names[1], sign, (index + 1) / (SWIPE_MOVES + 1))), source(names[2], sign, 1)]
-            return phases.map((phase) => `await page.eval(${phase});`).join(`\n${swipeFrameWaitSource()}\n`)
+            // A start element that matches nothing is what the candidate page
+            // did, so it ends the replay as product evidence, never a pass.
+            return phases.map((phase, index) => (index === 0 && selector !== null
+              ? `if (!(await page.eval(${phase}))) { productFailure = 'replay swipe start target was not found'; break replay; }`
+              : `await page.eval(${phase});`)).join(`\n${swipeFrameWaitSource()}\n`)
           }
         }
       }
@@ -1015,8 +1134,55 @@ console.log(JSON.stringify(captured));
       return captured
     },
 
-    async press(key) {
-      await run(`await page.press(${JSON.stringify(key)}); console.log(JSON.stringify(true));`)
+    // Presses a key, optionally while holding any of Alt, Control, and Meta.
+    async press(key, { modifiers = [] } = {}) {
+      if (!Array.isArray(modifiers) || new Set(modifiers).size !== modifiers.length
+        || modifiers.some((modifier) => !PRESS_MODIFIERS.includes(modifier))) {
+        throw new BrowserDriverError(`unsupported key modifiers: ${JSON.stringify(modifiers)}`)
+      }
+      const chord = [...PRESS_MODIFIERS.filter((modifier) => modifiers.includes(modifier)), key].join('+')
+      await run(`await page.press(${JSON.stringify(chord)}); console.log(JSON.stringify(true));`)
+    },
+
+    async installKeyInstrumentation() {
+      const token = randomUUID()
+      const installed = await run(`
+const installed = await page.eval(${keyInstrumentationInstallSource(token)});
+console.log(JSON.stringify(installed));
+`)
+      if (installed !== true) throw new BrowserDriverError('keydown instrumentation was not installed')
+      keyInstrumentationToken = token
+      return { installed: true }
+    },
+
+    // Reads the keydowns recorded since the last reset, and whether the
+    // instrumented document unloaded. A press that navigates may still be
+    // replacing the document, so a read that the navigation interrupts retries.
+    async readKeyInstrumentation({ reset = false } = {}) {
+      const read = await run(`
+const deadline = Date.now() + ${KEY_INSTRUMENTATION_READ_TIMEOUT_MS};
+let read = null;
+for (;;) {
+  try {
+    read = await page.eval(${keyInstrumentationReadSource(reset === true)});
+    break;
+  } catch (error) {
+    if (Date.now() >= deadline) throw error;
+    ${sleepSource(50)}
+  }
+}
+console.log(JSON.stringify(read));
+`)
+      if (!read || !Array.isArray(read.keydowns)) {
+        throw new BrowserDriverError('keydown instrumentation returned an invalid reading')
+      }
+      const installed = keyInstrumentationToken !== null && read.token === keyInstrumentationToken
+      return {
+        installed,
+        unloaded: keyInstrumentationToken !== null && (!installed || read.unloaded === true),
+        url: read.url,
+        keydowns: read.keydowns,
+      }
     },
 
     async releaseFocus() {
@@ -1126,16 +1292,93 @@ console.log(JSON.stringify(true));
 `)
     },
 
+    // The presentation's own interactive controls that the existing discovery
+    // recognises: its mode control, its Previous and Next controls, and its
+    // step controls. Each carries the convention that found it and a selector
+    // that addresses it alone, so a probe can start a gesture on it and a
+    // replay can address the same control in a fresh document: the control's
+    // own id, else its hook when that matches it alone, else its element path.
+    // An ambiguous mode, Previous, or Next match is left out rather than
+    // guessed. `looked_for` lists every convention searched.
+    async controlTargets() {
+      const targets = await run(`
+const targets = await page.eval(() => {
+  const presentation = document.querySelector(${JSON.stringify(PRESENTATION_SELECTOR)});
+${navigationDiscoverySource()}
+  const addresses = (selector, element) => {
+    try {
+      const matches = document.querySelectorAll(selector);
+      return matches.length === 1 && matches[0] === element;
+    } catch {
+      return false;
+    }
+  };
+  const selectorFor = (element, hook) => {
+    const own = element.id ? '#' + CSS.escape(element.id) : null;
+    if (own && addresses(own, element)) return own;
+    if (typeof hook === 'string' && hook.startsWith('[') && addresses(hook, element)) return hook;
+    const parts = [];
+    for (let node = element; node && node !== document.documentElement; node = node.parentElement) {
+      const id = node.id ? '#' + CSS.escape(node.id) : null;
+      if (id && addresses(id, node)) return [id, ...parts].join(' > ');
+      const tag = node.tagName.toLowerCase();
+      const siblings = [...node.parentElement.children].filter((child) => child.tagName === node.tagName);
+      parts.unshift(siblings.length > 1 ? tag + ':nth-of-type(' + (siblings.indexOf(node) + 1) + ')' : tag);
+    }
+    return ['html', ...parts].join(' > ');
+  };
+  const describe = (element, kind, hook, position = null) => ({
+    kind,
+    name: accessibleName(element),
+    selector: selectorFor(element, hook),
+    hook: hook || null,
+    position,
+  });
+  const found = [];
+  const mode = modeToggle(readMode() === 'present' ? 'browse' : 'present');
+  if (mode && mode !== 'ambiguous') found.push(describe(mode, 'mode', matchedSelectors.mode_toggle));
+  for (const [kind, selectors, pattern] of [
+    ['previous', ${JSON.stringify(PREVIOUS_SELECTORS)}, /^(previous|prev|back)\\b/i],
+    ['next', ${JSON.stringify(NEXT_SELECTORS)}, /^next\\b/i],
+  ]) {
+    const matches = findDirectionalControls(selectors, pattern, kind);
+    if (matches.length === 1) found.push(describe(matches[0], kind, matchedSelectors[kind]));
+  }
+  controls.forEach((control, position) => {
+    found.push(describe(control, 'step', matchedSelectors.controls, position));
+  });
+  return found;
+});
+console.log(JSON.stringify(targets));
+`)
+      if (!Array.isArray(targets)) throw new BrowserDriverError('control discovery returned an invalid reading')
+      return {
+        controls: targets,
+        looked_for: [
+          ...MODE_TOGGLE_SELECTORS, 'accessible mode name',
+          ...PREVIOUS_SELECTORS, ...NEXT_SELECTORS, 'accessible directional name',
+          ...PROGRESS_SELECTORS, EXPLICIT_CONTROL_SELECTOR, 'accessible step name',
+        ],
+      }
+    },
+
     // A finger's swipe spans many frames, so a page sees its touchstart, then
     // its touchmoves, then its touchend, each in its own task. A presentation
     // that records the touch start in state committed after a render, as
     // React's setState does, only sees it when the probe yields between them.
-    async swipe(direction, { input = 'touch' } = {}) {
+    //
+    // With a selector, the swipe starts at the centre of the matched element
+    // instead of the stage, over the same distance, path, and pacing. It
+    // returns false, having dispatched nothing, when no element matches.
+    async swipe(direction, { input = 'touch', selector = null } = {}) {
       if (!['left', 'right'].includes(direction)) {
         throw new BrowserDriverError(`unsupported swipe direction: ${direction}`)
       }
       if (!['touch', 'pointer'].includes(input)) {
         throw new BrowserDriverError(`unsupported swipe input: ${input}`)
+      }
+      if (selector !== null && (typeof selector !== 'string' || !selector.trim())) {
+        throw new BrowserDriverError(`invalid swipe start selector: ${selector}`)
       }
       const sign = direction === 'left' ? -1 : 1
       const eventSource = input === 'pointer' ? pointerSwipeEventSource : swipeEventSource
@@ -1143,15 +1386,20 @@ console.log(JSON.stringify(true));
         ? ['pointerdown', 'pointermove', 'pointerup']
         : ['touchstart', 'touchmove', 'touchend']
       const phases = [
-        eventSource(names[0], sign, 0),
+        eventSource(names[0], sign, 0, selector),
         ...Array.from({ length: SWIPE_MOVES }, (_, move) => (
           eventSource(names[1], sign, (move + 1) / (SWIPE_MOVES + 1))
         )),
         eventSource(names[2], sign, 1),
       ]
+      // A gesture that never started asked for no frame, so the script stops
+      // rather than waiting on one.
       const dispatched = await run(`
 let dispatched = true;
-${phases.map((phase) => `dispatched = (await page.eval(${phase})) && dispatched;`).join(`\n${swipeFrameWaitSource()}\n`)}
+swipe: {
+${phases.map((phase) => `dispatched = (await page.eval(${phase})) && dispatched;
+if (!dispatched) break swipe;`).join(`\n${swipeFrameWaitSource()}\n`)}
+}
 ${sleepSource(100)}
 console.log(JSON.stringify(dispatched));
 `)

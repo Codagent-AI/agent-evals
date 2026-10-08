@@ -2,7 +2,7 @@
 //
 // An adjudication never rewrites the judge record. It preserves each raw
 // component score, records the approved component-level replacement and
-// recalculates only the aggregates that depend on those four shared technical
+// recalculates only the aggregates that depend on those five shared technical
 // components. Publication accepts the resulting supersession only when it can
 // reproduce the exact revised result from the previously published result and
 // the embedded adjudication record.
@@ -78,7 +78,7 @@ function validateReview(result, review) {
   const supplied = Object.keys(review.component_scores ?? {}).sort()
   const expected = [...SHARED_COMPONENT_IDS].sort()
   if (hashJson(supplied) !== hashJson(expected)) {
-    throw new Error('technical adjudication must score exactly the four shared technical components')
+    throw new Error('technical adjudication must score exactly the five shared technical components')
   }
   const hasWorkflowScores = Object.hasOwn(review ?? {}, 'workflow_component_scores')
   if (hasWorkflowScores) {

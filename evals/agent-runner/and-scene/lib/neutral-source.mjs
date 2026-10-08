@@ -60,6 +60,15 @@ export const JUDGE_INPUT_POLICIES = Object.freeze({
     revision_provenance: false,
     ambiguity_sources: false,
   },
+  'engineering-quality': {
+    neutral_source: true,
+    neutral_requirements: true,
+    deterministic_facts: true,
+    candidate_evidence: false,
+    evaluator_evidence: false,
+    revision_provenance: false,
+    ambiguity_sources: false,
+  },
   'testing-evidence': {
     neutral_source: false,
     // Requirement and scenario headings only, as the coverage reference.

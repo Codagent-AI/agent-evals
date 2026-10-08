@@ -1,4 +1,4 @@
-// The six scored judge jobs.
+// The seven scored judge jobs.
 //
 // Each job maps to exactly one scored component, receives only that component's
 // rubric slice, and returns a pass/fail verdict with a rationale and cited
@@ -9,8 +9,8 @@
 //
 // Separate jobs, rather than one large prompt, keep a failure or retry local to
 // its component: an exhausted job leaves that component *unobserved* so the
-// scorer marks it incomplete, while the other three components keep their
-// valid, reusable results.
+// scorer marks it incomplete, while the other components keep their valid,
+// reusable results.
 import {
   JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE,
   SOURCE_JUDGE_RESULT_SCHEMA, LINE_CITED_RESULT_SCHEMA,
@@ -44,6 +44,7 @@ export const PRODUCT_JUDGE_JOB_IDS = [
   'scene-kit',
   'presentation-skill',
   'verification-tooling',
+  'engineering-quality',
   'testing-evidence',
   'assumption-handling',
 ]
@@ -53,6 +54,7 @@ const JOB_BRIEFS = {
   'scene-kit': 'the reusable scene kit\'s implementation of its technical contracts',
   'presentation-skill': 'the delivered presentation skill, its templates, and its workflow record',
   'verification-tooling': 'the delivered verification tooling, its behavior, and its produced artifacts',
+  'engineering-quality': 'the engineering quality of the delivered verification scripts, skill instructions and templates, scene kit, presentations, and tests beyond what the requirements state',
   'testing-evidence': 'the quality of the verified candidate-produced acceptance evidence',
   'assumption-handling': 'the observable quality of the implementation workflow\'s assumption handling',
 }
