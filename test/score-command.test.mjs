@@ -120,8 +120,9 @@ test('score.mjs refuses an exhausted required judge instead of fabricating zeroe
   )
 })
 
-// A run judged under automated rubric 12.x has no engineering-quality job and
-// no input-hygiene browser results. The refusal says how to recover.
+// A run judged under an automated rubric before 14.0.0 (12.x, or 13.0.0's
+// panel series) has no engineering-quality job and no input-hygiene browser
+// results. The refusal says how to recover.
 test('score.mjs tells the user to re-judge a run judged under an older rubric', async () => {
   const root = await mkdtemp(join(tmpdir(), 'and-scene-score-'))
   const inputs = await durableInputs(root, allJobs.filter((job) => job !== 'engineering-quality'))

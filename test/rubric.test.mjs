@@ -133,7 +133,7 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
 
 test('rubric 12.3 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '13.0.0')
+  assert.equal(rubric.version, '14.0.0')
   assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(
@@ -645,7 +645,7 @@ test('rubric 12.2 credits a general fix-and-rerun gate for skill failures', asyn
 
 // Issue #77 class A coverage audit (openspec/changes/eval-validator/class-a-coverage.md):
 // proposals P5, P6, and P7 restate fixture requirements the existing guidance missed.
-test('rubric 13.0 adds the class A coverage guidance for narrow viewports, kit parity, and step hooks', async () => {
+test('rubric 14.0 adds the class A coverage guidance for narrow viewports, kit parity, and step hooks', async () => {
   const rubric = await automatedRubric()
   const rows = rubric.components.flatMap(({ subcomponents }) => subcomponents)
   const lines = (id) => rows.find((row) => row.id === id).review_guidance
@@ -676,7 +676,7 @@ test('rubric 13.0 adds the class A coverage guidance for narrow viewports, kit p
 // Issue #77 class A item B7, adopted by Paul's decision after review: the
 // scaffold's render-verification dependencies include the Playwright Chromium
 // browser, which the fixture design installs in the verify step.
-test('rubric 13.0 fails a scaffold that never installs or checks for the Chromium browser', async () => {
+test('rubric 14.0 fails a scaffold that never installs or checks for the Chromium browser', async () => {
   const rubric = await automatedRubric()
   const rows = rubric.components.flatMap(({ subcomponents }) => subcomponents)
   const b7 = rows.find((row) => row.id === 'skill-scaffolding').review_guidance
@@ -728,7 +728,7 @@ function engineeringComponent(rubric) {
   return rubric.components.find(({ id }) => id === 'engineering-quality')
 }
 
-test('rubric 13.0 adds the eight-point engineering-quality component with sixteen classified criteria', async () => {
+test('rubric 14.0 adds the eight-point engineering-quality component with sixteen classified criteria', async () => {
   const rubric = await automatedRubric()
   const component = engineeringComponent(rubric)
   assert.equal(component.title, 'Engineering quality beyond the spec')

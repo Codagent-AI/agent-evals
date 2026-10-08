@@ -640,22 +640,24 @@ candidate took, never against a fixed test-plan case list. Each testing-evidence
 criterion's definition comes from `criterion_definitions` in the automated
 rubric and is shown to the judge beside its identifier.
 
-Automated rubric 13.0.0 adds an 8-point "Engineering quality beyond the spec"
+Automated rubric 14.0.0 adds an 8-point "Engineering quality beyond the spec"
 component (`engineering-quality`, issue #77). The implementation validator
 mostly enforces engineering qualities the fixture's planning documents never
-state, so before 13.0.0 a candidate that skipped that work lost nothing. The
+state, so before 14.0.0 a candidate that skipped that work lost nothing. The
 component has no floor and sixteen narrow, eval-owned criteria whose recorded
 reasons state their full pass conditions: input hygiene (2 points, two
 deterministic browser probes for modified arrow keys and swipes that start on a
 control), verification tooling robustness (3), skill instructions and templates
 (1.5), and presentation code and tests (1.5). The fourteen source-reviewed
 criteria belong to a focused `engineering-quality` judge job that runs for
-candidates and the reference. Both browser probes start from a middle step in
-present mode. The modifier probe presses ArrowRight and ArrowLeft holding Alt,
-Control, and Meta in turn, and fails a step change or a prevented default; its
-keydown instrumentation is installed before the first press, since
-chrome-devtools-axi has no init-script primitive. A press that leaves the
-document passes through, and the probe reloads and continues. The swipe probe
+candidates and the reference through the same cross-family panel as every
+other job (seven jobs for a candidate, five for the reference). Both browser
+probes start from a middle step in present mode. The modifier probe presses
+ArrowRight and ArrowLeft holding Alt, Control, and Meta in turn, and fails a
+step change or a prevented default; its keydown instrumentation is installed
+before the first press, since chrome-devtools-axi has no init-script primitive.
+A press that leaves the document passes through, and the probe reloads and
+continues. The swipe probe
 swipes from the mode control (or, failing that, a step or Previous/Next
 control) in whichever mode exposes one, as touch and then pointer events. Each
 declares the `demo-integration` fallback judge, which decides it only when the
@@ -674,8 +676,9 @@ canonical kit and fails a delivery that never installs the Playwright Chromium
 browser or checks that it is available before the render check, and
 `verification-step-error-fails` fails a verifier that reads missing or
 non-numeric step hooks as progress. Scores are
-not comparable with 12.x results until those runs are re-judged with
-`--rescore-from`.
+not comparable with results from earlier rubrics (12.x, or 13.0.0, which
+introduced the panel without this component) until those runs are re-judged
+with `--rescore-from`. 14.0.0 is built on 13.0.0's panel judging.
 
 Automated rubric 10.0.0 defines the terms the round-2 audit found judges
 splitting on: a stable step id survives insertion and reordering, a warning
