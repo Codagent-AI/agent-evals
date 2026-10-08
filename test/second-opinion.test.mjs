@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -63,7 +64,7 @@ test('malformed verifier and audit shapes retain their validation cause', async 
     attempts: 1, invoke: async () => JSON.stringify({ ...uphold, rationale: '' }),
   })
   assert.match(malformed.reason, /malformed second-opinion answer/)
-  const root = await mkdtemp(join(tmpdir(), 'second-opinion-invalid-audit-'))
+  const root = await makeTempDir(join(tmpdir(), 'second-opinion-invalid-audit-'))
   await writeFile(join(root, 'handler.js'), 'handler\n')
   const request = { target: { kind: 'criterion', id: 'demo-supported-navigation' }, browser_derived: false,
     verified_source_paths: ['handler.js'], input_roots: { source: root }, audit_cwd: root,
@@ -106,7 +107,7 @@ test('verifier invocation failure retries and keeps its cause when exhausted', a
 })
 
 test('audit invocation failure retries and keeps its cause when exhausted', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'second-opinion-audit-error-'))
+  const root = await makeTempDir(join(tmpdir(), 'second-opinion-audit-error-'))
   await writeFile(join(root, 'handler.js'), 'pointer handler\n')
   const request = { target: { kind: 'criterion', id: 'demo-supported-navigation' }, browser_derived: false,
     verified_source_paths: ['handler.js'], input_roots: { source: root }, audit_cwd: root,
@@ -126,7 +127,7 @@ test('audit invocation failure retries and keeps its cause when exhausted', asyn
 })
 
 test('an audited exact source span can overturn and invalid line ranges cannot', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'second-opinion-'))
+  const root = await makeTempDir(join(tmpdir(), 'second-opinion-'))
   await mkdir(join(root, 'src'))
   await writeFile(join(root, 'src/demo.js'), 'pointer handler\n')
   const rubrics = await loadRubrics()
@@ -164,7 +165,7 @@ test('an audited exact source span can overturn and invalid line ranges cannot',
 })
 
 test('a confirmed browser overturn requires a passing replay', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'second-opinion-replay-'))
+  const root = await makeTempDir(join(tmpdir(), 'second-opinion-replay-'))
   await writeFile(join(root, 'handler.js'), 'pointer handler\n')
   const request = { target: { kind: 'criterion', id: 'demo-supported-navigation' }, browser_derived: true,
     verified_source_paths: ['handler.js'], input_roots: { source: root }, audit_cwd: root,
@@ -212,7 +213,7 @@ test('a confirmed browser overturn requires a passing replay', async () => {
 })
 
 test('a terminal overturn without recorded log lines is rejected', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'terminal-opinion-'))
+  const root = await makeTempDir(join(tmpdir(), 'terminal-opinion-'))
   await writeFile(join(root, 'package.json'), '{"scripts":{"build":"vite build"}}\n')
   const request = { target: { kind: 'terminal', id: 'verification-build-whole-app' },
     verified_source_paths: ['package.json'], input_roots: { source: root },
@@ -227,7 +228,7 @@ test('a terminal overturn without recorded log lines is rejected', async () => {
 })
 
 test('a contrary runtime error remains in the audit packet and a nonconfirmation rejects overturn', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'runtime-opinion-'))
+  const root = await makeTempDir(join(tmpdir(), 'runtime-opinion-'))
   await writeFile(join(root, 'handler.js'), 'pointer handler\n')
   const request = { target: { kind: 'criterion', id: 'demo-supported-navigation' }, browser_derived: false,
     verified_source_paths: ['handler.js'], input_roots: { source: root }, audit_cwd: root,
@@ -251,7 +252,7 @@ test('a contrary runtime error remains in the audit packet and a nonconfirmation
 const DEMO_PATH = '/how-to-make-a-presentation'
 
 async function replayRequest(id, rationale, kind = 'criterion') {
-  const root = await mkdtemp(join(tmpdir(), 'second-opinion-allowlist-'))
+  const root = await makeTempDir(join(tmpdir(), 'second-opinion-allowlist-'))
   await writeFile(join(root, 'handler.js'), 'handler\n')
   return { target: { kind, id }, browser_derived: true, verified_source_paths: ['handler.js'],
     input_roots: { source: root }, audit_cwd: root,
@@ -540,7 +541,7 @@ test('the replay observation can explain a browser failure to the span auditor',
 // the inventory lists as src/..., and the valid overturn was refused before
 // the replay could run.
 test('a verifier citation prefixed with the neutral source directory resolves to its inventory path', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'second-opinion-prefix-'))
+  const root = await makeTempDir(join(tmpdir(), 'second-opinion-prefix-'))
   await mkdir(join(root, 'src'), { recursive: true })
   await writeFile(join(root, 'src/nav.ts'), 'export const jump = true\n')
   const request = { target: { kind: 'criterion', id: 'demo-supported-navigation' }, browser_derived: true,

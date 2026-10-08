@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -46,7 +47,7 @@ test('the pinned reference regression requires real mode operation and every can
 })
 
 test('a programmatic reference regression persists the artifact it cites', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'reference-browser-regression-'))
+  const dir = await makeTempDir(join(tmpdir(), 'reference-browser-regression-'))
   const artifact = join(dir, 'reference-browser.json')
   const result = await runReferenceBrowserRegression({
     baseUrl: 'http://127.0.0.1:4173/',

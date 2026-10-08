@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -511,7 +512,7 @@ test('a finalized human review is carried with its responses and rationales', ()
 // --- Artifact manifest -----------------------------------------------------
 
 async function runDirectory() {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-result-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-result-'))
   await mkdir(join(dir, 'phases'), { recursive: true })
   await mkdir(join(dir, '.runtime/candidate-worktree'), { recursive: true })
   await writeFile(join(dir, 'phases/score.json'), '{}\n')

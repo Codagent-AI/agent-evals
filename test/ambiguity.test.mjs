@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -39,7 +40,7 @@ function judgeOutput(payload) {
 }
 
 async function artifactDir(files) {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-ambiguity-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-ambiguity-'))
   for (const [relative, text] of Object.entries(files)) {
     const path = join(dir, relative)
     await mkdir(join(path, '..'), { recursive: true })

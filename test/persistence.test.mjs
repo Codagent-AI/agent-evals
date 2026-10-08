@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
@@ -14,7 +15,7 @@ import {
 } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
 
 async function workdir() {
-  return mkdtemp(join(tmpdir(), 'agent-evals-persistence-'))
+  return makeTempDir(join(tmpdir(), 'agent-evals-persistence-'))
 }
 
 test('writeJsonAtomic writes readable JSON and leaves no temporary files', async () => {

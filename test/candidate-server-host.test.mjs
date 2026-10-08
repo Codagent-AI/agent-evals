@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -16,7 +17,7 @@ const SUITE_DIR = join(
 )
 
 async function runDirectory({ build = true } = {}) {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-host-server-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-host-server-'))
   if (build) {
     await mkdir(join(dir, '.runtime/candidate-worktree/dist/assets'), { recursive: true })
     await writeFile(join(dir, '.runtime/candidate-worktree/dist/index.html'), '<h1>and-scene</h1>\n')

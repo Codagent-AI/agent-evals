@@ -1,3 +1,4 @@
+import { makeTempDir } from './temp-dir.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile, writeFile } from 'node:fs/promises'
@@ -151,7 +152,7 @@ test('cancellation during overflow cleanup does not send SIGTERM twice or leak i
   assert.equal((await stub.calls()).length, 1)
 })
 
-import { mkdtemp, mkdir, chmod, readdir, realpath, stat, symlink, rm } from 'node:fs/promises'
+import { mkdir, chmod, readdir, realpath, stat, symlink, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { createClaudeJudgeInvoker } from '../evals/lib/panel-judging/claude-invoker.mjs'
 import { createCodexJudgeInvoker } from '../evals/lib/panel-judging/codex-invoker.mjs'
@@ -181,7 +182,7 @@ test('INT-002 pinned Claude judge and decider are tool-less, strict, fail fast o
 })
 
 test('INT-002 private Codex home contains only auth.json and is removed on success or schema rejection', async t => {
-  const runDir = await mkdtemp(join(tmpdir(), 'define-codex-')); t.after(() => rm(runDir, { recursive: true, force: true }))
+  const runDir = await makeTempDir(join(tmpdir(), 'define-codex-')); t.after(() => rm(runDir, { recursive: true, force: true }))
   const authHome = join(runDir, 'host-home'); await mkdir(authHome)
   await writeFile(join(authHome, 'auth.json'), '{"token":"test"}')
   await writeFile(join(authHome, 'config.toml'), 'must not be copied')
@@ -229,7 +230,7 @@ else { fs.writeFileSync(argv[argv.indexOf('--output-last-message')+1], '{"result
 
 
 test('private Codex authentication reports missing auth and rejects symlink credentials before dispatch', async t => {
-  const runDir = await mkdtemp(join(tmpdir(), 'define-auth-')); t.after(() => rm(runDir, { recursive: true, force: true }))
+  const runDir = await makeTempDir(join(tmpdir(), 'define-auth-')); t.after(() => rm(runDir, { recursive: true, force: true }))
   const authHome = join(runDir, 'auth')
   const invoke = createCodexJudgeInvoker({ runDir, defaultCwd: join(runDir, 'inputs'), privateCodexHome: true, command: '/never-dispatch', env: { ...process.env, CODEX_HOME: authHome } })
   const request = { job: 'judge', authority: JUDGE_PROFILE.panel[1], schema: judgeSchema(['item']), prompt: 'inputs' }

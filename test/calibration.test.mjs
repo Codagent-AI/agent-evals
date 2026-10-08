@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -16,7 +17,7 @@ import { loadRubrics } from '../evals/agent-runner/and-scene/lib/rubric.mjs'
 const rubrics = await loadRubrics()
 
 async function out() {
-  return mkdtemp(join(tmpdir(), 'agent-evals-calibration-'))
+  return makeTempDir(join(tmpdir(), 'agent-evals-calibration-'))
 }
 
 test('the known-good reference scores all 62 applicable automated points and opens every gate', async () => {

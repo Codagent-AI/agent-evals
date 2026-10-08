@@ -1,6 +1,7 @@
+import { makeTempDir } from './temp-dir.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile, rm, readFile, readdir } from 'node:fs/promises'
+import { mkdir, writeFile, rm, readFile, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync, execFileSync } from 'node:child_process'
@@ -11,7 +12,7 @@ const runnerDir = process.env.AGENT_RUNNER_DIR
 // The real Runner is the tested boundary. Isolated auth/skills inputs avoid
 // depending on a maintainer's plugin inventory or exposing their credentials.
 for (const claudeAuth of ['file', 'token']) test(`INT-006 real Runner dry-run checks every container without Docker or model calls (Claude ${claudeAuth})`, { skip: !runnerDir && 'AGENT_RUNNER_DIR is unset; real Runner sandbox plan requires a checkout' }, async t => {
-  const root = await mkdtemp(join(tmpdir(), 'define-plan-')); t.after(() => rm(root, { recursive: true, force: true }))
+  const root = await makeTempDir(join(tmpdir(), 'define-plan-')); t.after(() => rm(root, { recursive: true, force: true }))
   const home = join(root, 'home'); const skills = join(root, 'skills'); const run = join(root, 'run')
   for (const dir of [join(home, '.claude'), join(home, '.codex'), join(skills, '.claude-plugin'), join(skills, '.codex-plugin')]) await mkdir(dir, { recursive: true })
   if (claudeAuth === 'file') await writeFile(join(home, '.claude/.credentials.json'), '{"test":"credential"}')

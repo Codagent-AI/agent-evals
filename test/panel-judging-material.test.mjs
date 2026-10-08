@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -9,7 +10,7 @@ import {
 } from '../evals/lib/panel-judging/protocol.mjs'
 
 async function sourceRoot(t) {
-  const root = await mkdtemp(join(tmpdir(), 'panel-material-'))
+  const root = await makeTempDir(join(tmpdir(), 'panel-material-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   await mkdir(join(root, 'source'))
   await writeFile(join(root, 'source/a'), 'mechanism\n')

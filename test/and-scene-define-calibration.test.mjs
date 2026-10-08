@@ -1,6 +1,7 @@
+import { makeTempDir } from './temp-dir.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFile, mkdtemp, mkdir, writeFile, rm, cp, readdir } from 'node:fs/promises'
+import { readFile, mkdir, writeFile, rm, cp, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildRubric, checkJudgingInputs } from '../evals/agent-runner/and-scene-define/lib/rubric.mjs'
@@ -152,7 +153,7 @@ test('expectations name each input a reference or a degraded variant and carry n
 })
 
 test('the loader verifies manifest hashes and rejects unlisted or altered files', async t => {
-  const dir = await mkdtemp(join(tmpdir(), 'define-calibration-set-')); t.after(() => rm(dir, { recursive: true, force: true }))
+  const dir = await makeTempDir(join(tmpdir(), 'define-calibration-set-')); t.after(() => rm(dir, { recursive: true, force: true }))
   await cp(join(SUITE_ROOT, 'calibration'), dir, { recursive: true })
   await writeFile(join(dir, 'reference/collected/proposal.md'), 'tampered\n')
   await assert.rejects(loadCalibrationSet(dir, { rubric: realRubric }), /reference: manifest hash mismatch for collected\/proposal.md/)
@@ -198,7 +199,7 @@ test('rerunDefinitionDecider re-runs only the decider on the recorded panel outp
 // ---------------------------------------------------------------- end to end with stub judges
 
 async function suiteFixture(t, { reviewed = true } = {}) {
-  const root = await mkdtemp(join(tmpdir(), 'define-calibrate-')); t.after(() => rm(root, { recursive: true, force: true }))
+  const root = await makeTempDir(join(tmpdir(), 'define-calibrate-')); t.after(() => rm(root, { recursive: true, force: true }))
   const suiteRoot = join(root, 'suite')
   await mkdir(join(suiteRoot, 'hidden/reference'), { recursive: true })
   await writeFile(join(suiteRoot, 'hidden/inventory.json'), JSON.stringify(reviewed ? subset : { ...subset, anchors_review: null }))
@@ -375,7 +376,7 @@ test('calibration output is never published', async t => {
 
 test('candidate runs never require calibration output', async t => {
   // A reviewed suite with no calibration set and no calibration report passes judging-input preflight; no pass threshold is needed.
-  const root = await mkdtemp(join(tmpdir(), 'define-no-calibration-')); t.after(() => rm(root, { recursive: true, force: true }))
+  const root = await makeTempDir(join(tmpdir(), 'define-no-calibration-')); t.after(() => rm(root, { recursive: true, force: true }))
   await writeFile(join(root, 'rubric.json'), JSON.stringify(rubric))
   await checkJudgingInputs({ suiteRoot: root, inventory: subset })
   for (const file of ['controller.mjs', 'lib/preflight.mjs', 'lib/judging.mjs', 'lib/rescore.mjs']) {

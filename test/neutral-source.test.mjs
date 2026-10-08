@@ -1,6 +1,7 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -15,7 +16,7 @@ function git(cwd, ...args) {
 }
 
 async function repository({ extraFiles = {} } = {}) {
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-neutral-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-neutral-'))
   git(root, 'init', '-q')
   git(root, 'config', 'user.email', 'eval@example.test')
   git(root, 'config', 'user.name', 'Eval Test')

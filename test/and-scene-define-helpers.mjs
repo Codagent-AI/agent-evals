@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, writeFile, chmod, rm } from 'node:fs/promises'
+import { readFile, writeFile, chmod, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 // Codex strict structured outputs reject a double quote or backslash in any
@@ -16,7 +17,7 @@ export function assertStrictSchema(schema) {
   if (schema.items) assertStrictSchema(schema.items)
 }
 export async function claudeStub(t, outputs) {
-  const runDir = await mkdtemp(join(tmpdir(), 'define-invoker-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'define-invoker-'))
   t.after(() => rm(runDir, { recursive: true, force: true }))
   const command = join(runDir, 'claude')
   await writeFile(join(runDir, 'outputs.json'), JSON.stringify(outputs))

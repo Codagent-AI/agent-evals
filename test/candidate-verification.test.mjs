@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -17,7 +18,7 @@ function executor(statuses) {
 }
 
 test('candidate verification installs, builds, and runs the repository verifier in order', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-verification-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-verification-'))
   const worktree = join(runDir, '.runtime/candidate-worktree')
   const { calls, exec } = executor([0, 0, 0])
 
@@ -37,7 +38,7 @@ test('candidate verification installs, builds, and runs the repository verifier 
 })
 
 test('a candidate command failure is an explicit failed product result, not a thrown harness error', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-verification-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-verification-'))
   const { calls, exec } = executor([0, 2, 2])
 
   const result = await runCandidateVerification({
@@ -59,7 +60,7 @@ test('a candidate command failure is an explicit failed product result, not a th
 })
 
 test('failed build attempts retain complete output beyond the summary limit', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-verification-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-verification-'))
   const stdout = `${'progress '.repeat(600)}\nwrong harness command\n`
   let calls = 0
   const result = await runCandidateVerification({ worktree: runDir, runDir,
@@ -75,7 +76,7 @@ test('failed build attempts retain complete output beyond the summary limit', as
 })
 
 test('oversized command streams retain their head and tail with an omission marker', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-verification-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-verification-'))
   const stdout = `start\n${'x'.repeat(1024 * 1024)}\ndecisive tail\n`
   let calls = 0
   const result = await runCandidateVerification({ worktree: runDir, runDir,
@@ -92,7 +93,7 @@ test('oversized command streams retain their head and tail with an omission mark
 })
 
 test('a verifier exit status is retained as its machine-readable product result', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-verification-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-verification-'))
   const { calls, exec } = executor([0, 0, 2])
 
   const result = await runCandidateVerification({
@@ -108,7 +109,7 @@ test('a verifier exit status is retained as its machine-readable product result'
 })
 
 test('a missing candidate Playwright browser is installed as harness setup and verification is retried', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-verification-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-verification-'))
   const calls = []
   let verificationAttempts = 0
   const exec = (command, args, options) => {
@@ -144,7 +145,7 @@ test('a missing candidate Playwright browser is installed as harness setup and v
 })
 
 test('install and build failures identify the reproducible product-owned stage', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-verification-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-verification-'))
 
   const installFailure = await runCandidateVerification({
     worktree: join(runDir, '.runtime/install-failure'),
@@ -162,7 +163,7 @@ test('install and build failures identify the reproducible product-owned stage',
 })
 
 test('a one-off candidate command failure is retried and does not become a conclusive product failure', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-verification-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-verification-'))
   const { calls, exec } = executor([0, 2, 0, 0])
 
   const result = await runCandidateVerification({

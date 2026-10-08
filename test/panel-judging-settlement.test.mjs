@@ -1,3 +1,4 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { runPanelJob, rerunDecider, resolvePanel, verifyCachedPanelJob, PANEL_PROTOCOL } from '../evals/lib/panel-judging/panel.mjs'
@@ -100,13 +101,13 @@ test('a failed panel seat reports its own error, not one another seat recovered 
 })
 
 // INT-010: use real neutral files and the existing closed-world/span mechanics.
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runJudgeJob, SOURCE_JUDGE_RESULT_SCHEMA } from '../evals/lib/panel-judging/protocol.mjs'
 
 async function sourceSetup(t, votes, behavior = {}) {
-  const root = await mkdtemp(join(tmpdir(), 'panel-source-'))
+  const root = await makeTempDir(join(tmpdir(), 'panel-source-'))
   await mkdir(join(root, 'source'))
   await writeFile(join(root, 'source/a'), 'mechanism\nfocused test\n')
   t.after(() => rm(root, { recursive: true, force: true }))

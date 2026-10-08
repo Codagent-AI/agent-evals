@@ -1,6 +1,7 @@
+import { makeTempDir } from './temp-dir.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises'
+import { mkdir, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { checkInventory, assertPinnedInventory } from '../evals/agent-runner/and-scene-define/lib/inventory.mjs'
@@ -10,7 +11,7 @@ import { sha256 } from '../evals/agent-runner/and-scene-define/lib/files.mjs'
 const suite = resolve('evals/agent-runner/and-scene-define')
 const document = 'openspec/changes/create-and-scene/specs/example/spec.md'
 async function fixture(t) {
-  const root = await mkdtemp(join(tmpdir(), 'define-inventory-'))
+  const root = await makeTempDir(join(tmpdir(), 'define-inventory-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   await mkdir(join(root, 'reference', document, '..'), { recursive: true })
   const content = '# Specs\n## Requirement: Useful\nThe tool SHALL work.\n### Scenario: Success\nIt works.\n## Other\nA quote elsewhere.\n'
@@ -140,7 +141,7 @@ test('version ledger rejects changed content without a version bump and preserve
 })
 
 test('version checker rejects changed file content and self-consistent hash rewrites', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'define-versions-'))
+  const root = await makeTempDir(join(tmpdir(), 'define-versions-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   await mkdir(join(root, 'hidden'))
   const inputs = {}
@@ -172,7 +173,7 @@ test('version checker rejects changed file content and self-consistent hash rewr
 async function versionRepository(t) {
   const { cp } = await import('node:fs/promises')
   const { execFileSync } = await import('node:child_process')
-  const root = await mkdtemp(join(tmpdir(), 'define-history-'))
+  const root = await makeTempDir(join(tmpdir(), 'define-history-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   await mkdir(join(root, 'hidden'))
   for (const path of ['versions.json', 'rubric.json', 'contamination-patterns.json', 'hidden/inventory.json', 'hidden/starting-prompt.md', 'hidden/simulated-user-policy.md']) await cp(join(suite, path), join(root, path))

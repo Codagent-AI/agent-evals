@@ -1,3 +1,4 @@
+import { makeTempDir } from './temp-dir.mjs'
 // Every schema handed to `codex exec --output-schema` is sent to OpenAI as a
 // strict structured-output format. Strict mode rejects the whole request with
 // HTTP 400 `invalid_json_schema` unless every object lists every property key in
@@ -25,7 +26,7 @@ import {
 import { SECOND_OPINION_SCHEMA, buildSecondOpinionRequest, buildSpanAuditRequest as buildOpinionAuditRequest }
   from '../evals/agent-runner/and-scene/lib/second-opinion.mjs'
 import { loadRubrics } from '../evals/agent-runner/and-scene/lib/rubric.mjs'
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -116,7 +117,7 @@ test('ambiguity parser accepts the strict nullable form of optional fields', () 
 test('every schema the harness actually sends to a judge is strict-mode valid', async () => {
   const rubrics = await loadRubrics()
   const authority = { cli: 'codex', model: 'gpt-test' }
-  const root = await mkdtemp(join(tmpdir(), 'and-scene-strict-'))
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-strict-'))
   await mkdir(join(root, 'source/src'), { recursive: true })
   await writeFile(join(root, 'source/src/a.ts'), 'export const a = 1\n')
   const neutral = { root, source_root: join(root, 'source'), audit_root: root, requirements_root: join(root, 'req'),

@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -27,7 +28,7 @@ function container(artifacts, command) {
 test('replacement containers reuse only their own mounted agent sessions', {
   skip: !dockerAvailable,
 }, async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-session-docker-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-session-docker-'))
   const firstArtifacts = join(dir, 'evaluation-a')
   const secondArtifacts = join(dir, 'evaluation-b')
   await mkdir(firstArtifacts)

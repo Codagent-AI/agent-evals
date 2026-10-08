@@ -1,8 +1,9 @@
+import { makeTempDir } from './temp-dir.mjs'
 // The two diagnostic phases end to end through the controller: Runner metrics
 // ingestion, pricing, cost aggregation, machine timing, and the ambiguity
 // ledger. None of them may move a point.
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -124,7 +125,7 @@ function runMetrics(overrides = {}) {
 }
 
 async function environment({ metrics = runMetrics(), sessionFiles = {} } = {}) {
-  const root = await mkdtemp(join(tmpdir(), 'agent-evals-diagnostics-'))
+  const root = await makeTempDir(join(tmpdir(), 'agent-evals-diagnostics-'))
   const agentRunnerDir = join(root, 'agent-runner')
   const agentSkillsDir = join(root, 'agent-skills')
   await mkdir(join(agentRunnerDir, 'workflows/core'), { recursive: true })

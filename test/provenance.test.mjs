@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -39,7 +40,7 @@ function execStub(overrides = {}) {
 }
 
 async function checkout({ workflow = workflowYaml } = {}) {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-provenance-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-provenance-'))
   if (workflow !== null) {
     await mkdir(join(dir, 'workflows/core'), { recursive: true })
     await writeFile(join(dir, WORKFLOW_RELATIVE_PATH), workflow)
@@ -52,7 +53,7 @@ test('the pinned workflow path is the versioned implement-change contract', () =
 })
 
 test('a clean Agent Skills checkout records its commit and plugin manifest hash', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-skills-provenance-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-skills-provenance-'))
   const manifest = '{"name":"codagent"}\n'
   await mkdir(join(dir, '.claude-plugin'), { recursive: true })
   await writeFile(join(dir, AGENT_SKILLS_MANIFEST_PATH), manifest)
@@ -70,7 +71,7 @@ test('a clean Agent Skills checkout records its commit and plugin manifest hash'
 })
 
 test('Agent Skills provenance rejects a dirty or incomplete checkout', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-skills-provenance-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-skills-provenance-'))
   await mkdir(join(dir, '.claude-plugin'), { recursive: true })
   await writeFile(join(dir, AGENT_SKILLS_MANIFEST_PATH), '{}\n')
 
@@ -82,7 +83,7 @@ test('Agent Skills provenance rejects a dirty or incomplete checkout', async () 
     (error) => error.code === 'dirty-agent-skills-checkout',
   )
 
-  const missing = await mkdtemp(join(tmpdir(), 'agent-evals-skills-provenance-'))
+  const missing = await makeTempDir(join(tmpdir(), 'agent-evals-skills-provenance-'))
   await assert.rejects(
     () => readAgentSkillsProvenance({ agentSkillsDir: missing, exec: execStub() }),
     (error) => error.code === 'missing-agent-skills-manifest',

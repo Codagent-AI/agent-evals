@@ -1,6 +1,7 @@
+import { makeTempDir } from './temp-dir.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, writeFile, stat, readdir, symlink } from 'node:fs/promises'
+import { mkdir, readFile, writeFile, stat, readdir, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -162,7 +163,7 @@ test('history, anchor freeze, divergence, and validation', () => {
   ]) assert.throws(() => baseline.validateRecord(bad))
 })
 
-async function temp() { return mkdtemp(join(tmpdir(), 'experiment-baseline-')) }
+async function temp() { return makeTempDir(join(tmpdir(), 'experiment-baseline-')) }
 async function resultDir(root, result) { const dir = join(root, result.run_id); await mkdir(dir); await writeFile(join(dir, 'result.json'), JSON.stringify(result)); return dir }
 function capture() { const lines = []; return { lines, stdout: s => lines.push(s) } }
 

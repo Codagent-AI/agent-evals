@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -20,7 +21,7 @@ const audit = (classification) => JSON.stringify({ results: [{ id: 'x', classifi
 const parsedAudit = (classification) => parseSourceAuditOutput(audit(classification), ['x'], 'job')[0]
 
 async function sourceRequest(t, extra = {}) {
-  const root = await mkdtemp(join(tmpdir(), 'panel-escaping-'))
+  const root = await makeTempDir(join(tmpdir(), 'panel-escaping-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   await mkdir(join(root, 'source'))
   await writeFile(join(root, 'source/a'), 'mechanism\n')

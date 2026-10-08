@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -311,7 +312,7 @@ function v4Metrics(overrides = {}) {
 }
 
 async function sessionDir(contents) {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-metrics-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-metrics-'))
   if (contents !== null) {
     await writeFile(join(dir, RUNNER_METRICS_FILENAME), contents)
   }

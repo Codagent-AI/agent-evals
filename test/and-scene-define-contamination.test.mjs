@@ -1,6 +1,7 @@
+import { makeTempDir } from './temp-dir.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from 'node:fs/promises'
+import { mkdir, writeFile, readFile, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
@@ -18,7 +19,7 @@ const call = (name, input, output, id = 'c1') => [
   { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, content: output }] } },
 ]
 async function fixture(t, { extra = [], conversation = [exchange], replies = [exchange], users = [exchange.reply], crosscheck = null, runPrefix = 'define-audit-' } = {}) {
-  const runDir = await mkdtemp(join(tmpdir(), runPrefix)); t.after(() => rm(runDir, { recursive: true, force: true }))
+  const runDir = await makeTempDir(join(tmpdir(), runPrefix)); t.after(() => rm(runDir, { recursive: true, force: true }))
   const runtime = join(runDir, 'sandbox/.runtime'); const runnerDir = join(runtime, 'agent-runner-projects/repo/runs/run')
   for (const dir of [runnerDir, join(runnerDir, 'external-user'), join(runnerDir, 'output'), join(runtime, 'claude/projects/repo'), join(runDir, 'collected')]) await mkdir(dir, { recursive: true })
   const put = (path, value) => writeFile(path, typeof value === 'string' ? value : JSON.stringify(value))
@@ -219,7 +220,7 @@ test('literal and multiline regex audit excerpts locate the matching text with c
 
 import { cursorRecords } from '../evals/agent-runner/and-scene-define/lib/transcripts.mjs'
 test('manifest-backed Cursor reader ignores unlisted WAL evidence and never writes SQLite sidecars', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'define-immutable-')); t.after(() => rm(root, { recursive: true, force: true }))
+  const root = await makeTempDir(join(tmpdir(), 'define-immutable-')); t.after(() => rm(root, { recursive: true, force: true }))
   const db = join(root, 'snapshot #?%.db')
   execFileSync('python3', ['-c', `import sqlite3, os, sys
 c=sqlite3.connect(sys.argv[1])
