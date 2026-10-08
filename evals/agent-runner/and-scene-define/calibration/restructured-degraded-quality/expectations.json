@@ -2,8 +2,7 @@
   "input_id": "restructured-degraded-quality",
   "description": "The restructured reference with the release-check outcome requirement (PASS/FAIL summary and exit status) removed, and quality degraded: vague untestable scenarios, decisions without rationale, a design registry that disagrees with the specified manifest, and a test plan that drops capture, failure-path, and viewer tests.",
   "base": "restructured",
-  "expected_outcome": "fail",
-  "expected_fail_mark": "proposed",
+  "variant": "degraded",
   "expected": {
     "INV-001": "met",
     "INV-002": "met",

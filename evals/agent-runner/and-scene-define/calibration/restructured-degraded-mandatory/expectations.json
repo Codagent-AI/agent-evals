@@ -2,8 +2,7 @@
   "input_id": "restructured-degraded-mandatory",
   "description": "The restructured reference with mandatory requirements silently removed (focused controls keep their keys; the sample is produced by the skill; server and browser cleanup), plus two acceptable alternatives removed (probe-based readiness detection; settled captures). Design and test plan are adjusted to match.",
   "base": "restructured",
-  "expected_outcome": "fail",
-  "expected_fail_mark": "proposed",
+  "variant": "degraded",
   "expected": {
     "INV-001": "met",
     "INV-002": "met",

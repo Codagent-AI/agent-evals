@@ -1,13 +1,11 @@
 // Pure score computation: discovery and report-only flags are never inputs.
 const verdicts = new Set(['met', 'partial', 'missing'])
-export const VERDICT_UNAVAILABLE = 'pass threshold not set (calibration pending)'
 export const COVERAGE_UNAVAILABLE = 'every graded item leaked, so coverage cannot be measured'
 function complete(criteria, results, name) {
   if (results.length !== criteria.length || new Set(results.map(x => x.id)).size !== criteria.length || criteria.some(c => !results.some(x => x.id === c.id && verdicts.has(x.verdict)))) throw new Error(`${name}: incomplete validated verdicts`)
 }
 export function scoreDefinition({ rubric, coverage, quality, fidelity, leaked = [], gates }) {
   complete(rubric.coverage, coverage, 'coverage'); complete(rubric.quality, quality, 'quality')
-  const gatesPassed = gates.every(x => x.passed)
   if (new Set(fidelity.map(x => x.id)).size !== fidelity.length || fidelity.some(x => !['met', 'missing'].includes(x.verdict))) throw new Error('invalid fidelity verdicts')
   const leaks = new Set(leaked)
   if (leaked.some(id => !rubric.coverage.some(x => x.id === id))) throw new Error('unknown leaked item')
@@ -27,13 +25,9 @@ export function scoreDefinition({ rubric, coverage, quality, fidelity, leaked = 
   // no coverage score and no total rather than a zero the agent did not earn.
   const measured = possible > 0
   const total = measured ? Object.values(components).reduce((sum, c) => sum + c.score, 0) : null
-  // A failed gate fails regardless of points. Otherwise a missing threshold
-  // (calibration pending) yields a full breakdown with no verdict; preflight
-  // still refuses candidate runs against an uncalibrated rubric.
-  const calibrated = Number.isFinite(rubric.pass_threshold)
-  const definition_verdict = !gatesPassed ? 'fail' : !measured || !calibrated ? null : total >= rubric.pass_threshold ? 'pass' : 'fail'
-  const unavailable = !measured ? COVERAGE_UNAVAILABLE : VERDICT_UNAVAILABLE
-  return { evaluation_status: 'complete', definition_verdict, ...(definition_verdict === null ? { verdict_unavailable: unavailable } : {}), rubric_version: rubric.rubric_version, components, total, coverage: scoredCoverage, quality, fidelity, gates, leaked_items: [...leaks] }
+  // The score is the result: there is no pass/fail verdict. Gates are reported
+  // beside the score and never change it.
+  return { evaluation_status: 'complete', ...(measured ? {} : { score_unavailable: COVERAGE_UNAVAILABLE }), rubric_version: rubric.rubric_version, components, total, coverage: scoredCoverage, quality, fidelity, gates, leaked_items: [...leaks] }
 }
 export function discoveryLedger({ coverage, asked }) {
   if (asked.length !== coverage.length || new Set(asked.map(x => x.id)).size !== coverage.length) throw new Error('incomplete discovery decisions')

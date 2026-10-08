@@ -2,8 +2,7 @@
   "input_id": "restructured-degraded-mixed",
   "description": "The restructured reference with a mixed set of faults: a mode switch now restarts the current chapter (contradicting a mandatory item), a browser visual editor is added (excluded scope), and the release-check summary no longer names the failed check (weakened). Stale test-plan expectations make the artifacts inconsistent. The artifacts also make Tailwind the default styling and redirect the root URL to the sample, contradicting two simulated-user answers in conversation.jsonl.",
   "base": "restructured",
-  "expected_outcome": "fail",
-  "expected_fail_mark": "proposed",
+  "variant": "degraded",
   "expected": {
     "INV-001": "met",
     "INV-002": "met",

@@ -135,7 +135,7 @@ export async function runCalibration(options, dependencies = {}) {
   const outDir = resolve(options.outDir)
   for (const root of [join(suiteRoot, 'results'), join(options.repoRoot ?? REPO_ROOT, RESULTS_RELATIVE_DIR)]) if (inside(root, outDir)) throw new Error('calibration output must never be written under the published results directory')
   const plan = { mode: 'calibration', output_directory: outDir, repeats, decider_reruns: DECIDER_RERUNS,
-    inputs: set.inputs.map(x => ({ input_id: x.input_id, expected_outcome: x.expectations.expected_outcome, expected_fail_mark: x.expectations.expected_fail_mark, artifacts: x.files.length, conversation_exchanges: x.conversation.length, input_hash: x.input_hash })),
+    inputs: set.inputs.map(x => ({ input_id: x.input_id, variant: x.expectations.variant, artifacts: x.files.length, conversation_exchanges: x.conversation.length, input_hash: x.input_hash })),
     judge_profile: JUDGE_PROFILE, panel_protocol: PANEL_PROTOCOL }
   if (options.dryRun) return { dryRun: true, plan, exitCode: 0 }
   assertAnchorsReviewed(inventory)
@@ -192,7 +192,7 @@ async function main() {
     const outcome = await runCalibration(options, { log: line => console.error(line) })
     if (outcome.dryRun) { console.log(JSON.stringify(outcome.plan, null, 2)); return }
     for (const failure of outcome.report.failures) console.error(`calibration failure: ${failure.message}`)
-    console.log(JSON.stringify({ output_directory: options.outDir, passed: outcome.report.passed, failures: outcome.report.failures.length, proposed_threshold: outcome.report.threshold.proposed }, null, 2))
+    console.log(JSON.stringify({ output_directory: options.outDir, passed: outcome.report.passed, failures: outcome.report.failures.length }, null, 2))
     process.exitCode = outcome.exitCode
   } catch (error) { console.error(error.message); process.exitCode = 1 }
 }

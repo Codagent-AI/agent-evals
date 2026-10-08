@@ -20,5 +20,5 @@ export function auditContamination({ transcripts, outputs = [], conversation, pa
     }
   }
   matches.sort((a, b) => JSON.stringify(a) < JSON.stringify(b) ? -1 : JSON.stringify(a) > JSON.stringify(b) ? 1 : 0)
-  return { schema_version: 1, pattern_version: patterns.version, status: matches.length ? 'contaminated' : 'clean', ...(matches.length ? { evaluation_status: 'contaminated', definition_verdict: 'unavailable' } : {}), matches, excluded_canaries: excluded, residual_risk: RESIDUAL_RISK }
+  return { schema_version: 1, pattern_version: patterns.version, status: matches.length ? 'contaminated' : 'clean', ...(matches.length ? { evaluation_status: 'contaminated' } : {}), matches, excluded_canaries: excluded, residual_risk: RESIDUAL_RISK }
 }

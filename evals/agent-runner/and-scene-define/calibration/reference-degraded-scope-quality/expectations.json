@@ -2,8 +2,7 @@
   "input_id": "reference-degraded-scope-quality",
   "description": "The reference with three excluded scopes added as committed features (PDF/PNG export, an in-browser visual editor, GitHub Pages publishing) in a new presentation-delivery capability, plus quality defects: vague untestable scenarios, a design canvas that contradicts the specification, a test plan that says twelve sample steps, design decisions stripped of rationale, and test-plan gaps (no navigation/mode, failure-path, or delivery tests).",
   "base": "reference",
-  "expected_outcome": "fail",
-  "expected_fail_mark": "proposed",
+  "variant": "degraded",
   "expected": {
     "INV-001": "met",
     "INV-002": "met",

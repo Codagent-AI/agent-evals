@@ -2,8 +2,7 @@
   "input_id": "reference-degraded-contradictions",
   "description": "The reference rewritten so it commits to the opposite of several graded items (departing entities linger dimmed; navigation keys override focused controls; fully scaffolded projects are re-scaffolded from templates; one repair attempt, then success is reported with known issues), consistently across artifacts. The design also adopts react-router-dom and opens the sample in present mode, contradicting two simulated-user answers in conversation.jsonl.",
   "base": "reference",
-  "expected_outcome": "fail",
-  "expected_fail_mark": "proposed",
+  "variant": "degraded",
   "expected": {
     "INV-001": "met",
     "INV-002": "met",

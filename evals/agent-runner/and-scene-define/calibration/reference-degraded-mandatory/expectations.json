@@ -2,8 +2,7 @@
   "input_id": "reference-degraded-mandatory",
   "description": "The reference with mandatory requirements silently removed from every artifact (mode toggle keeps the step; existing presentations preserved; browser errors fail verification and name the step), the missing-sample failure removed, and the fix-and-recheck loop weakened to build failures only. Other artifacts are adjusted so nothing contradicts the removals.",
   "base": "reference",
-  "expected_outcome": "fail",
-  "expected_fail_mark": "proposed",
+  "variant": "degraded",
   "expected": {
     "INV-001": "met",
     "INV-002": "met",

@@ -34,7 +34,7 @@
     },
     "rubric": {
       "path": "rubric.json",
-      "version": 8,
+      "version": 9,
       "hashes": {
         "1": "8c1a28e2feaf4a5cbee01e0a94130033c5655bf212af7695f9c36adfb0d269d0",
         "2": "343a69925088dd2139da70513fcd8dc97d46df8dbfac98cbd93bfc41ab6470e1",
@@ -43,7 +43,8 @@
         "5": "838516672d809a80622d95f4b32009bc06caf0125363310b886359045a987e85",
         "6": "0ed9105ef0c0addce2a8c989c91297f4b50dd5f746f2772e6ae09dd43bb4aaac",
         "7": "3e19e6edee6b682b4e4011b954e4c5ebe88d23c8e2e0fb6d7749a53c85dbc0ec",
-        "8": "213a73965d30c18f30d57c0c63bfc7cc5f15cb459e9e0ff372968cfa99b19399"
+        "8": "213a73965d30c18f30d57c0c63bfc7cc5f15cb459e9e0ff372968cfa99b19399",
+        "9": "f1b341c26f9377acc83d46b1ac203665edb42a9d419ad081af8faeaf83e70cd2"
       }
     }
   }

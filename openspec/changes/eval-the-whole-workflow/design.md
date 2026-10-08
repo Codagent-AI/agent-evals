@@ -227,11 +227,13 @@ The scorer is deterministic code over the validated verdicts. Discovery outcomes
 
 `rubric.json` declares:
 - its version and the inventory version it applies to;
-- components and points: coverage 70, artifact quality 15, fidelity 15 (provisional). Artifact quality is five narrow, countable criteria, 3 points each: observable scenario outcomes, design agrees with the specifications, test plan agrees with the specifications, decisions state a reason, and every requirement has a planned check. Each criterion's `met`, `partial`, and `missing` are set by a count of what the judge lists, because broad quality questions split the panel and the decider settled those close calls inconsistently across repeats (calibration attempt 6);
+- components and points: coverage 70, artifact quality 15, fidelity 15, approved by the maintainer after calibration (HT-002). Artifact quality is five narrow, countable criteria, 3 points each: observable scenario outcomes, design agrees with the specifications, test plan agrees with the specifications, decisions state a reason, and every requirement has a planned check. Each criterion's `met`, `partial`, and `missing` are set by a count of what the judge lists, because broad quality questions split the panel and the decider settled those close calls inconsistently across repeats (calibration attempt 6);
 - per-item weights: mandatory 2, acceptable-alternative 1;
 - verdict values: `met` 1, `partial` 0.5, `missing` 0. `partial` means the artifacts commit to the item's intent but leave out or weaken part of what the item requires;
 - leaked items: an item the disclosure audit marks leaked is dropped from both earned and possible coverage points, and coverage is scaled to its 60 points over the remaining items;
-- fidelity deductions, quality criteria, gates, the pass threshold, and the calibration evidence.
+- fidelity deductions, quality criteria, gates, and the calibration evidence.
+
+A definition receives a score only. The rubric has no pass threshold, and the result has no pass/fail verdict: gates are reported beside the score and never change it. The maintainer chose this after calibration showed that the synthetic inputs sit too close to the reference to place a threshold that real candidates would meet; the first real runs show where real definitions score.
 
 Each coverage criterion carries its item's anchors from `inventory.json` (`anchors.met`, `anchors.partial`, `anchors.missing`). They are written in the reference's words where possible, and against the intent for acceptable-alternative items. An agent drafts them from each item's statement, intent, and source quotes. A maintainer reviews them, and the review is recorded in the inventory (`anchors_review`: reviewer, date, and the inventory version reviewed). Preflight refuses a candidate run whose anchors are unreviewed. Adding anchors bumps the inventory version.
 
@@ -248,7 +250,7 @@ Rubric guidance is limited to what the reference states. Each omission is owned 
 
 A test fails when any content changes without a version bump, so two different contents can never claim one version.
 
-Preflight refuses candidate runs while the rubric has no calibrated pass threshold.
+Preflight refuses a rubric that sets a pass threshold.
 
 ### Contamination audit and evidence
 
@@ -342,7 +344,7 @@ Preflight runs before any model call:
 - Docker is available.
 - Auth for the evaluated CLIs, for host `claude` (simulated user), and for host `codex` (judges).
 - Every pinned hash matches.
-- The rubric's inventory version matches the pinned inventory, and the rubric has a threshold.
+- The rubric's inventory version matches the pinned inventory, and the rubric sets no pass threshold.
 - The mount set is exactly `sandbox-input/`, `sandbox/`, the Agent Skills checkout, and auth files, checked from the dry-run docker command.
 - The canary check passes.
 
@@ -499,7 +501,7 @@ These are copied into `and-scene-define/lib/` and adapted:
   - The scripted policy-test diagnostic sends each case 3 times and reports both policy compliance and whether the disclosure decision was consistent across the three replies.
   - The disclosure audit removes leaked items from coverage and shows every flag next to the scores. A run with many leaked items scores over fewer items, so the report shows the leaked count for comparisons.
   - Conclusions need repeated runs.
-- **Judge reliance on intent.** Calibration with a restructured reference and degraded variants checks that judges credit alternatives and catch removals. The provisional weights and threshold are fixed only after calibration.
+- **Judge reliance on intent.** Calibration with a restructured reference and degraded variants checks that judges credit alternatives and catch removals. The weights were approved after calibration; there is no threshold.
 - **Cheaper panel models.** Sonnet 5.5, `gpt-6-luna`, and `gpt-6-sol` are weaker than the decider at intent judgments.
   - Cross-family splits, backed dissents, and three-way splits go to Opus 5.5, and the two families make different mistakes, so a shared blind spot is the residual risk.
   - Families read borderline terms differently, and systematically. Calibration reports each family's verdict distribution, the share of items settled by each basis, and a per-item diff of two identical rescores.
@@ -524,4 +526,4 @@ This suite is new. `and-scene` migrates its judging in the three steps under "Sh
 
 ## Open Questions
 
-- The pass threshold, final weights, and pinned tolerance and spread come from the first calibration.
+- Whether to change the weights, for example to make a missing must-have cost more, is revisited after the first real candidate runs.

@@ -14,7 +14,7 @@ Agent-evals PR #81 ("fix: make and-scene judging and scoring robust") is merged 
 3. switch `and-scene` to the cross-family panel (INT-010, then E2E-004 during acceptance);
 4. build this suite's judging on the shared module (INT-003).
 
-The E2E runs need a calibrated rubric, so E2E-001 and E2E-002 run after E2E-003.
+The E2E runs use the rubric approved after E2E-003, so E2E-001 and E2E-002 run after it.
 
 ## Integration Tests
 
@@ -74,7 +74,7 @@ The E2E runs need a calibrated rubric, so E2E-001 and E2E-002 run after E2E-003.
   - the contradicted mandatory item is scored only under coverage, and the contradicted preference is a fidelity deduction;
   - every prompt contains the scope rule and each judged item's anchors and source quotes;
   - the uncited verdict is retried and never scored;
-  - the `missing` verdict for the absent design is accepted without a retry, and the run stays `complete` with `definition_verdict=fail`;
+  - the `missing` verdict for the absent design is accepted without a retry, and the run stays `complete`, scored, with the failed gate reported;
   - the cross-family leaked item and the decider-ruled item, if ruled leaked, are dropped from earned and possible coverage, reported `leaked` in the result and discovery ledger, and coverage is scaled over the remaining items;
   - the withholding flag changes no score;
   - a rejected call writes a zero-token usage record;
@@ -201,15 +201,15 @@ The E2E runs need a calibrated rubric, so E2E-001 and E2E-002 run after E2E-003.
 - Surface: `evals/agent-runner/and-scene-define/run.sh --run-agent`.
 - Setup:
   - this Mac with Docker;
-  - the Runner from `agent-runner/worktrees/external-user-mode`;
+  - a clean Agent Runner `main` checkout (external-user mode merged in PR #214);
   - the pinned Agent Skills checkout;
   - lead `claude`, crosscheck `codex`;
   - host Claude and Codex subscription auth;
-  - the calibrated rubric from E2E-003;
+  - the rubric approved after E2E-003;
   - a temporary clone of agent-evals whose upstream is a local bare remote.
 - Journey: start the run and let it finish, then run `--rescore-from` on the run directory.
 - Assertions:
-  - `evaluation_status` is `complete`;
+  - `evaluation_status` is `complete`, with a total score and no pass/fail verdict;
   - all four artifacts are collected with hashes, and the gates are evaluated;
   - the contamination audit is clean, with a transcript for every invocation in `run-metrics.json`;
   - `result.json`, `report.html`, the conversation, the discovery ledger, and the evidence manifest exist;
@@ -233,7 +233,7 @@ The E2E runs need a calibrated rubric, so E2E-001 and E2E-002 run after E2E-003.
 ### E2E-003: Calibration
 - Covers: calibration, including the decider's test-retest spread (`definition-artifact-scoring`).
 - Surface: `run.sh --calibrate`.
-- Setup: the committed calibration set, with expected per-item verdicts and expected-fail marks; the pinned judge profile; host Claude and Codex auth.
+- Setup: the committed calibration set, with expected per-item verdicts and each input labeled a reference or a degraded variant; the pinned judge profile; host Claude and Codex auth.
 - Journey: run calibration.
 - Assertions:
   - each input is judged at least three times;
@@ -241,8 +241,9 @@ The E2E runs need a calibrated rubric, so E2E-001 and E2E-002 run after E2E-003.
   - two identical rescores of one input are diffed per item, and every differing item is listed;
   - the decider is re-run 3 times on the same recorded panel outputs, and its ruling-flip rate is reported separately;
   - the report names any undetected removed mandatory item, restructured-reference loss beyond tolerance, or spread beyond the pinned limit;
-  - it proposes a pass threshold between the expected-fail variants and the expected-pass inputs.
+  - it proposes no pass threshold.
 - Execution: local, opt-in, paid; never in CI. Run after HT-003.
+- Result (2026-10-07, run `2026-10-07-e2e-003-r7`, rubric v8): spread at most 1.46 points, 98.1% agreement with expected verdicts, 0 of 30 decider re-runs flipped. One reported failure remains: in `restructured-degraded-quality`, removed mandatory item INV-093 was judged `met` in 1 of 3 repeats. The maintainer accepted the result as is and will revisit scoring after the first real candidate runs.
 
 ### E2E-004: `and-scene` baseline re-scored under the cross-family panel
 - Covers: the `and-scene` switch on real evidence (`product-quality-scoring`, `evaluation-metrics-reporting`).
@@ -263,7 +264,7 @@ The E2E runs need a calibrated rubric, so E2E-001 and E2E-002 run after E2E-003.
 
 - **Environments and sandboxes:**
   - this Mac with Docker;
-  - Agent Runner from `/Users/paul/codagent/agent-runner/worktrees/external-user-mode` (branch `external-user-mode`);
+  - Agent Runner `main`, which includes the external-user mode (merged from branch `external-user-mode` in PR #214);
   - the pinned Agent Skills checkout;
   - the suite's `run.sh` modes: dry run, candidate, resume, rescore, calibrate, and the simulated-user policy-test diagnostic;
   - temporary agent-evals clones with local bare remotes for publication.
@@ -306,6 +307,7 @@ The E2E runs need a calibrated rubric, so E2E-001 and E2E-002 run after E2E-003.
   - the tree and its manifest (allowlist and rewrites) are committed.
 - Instructions: read the files under `evals/agent-runner/and-scene-define/starting-repo/` as the evaluated agent will see them.
 - Required decision or observation: approve the tree, or list the files or passages to exclude or rewrite.
+- Outcome (2026-10-07): waived by the maintainer; no review is needed before candidate runs.
 
 ### HT-003: Anchor review
 - Reason: the inventory spec requires a maintainer review of every graded item's anchors before they are used for a candidate run, and the anchors decide borderline verdicts.
@@ -313,13 +315,14 @@ The E2E runs need a calibrated rubric, so E2E-001 and E2E-002 run after E2E-003.
 - Instructions: read each item's `met`, `partial`, and `missing` anchors beside its statement, intent, and source quotes.
 - Required decision or observation: approve the anchors, which records `anchors_review`, or name the items to change.
 
-### HT-002: Calibrated threshold and weights
-- Reason: the spec reserves the expected-fail marking of degraded variants and the pass threshold to the maintainer.
+### HT-002: Weights after calibration
+- Reason: only the maintainer decides whether the scoring weights are fit for candidate runs.
 - Prerequisites:
-  - E2E-003 has completed without failures;
-  - its report shows per-input scores, the panel and decider spread, and the proposed threshold.
-- Instructions: review the calibration report and the rubric's proposed weights, threshold, and expected-fail marks.
-- Required decision or observation: approve the threshold and weights, or name the changes.
+  - E2E-003 has completed;
+  - its report shows per-input scores and the panel and decider spread.
+- Instructions: review the calibration report and the rubric's weights.
+- Required decision or observation: approve the weights, or name the changes.
+- Outcome (2026-10-07): the maintainer approved the weights as they are and removed pass/fail: a definition receives a score only, with no pass threshold and no pass/fail verdict. Changes to the weights wait until after the first real candidate run.
 
 ## Coverage Map
 

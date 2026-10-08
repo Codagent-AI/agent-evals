@@ -1,11 +1,10 @@
 {
-  "calibration_set_version": 3,
+  "calibration_set_version": 4,
   "inventory_version": 2,
   "graded_items": 72,
   "change_name": "add-presentation-skill",
   "layout": "<input_id>/collected/ mirrors a run's collected/ directory (the change directory contents); <input_id>/expectations.json holds expected verdicts; <input_id>/conversation.jsonl, when present, mirrors a run's conversation.jsonl.",
   "host_only": true,
-  "expected_fail_marks_status": "proposed; awaiting maintainer review (HT-002)",
   "real_candidates": {
     "directory": "real-candidates/",
     "inputs": []
@@ -14,8 +13,7 @@
     {
       "input_id": "reference",
       "base": null,
-      "expected_outcome": "pass",
-      "expected_fail_mark": null,
+      "variant": "reference",
       "expected_counts": {
         "met": 70,
         "partial": 1,
@@ -49,15 +47,14 @@
         },
         {
           "path": "reference/expectations.json",
-          "sha256": "fa25c9678ad4a288e017062f5acdade54da0b9cd94c1095cf16546bd2673f45a"
+          "sha256": "4e44b212d82d02c1942c1ca99d2c55c7d9189056dd683ecb092fd60bfe23508c"
         }
       ]
     },
     {
       "input_id": "restructured",
       "base": "reference",
-      "expected_outcome": "pass",
-      "expected_fail_mark": null,
+      "variant": "reference",
       "expected_counts": {
         "met": 72,
         "partial": 0,
@@ -95,15 +92,14 @@
         },
         {
           "path": "restructured/expectations.json",
-          "sha256": "9f2e5f50a4aba39436c78b9003ad6bd9b84e118cffd8752aab5cfab3777aa466"
+          "sha256": "587d59616f8dc6588b931dd315d49567dc7b422cf01ac29f178116ed8539309b"
         }
       ]
     },
     {
       "input_id": "reference-degraded-mandatory",
       "base": "reference",
-      "expected_outcome": "fail",
-      "expected_fail_mark": "proposed",
+      "variant": "degraded",
       "expected_counts": {
         "met": 63,
         "partial": 4,
@@ -137,15 +133,14 @@
         },
         {
           "path": "reference-degraded-mandatory/expectations.json",
-          "sha256": "0d718dc008f227847a3b32312bfcf9cb624ce6f2e00cccade4665c6983f20df2"
+          "sha256": "ee8d533513fdf3574fd9daf502b5df897f29e9294b6445eb1d92836ec43b1e52"
         }
       ]
     },
     {
       "input_id": "reference-degraded-contradictions",
       "base": "reference",
-      "expected_outcome": "fail",
-      "expected_fail_mark": "proposed",
+      "variant": "degraded",
       "expected_counts": {
         "met": 65,
         "partial": 1,
@@ -183,15 +178,14 @@
         },
         {
           "path": "reference-degraded-contradictions/expectations.json",
-          "sha256": "63afa4c31b16d4c2671eb79d319a1d7a542caec5a460a7602d343167e44e4e37"
+          "sha256": "b118804fcacbe9fef44e8b9abda4c6e667d57a81d9fe04723bf05f42f50ae7a9"
         }
       ]
     },
     {
       "input_id": "reference-degraded-scope-quality",
       "base": "reference",
-      "expected_outcome": "fail",
-      "expected_fail_mark": "proposed",
+      "variant": "degraded",
       "expected_counts": {
         "met": 67,
         "partial": 1,
@@ -229,15 +223,14 @@
         },
         {
           "path": "reference-degraded-scope-quality/expectations.json",
-          "sha256": "98d20fa56b5936e9c682a75ac56ac7d7665d92d6b65f4e13ff244a8d67b323e6"
+          "sha256": "7f2aa4f28ad5761339ddce60c21698bf7713feef9ebde071ae0d03b778e184ba"
         }
       ]
     },
     {
       "input_id": "restructured-degraded-mandatory",
       "base": "restructured",
-      "expected_outcome": "fail",
-      "expected_fail_mark": "proposed",
+      "variant": "degraded",
       "expected_counts": {
         "met": 67,
         "partial": 0,
@@ -275,15 +268,14 @@
         },
         {
           "path": "restructured-degraded-mandatory/expectations.json",
-          "sha256": "c1a8ef569afd1cefcfa8ef206add17fd6525a3b2311e5a91df3d58bbf9a14060"
+          "sha256": "8b9d2b8b539a7a61ff61fdbf8bb1dc61c98677b25a71e140c9971e0671976faf"
         }
       ]
     },
     {
       "input_id": "restructured-degraded-mixed",
       "base": "restructured",
-      "expected_outcome": "fail",
-      "expected_fail_mark": "proposed",
+      "variant": "degraded",
       "expected_counts": {
         "met": 69,
         "partial": 1,
@@ -325,15 +317,14 @@
         },
         {
           "path": "restructured-degraded-mixed/expectations.json",
-          "sha256": "d06de2d03bbae18f72ca3742bdb41477947e5feaa5b77bd927d22c5c7f679d44"
+          "sha256": "7f7b6e273838720c0ea7bb43987e7832ea0b80ca6fc5bd8baec3c45f6facd1f9"
         }
       ]
     },
     {
       "input_id": "restructured-degraded-quality",
       "base": "restructured",
-      "expected_outcome": "fail",
-      "expected_fail_mark": "proposed",
+      "variant": "degraded",
       "expected_counts": {
         "met": 71,
         "partial": 0,
@@ -371,7 +362,7 @@
         },
         {
           "path": "restructured-degraded-quality/expectations.json",
-          "sha256": "41581e04779bff97310eaae92b6132f3610f4afc0beec2fb170709ec28499d53"
+          "sha256": "e07f628feb399601bb40485ba148f4ef18b58b838daaac39dfd11a1ddf3b71ce"
         }
       ]
     }

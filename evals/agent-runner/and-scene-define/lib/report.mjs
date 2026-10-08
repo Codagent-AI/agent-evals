@@ -2,19 +2,18 @@ const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '
 const number = value => Number.isFinite(value) ? String(Math.round(value * 100) / 100) : 'n/a'
 const row = (label, value) => `<tr><th scope="row">${escape(label)}</th><td>${value}</td></tr>`
 const table = (caption, rows) => rows.length ? `<table><caption>${escape(caption)}</caption>${rows.join('')}</table>` : ''
-// A readable summary first: status, verdict or failure, scores, gates, leaks and
-// discovery. Every value is escaped; the full JSON follows for detail.
+// A readable summary first: status or failure, scores, gates, leaks and
+// discovery. The score is the result; there is no pass/fail verdict. Every
+// value is escaped; the full JSON follows for detail.
 function headline(result) {
-  const verdict = result.verdict_unavailable && result.definition_verdict !== 'pass' && result.definition_verdict !== 'fail'
-    ? `${escape(result.definition_verdict ?? 'unavailable')} (${escape(result.verdict_unavailable)})` : escape(result.definition_verdict ?? 'unavailable')
-  const outcome = [row('Evaluation status', escape(result.evaluation_status ?? 'unknown')), row('Definition verdict', verdict), row('Mode', escape(result.mode ?? 'candidate'))]
+  const outcome = [row('Evaluation status', escape(result.evaluation_status ?? 'unknown')), row('Mode', escape(result.mode ?? 'candidate'))]
   if (result.evaluation_status !== 'complete') {
     outcome.push(row('Owning phase', escape(result.owning_phase ?? 'unknown')), row('Error', escape(result.observed_error ?? 'none recorded')), row('Resumable', escape(result.resumable === true ? 'yes' : 'no')))
     if (result.last_active_step) outcome.push(row('Last active step', escape(result.last_active_step)))
   }
   const scores = Number.isFinite(result.total)
     ? [row('Total', `${escape(number(result.total))} / 100`), ...Object.entries(result.components ?? {}).map(([name, c]) => row(name, `${escape(number(c?.score))} / ${escape(number(c?.points))}`))]
-    : [row('Total', 'Not scored')]
+    : [row('Total', result.score_unavailable ? `Not scored (${escape(result.score_unavailable)})` : 'Not scored')]
   if (Array.isArray(result.leaked_items)) scores.push(row('Leaked items', escape(`${result.leaked_count ?? result.leaked_items.length}${result.leaked_items.length ? `: ${result.leaked_items.join(', ')}` : ''}`)))
   else scores.push(row('Leaked items', escape(result.leaked_count ?? 0)))
   if (result.excluded_graded_contradictions?.length) scores.push(row('Excluded graded contradictions', escape(result.excluded_graded_contradictions.map(x => x.subject_id).join(', '))))

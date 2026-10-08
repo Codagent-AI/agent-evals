@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildRubric, checkJudgingInputs } from '../evals/agent-runner/and-scene-define/lib/rubric.mjs'
 import { SUITE_ROOT } from '../evals/agent-runner/and-scene-define/lib/files.mjs'
-import { accuracy, stability, basisShares, familyDistribution, rescoreDiff, deciderFlips, proposeThreshold, aggregateCalibration, loadCalibrationSet, allExpected, renderCalibrationMarkdown, CALIBRATION_MODE } from '../evals/agent-runner/and-scene-define/lib/calibration.mjs'
+import { accuracy, stability, basisShares, familyDistribution, rescoreDiff, deciderFlips, aggregateCalibration, loadCalibrationSet, allExpected, renderCalibrationMarkdown, CALIBRATION_MODE } from '../evals/agent-runner/and-scene-define/lib/calibration.mjs'
 import { runCalibration, parseCalibrateArguments, assertAnchorsReviewed } from '../evals/agent-runner/and-scene-define/calibrate.mjs'
 import { runDefinitionPanel, rerunDefinitionDecider } from '../evals/agent-runner/and-scene-define/lib/judge-jobs.mjs'
 import { publicationEligibility, publishRun } from '../evals/agent-runner/and-scene-define/lib/publication.mjs'
@@ -31,7 +31,7 @@ function scored(total, verdicts, { votes = {}, bases = {}, gates = true } = {}) 
   return { total, components: { coverage: { score: total } }, gates: [{ id: 'gate:openspec-validate', passed: gates }], coverage, quality, fidelity: [],
     panel_records: [{ kind: 'coverage', record: { results: results.filter(x => !x.id.startsWith('quality:')), votes: allVotes.filter(x => !x.id.startsWith('quality:')) } }, { kind: 'quality', record: { results: results.filter(x => x.id.startsWith('quality:')), votes: allVotes.filter(x => x.id.startsWith('quality:')) } }] }
 }
-const expectations = (outcome, expected, extra = {}) => ({ input_id: 'x', expected_outcome: outcome, expected_fail_mark: outcome === 'fail' ? 'proposed' : null, expected, removed_items: [], contradicted_items: [], added_scope: [], quality_defects: [], planted_fidelity_contradictions: [], weakened_items: [], collateral_items: [], ...extra })
+const expectations = (variant, expected, extra = {}) => ({ input_id: 'x', variant, expected, removed_items: [], contradicted_items: [], added_scope: [], quality_defects: [], planted_fidelity_contradictions: [], weakened_items: [], collateral_items: [], ...extra })
 
 test('accuracy counts per-item agreement and a confusion matrix across repeats', () => {
   const result = accuracy({ [A]: 'met', [B]: 'missing' }, [scored(90, { [A]: 'met', [B]: 'met' }), scored(90, { [A]: 'met', [B]: 'missing' }), scored(80, { [A]: 'partial', [B]: 'missing' })])
@@ -93,10 +93,10 @@ const allMet = { [A]: 'met', [B]: 'met', [C]: 'met', [D]: 'met' }
 
 test('failures name the input and item: removed mandatory judged met, restructured loss beyond tolerance, spread beyond limit', () => {
   const report = aggregateCalibration({ rubric, inputs: [
-    input('reference', expectations('pass', allMet), [scored(95, {}), scored(95, {}), scored(95, {})]),
+    input('reference', expectations('reference', allMet), [scored(95, {}), scored(95, {}), scored(95, {})]),
     // Loses A (weight 2), C and D (1 each) = 4 > tolerance 3.
-    input('restructured', expectations('pass', allMet), [scored(90, {}), scored(80, { [A]: 'missing', [C]: 'missing', [D]: 'missing' }), scored(90, {})]),
-    input('degraded', expectations('fail', { ...allMet, [A]: 'missing' }, { removed_items: [A, B] }), [scored(30, { [A]: 'missing' }), scored(31, { [A]: 'met' }), scored(30, { [A]: 'missing' })]),
+    input('restructured', expectations('reference', allMet), [scored(90, {}), scored(80, { [A]: 'missing', [C]: 'missing', [D]: 'missing' }), scored(90, {})]),
+    input('degraded', expectations('degraded', { ...allMet, [A]: 'missing' }, { removed_items: [A, B] }), [scored(30, { [A]: 'missing' }), scored(31, { [A]: 'met' }), scored(30, { [A]: 'missing' })]),
   ] })
   const codes = report.failures.map(x => [x.code, x.input_id])
   assert.deepEqual(codes, [['restructured-loss-beyond-tolerance', 'restructured'], ['spread-beyond-limit', 'restructured'], ['removed-mandatory-undetected', 'degraded']])
@@ -109,29 +109,16 @@ test('failures name the input and item: removed mandatory judged met, restructur
   assert.equal(report.passed, false); assert.equal(report.mode, CALIBRATION_MODE)
   // Within tolerance and limits: no failure.
   const ok = aggregateCalibration({ rubric, inputs: [
-    input('reference', expectations('pass', allMet), [scored(95, {}), scored(95, {}), scored(95, {})]),
-    input('restructured', expectations('pass', allMet), [scored(92, { [A]: 'partial', [C]: 'missing' }), scored(92, {}), scored(92, {})]),
-    input('degraded', expectations('fail', allMet, { removed_items: [A] }), [scored(30, { [A]: 'missing' }), scored(30, { [A]: 'partial' }), scored(30, { [A]: 'missing' })]),
+    input('reference', expectations('reference', allMet), [scored(95, {}), scored(95, {}), scored(95, {})]),
+    input('restructured', expectations('reference', allMet), [scored(92, { [A]: 'partial', [C]: 'missing' }), scored(92, {}), scored(92, {})]),
+    input('degraded', expectations('degraded', allMet, { removed_items: [A] }), [scored(30, { [A]: 'missing' }), scored(30, { [A]: 'partial' }), scored(30, { [A]: 'missing' })]),
   ] })
   assert.deepEqual(ok.failures, []); assert.equal(ok.passed, true)
-  assert.equal(ok.threshold.proposed, 61); assert.equal(ok.identical_rescore.input_id, 'reference')
-  assert.match(renderCalibrationMarkdown(ok), /Proposed pass threshold[\s\S]*\*\*61\*\*/)
-})
-
-test('threshold is the midpoint between expected-fail and expected-pass scores, or a named failure when they overlap', () => {
-  const pass = input('reference', expectations('pass', allMet), [scored(80, {}), scored(78, {}), scored(82, {})])
-  const fail = input('degraded', expectations('fail', allMet), [scored(50, {}), scored(60, {}), scored(55, {})])
-  // Unmarked variants and gate-failed repeats do not bound the threshold.
-  const unmarked = input('unmarked', { ...expectations('fail', allMet), expected_fail_mark: null }, [scored(95, {})])
-  const gateFailed = input('gate-failed', expectations('fail', allMet), [scored(99, {}, { gates: false })])
-  const separated = proposeThreshold([pass, fail, unmarked, gateFailed])
-  assert.equal(separated.separable, true); assert.equal(separated.proposed, 69)
-  assert.deepEqual(separated.highest_fail, { input_id: 'degraded', total: 60 }); assert.deepEqual(separated.lowest_pass, { input_id: 'reference', total: 78 })
-  const overlapping = input('degraded', expectations('fail', allMet), [scored(79, {}), scored(60, {}), scored(55, {})])
-  const report = aggregateCalibration({ rubric, inputs: [pass, overlapping] })
-  assert.equal(report.threshold.proposed, null); assert.equal(report.threshold.separable, false)
-  const failure = report.failures.find(x => x.code === 'threshold-cannot-separate')
-  assert.match(failure.message, /threshold cannot separate.*degraded.*79.*reference.*78/)
+  assert.equal(ok.identical_rescore.input_id, 'reference')
+  // Plans get a score only, so calibration proposes no pass threshold.
+  assert.equal('threshold' in ok, false)
+  assert.doesNotMatch(renderCalibrationMarkdown(ok), /threshold/i)
+  assert.match(renderCalibrationMarkdown(ok), /\| degraded \| degraded \|/)
 })
 
 // ---------------------------------------------------------------- the committed set
@@ -148,10 +135,20 @@ test('the committed calibration set loads without model calls and every input co
     assert.ok(Object.keys(x.artifacts).some(p => /^specs\/.+\/spec\.md$/.test(p)))
     assert.ok(!Object.keys(x.artifacts).some(p => p.startsWith('collected/') || p === 'expectations.json'))
     if (x.expectations.expected_fidelity) assert.ok(x.conversation.length)
-    if (x.expectations.expected_outcome === 'fail') assert.equal(x.expectations.expected_fail_mark, 'proposed')
+    assert.ok(['reference', 'degraded'].includes(x.expectations.variant), x.input_id)
+    assert.equal('expected_outcome' in x.expectations, false); assert.equal('expected_fail_mark' in x.expectations, false)
   }
-  assert.ok(set.inputs.some(x => x.input_id === 'reference' && x.expectations.expected_outcome === 'pass'))
-  assert.ok(set.inputs.some(x => x.input_id.startsWith('restructured') && x.expectations.expected_outcome === 'pass'))
+  assert.ok(set.inputs.some(x => x.input_id === 'reference' && x.expectations.variant === 'reference'))
+  assert.ok(set.inputs.some(x => x.input_id.startsWith('restructured') && x.expectations.variant === 'reference'))
+})
+
+test('expectations name each input a reference or a degraded variant and carry no pass/fail outcome', async () => {
+  const { validateExpectations } = await import('../evals/agent-runner/and-scene-define/lib/calibration.mjs')
+  const ok = { ...expectations('degraded', allMet), input_id: 'degraded' }
+  assert.deepEqual(validateExpectations(ok, { rubric, dirName: 'degraded' }), [])
+  assert.ok(validateExpectations({ ...ok, variant: 'fail' }, { rubric, dirName: 'degraded' }).some(x => /variant must be reference or degraded/.test(x)))
+  assert.ok(validateExpectations({ ...ok, expected_outcome: 'fail' }, { rubric, dirName: 'degraded' }).some(x => /expected_outcome.*no pass\/fail/.test(x)))
+  assert.ok(validateExpectations({ ...ok, expected_fail_mark: 'proposed' }, { rubric, dirName: 'degraded' }).some(x => /expected_fail_mark.*no pass\/fail/.test(x)))
 })
 
 test('the loader verifies manifest hashes and rejects unlisted or altered files', async t => {
@@ -216,9 +213,9 @@ async function suiteFixture(t, { reviewed = true } = {}) {
     }
     await writeFile(join(calibrationDir, id, 'expectations.json'), JSON.stringify({ ...exp, input_id: id, description: `${id} fixture` }))
   }
-  await write('reference', expectations('pass', allMet, { expected_quality: Object.fromEntries(QUALITY.map(id => [id, 'met'])) }))
-  await write('restructured', expectations('pass', allMet))
-  await write('degraded', expectations('fail', { ...allMet, [A]: 'missing' }, { removed_items: [A] }))
+  await write('reference', expectations('reference', allMet, { expected_quality: Object.fromEntries(QUALITY.map(id => [id, 'met'])) }))
+  await write('restructured', expectations('reference', allMet))
+  await write('degraded', expectations('degraded', { ...allMet, [A]: 'missing' }, { removed_items: [A] }))
   await mkdir(join(calibrationDir, 'real-candidates')); await writeFile(join(calibrationDir, 'real-candidates/README.md'), 'Empty slot.\n')
   return { root, suiteRoot, calibrationDir, outDir: join(root, 'out') }
 }
@@ -279,8 +276,6 @@ test('--calibrate judges each input three independent times through the candidat
   assert.deepEqual(report.identical_rescore.differing_items, [])
   // Scripted failures: restructured loses A, C, D (4 > 3); degraded's removed A met in repeat 2 and spreads.
   assert.deepEqual(report.failures.map(x => [x.code, x.input_id]).sort(), [['removed-mandatory-undetected', 'degraded'], ['restructured-loss-beyond-tolerance', 'restructured'], ['spread-beyond-limit', 'degraded']])
-  assert.equal(report.threshold.separable, true)
-  assert.ok(report.threshold.proposed > report.threshold.highest_fail.total && report.threshold.proposed < report.threshold.lowest_pass.total)
   assert.equal(exitCode, 1)
   const written = JSON.parse(await readFile(join(f.outDir, 'calibration-report.json'), 'utf8'))
   assert.equal(written.mode, 'calibration'); assert.equal(written.published, false)
@@ -319,7 +314,6 @@ test('calibration judges several repeats at once and reports them in input and r
   assert.deepEqual(many.report.inputs.map(x => x.input_id), one.report.inputs.map(x => x.input_id))
   assert.deepEqual(many.report.inputs.map(x => x.scores.per_repeat), one.report.inputs.map(x => x.scores.per_repeat))
   assert.deepEqual(many.report.failures, one.report.failures)
-  assert.deepEqual(many.report.threshold, one.report.threshold)
   for (const id of ['reference', 'restructured', 'degraded']) assert.deepEqual((await readdir(join(f.outDir, 'inputs', id))).sort(), ['repeat-1', 'repeat-2', 'repeat-3'])
 })
 
@@ -363,17 +357,17 @@ test('calibrate arguments: at least three repeats, host-only default output, one
 test('calibration output is never published', async t => {
   const f = await suiteFixture(t)
   await assert.rejects(runCalibration({ suiteRoot: f.suiteRoot, calibrationDir: f.calibrationDir, outDir: join(f.root, 'evals/agent-runner/and-scene-define/results/cal'), repoRoot: f.root }, { judges: stubJudges().judges, gateCommand }), /never be written under the published results/)
-  const report = aggregateCalibration({ rubric, inputs: [input('reference', expectations('pass', allMet), [scored(95, {}), scored(95, {}), scored(95, {})])] })
+  const report = aggregateCalibration({ rubric, inputs: [input('reference', expectations('reference', allMet), [scored(95, {}), scored(95, {}), scored(95, {})])] })
   assert.equal(publicationEligibility(report), false)
-  assert.equal(publicationEligibility({ ...report, evaluation_status: 'complete', definition_verdict: 'pass' }), false)
+  assert.equal(publicationEligibility({ ...report, evaluation_status: 'complete', total: 95 }), false)
   const git = async () => { throw new Error('publication must not run git for calibration') }
   assert.deepEqual(await publishRun({ runDir: f.root, repoDir: f.root, result: report, git }), { skipped: true, published: false, commit: null })
 })
 
 test('candidate runs never require calibration output', async t => {
-  // A calibrated, reviewed suite with no calibration set and no calibration report passes judging-input preflight.
+  // A reviewed suite with no calibration set and no calibration report passes judging-input preflight; no pass threshold is needed.
   const root = await mkdtemp(join(tmpdir(), 'define-no-calibration-')); t.after(() => rm(root, { recursive: true, force: true }))
-  await writeFile(join(root, 'rubric.json'), JSON.stringify({ ...rubric, pass_threshold: 70 }))
+  await writeFile(join(root, 'rubric.json'), JSON.stringify(rubric))
   await checkJudgingInputs({ suiteRoot: root, inventory: subset })
   for (const file of ['controller.mjs', 'lib/preflight.mjs', 'lib/judging.mjs', 'lib/rescore.mjs']) {
     const source = await readFile(join(SUITE_ROOT, file), 'utf8')

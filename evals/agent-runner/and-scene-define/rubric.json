@@ -1,7 +1,7 @@
 {
-  "rubric_version": 8,
+  "rubric_version": 9,
   "inventory_version": 5,
-  "provisional": true,
+  "provisional": false,
   "components": {
     "coverage": 70,
     "artifact_quality": 15,
@@ -16,7 +16,7 @@
     "partial": 0.5,
     "missing": 0
   },
-  "leaked_items": "Drop from earned and possible coverage; scale over remaining items. If none remain, coverage and the total are unavailable and there is no verdict unless a gate failed.",
+  "leaked_items": "Drop from earned and possible coverage; scale over remaining items. If none remain, coverage and the total are unavailable.",
   "coverage": [
     {
       "id": "INV-001",
@@ -908,9 +908,17 @@
   "calibration": {
     "restructured_tolerance_items": 3,
     "max_spread": 5,
-    "provisional": true,
-    "note": "Provisional limits pending E2E-003 calibration evidence and maintainer approval (HT-002). restructured_tolerance_items: total coverage weight the restructured reference may lose versus the reference. max_spread: total-score points by which repeated judging of one input may differ."
+    "provisional": false,
+    "note": "Approved by the maintainer (HT-002) on 2026-10-07 after the E2E-003 calibration; a plan receives a score only, with no pass threshold. restructured_tolerance_items: total coverage weight the restructured reference may lose versus the reference. max_spread: total-score points by which repeated judging of one input may differ."
   },
-  "pass_threshold": null,
-  "calibration_evidence": null
+  "calibration_evidence": {
+    "calibration_run": "2026-10-07-e2e-003-r7",
+    "rubric_version": 8,
+    "calibration_set_version": 3,
+    "repeats": 3,
+    "max_spread": 1.4583,
+    "agreement_rate": 0.981,
+    "decider_flips": "0 of 30",
+    "open_failure": "restructured-degraded-quality: removed mandatory item INV-093 judged met in 1 of 3 repeats; left for review after the first real run"
+  }
 }

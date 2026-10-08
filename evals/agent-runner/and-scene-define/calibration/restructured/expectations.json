@@ -2,8 +2,7 @@
   "input_id": "restructured",
   "description": "The reference rewritten from scratch: four renamed capabilities (scene-runtime, viewer-controls, presentation-authoring, release-checks), merged and split requirements, new wording throughout, and swapped mechanisms for every acceptable alternative whose mechanism can change. Every requirement is kept.",
   "base": "reference",
-  "expected_outcome": "pass",
-  "expected_fail_mark": null,
+  "variant": "reference",
   "expected": {
     "INV-001": "met",
     "INV-002": "met",

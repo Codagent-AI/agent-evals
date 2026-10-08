@@ -29,8 +29,8 @@ An eval-owned judge with a pinned profile SHALL decide the asked part from the s
 - **THEN** the job is retried and the uncited decision is not recorded
 
 ### Requirement: Non-scoring diagnostic
-The discovery ledger SHALL NOT change any score, gate, or `definition_verdict`. The result and report SHALL show the count of each outcome and each item's outcome, the ledger SHALL be included in the published result, and `--rescore-from` SHALL rebuild it.
+The discovery ledger SHALL NOT change any score or gate. The result and report SHALL show the count of each outcome and each item's outcome, the ledger SHALL be included in the published result, and `--rescore-from` SHALL rebuild it.
 
-#### Scenario: Ledger does not affect the verdict
+#### Scenario: Ledger does not affect the score
 - **WHEN** two runs have identical coverage, fidelity, and quality verdicts but different discovery outcomes
-- **THEN** they receive the same score and `definition_verdict`
+- **THEN** they receive the same score
