@@ -2,8 +2,7 @@
   "input_id": "restructured-degraded-mixed",
   "description": "The restructured reference with a mixed set of faults: a mode switch now restarts the current chapter (contradicting a mandatory item), a browser visual editor is added (excluded scope), and the release-check summary no longer names the failed check (weakened). Stale test-plan expectations make the artifacts inconsistent. The artifacts also make Tailwind the default styling and redirect the root URL to the sample, contradicting two simulated-user answers in conversation.jsonl.",
   "base": "restructured",
-  "expected_outcome": "fail",
-  "expected_fail_mark": "proposed",
+  "variant": "degraded",
   "expected": {
     "INV-001": "met",
     "INV-002": "met",
@@ -79,19 +78,20 @@
     "INV-118": "met"
   },
   "expected_quality": {
-    "quality:testable-scenarios": "met",
-    "quality:consistency": "partial",
-    "quality:rationale": "met",
-    "quality:test-plan": "met"
+    "quality:observable-outcomes": "met",
+    "quality:design-matches-specs": "met",
+    "quality:test-plan-matches-specs": "partial",
+    "quality:decision-rationale": "met",
+    "quality:requirements-tested": "partial"
   },
   "conversation": "conversation.jsonl",
   "expected_fidelity": {
-    "fidelity:[\"define.proposal\",\"proposal\",1,1]": "missing",
-    "fidelity:[\"define.proposal\",\"proposal\",1,2]": "met",
-    "fidelity:[\"define.specs\",\"specs\",1,1]": "met",
-    "fidelity:[\"define.specs\",\"specs\",1,2]": "missing",
-    "fidelity:[\"define.design\",\"design\",1,1]": "missing",
-    "fidelity:[\"define.test-plan\",\"test-plan\",1,1]": "missing"
+    "fidelity:define.proposal/proposal/1/1": "missing",
+    "fidelity:define.proposal/proposal/1/2": "met",
+    "fidelity:define.specs/specs/1/1": "met",
+    "fidelity:define.specs/specs/1/2": "missing",
+    "fidelity:define.design/design/1/1": "missing",
+    "fidelity:define.test-plan/test-plan/1/1": "missing"
   },
   "removed_items": [],
   "contradicted_items": [
@@ -117,20 +117,25 @@
   "collateral_items": [],
   "quality_defects": [
     {
-      "criterion": "quality:consistency",
-      "where": "test-plan.md (AR-3, RC-2) vs specs/viewer-controls and specs/release-checks",
-      "defect": "AR-3 still expects the step to survive mode switches, and RC-2 still expects FAIL to name the failed check; neither matches the changed specifications."
+      "criterion": "quality:test-plan-matches-specs",
+      "where": "test-plan.md (AR-3) vs specs/viewer-controls",
+      "defect": "AR-3 still expects the step to survive mode switches; the changed specification restarts at the first step of the current chapter. RC-2 still expects FAIL to name the failed check, which only adds detail to the specified FAIL summary and is not a contradiction."
+    },
+    {
+      "criterion": "quality:requirements-tested",
+      "where": "test-plan.md vs specs/viewer-controls (In-place visual editing)",
+      "defect": "The added in-place visual editing requirement has no planned check."
     }
   ],
   "planted_fidelity_contradictions": [
     {
-      "exchange": "[\"define.proposal\",\"proposal\",1,2]",
+      "exchange": "define.proposal/proposal/1/2",
       "subject_id": "INV-057",
       "artifact": "specs/presentation-authoring/spec.md",
       "change": "Generated presentations are styled with Tailwind utility classes, installed when the first presentation is created."
     },
     {
-      "exchange": "[\"define.specs\",\"specs\",1,1]",
+      "exchange": "define.specs/specs/1/1",
       "subject_id": "INV-113",
       "artifact": "design.md; specs/release-checks/spec.md",
       "change": "The root URL redirects to the sample; there is no landing page."

@@ -53,7 +53,7 @@ test('INT-008 interrupted workflow resumes exact Runner ID without a second fres
   f.setNext('capped')
   const resumed = await runEvaluation({ ...f.options, resume: true }, f.deps)
   assert.deepEqual(f.modes, [{ kind: 'fresh' }, { kind: 'resume', runId: 'runner-one' }])
-  assert.equal(resumed.result.definition_verdict, 'unavailable'); assert.notEqual(resumed.result.evaluation_status, 'complete')
+  assert.equal('definition_verdict' in resumed.result, false); assert.notEqual(resumed.result.evaluation_status, 'complete')
   assert.equal(resumed.result.owning_phase, 'disclosure-audit'); assert.match(resumed.result.observed_error, /stub disclosure failure/)
   assert.equal(await readFile(join(f.options.runDir, 'collected/proposal.md'), 'utf8'), 'proposal')
   assert.equal((await runEvaluation({ ...f.options, resume: true }, f.deps)).result.resumable, true)
@@ -165,7 +165,7 @@ test('contamination checkpoints the audit and prevents gates, judging, and publi
   const called = []
   f.deps.handlers = Object.fromEntries(['disclosure-audit', 'gates-and-judging', 'discovery', 'result-and-report', 'publication'].map(phase => [phase, async () => { called.push(phase); return [] }]))
   const first = await runEvaluation(f.options, f.deps)
-  assert.equal(first.result.evaluation_status, 'contaminated'); assert.equal(first.result.definition_verdict, 'unavailable')
+  assert.equal(first.result.evaluation_status, 'contaminated'); assert.equal(first.result.total, null)
   assert.equal(first.result.score, undefined); assert.deepEqual(called, [])
   assert.ok(first.result.matches.some(m => m.tool_call === 'fixture-fetch'))
   assert.match(first.result.residual_risk, /Docker image is not scanned/)
@@ -194,7 +194,7 @@ test('a missing evaluated transcript produces a harness failure naming the sessi
   const { result } = await runEvaluation(f.options, f.deps)
   assert.equal(result.evaluation_status, 'evaluation-harness-failed')
   assert.equal(result.owning_phase, 'artifact-collection'); assert.match(result.observed_error, /missing.*codex:lead/)
-  assert.equal(result.definition_verdict, 'unavailable'); assert.match(result.residual_risk, /network access/)
+  assert.equal('definition_verdict' in result, false); assert.match(result.residual_risk, /network access/)
 })
 
 test('changed retained evidence invalidates reconciliation and audit checkpoints', async t => {
@@ -228,7 +228,7 @@ function missingJudges(calls) {
 const minimalInputs = async args => {
   const data = await loadJudgingInputs(args)
   data.inventory = { ...data.inventory, items: data.inventory.items.filter(x => x.class !== 'preference').slice(0, 2) }
-  data.rubric = { ...buildRubric(data.inventory), rubric_version: 999, pass_threshold: 70 }
+  data.rubric = { ...buildRubric(data.inventory), rubric_version: 999 }
   return data
 }
 test('INT-008 host rescore uses only manifest evidence, current evaluator inputs and original provenance', async t => {
@@ -243,7 +243,7 @@ test('INT-008 host rescore uses only manifest evidence, current evaluator inputs
   process.env.PATH = '' // No Docker, Runner, or other executable is available.
   t.after(() => { process.env.PATH = originalPath })
   const { result, exitCode } = await runEvaluation(options, { ...deps, sandbox: { start: () => { throw new Error('rescore must not dispatch') } }, inspect: () => { throw new Error('must not probe Runner') } })
-  assert.equal(exitCode, 0); assert.equal(result.evaluation_status, 'complete'); assert.equal(result.definition_verdict, 'fail')
+  assert.equal(exitCode, 0); assert.equal(result.evaluation_status, 'complete'); assert.ok(Number.isFinite(result.total)); assert.equal('definition_verdict' in result, false)
   assert.equal(result.rubric_version, 999); assert.deepEqual(result.series_identity, { rubric: 999 })
   assert.deepEqual(result.original.series_identity, original.series_identity); assert.deepEqual(result.original.candidate, original.candidate)
   assert.deepEqual(result.contamination_audit, original.contamination_audit)
@@ -254,7 +254,7 @@ test('INT-008 host rescore uses only manifest evidence, current evaluator inputs
   await assert.rejects(rescoreEvaluation({ ...options, runDir: join(f.options.runDir, '../tampered-rescore') }, deps), /evidence hash mismatch/)
 })
 // A committed copy of the suite whose evaluator inputs differ from the original
-// run: reviewed anchors and a calibrated, re-versioned rubric.
+// run: reviewed anchors and a re-versioned rubric.
 async function evaluatorSuite(t, rubricChange) {
   const { cp } = await import('node:fs/promises')
   const { createHash } = await import('node:crypto')
@@ -279,12 +279,12 @@ async function evaluatorSuite(t, rubricChange) {
 test('INT-008 rescore records the series identity of the real current evaluator inputs', async t => {
   const f = await fixture(t, 'capped'); await runEvaluation(f.options, f.deps)
   const original = JSON.parse(await readFile(join(f.options.runDir, 'result.json'), 'utf8'))
-  const suiteRoot = await evaluatorSuite(t, rubric => ({ ...rubric, rubric_version: rubric.rubric_version + 1, pass_threshold: 70 }))
+  const suiteRoot = await evaluatorSuite(t, rubric => ({ ...rubric, rubric_version: rubric.rubric_version + 1 }))
   const { inspectEvaluatorInputs } = await import('../evals/agent-runner/and-scene-define/lib/preflight.mjs')
   const { seriesIdentity } = await inspectEvaluatorInputs({ suiteRoot })
   const calls = []
   const { result, exitCode } = await rescoreEvaluation({ rescoreFrom: f.options.runDir, runDir: join(f.options.runDir, '../real-rescore'), suiteRoot }, { judges: missingJudges(calls), gateCommand: async () => ({ status: 1, stderr: 'invalid definition' }) })
-  assert.equal(exitCode, 0, result.observed_error); assert.equal(result.evaluation_status, 'complete'); assert.equal(result.definition_verdict, 'fail')
+  assert.equal(exitCode, 0, result.observed_error); assert.equal(result.evaluation_status, 'complete'); assert.ok(Number.isFinite(result.total))
   const rubricVersion = JSON.parse(await readFile(join(suiteRoot, 'rubric.json'), 'utf8')).rubric_version
   assert.equal(result.rubric_version, rubricVersion)
   assert.deepEqual(result.series_identity, seriesIdentity)
@@ -294,12 +294,12 @@ test('INT-008 rescore records the series identity of the real current evaluator 
   assert.deepEqual(result.original.series_identity, original.series_identity); assert.deepEqual(result.original.candidate, original.candidate)
   assert.equal(result.original.run_id, original.run_id)
   assert.ok(calls.includes('artifact-quality'))
-  // An uncalibrated current rubric is refused before any output or judge call.
-  const uncalibrated = await evaluatorSuite(t, rubric => ({ ...rubric, rubric_version: rubric.rubric_version + 1, pass_threshold: null }))
+  // A current rubric that still sets a pass threshold is refused before any output or judge call.
+  const thresholded = await evaluatorSuite(t, rubric => ({ ...rubric, rubric_version: rubric.rubric_version + 1, pass_threshold: 70 }))
   const before = calls.length
-  await assert.rejects(rescoreEvaluation({ rescoreFrom: f.options.runDir, runDir: join(f.options.runDir, '../uncalibrated-rescore'), suiteRoot: uncalibrated }, { judges: missingJudges(calls) }), /uncalibrated/)
+  await assert.rejects(rescoreEvaluation({ rescoreFrom: f.options.runDir, runDir: join(f.options.runDir, '../thresholded-rescore'), suiteRoot: thresholded }, { judges: missingJudges(calls) }), /pass threshold/)
   assert.equal(calls.length, before)
-  await assert.rejects(readFile(join(f.options.runDir, '../uncalibrated-rescore/run-state.json')), { code: 'ENOENT' })
+  await assert.rejects(readFile(join(f.options.runDir, '../thresholded-rescore/run-state.json')), { code: 'ENOENT' })
 })
 test('rescore refuses an original identity that is not the hash-protected or recorded one', async t => {
   const f = await fixture(t, 'capped'); await runEvaluation(f.options, f.deps)
@@ -338,7 +338,7 @@ test('INT-008 publication-only resume preserves completed result and never prefl
   delete f.deps.handlers
   Object.assign(f.deps, { judges: missingJudges(calls), loadInputs: minimalInputs, gateCommand: async () => ({ status: 1 }), publish: async () => { publications++; if (failPush) throw Object.assign(new Error('rejected push'), { publication: true, resumable: true }) } })
   const completed = await runEvaluation(f.options, f.deps)
-  assert.equal(completed.result.evaluation_status, 'complete'); assert.equal(completed.result.definition_verdict, 'fail'); assert.equal(completed.exitCode, 1)
+  assert.equal(completed.result.evaluation_status, 'complete'); assert.ok(Number.isFinite(completed.result.total)); assert.equal(completed.exitCode, 1)
   const saved = await readFile(join(f.options.runDir, 'result.json'), 'utf8'); const count = calls.length
   const state = JSON.parse(await readFile(join(f.options.runDir, 'run-state.json'), 'utf8'))
   assert.equal(state.phases.publication.units.phase.state, 'failed')

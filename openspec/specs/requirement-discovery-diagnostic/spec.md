@@ -1,5 +1,8 @@
-## ADDED Requirements
+# requirement-discovery-diagnostic Specification
 
+## Purpose
+TBD - created by archiving change eval-the-whole-workflow. Update Purpose after archive.
+## Requirements
 ### Requirement: Discovery ledger
 For each `mandatory` and `acceptable-alternative` inventory item, the suite SHALL record whether any agent turn in the simulated-user conversation asked about it, citing the exchange, and SHALL combine that with the item's coverage verdict into one outcome:
 
@@ -29,8 +32,9 @@ An eval-owned judge with a pinned profile SHALL decide the asked part from the s
 - **THEN** the job is retried and the uncited decision is not recorded
 
 ### Requirement: Non-scoring diagnostic
-The discovery ledger SHALL NOT change any score, gate, or `definition_verdict`. The result and report SHALL show the count of each outcome and each item's outcome, the ledger SHALL be included in the published result, and `--rescore-from` SHALL rebuild it.
+The discovery ledger SHALL NOT change any score or gate. The result and report SHALL show the count of each outcome and each item's outcome, the ledger SHALL be included in the published result, and `--rescore-from` SHALL rebuild it.
 
-#### Scenario: Ledger does not affect the verdict
+#### Scenario: Ledger does not affect the score
 - **WHEN** two runs have identical coverage, fidelity, and quality verdicts but different discovery outcomes
-- **THEN** they receive the same score and `definition_verdict`
+- **THEN** they receive the same score
+

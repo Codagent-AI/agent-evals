@@ -2,7 +2,12 @@ import assert from 'node:assert/strict'
 import { mkdtemp, readFile, writeFile, chmod, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+// Codex strict structured outputs reject a double quote or backslash in any
+// string literal, such as an enum value naming a criterion.
 export function assertStrictSchema(schema) {
+  for (const literal of [...(schema.enum ?? []), ...('const' in schema ? [schema.const] : [])]) {
+    if (typeof literal === 'string') assert.doesNotMatch(literal, /["\\]/, `schema string literal ${literal} has a quote or backslash`)
+  }
   if (schema.type === 'object') {
     assert.equal(schema.additionalProperties, false)
     assert.deepEqual([...schema.required].sort(), Object.keys(schema.properties).sort())

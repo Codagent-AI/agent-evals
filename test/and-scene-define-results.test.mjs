@@ -9,7 +9,7 @@ import { compareResults } from '../evals/agent-runner/and-scene-define/lib/compa
 import { publishRun, publicationEligibility } from '../evals/agent-runner/and-scene-define/lib/publication.mjs'
 async function temp(t) { const dir = await mkdtemp(join(tmpdir(), 'define-results-')); t.after(() => rm(dir, { recursive: true, force: true })); return dir }
 async function json(dir, path, value) { await mkdir(join(dir, path, '..'), { recursive: true }); await writeFile(join(dir, path), JSON.stringify(value)) }
-const core = { evaluation_status: 'complete', definition_verdict: 'fail', run_id: 'recorded', mode: 'candidate' }
+const core = { evaluation_status: 'complete', total: 42, run_id: 'recorded', mode: 'candidate' }
 test('results explain all statuses, retain detailed judgments and separate usage', async t => {
   const runDir = await temp(t)
   const score = { total: 42, components: { coverage: { score: 42 } }, coverage: [{ id: 'one', verdict: 'met', citations: ['proposal.md:1'] }], panel_records: [{ family: 'claude', basis: 'decider', targeted_checks: ['check'], decider: { verdict: 'met' } }], gates: [{ passed: false }], leaked_items: ['two'], added_scope: ['extra'] }
@@ -18,7 +18,7 @@ test('results explain all statuses, retain detailed judgments and separate usage
   await json(runDir, 'phases/workflow-metrics.json', { completeness: 'partial', cost: null })
   await writeFile(join(runDir, 'phases/eval-owned-usage.jsonl'), '{"cost":99}\n')
   for (const evaluation_status of ['complete', 'contaminated', 'definition-workflow-failed', 'evaluation-harness-failed']) {
-    const outcome = { ...core, evaluation_status, owning_phase: 'define-workflow', observed_error: '<script>alert(1)</script>', resumable: true }
+    const outcome = { run_id: core.run_id, mode: core.mode, evaluation_status, owning_phase: 'define-workflow', observed_error: '<script>alert(1)</script>', resumable: true }
     const result = await assembleResult({ runDir, outcome, checkpoint: { series_identity: { rubric: 1 }, candidate: { profiles: {} } } })
     assert.equal(result.evaluation_status, evaluation_status)
     assert.equal(result.observed_error, outcome.observed_error)
@@ -57,29 +57,32 @@ test('comparison pairs only identical series and lists all changed candidate com
 import { renderReport } from '../evals/agent-runner/and-scene-define/lib/report.mjs'
 test('report opens with a readable escaped headline before the full JSON', () => {
   const headline = html => html.slice(html.indexOf('<section class="headline"'), html.indexOf('</section>', html.indexOf('<section class="headline"')))
-  const complete = renderReport({ ...core, run_id: 'run<1>', definition_verdict: 'pass', total: 82.5, components: { coverage: { score: 50, points: 60 }, artifact_quality: { score: 20, points: 25 }, fidelity: { score: 12.5, points: 15 } },
+  const complete = renderReport({ ...core, run_id: 'run<1>', total: 82.5, components: { coverage: { score: 50, points: 60 }, artifact_quality: { score: 20, points: 25 }, fidelity: { score: 12.5, points: 15 } },
     gates: [{ id: 'gate:required-artifact:design', passed: true }, { id: 'gate:openspec-validate', passed: false, reason: '<b>invalid</b>' }], leaked_count: 2,
     discovery_ledger: { counts: { discovered: 3, inferred: 1, missed: 0, 'asked-not-captured': 2, leaked: 2 } }, excluded_graded_contradictions: [{ subject_id: 'INV-001' }] })
   const top = headline(complete)
-  for (const text of ['Evaluation status', 'complete', 'Definition verdict', 'pass', 'Total', '82.5 / 100', 'coverage', '50 / 60', 'artifact_quality', '20 / 25', 'fidelity', '12.5 / 15',
+  for (const text of ['Evaluation status', 'complete', 'Total', '82.5 / 100', 'coverage', '50 / 60', 'artifact_quality', '20 / 25', 'fidelity', '12.5 / 15',
     'gate:required-artifact:design', 'passed', 'gate:openspec-validate', 'failed', '&lt;b&gt;invalid&lt;/b&gt;', 'Leaked items', 'discovered', 'asked-not-captured', 'Excluded graded contradictions']) assert.ok(top.includes(text), text)
   assert.match(complete, /run&lt;1&gt;/); assert.doesNotMatch(complete, /run<1>|<b>invalid/)
   assert.ok(complete.indexOf('<section class="headline"') < complete.indexOf('<pre>'))
-  const failed = headline(renderReport({ ...core, evaluation_status: 'evaluation-harness-failed', definition_verdict: 'unavailable', owning_phase: 'gates-and-judging', observed_error: '<script>x</script>', resumable: true, total: null, components: null, gates: [], discovery_ledger: null }))
-  for (const text of ['evaluation-harness-failed', 'unavailable', 'gates-and-judging', '&lt;script&gt;x&lt;/script&gt;', 'Resumable', 'Not scored']) assert.ok(failed.includes(text), text)
+  // The score is the outcome; there is no pass/fail verdict to show.
+  assert.doesNotMatch(top, /verdict/i)
+  const failed = headline(renderReport({ ...core, evaluation_status: 'evaluation-harness-failed', owning_phase: 'gates-and-judging', observed_error: '<script>x</script>', resumable: true, total: null, components: null, gates: [], discovery_ledger: null }))
+  for (const text of ['evaluation-harness-failed', 'gates-and-judging', '&lt;script&gt;x&lt;/script&gt;', 'Resumable', 'Not scored']) assert.ok(failed.includes(text), text)
   assert.doesNotMatch(failed, /<script>/)
-  const uncalibrated = headline(renderReport({ ...core, definition_verdict: 'unavailable', verdict_unavailable: 'pass threshold not set (calibration pending)', total: 70, components: {} }))
-  assert.ok(uncalibrated.includes('pass threshold not set (calibration pending)'))
+  const unmeasured = headline(renderReport({ ...core, score_unavailable: 'every graded item leaked, so coverage cannot be measured', total: null, components: {} }))
+  assert.ok(unmeasured.includes('Not scored (every graded item leaked, so coverage cannot be measured)'))
 })
 test('comparison pairs only complete scored runs and lists the others as unscored', () => {
   const scored = { ...core, series_identity: { rubric: 1 }, candidate: { agent_skills_commit: 'a' }, total: 10 }
-  const failed = { ...scored, run_id: 'failed', evaluation_status: 'evaluation-harness-failed', definition_verdict: 'unavailable', total: 99, owning_phase: 'gates-and-judging' }
-  const contaminated = { ...scored, run_id: 'contaminated', evaluation_status: 'contaminated', definition_verdict: 'unavailable', total: null }
+  const failed = { ...scored, run_id: 'failed', evaluation_status: 'evaluation-harness-failed', total: 99, owning_phase: 'gates-and-judging' }
+  const contaminated = { ...scored, run_id: 'contaminated', evaluation_status: 'contaminated', total: null }
   const unscoredComplete = { ...scored, run_id: 'no-total', total: null }
-  const uncalibrated = { ...scored, run_id: 'uncalibrated', definition_verdict: 'unavailable', verdict_unavailable: 'pass threshold not set (calibration pending)', total: 70, candidate: { agent_skills_commit: 'b' } }
-  const report = compareResults([scored, failed, contaminated, unscoredComplete, uncalibrated])
-  assert.deepEqual(report.pairs.map(x => x.run_ids), [['recorded', 'uncalibrated']])
-  assert.equal(report.pairs[0].runs[1].definition_verdict, 'unavailable')
+  const other = { ...scored, run_id: 'other', total: 70, candidate: { agent_skills_commit: 'b' } }
+  const report = compareResults([scored, failed, contaminated, unscoredComplete, other])
+  assert.deepEqual(report.pairs.map(x => x.run_ids), [['recorded', 'other']])
+  assert.deepEqual(report.pairs[0].runs.map(x => x.total), [10, 70])
+  assert.equal('definition_verdict' in report.pairs[0].runs[0], false)
   assert.deepEqual(report.unscored.map(x => [x.run_id, x.evaluation_status]), [['failed', 'evaluation-harness-failed'], ['contaminated', 'contaminated'], ['no-total', 'complete']])
   assert.ok(report.unscored.every(x => x.reason))
   assert.equal(report.unscored[0].total, undefined)
@@ -136,17 +139,15 @@ test('result assembly retains valid usage and reports corrupt or truncated usage
   await writeResultArtifacts({ runDir, result })
   assert.match(await readFile(join(runDir, 'report.html'), 'utf8'), /eval_owned_usage_errors/)
 })
-test('an uncalibrated complete score has an unavailable verdict with its reason and is never publishable', async t => {
+test('a complete score is the result: no verdict field, and it is publishable only with a total', async t => {
   const runDir = await temp(t)
-  await json(runDir, 'judges/score.json', { evaluation_status: 'complete', definition_verdict: null, verdict_unavailable: 'pass threshold not set (calibration pending)', total: 81, components: { coverage: { score: 50, points: 60 } } })
-  for (const definition_verdict of [null, undefined, 'unavailable']) {
-    const result = await assembleResult({ runDir, outcome: { evaluation_status: 'complete', definition_verdict, resumable: false }, checkpoint: { kind: 'candidate', run_id: 'uncalibrated' } })
-    assert.equal(result.definition_verdict, 'unavailable')
-    assert.equal(result.verdict_unavailable, 'pass threshold not set (calibration pending)')
-    assert.equal(result.total, 81)
-    assert.equal(publicationEligibility(result), false)
-    assert.equal(publicationEligibility({ ...result, definition_verdict: null }), false)
-    await writeResultArtifacts({ runDir, result })
-    assert.match(await readFile(join(runDir, 'report.html'), 'utf8'), /pass threshold not set \(calibration pending\)/)
-  }
+  await json(runDir, 'judges/score.json', { evaluation_status: 'complete', total: 81, components: { coverage: { score: 50, points: 70 } }, gates: [{ id: 'gate:openspec-validate', passed: false }] })
+  const result = await assembleResult({ runDir, outcome: { evaluation_status: 'complete', resumable: false }, checkpoint: { kind: 'candidate', run_id: 'scored' } })
+  assert.equal(result.total, 81); assert.equal('definition_verdict' in result, false); assert.equal('verdict_unavailable' in result, false)
+  // A failed gate is reported and does not stop publication of the score.
+  assert.equal(result.gates[0].passed, false)
+  assert.equal(publicationEligibility(result), true)
+  assert.equal(publicationEligibility({ ...result, total: null, score_unavailable: 'every graded item leaked, so coverage cannot be measured' }), false)
+  await writeResultArtifacts({ runDir, result })
+  assert.match(await readFile(join(runDir, 'report.html'), 'utf8'), /81 \/ 100/)
 })

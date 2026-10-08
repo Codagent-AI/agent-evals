@@ -88,7 +88,6 @@ export function createJudgingPhases({ runDir, suiteRoot = SUITE_ROOT, getCheckpo
       const excluded_graded_contradictions = records.filter(x => x.kind === 'fidelity').flatMap(x => excludedGradedContradictions(x.record))
       const scored = { ...scoreDefinition({ rubric: data.rubric, coverage, quality, fidelity, leaked: audit.leaked_items, gates: gateRecord.gates }), judge_authority: JUDGE_PROFILE, panel_protocol: PANEL_PROTOCOL, panel_records: records, disclosure_audit: audit, added_scope, excluded_graded_contradictions }
       const target = join(runDir, 'judges/score.json'); await writeJsonAtomic(target, scored)
-      setCheckpoint({ ...getCheckpoint(), definition_verdict: scored.definition_verdict }); await persist()
       return [...outputs, target]
     },
     discovery: async () => {

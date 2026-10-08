@@ -121,7 +121,7 @@ test('INT-001: actual conversation fsync precedes publication; stop in write-ahe
 
 test('INT-001: stub claude replays a clean recorded whole-turn response across steps', { timeout: 60000 }, async t => {
   const dirs = await setup(t)
-  const poc = 'openspec/changes/eval-the-whole-workflow/poc/runs/codex-20261004T023437Z'
+  const poc = 'openspec/changes/archive/2026-10-08-eval-the-whole-workflow/poc/runs/codex-20261004T023437Z'
   const conversation = JSON.parse(await readFile(join(poc, 'conversation.json'), 'utf8'))
   const exchanges = conversation.exchanges
   const recorded = await readFile(join(poc, 'turns/02-simuser.stdout.jsonl'), 'utf8')

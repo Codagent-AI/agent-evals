@@ -11,17 +11,18 @@ export const DEFINITION_SCOPE_RULE = [
 ].join('\n')
 const object = properties => ({ type: 'object', additionalProperties: false, properties, required: Object.keys(properties) })
 const string = { type: 'string' }
-const strings = { type: 'array', items: string }
 export const CITATION_SCHEMA = object({ path: { type: ['string', 'null'] }, start_line: { type: ['integer', 'null'] }, end_line: { type: ['integer', 'null'] }, gate: { type: ['string', 'null'] }, exchange: { type: ['string', 'null'] } })
 const citations = { type: 'array', items: CITATION_SCHEMA }
 const addedScope = { type: 'array', items: object({ description: string, citations }) }
 export function judgeSchema(ids) {
-  return object({ results: { type: 'array', items: object({ id: { type: 'string', enum: ids }, verdict: { type: 'string', enum: ['met', 'partial', 'missing'] }, rationale: string, evidence: strings, citations, subject_id: { type: ['string', 'null'] }, added_scope: addedScope }) } })
+  return object({ results: { type: 'array', items: object({ id: { type: 'string', enum: ids }, verdict: { type: 'string', enum: ['met', 'partial', 'missing'] }, rationale: string, evidence: { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } }, citations, subject_id: { type: ['string', 'null'] }, added_scope: addedScope }) } })
 }
 export function discoverySchema(ids) {
   return object({ results: { type: 'array', items: object({ id: { type: 'string', enum: ids }, asked: { type: 'boolean' }, rationale: string, citations }) } })
 }
-export const exchangeIdentity = x => JSON.stringify([x.step, x.step_id, x.attempt, x.turn])
+// Exchange identities appear in criterion ids, which strict judge schemas list as
+// enum values; Codex rejects quotes and backslashes there, so each part is encoded.
+export const exchangeIdentity = x => [x.step, x.step_id, x.attempt, x.turn].map(part => encodeURIComponent(String(part))).join('/')
 export function makeJobs({ inventory, rubric, artifacts, conversation, gates, reference = [], policy = '' }) {
   const graded = inventory.items.filter(x => x.class !== 'preference')
   const jobs = [...new Set(graded.map(x => x.area))].map(area => {
@@ -39,7 +40,7 @@ export function makeJobs({ inventory, rubric, artifacts, conversation, gates, re
 }
 const rules = {
   coverage: 'Judge each mandatory item against its statement and anchors, each acceptable-alternative against intent and anchors only. Capture requires commitment in a specification requirement or scenario, design decision, or proposal scope statement. A passing mention or test-plan-only mention does not capture it. Scope-exclusion items are met when excluded scope is absent, with no explicit exclusion required.',
-  quality: 'Judge only observable and testable scenarios, cross-artifact consistency, design rationale, and test-plan coverage. Different organization is never a fault. An explicit open question never scores below silent omission. The hidden reference and inventory are not inputs.',
+  quality: 'Judge only the quality criteria given. For each criterion, first list in evidence every instance you found (each failing scenario by heading, each contradiction citing both sides, each decision without a reason, each requirement without a planned check), then give the verdict its met, partial and missing counts select. Judge what the artifacts state, not how well they are written. Different organization is never a fault. An explicit open question never scores below silent omission. The hidden reference and inventory are not inputs.',
   fidelity: 'For each exchange, met means an artifact contradicts a simulated-user answer about a preference item or a matter outside the graded inventory; missing means no such contradiction. Partial is invalid. Cite both artifact line spans and exactly that exchange. subject_id must be the preference id or null for an outside-inventory matter. Never deduct a contradiction of coverage_owned_matters: these are an exclusion list, not fidelity criteria. Coverage owns them. If an answer is not clearly outside that list and is not a preference, make no deduction. Added scope alone is not a deduction; list added_scope with artifact citations as a diagnostic.',
   disclosure: 'Audit every reply against the agent turn it answered and the preceding conversation, reference, and policy. For leak:ID, met means a reply disclosed that graded item without being asked; missing means no leak; partial is invalid. Cite the exchange for a leak. For inconsistent-withholding and contradiction criteria, met means that flag applies at that exchange, missing means it does not. These flags are report-only. A single valid flag is a backed dissent. subject_id is the item id for leaks and null otherwise.',
   discovery: 'Decide only whether any agent_message asked about each item. asked=true requires a cited exchange. Capturing the item is not your judgment; coverage supplies that separately.',
@@ -47,7 +48,7 @@ const rules = {
 export function jobPrompt(job) {
   const lineNumbered = Object.fromEntries(Object.entries(job.inputs.artifacts ?? {}).map(([path, text]) => [path, text.split('\n').map((line, n) => `${n + 1}: ${line}`).join('\n')]))
   return [DEFINITION_SCOPE_RULE, rules[job.kind],
-    'met/partial findings cite {path,start_line,end_line,gate:null,exchange:null}. Missing coverage/quality findings cite inspected collected file names (null line numbers), or a failed required-artifact gate. Every other field is null unless it is the citation target. Fidelity needs both a line span and its exchange. Discovery and disclosure flags need exchange identities. No citations may refer to hidden inputs. Supply every criterion exactly once. Use empty added_scope unless this is fidelity.',
+    'met/partial findings cite {path,start_line,end_line,gate:null,exchange:null}. Missing coverage/quality findings cite inspected collected file names (null line numbers), or a failed required-artifact gate. Every other field is null unless it is the citation target. A citation path is exactly a key of artifacts; source-quote documents are reference paths, never citation paths. Fidelity deductions cite the line span and the exchange as two separate citations: {path,start_line,end_line,gate:null,exchange:null} and {path:null,start_line:null,end_line:null,gate:null,exchange}. Discovery and disclosure flags need exchange identities. No citations may refer to hidden inputs. Supply every criterion exactly once. Every verdict, including missing fidelity findings, gives at least one evidence sentence stating what was checked. Use empty added_scope unless this is fidelity.',
     '# BEGIN UNTRUSTED JOB INPUTS', JSON.stringify({ ...job.inputs, ...(job.inputs.artifacts ? { artifacts: lineNumbered } : {}), conversation: job.inputs.conversation?.map(x => ({ ...x, exchange_identity: exchangeIdentity(x) })) }), '# END UNTRUSTED JOB INPUTS',
     `Criteria: ${JSON.stringify(job.criteria)}`].join('\n')
 }
@@ -108,10 +109,23 @@ export function excludedGradedContradictions(record) {
 }
 // Drop-and-keep: each citation is validated on its own; invalid ones are
 // removed and recorded, and the verdict's requirements apply to those kept.
+// Judges often cite an artifact and an exchange in one object. It names two
+// targets, so it is split into one citation per target before validation.
+function splitTargets(citation) {
+  if (!citation || typeof citation !== 'object' || citation.path == null || citation.exchange == null || citation.gate !== null) return [citation]
+  return [{ ...citation, exchange: null }, { path: null, start_line: null, end_line: null, gate: null, exchange: citation.exchange }]
+}
+// Item source quotes name reference documents under openspec/changes/<change>/,
+// and judges sometimes copy that directory into a citation path. The prefix is
+// removed only when what remains is a collected file.
+function collectedPath(citation, inputs) {
+  const relative = typeof citation?.path === 'string' && !Object.hasOwn(inputs.artifacts ?? {}, citation.path) && citation.path.match(/^openspec\/changes\/[^/]+\/(.+)$/)?.[1]
+  return relative && Object.hasOwn(inputs.artifacts ?? {}, relative) ? { ...citation, path: relative } : citation
+}
 function keepValidCitations(citations, inputs) {
   if (!Array.isArray(citations)) bad('missing citations')
   const kept = []; const dropped = []
-  for (const citation of citations) {
+  for (const citation of citations.flatMap(splitTargets).map(c => collectedPath(c, inputs))) {
     try { validateCitation(citation, inputs); kept.push(citation) }
     catch (error) { if (!(error instanceof JudgeOutputError)) throw error; dropped.push({ citation, reason: error.message }) }
   }

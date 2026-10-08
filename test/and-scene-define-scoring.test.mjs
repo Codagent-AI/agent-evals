@@ -7,7 +7,7 @@ import { buildRubric, checkRubric, verifyJudgingInputs, rubricSettings, RUBRIC_S
 import { checkVersions } from '../evals/agent-runner/and-scene-define/lib/versions.mjs'
 import { checkInventory } from '../evals/agent-runner/and-scene-define/lib/inventory.mjs'
 import { scoreDefinition, discoveryLedger } from '../evals/agent-runner/and-scene-define/lib/scoring.mjs'
-import { runDefinitionPanel, judgeSchema, exchangeIdentity, makeJobs } from '../evals/agent-runner/and-scene-define/lib/judge-jobs.mjs'
+import { runDefinitionPanel, judgeSchema, discoverySchema, exchangeIdentity, makeJobs, jobPrompt } from '../evals/agent-runner/and-scene-define/lib/judge-jobs.mjs'
 import { assertStrictSchema } from './and-scene-define-helpers.mjs'
 const root = 'evals/agent-runner/and-scene-define'
 const inventory = JSON.parse(await readFile(join(root, 'hidden/inventory.json'), 'utf8'))
@@ -25,7 +25,7 @@ function members(votes, deciderVote = null, check = 'confirmed', calls = []) {
     return JSON.stringify({ results: req.criteria.map(id => req.audit_stage ? { id, classification: check, rationale: 'Checked the commitment.', evidence: ['source'] } : result(id, deciderVote)) })
   } } }
 }
-test('anchors and generated rubric are pinned; preflight refuses review and calibration gaps', async () => {
+test('anchors and generated rubric are pinned; preflight refuses review gaps and needs no pass threshold', async () => {
   assert.deepEqual(inventory.anchors_review, { reviewer: 'Paul Caplan', date: '2026-10-06', inventory_version: 5 })
   assert.equal(inventory.inventory_version, 5)
   assert.deepEqual(await checkInventory(), [])
@@ -39,7 +39,8 @@ test('anchors and generated rubric are pinned; preflight refuses review and cali
   assert.ok(checkRubric(stale, inventory).length)
   assert.throws(() => verifyJudgingInputs({ inventory: { ...inventory, anchors_review: null }, rubric }), /anchors need review/)
   assert.throws(() => verifyJudgingInputs({ inventory: { ...inventory, anchors_review: { ...inventory.anchors_review, inventory_version: 4 } }, rubric }), /anchors need review/)
-  assert.throws(() => verifyJudgingInputs({ inventory, rubric }), /calibration must set/)
+  assert.doesNotThrow(() => verifyJudgingInputs({ inventory, rubric }))
+  assert.throws(() => verifyJudgingInputs({ inventory, rubric: { ...rubric, pass_threshold: 70 } }), /must not set a pass threshold/)
   assert.throws(() => verifyJudgingInputs({ inventory, rubric: { ...rubric, inventory_version: 1 } }), /inventory version/)
 })
 for (const [votes, ruling, classification, expected, basis, extra] of [
@@ -101,15 +102,17 @@ test('missing design cites absence gate without retry', async () => {
   const outcome = await runDefinitionPanel({ job: { ...job, inputs: { ...inputs, gates: [{ id: 'gate:required-artifact:design', passed: false }] } }, ...judges })
   assert.equal(outcome.ok, true); assert.equal(calls.length, 3)
 })
-test('deterministic score excludes leaks, charges fidelity once, gates fail and discovery cannot change scores', () => {
-  const rubric = { ...buildRubric(inventory), pass_threshold: 70 }
+test('deterministic score excludes leaks, charges fidelity once, reports gates and discovery without changing scores', () => {
+  const rubric = buildRubric(inventory)
   const coverage = rubric.coverage.map(x => result(x.id, 'met'))
   const leaked = [coverage[0].id]
   const quality = rubric.quality.map(x => result(x.id, 'met'))
   const fidelity = [result('fidelity:exchange', 'met')]
   const scored = scoreDefinition({ rubric, coverage, quality, fidelity, leaked, gates: [{ passed: false }] })
-  assert.equal(scored.evaluation_status, 'complete'); assert.equal(scored.definition_verdict, 'fail')
-  assert.equal(scored.components.coverage.score, 60); assert.equal(scored.components.coverage.possible, 94)
+  // The score is the result: no pass/fail verdict, and a failed gate is reported without changing points.
+  assert.equal(scored.evaluation_status, 'complete'); assert.equal(scored.definition_verdict, undefined)
+  assert.deepEqual(scored.gates, [{ passed: false }])
+  assert.equal(scored.components.coverage.score, 70); assert.equal(scored.components.coverage.possible, 94)
   assert.equal(scored.components.fidelity.score, 12); assert.equal(scored.total, 97)
   // Identical verdicts with opposite discovery decisions: the ledgers differ,
   // but neither ledger alters the score or the scored coverage it reads.
@@ -123,21 +126,21 @@ test('deterministic score excludes leaks, charges fidelity once, gates fail and 
   const rescored = scoreDefinition({ rubric, coverage, quality, fidelity, leaked, gates: [{ passed: false }] })
   assert.deepEqual(rescored, scored)
   assert.equal(rescored.total, snapshot.total); assert.deepEqual(rescored.components, snapshot.components)
-  assert.equal(scoreDefinition({ rubric, coverage, quality, fidelity: [], leaked: [], gates: [] }).definition_verdict, 'pass')
+  assert.equal(scoreDefinition({ rubric, coverage, quality, fidelity, leaked, gates: [{ passed: true }] }).total, scored.total)
 })
-test('a run where every graded item leaked has no coverage score and no verdict unless a gate failed', () => {
-  const rubric = { ...buildRubric(inventory), pass_threshold: 70 }
+test('a run where every graded item leaked has no coverage score and no total, with the reason', () => {
+  const rubric = buildRubric(inventory)
   const coverage = rubric.coverage.map(x => result(x.id, 'met'))
   const quality = rubric.quality.map(x => result(x.id, 'met'))
   const leaked = coverage.map(x => x.id)
   const scored = scoreDefinition({ rubric, coverage, quality, fidelity: [], leaked, gates: [{ passed: true }] })
   assert.equal(scored.evaluation_status, 'complete')
-  assert.equal(scored.definition_verdict, null)
-  assert.match(scored.verdict_unavailable, /every graded item leaked/)
+  assert.equal(scored.definition_verdict, undefined)
+  assert.match(scored.score_unavailable, /every graded item leaked/)
   assert.equal(scored.components.coverage.score, null); assert.equal(scored.components.coverage.possible, 0)
   assert.equal(scored.total, null)
-  assert.equal(scored.components.artifact_quality.score, 25)
-  assert.equal(scoreDefinition({ rubric, coverage, quality, fidelity: [], leaked, gates: [{ passed: false }] }).definition_verdict, 'fail')
+  assert.equal(scored.components.artifact_quality.score, 15)
+  assert.equal(scoreDefinition({ rubric, coverage, quality, fidelity: [], leaked, gates: [{ passed: false }] }).total, null)
 })
 test('quality inputs contain no hidden material; fidelity excludes graded subjects without failing and requires matching exchange', async () => {
   const exchange = { step: 'define.specs', step_id: 'specs', attempt: 1, turn: 1, agent_message: 'Style?', reply: 'Blue', reply_type: 'answer' }
@@ -178,7 +181,7 @@ async function phaseFixture(t) {
   await mkdir(join(runDir, 'collected'))
   await writeFile(join(runDir, 'collected/proposal.md'), inputs.artifacts['proposal.md'])
   const subset = { ...inventory, items: inventory.items.filter(x => x.class !== 'preference').slice(0, 5) }
-  const rubric = { ...buildRubric(subset), pass_threshold: 70 }
+  const rubric = buildRubric(subset)
   let checkpoint = createCheckpoint({ run_id: 'test', identity: { series_identity: { fixture: 'test' } } })
   const calls = []; let failure = false
   let override = null
@@ -227,7 +230,7 @@ test('INT-003 lifecycle neutralizes settled leaks, records flags and scores abse
   assert.ok(audit.flags.some(x => x.type === 'inconsistent-withholding'))
   assert.ok(audit.panel.checks.some(x => x.stage === 'dissent-check'))
   assert.ok(audit.panel.rulings.length)
-  assert.equal(scored.definition_verdict, 'fail'); assert.equal(scored.evaluation_status, 'complete')
+  assert.equal(scored.definition_verdict, undefined); assert.equal(scored.evaluation_status, 'complete')
   assert.equal(scored.components.fidelity.score, 15)
   assert.equal(scored.components.coverage.possible, 3)
   assert.equal(scored.coverage.filter(x => x.verdict === 'leaked').length, 3)
@@ -266,23 +269,18 @@ test('gate execution failures are harness failures; invalid definitions remain d
   assert.equal(gates.at(-1).passed, true)
 })
 
-test('failed gates retain complete/fail diagnostics without a calibrated threshold', () => {
+test('a failed gate is reported beside the full score and never replaces it with a verdict', () => {
   const rubric = buildRubric(inventory)
   const data = { rubric, coverage: rubric.coverage.map(x => result(x.id, 'met')), quality: rubric.quality.map(x => result(x.id, 'met')), fidelity: [] }
   for (const id of ['gate:required-artifact:design', 'gate:openspec-validate']) {
     const scored = scoreDefinition({ ...data, gates: [{ id, passed: false }] })
     assert.equal(scored.evaluation_status, 'complete')
-    assert.equal(scored.definition_verdict, 'fail')
-    assert.equal(scored.total, 100)
+    assert.equal(scored.definition_verdict, undefined); assert.equal(scored.verdict_unavailable, undefined)
+    assert.deepEqual(scored.gates, [{ id, passed: false }])
+    assert.equal(scored.total, 100); assert.equal(scored.components.coverage.score, 70)
   }
-  // Calibration scores inputs before a threshold exists: no verdict, full breakdown.
-  const uncalibrated = scoreDefinition({ ...data, gates: [{ passed: true }] })
-  assert.equal(uncalibrated.evaluation_status, 'complete')
-  assert.equal(uncalibrated.definition_verdict, null)
-  assert.match(uncalibrated.verdict_unavailable, /pass threshold not set \(calibration pending\)/)
-  assert.equal(uncalibrated.total, 100); assert.equal(uncalibrated.components.coverage.score, 60)
-  const calibrated = scoreDefinition({ ...data, rubric: { ...rubric, pass_threshold: 70 }, gates: [{ passed: true }] })
-  assert.equal(calibrated.definition_verdict, 'pass'); assert.equal(calibrated.verdict_unavailable, undefined)
+  // A rubric has no pass threshold to set.
+  assert.equal('pass_threshold' in rubric, false)
 })
 test('rubric pins concrete quality, fidelity and reference-shape examples', () => {
   const rubric = buildRubric(inventory)
@@ -295,34 +293,37 @@ test('rubric pins concrete quality, fidelity and reference-shape examples', () =
   assert.ok(rubric.guidance[0].includes('Example:'))
   assert.ok(rubric.guidance[1].includes('Example:'))
 })
-test('committed rubric pins provisional settings and calibration limits as defaults', async () => {
+test('committed rubric records the approved settings and calibration limits', async () => {
   const rubric = JSON.parse(await readFile(join(root, 'rubric.json'), 'utf8'))
-  assert.deepEqual(rubric.components, { coverage: 60, artifact_quality: 25, fidelity: 15 })
+  assert.deepEqual(rubric.components, { coverage: 70, artifact_quality: 15, fidelity: 15 })
   assert.deepEqual(rubric.weights, { mandatory: 2, 'acceptable-alternative': 1 })
-  assert.ok(rubric.quality.every(x => x.points === 6.25))
+  assert.ok(rubric.quality.every(x => x.points === 3))
   assert.equal(rubric.fidelity.deduction_per_exchange, 3)
-  assert.equal(rubric.pass_threshold, null)
+  assert.equal('pass_threshold' in rubric, false)
   assert.equal(rubric.calibration.restructured_tolerance_items, 3)
   assert.equal(rubric.calibration.max_spread, 5)
-  assert.equal(rubric.calibration.provisional, true)
-  assert.match(rubric.calibration.note, /provisional/i)
-  assert.deepEqual(rubricSettings(rubric), { ...RUBRIC_SETTINGS_DEFAULTS, rubric_version: rubric.rubric_version, quality_points: rubricSettings(rubric).quality_points })
+  // Approved by the maintainer (HT-002) after the E2E-003 calibration; otherwise the defaults.
+  assert.equal(rubric.provisional, false); assert.equal(rubric.calibration.provisional, false)
+  assert.match(rubric.calibration.note, /HT-002/); assert.match(rubric.calibration.note, /score only/)
+  assert.equal(rubric.calibration_evidence.calibration_run, '2026-10-07-e2e-003-r7')
+  assert.deepEqual(rubricSettings(rubric), { ...RUBRIC_SETTINGS_DEFAULTS, rubric_version: rubric.rubric_version, provisional: false, quality_points: rubricSettings(rubric).quality_points,
+    calibration: rubric.calibration, calibration_evidence: rubric.calibration_evidence })
   assert.deepEqual(checkRubric(rubric, inventory), [])
   assert.deepEqual(await checkVersions(), [])
 })
-test('recorded calibrated settings round-trip while coverage criteria stay generated from the inventory', () => {
-  const quality_points = Object.fromEntries(buildRubric(inventory).quality.map((x, n) => [x.id, [10, 8, 6, 6][n]]))
+test('recorded settings round-trip while coverage criteria stay generated from the inventory', () => {
+  const quality_points = Object.fromEntries(buildRubric(inventory).quality.map((x, n) => [x.id, [10, 8, 6, 3, 3][n]]))
   const settings = { rubric_version: 4, provisional: true, components: { coverage: 50, artifact_quality: 30, fidelity: 20 }, weights: { mandatory: 3, 'acceptable-alternative': 1.5 }, quality_points,
     fidelity: { deduction_per_exchange: 4, floor: 2 }, calibration: { restructured_tolerance_items: 4, max_spread: 6, provisional: false, note: 'Calibrated by E2E-003.', expected_fail: ['variant-a'], approval: 'awaiting HT-002' },
-    pass_threshold: 72, calibration_evidence: { report: 'calibration/run/report.html', input_hashes: { reference: 'abc' } } }
+    calibration_evidence: { report: 'calibration/run/report.html', input_hashes: { reference: 'abc' } } }
   const rubric = buildRubric(inventory, settings)
   assert.deepEqual(checkRubric(rubric, inventory), [])
   assert.deepEqual(rubricSettings(rubric), settings)
   assert.equal(rubric.coverage.find(x => x.class === 'mandatory').weight, 3)
   assert.equal(rubric.coverage.find(x => x.class === 'acceptable-alternative').weight, 1.5)
-  assert.deepEqual(rubric.quality.map(x => x.points), [10, 8, 6, 6])
+  assert.deepEqual(rubric.quality.map(x => x.points), [10, 8, 6, 3, 3])
   assert.equal(rubric.fidelity.deduction_per_exchange, 4); assert.equal(rubric.fidelity.floor, 2)
-  assert.equal(rubric.pass_threshold, 72); assert.equal(rubric.calibration.approval, 'awaiting HT-002')
+  assert.equal(rubric.calibration.approval, 'awaiting HT-002')
   // Scoring follows the recorded settings.
   const scored = scoreDefinition({ rubric, coverage: rubric.coverage.map(x => result(x.id, 'met')), quality: rubric.quality.map(x => result(x.id, 'met')), fidelity: [result('fidelity:a', 'met')], gates: [] })
   assert.equal(scored.components.coverage.score, 50); assert.equal(scored.components.artifact_quality.score, 30); assert.equal(scored.components.fidelity.score, 16)
@@ -340,7 +341,7 @@ test('recorded calibrated settings round-trip while coverage criteria stay gener
     [r => { r.fidelity.deduction_per_exchange = -1 }, /deduction/],
     [r => { r.calibration.max_spread = -1 }, /max_spread/],
     [r => { r.calibration.restructured_tolerance_items = 'many' }, /restructured_tolerance_items/],
-    [r => { r.pass_threshold = 120 }, /threshold/],
+    [r => { r.pass_threshold = 70 }, /pass threshold/],
   ]) {
     const bad = structuredClone(rubric); change(bad)
     assert.ok(checkRubric(bad, inventory).some(x => pattern.test(x)), String(pattern))
@@ -385,4 +386,47 @@ test('a coverage job with one disputed item sends the decider only that item, in
   assert.equal(outcome.ok, true, outcome.record.error)
   assert.deepEqual(seen.map(req => req.schema.properties.results.items.properties.id.enum), [[first.id]])
   assert.deepEqual(outcome.results.map(r => [r.id, r.basis]), [[first.id, 'decider-met'], [second.id, 'consensus-met']])
+})
+test('every judging job with a conversation has a strict schema Codex accepts', () => {
+  const jobs = makeJobs({ inventory, rubric: buildRubric(inventory), artifacts: inputs.artifacts, conversation: [exchange], gates: [] })
+  assert.ok(jobs.some(job => job.kind === 'fidelity') && jobs.some(job => job.kind === 'disclosure'))
+  for (const job of jobs) assertStrictSchema(job.kind === 'discovery' ? discoverySchema(job.criteria) : judgeSchema(job.criteria))
+  assert.equal(exchangeIdentity(exchange), 'define.specs/specs/1/1')
+})
+test('every verdict, including a fidelity finding of no contradiction, must carry evidence', () => {
+  const jobs = makeJobs({ inventory, rubric: buildRubric(inventory), artifacts: inputs.artifacts, conversation: [exchange], gates: [] })
+  const fidelity = jobs.find(job => job.kind === 'fidelity')
+  assert.deepEqual(judgeSchema(fidelity.criteria).properties.results.items.properties.evidence, { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } })
+  assert.match(jobPrompt(fidelity), /including missing fidelity findings, gives at least one evidence sentence/)
+})
+test('a fidelity deduction citing its line span and exchange in one citation is split into both and scored', async () => {
+  const jobs = makeJobs({ inventory, rubric: buildRubric(inventory), artifacts: inputs.artifacts, conversation: [exchange], gates: [] })
+  const fidelity = jobs.find(x => x.kind === 'fidelity')
+  assert.match(jobPrompt(fidelity), /Fidelity deductions cite the line span and the exchange as two separate citations/)
+  const preference = inventory.items.find(x => x.class === 'preference')
+  const judges = members(['met', 'met', 'met'])
+  // Judges often put the span and its exchange in one object; it names two targets.
+  for (const judge of judges.panel) judge.invoke = async req => JSON.stringify({ results: req.criteria.map(id => ({ ...result(id, 'met', [{ ...citation, exchange: exchangeIdentity(exchange) }]), subject_id: preference.id })) })
+  const outcome = await runDefinitionPanel({ job: fidelity, ...judges })
+  assert.equal(outcome.ok, true, JSON.stringify(outcome.failure))
+  assert.equal(outcome.results[0].verdict, 'met')
+  assert.ok(outcome.record.votes.every(v => JSON.stringify(v.citations) === JSON.stringify([citation, exchangeCitation]) && v.dropped_citations === undefined))
+  // Each half is still validated on its own: a wrong exchange is dropped, leaving no matching exchange.
+  for (const judge of judges.panel) judge.invoke = async req => JSON.stringify({ results: req.criteria.map(id => ({ ...result(id, 'met', [{ ...citation, exchange: 'wrong' }]), subject_id: preference.id })) })
+  assert.equal((await runDefinitionPanel({ job: fidelity, ...judges })).ok, false)
+})
+test('a citation path carrying the reference change directory resolves to the collected file it names', async () => {
+  assert.match(jobPrompt(job), /A citation path is exactly a key of artifacts/)
+  const judges = members(['met', 'met', 'met'])
+  // Item source quotes name reference documents under openspec/changes/<change>/; judges sometimes copy that prefix.
+  const prefixed = { ...citation, path: `openspec/changes/create-and-scene/${citation.path}` }
+  for (const judge of judges.panel) judge.invoke = async req => JSON.stringify({ results: req.criteria.map(id => result(id, 'met', [prefixed])) })
+  const outcome = await runDefinitionPanel({ job, ...judges })
+  assert.equal(outcome.ok, true, JSON.stringify(outcome.failure))
+  assert.ok(outcome.record.votes.every(v => JSON.stringify(v.citations) === JSON.stringify([citation])))
+  // Only that prefix is removed, and only when what remains is a collected file.
+  for (const path of ['openspec/changes/create-and-scene/missing.md', `other/${citation.path}`, `openspec/${citation.path}`]) {
+    for (const judge of judges.panel) judge.invoke = async req => JSON.stringify({ results: req.criteria.map(id => result(id, 'met', [{ ...citation, path }])) })
+    assert.equal((await runDefinitionPanel({ job, ...judges })).ok, false, path)
+  }
 })

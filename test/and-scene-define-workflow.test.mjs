@@ -46,7 +46,7 @@ test('mount preflight inspects build and command containers, modes, and environm
   assert.throws(() => verifyMountPlan(command.replace(' image', ' --env-file /secrets image'), options), /env-file/)
 })
 test('collection freezes files and records SHA-256 and HEAD', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'define-collection-')); t.after(() => rm(root, { recursive: true, force: true }))
+  const root = await mkdtemp(join(tmpdir(), 'define-collection-')); t.after(() => rm(root, { recursive: true, force: true, maxRetries: 3 }))
   const repo = join(root, 'repo'); const change = join(repo, 'openspec/changes/add-presentation-skill')
   await mkdir(change, { recursive: true }); await writeFile(join(change, 'proposal.md'), 'proposal')
   repoGit(repo, ['init', '--initial-branch=main']); repoGit(repo, ['add', '.']); repoGit(repo, ['commit', '-m', 'test: fixture'])
@@ -77,7 +77,7 @@ test('sandbox driver creates the pinned repository, preserves all CLI sessions, 
   const { readlink } = await import('node:fs/promises')
   const { materialize } = await import('../evals/agent-runner/and-scene-define/lib/starting-repo.mjs')
   const { stageRuntime } = await import('../evals/agent-runner/and-scene-define/lib/sandbox.mjs')
-  const root = await mkdtemp(join(tmpdir(), 'define-driver-')); t.after(() => rm(root, { recursive: true, force: true }))
+  const root = await mkdtemp(join(tmpdir(), 'define-driver-')); t.after(() => rm(root, { recursive: true, force: true, maxRetries: 3 }))
   const starting = await materialize(join(root, 'starting'))
   const input = join(root, 'input'); const home = join(root, 'home'); const artifacts = join(root, 'sandbox'); const bin = join(root, 'bin'); const skills = join(root, 'skills')
   for (const dir of [home, bin, skills]) await mkdir(dir)
@@ -101,7 +101,7 @@ test('sandbox driver creates the pinned repository, preserves all CLI sessions, 
 async function preflightFixture(t) {
   const { cp } = await import('node:fs/promises')
   const { SUITE_ROOT } = await import('../evals/agent-runner/and-scene-define/lib/files.mjs')
-  const root = await mkdtemp(join(tmpdir(), 'define-pins-')); t.after(() => rm(root, { recursive: true, force: true }))
+  const root = await mkdtemp(join(tmpdir(), 'define-pins-')); t.after(() => rm(root, { recursive: true, force: true, maxRetries: 3 }))
   const runner = join(root, 'runner'); const skills = join(root, 'skills'); const suite = join(root, 'suite'); const home = join(root, 'home')
   for (const dir of [join(runner, 'workflows/openspec'), join(runner, 'workflows/core'), join(skills, '.claude-plugin'), join(skills, '.codex-plugin'), join(skills, '.cursor-plugin'), join(home, '.codex'), join(home, '.cursor')]) await mkdir(dir, { recursive: true })
   await writeFile(join(runner, 'workflows/openspec/change-v2.0.yaml'), 'steps:\n  - id: create\n  - id: define\n    workflow: ../core/define-change-v1.0.yaml\n')
@@ -129,7 +129,10 @@ test('a Claude agent without a credentials file is forwarded a setup-token inste
   const { inspectInputs } = await import('../evals/agent-runner/and-scene-define/lib/preflight.mjs')
   const { runner, skills, suite, home, command } = await preflightFixture(t)
   const claudeProfiles = { ...profiles, crosscheck: { cli: 'claude', model: 'claude-opus-5-5', effort: 'high' } }
-  const inputs = { profiles: claudeProfiles, runnerDir: runner, skillsDir: skills, suiteRoot: suite, home, dryRun: true, command, rubricChecks: async () => {} }
+  // The token is relied on only when the Runner's sandbox help says it forwards it.
+  const forwarding = (name, args) => ({ ...command(name, args), stdout: `${command(name, args).stdout} CLAUDE_CODE_OAUTH_TOKEN` })
+  await assert.rejects(inspectInputs({ profiles: claudeProfiles, runnerDir: runner, skillsDir: skills, suiteRoot: suite, home, dryRun: true, command, rubricChecks: async () => {}, env: { CLAUDE_CODE_OAUTH_TOKEN: 'token-value' } }), /sandbox capability: .*does not forward CLAUDE_CODE_OAUTH_TOKEN/)
+  const inputs = { profiles: claudeProfiles, runnerDir: runner, skillsDir: skills, suiteRoot: suite, home, dryRun: true, command: forwarding, rubricChecks: async () => {} }
   const inspected = await inspectInputs({ ...inputs, env: { CLAUDE_CODE_OAUTH_TOKEN: 'token-value' } })
   assert.deepEqual(inspected.credentials, [join(home, '.codex/auth.json')])
   assert.deepEqual(inspected.forwardedEnv, ['CLAUDE_CODE_OAUTH_TOKEN'])
@@ -167,7 +170,7 @@ test('failed subprocess diagnostics retain exit status when stderr is empty', as
 test('active-container lookup tolerates absent artifact directories and still detects their mounts', async t => {
   const { LocalSandbox } = await import('../evals/agent-runner/and-scene-define/lib/sandbox.mjs')
   const { realpath } = await import('node:fs/promises')
-  const root = await mkdtemp(join(tmpdir(), 'define-active-')); t.after(() => rm(root, { recursive: true, force: true }))
+  const root = await mkdtemp(join(tmpdir(), 'define-active-')); t.after(() => rm(root, { recursive: true, force: true, maxRetries: 3 }))
   let source = '/unrelated/artifacts'
   const command = (_command, args) => ({ ok: true, stdout: args[0] === 'ps' ? 'other-container\n' : JSON.stringify([{ Mounts: [{ Source: source }] }]), stderr: '' })
   const sandbox = new LocalSandbox({ runDir: root, runnerDir: root, skillsDir: root, command })

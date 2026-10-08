@@ -92,6 +92,8 @@ export async function inspectInputs({ profiles, runnerDir, skillsDir, suiteRoot 
   // forwards a `claude setup-token` token by name instead.
   const claudeFile = join(home, '.claude/.credentials.json')
   const claudeToken = selectedCredentials(profiles, home).includes(claudeFile) && !(await lstat(claudeFile).catch(() => null))?.isFile() && Boolean(env.CLAUDE_CODE_OAUTH_TOKEN)
+  // An older Runner would start the sandbox without Claude auth; refuse here rather than mid-run.
+  if (claudeToken && !sandboxHelp.includes('CLAUDE_CODE_OAUTH_TOKEN')) throw new Error('sandbox capability: the Runner sandbox does not forward CLAUDE_CODE_OAUTH_TOKEN; add ~/.claude/.credentials.json or update Agent Runner')
   const credentials = selectedCredentials(profiles, home).filter(path => !(claudeToken && path === claudeFile))
   for (const path of credentials) await regularAuth(path).catch(error => { throw path === claudeFile ? new Error(`${error.message}, or set CLAUDE_CODE_OAUTH_TOKEN from claude setup-token`) : error })
   if (!dryRun) {

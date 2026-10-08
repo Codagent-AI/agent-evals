@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildRubric, checkJudgingInputs } from '../evals/agent-runner/and-scene-define/lib/rubric.mjs'
 import { SUITE_ROOT } from '../evals/agent-runner/and-scene-define/lib/files.mjs'
-import { accuracy, stability, basisShares, familyDistribution, rescoreDiff, deciderFlips, proposeThreshold, aggregateCalibration, loadCalibrationSet, allExpected, renderCalibrationMarkdown, CALIBRATION_MODE } from '../evals/agent-runner/and-scene-define/lib/calibration.mjs'
-import { runCalibration, parseCalibrateArguments, assertAnchorsReviewed } from '../evals/agent-runner/and-scene-define/calibrate.mjs'
+import { accuracy, stability, basisShares, familyDistribution, rescoreDiff, deciderFlips, aggregateCalibration, loadCalibrationSet, allExpected, renderCalibrationMarkdown, CALIBRATION_MODE } from '../evals/agent-runner/and-scene-define/lib/calibration.mjs'
+import { runCalibration, parseCalibrateArguments, assertAnchorsReviewed, CALIBRATE_HELP } from '../evals/agent-runner/and-scene-define/calibrate.mjs'
 import { runDefinitionPanel, rerunDefinitionDecider } from '../evals/agent-runner/and-scene-define/lib/judge-jobs.mjs'
 import { publicationEligibility, publishRun } from '../evals/agent-runner/and-scene-define/lib/publication.mjs'
 import { parseArguments } from '../evals/agent-runner/and-scene-define/controller.mjs'
@@ -31,7 +31,7 @@ function scored(total, verdicts, { votes = {}, bases = {}, gates = true } = {}) 
   return { total, components: { coverage: { score: total } }, gates: [{ id: 'gate:openspec-validate', passed: gates }], coverage, quality, fidelity: [],
     panel_records: [{ kind: 'coverage', record: { results: results.filter(x => !x.id.startsWith('quality:')), votes: allVotes.filter(x => !x.id.startsWith('quality:')) } }, { kind: 'quality', record: { results: results.filter(x => x.id.startsWith('quality:')), votes: allVotes.filter(x => x.id.startsWith('quality:')) } }] }
 }
-const expectations = (outcome, expected, extra = {}) => ({ input_id: 'x', expected_outcome: outcome, expected_fail_mark: outcome === 'fail' ? 'proposed' : null, expected, removed_items: [], contradicted_items: [], added_scope: [], quality_defects: [], planted_fidelity_contradictions: [], weakened_items: [], collateral_items: [], ...extra })
+const expectations = (variant, expected, extra = {}) => ({ input_id: 'x', variant, expected, removed_items: [], contradicted_items: [], added_scope: [], quality_defects: [], planted_fidelity_contradictions: [], weakened_items: [], collateral_items: [], ...extra })
 
 test('accuracy counts per-item agreement and a confusion matrix across repeats', () => {
   const result = accuracy({ [A]: 'met', [B]: 'missing' }, [scored(90, { [A]: 'met', [B]: 'met' }), scored(90, { [A]: 'met', [B]: 'missing' }), scored(80, { [A]: 'partial', [B]: 'missing' })])
@@ -50,14 +50,14 @@ test('stability reports total spread and every item whose verdict differs across
   const result = stability([scored(90, {}), scored(84, { [C]: 'partial' }), scored(88, {})])
   assert.deepEqual(result.totals, [90, 84, 88]); assert.equal(result.spread, 6)
   assert.deepEqual(result.differing_items, [{ id: C, verdicts: ['met', 'partial', 'met'] }])
-  assert.equal(result.items_differing, 1); assert.equal(result.items_judged, 8)
+  assert.equal(result.items_differing, 1); assert.equal(result.items_judged, 9)
 })
 
 test('basis shares count each settled criterion by its settlement basis', () => {
   const result = basisShares([scored(90, { [B]: 'missing' }, { bases: { [A]: 'majority-met', [B]: 'decider-missing', [C]: 'checked-dissent-met' } })])
-  assert.equal(result.total, 8)
-  assert.deepEqual(result.counts, { majority: 1, decider: 1, 'checked-dissent': 1, consensus: 5 })
-  assert.equal(result.shares.consensus, 0.625)
+  assert.equal(result.total, 9)
+  assert.deepEqual(result.counts, { majority: 1, decider: 1, 'checked-dissent': 1, consensus: 6 })
+  assert.equal(result.shares.consensus, 0.6667)
 })
 
 test('family distributions sit beside the expected distribution and expose leniency', () => {
@@ -93,10 +93,10 @@ const allMet = { [A]: 'met', [B]: 'met', [C]: 'met', [D]: 'met' }
 
 test('failures name the input and item: removed mandatory judged met, restructured loss beyond tolerance, spread beyond limit', () => {
   const report = aggregateCalibration({ rubric, inputs: [
-    input('reference', expectations('pass', allMet), [scored(95, {}), scored(95, {}), scored(95, {})]),
+    input('reference', expectations('reference', allMet), [scored(95, {}), scored(95, {}), scored(95, {})]),
     // Loses A (weight 2), C and D (1 each) = 4 > tolerance 3.
-    input('restructured', expectations('pass', allMet), [scored(90, {}), scored(80, { [A]: 'missing', [C]: 'missing', [D]: 'missing' }), scored(90, {})]),
-    input('degraded', expectations('fail', { ...allMet, [A]: 'missing' }, { removed_items: [A, B] }), [scored(30, { [A]: 'missing' }), scored(31, { [A]: 'met' }), scored(30, { [A]: 'missing' })]),
+    input('restructured', expectations('reference', allMet), [scored(90, {}), scored(80, { [A]: 'missing', [C]: 'missing', [D]: 'missing' }), scored(90, {})]),
+    input('degraded', expectations('degraded', { ...allMet, [A]: 'missing' }, { removed_items: [A, B] }), [scored(30, { [A]: 'missing' }), scored(31, { [A]: 'met' }), scored(30, { [A]: 'missing' })]),
   ] })
   const codes = report.failures.map(x => [x.code, x.input_id])
   assert.deepEqual(codes, [['restructured-loss-beyond-tolerance', 'restructured'], ['spread-beyond-limit', 'restructured'], ['removed-mandatory-undetected', 'degraded']])
@@ -109,29 +109,16 @@ test('failures name the input and item: removed mandatory judged met, restructur
   assert.equal(report.passed, false); assert.equal(report.mode, CALIBRATION_MODE)
   // Within tolerance and limits: no failure.
   const ok = aggregateCalibration({ rubric, inputs: [
-    input('reference', expectations('pass', allMet), [scored(95, {}), scored(95, {}), scored(95, {})]),
-    input('restructured', expectations('pass', allMet), [scored(92, { [A]: 'partial', [C]: 'missing' }), scored(92, {}), scored(92, {})]),
-    input('degraded', expectations('fail', allMet, { removed_items: [A] }), [scored(30, { [A]: 'missing' }), scored(30, { [A]: 'partial' }), scored(30, { [A]: 'missing' })]),
+    input('reference', expectations('reference', allMet), [scored(95, {}), scored(95, {}), scored(95, {})]),
+    input('restructured', expectations('reference', allMet), [scored(92, { [A]: 'partial', [C]: 'missing' }), scored(92, {}), scored(92, {})]),
+    input('degraded', expectations('degraded', allMet, { removed_items: [A] }), [scored(30, { [A]: 'missing' }), scored(30, { [A]: 'partial' }), scored(30, { [A]: 'missing' })]),
   ] })
   assert.deepEqual(ok.failures, []); assert.equal(ok.passed, true)
-  assert.equal(ok.threshold.proposed, 61); assert.equal(ok.identical_rescore.input_id, 'reference')
-  assert.match(renderCalibrationMarkdown(ok), /Proposed pass threshold[\s\S]*\*\*61\*\*/)
-})
-
-test('threshold is the midpoint between expected-fail and expected-pass scores, or a named failure when they overlap', () => {
-  const pass = input('reference', expectations('pass', allMet), [scored(80, {}), scored(78, {}), scored(82, {})])
-  const fail = input('degraded', expectations('fail', allMet), [scored(50, {}), scored(60, {}), scored(55, {})])
-  // Unmarked variants and gate-failed repeats do not bound the threshold.
-  const unmarked = input('unmarked', { ...expectations('fail', allMet), expected_fail_mark: null }, [scored(95, {})])
-  const gateFailed = input('gate-failed', expectations('fail', allMet), [scored(99, {}, { gates: false })])
-  const separated = proposeThreshold([pass, fail, unmarked, gateFailed])
-  assert.equal(separated.separable, true); assert.equal(separated.proposed, 69)
-  assert.deepEqual(separated.highest_fail, { input_id: 'degraded', total: 60 }); assert.deepEqual(separated.lowest_pass, { input_id: 'reference', total: 78 })
-  const overlapping = input('degraded', expectations('fail', allMet), [scored(79, {}), scored(60, {}), scored(55, {})])
-  const report = aggregateCalibration({ rubric, inputs: [pass, overlapping] })
-  assert.equal(report.threshold.proposed, null); assert.equal(report.threshold.separable, false)
-  const failure = report.failures.find(x => x.code === 'threshold-cannot-separate')
-  assert.match(failure.message, /threshold cannot separate.*degraded.*79.*reference.*78/)
+  assert.equal(ok.identical_rescore.input_id, 'reference')
+  // Plans get a score only, so calibration proposes no pass threshold.
+  assert.equal('threshold' in ok, false)
+  assert.doesNotMatch(renderCalibrationMarkdown(ok), /threshold/i)
+  assert.match(renderCalibrationMarkdown(ok), /\| degraded \| degraded \|/)
 })
 
 // ---------------------------------------------------------------- the committed set
@@ -148,10 +135,20 @@ test('the committed calibration set loads without model calls and every input co
     assert.ok(Object.keys(x.artifacts).some(p => /^specs\/.+\/spec\.md$/.test(p)))
     assert.ok(!Object.keys(x.artifacts).some(p => p.startsWith('collected/') || p === 'expectations.json'))
     if (x.expectations.expected_fidelity) assert.ok(x.conversation.length)
-    if (x.expectations.expected_outcome === 'fail') assert.equal(x.expectations.expected_fail_mark, 'proposed')
+    assert.ok(['reference', 'degraded'].includes(x.expectations.variant), x.input_id)
+    assert.equal('expected_outcome' in x.expectations, false); assert.equal('expected_fail_mark' in x.expectations, false)
   }
-  assert.ok(set.inputs.some(x => x.input_id === 'reference' && x.expectations.expected_outcome === 'pass'))
-  assert.ok(set.inputs.some(x => x.input_id.startsWith('restructured') && x.expectations.expected_outcome === 'pass'))
+  assert.ok(set.inputs.some(x => x.input_id === 'reference' && x.expectations.variant === 'reference'))
+  assert.ok(set.inputs.some(x => x.input_id.startsWith('restructured') && x.expectations.variant === 'reference'))
+})
+
+test('expectations name each input a reference or a degraded variant and carry no pass/fail outcome', async () => {
+  const { validateExpectations } = await import('../evals/agent-runner/and-scene-define/lib/calibration.mjs')
+  const ok = { ...expectations('degraded', allMet), input_id: 'degraded' }
+  assert.deepEqual(validateExpectations(ok, { rubric, dirName: 'degraded' }), [])
+  assert.ok(validateExpectations({ ...ok, variant: 'fail' }, { rubric, dirName: 'degraded' }).some(x => /variant must be reference or degraded/.test(x)))
+  assert.ok(validateExpectations({ ...ok, expected_outcome: 'fail' }, { rubric, dirName: 'degraded' }).some(x => /expected_outcome.*no pass\/fail/.test(x)))
+  assert.ok(validateExpectations({ ...ok, expected_fail_mark: 'proposed' }, { rubric, dirName: 'degraded' }).some(x => /expected_fail_mark.*no pass\/fail/.test(x)))
 })
 
 test('the loader verifies manifest hashes and rejects unlisted or altered files', async t => {
@@ -216,9 +213,9 @@ async function suiteFixture(t, { reviewed = true } = {}) {
     }
     await writeFile(join(calibrationDir, id, 'expectations.json'), JSON.stringify({ ...exp, input_id: id, description: `${id} fixture` }))
   }
-  await write('reference', expectations('pass', allMet, { expected_quality: Object.fromEntries(QUALITY.map(id => [id, 'met'])) }))
-  await write('restructured', expectations('pass', allMet))
-  await write('degraded', expectations('fail', { ...allMet, [A]: 'missing' }, { removed_items: [A] }))
+  await write('reference', expectations('reference', allMet, { expected_quality: Object.fromEntries(QUALITY.map(id => [id, 'met'])) }))
+  await write('restructured', expectations('reference', allMet))
+  await write('degraded', expectations('degraded', { ...allMet, [A]: 'missing' }, { removed_items: [A] }))
   await mkdir(join(calibrationDir, 'real-candidates')); await writeFile(join(calibrationDir, 'real-candidates/README.md'), 'Empty slot.\n')
   return { root, suiteRoot, calibrationDir, outDir: join(root, 'out') }
 }
@@ -256,7 +253,8 @@ const gateCommand = async () => ({ status: 0, stdout: '', stderr: '' })
 test('--calibrate judges each input three independent times through the candidate judging path and reports every diagnostic', async t => {
   const f = await suiteFixture(t)
   const { judges, calls } = stubJudges()
-  const { report, exitCode } = await runCalibration({ suiteRoot: f.suiteRoot, calibrationDir: f.calibrationDir, outDir: f.outDir, repeats: 3, repoRoot: f.root }, { judges, gateCommand })
+  // The script keys votes to call order, so judge one repeat at a time.
+  const { report, exitCode } = await runCalibration({ suiteRoot: f.suiteRoot, calibrationDir: f.calibrationDir, outDir: f.outDir, repeats: 3, repoRoot: f.root, concurrency: 1 }, { judges, gateCommand })
   // Each input: one coverage job and one quality job, three panel judges, three repeats, no reuse.
   for (const id of ['reference', 'restructured', 'degraded']) {
     assert.equal(calls.filter(x => x.input === id && x.who !== 'decider').length, 3 * 2 * 3, id)
@@ -278,14 +276,62 @@ test('--calibrate judges each input three independent times through the candidat
   assert.deepEqual(report.identical_rescore.differing_items, [])
   // Scripted failures: restructured loses A, C, D (4 > 3); degraded's removed A met in repeat 2 and spreads.
   assert.deepEqual(report.failures.map(x => [x.code, x.input_id]).sort(), [['removed-mandatory-undetected', 'degraded'], ['restructured-loss-beyond-tolerance', 'restructured'], ['spread-beyond-limit', 'degraded']])
-  assert.equal(report.threshold.separable, true)
-  assert.ok(report.threshold.proposed > report.threshold.highest_fail.total && report.threshold.proposed < report.threshold.lowest_pass.total)
   assert.equal(exitCode, 1)
   const written = JSON.parse(await readFile(join(f.outDir, 'calibration-report.json'), 'utf8'))
   assert.equal(written.mode, 'calibration'); assert.equal(written.published, false)
   assert.match(await readFile(join(f.outDir, 'calibration-report.md'), 'utf8'), /Decider ruling flips/)
   assert.equal(written.usage.ledger, 'phases/eval-owned-usage.jsonl')
   assert.deepEqual((await readdir(join(f.outDir, 'inputs/reference'))).sort(), ['repeat-1', 'repeat-2', 'repeat-3'])
+})
+
+// Order-independent panel: every vote depends only on the input, and each call
+// waits briefly so concurrently judged repeats overlap.
+function steadyJudges({ failOn } = {}) {
+  let inFlight = 0; let peak = 0; const started = []
+  const inputOf = prompt => {
+    const marker = prompt.match(/CALIBRATION-INPUT (\S+?)(\\n|\s)/)
+    if (!marker) throw new Error('no CALIBRATION-INPUT marker in the judge prompt')
+    return marker[1]
+  }
+  const answer = async (id, criteria, verdictOf) => {
+    inFlight++; peak = Math.max(peak, inFlight); started.push(id)
+    try {
+      await new Promise(done => setTimeout(done, 5))
+      if (id === failOn) throw Object.assign(new Error(`judge down for ${id}`), { retryable: false })
+      return JSON.stringify({ results: criteria.map(c => vote(c, verdictOf(c))) })
+    } finally { inFlight-- }
+  }
+  const verdictOf = id => c => c.startsWith('quality:') ? (id === 'degraded' ? 'missing' : 'met') : (id === 'degraded' && c === A ? 'missing' : 'met')
+  const panel = [0, 1, 2].map(n => ({ family: n ? 'codex' : 'claude', model: n ? 'stub-codex' : 'stub-claude', effort: 'high', invoke: req => answer(inputOf(req.prompt), req.criteria, verdictOf(inputOf(req.prompt))) }))
+  const decider = { family: 'claude', model: 'stub-decider', effort: 'high', invoke: req => answer(inputOf(req.prompt), req.criteria, verdictOf(inputOf(req.prompt))) }
+  return { judges: { panel, decider }, stats: { get peak() { return peak }, get inFlight() { return inFlight }, started } }
+}
+
+test('calibration judges several repeats at once and reports them in input and repeat order', async t => {
+  const sequential = await suiteFixture(t)
+  const one = await runCalibration({ suiteRoot: sequential.suiteRoot, calibrationDir: sequential.calibrationDir, outDir: sequential.outDir, repoRoot: sequential.root, concurrency: 1 }, { judges: steadyJudges().judges, gateCommand })
+  const f = await suiteFixture(t)
+  const { judges, stats } = steadyJudges()
+  const many = await runCalibration({ suiteRoot: f.suiteRoot, calibrationDir: f.calibrationDir, outDir: f.outDir, repoRoot: f.root, concurrency: 4 }, { judges, gateCommand })
+  // Three panel seats per job; more than one job in flight means repeats overlapped.
+  assert.ok(stats.peak > 3, `peak in-flight judge calls ${stats.peak}`)
+  assert.deepEqual(many.report.inputs.map(x => x.input_id), one.report.inputs.map(x => x.input_id))
+  assert.deepEqual(many.report.inputs.map(x => x.scores.per_repeat), one.report.inputs.map(x => x.scores.per_repeat))
+  assert.deepEqual(many.report.failures, one.report.failures)
+  for (const id of ['reference', 'restructured', 'degraded']) assert.deepEqual((await readdir(join(f.outDir, 'inputs', id))).sort(), ['repeat-1', 'repeat-2', 'repeat-3'])
+})
+
+test('a failed repeat stops new calibration work, lets in-flight repeats finish, and fails the calibration', async t => {
+  const f = await suiteFixture(t)
+  // Inputs run in set order, so two workers take degraded's first two repeats.
+  const { judges, stats } = steadyJudges({ failOn: 'degraded' })
+  const lines = []
+  await assert.rejects(runCalibration({ suiteRoot: f.suiteRoot, calibrationDir: f.calibrationDir, outDir: f.outDir, repoRoot: f.root, concurrency: 2 }, { judges, gateCommand, log: line => lines.push(line) }), /judge down for degraded/)
+  // Both concurrent failures are logged, not only the first.
+  assert.equal(lines.filter(x => /^calibration failed: degraded repeat \d: .*judge down/.test(x)).length, 2)
+  assert.equal(stats.inFlight, 0)
+  assert.deepEqual([...new Set(stats.started)], ['degraded'])
+  await assert.rejects(readFile(join(f.outDir, 'calibration-report.json')), { code: 'ENOENT' })
 })
 
 test('real judging is refused while anchors are unreviewed (HT-003); a dry run makes no calls and writes nothing', async t => {
@@ -296,18 +342,23 @@ test('real judging is refused while anchors are unreviewed (HT-003); a dry run m
   await assert.rejects(readdir(f.outDir), { code: 'ENOENT' })
   assert.throws(() => assertAnchorsReviewed({ inventory_version: 3, anchors_review: { reviewer: 'm', date: '2026-10-06', inventory_version: 2 } }), /HT-003.*version 3/)
   const dry = await runCalibration({ suiteRoot: f.suiteRoot, calibrationDir: f.calibrationDir, outDir: f.outDir, dryRun: true, repoRoot: f.root }, { judges, gateCommand })
-  assert.equal(dry.dryRun, true); assert.equal(dry.plan.inputs.length, 3); assert.equal(dry.plan.repeats, 3)
+  assert.equal(dry.dryRun, true); assert.equal(dry.plan.inputs.length, 3); assert.equal(dry.plan.repeats, 3); assert.equal(dry.plan.concurrency, 6)
   assert.equal(calls.length, 0)
   await assert.rejects(readdir(f.outDir), { code: 'ENOENT' })
 })
 
-test('calibrate arguments: at least three repeats, host-only default output, one mode', () => {
+test('calibrate arguments: at least three repeats, host-only default output, one mode', async () => {
   const now = new Date('2026-10-06T12:00:00Z')
   const options = parseCalibrateArguments(['--calibrate'], { now, repoRoot: '/repo' })
   assert.equal(options.repeats, 3); assert.equal(options.outDir, '/repo/artifacts/evals/and-scene-define-calibration/2026-10-06T12-00-00-000Z')
   assert.equal(parseCalibrateArguments(['--calibrate', '--repeats', '5', '--dry-run'], { now }).repeats, 5)
   assert.equal(parseCalibrateArguments(['--calibrate', '--dry-run'], { now }).dryRun, true)
   assert.throws(() => parseCalibrateArguments(['--calibrate', '--repeats', '2']), /at least 3/)
+  assert.equal(options.concurrency, 6)
+  assert.equal(parseCalibrateArguments(['--calibrate', '--concurrency', '2'], { now }).concurrency, 2)
+  assert.throws(() => parseCalibrateArguments(['--calibrate', '--concurrency', '0']), /--concurrency must be an integer of at least 1/)
+  // Both the suite help and the calibrate help name every calibration option.
+  for (const help of [(await import('../evals/agent-runner/and-scene-define/controller.mjs')).HELP, CALIBRATE_HELP]) assert.match(help, /--concurrency N/)
   assert.throws(() => parseCalibrateArguments(['--calibrate', '--run-agent']), /exactly one mode/)
   assert.throws(() => parseArguments(['--calibrate']), /run\.sh \(calibrate\.mjs\)/)
 })
@@ -315,17 +366,17 @@ test('calibrate arguments: at least three repeats, host-only default output, one
 test('calibration output is never published', async t => {
   const f = await suiteFixture(t)
   await assert.rejects(runCalibration({ suiteRoot: f.suiteRoot, calibrationDir: f.calibrationDir, outDir: join(f.root, 'evals/agent-runner/and-scene-define/results/cal'), repoRoot: f.root }, { judges: stubJudges().judges, gateCommand }), /never be written under the published results/)
-  const report = aggregateCalibration({ rubric, inputs: [input('reference', expectations('pass', allMet), [scored(95, {}), scored(95, {}), scored(95, {})])] })
+  const report = aggregateCalibration({ rubric, inputs: [input('reference', expectations('reference', allMet), [scored(95, {}), scored(95, {}), scored(95, {})])] })
   assert.equal(publicationEligibility(report), false)
-  assert.equal(publicationEligibility({ ...report, evaluation_status: 'complete', definition_verdict: 'pass' }), false)
+  assert.equal(publicationEligibility({ ...report, evaluation_status: 'complete', total: 95 }), false)
   const git = async () => { throw new Error('publication must not run git for calibration') }
   assert.deepEqual(await publishRun({ runDir: f.root, repoDir: f.root, result: report, git }), { skipped: true, published: false, commit: null })
 })
 
 test('candidate runs never require calibration output', async t => {
-  // A calibrated, reviewed suite with no calibration set and no calibration report passes judging-input preflight.
+  // A reviewed suite with no calibration set and no calibration report passes judging-input preflight; no pass threshold is needed.
   const root = await mkdtemp(join(tmpdir(), 'define-no-calibration-')); t.after(() => rm(root, { recursive: true, force: true }))
-  await writeFile(join(root, 'rubric.json'), JSON.stringify({ ...rubric, pass_threshold: 70 }))
+  await writeFile(join(root, 'rubric.json'), JSON.stringify(rubric))
   await checkJudgingInputs({ suiteRoot: root, inventory: subset })
   for (const file of ['controller.mjs', 'lib/preflight.mjs', 'lib/judging.mjs', 'lib/rescore.mjs']) {
     const source = await readFile(join(SUITE_ROOT, file), 'utf8')

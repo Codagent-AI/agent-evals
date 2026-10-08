@@ -29,9 +29,9 @@ export function validateExpectations(expectations, { rubric, dirName }) {
   const where = `calibration input ${dirName}`
   if (!expectations || typeof expectations !== 'object') return [`${where}: expectations.json is not an object`]
   if (typeof expectations.input_id !== 'string' || !expectations.input_id.trim()) errors.push(`${where}: input_id is required`)
-  if (!['pass', 'fail'].includes(expectations.expected_outcome)) errors.push(`${where}: expected_outcome must be pass or fail`)
-  if (![null, undefined, 'proposed', 'confirmed'].includes(expectations.expected_fail_mark)) errors.push(`${where}: expected_fail_mark must be proposed, confirmed, or null`)
-  if (expectations.expected_outcome === 'pass' && expectations.expected_fail_mark) errors.push(`${where}: an expected pass cannot carry an expected-fail mark`)
+  if (!['reference', 'degraded'].includes(expectations.variant)) errors.push(`${where}: variant must be reference or degraded`)
+  // Plans receive a score only; an input never predicts a pass or a fail.
+  for (const key of ['expected_outcome', 'expected_fail_mark']) if (key in expectations) errors.push(`${where}: ${key} is not allowed: plans receive a score only, with no pass/fail outcome`)
   const graded = new Set([...(rubric?.coverage ?? []).map(x => x.id), ...(rubric?.quality ?? []).map(x => x.id)])
   if (!expectations.expected || typeof expectations.expected !== 'object' || Array.isArray(expectations.expected)) errors.push(`${where}: expected must map graded item ids to verdicts`)
   else for (const [id, verdict] of Object.entries(expectations.expected)) {
@@ -82,7 +82,7 @@ export async function loadCalibrationInput(dir, { rubric, dirName = dir } = {}) 
   const conversation = conversationText.split('\n').filter(x => x.trim()).map(JSON.parse)
   const sourceFiles = []
   for (const path of await filesUnder(dir)) sourceFiles.push({ path: relative(dir, path).split('\\').join('/'), sha256: sha256(await readFile(path)) })
-  return { input_id: expectations.input_id, dir, expectations: { ...Object.fromEntries(LISTS.map(key => [key, []])), expected_fail_mark: null, ...expectations },
+  return { input_id: expectations.input_id, dir, expectations: { ...Object.fromEntries(LISTS.map(key => [key, []])), ...expectations },
     artifacts, files, conversation, conversation_text: conversationText, input_hash: sha256(JSON.stringify(sourceFiles)), source_files: sourceFiles }
 }
 
@@ -268,7 +268,7 @@ export function deciderFlips(reruns) {
 }
 
 export function isRestructuredReference(input) {
-  return input.input_id.startsWith('restructured') && input.expectations.expected_outcome === 'pass'
+  return input.input_id.startsWith('restructured') && input.expectations.variant === 'reference'
 }
 
 // Weighted coverage the input lost against its own expectations in one repeat.
@@ -284,23 +284,6 @@ export function coverageLoss(expected, scored, rubric) {
     if (loss > 0) { lost += loss; items.push({ id: criterion.id, expected: want, judged: got, weight_lost: loss }) }
   }
   return { lost_weight: round(lost), items }
-}
-
-export function proposeThreshold(inputs) {
-  const pass = inputs.filter(x => x.expectations.expected_outcome === 'pass')
-  const fail = inputs.filter(x => x.expectations.expected_outcome === 'fail' && x.expectations.expected_fail_mark)
-  // A gate-failed repeat fails regardless of points, so it does not bound the threshold.
-  const failTotals = fail.flatMap(x => x.repeats.filter(r => (r.gates ?? []).every(g => g.passed)).map(r => ({ input_id: x.input_id, total: r.total })))
-  const passTotals = pass.flatMap(x => x.repeats.map(r => ({ input_id: x.input_id, total: r.total })))
-  const base = { method: 'midpoint between the highest gate-passing repeat score of a marked expected-fail input and the lowest repeat score of an expected-pass input', expected_pass: pass.map(x => x.input_id), expected_fail: fail.map(x => ({ input_id: x.input_id, mark: x.expectations.expected_fail_mark })) }
-  if (!passTotals.length || !fail.length) return { ...base, proposed: null, separable: false, reason: 'the set needs expected-pass inputs and marked expected-fail inputs' }
-  const lowestPass = passTotals.reduce((a, b) => b.total < a.total ? b : a)
-  if (!failTotals.length) return { ...base, proposed: null, separable: false, reason: 'every marked expected-fail repeat failed a gate; scores cannot bound the threshold', lowest_pass: { ...lowestPass, total: round(lowestPass.total) } }
-  const highestFail = failTotals.reduce((a, b) => b.total > a.total ? b : a)
-  const separable = highestFail.total < lowestPass.total
-  return { ...base, highest_fail: { ...highestFail, total: round(highestFail.total) }, lowest_pass: { ...lowestPass, total: round(lowestPass.total) }, separable,
-    proposed: separable ? round((highestFail.total + lowestPass.total) / 2, 2) : null,
-    ...(separable ? {} : { reason: `expected-fail ${highestFail.input_id} scores ${round(highestFail.total)}, at or above expected-pass ${lowestPass.input_id} at ${round(lowestPass.total)}` }) }
 }
 
 // inputs: [{ input_id, description, expectations, input_hash, repeats: [scored] }]
@@ -335,19 +318,17 @@ export function aggregateCalibration({ inputs, rubric, reruns = [], rescoreInput
       own.push({ code: 'spread-beyond-limit', input_id: input.input_id, items, spread: stable.spread, max_spread: limits.max_spread, message: `${input.input_id}: repeated totals differ by ${stable.spread} points (limit ${limits.max_spread}); differing items: ${items.join(', ') || 'none'}` })
     }
     failures.push(...own)
-    return { input_id: input.input_id, description: input.description ?? input.expectations.description ?? null, expected_outcome: expectations.expected_outcome, expected_fail_mark: expectations.expected_fail_mark ?? null,
+    return { input_id: input.input_id, description: input.description ?? input.expectations.description ?? null, variant: expectations.variant,
       input_hash: input.input_hash, repeats: repeats.length, scores, accuracy: accuracy(allExpected(expectations), repeats), stability: stable,
       basis_shares: basisShares(repeats), family_distribution: familyDistribution([{ expected: { ...expectations.expected, ...(expectations.expected_quality ?? {}) }, repeats }]),
       removed_items: expectations.removed_items, contradicted_items: expectations.contradicted_items, restructured, failures: own }
   })
-  const threshold = proposeThreshold(inputs)
-  if (!threshold.separable) failures.push({ code: 'threshold-cannot-separate', input_id: threshold.highest_fail?.input_id ?? null, items: [], message: `threshold cannot separate: ${threshold.reason}` })
   const overallAccuracy = perInput.reduce((acc, x) => ({ compared: acc.compared + x.accuracy.compared, agreed: acc.agreed + x.accuracy.agreed }), { compared: 0, agreed: 0 })
   const byKind = {}
   for (const x of perInput) for (const [kind, k] of Object.entries(x.accuracy.by_kind)) { const t = byKind[kind] ??= { compared: 0, agreed: 0 }; t.compared += k.compared; t.agreed += k.agreed }
   for (const k of Object.values(byKind)) k.agreement_rate = rate(k.agreed, k.compared)
   const confusion = Object.fromEntries(VERDICTS.map(e => [e, Object.fromEntries(VERDICTS.map(g => [g, perInput.reduce((s, x) => s + x.accuracy.confusion[e][g], 0)]))]))
-  const designated = rescoreInput ?? (reference ? 'reference' : inputs.find(x => x.expectations.expected_outcome === 'pass')?.input_id ?? inputs[0]?.input_id)
+  const designated = rescoreInput ?? (reference ? 'reference' : inputs.find(x => x.expectations.variant === 'reference')?.input_id ?? inputs[0]?.input_id)
   const rescoreSource = inputs.find(x => x.input_id === designated)
   return {
     mode: CALIBRATION_MODE, schema_version: CALIBRATION_SCHEMA_VERSION, generated_at: generatedAt, published: false,
@@ -361,7 +342,6 @@ export function aggregateCalibration({ inputs, rubric, reruns = [], rescoreInput
       family_distribution: familyDistribution(inputs.map(x => ({ expected: { ...x.expectations.expected, ...(x.expectations.expected_quality ?? {}) }, repeats: x.repeats }))) },
     decider_flips: deciderFlips(reruns),
     identical_rescore: { ...rescoreDiff(designated, rescoreSource?.repeats[0], rescoreSource?.repeats[1]), method: 'repeats 1 and 2 of the designated input: two independent judgings under identical inputs, judges, and rubric' },
-    threshold,
     proposed_weights: { components: settings.components, weights: settings.weights, quality_points: settings.quality_points, fidelity: settings.fidelity,
       note: 'Current rubric settings are retained as the proposal; calibration evaluates them and does not fit new weights.' },
     usage,
@@ -376,10 +356,9 @@ export function renderCalibrationMarkdown(report) {
   const lines = [`# and-scene-define calibration`, '', `Generated ${report.generated_at}. Rubric v${report.rubric_version}, inventory v${report.inventory_version}, ${report.repeats} repeats per input. ${report.note}`, '']
   lines.push(`## Outcome: ${report.passed ? 'no failures' : `${report.failures.length} failure(s)`}`, '')
   for (const f of report.failures) lines.push(`- **${f.code}**: ${f.message}`)
-  const t = report.threshold
-  lines.push('', '## Proposed pass threshold', '', t.proposed === null ? `No threshold: ${t.reason}.` : `**${t.proposed}** (highest expected-fail ${t.highest_fail.input_id} ${t.highest_fail.total}; lowest expected-pass ${t.lowest_pass.input_id} ${t.lowest_pass.total}).`, '', `Weights: ${report.proposed_weights.note}`, '')
-  lines.push('## Inputs', '', '| Input | Expected | Mean | Min | Max | Per repeat | Accuracy | Spread | Items differing |', '|---|---|---|---|---|---|---|---|---|')
-  for (const x of report.inputs) lines.push(`| ${x.input_id} | ${x.expected_outcome}${x.expected_fail_mark ? ` (${x.expected_fail_mark})` : ''} | ${x.scores.mean} | ${x.scores.min} | ${x.scores.max} | ${x.scores.per_repeat.map(r => r.total).join(', ')} | ${pct(x.accuracy.agreement_rate)} | ${x.stability.spread} | ${x.stability.items_differing} |`)
+  lines.push('', `Weights: ${report.proposed_weights.note}`, '')
+  lines.push('## Inputs', '', '| Input | Variant | Mean | Min | Max | Per repeat | Accuracy | Spread | Items differing |', '|---|---|---|---|---|---|---|---|---|')
+  for (const x of report.inputs) lines.push(`| ${x.input_id} | ${x.variant} | ${x.scores.mean} | ${x.scores.min} | ${x.scores.max} | ${x.scores.per_repeat.map(r => r.total).join(', ')} | ${pct(x.accuracy.agreement_rate)} | ${x.stability.spread} | ${x.stability.items_differing} |`)
   const o = report.overall
   lines.push('', `## Accuracy`, '', `Overall agreement ${pct(o.accuracy.agreement_rate)} over ${o.accuracy.compared} item verdicts.`, '', '| Expected \\ judged | met | partial | missing |', '|---|---|---|---|')
   for (const e of VERDICTS) lines.push(`| ${e} | ${VERDICTS.map(g => o.accuracy.confusion[e][g]).join(' | ')} |`)

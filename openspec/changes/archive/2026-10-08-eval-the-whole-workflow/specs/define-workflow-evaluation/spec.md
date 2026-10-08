@@ -48,15 +48,15 @@ Each run SHALL record a series identity composed of the evaluator and fixture in
 - **THEN** reports present them as a paired comparison and name the Agent Skills commit as the differing candidate component
 
 ### Requirement: Preflight
-Before any model call, the harness SHALL verify a clean Agent Runner checkout that provides the external-user mode for interactive steps; a clean Agent Skills checkout containing every `codagent:*` skill named by the define workflow and the workflows it invokes; Docker; authentication for the selected evaluated CLIs and for the pinned simulated-user and judge CLIs; every pinned input matching its recorded hash; a rubric that records a calibrated pass threshold; and an unused run directory unless resuming. Any failed check SHALL stop the run with `evaluation_status=evaluation-harness-failed` and SHALL identify the check.
+Before any model call, the harness SHALL verify a clean Agent Runner checkout that provides the external-user mode for interactive steps; a clean Agent Skills checkout containing every `codagent:*` skill named by the define workflow and the workflows it invokes; Docker; authentication for the selected evaluated CLIs and for the pinned simulated-user and judge CLIs; every pinned input matching its recorded hash; and an unused run directory unless resuming. A candidate run SHALL NOT require a pass threshold, because a definition receives a score only. Any failed check SHALL stop the run with `evaluation_status=evaluation-harness-failed` and SHALL identify the check.
 
 #### Scenario: Runner lacks external-user mode
 - **WHEN** the configured Agent Runner checkout does not provide the external-user mode
 - **THEN** preflight fails before any model call and identifies the missing Runner capability
 
-#### Scenario: Rubric is not yet calibrated
-- **WHEN** a candidate run starts and the pinned rubric records no calibrated pass threshold
-- **THEN** preflight fails before any model call and states that calibration must set the threshold first
+#### Scenario: Rubric sets a pass threshold
+- **WHEN** a candidate run starts and the pinned rubric sets a pass threshold
+- **THEN** preflight fails before any model call and states that the rubric must not set a pass threshold
 
 #### Scenario: Pinned input hash mismatch
 - **WHEN** the starting snapshot, hidden reference, or inventory does not match its pinned hash
@@ -110,25 +110,25 @@ A candidate run SHALL execute phases in this order: preflight; starting-environm
 - **WHEN** the define workflow has completed but artifact collection has not
 - **THEN** no judge job starts
 
-### Requirement: Evaluation status and definition verdict
-The result SHALL report `evaluation_status` as exactly one of `complete`, `definition-workflow-failed`, `contaminated`, or `evaluation-harness-failed`, and `definition_verdict` as exactly one of `pass`, `fail`, or `unavailable`. A completed define workflow whose collected artifacts are missing a required artifact or fail `openspec validate` SHALL be `complete` with `definition_verdict=fail` through a hard gate, and any artifacts that exist SHALL still be judged as diagnostics. A contaminated run SHALL have `definition_verdict=unavailable` and no score. Workflow and harness failures SHALL have `definition_verdict=unavailable` and SHALL NOT be reported as a definition failure.
+### Requirement: Evaluation status and score
+The result SHALL report `evaluation_status` as exactly one of `complete`, `definition-workflow-failed`, `contaminated`, or `evaluation-harness-failed`. A complete evaluation SHALL report the definition's score; there SHALL be no pass/fail verdict. A completed define workflow whose collected artifacts are missing a required artifact or fail `openspec validate` SHALL be `complete`, with the failed gate reported beside a score of the artifacts that exist. A contaminated run SHALL have no score. Workflow and harness failures SHALL have no score and SHALL NOT be reported as a definition result.
 
-#### Scenario: Definition passes
-- **WHEN** gates pass and the score meets the pass threshold
-- **THEN** `evaluation_status` is `complete` and `definition_verdict` is `pass`
+#### Scenario: Definition is scored
+- **WHEN** the define workflow completes and judging finishes
+- **THEN** `evaluation_status` is `complete` and the result reports the total score and its breakdown, with no pass/fail verdict
 
 #### Scenario: Required artifact is missing
 - **WHEN** the define workflow completes but the collected change lacks a design
-- **THEN** `evaluation_status` is `complete` and `definition_verdict` is `fail` through the required-artifact gate
-- **AND** the proposal, specifications, and test plan that exist are still judged and reported as diagnostics
+- **THEN** `evaluation_status` is `complete` and the required-artifact gate is reported as failed
+- **AND** the proposal, specifications, and test plan that exist are judged and scored
 
 #### Scenario: Run is contaminated
 - **WHEN** the contamination audit finds access to hidden material
-- **THEN** `evaluation_status` is `contaminated`, `definition_verdict` is `unavailable`, and no score is reported
+- **THEN** `evaluation_status` is `contaminated` and no score is reported
 
 #### Scenario: Workflow fails
 - **WHEN** Agent Runner fails or the elapsed-time limit is reached before define completes
-- **THEN** `evaluation_status` is `definition-workflow-failed` and `definition_verdict` is `unavailable`
+- **THEN** `evaluation_status` is `definition-workflow-failed` and no score is reported
 
 ### Requirement: Durable checkpoints and resume
 The harness SHALL checkpoint every phase and every independently verifiable unit, including each judge job and each audit, with its input provenance and output hashes. On resume in the same run directory it SHALL verify the recorded run identity, series identity, and candidate, including the profiles; reuse every unit it can prove complete; resume an inactive unfinished Agent Runner run with `--resume <run-id>`; and SHALL NOT start a duplicate Agent Runner run. A provenance mismatch SHALL stop the resume with an explicit error.
@@ -153,17 +153,17 @@ Workflow time and cost SHALL come from Agent Runner's `run-metrics.json`, attrib
 - **THEN** simulated-user and judge usage appear only as eval-owned usage and not in workflow cost
 
 ### Requirement: Result and report
-Each run SHALL write `result.json` and a self-contained `report.html` containing the evaluation status and definition verdict, scores with per-criterion verdicts and citations, gate results, the discovery-ledger summary, the contamination- and disclosure-audit outcomes, the stated residual-contamination risk, the series identity and candidate, provenance, workflow metrics, and eval-owned usage. A failed or incomplete run SHALL identify the owning phase and whether it can be resumed.
+Each run SHALL write `result.json` and a self-contained `report.html` containing the evaluation status, scores with per-criterion verdicts and citations, gate results, the discovery-ledger summary, the contamination- and disclosure-audit outcomes, the stated residual-contamination risk, the series identity and candidate, provenance, workflow metrics, and eval-owned usage. A failed or incomplete run SHALL identify the owning phase and whether it can be resumed.
 
 #### Scenario: Failed run explains itself
 - **WHEN** a run ends with `definition-workflow-failed` or `evaluation-harness-failed`
 - **THEN** `result.json` identifies the failed phase, the observed error, and whether the run can be resumed
 
 ### Requirement: Permanent result publication
-After a candidate run reaches `evaluation_status=complete` with `definition_verdict` `pass` or `fail`, the harness SHALL copy `result.json`, `report.html`, the collected definition artifacts, the simulated-user conversation, the discovery ledger, and an artifact manifest into `evals/agent-runner/and-scene-define/results/<run-id>/`, commit only that directory with message `chore: record and-scene-define eval <run-id>`, and run an ordinary `git push` on the current branch's configured upstream. Contaminated, failed, harness-failed, rescore, and calibration runs SHALL NOT be published. The snapshot SHALL exclude runtime state, credentials, Agent Runner session state, raw judge output, and full logs. A commit or push failure SHALL preserve the result, record a retryable publication checkpoint, and exit nonzero; resume SHALL retry only publication, reuse an existing result commit, and SHALL NOT create a duplicate commit or force-push.
+After a candidate run reaches `evaluation_status=complete` with a score, the harness SHALL copy `result.json`, `report.html`, the collected definition artifacts, the simulated-user conversation, the discovery ledger, and an artifact manifest into `evals/agent-runner/and-scene-define/results/<run-id>/`, commit only that directory with message `chore: record and-scene-define eval <run-id>`, and run an ordinary `git push` on the current branch's configured upstream. Contaminated, failed, harness-failed, rescore, and calibration runs SHALL NOT be published. The snapshot SHALL exclude runtime state, credentials, Agent Runner session state, raw judge output, and full logs. A commit or push failure SHALL preserve the result, record a retryable publication checkpoint, and exit nonzero; resume SHALL retry only publication, reuse an existing result commit, and SHALL NOT create a duplicate commit or force-push.
 
 #### Scenario: Completed run is published
-- **WHEN** a candidate run completes with `definition_verdict` `pass` or `fail`
+- **WHEN** a candidate run completes with a score
 - **THEN** its result directory, including the definition artifacts and simulated-user conversation, is committed alone and pushed
 
 #### Scenario: Contaminated run is not published

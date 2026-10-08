@@ -24,12 +24,12 @@ The result is a **repeatable define-workflow benchmark** for comparing Codagent 
   - **acceptable-alternative:** intent graded, and alternative designs that meet it pass.
   - **preference:** opinion, judgment, or an incidental reference choice, such as the exact 880 × 380 canvas or the prescribed nine-step sample; not graded.
   - Two agents from different model families label independently from a versioned brief, and a maintainer reconciles their disagreements.
-- **Artifact scoring.** Eval-owned judges score the produced proposal, specifications, design, and test plan under a versioned rubric with explicit criteria, points, gates, and pass threshold:
+- **Artifact scoring.** Eval-owned judges score the produced proposal, specifications, design, and test plan under a versioned rubric with explicit criteria, points, and gates. A definition receives a score out of 100, with no pass/fail verdict:
   - **Requirement coverage** of mandatory and acceptable-alternative items, judged by intent rather than wording or structure. This is the primary component.
   - **Fidelity:** no contradiction of the simulated user's answers on matters coverage does not grade, such as preference items. A contradiction of a graded requirement is scored once, under coverage. Added scope is reported but not penalized unless it contradicts the user.
   - **Artifact quality:** testable specification scenarios, cross-artifact consistency, sound design decisions, and a test plan that covers the requirements.
-  - **Gates:** passing `openspec validate`, and a completed define workflow.
-- **Calibration.** Weights and the pass threshold are set only after calibration against three kinds of input:
+  - **Gates:** passing `openspec validate`, and a completed define workflow. Gates are reported beside the score and do not change it.
+- **Calibration.** Weights are approved only after calibration against three kinds of input:
   - human-rated good definitions organized differently from the reference, such as a strong earlier agent definition that a maintainer rates;
   - the fixture's own reviewed change, and a restructured rewrite of it that keeps every requirement;
   - deliberately degraded variants.
