@@ -9,7 +9,7 @@ parts that work together:
   about any particular topic;
 - a **`presentation` skill** whose procedure collects a brief, readies the
   project, writes or edits a presentation, and checks its own output;
-- a **bundled sample**, produced by the skill, that explains the skill;
+- a **bundled sample** that explains the skill;
 - a **release check**, `npm run release-check`, and a capture command for
   visual review.
 

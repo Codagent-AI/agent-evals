@@ -108,8 +108,7 @@ The kit provides:
 
 Each **presentation** supplies only its own `entities.ts` (its `layoutId`
 namespace) and `steps/*` (Scenes composing the primitives), then renders
-`<Presentation steps=… />`. This is what keeps generated output consistent
-across presentations.
+`<Presentation steps=… />`.
 
 ### Routing + registry
 
@@ -118,8 +117,7 @@ across presentations.
   `Landing` (or a simple not-found).
 - `presentations/index.ts` is an **explicit** array of
   `{ slug, title, load: () => import('./<dir>/Talk') }`. Adding a presentation =
-  new folder + one registry line. Chosen over `import.meta.glob` so registration
-  is deterministic and diffable in review.
+  new folder + one registry line.
 - `Landing.tsx` enumerates the registry (replaces the placeholder `App.tsx`).
 
 ### Skill (`skills/presentation/SKILL.md`)
@@ -206,8 +204,7 @@ host already uses, or the user explicitly requests, another styling system.
   snapshot of the kit; verification builds and renders the materialized app, so
   any drift that breaks rendering fails CI. Keep the snapshot in sync when the
   kit changes.
-- **Playwright browser in Docker/CI** → Install Chromium in the verify step. Heavier
-  than a jsdom check, accepted for fidelity.
+- **Playwright browser in Docker/CI** → Install Chromium in the verify step.
 - **Monorepo detection is heuristic** → The skill states the resolved target and
   confirms before writing in any non-empty project, so a wrong guess is caught by
   the user, not silently applied.

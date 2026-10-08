@@ -1,8 +1,7 @@
 ## Approach
 
 Unit tests follow the specifications directly for isolated logic: the step
-contract and headline derivation, continuity diffing, input handling and
-clamping, canvas fitting, manifest parsing, readiness probes, and template hash
+contract and headline derivation, continuity diffing, canvas fitting, manifest parsing, readiness probes, and template hash
 parity. They are not listed individually here. This plan lists the checks that
 need real files, child processes, a real browser, or an agent following the
 skill. All of them run against disposable copies, publish nothing, and incur no
@@ -25,9 +24,9 @@ paid effects.
 ## Release-Check Tests
 
 ### RC-1: The sample passes
-- Requirements: Release-check command; Bundled sample; Browser render pass; Outcome and cleanup.
+- Requirements: Release-check command; Bundled sample; Browser render pass.
 - Journey: `npm run release-check` in a clean checkout.
-- Checks: the whole app builds; the sample is in the manifest and its nine chapters, headlines, and bodies match `sample-outline.json` in order; the server, readiness probe, and browser URLs all use `127.0.0.1`; all nine `aria-valuenow` values are observed with no console or page errors.
+- Checks: the whole app builds; the sample is in the manifest and its nine steps, headlines, and bodies match `sample-outline.json` in order; the server, readiness probe, and browser URLs all use `127.0.0.1`; all nine `aria-valuenow` values are observed with no console or page errors.
 - Runs on: every pull request.
 
 ### RC-3: Sample provenance is present
@@ -69,10 +68,10 @@ None.
 | --- | --- | --- | --- | --- |
 | Step sequence, narration, continuity, persistent scene, fitted canvas | yes | — | — | — |
 | Styling ownership and attribution | yes | IC-1 | — | AR-4 |
-| Viewing modes, moving between steps, sequence ends | yes | — | — | — |
+| Viewing modes, moving between steps, sequence ends | — | — | — | — |
 | Collecting the brief | — | — | — | AR-1 |
 | Project readiness and scaffold placement | yes | IC-1, IC-2 | — | AR-1, AR-2 |
 | Creating and editing presentations | — | — | — | AR-1, AR-2 |
 | Checks before declaring done | — | — | — | AR-1, AR-4 |
-| Release-check command, bundled sample, render pass, cleanup | yes | — | RC-1, RC-3 | — |
+| Release-check command, bundled sample, render pass | yes | — | RC-1, RC-3 | — |
 | Step captures for review | — | — | — | AR-4 |

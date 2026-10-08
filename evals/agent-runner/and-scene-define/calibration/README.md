@@ -4,8 +4,9 @@
 - credit sound alternatives rather than the reference's shape;
 - catch removed requirements, contradictions, excluded scope, and planted
   quality and fidelity defects;
-- support a pass threshold that separates the expected-pass inputs from the
-  degraded variants.
+- give the same input the same score when it is judged repeatedly.
+
+A plan receives a score only, so calibration proposes no pass threshold.
 
 The set is **host-only**. Never stage it into a sandbox or publish it. The
 starting-snapshot loader rejects any `calibration/` path (`lib/starting-repo.mjs`).
@@ -31,13 +32,13 @@ project.
 
 `expectations.json` fields:
 - `input_id`, `description`, `base`;
-- `expected_outcome` (`pass`/`fail`) and `expected_fail_mark` (`proposed` for every
-  degraded variant; the maintainer confirms or rejects each under HT-002);
+- `variant`: `reference` for the two sound inputs, `degraded` for the variants with
+  planted problems;
 - `expected`: `met`, `partial`, or `missing` for all 72 graded items (mandatory and
   acceptable-alternative). Coverage criterion IDs are the inventory IDs;
 - `removed_items`, `contradicted_items`, `added_scope`, `weakened_items`, and
   `collateral_items`: every intended change and its knock-on effect on other items;
-- `quality_defects` and `expected_quality` (proposed verdicts for the four
+- `quality_defects` and `expected_quality` (expected verdicts for the five
   `quality:*` criteria);
 - `planted_fidelity_contradictions` and `expected_fidelity`, keyed by
   `fidelity:<exchange identity>`, when there is a conversation;
@@ -46,16 +47,16 @@ project.
 
 ## Inputs
 
-| Input | Expected | What it tests |
+| Input | Variant | What it tests |
 | --- | --- | --- |
-| `reference` | pass | The fixture's own change at `ad667a9`, identical to `hidden/reference`. Two honest gaps: INV-094 is missing (only the test plan commits to it) and INV-118 is partial (parity is only enforced for drift that breaks rendering). |
-| `restructured` | pass | The reference rewritten with four renamed capabilities, merged and split requirements, and new wording. Mechanisms are swapped for 34 of the 48 acceptable alternatives. All 72 items are met. |
-| `reference-degraded-mandatory` | fail (proposed) | Removes INV-024, INV-058, INV-092, and INV-089; weakens INV-064; INV-055 and INV-090 become partial as a result. |
-| `reference-degraded-contradictions` | fail (proposed) | Contradicts INV-008, INV-030, INV-045, INV-050, and INV-064. Its conversation plants contradictions of INV-115 (router library) and INV-120 (sample opens in browse mode). |
-| `reference-degraded-scope-quality` | fail (proposed) | Adds excluded scope for INV-105, INV-106, and INV-107. Adds untestable scenarios, cross-artifact inconsistencies, decisions without rationale, and test-plan gaps. |
-| `restructured-degraded-mandatory` | fail (proposed) | Removes INV-030, INV-075, INV-094, INV-045, and INV-096. |
-| `restructured-degraded-mixed` | fail (proposed) | Contradicts INV-024, adds INV-106 as scope, weakens INV-093, and leaves stale test-plan expectations. Its conversation plants contradictions of INV-057 (plain CSS default) and INV-113 (landing page). |
-| `restructured-degraded-quality` | fail (proposed) | Removes INV-093. Adds untestable scenarios, a registry inconsistency, decisions without rationale, and test-plan gaps. Its coverage loss is small, so whether it falls below the threshold depends mostly on artifact quality, which the maintainer decides. |
+| `reference` | reference | The fixture's own change at `ad667a9`, identical to `hidden/reference`. Two honest gaps: INV-094 is missing (only the test plan commits to it) and INV-118 is partial (parity is only enforced for drift that breaks rendering). |
+| `restructured` | reference | The reference rewritten with four renamed capabilities, merged and split requirements, and new wording. Mechanisms are swapped for 34 of the 48 acceptable alternatives. All 72 items are met. |
+| `reference-degraded-mandatory` | degraded | Removes INV-024, INV-058, INV-092, and INV-089; weakens INV-064; INV-055 and INV-090 become partial as a result. |
+| `reference-degraded-contradictions` | degraded | Contradicts INV-008, INV-030, INV-045, INV-050, and INV-064. Its conversation plants contradictions of INV-115 (router library) and INV-120 (sample opens in browse mode). |
+| `reference-degraded-scope-quality` | degraded | Adds excluded scope for INV-105, INV-106, and INV-107. Adds untestable scenarios, cross-artifact inconsistencies, decisions without rationale, and test-plan gaps. |
+| `restructured-degraded-mandatory` | degraded | Removes INV-030, INV-075, INV-094, INV-045, and INV-096. |
+| `restructured-degraded-mixed` | degraded | Contradicts INV-024, adds INV-106 as scope, weakens INV-093, and leaves stale test-plan expectations. Its conversation plants contradictions of INV-057 (plain CSS default) and INV-113 (landing page). |
+| `restructured-degraded-quality` | degraded | Removes INV-093. Adds untestable scenarios, a registry inconsistency, decisions without rationale, and test-plan gaps. Its coverage loss is small, so most of its lost points come from artifact quality. |
 
 Fidelity is calibrated only through the two inputs with a `conversation.jsonl`.
 Their exchanges use the responder's record shape

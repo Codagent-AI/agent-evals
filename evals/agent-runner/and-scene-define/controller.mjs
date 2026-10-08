@@ -20,7 +20,7 @@ import { auditContamination, RESIDUAL_RISK } from './lib/contamination.mjs'
 import { createJudgingPhases } from './lib/judging.mjs'
 import { AUTOMATED_PHASES, runPhases } from './lib/phases.mjs'
 import { assembleResult, writeResultArtifacts } from './lib/result.mjs'
-import { publishRun } from './lib/publication.mjs'
+import { publishRun, publicationEligibility } from './lib/publication.mjs'
 import { rescoreEvaluation } from './lib/rescore.mjs'
 import { failureOutcome } from './lib/outcomes.mjs'
 export const DEFAULT_TIME_LIMIT_MS = 3 * 60 * 60 * 1000
@@ -237,7 +237,7 @@ export async function runEvaluation(options, dependencies = {}) {
     },
     ...createJudgingPhases({ runDir, suiteRoot: options.suiteRoot, getCheckpoint: () => checkpoint, setCheckpoint: value => { checkpoint = value }, persist, judges: dependencies.judges, gateCommand: dependencies.gateCommand, loadInputs: dependencies.loadInputs }),
     'result-and-report': async () => {
-      result = await assembleResult({ runDir, checkpoint, outcome: { evaluation_status: 'complete', definition_verdict: checkpoint.definition_verdict ?? 'unavailable', resumable: false } })
+      result = await assembleResult({ runDir, checkpoint, outcome: { evaluation_status: 'complete', resumable: false } })
       const outputs = await writeResultArtifacts({ runDir, result }); artifactsWritten = true
       return outputs
     },
@@ -267,7 +267,7 @@ export async function runEvaluation(options, dependencies = {}) {
     // Delivery is independent of candidate preflight. A complete result survives
     // publication failure unchanged; resume retries only the curated delivery.
     const savedResult = options.resume ? await readJson(join(runDir, 'result.json'), null) : null
-    if (savedResult?.evaluation_status === 'complete' && ['pass', 'fail'].includes(savedResult.definition_verdict)) {
+    if (publicationEligibility(savedResult)) {
       checkpoint = await loadCheckpoint(statePath)
       if (!checkpoint || savedResult.run_id !== checkpoint.run_id) throw new Error('publication resume run identity mismatch')
       phase = 'publication'; result = savedResult; artifactsWritten = true
@@ -310,7 +310,7 @@ export async function runEvaluation(options, dependencies = {}) {
         if (name === 'contamination-audit' && checkpoint.contamination_audit?.status === 'contaminated') return { stop: true, outcome: checkpoint.contamination_audit }
       } })
       result = result ?? (lifecycle.outcome ? { ...lifecycle.outcome, owning_phase: 'contamination-audit', resumable: false } : lifecycle.blocked ? { ...failureOutcome({ phase: lifecycle.blocked, reason: `phases not yet implemented: ${lifecycle.missing.join(', ')}`, resumable: true }), unimplemented_phases: lifecycle.missing }
-        : { evaluation_status: 'complete', definition_verdict: checkpoint.definition_verdict ?? 'unavailable', resumable: false })
+        : { evaluation_status: 'complete', resumable: false })
     }
   } catch (error) {
     if (phase === 'publication' && result?.evaluation_status === 'complete') publicationFailed = true
@@ -367,7 +367,7 @@ Compare recorded runs (scores are paired only within one series):
 Rescores use current pinned evaluator inputs and a new --run-dir; never published.
 Publication failure: --resume --run-dir retries only publication, without profiles.
 Calibration options (with --calibrate): --out DIR, --repeats N (>=3, default 3),
-  --rescore-input ID, --calibration-dir DIR, --dry-run (no model calls). Output
+  --concurrency N (repeats judged at once, default 6), --rescore-input ID, --calibration-dir DIR, --dry-run (no model calls). Output
   defaults to artifacts/evals/and-scene-define-calibration/<timestamp>; real
   judging requires reviewed anchors (HT-003).
 Policy diagnostic: node evals/agent-runner/and-scene-define/policy-test.mjs --output PATH

@@ -3,7 +3,6 @@ import { join } from 'node:path'
 import { readJson, writeJsonAtomic, writeTextAtomic } from './persistence.mjs'
 import { RESIDUAL_RISK } from './contamination.mjs'
 import { renderReport } from './report.mjs'
-import { DEFINITION_VERDICTS } from './outcomes.mjs'
 export async function assembleResult({ runDir, outcome, checkpoint }) {
   const read = async path => {
     try { return await readJson(join(runDir, path), null) }
@@ -38,9 +37,6 @@ export async function assembleResult({ runDir, outcome, checkpoint }) {
     provenance: { pinned_inputs: checkpoint?.series_identity ?? null, evidence_manifest: manifest, collection },
     workflow_metrics: metrics, eval_owned_usage, eval_owned_usage_errors,
   }
-  // A score without a verdict (no calibrated threshold) is reported as
-  // unavailable with its reason, never as pass/fail, so it is never publishable.
-  if (!DEFINITION_VERDICTS.includes(result.definition_verdict)) result.definition_verdict = 'unavailable'
   return result
 }
 export async function writeResultArtifacts({ runDir, result }) {

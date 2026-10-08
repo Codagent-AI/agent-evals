@@ -7,8 +7,10 @@ import { guardPath } from './evidence.mjs'
 import { readJson, writeJsonAtomic, hashFile } from './persistence.mjs'
 import { runTimed } from './subprocess.mjs'
 export const RESULTS_RELATIVE_DIR = 'evals/agent-runner/and-scene-define/results'
+// A complete candidate run is published with its score. A run without a total
+// (every graded item leaked) has nothing to publish.
 export function publicationEligibility(result) {
-  return result?.mode === 'candidate' && result.evaluation_status === 'complete' && ['pass', 'fail'].includes(result.definition_verdict)
+  return result?.mode === 'candidate' && result.evaluation_status === 'complete' && Number.isFinite(result.total)
 }
 export async function publishRun({ runDir, repoDir, result, git = (args, options) => runTimed('git', args, options) }) {
   if (!publicationEligibility(result)) return { skipped: true, published: false, commit: null }

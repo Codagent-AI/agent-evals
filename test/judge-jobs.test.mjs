@@ -2036,6 +2036,21 @@ test('parallel product judging runs checkpoint callbacks one at a time', async (
   assert.equal(overlap, 1)
 })
 
+test('a failed checkpoint callback stops new jobs and reports only after every worker settles', async () => {
+  let settled = false
+  const late = []
+  const run = runProductJudging({ rubrics, authority, concurrency: 3, invoke: staggeredJudge([]).invoke,
+    saveJob: async ({ id }) => {
+      if (settled) late.push(id)
+      if (id === PRODUCT_JUDGE_JOB_IDS.at(-1)) throw new Error('checkpoint disk full')
+    },
+  })
+  await assert.rejects(run, /checkpoint disk full/)
+  settled = true
+  await new Promise((resolve) => setTimeout(resolve, PRODUCT_JUDGE_JOB_IDS.length * 10))
+  assert.deepEqual(late, [])
+})
+
 test('product judging retains schema rejection and quota recovery metadata', async () => {
   const outcome = await runProductJudging({ rubrics, authority, invoke: async request => {
     if (request.job === 'scene-kit') throw Object.assign(new Error('invalid_json_schema'), { code: 'judge-schema-invalid', retryable: false, resumable: false, owner: 'evaluation-harness' })

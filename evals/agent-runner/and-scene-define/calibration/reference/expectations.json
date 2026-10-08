@@ -2,8 +2,7 @@
   "input_id": "reference",
   "description": "The and-scene fixture's own create-and-scene change at ad667a9 (proposal, three specs, design, test plan), byte-identical to hidden/reference.",
   "base": null,
-  "expected_outcome": "pass",
-  "expected_fail_mark": null,
+  "variant": "reference",
   "expected": {
     "INV-001": "met",
     "INV-002": "met",
@@ -79,10 +78,11 @@
     "INV-118": "partial"
   },
   "expected_quality": {
-    "quality:testable-scenarios": "met",
-    "quality:consistency": "met",
-    "quality:rationale": "met",
-    "quality:test-plan": "met"
+    "quality:observable-outcomes": "met",
+    "quality:design-matches-specs": "met",
+    "quality:test-plan-matches-specs": "met",
+    "quality:decision-rationale": "met",
+    "quality:requirements-tested": "met"
   },
   "conversation": null,
   "removed_items": [],

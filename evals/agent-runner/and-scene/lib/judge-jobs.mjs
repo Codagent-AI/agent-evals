@@ -496,13 +496,23 @@ export async function runProductJudging({
 
   const judged = new Array(jobs.length)
   let nextJob = 0
+  let stopped = false
   const worker = async () => {
-    while (nextJob < jobs.length) {
+    while (!stopped && nextJob < jobs.length) {
       const index = nextJob++
-      judged[index] = await judgeJob(jobs[index])
+      try {
+        judged[index] = await judgeJob(jobs[index])
+      } catch (error) {
+        stopped = true
+        throw error
+      }
     }
   }
-  await Promise.all(Array.from({ length: Math.max(1, Math.min(concurrency, jobs.length)) }, worker))
+  // A failed checkpoint callback stops new jobs, and the failure is reported
+  // only after running workers settle, so no checkpoint is written after it.
+  const settled = await Promise.allSettled(Array.from({ length: Math.max(1, Math.min(concurrency, jobs.length)) }, worker))
+  const rejected = settled.find(({ status }) => status === 'rejected')
+  if (rejected) throw rejected.reason
   for (const job of judged) recordJob(job)
 
   return {

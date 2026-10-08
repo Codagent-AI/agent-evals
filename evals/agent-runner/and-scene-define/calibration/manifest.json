@@ -1,11 +1,10 @@
 {
-  "calibration_set_version": 1,
+  "calibration_set_version": 4,
   "inventory_version": 2,
   "graded_items": 72,
   "change_name": "add-presentation-skill",
   "layout": "<input_id>/collected/ mirrors a run's collected/ directory (the change directory contents); <input_id>/expectations.json holds expected verdicts; <input_id>/conversation.jsonl, when present, mirrors a run's conversation.jsonl.",
   "host_only": true,
-  "expected_fail_marks_status": "proposed; awaiting maintainer review (HT-002)",
   "real_candidates": {
     "directory": "real-candidates/",
     "inputs": []
@@ -14,8 +13,7 @@
     {
       "input_id": "reference",
       "base": null,
-      "expected_outcome": "pass",
-      "expected_fail_mark": null,
+      "variant": "reference",
       "expected_counts": {
         "met": 70,
         "partial": 1,
@@ -49,15 +47,14 @@
         },
         {
           "path": "reference/expectations.json",
-          "sha256": "4e712adc6ece3eb6be0ef8f357b6a5558a2188c0e253088127b789f1ff8c83cf"
+          "sha256": "4e44b212d82d02c1942c1ca99d2c55c7d9189056dd683ecb092fd60bfe23508c"
         }
       ]
     },
     {
       "input_id": "restructured",
       "base": "reference",
-      "expected_outcome": "pass",
-      "expected_fail_mark": null,
+      "variant": "reference",
       "expected_counts": {
         "met": 72,
         "partial": 0,
@@ -91,19 +88,18 @@
         },
         {
           "path": "restructured/collected/test-plan.md",
-          "sha256": "6893d54fd49dd3e002c95b3dc34c78a0e5c5939b946bb9eb886d8e558cee70fb"
+          "sha256": "2c502eea74abcc436df04c989454cbb7896183ce52419e813fb5c0c8405e8892"
         },
         {
           "path": "restructured/expectations.json",
-          "sha256": "8fee98c58239f888bf11f07f58e09df35bfc7f0b6094d3ed3f81b0ab0949ad2a"
+          "sha256": "587d59616f8dc6588b931dd315d49567dc7b422cf01ac29f178116ed8539309b"
         }
       ]
     },
     {
       "input_id": "reference-degraded-mandatory",
       "base": "reference",
-      "expected_outcome": "fail",
-      "expected_fail_mark": "proposed",
+      "variant": "degraded",
       "expected_counts": {
         "met": 63,
         "partial": 4,
@@ -113,7 +109,7 @@
       "files": [
         {
           "path": "reference-degraded-mandatory/collected/design.md",
-          "sha256": "185205e0e0887d439b4c6aa13da44d2555e09819b7191eb58fb06ea66be2dfd2"
+          "sha256": "1b56e232132892a466417338b1d9e3dfbb560a405ac73fc452e29eea2db0f408"
         },
         {
           "path": "reference-degraded-mandatory/collected/proposal.md",
@@ -125,7 +121,7 @@
         },
         {
           "path": "reference-degraded-mandatory/collected/specs/presentation-skill/spec.md",
-          "sha256": "4a3d66d712361d40b51a38f780d2c6ad258a6c22c187144a43b3c4350a038e75"
+          "sha256": "5208c12632a3a1552fc8ad52d88f6769f55020d66e09ae1f39ecd99415b47925"
         },
         {
           "path": "reference-degraded-mandatory/collected/specs/presentation-verification/spec.md",
@@ -137,15 +133,14 @@
         },
         {
           "path": "reference-degraded-mandatory/expectations.json",
-          "sha256": "ac8a9de1ba201ec0539ed4911586a08a6dedc421d2c8e4b26e37feb5fc2a0941"
+          "sha256": "ee8d533513fdf3574fd9daf502b5df897f29e9294b6445eb1d92836ec43b1e52"
         }
       ]
     },
     {
       "input_id": "reference-degraded-contradictions",
       "base": "reference",
-      "expected_outcome": "fail",
-      "expected_fail_mark": "proposed",
+      "variant": "degraded",
       "expected_counts": {
         "met": 65,
         "partial": 1,
@@ -183,15 +178,14 @@
         },
         {
           "path": "reference-degraded-contradictions/expectations.json",
-          "sha256": "381c8ab1609e2481f04fd12a19d4a145977d95c9a7ab0643961cf0d767dfa9d8"
+          "sha256": "b118804fcacbe9fef44e8b9abda4c6e667d57a81d9fe04723bf05f42f50ae7a9"
         }
       ]
     },
     {
       "input_id": "reference-degraded-scope-quality",
       "base": "reference",
-      "expected_outcome": "fail",
-      "expected_fail_mark": "proposed",
+      "variant": "degraded",
       "expected_counts": {
         "met": 67,
         "partial": 1,
@@ -201,7 +195,7 @@
       "files": [
         {
           "path": "reference-degraded-scope-quality/collected/design.md",
-          "sha256": "9327254e9086a266f8394af509ef4308471ef7ae67d8a38620bcf5f4ed025829"
+          "sha256": "d0998d56efadb4e94db16179418731f27d5db6726d3c64294cc3835dbae29b01"
         },
         {
           "path": "reference-degraded-scope-quality/collected/proposal.md",
@@ -229,15 +223,14 @@
         },
         {
           "path": "reference-degraded-scope-quality/expectations.json",
-          "sha256": "cf31959bdaa6248a8c21c569387f5ee88409cbdc1a2fe147b3c82ae8b17af805"
+          "sha256": "7f2aa4f28ad5761339ddce60c21698bf7713feef9ebde071ae0d03b778e184ba"
         }
       ]
     },
     {
       "input_id": "restructured-degraded-mandatory",
       "base": "restructured",
-      "expected_outcome": "fail",
-      "expected_fail_mark": "proposed",
+      "variant": "degraded",
       "expected_counts": {
         "met": 67,
         "partial": 0,
@@ -247,7 +240,7 @@
       "files": [
         {
           "path": "restructured-degraded-mandatory/collected/design.md",
-          "sha256": "b16a64df5071f075692c50f6f033e52b6342a33be3a42f2cc22cbfb8f8f64345"
+          "sha256": "2fa509dd1a7a392519c12ef7f31b3ded23a418b8ae8d66c5031b852f7fac4f62"
         },
         {
           "path": "restructured-degraded-mandatory/collected/proposal.md",
@@ -271,19 +264,18 @@
         },
         {
           "path": "restructured-degraded-mandatory/collected/test-plan.md",
-          "sha256": "79bf5dcdb965a64da321dcfd9b4ea00af27b909ac47a63e09857bfef7e338a83"
+          "sha256": "e6818efac9b189cab03eaec27489f51d24a2b54c3e0a8a1c0f4bfb221cb1bf5e"
         },
         {
           "path": "restructured-degraded-mandatory/expectations.json",
-          "sha256": "984779636347f88de2e5e37afbf82cf5391a748fc71da63207b94b3a6bd4f212"
+          "sha256": "8b9d2b8b539a7a61ff61fdbf8bb1dc61c98677b25a71e140c9971e0671976faf"
         }
       ]
     },
     {
       "input_id": "restructured-degraded-mixed",
       "base": "restructured",
-      "expected_outcome": "fail",
-      "expected_fail_mark": "proposed",
+      "variant": "degraded",
       "expected_counts": {
         "met": 69,
         "partial": 1,
@@ -317,7 +309,7 @@
         },
         {
           "path": "restructured-degraded-mixed/collected/test-plan.md",
-          "sha256": "a3203d29ae5a44f935e7a7ad232a175c2424ec25e633ae24bc3640792de4818c"
+          "sha256": "1ca7a6744bea37680bd9fedb28112f928dfd4022d31e262c88e44ea596dacd12"
         },
         {
           "path": "restructured-degraded-mixed/conversation.jsonl",
@@ -325,15 +317,14 @@
         },
         {
           "path": "restructured-degraded-mixed/expectations.json",
-          "sha256": "e702ab26083d5b7803b75556cc6f0501366872e673f565fc594cb5da5a218613"
+          "sha256": "7f7b6e273838720c0ea7bb43987e7832ea0b80ca6fc5bd8baec3c45f6facd1f9"
         }
       ]
     },
     {
       "input_id": "restructured-degraded-quality",
       "base": "restructured",
-      "expected_outcome": "fail",
-      "expected_fail_mark": "proposed",
+      "variant": "degraded",
       "expected_counts": {
         "met": 71,
         "partial": 0,
@@ -367,11 +358,11 @@
         },
         {
           "path": "restructured-degraded-quality/collected/test-plan.md",
-          "sha256": "53b731646c45526cd628bd54d13fecb10818adcb3a4407eca34bd504186de2fc"
+          "sha256": "6e5ee498d091829f9c26070d4ea1d4acc86115be9fb9aa243fc359ac5bfc9375"
         },
         {
           "path": "restructured-degraded-quality/expectations.json",
-          "sha256": "c84dc0dab5eab1094eec43f227a5a260cca9b545a0db95cb13d691a3e8256f20"
+          "sha256": "e07f628feb399601bb40485ba148f4ef18b58b838daaac39dfd11a1ddf3b71ce"
         }
       ]
     }

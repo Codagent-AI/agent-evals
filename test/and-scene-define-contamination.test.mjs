@@ -51,7 +51,7 @@ test('INT-004 retains hashed evidence and audits native calls and output determi
   assert.equal(JSON.stringify(a), JSON.stringify(b)); assert.equal(a.evaluation_status, 'contaminated')
   assert.ok(a.matches.some(m => m.pattern === 'exchange-file' && m.session === 'lead' && m.tool_call === 'c1'))
   assert.ok(a.matches.some(m => m.pattern === 'reference-canvas-dimensions'))
-  assert.equal(a.definition_verdict, 'unavailable'); assert.equal(a.residual_risk, RESIDUAL_RISK)
+  assert.equal('definition_verdict' in a, false); assert.equal(a.residual_risk, RESIDUAL_RISK)
   const manifest = await readJson(join(f.runDir, 'evidence-manifest.json'))
   for (const path of ['collected/proposal.md', 'conversation.jsonl', 'evidence/runner/state.json', 'evidence/runner/audit.log', 'evidence/runner/run-metrics.json', 'evidence/runner/external-user/exchanges.jsonl']) assert.ok(manifest.files.some(file => file.path === path && /^[a-f0-9]{64}$/.test(file.sha256)))
   await rm(f.runtime, { recursive: true }); assert.equal(reconcileConversation(await loadEvidence(f.runDir)).status, 'clean')

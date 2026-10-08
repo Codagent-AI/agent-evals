@@ -119,8 +119,8 @@ Run from the repository root; consult
 and `run.sh --help` before constructing an invocation.
 
 - Start with `--dry-run`; paid candidates use `--run-agent` with lead and
-  crosscheck profiles and the Runner `external-user-mode` checkout supporting
-  `--auth-only` and `--hide-source`. Evaluator inputs remain on the host.
+  crosscheck profiles and a clean Agent Runner `main` checkout (it includes the
+  external-user mode, `--auth-only`, and `--hide-source`). Evaluator inputs remain on the host.
 - Resume in the exact run directory with unchanged profiles and pinned inputs.
   Publication failures resume delivery alone, using the existing result commit.
 - `--rescore-from <run-dir> --run-dir <new-dir>` verifies retained manifest hashes

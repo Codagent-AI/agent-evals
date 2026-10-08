@@ -8,7 +8,8 @@ sandbox and answers interactive turns using the host-side simulated user.
 The host retains native transcripts and conversation evidence, audits contamination
 and disclosure, applies gates and panel judging, and writes a discovery ledger.
 Every outcome produces `result.json` and an offline, self-contained `report.html`.
-Completed candidate verdicts are published as a separate definition results series.
+A plan receives a score out of 100, with no pass/fail verdict. Completed, scored
+candidate runs are published as a separate definition results series.
 Contamination stops scoring and publication. All commands run from the repository root.
 
 Run from the repository root:
@@ -158,7 +159,7 @@ steps, plugin manifests, snapshot and inventory pins, mount isolation, and the
 canary check; they start no container and make no model call.
 
 ```sh
-AGENT_RUNNER_DIR=/Users/paul/codagent/agent-runner/worktrees/external-user-mode \
+AGENT_RUNNER_DIR=/path/to/clean/agent-runner \
 AGENT_SKILLS_DIR=/path/to/clean/agent-skills \
 evals/agent-runner/and-scene-define/run.sh --dry-run \
   --run-dir /absolute/new-run-dir \
@@ -226,15 +227,13 @@ the lifecycle with a fake sandbox, without paid calls. Test INT-006 invokes the
 real Runner sandbox dry-run script using isolated test auth and Skills inputs:
 
 ```sh
-AGENT_RUNNER_DIR=/Users/paul/codagent/agent-runner/worktrees/external-user-mode \
+AGENT_RUNNER_DIR=/path/to/clean/agent-runner \
 node --test test/and-scene-define-sandbox-plan.test.mjs
 ```
 
 Without `AGENT_RUNNER_DIR`, that integration test skips with an explicit reason.
-`--calibrate` remains a reserved maintainer diagnostic and fails explicitly until
-its calibration task is implemented. It is never a candidate prerequisite or gate:
-calibrated evaluator inputs are pinned ahead of candidate admission. Its eventual
-invocation is `evals/agent-runner/and-scene-define/run.sh --calibrate`.
+`--calibrate` is a maintainer diagnostic (see Calibration below). It is never a
+candidate prerequisite or gate.
 
 ## Definition judging and calibration prerequisites
 
@@ -249,24 +248,24 @@ Preference items have no coverage anchors.
 `rubric.json` is generated from the inventory. Its coverage criteria and
 anchors, quality and fidelity wording, guidance, and gates are always
 regenerated; its scoring settings are recorded in the file and round-trip
-through the builder, so calibration can record proposed values there:
+through the builder:
 
-| Setting | Field in `rubric.json` | Provisional default |
+| Setting | Field in `rubric.json` | Default |
 | --- | --- | --- |
-| Component points (sum to 100) | `components` | coverage 60, artifact_quality 25, fidelity 15 |
+| Component points (sum to 100) | `components` | coverage 70, artifact_quality 15, fidelity 15 |
 | Item weight per class | `weights` | mandatory 2, acceptable-alternative 1 |
-| Quality criterion points (sum to artifact_quality) | `quality[].points` | 6.25 each |
+| Quality criterion points (sum to artifact_quality) | `quality[].points` | 3 each |
 | Fidelity deduction and floor | `fidelity.deduction_per_exchange`, `fidelity.floor` | 3 per contradicted exchange, floor 0 |
 | Restructured-reference tolerance | `calibration.restructured_tolerance_items` | 3 (total coverage weight lost) |
 | Repeat-judging spread limit | `calibration.max_spread` | 5 total-score points |
-| Pass threshold | `pass_threshold` | `null` |
 | Calibration evidence | `calibration_evidence` | `null` |
 
-The calibration limits are provisional (`calibration.provisional: true`) until
-E2E-003 evidence and maintainer approval (HT-002). Extra keys in `calibration`
-(for example approval status or expected-fail marks) are preserved. To record
-calibrated settings, edit those fields, bump `rubric_version` and
-`versions.json`, and run the builder. `--check` still refuses any coverage
+The maintainer approved these settings as they are (HT-002) after the E2E-003
+calibration, and `rubric.json` records that approval (`provisional: false`) and a
+summary of the calibration run in `calibration_evidence`. There is no pass
+threshold: a rubric that sets `pass_threshold` is refused. Extra keys in
+`calibration` are preserved. To change a setting, edit it, bump `rubric_version`
+and `versions.json`, and run the builder. `--check` still refuses any coverage
 criterion, anchor, or item weight that diverges from the inventory and the
 recorded class weights, and any inconsistent settings.
 
@@ -276,12 +275,8 @@ output: that contradiction is scored only under coverage, so the finding is
 normalized to no deduction and listed in the score's
 `excluded_graded_contradictions` (criterion, subject id, judged verdict, judge
 and rationale). A `subject_id` outside the inventory remains invalid output. Candidate preflight
-refuses unreviewed anchors, rubric/inventory mismatches, and a null threshold.
-Dry runs verify rubric consistency without requiring review or calibration.
-Scoring itself does not need a threshold: with a null threshold (as during
-calibration) the full breakdown and total are computed, `definition_verdict`
-is unavailable, and `verdict_unavailable` records why. Such a result is never
-publishable.
+refuses unreviewed anchors and rubric/inventory mismatches. Dry runs verify
+rubric consistency without requiring review.
 
 ```sh
 node evals/agent-runner/and-scene-define/scripts/build-rubric.mjs
@@ -300,9 +295,11 @@ credential copies from the run runtime directory. Calls write eval-owned usage t
 
 `audits/disclosure.json` records settled and dissenting flags and leaked item
 ids. Leaks are excluded from both earned and possible coverage. If every item
-is leaked, coverage is zero. `judges/score.json` holds diagnostic component
-scores, gates, citations and panel records; a failed artifact or OpenSpec gate
-produces `complete`/`fail` in both the final result and report.
+is leaked, coverage is zero. `judges/score.json` holds the component
+scores and total, gates, citations and panel records. Gates are reported beside the
+score and never change it: a failed artifact or OpenSpec gate still yields a
+complete, scored result. If every item leaked, there is no total and
+`score_unavailable` says why.
 `discovery/asked.json` and `discovery/ledger.json` record asked decisions and the
 five non-scoring outcomes. Each judge job is an independent durable checkpoint,
 so a resumed judging failure reuses jobs whose provenance and hashes still
@@ -316,13 +313,13 @@ sandbox.
 staged or published. It contains:
 - the fixture's own change (`reference`);
 - a `restructured` rewrite that swaps acceptable-alternative mechanisms;
-- six degraded variants, each with a proposed expected-fail mark;
+- six degraded variants, each with planted problems;
 - an empty `real-candidates/` slot.
 
 Each input pairs a `collected/` change directory with `expectations.json`, which
 gives verdicts for all 72 graded items. Two inputs also carry a synthetic
 `conversation.jsonl` that plants fidelity contradictions. `manifest.json` hashes
-every input file. The expected-fail marks await maintainer review (HT-002). See
+every input file. See
 [`calibration/README.md`](calibration/README.md).
 
 ## Calibration (`--calibrate`)
@@ -334,7 +331,7 @@ refuses, and an output directory under `results/` is refused.
 
 ```sh
 evals/agent-runner/and-scene-define/run.sh --calibrate --dry-run
-evals/agent-runner/and-scene-define/run.sh --calibrate [--out DIR] [--repeats N] [--rescore-input ID]
+evals/agent-runner/and-scene-define/run.sh --calibrate [--out DIR] [--repeats N] [--concurrency N] [--rescore-input ID]
 ```
 
 - `--dry-run` loads the set, verifies `manifest.json` hashes and expectations,
@@ -346,6 +343,11 @@ evals/agent-runner/and-scene-define/run.sh --calibrate [--out DIR] [--repeats N]
   candidate `gates-and-judging` phase (OpenSpec gates, coverage per area,
   quality, and fidelity when the input has a conversation). No judged unit is
   reused between repeats. Inputs have no disclosure audit, so nothing is leaked.
+- `--concurrency` is how many repeats are judged at once (default 6, at
+  least 1). Each repeat's panel already runs its three judges together, so the
+  default keeps about eighteen judge CLIs in flight. The report is the same
+  whatever order repeats finish in. After a failed repeat no new repeat
+  starts, and the calibration fails once in-flight repeats finish.
 - For each input's first repeat, the decider alone is re-run 3 times on every
   recorded panel record that reached it: the batched decider ruling and every
   targeted dissent check, rebuilt exactly as the panel built them
@@ -368,24 +370,19 @@ evals/agent-runner/and-scene-define/run.sh --calibrate [--out DIR] [--repeats N]
 - `identical_rescore`: repeats 1 and 2 of `--rescore-input` (default
   `reference`), two judgings under identical conditions, diffed per item;
 - `failures`, each naming the input and items: a removed mandatory item judged
-  `met` in any repeat; the restructured reference (an expected-pass input whose
+  `met` in any repeat; the restructured reference (a `reference` variant whose
   id starts with `restructured`) losing more weighted coverage than
   `calibration.restructured_tolerance_items` against its expectations in any
-  repeat; a total-score spread above `calibration.max_spread`; and a threshold
-  that cannot separate the outcomes;
-- `threshold`: the midpoint between the highest gate-passing repeat score of a
-  marked expected-fail input and the lowest repeat score of an expected-pass
-  input, or none when they overlap. Gate-failed repeats fail regardless of
-  points, so they do not bound it;
+  repeat; and a total-score spread above `calibration.max_spread`;
 - `proposed_weights`: the current rubric settings, retained (calibration
   evaluates them; it does not fit new weights).
 
-The exit status is 0 only when there are no failures. Recording the proposed
-threshold and evidence in `rubric.json` remains a maintainer step (HT-002).
+The exit status is 0 only when there are no failures. Calibration proposes no
+pass threshold, because a plan receives a score only.
 
 ## Results, resume, and rescore
 
-The paid run needs a clean Agent Runner **external-user-mode** checkout supporting
+The paid run needs a clean Agent Runner checkout of `main`, which supports
 `--external-user`, `--until define`, and sandbox `--auth-only`, `--hide-source`,
 `--no-default-secrets`, `--input-dir`, and `--artifact-dir`. Use clean Agent Skills,
 Docker, Go, Git, Node 22, OpenSpec on the host, and valid Claude and Codex host auth
@@ -438,9 +435,9 @@ sandbox-input/, sandbox/    isolated inputs, workspace, private session recovery
 .runtime/                   private host evaluator scratch
 ```
 
-`complete` with `definition_verdict=pass` or `fail` is a finished evaluation; failed
-gates still retain diagnostic scores. `contaminated` has an unavailable verdict,
-every match, and no publication. `definition-workflow-failed` identifies the failed
+`complete` is a finished evaluation with its score; failed gates are reported
+beside the score. `contaminated` has no score, records every match, and is not
+published. `definition-workflow-failed` identifies the failed
 define step; `evaluation-harness-failed` identifies the evaluator phase. Both
 failure statuses record the observed error and whether resume is possible. Read
 `result.json` first, then the owning phase's checkpoint and evidence. A failed
@@ -477,8 +474,9 @@ runs are listed under `unscored` with their status and owning phase.
 
 ## Publication
 
-Only complete candidate `pass`/`fail` results enter
-`evals/agent-runner/and-scene-define/results/<run-id>/`. The snapshot contains
+Only complete, scored candidate results enter
+`evals/agent-runner/and-scene-define/results/<run-id>/`. A run with a failed gate
+is published like any other scored run, with the failed gate in its result. The snapshot contains
 `result.json`, `report.html`, `collected/`, `conversation.jsonl`,
 `discovery/ledger.json`, and `artifact-manifest.json` with SHA-256 hashes.
 Runtime/session state, credentials, raw judge output and full logs are excluded.

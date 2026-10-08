@@ -2,7 +2,7 @@
 
 These fixtures retain the user, assistant, and tool records from the native
 sessions of `claude-20261004T023042Z` and `codex-20261004T023437Z`, whose public
-proof-of-concept records live in `openspec/changes/eval-the-whole-workflow/poc/runs/`.
+proof-of-concept records live in `openspec/changes/archive/2026-10-08-eval-the-whole-workflow/poc/runs/`.
 Both runs asked questions and received requirements from the simulated user.
 
 Absolute workspace and personal home paths and email addresses were redacted.
