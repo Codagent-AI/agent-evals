@@ -13,8 +13,10 @@ const environment = {
 }
 // Inherited Git variables must not redirect the repository or inject config.
 for (const name of Object.keys(environment)) if (name.startsWith('GIT_') && !['GIT_CONFIG_NOSYSTEM', 'GIT_CONFIG_GLOBAL', 'GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL', 'GIT_AUTHOR_DATE', 'GIT_COMMITTER_DATE'].includes(name)) delete environment[name]
+// Auto maintenance is off: since Git 2.47 a commit can leave a detached
+// `git maintenance` process writing under .git/objects after it returns.
 export function repoGit(cwd, args, options = {}) {
-  const output = execFileSync('git', ['-C', cwd, '-c', 'core.autocrlf=false', '-c', 'core.excludesFile=/dev/null', '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', ...args], { env: environment, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...options })
+  const output = execFileSync('git', ['-C', cwd, '-c', 'core.autocrlf=false', '-c', 'core.excludesFile=/dev/null', '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', '-c', 'maintenance.auto=false', '-c', 'gc.auto=0', ...args], { env: environment, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...options })
   return typeof output === 'string' ? output.trim() : output
 }
 export async function initializeTree(repoDir, expectedFileCount) {
