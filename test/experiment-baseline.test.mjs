@@ -81,6 +81,9 @@ test('admission, identity, lineage and human review', () => {
   for (const patch of [{ schema_version: 7 }, { run_id: null }, { run_kind: 'reference' }, { failure: { reason: 'quota' } }, { automated_subtotal: { complete: false } }, { workflow: { provenance: { commit: null } } }]) {
     assert.ok(extracted(patch).refusals.length)
   }
+  // Schema 9 added only the second-opinion summary, so its results are admitted too.
+  assert.deepEqual(extracted({ schema_version: 9 }).refusals, [])
+  assert.ok(extracted({ schema_version: 10 }).refusals.length)
   refusal(set(baseline.emptyRecord(), [extracted({ run_id: null })]), 'missing-run-id')
   const different = extracted({ run_id: 'rep-2', role_configuration: { roles: { implementor: { configured: { model: 'model-b' } } } } })
   refusal(add(initial, different), 'identity-mismatch')

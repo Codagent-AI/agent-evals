@@ -94,7 +94,7 @@ temporary file SHALL remain. `show` SHALL never write the record.
 A directory SHALL be refused when:
 - it has no readable `result.json`;
 - its `result.json` is not valid JSON;
-- its `schema_version` is not supported. Version 8 is the only supported version;
+- its `schema_version` is not supported. Versions 8 and 9 are supported; version 9 adds only the second-opinion summary;
 - it is not an Agent Runner candidate run (`run_kind` other than `candidate`, or `mode` other than
   `agent-runner`). Reference-baseline runs cannot join an experiment baseline.
 
@@ -146,7 +146,7 @@ A value missing from `result.json` SHALL be stored as `null`. It SHALL NOT be fi
 default.
 
 #### Scenario: Entry copies the mapped values
-- **WHEN** a schema-8 result is admitted
+- **WHEN** a schema-8 or schema-9 result is admitted
 - **THEN** its entry holds the run id, runner and skills commits, workflow settings, fixture
   commit, role profiles with observed models, rubric identities, automated score, gate verdicts,
   tokens, active time, cost and failure fields with the values found in that `result.json`

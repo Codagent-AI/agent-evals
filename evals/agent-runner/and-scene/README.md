@@ -910,7 +910,7 @@ then recompute the official score from rescored automated points and awarded hum
 points. The record and `show` name the review source. An unavailable review or
 rubric mismatch leaves a rescored median ineligible for `set`.
 
-Only schema-8 Agent Runner candidate results are admitted. Every repetition must
+Only schema-8 and schema-9 Agent Runner candidate results are admitted. Every repetition must
 have the same runner commit; `--allow-mismatch <reason>` cannot waive this rule.
 It can waive differences in the skills commit, workflow settings, fixture commit,
 configured role profiles, or rubrics. The waived fields and reason are saved on
