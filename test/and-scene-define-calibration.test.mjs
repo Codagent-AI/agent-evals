@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { buildRubric, checkJudgingInputs } from '../evals/agent-runner/and-scene-define/lib/rubric.mjs'
 import { SUITE_ROOT } from '../evals/agent-runner/and-scene-define/lib/files.mjs'
 import { accuracy, stability, basisShares, familyDistribution, rescoreDiff, deciderFlips, aggregateCalibration, loadCalibrationSet, allExpected, renderCalibrationMarkdown, CALIBRATION_MODE } from '../evals/agent-runner/and-scene-define/lib/calibration.mjs'
-import { runCalibration, parseCalibrateArguments, assertAnchorsReviewed } from '../evals/agent-runner/and-scene-define/calibrate.mjs'
+import { runCalibration, parseCalibrateArguments, assertAnchorsReviewed, CALIBRATE_HELP } from '../evals/agent-runner/and-scene-define/calibrate.mjs'
 import { runDefinitionPanel, rerunDefinitionDecider } from '../evals/agent-runner/and-scene-define/lib/judge-jobs.mjs'
 import { publicationEligibility, publishRun } from '../evals/agent-runner/and-scene-define/lib/publication.mjs'
 import { parseArguments } from '../evals/agent-runner/and-scene-define/controller.mjs'
@@ -342,12 +342,12 @@ test('real judging is refused while anchors are unreviewed (HT-003); a dry run m
   await assert.rejects(readdir(f.outDir), { code: 'ENOENT' })
   assert.throws(() => assertAnchorsReviewed({ inventory_version: 3, anchors_review: { reviewer: 'm', date: '2026-10-06', inventory_version: 2 } }), /HT-003.*version 3/)
   const dry = await runCalibration({ suiteRoot: f.suiteRoot, calibrationDir: f.calibrationDir, outDir: f.outDir, dryRun: true, repoRoot: f.root }, { judges, gateCommand })
-  assert.equal(dry.dryRun, true); assert.equal(dry.plan.inputs.length, 3); assert.equal(dry.plan.repeats, 3)
+  assert.equal(dry.dryRun, true); assert.equal(dry.plan.inputs.length, 3); assert.equal(dry.plan.repeats, 3); assert.equal(dry.plan.concurrency, 6)
   assert.equal(calls.length, 0)
   await assert.rejects(readdir(f.outDir), { code: 'ENOENT' })
 })
 
-test('calibrate arguments: at least three repeats, host-only default output, one mode', () => {
+test('calibrate arguments: at least three repeats, host-only default output, one mode', async () => {
   const now = new Date('2026-10-06T12:00:00Z')
   const options = parseCalibrateArguments(['--calibrate'], { now, repoRoot: '/repo' })
   assert.equal(options.repeats, 3); assert.equal(options.outDir, '/repo/artifacts/evals/and-scene-define-calibration/2026-10-06T12-00-00-000Z')
@@ -357,6 +357,8 @@ test('calibrate arguments: at least three repeats, host-only default output, one
   assert.equal(options.concurrency, 6)
   assert.equal(parseCalibrateArguments(['--calibrate', '--concurrency', '2'], { now }).concurrency, 2)
   assert.throws(() => parseCalibrateArguments(['--calibrate', '--concurrency', '0']), /--concurrency must be an integer of at least 1/)
+  // Both the suite help and the calibrate help name every calibration option.
+  for (const help of [(await import('../evals/agent-runner/and-scene-define/controller.mjs')).HELP, CALIBRATE_HELP]) assert.match(help, /--concurrency N/)
   assert.throws(() => parseCalibrateArguments(['--calibrate', '--run-agent']), /exactly one mode/)
   assert.throws(() => parseArguments(['--calibrate']), /run\.sh \(calibrate\.mjs\)/)
 })

@@ -367,7 +367,7 @@ Compare recorded runs (scores are paired only within one series):
 Rescores use current pinned evaluator inputs and a new --run-dir; never published.
 Publication failure: --resume --run-dir retries only publication, without profiles.
 Calibration options (with --calibrate): --out DIR, --repeats N (>=3, default 3),
-  --rescore-input ID, --calibration-dir DIR, --dry-run (no model calls). Output
+  --concurrency N (repeats judged at once, default 6), --rescore-input ID, --calibration-dir DIR, --dry-run (no model calls). Output
   defaults to artifacts/evals/and-scene-define-calibration/<timestamp>; real
   judging requires reviewed anchors (HT-003).
 Policy diagnostic: node evals/agent-runner/and-scene-define/policy-test.mjs --output PATH

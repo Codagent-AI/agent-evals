@@ -134,7 +134,9 @@ export async function runCalibration(options, dependencies = {}) {
   const set = await loadCalibrationSet(options.calibrationDir ?? join(suiteRoot, 'calibration'), { rubric })
   const outDir = resolve(options.outDir)
   for (const root of [join(suiteRoot, 'results'), join(options.repoRoot ?? REPO_ROOT, RESULTS_RELATIVE_DIR)]) if (inside(root, outDir)) throw new Error('calibration output must never be written under the published results directory')
-  const plan = { mode: 'calibration', output_directory: outDir, repeats, decider_reruns: DECIDER_RERUNS,
+  const concurrency = options.concurrency ?? CALIBRATION_CONCURRENCY
+  if (!Number.isInteger(concurrency) || concurrency < 1) throw new Error('calibration concurrency must be an integer of at least 1')
+  const plan = { mode: 'calibration', output_directory: outDir, repeats, concurrency, decider_reruns: DECIDER_RERUNS,
     inputs: set.inputs.map(x => ({ input_id: x.input_id, variant: x.expectations.variant, artifacts: x.files.length, conversation_exchanges: x.conversation.length, input_hash: x.input_hash })),
     judge_profile: JUDGE_PROFILE, panel_protocol: PANEL_PROTOCOL }
   if (options.dryRun) return { dryRun: true, plan, exitCode: 0 }
@@ -153,8 +155,6 @@ export async function runCalibration(options, dependencies = {}) {
   // and repeat, so the report does not depend on which repeat finishes first.
   // After a failure no new repeat starts; in-flight repeats finish first so no
   // judge call outlives the calibration.
-  const concurrency = options.concurrency ?? CALIBRATION_CONCURRENCY
-  if (!Number.isInteger(concurrency) || concurrency < 1) throw new Error('calibration concurrency must be an integer of at least 1')
   const tasks = set.inputs.flatMap((input, index) => Array.from({ length: repeats }, (_, n) => ({ index, input, repeat: n + 1 })))
   const results = set.inputs.map(() => [])
   const rerunsByInput = set.inputs.map(() => [])
