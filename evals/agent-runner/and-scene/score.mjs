@@ -9,7 +9,7 @@ import { pathToFileURL } from 'node:url'
 
 import { readJson } from './lib/persistence.mjs'
 import { productJudgeJobs } from './lib/judge-jobs.mjs'
-import { loadRubrics } from './lib/rubric.mjs'
+import { deterministicCriteria, loadRubrics } from './lib/rubric.mjs'
 import { scoreProduct } from './lib/scorer.mjs'
 
 function valueAfter(args, option, required = true) {
@@ -35,11 +35,30 @@ async function main(args) {
   const mode = valueAfter(args, '--mode', false) ?? 'agent-runner'
   const requiredJobs = productJudgeJobs(rubrics, { mode }).map(({ id }) => id)
   const failed = new Set(judging?.failed_jobs ?? [])
+  const judges = judging?.judges ?? {}
+  // In a recorded judging phase, a job that is neither recorded nor failed was
+  // never asked: the run was judged under an older automated rubric without it.
+  const recordedJudging = Object.keys(judges).length > 0
+  const unjudged = recordedJudging
+    ? requiredJobs.filter((job) => !failed.has(job) && !Object.hasOwn(judges, job))
+    : []
   const missing = requiredJobs.filter((job) => (
-    failed.has(job) || !Array.isArray(judging?.judges?.[job])
+    !unjudged.includes(job) && (failed.has(job) || !Array.isArray(judges[job]))
   ))
   if (missing.length > 0) {
     throw new Error(`required judge jobs failed: ${missing.join(', ')}`)
+  }
+  const version = rubrics.automated.version
+  const rejudge = 'it was judged under an older rubric and must be re-judged with --rescore-from'
+  if (unjudged.length > 0) {
+    throw new Error(`judging has no verdicts for ${unjudged.join(', ')}, which automated rubric ${version} requires; ${rejudge}`)
+  }
+  if (browser?.criteria) {
+    const recorded = new Set(browser.criteria.map(({ id }) => id))
+    const absent = deterministicCriteria(rubrics.automated.rubric).filter((id) => !recorded.has(id))
+    if (absent.length > 0) {
+      throw new Error(`the browser evaluation has no results for ${absent.join(', ')}, which automated rubric ${version} requires; ${rejudge}`)
+    }
   }
   const durableHuman = humanReview?.score
     ? {

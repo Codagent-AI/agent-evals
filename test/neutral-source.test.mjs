@@ -179,7 +179,7 @@ test('neutral requirements preserve normative text in identity-free paths', asyn
 
 test('judge input policies expose only the source and provenance each rubric permits', () => {
   for (const job of [
-    'demo-integration', 'scene-kit', 'presentation-skill', 'verification-tooling',
+    'demo-integration', 'scene-kit', 'presentation-skill', 'verification-tooling', 'engineering-quality',
   ]) {
     assert.deepEqual(JUDGE_INPUT_POLICIES[job], {
       neutral_source: true,

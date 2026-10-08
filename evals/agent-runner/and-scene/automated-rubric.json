@@ -334,9 +334,23 @@
     },
     "skill-empty-directory-scaffold": {
       "owner": "fixture",
-      "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
-      "heading": "Scenario: Empty or fully unscaffolded directory",
-      "quote": "it performs a full scaffold (build setup, scene kit, and presentation index) and installs the required dependencies before creating the presentation"
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Scenario: Empty or fully unscaffolded directory",
+          "quote": "it performs a full scaffold (build setup, scene kit, and presentation index) and installs the required dependencies before creating the presentation"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-skill/spec.md",
+          "heading": "Requirement: Self-bootstrapping scaffold",
+          "quote": "It SHALL install the runtime and build dependencies needed for React, Vite, TypeScript, Motion, Lucide icons, linting, and render verification"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Risks / Trade-offs",
+          "quote": "Install Chromium in the verify step"
+        }
+      ]
     },
     "skill-already-scaffolded": {
       "owner": "fixture",
@@ -446,9 +460,18 @@
     },
     "verification-step-error-fails": {
       "owner": "fixture",
-      "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
-      "heading": "Scenario: Step error fails verification",
-      "quote": "verification fails and identifies the failing step"
+      "sources": [
+        {
+          "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
+          "heading": "Scenario: Step error fails verification",
+          "quote": "verification fails and identifies the failing step"
+        },
+        {
+          "document": "openspec/changes/create-and-scene/design.md",
+          "heading": "Verification (`npm run verify` → `scripts/verify.mjs`)",
+          "quote": "reads the step count from a `data-step-count` hook on the chrome, then steps through every step (`ArrowRight`), checking the `data-step-index` advances"
+        }
+      ]
     },
     "quality-project-local-screenshot-helper": {
       "owner": "fixture",
@@ -547,6 +570,70 @@
       "document": "openspec/changes/create-and-scene/specs/presentation-verification/spec.md",
       "heading": "Scenario: Clear outcome",
       "quote": "it reports a clear pass or fail (non-zero exit on failure) identifying which check failed"
+    },
+    "input-modifier-keys-pass-through": {
+      "owner": "eval",
+      "reason": "Pass only when, from a step that is neither the first nor the last, pressing ArrowRight and ArrowLeft while holding each of Alt, Control, and Meta in turn never changes the step index and the page never calls preventDefault on any of those modified keydowns, even when its handler also stops propagation. A modified press that makes the browser leave the presentation document, such as Alt+ArrowLeft navigating history, shows that the page let the shortcut through and counts as passing through. Fail when any modified press changes the step index or has its default prevented. The fixture does not specify modifier keys; leaving browser and system shortcuts to the browser is eval-owned engineering quality."
+    },
+    "input-swipe-from-control-ignored": {
+      "owner": "eval",
+      "reason": "Pass only when a predominantly horizontal single-touch swipe that starts on an interactive control inside the presentation, made from a step that is neither the first nor the last in whichever mode exposes such a control, leaves the step index unchanged whether it is delivered as touch events or as pointer events. A control whose activation does not change the step, such as a mode control, is preferred. Fail when the swipe changes the step index under either input path, except that when the only control available is a step control, a resulting step equal to that control's own activation target is not a failure. The fixture does not specify swipes that start on controls; ignoring them is eval-owned engineering quality."
+    },
+    "engineering-preview-terminated-on-every-exit": {
+      "owner": "eval",
+      "reason": "Pass only when the delivered verify and inspect scripts, in both the repository copies and the skill's bootstrap template copies, terminate and await the preview server process itself on every exit path, including success, a browser launch failure, and an error after the preview started. Killing only an npm or npx wrapper while the server it spawned keeps running fails. A preview started through Vite's preview() API and closed on every exit path passes."
+    },
+    "engineering-preview-readiness-bounded": {
+      "owner": "eval",
+      "reason": "Pass only when the delivered verify and inspect scripts meet all three of these: every wait for preview readiness has a timeout; verification starts the preview only after the build it verifies has completed; and when readiness relies on the server's printed ready URL, the parsing tolerates ANSI colour codes and output split across chunks. Fail when any of the three is not met. Whether readiness is connected to the scripts' own child process is scored only by verification-preview-process-ownership."
+    },
+    "engineering-bootstrap-scripts-generic": {
+      "owner": "eval",
+      "reason": "Pass only when the skill's bootstrap template copies of verify and inspect meet all three of these: they take the target presentation from an argument, or verify every registered route; they reject an unregistered slug with a clear non-zero failure, rather than timing out or accepting the landing-page fallback; and they contain no titles, captions, routes, or defaults specific to the repository's reference sample. Fail when any of the three is not met, including a template that checks only a hardcoded sample route or only the first registry entry."
+    },
+    "engineering-inspect-fails-loudly": {
+      "owner": "eval",
+      "reason": "Pass only when the delivered inspect helper meets all three of these: it rejects a missing, zero, or non-numeric step count or step index; before capturing each step, it confirms that the reported step index equals the step it meant to reach; and it never reports success with zero captures. Fail when any of the three is not met. Verify's detection of a non-advancing step is scored by the existing verification criteria, not here."
+    },
+    "engineering-checks-read-rendered-page": {
+      "owner": "eval",
+      "reason": "Pass only when the delivered verification checks of the sample's titles, captions, outline order, and registration read the rendered page at each step, rather than matching regular expressions over source text. Fail when any of those checks matches regular expressions over source text. Hardening a source parser against syntax that never occurs earns no credit."
+    },
+    "engineering-diagnostics-cover-presentation": {
+      "owner": "eval",
+      "reason": "Pass only when the visual inspection diagnostics run on every captured step, not only one, and the captures and diagnostics include the presentation's chrome rather than only a cropped scene. Fail when diagnostics run on a single step, such as the last, or when captures crop out the caption, table of contents, or controls. Whether individual warnings fire, and the scope of intentional-overlap suppression, are scored by the existing visual-helper criteria; the performance of the overlap scan does not affect the verdict."
+    },
+    "engineering-templates-build-at-destination": {
+      "owner": "eval",
+      "reason": "Pass only when every step, presentation, and inspect template that the skill materializes would type-check and build at the destination the skill documents for it, established either by tracing each template's relative imports, CSS imports, required props, and field names against the bootstrapped project layout and the kit's types, or by a focused test that materializes the templates and builds them. Fail when a template's relative import resolves outside the project's src directory from its documented destination, a CSS import does not resolve, a template omits a prop the kit's types require, or a field name does not match the kit's types. Whether the skill resolves its template paths is scored only by skill-template-path-resolution."
+    },
+    "engineering-skill-description-triggers": {
+      "owner": "eval",
+      "reason": "Pass only when the delivered SKILL.md frontmatter description is written in the third person, states when to use the skill, and quotes at least two example user phrases that should trigger it. Fail when any of the three is missing, such as a first-person description or one that quotes no trigger phrases."
+    },
+    "engineering-skill-out-of-scope-redirects": {
+      "owner": "eval",
+      "reason": "Pass only when the delivered SKILL.md has a section listing each of the proposal's exclusions, which are PowerPoint or Keynote output, PDF or image export, a visual editor, and hosting, and gives each a redirect telling the agent what to do or suggest instead. Fail when the section is missing, omits an exclusion, or lists an exclusion without a redirect."
+    },
+    "engineering-skill-completion-report": {
+      "owner": "eval",
+      "reason": "Pass only when the delivered SKILL.md gives a completion-report template that names the presentation route, the files changed, the build, render, and inspect results, and the advisory warnings that remain. Fail when it tells the agent to report completion without defining the report's contents, or when the template omits any of those items. Whether the checks must run and pass before completion is scored only by skill-checks-run-before-done and skill-failures-fixed-before-success; this criterion scores only the report the skill asks the agent to give."
+    },
+    "engineering-presentation-css-scoped": {
+      "owner": "eval",
+      "reason": "Pass only when every selector in a stylesheet owned by a presentation is scoped under that presentation's own root class or hook, or comes from a CSS module, including selectors that target the kit's hook classes or attributes such as `.presentation-attribution`. Fail when a presentation-owned stylesheet contains an unscoped rule, because it leaks to other presentations after client-side navigation. A host-owned global stylesheet may style kit hooks without a presentation scope. Readability and narrow-viewport layout are not scored here."
+    },
+    "engineering-typed-kit-primitives": {
+      "owner": "eval",
+      "reason": "Pass only when the kit's public primitives meet all three of these: they type their props as the rendered element's props rather than an untyped bag such as Record<string, unknown>; they apply the kit's own identity hooks (data-presentation-* attributes, layoutId, entity identifiers) after caller props, so callers cannot override them; and they keep props meant only for the kit off the DOM. Fail when any of the three is not met."
+    },
+    "engineering-tests-wait-on-state": {
+      "owner": "eval",
+      "reason": "Pass only when the delivered automated tests that drive a browser wait for observable state before asserting on it, using a polling or auto-waiting assertion on, for example, the step index or a settled signal, and use no fixed sleeps. A call that returns immediately but is used as if it waited, such as reading an element count, counts as a fixed sleep. Fail when any browser test sleeps for a fixed time instead of waiting for state."
+    },
+    "engineering-tests-isolate-resources": {
+      "owner": "eval",
+      "reason": "Pass only when the delivered automated tests that start a preview server or a browser allocate ports dynamically rather than sharing fixed ports, and terminate every process they start. Fail when tests share a hardcoded port, or when a test kills only an npm or npx wrapper and leaves the preview server running."
     }
   },
   "eval_owned_values": [
@@ -569,10 +656,42 @@
     {
       "value": "https://github.com/Codagent-AI/and-scene",
       "reason": "The fixture requires the default attribution to link to the and-scene GitHub repository; this is that repository, the fixture's own origin."
+    },
+    {
+      "value": "PowerPoint",
+      "reason": "Exclusion from the fixture proposal's Out of Scope section, repeated by engineering-skill-out-of-scope-redirects; that criterion is eval-owned, so it names the exclusion rather than citing it."
+    },
+    {
+      "value": "Keynote",
+      "reason": "Exclusion from the fixture proposal's Out of Scope section, repeated by engineering-skill-out-of-scope-redirects; that criterion is eval-owned, so it names the exclusion rather than citing it."
+    },
+    {
+      "value": "PDF or image export",
+      "reason": "Exclusion from the fixture proposal's Out of Scope section, repeated by engineering-skill-out-of-scope-redirects; that criterion is eval-owned, so it names the exclusion rather than citing it."
+    },
+    {
+      "value": "visual editor",
+      "reason": "Exclusion from the fixture proposal's Out of Scope section, repeated by engineering-skill-out-of-scope-redirects; that criterion is eval-owned, so it names the exclusion rather than citing it."
+    },
+    {
+      "value": "hosting",
+      "reason": "Exclusion from the fixture proposal's Out of Scope section, repeated by engineering-skill-out-of-scope-redirects; that criterion is eval-owned, so it names the exclusion rather than citing it."
+    },
+    {
+      "value": "data-presentation",
+      "reason": "Prefix of the kit's own data-presentation-* identity hook attributes, named as an example by the eval-owned engineering-typed-kit-primitives criterion; the fixture requires presentation hooks without naming their spelling."
+    },
+    {
+      "value": ".presentation-attribution",
+      "reason": "Example of a kit attribution hook class named by the eval-owned engineering-presentation-css-scoped criterion; the fixture requires a stable attribution styling hook without naming it."
+    },
+    {
+      "value": "layoutId",
+      "reason": "The motion layout identity prop the fixture design uses for persisting entities, named as a kit identity hook by the eval-owned engineering-typed-kit-primitives criterion, which cannot cite the fixture."
     }
   ],
   "rubric_id": "and-scene-automated-product",
-  "version": "13.0.0",
+  "version": "14.0.0",
   "total_points": 100,
   "automated_points": 70,
   "human_points": 30,
@@ -648,6 +767,16 @@
       "job": "demo-integration",
       "requirement": "The nine steps are one evolving scene whose objects persist across steps.",
       "guidance": ["Cite the identity each persisting object carries across steps."]
+    },
+    "input-modifier-keys-pass-through": {
+      "job": "demo-integration",
+      "requirement": "From a step that is neither the first nor the last, ArrowRight and ArrowLeft pressed while Alt, Control, or Meta is held neither change the step nor have their default prevented.",
+      "guidance": ["Cite the deck's keydown handler and show that it returns before navigating or calling preventDefault when altKey, ctrlKey, or metaKey is set; a handler that navigates or prevents the default regardless of modifiers fails. Treat the browser observation as a lead."]
+    },
+    "input-swipe-from-control-ignored": {
+      "job": "demo-integration",
+      "requirement": "A predominantly horizontal single-touch swipe that starts on an interactive control inside the presentation does not change the step.",
+      "guidance": ["Cite the swipe handler and show that a touch or pointer gesture whose start target is an interactive control, or inside one, is ignored for navigation; a handler that navigates on any horizontal swipe regardless of where it starts fails. Treat the browser observation as a lead."]
     }
   },
   "contradiction_pairs": [
@@ -661,13 +790,13 @@
     {
       "id": "demo-technical-quality",
       "title": "Demo presentation technical quality",
-      "points": 24,
-      "floor": 15,
+      "points": 20,
+      "floor": 12.5,
       "subcomponents": [
         {
           "id": "demo-canonical-content",
           "title": "Canonical content, routing, and technical structure",
-          "points": 5,
+          "points": 4,
           "evaluator": "deterministic-browser",
           "criteria": [
             "demo-route-and-registration",
@@ -680,7 +809,7 @@
         {
           "id": "demo-navigation-and-modes",
           "title": "Navigation, modes, boundaries, and controls",
-          "points": 5,
+          "points": 4,
           "evaluator": "deterministic-browser",
           "criteria": [
             "demo-present-mode-behavior",
@@ -693,7 +822,7 @@
         {
           "id": "demo-runtime-reliability",
           "title": "Runtime reliability and accessibility baseline",
-          "points": 4,
+          "points": 3,
           "evaluator": "deterministic-browser",
           "criteria": [
             "demo-step-and-transition-reliability",
@@ -732,7 +861,7 @@
         {
           "id": "demo-code-boundaries",
           "title": "Maintains clear boundaries and scope discipline",
-          "points": 3,
+          "points": 2,
           "evaluator": "llm-source-review",
           "job": "demo-integration",
           "criteria": [
@@ -754,13 +883,13 @@
     {
       "id": "scene-kit-correctness",
       "title": "Scene kit correctness",
-      "points": 24,
-      "floor": 15,
+      "points": 20,
+      "floor": 12.5,
       "subcomponents": [
         {
           "id": "scene-step-model",
           "title": "Step model, stable identity, and typed boundary",
-          "points": 4,
+          "points": 3,
           "evaluator": "llm-source-review",
           "job": "scene-kit",
           "criteria": [
@@ -776,7 +905,7 @@
         {
           "id": "scene-entity-transitions",
           "title": "Entity transitions and persistent grouped scenes",
-          "points": 7,
+          "points": 6,
           "evaluator": "llm-source-review",
           "job": "scene-kit",
           "criteria": [
@@ -802,7 +931,7 @@
         {
           "id": "scene-modes-and-navigation",
           "title": "Present/browse modes, navigation, controls, and boundaries",
-          "points": 6,
+          "points": 5,
           "evaluator": "llm-source-review",
           "job": "scene-kit",
           "criteria": [
@@ -853,7 +982,7 @@
         {
           "id": "scene-style-and-attribution",
           "title": "Style ownership, hooks, framework neutrality, and attribution",
-          "points": 5,
+          "points": 4,
           "evaluator": "llm-source-review",
           "job": "scene-kit",
           "criteria": [
@@ -918,7 +1047,9 @@
             "Fail an instruction-governed scaffold criterion when its instruction is missing, ambiguous, or contradicts the scenario, or when a delivered helper script or template implements that branch differently. A generic instruction such as scaffold if needed does not state a branch.",
             "For skill-template-path-resolution, credit an explicit instruction or helper that resolves template paths from the directory containing SKILL.md rather than from the caller's working directory.",
             "For skill-empty-directory-scaffold, require that the bootstrap template contains the build setup, scene kit, and presentation index with the required dependency set, that SKILL.md directs a full scaffold and dependency installation for an empty or unscaffolded target, and a test that materializes the bootstrap template in a fresh temporary location and builds it, as the fixture test plan's integration coverage describes. Any materialization pattern counts, including creating a temporary directory and copying the template into a new app path inside it; a test name or filename alone is not that test.",
-            "For skill-scaffold-style-neutral, inspect the bootstrap template's dependencies and styles: credit a scaffold that adds no styling framework and defines no default presentation colors, fonts, spacing scale, card or button styles, borders, shadows, or theme tokens."
+            "For skill-scaffold-style-neutral, inspect the bootstrap template's dependencies and styles: credit a scaffold that adds no styling framework and defines no default presentation colors, fonts, spacing scale, card or button styles, borders, shadows, or theme tokens.",
+            "For skill-empty-directory-scaffold, the scene kit in the bootstrap template is a snapshot of the canonical src/presentation-kit/, which the fixture requires to stay aligned with it. Fail when a non-test scene-kit file in the bootstrap template differs in behavior or public types from its canonical counterpart. Cite both files. Formatting-only differences do not fail.",
+            "For skill-empty-directory-scaffold, the dependencies needed for render verification include the Playwright Chromium browser, which the fixture design installs in the verify step. Credit SKILL.md, the bootstrap scripts, or the verify step when they install Chromium or check that it is available before the render check. Fail when none of them installs it or checks for it."
           ]
         },
         {
@@ -952,7 +1083,8 @@
           "review_guidance": [
             "The normative skill instructions are the implementation of the agent's completion gate. Credit explicit instructions that require build, render, and browser composition checks before success and require fixing and rerunning failures before completion.",
             "Do not require an automated agent-remediation loop or interaction transcript; the verification tooling itself is scored separately for its executable technical behavior.",
-            "For skill-failures-fixed-before-success, credit a general instruction to fix failures and re-run the checks, together with a rule against reporting success while a build or render failure remains; fixing visual composition findings and re-inspecting satisfies the visual check. Do not fail it for a failure mode of a check tool the instructions do not mention. It need not name each check type. Fail it when the instructions allow completing with a failing check, or name a failure type that may be reported instead of fixed. A pass/fail field in a completion report format is not a permission to complete with a failing check."
+            "For skill-failures-fixed-before-success, credit a general instruction to fix failures and re-run the checks, together with a rule against reporting success while a build or render failure remains; fixing visual composition findings and re-inspecting satisfies the visual check. Do not fail it for a failure mode of a check tool the instructions do not mention. It need not name each check type. Fail it when the instructions allow completing with a failing check, or name a failure type that may be reported instead of fixed. A pass/fail field in a completion report format is not a permission to complete with a failing check.",
+            "For skill-checks-run-before-done, the fixture's self-verify requirement says that the visual composition check inspects the first step, the last step, and any dense or key steps, and that responsive-sensitive presentations are also checked at a narrow viewport. Fail when the instructions' visual composition check never directs a narrow-viewport check for a responsive-sensitive presentation. The project-local screenshot helper need not capture the narrow viewport, because the fixture defines it at a standard desktop viewport; any browser view satisfies the narrow check."
           ]
         }
       ]
@@ -991,7 +1123,8 @@
             "For verification-preview-process-ownership, credit either of these mechanisms: (a) the verifier picks a fresh port it reserved itself (for example an ephemeral port), starts the preview on it with a strict port, and takes readiness from the spawned child's own announcement of that address, with the child exiting before readiness rejecting it; or (b) readiness polling of the preview address is raced against the spawned child's exit, so the child's exit at any point before readiness fails verification.",
             "Fail verification-preview-process-ownership when readiness comes from HTTP polling of a fixed or reused port and the only ownership check is the child's liveness sampled before each request or after a fixed delay: a stale server already listening there answers before the child's exit is observed. A strict port alone is likewise insufficient.",
             "For verification-console-page-error-fails, the source must fail on both console errors and uncaught page errors and report the step. Executable evidence needs one representative browser-error test, either a console error or a page error, that asserts a non-zero exit and the offending step, as the fixture's end-to-end plan describes; separate tests for each error kind are not required.",
-            "For verification-step-error-fails, require a test of a step that fails to render or advance that asserts a non-zero exit and the offending step."
+            "For verification-step-error-fails, require a test of a step that fails to render or advance that asserts a non-zero exit and the offending step.",
+            "For verification-step-error-fails, the verifier must not treat a missing, zero, or non-numeric data-step-count or data-step-index as progress. Fail when the transition check converts an absent or non-numeric hook into a number that still satisfies its comparison (for example Number(null) === 0 on the first step). Also fail when an unreadable step count makes the verifier step through no steps and still pass. Cite the comparison. The inspect helper's handling of the same hooks is scored by engineering-inspect-fails-loudly, not here."
           ]
         },
         {
@@ -1032,6 +1165,93 @@
             "A warning identifies an element when its output names something a reader can find on the page: the step, plus for each element its visible text, or for an element without visible text its accessible name, a stable hook or data attribute, or a selector path. For visual-helper-active-state-warning the warning must say which chrome is affected (the progress indicator or the table-of-contents entry); a stable hook or selector of that chrome, such as a progress or table-of-contents data attribute, says which chrome it is. An empty string, a bare tag name, or a generic label such as element for a textless element does not identify it and fails the criterion whose warning prints it.",
             "For visual-helper-overlap-warning, the fixture covers visible text or presentation chrome overlapping another visible text or chrome element, so presentation chrome counts whether or not it contains text (for example progress dots or icon-only controls). Require that the helper compares those elements on each step and prints an advisory warning naming the step and the overlapping elements, with a focused test whose setup creates an unmarked collision and asserts that warning. Fail when the comparison drops chrome that has no text content. Do not require detection of any collision beyond overlapping visible text or chrome elements.",
             "For visual-helper-allow-overlap, the fixture exempts elements inside a subtree marked as allowing overlap. Skipping every pair in which at least one element is inside a marked subtree is a correct reading; do not require the helper to keep reporting collisions between a marked element and an unmarked one. Require a focused test whose setup marks an overlapping subtree and asserts that no overlap warning is reported for it."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineering-quality",
+      "title": "Engineering quality beyond the spec",
+      "points": 8,
+      "floor": null,
+      "subcomponents": [
+        {
+          "id": "engineering-input-hygiene",
+          "title": "Input hygiene",
+          "points": 2,
+          "evaluator": "deterministic-browser",
+          "criteria": [
+            "input-modifier-keys-pass-through",
+            "input-swipe-from-control-ignored"
+          ]
+        },
+        {
+          "id": "engineering-verification-tooling-robustness",
+          "title": "Verification tooling robustness",
+          "points": 3,
+          "evaluator": "llm-source-review",
+          "job": "engineering-quality",
+          "criteria": [
+            "engineering-preview-terminated-on-every-exit",
+            "engineering-preview-readiness-bounded",
+            "engineering-bootstrap-scripts-generic",
+            "engineering-inspect-fails-loudly",
+            "engineering-checks-read-rendered-page",
+            "engineering-diagnostics-cover-presentation"
+          ],
+          "review_guidance": [
+            "Each criterion's eval-owned requirement states its complete pass condition. Score each defect once, under the one criterion whose clause names it.",
+            "For engineering-preview-terminated-on-every-exit, inspect the repository verify and inspect scripts and the skill's bootstrap template copies. Trace every exit path after the preview starts: success, a failing check, a browser launch failure, and an error thrown after the preview started. Each must terminate the preview server process itself and await its exit, or close a server started through Vite's preview() API. Fail when cleanup kills only an npm or npx wrapper while the server it spawned keeps running, when a browser launch failure or a later error leaves the preview running, or when any copy lacks such cleanup. Closing a preview() server in a finally path that every exit passes through satisfies the criterion.",
+            "Do not re-score preview ownership: whether readiness is connected to the scripts' own child, and whether verification fails when that child exits, is scored only by verification-preview-process-ownership. Termination on every exit path belongs to engineering-preview-terminated-on-every-exit; bounded readiness, building before previewing, and ready-URL parsing belong to engineering-preview-readiness-bounded.",
+            "For engineering-preview-readiness-bounded, fail when any readiness wait has no timeout, when verify starts the preview while the build it verifies is still running, or when readiness depends on the server's printed ready URL and the matching breaks on ANSI colour codes or on output split across chunks, such as a per-chunk regular expression over raw coloured output. When readiness does not parse printed output, for example a preview() API call that resolves with its address, the parsing clause does not apply.",
+            "For engineering-bootstrap-scripts-generic, judge only the skill's bootstrap template copies of verify and inspect. Fail when they check only a hardcoded sample route or only the first registry entry, when an unregistered slug times out or is accepted through the landing-page fallback instead of being rejected with a clear non-zero failure, or when they embed the repository reference sample's titles, captions, routes, or defaults. Sample assertions belong only in the repository's own verify script.",
+            "For engineering-inspect-fails-loudly, judge only the delivered inspect helper. Fail when it proceeds after reading a missing, zero, or non-numeric step count or step index, when it captures a step without first confirming that the reported step index equals the step it meant to reach, or when it can exit successfully with zero captures. Verify's detection of a non-advancing step stays scored by verification-step-error-fails and the hard gates; do not score it here.",
+            "For engineering-checks-read-rendered-page, fail when verification checks the sample's titles, captions, outline order, or registration by matching regular expressions over source text; pass when it reads them from the rendered page at each step. Hardening a source parser against shorthand properties, comments, quote styles, or other syntax that never occurs earns no credit.",
+            "For engineering-diagnostics-cover-presentation, fail when the inspect helper runs its diagnostics only on one step, for example only on the final step, rather than on every captured step, or when captures and diagnostics cover only a cropped scene so the caption, table of contents, and controls are never inspected. Whether each warning fires, and how far allow-overlap suppression reaches, stay scored by the visual-helper-* criteria. The performance of the overlap scan does not affect the verdict.",
+            "Validator noise is not rewarded. No engineering-quality criterion awards credit for, or fails for the absence of: hardening for runtime step-list changes beyond clamping at the ends; registry or source-parser hardening against syntax that never occurs; routing hardening for hosting concerns the proposal excludes; longer fixed settle delays; or arrow keys driving the deck while an interactive control holds focus."
+          ]
+        },
+        {
+          "id": "engineering-skill-instructions-and-templates",
+          "title": "Skill instructions and templates",
+          "points": 1.5,
+          "evaluator": "llm-source-review",
+          "job": "engineering-quality",
+          "criteria": [
+            "engineering-templates-build-at-destination",
+            "engineering-skill-description-triggers",
+            "engineering-skill-out-of-scope-redirects",
+            "engineering-skill-completion-report"
+          ],
+          "review_guidance": [
+            "Each criterion's eval-owned requirement states its complete pass condition. Score each defect once, under the one criterion whose clause names it. The normative SKILL.md instructions and the templates the skill materializes are the implementation judged here.",
+            "For engineering-templates-build-at-destination, establish for every step, presentation, and inspect template the skill materializes that it would type-check and build where the skill documents it lands: trace each template's relative imports, CSS imports, required props, and field names against the bootstrapped project layout and the kit's types, or cite a focused test that materializes the templates into a fresh bootstrap and runs the type check and build. Fail when a relative import resolves outside the project's src directory from its documented destination, a CSS import path does not resolve, a template renders a kit primitive without a prop the kit's types require, or a field name does not match the kit's types. Whether the skill finds its templates at all is scored only by skill-template-path-resolution; do not re-score it here.",
+            "For engineering-skill-description-triggers, read the SKILL.md frontmatter description. A first-person description, one that never says when to use the skill, or one that quotes fewer than two example user phrases fails. A third-person description that says when to use the skill and quotes trigger phrases such as create a presentation and add steps passes.",
+            "For engineering-skill-out-of-scope-redirects, require a SKILL.md section that lists each of the proposal's exclusions: PowerPoint or Keynote output, PDF or image export, a visual editor, and hosting. Each needs a redirect telling the agent what to do or suggest instead. Fail when the section is missing, omits an exclusion, or gives no redirect for any one of them, such as hosting.",
+            "No existing criterion scores the description or the out-of-scope section; score them only here.",
+            "For engineering-skill-completion-report, require a completion-report template naming the presentation route, the files changed, the build, render, and inspect results, and the advisory warnings that remain. Fail when SKILL.md tells the agent to report completion without defining the report's contents, or omits any of those items. Whether the checks run and pass before completion is scored only by skill-checks-run-before-done and skill-failures-fixed-before-success; score only the report template here.",
+            "Validator noise is not rewarded. No engineering-quality criterion awards credit for, or fails for the absence of: hardening for runtime step-list changes beyond clamping at the ends; registry or source-parser hardening against syntax that never occurs; routing hardening for hosting concerns the proposal excludes; longer fixed settle delays; or arrow keys driving the deck while an interactive control holds focus."
+          ]
+        },
+        {
+          "id": "engineering-presentation-code-and-tests",
+          "title": "Presentation code and tests",
+          "points": 1.5,
+          "evaluator": "llm-source-review",
+          "job": "engineering-quality",
+          "criteria": [
+            "engineering-presentation-css-scoped",
+            "engineering-typed-kit-primitives",
+            "engineering-tests-wait-on-state",
+            "engineering-tests-isolate-resources"
+          ],
+          "review_guidance": [
+            "Each criterion's eval-owned requirement states its complete pass condition. Score each defect once, under the one criterion whose clause names it.",
+            "For engineering-presentation-css-scoped, inspect every stylesheet a presentation owns. Each selector must sit under that presentation's own root class or hook, or come from a CSS module; this includes selectors that target the kit's hook classes or attributes, such as `.presentation-attribution`. Fail when a presentation-owned stylesheet has an unscoped rule, which leaks to other presentations after client-side navigation. A host-owned global stylesheet may style kit hooks without a presentation scope. Presentation CSS may restyle kit hooks, as attribution-styling-hook and skill-presentation-owns-style allow; this criterion adds only that such a rule is scoped. Do not score readability or narrow-viewport layout here.",
+            "For engineering-typed-kit-primitives, fail when a public primitive types its props as an untyped bag such as Record<string, unknown> instead of the rendered element's props, when it spreads caller props after setting its layoutId, entity identifier, or a data-presentation-* hook so a caller can override them, or when it forwards a kit-only prop, such as a label, to the DOM element. Typed primitives that apply identity hooks after caller props and strip kit-only props pass.",
+            "For engineering-tests-wait-on-state, judge the delivered automated tests that drive a browser. Fail when any waits a fixed number of milliseconds, or calls another fixed sleep, for a transition before asserting the step, or treats a call that returns immediately, such as reading an element count, as if it waited. Pass when every such wait is a polling or auto-waiting assertion on observable state, such as the step index or a settled signal.",
+            "For engineering-tests-isolate-resources, judge the delivered automated tests that start a preview server or a browser. Fail when two test files start a preview on the same hardcoded port, or when a test kills only the npx wrapper and leaves the preview server running. Pass when ports are allocated dynamically and every started process is terminated. A hardcoded browser path or a missing browser installation is not scored here.",
+            "Validator noise is not rewarded. No engineering-quality criterion awards credit for, or fails for the absence of: hardening for runtime step-list changes beyond clamping at the ends; registry or source-parser hardening against syntax that never occurs; routing hardening for hosting concerns the proposal excludes; longer fixed settle delays; or arrow keys driving the deck while an interactive control holds focus."
           ]
         }
       ]

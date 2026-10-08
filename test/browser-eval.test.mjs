@@ -69,6 +69,20 @@ function createDemo(knobs = {}) {
     canvasFitsNarrow = true,
     canvasUniform = true,
     throwOn = null,
+    // Chords, such as 'Alt+ArrowRight', that the deck handles as plain arrows,
+    // whose default it prevents, or that make the browser leave the document.
+    modifiedArrowsNavigate = [],
+    preventsModified = [],
+    unloadsOn = [],
+    reloadFailsAfterUnload = false,
+    keyInstrumentation = true,
+    // The presentation's own controls a swipe can start on, and what a swipe
+    // starting on one does under each input path: 'navigate' moves the deck as
+    // a stage swipe would, 'activate' lands on the control's own step.
+    modeControl = true,
+    swipeControls = null,
+    swipeFromControl = {},
+    swipeTargetsVanish = false,
   } = knobs
 
   let index = 0
@@ -77,6 +91,11 @@ function createDemo(knobs = {}) {
   let keysLive = true
   let currentViewport = { ...viewport }
   const observed = []
+  // The keydown instrumentation of the current document, and whether a press
+  // has made the browser leave that document.
+  let left = false
+  let instrumented = false
+  let keydowns = []
 
   const clamp = (next) => {
     if (next < 0) return clampStart ? 0 : stepCount - 1
@@ -92,6 +111,17 @@ function createDemo(knobs = {}) {
     if (throwOn === name) throw new Error(`driver blew up in ${name}`)
   }
 
+  function fakeControls() {
+    if (swipeControls) return swipeControls(mode)
+    const steps = controlsOnlyInBrowse && mode !== 'browse' ? 0 : controlCount
+    return [
+      ...(modeControl ? [{ kind: 'mode', name: mode === 'present' ? 'Browse mode' : 'Present mode',
+        selector: '#mode', hook: '[data-presentation-mode-toggle]', position: null }] : []),
+      ...Array.from({ length: steps }, (_, position) => ({ kind: 'step', name: `Step ${position + 1}`,
+        selector: `#step-${position + 1}`, hook: 'semantic-progress-region', position })),
+    ]
+  }
+
   return {
     async routes() {
       guard('routes')
@@ -100,6 +130,10 @@ function createDemo(knobs = {}) {
     async open(target) {
       guard('open')
       if (target !== route) throw new Error(`no such route: ${target}`)
+      if (left && reloadFailsAfterUnload) throw new Error('the presentation did not load again')
+      left = false
+      instrumented = false
+      keydowns = []
       index = 0
       mode = initialMode
       focused = null
@@ -112,7 +146,7 @@ function createDemo(knobs = {}) {
     async state() {
       guard('state')
       return {
-        stepIndex: stateUnreadable || index === unreadableAtIndex ? null : index,
+        stepIndex: left || stateUnreadable || index === unreadableAtIndex ? null : index,
         stepCount,
         mode,
         title: (mode === 'browse' && !activeTitleVisibleInBrowse) || (mode === 'present' && presentShowsDeckTitle)
@@ -211,8 +245,21 @@ function createDemo(knobs = {}) {
         scale: { x: scaleX, y: scaleY },
       }
     },
-    async press(key) {
+    async press(key, { modifiers = [] } = {}) {
       guard('press')
+      if (modifiers.length > 0) {
+        const chord = [...modifiers, key].join('+')
+        const prevented = preventsModified.includes(chord)
+        if (instrumented && !left) {
+          keydowns.push({ key, altKey: modifiers.includes('Alt'), ctrlKey: modifiers.includes('Control'),
+            metaKey: modifiers.includes('Meta'), shiftKey: false, prevented, preventDefaultCalls: prevented ? 1 : 0 })
+        }
+        if (unloadsOn.includes(chord)) {
+          left = true
+          return
+        }
+        if (!modifiedArrowsNavigate.includes(chord)) return
+      }
       if (focusedControlConsumesArrows && focused?.startsWith('Step ')) return
       if (key === 'ArrowRight') step(1)
       else if (key === 'ArrowLeft') step(-1)
@@ -253,11 +300,36 @@ function createDemo(knobs = {}) {
     async restoreFocusTarget() {
       guard('restoreFocusTarget')
     },
-    async swipe(direction) {
+    async swipe(direction, { input = 'touch', selector = null } = {}) {
       guard('swipe')
-      if (!swipeWorks) return
+      if (selector !== null) {
+        if (swipeTargetsVanish || !fakeControls().some((control) => control.selector === selector)) return false
+        const behaviour = swipeFromControl[input]
+        if (behaviour === 'navigate') step(direction === 'left' ? 1 : -1)
+        if (behaviour === 'activate') index = clamp(Number(/^#step-(\d+)$/.exec(selector)?.[1] ?? index + 1) - 1)
+        return true
+      }
+      if (!swipeWorks) return true
       step(direction === 'left' ? 1 : -1)
+      return true
     },
+    async controlTargets() {
+      guard('controlTargets')
+      return { controls: fakeControls(), looked_for: ['[data-presentation-mode-toggle]', 'accessible step name'] }
+    },
+    ...(keyInstrumentation ? {
+      async installKeyInstrumentation() {
+        instrumented = true
+        keydowns = []
+        return { installed: true }
+      },
+      async readKeyInstrumentation({ reset = false } = {}) {
+        const read = { installed: instrumented && !left, unloaded: instrumented && left,
+          url: left ? 'http://demo/' : `http://demo/${route}`, keydowns: left ? [] : keydowns.map((entry) => ({ ...entry })) }
+        if (reset) keydowns = []
+        return read
+      },
+    } : {}),
     async toggleMode() {
       guard('toggleMode')
       mode = mode === 'present' ? 'browse' : 'present'
@@ -313,7 +385,7 @@ test('the deterministic browser evaluator owns exactly the rubric-assigned demo 
     [...DETERMINISTIC_BROWSER_CRITERIA].sort(),
     [...deterministicCriteria(automated.rubric)].sort(),
   )
-  assert.equal(DETERMINISTIC_BROWSER_CRITERIA.length, 14)
+  assert.equal(DETERMINISTIC_BROWSER_CRITERIA.length, 16)
 })
 
 test('a conforming built demo passes every deterministic criterion and hard gate', async () => {
@@ -799,6 +871,9 @@ test('each broken demo behaviour fails its own criterion', async () => {
     ['demo-mode-interaction-reliability', { failures: ['TypeError: cannot read mode of undefined'] }],
     ['demo-control-semantics', { ariaCurrent: false }],
     ['demo-focus-and-keyboard-accessibility', { focusable: false }],
+    ['input-modifier-keys-pass-through', { modifiedArrowsNavigate: ['Alt+ArrowRight'] }],
+    ['input-modifier-keys-pass-through', { preventsModified: ['Control+ArrowLeft'] }],
+    ['input-swipe-from-control-ignored', { swipeFromControl: { touch: 'navigate' } }],
   ]
 
   for (const [criterion, knobs] of mutations) {
@@ -1178,4 +1253,197 @@ test('browse reachability counts the steps reached, not the order controls were 
   const result = await evaluate({ controlsReversed: true, nextVisibleInBrowse: false })
 
   assert.equal(verdictOf(result, 'demo-browse-mode-behavior'), 'pass')
+})
+
+const MODIFIER_PROBE = 'input-modifier-keys-pass-through'
+const SWIPE_PROBE = 'input-swipe-from-control-ignored'
+const criterionOf = (result, id) => result.criteria.find((entry) => entry.id === id)
+const PRESS_ORDER = [
+  ['Alt', 'ArrowRight'], ['Alt', 'ArrowLeft'],
+  ['Control', 'ArrowRight'], ['Control', 'ArrowLeft'],
+  ['Meta', 'ArrowRight'], ['Meta', 'ArrowLeft'],
+]
+
+test('modified arrow presses that leave the deck alone pass, with every press retained', async () => {
+  const result = await evaluate()
+  const entry = criterionOf(result, MODIFIER_PROBE)
+  assert.equal(entry.verdict, 'pass')
+  const observed = entry.observations.modifier_keys
+  assert.equal(observed.mode, 'present')
+  assert.equal(observed.start_step, 4)
+  assert.equal(observed.failure, null)
+  assert.deepEqual(observed.presses.map(({ modifier, key }) => [modifier, key]), PRESS_ORDER)
+  for (const press of observed.presses) {
+    assert.deepEqual(press, { key: press.key, modifier: press.modifier, step_before: 4, step_after: 4,
+      prevented: false, prevent_default_calls: 0, keydown_observed: true, unloaded: false, reestablished: false })
+  }
+  const probe = result.probes.find(({ id }) => id === MODIFIER_PROBE)
+  assert.equal(probe.required_mode, 'present')
+  assert.equal(probe.start_position, 4)
+  assert.deepEqual(probe.outputs.modifier_keys, observed)
+})
+
+test('a modified arrow that changes the step fails, naming the key, modifier, and steps', async () => {
+  const entry = criterionOf(await evaluate({ modifiedArrowsNavigate: ['Alt+ArrowRight'] }), MODIFIER_PROBE)
+  assert.equal(entry.verdict, 'fail')
+  assert.match(entry.rationale, /Alt\+ArrowRight moved the deck from step index 4 to 5/)
+  const observed = entry.observations.modifier_keys
+  assert.deepEqual(observed.failure,
+    { key: 'ArrowRight', modifier: 'Alt', reason: 'step-changed', prevented: false, step_before: 4, step_after: 5 })
+  assert.equal(observed.presses[0].reestablished, true)
+  // The probe returns to its middle step, so every later press starts there.
+  assert.ok(observed.presses.slice(1).every(({ step_before }) => step_before === 4))
+})
+
+test('a prevented default on a modified arrow fails although the step stays put', async () => {
+  const entry = criterionOf(await evaluate({ preventsModified: ['Control+ArrowLeft'] }), MODIFIER_PROBE)
+  assert.equal(entry.verdict, 'fail')
+  assert.match(entry.rationale, /prevented the default of Control\+ArrowLeft/)
+  const press = entry.observations.modifier_keys.presses.find(({ modifier, key }) => modifier === 'Control' && key === 'ArrowLeft')
+  assert.equal(press.prevented, true)
+  assert.equal(press.prevent_default_calls, 1)
+  assert.equal(press.step_after, press.step_before)
+  assert.equal(entry.observations.modifier_keys.failure.reason, 'prevented-default')
+  assert.equal(entry.observations.modifier_keys.failure.prevented, true)
+})
+
+// A press can both move the deck and have its default prevented, as a
+// keydown handler that navigates and calls preventDefault does. The failure
+// summary records both facts, so a reader of it alone sees the prevented
+// default that keeps the failure from being overturned.
+test('a modified arrow that navigates with its default prevented records both in the failure', async () => {
+  const entry = criterionOf(await evaluate({
+    modifiedArrowsNavigate: ['Alt+ArrowRight'], preventsModified: ['Alt+ArrowRight'],
+  }), MODIFIER_PROBE)
+  assert.equal(entry.verdict, 'fail')
+  assert.match(entry.rationale, /Alt\+ArrowRight moved the deck from step index 4 to 5 and the page prevented its default/)
+  assert.deepEqual(entry.observations.modifier_keys.failure,
+    { key: 'ArrowRight', modifier: 'Alt', reason: 'step-changed', prevented: true, step_before: 4, step_after: 5 })
+})
+
+test('a prevented default the page hid by stopping propagation still fails the probe', async () => {
+  // The instrumentation wraps KeyboardEvent.prototype.preventDefault, so it
+  // reports the call even when the page's handler stopped propagation first.
+  const entry = criterionOf(await evaluate({ preventsModified: ['Meta+ArrowRight'] }), MODIFIER_PROBE)
+  assert.equal(entry.verdict, 'fail')
+  assert.deepEqual(entry.observations.modifier_keys.failure,
+    { key: 'ArrowRight', modifier: 'Meta', reason: 'prevented-default', prevented: true, step_before: 4, step_after: 4 })
+})
+
+test('a modified press that leaves the document passes through, and the probe reloads and continues', async () => {
+  const actions = []
+  const result = await evaluate({ unloadsOn: ['Alt+ArrowLeft'], actions })
+  const entry = criterionOf(result, MODIFIER_PROBE)
+  assert.equal(entry.verdict, 'pass')
+  const presses = entry.observations.modifier_keys.presses
+  assert.equal(presses.length, 6)
+  // The document that replaced the presentation carries none of its keydowns.
+  assert.deepEqual(presses[1], { key: 'ArrowLeft', modifier: 'Alt', step_before: 4, step_after: null,
+    prevented: false, prevent_default_calls: 0, keydown_observed: false, unloaded: true, reestablished: true })
+  assert.ok(presses.slice(2).every(({ step_before, unloaded }) => step_before === 4 && !unloaded))
+  const probe = result.probes.find(({ id }) => id === MODIFIER_PROBE)
+  // One session counts the steps, one starts the presses, and one reloads.
+  assert.deepEqual(probe.sessions.map(({ established_state: state }) => state.position), [0, 4, 4])
+})
+
+test('a presentation that cannot be reloaded after an unload is a resumable harness failure', async () => {
+  await assert.rejects(
+    () => evaluate({ unloadsOn: ['Alt+ArrowLeft'], reloadFailsAfterUnload: true }),
+    (error) => {
+      assert.equal(error.owner, 'evaluation-harness')
+      assert.equal(error.code, 'browser-driver-failed')
+      assert.equal(error.resumable, true)
+      assert.match(error.message, /could not be reloaded at step index 4 after Alt\+ArrowLeft left the document/)
+      return true
+    },
+  )
+})
+
+test('a driver without keydown instrumentation is a harness failure, not a verdict', async () => {
+  await assert.rejects(() => evaluate({ keyInstrumentation: false }),
+    (error) => error.owner === 'evaluation-harness' && /installKeyInstrumentation/.test(error.message))
+})
+
+test('a deck with no middle step leaves both input-hygiene probes not observed, saying so', async () => {
+  const result = await evaluate({ titles: TITLES.slice(0, 2), stepCount: 2 })
+  for (const id of [MODIFIER_PROBE, SWIPE_PROBE]) {
+    const entry = criterionOf(result, id)
+    assert.equal(entry.verdict, null, id)
+    assert.equal(entry.outcome, 'not-observed', id)
+    assert.match(entry.rationale, /2 steps and no step that is neither the first nor the last/, id)
+    assert.deepEqual(entry.looked_for, ['a step that is neither the first nor the last'], id)
+  }
+})
+
+test('a swipe that starts on the mode control and changes the step fails, naming control, mode, and input', async () => {
+  const entry = criterionOf(await evaluate({ swipeFromControl: { touch: 'navigate' } }), SWIPE_PROBE)
+  assert.equal(entry.verdict, 'fail')
+  assert.match(entry.rationale, /touch swipe left starting on the mode control #mode in present mode moved the deck from step index 4 to 5/)
+  const observed = entry.observations.swipe_from_control
+  assert.equal(observed.mode, 'present')
+  assert.deepEqual(observed.control, { kind: 'mode', name: 'Browse mode', selector: '#mode',
+    hook: '[data-presentation-mode-toggle]', activation_target: null })
+  assert.deepEqual(observed.inputs_tried, ['touch'])
+  assert.deepEqual(observed.failure, { input: 'touch', step_before: 4, step_after: 5 })
+})
+
+test('a swipe from a control that moves the deck only as pointer events fails on the pointer path', async () => {
+  const entry = criterionOf(await evaluate({ swipeFromControl: { pointer: 'navigate' } }), SWIPE_PROBE)
+  assert.equal(entry.verdict, 'fail')
+  const observed = entry.observations.swipe_from_control
+  assert.deepEqual(observed.inputs_tried, ['touch', 'pointer'])
+  assert.deepEqual(observed.attempts.map(({ input, step_before, step_after }) => [input, step_before, step_after]),
+    [['touch', 4, 4], ['pointer', 4, 5]])
+  assert.deepEqual(observed.failure, { input: 'pointer', step_before: 4, step_after: 5 })
+})
+
+test('swipes from a control that leave the step alone pass after both input paths', async () => {
+  const entry = criterionOf(await evaluate(), SWIPE_PROBE)
+  assert.equal(entry.verdict, 'pass')
+  assert.deepEqual(entry.observations.swipe_from_control.inputs_tried, ['touch', 'pointer'])
+  assert.equal(entry.observations.swipe_from_control.failure, null)
+})
+
+test('without a mode control the swipe starts on the active step\'s own step control', async () => {
+  const entry = criterionOf(await evaluate({ modeControl: false, swipeFromControl: { touch: 'navigate' } }), SWIPE_PROBE)
+  assert.equal(entry.verdict, 'fail')
+  assert.equal(entry.observations.swipe_from_control.control.selector, '#step-5')
+  assert.equal(entry.observations.swipe_from_control.control.activation_target, 4)
+})
+
+test('a swipe from a step button that lands on that button\'s own step is not a failure', async () => {
+  const onlyStepSix = () => [{ kind: 'step', name: 'Step 6', selector: '#step-6', hook: 'semantic-progress-region', position: 5 }]
+  const landed = criterionOf(await evaluate({ swipeControls: onlyStepSix, swipeFromControl: { touch: 'activate', pointer: 'activate' } }), SWIPE_PROBE)
+  assert.equal(landed.verdict, 'pass')
+  const observed = landed.observations.swipe_from_control
+  assert.equal(observed.control.activation_target, 5)
+  // The swipe travels away from the button's own step.
+  assert.equal(observed.direction, 'right')
+  assert.deepEqual(observed.attempts.map(({ input, step_after, exempt }) => [input, step_after, exempt]),
+    [['touch', 5, true], ['pointer', 5, true]])
+
+  const navigated = criterionOf(await evaluate({ swipeControls: onlyStepSix, swipeFromControl: { touch: 'navigate' } }), SWIPE_PROBE)
+  assert.equal(navigated.verdict, 'fail')
+  assert.deepEqual(navigated.observations.swipe_from_control.failure, { input: 'touch', step_before: 4, step_after: 3 })
+})
+
+test('a swipe probe moves to browse mode when present mode exposes no control', async () => {
+  const result = await evaluate({ modeControl: false, controlsOnlyInBrowse: true })
+  const entry = criterionOf(result, SWIPE_PROBE)
+  assert.equal(entry.verdict, 'pass')
+  assert.equal(entry.observations.swipe_from_control.mode, 'browse')
+})
+
+test('no control in either mode leaves the swipe probe not observed with the conventions looked for', async () => {
+  const entry = criterionOf(await evaluate({ swipeControls: () => [] }), SWIPE_PROBE)
+  assert.equal(entry.verdict, null)
+  assert.equal(entry.outcome, 'not-observed')
+  assert.match(entry.rationale, /no interactive control/)
+  assert.deepEqual(entry.looked_for, ['[data-presentation-mode-toggle]', 'accessible step name'])
+})
+
+test('a discovered control that cannot be found to swipe from is a harness failure', async () => {
+  await assert.rejects(() => evaluate({ swipeTargetsVanish: true }),
+    (error) => error.owner === 'evaluation-harness' && error.resumable === true
+      && /control #mode could not be found to start a swipe on/.test(error.message))
 })

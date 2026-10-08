@@ -11,6 +11,27 @@ Agent Evals contains evaluation suites for Codagent tools.
 - Use test-driven development for behavior changes. Run targeted tests, then `npm run check`.
 - Do not add third-party runtime dependencies without explicit approval.
 - Use `chrome-devtools-axi` when an agent needs to inspect or operate a browser. Prefer it over direct Chrome DevTools MCP use.
+- Run `agent-validator run` before archiving an OpenSpec change or opening a pull request. Treat a review that returns only a one-line pass on a large diff as unreviewed, and review that area by hand.
+
+## Real-browser test suites
+
+`npm run check`, which CI runs, covers only `test/*.test.mjs` and takes about a minute. The suites in `test/real-browser/` drive real Chrome, so they sit outside that glob and CI never runs them. Run them by hand; each file header has its command, and the suite README describes the candidate and adversarial suites.
+
+| Suite | Covers | Rough time | Run before merging a change to |
+| --- | --- | --- | --- |
+| `driver-primitives.test.mjs` | the axi browser driver's key presses, swipes, and keydown instrumentation | a few minutes | `lib/axi-browser-driver.mjs` |
+| `input-hygiene.test.mjs` | the modifier-key and swipe-from-control probes | about 3 minutes | those probes, or the driver primitives they use |
+| `candidate.test.mjs` | the whole browser evaluation against one real candidate (build and serve steps in its header) | about 5 minutes | any browser probe or gate, or `lib/browser-eval.mjs` |
+| `adversarial.test.mjs` | probes and second-opinion replays against hand-made trick pages | about 70 minutes | the probes the README lists, or second-opinion replay in `lib/second-opinion.mjs` |
+
+- They share one Chrome, so run them one at a time, and never while another agent or session is using that browser. Concurrent use produces spurious failures.
+- Run the adversarial suite once, at the end of a change, not after every edit.
+- Before relying on a suite for a change, run it on the base commit, so an existing failure is not mistaken for a new one.
+
+## OpenSpec deltas
+
+- A `MODIFIED` requirement replaces the whole requirement when archived. Copy it from the current text on `main`, and check open pull requests that change the same requirement; a stale copy silently reverts their update.
+- Never rename a `#### Scenario:` header inside a `MODIFIED` requirement: `openspec archive` then aborts with no recovery path.
 
 ## Running the Agent Runner `and-scene` suite
 
@@ -33,6 +54,9 @@ consult `run.sh --help` before constructing an unfamiliar invocation.
 - Use `--calibrate` only when changing or reviewing the rubric, scoring, gates,
   or reporting. Calibration is a maintainer diagnostic, not a prerequisite or
   runtime gate for a candidate evaluation.
+- When a rubric change moves points onto LLM-judged criteria, measure how often
+  each new criterion's verdict flips across repeated rescores of the same code
+  before relying on calibration or comparing scores across rubric versions.
 - A paid candidate run needs `--run-agent`, all three role profiles
   (`--lead-*`, `--implementor-*`, and `--tester-*`), a clean Agent Runner
   checkout, a clean pinned Agent Skills checkout, Docker, valid CLI auth, and

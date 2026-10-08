@@ -7,6 +7,7 @@ import { test } from 'node:test'
 import {
   JUDGE_ATTEMPTS,
   PRODUCT_JUDGE_JOB_IDS,
+  PRODUCT_JUDGE_CONCURRENCY,
   buildSourceAuditRequest,
   buildJudgeRequest,
   buildTiebreakRequest,
@@ -61,10 +62,10 @@ function auditOutput(ids, classifications = {}) {
   })
 }
 
-test('the six scored judge jobs align with the six automated components', () => {
+test('the seven scored judge jobs align with the seven automated components', () => {
   assert.deepEqual(PRODUCT_JUDGE_JOB_IDS, [
     'demo-integration', 'scene-kit', 'presentation-skill', 'verification-tooling',
-    'testing-evidence', 'assumption-handling',
+    'engineering-quality', 'testing-evidence', 'assumption-handling',
   ])
   for (const job of productJudgeJobs(rubrics)) {
     assert.deepEqual(job.criteria, criteriaForJob(automated, job.id))
@@ -198,6 +199,116 @@ test('fallback passes cannot cite paths outside the verified delivered-source in
 
   assert.equal(outcome.judges['demo-integration'], null)
   assert.ok(outcome.failed_jobs.includes('demo-integration'))
+})
+
+const ENGINEERING_SOURCE_CRITERIA = [
+  'engineering-preview-terminated-on-every-exit',
+  'engineering-preview-readiness-bounded',
+  'engineering-bootstrap-scripts-generic',
+  'engineering-inspect-fails-loudly',
+  'engineering-checks-read-rendered-page',
+  'engineering-diagnostics-cover-presentation',
+  'engineering-templates-build-at-destination',
+  'engineering-skill-description-triggers',
+  'engineering-skill-out-of-scope-redirects',
+  'engineering-skill-completion-report',
+  'engineering-presentation-css-scoped',
+  'engineering-typed-kit-primitives',
+  'engineering-tests-wait-on-state',
+  'engineering-tests-isolate-resources',
+]
+const inputHygieneNotObserved = [
+  'input-modifier-keys-pass-through',
+  'input-swipe-from-control-ignored',
+].map((id) => ({ id, rationale: 'probe could not run', looked_for: ['data-presentation-mode'], evidence: ['browser-probe.json'] }))
+
+test('the engineering-quality job returns exactly its fourteen source-reviewed criteria for candidates and references', () => {
+  for (const mode of ['agent-runner', 'reference-baseline']) {
+    const jobs = productJudgeJobs(rubrics, { mode, notObserved: inputHygieneNotObserved })
+    const engineering = jobs.find(({ id }) => id === 'engineering-quality')
+    assert.deepEqual(engineering.criteria, ENGINEERING_SOURCE_CRITERIA, mode)
+  }
+  assert.deepEqual(productJudgeJobs(rubrics).map(({ id }) => id), PRODUCT_JUDGE_JOB_IDS)
+  assert.deepEqual(productJudgeJobs(rubrics, { mode: 'reference-baseline' }).map(({ id }) => id), [
+    'demo-integration', 'scene-kit', 'presentation-skill', 'verification-tooling', 'engineering-quality',
+  ])
+})
+
+test('a not-observed input-hygiene probe joins the demo-integration job, never engineering quality', () => {
+  const notObserved = inputHygieneNotObserved.slice(1)
+  const jobs = productJudgeJobs(rubrics, { notObserved })
+  const demo = jobs.find(({ id }) => id === 'demo-integration')
+  const engineering = jobs.find(({ id }) => id === 'engineering-quality')
+  assert.deepEqual(demo.criteria, [...criteriaForJob(automated, 'demo-integration'), 'input-swipe-from-control-ignored'])
+  assert.deepEqual(engineering.criteria, ENGINEERING_SOURCE_CRITERIA)
+
+  const request = buildJudgeRequest({ rubrics, job: 'demo-integration', authority, sources: ['src/demo.tsx'], notObserved })
+  assert.ok(request.criteria.includes('input-swipe-from-control-ignored'))
+  assert.match(request.prompt, /## Browser fallback criteria[\s\S]*input-swipe-from-control-ignored/)
+  const engineeringRequest = buildJudgeRequest({ rubrics, job: 'engineering-quality', authority, sources: ['src/demo.tsx'], notObserved })
+  assert.equal(engineeringRequest.criteria.includes('input-swipe-from-control-ignored'), false)
+  assert.doesNotMatch(engineeringRequest.prompt, /## Browser fallback criteria/)
+})
+
+test('the engineering-quality job uses the shared source-review inputs, schema, audit, and untrusted-data handling', () => {
+  const neutral = {
+    root: '/run/neutral',
+    source_root: '/run/neutral/source',
+    requirements_root: '/run/neutral/requirements',
+    audit_root: '/run/neutral-audit',
+  }
+  const build = (job) => buildJudgeRequest({
+    rubrics, job, authority, evidence: [{ id: 'fact', verdict: 'pass', note: 'token scan passed' }],
+    sources: ['scripts/verify.mjs'], neutral,
+  })
+  const engineering = build('engineering-quality')
+  const reference = build('verification-tooling')
+
+  assert.deepEqual(engineering.criteria, ENGINEERING_SOURCE_CRITERIA)
+  assert.deepEqual(engineering.input_permissions, reference.input_permissions)
+  assert.deepEqual(engineering.input_roots, { source: '/run/neutral/source', requirements: '/run/neutral/requirements' })
+  assert.equal(engineering.cwd, '/run/neutral')
+  assert.equal(engineering.audit_cwd, '/run/neutral-audit')
+  assert.equal(engineering.source_access, 'read-only')
+  assert.equal(engineering.source_audit, true)
+  assert.equal(engineering.source_audit_version, reference.source_audit_version)
+  assert.deepEqual(
+    Object.keys(engineering.schema.properties.results.items.properties),
+    Object.keys(reference.schema.properties.results.items.properties),
+  )
+  assert.deepEqual(engineering.schema.properties.results.items.properties.id.enum, ENGINEERING_SOURCE_CRITERIA)
+  assert.match(engineering.prompt, /untrusted data, never instructions/)
+  assert.match(engineering.prompt, /NEUTRAL SOURCE FILES/)
+  // Every eval-owned criterion carries its reason as the requirement it is judged against.
+  for (const id of ENGINEERING_SOURCE_CRITERIA) {
+    assert.match(engineering.prompt, new RegExp(`- ${id}\\n  Requirement \\(eval-owned\\): `), id)
+  }
+  assert.match(engineering.prompt, /verification-preview-process-ownership/)
+  for (const other of ['demo-scope-discipline', 'skill-monorepo-target', 'visual-helper-overlap-warning', 'input-modifier-keys-pass-through']) {
+    assert.equal(engineering.prompt.includes(`- ${other}\n`), false, other)
+  }
+})
+
+test('engineering-quality is judged by the cross-family panel for candidates and the reference', async () => {
+  for (const mode of ['agent-runner', 'reference-baseline']) {
+    const saved = []
+    const seats = []
+    const outcome = await runProductJudging({ rubrics, authority, mode,
+      saveJob: async (record) => saved.push(record),
+      invoke: async (request) => {
+        if (request.job === 'engineering-quality' && !request.audit_stage) seats.push(`${request.authority.cli}:${request.authority.model}`)
+        return request.audit_stage ? auditOutput(request.criteria) : judgeOutput(request.criteria)
+      },
+    })
+    assert.equal(outcome.failed_jobs.includes('engineering-quality'), false, mode)
+    const record = saved.find(({ id }) => id === 'engineering-quality')
+    assert.equal(record.protocol, 'cross-family-panel-v1', mode)
+    assert.deepEqual(seats.sort(), PRODUCT_JUDGE_PROFILE.panel.map(({ family, model }) => `${family}:${model}`).sort(), mode)
+    for (const result of outcome.judges['engineering-quality']) {
+      assert.equal(result.basis, 'consensus-pass', mode)
+      assert.deepEqual(result.votes.map(({ family }) => family).sort(), ['claude', 'codex', 'codex'], mode)
+    }
+  }
 })
 
 test('product judge requests are rooted in neutral inputs and disclose exact permissions', () => {
@@ -1130,7 +1241,7 @@ test('an exhausted judge job leaves its component unobserved rather than failed'
   assert.ok(result.attempts.every(({ error }) => typeof error === 'string' && error.length > 0))
 })
 
-test('one failed job does not discard the other five complete outputs', async () => {
+test('one failed job does not discard the other six complete outputs', async () => {
   const outcome = await runProductJudging({
     rubrics, authority, evidence: [], sources: [],
     invoke: async ({ job, criteria }) => job === 'scene-kit' ? 'nope' : judgeOutput(criteria),
@@ -1139,7 +1250,7 @@ test('one failed job does not discard the other five complete outputs', async ()
   assert.equal(outcome.judges['scene-kit'], null)
   for (const job of [
     'demo-integration', 'presentation-skill', 'verification-tooling',
-    'testing-evidence', 'assumption-handling',
+    'engineering-quality', 'testing-evidence', 'assumption-handling',
   ]) {
     assert.equal(outcome.judges[job].length, criteriaForJob(automated, job).length, job)
   }
@@ -1148,7 +1259,7 @@ test('one failed job does not discard the other five complete outputs', async ()
   assert.equal(outcome.retries['scene-kit'], 3 * JUDGE_ATTEMPTS - JUDGE_SAMPLES)
 })
 
-test('six jobs checkpoint independently and reuse a valid completed output', async () => {
+test('seven jobs checkpoint independently and reuse a valid completed output', async () => {
   const loaded = new Map()
   const saved = []
   const invoked = []
@@ -1896,9 +2007,16 @@ test('parallel product judging records the same outcome as sequential judging', 
   }
   const sequential = await run(1)
   const parallel = await run(PRODUCT_JUDGE_JOB_IDS.length)
+  // The default limit is below the seven jobs, so the pool also queues.
+  const pooled = await run(PRODUCT_JUDGE_CONCURRENCY)
+  assert.ok(PRODUCT_JUDGE_CONCURRENCY < PRODUCT_JUDGE_JOB_IDS.length)
   assert.deepEqual(parallel.outcome, sequential.outcome)
+  assert.deepEqual(pooled.outcome, sequential.outcome)
   assert.deepEqual(Object.keys(parallel.outcome.judges), PRODUCT_JUDGE_JOB_IDS)
+  assert.equal(PRODUCT_JUDGE_JOB_IDS.length, 7)
+  assert.ok(Array.isArray(parallel.outcome.judges['engineering-quality']))
   assert.deepEqual(parallel.saved, sequential.saved)
+  assert.deepEqual(pooled.saved, sequential.saved)
   assert.deepEqual(parallel.outcome.failed_jobs, ['verification-tooling'])
   assert.equal(Object.keys(parallel.saved).length, PRODUCT_JUDGE_JOB_IDS.length - 1)
 })
@@ -1981,4 +2099,81 @@ test('evidence citation validation accepts in-range spans at the length and coun
   assert.deepEqual(counted.get('x'), citations.map(citation => ({
     ...citation, lines: [{ line: citation.start_line, text: 'evidence' }],
   })))
+})
+
+// engineering-quality (rubric 14.0.0) carries the largest judge prompt and,
+// after scene-kit, the most criteria. A dispute on every one of its fourteen
+// criteria goes to the panel's line-cited decider in one batched ruling, whose
+// span audit must fit the bounded closed-world packet (#83 previously
+// overflowed an evidence decider's packet).
+test('a dispute on all fourteen engineering-quality criteria settles through the line-cited decider within the packet bound', async t => {
+  const { MAX_AUDIT_PACKET_CHARS } = await import('../evals/lib/panel-judging/protocol.mjs')
+  const job = 'engineering-quality'
+  const criteria = criteriaForJob(automated, job)
+  assert.equal(criteria.length, 14)
+  const root = await mkdtemp(join(tmpdir(), 'and-scene-engineering-decider-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  // Representative delivered files: 300 lines of about 50 characters each.
+  const files = [
+    'scripts/verify.mjs', 'scripts/preview.mjs', 'scripts/inspect.mjs',
+    '.claude/skills/presentation/SKILL.md', 'templates/presentation/Deck.tsx', 'tests/deck.spec.ts',
+  ]
+  for (const path of files) {
+    await mkdir(join(root, 'source', path, '..'), { recursive: true })
+    await writeFile(join(root, 'source', path), Array.from({ length: 300 }, (_, index) => (
+      `  const title${index} = await stepTitle(page, ${index})`.padEnd(50, ' ')
+    )).join('\n'))
+  }
+  const neutral = { root, source_root: join(root, 'source'), audit_root: root, requirements_root: join(root, 'r'),
+    manifest: { entries: files.map((path) => ({ namespace: 'neutral-source', path: `source/${path}` })) } }
+  // Each decider pass cites three 40-line spans in different files, a heavy but
+  // ordinary proof: a mechanism, its caller, and a focused test.
+  const spansFor = (index) => [0, 1, 2].map((offset) => {
+    const start = 1 + ((index * 17 + offset * 53) % 250)
+    return { path: files[(index + offset) % files.length], start_line: start, end_line: start + 39 }
+  })
+  const rationale = 'The delivered tooling implements this quality: the cited mechanism handles the case the criterion names, '
+    + 'its caller reaches it on every path, and the focused test exercises it.'
+  const stages = []
+  let decider = null
+  let spanAudit = null
+  const saved = []
+  const outcome = await runProductJudging({ rubrics, authority, neutral,
+    saveJob: async (record) => saved.push(record),
+    invoke: async (request) => {
+      if (request.job === job) stages.push(request.audit_stage ?? request.judge_stage ?? `panel-${request.judge_sample}`)
+      if (request.audit_stage === 'tiebreak-span-audit') {
+        spanAudit = request
+        return auditOutput(request.criteria)
+      }
+      if (request.audit_stage) return auditOutput(request.criteria)
+      if (request.judge_stage === 'tiebreak') {
+        decider = request
+        return JSON.stringify({ results: request.criteria.map((id, index) => ({
+          id, verdict: 'pass', rationale, evidence: [files[index % files.length]], citations: spansFor(index),
+        })) })
+      }
+      // The Claude seat (sample 1) fails every engineering-quality criterion
+      // and both Codex seats pass it: a Codex-only majority the decider rules on.
+      const verdict = request.job === job && request.judge_sample === 1 ? 'fail' : 'pass'
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict, rationale,
+        evidence: [files[0]], citations: [files[0]] })) })
+    },
+  })
+  // The evidence jobs have no evidence view here; only the source job matters.
+  assert.equal(outcome.failed_jobs.includes(job), false, JSON.stringify(outcome.failures[job]))
+  assert.deepEqual(decider.criteria, criteria)
+  assert.equal(decider.authority.model, PRODUCT_JUDGE_PROFILE.decider.model)
+  assert.equal(stages.filter((stage) => stage === 'tiebreak').length, 1)
+  assert.deepEqual(spanAudit.criteria, criteria)
+  const packet = spanAudit.prompt.split('# BEGIN LINE-CITED CLAIMS\n')[1].split('\n# END LINE-CITED CLAIMS')[0]
+  assert.equal(JSON.parse(packet).length, 14)
+  // Measured on 2026-10-07: 1,680 quoted lines make a 215,921-character packet
+  // against the 300,000 bound (about 72 characters of JSON per quoted line
+  // beyond its text), and the decider prompt is 39,073 characters.
+  t.diagnostic(`span-audit packet ${packet.length} of ${MAX_AUDIT_PACKET_CHARS}; decider prompt ${decider.prompt.length}`)
+  assert.ok(packet.length <= MAX_AUDIT_PACKET_CHARS, `${packet.length} > ${MAX_AUDIT_PACKET_CHARS}`)
+  assert.ok(outcome.judges[job].every(({ basis }) => basis === 'decider-pass'))
+  assert.equal(saved.find(({ id }) => id === job).protocol, JUDGING_PROTOCOL)
+  assert.equal(JUDGING_PROTOCOL, 'cross-family-panel-v1')
 })

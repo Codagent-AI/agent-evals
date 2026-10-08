@@ -14,7 +14,7 @@ function component(id, pointsAwarded, pointsPossible) {
     points_observed: pointsAwarded,
     points_possible: pointsPossible,
     points_observed_possible: pointsPossible,
-    floor: id.includes('demo') || id.includes('scene') ? 15 : null,
+    floor: id.includes('demo') || id.includes('scene') ? 12.5 : null,
     complete: true,
     subcomponents: [],
   }
@@ -22,10 +22,11 @@ function component(id, pointsAwarded, pointsPossible) {
 
 function candidateResult() {
   const components = [
-    component('demo-technical-quality', 23, 24),
-    component('scene-kit-correctness', 23.4, 24),
+    component('demo-technical-quality', 19, 20),
+    component('scene-kit-correctness', 19.4, 20),
     component('presentation-skill-correctness', 7, 7),
     component('verification-tool-correctness', 6.5, 7),
+    component('engineering-quality', 8, 8),
     component('testing-evidence-quality', 4, 4),
     component('assumption-handling-quality', 4, 4),
   ]
@@ -74,10 +75,11 @@ function candidateResult() {
       denominator: 92,
       totals: { baseline: 92, candidate: 80.4, delta: -11.6 },
       components: [
-        { id: 'demo-technical-quality', baseline: 24, candidate: 23, delta: -1 },
-        { id: 'scene-kit-correctness', baseline: 24, candidate: 23.4, delta: -0.6 },
+        { id: 'demo-technical-quality', baseline: 20, candidate: 19, delta: -1 },
+        { id: 'scene-kit-correctness', baseline: 20, candidate: 19.4, delta: -0.6 },
         { id: 'presentation-skill-correctness', baseline: 7, candidate: 7, delta: 0 },
         { id: 'verification-tool-correctness', baseline: 7, candidate: 6.5, delta: -0.5 },
+        { id: 'engineering-quality', baseline: 8, candidate: 8, delta: 0 },
       ],
       human_review: { baseline: 30, candidate: 20.5, delta: -9.5 },
     },
@@ -90,10 +92,11 @@ function approvedReview() {
     approved_at: '2026-07-28T20:00:00.000Z',
     rationale: 'Independent technical review corrected scanner errors and assessed robustness.',
     component_scores: {
-      'demo-technical-quality': 24,
-      'scene-kit-correctness': 22.5,
+      'demo-technical-quality': 20,
+      'scene-kit-correctness': 18.5,
       'presentation-skill-correctness': 6,
       'verification-tool-correctness': 5.5,
+      'engineering-quality': 8,
     },
     findings: [
       'active-state scanner false negatives',
@@ -219,8 +222,8 @@ test('an approved technical adjudication revises the shared score to 58 with an 
   )
   assert.equal(revised.baseline.totals.candidate, 78.5)
   assert.equal(revised.baseline.totals.delta, -13.5)
-  assert.equal(revised.score.components.find(({ id }) => id === 'demo-technical-quality').raw_points_awarded, 23)
-  assert.equal(revised.score.components.find(({ id }) => id === 'demo-technical-quality').points_awarded, 24)
+  assert.equal(revised.score.components.find(({ id }) => id === 'demo-technical-quality').raw_points_awarded, 19)
+  assert.equal(revised.score.components.find(({ id }) => id === 'demo-technical-quality').points_awarded, 20)
 })
 
 test('a reviewed adjudication can supersede a provisional adjudication without losing either audit record', async () => {
@@ -238,10 +241,11 @@ test('a reviewed adjudication can supersede a provisional adjudication without l
       sha256: 'c'.repeat(64),
     },
     component_scores: {
-      'demo-technical-quality': 23,
-      'scene-kit-correctness': 637 / 30,
+      'demo-technical-quality': 19,
+      'scene-kit-correctness': 517 / 30,
       'presentation-skill-correctness': 41 / 8,
       'verification-tool-correctness': 13 / 3,
+      'engineering-quality': 8,
     },
     workflow_component_scores: {
       'testing-evidence-quality': 4,
@@ -262,9 +266,9 @@ test('a reviewed adjudication can supersede a provisional adjudication without l
   assert.equal(revised.automated_subtotal.points, 59.691666666667)
   assert.equal(revised.official_score, 80.191666666667)
   const demo = revised.score.components.find(({ id }) => id === 'demo-technical-quality')
-  assert.equal(demo.raw_points_awarded, 23)
-  assert.equal(demo.prior_points_awarded, 24)
-  assert.equal(demo.points_awarded, 23)
+  assert.equal(demo.raw_points_awarded, 19)
+  assert.equal(demo.prior_points_awarded, 20)
+  assert.equal(demo.points_awarded, 19)
   assert.equal(demo.adjudication_adjustment, 0)
   assert.equal(demo.prior_adjudication_adjustment, 1)
   const assumptions = revised.score.components.find(({ id }) => id === 'assumption-handling-quality')
@@ -286,15 +290,21 @@ test('technical adjudication rejects incomplete or out-of-range component scores
   delete review.component_scores['verification-tool-correctness']
   assert.throws(
     () => module.applyTechnicalAdjudication(candidateResult(), review),
-    /exactly the four shared technical components/,
+    /exactly the five shared technical components/,
+  )
+  const withoutEngineering = approvedReview()
+  delete withoutEngineering.component_scores['engineering-quality']
+  assert.throws(
+    () => module.applyTechnicalAdjudication(candidateResult(), withoutEngineering),
+    /exactly the five shared technical components/,
   )
 
   assert.throws(
     () => module.applyTechnicalAdjudication(candidateResult(), {
       ...approvedReview(),
-      component_scores: { ...approvedReview().component_scores, 'scene-kit-correctness': 25 },
+      component_scores: { ...approvedReview().component_scores, 'scene-kit-correctness': 21 },
     }),
-    /outside 0-24/,
+    /outside 0-20/,
   )
 
   for (const reviewed_rubric of [null, false, 0, '']) {
@@ -314,10 +324,11 @@ test('technical adjudication recomputes the pass contract after lowering a passi
   const revised = module.applyTechnicalAdjudication(result, {
     ...approvedReview(),
     component_scores: {
-      'demo-technical-quality': 15,
-      'scene-kit-correctness': 15,
+      'demo-technical-quality': 12.5,
+      'scene-kit-correctness': 12.5,
       'presentation-skill-correctness': 0,
       'verification-tool-correctness': 0,
+      'engineering-quality': 5,
     },
   })
 

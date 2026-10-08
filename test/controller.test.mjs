@@ -386,6 +386,7 @@ function browserDemo({ captions = DEMO_CONTRACT.step_captions } = {}) {
   let index = 0
   let mode = 'present'
   let viewport = { width: 1280, height: 720 }
+  let keydowns = []
   return {
     async routes() { return [DEMO_CONTRACT.route] },
     async open() { index = 0; mode = 'present'; viewport = { width: 1280, height: 720 } },
@@ -428,12 +429,31 @@ function browserDemo({ captions = DEMO_CONTRACT.step_captions } = {}) {
         focused: null,
       }
     },
-    async press(key) {
+    // Modified arrows pass through to the browser, and a swipe that starts on
+    // one of the deck's controls leaves the deck alone.
+    async press(key, { modifiers = [] } = {}) {
+      if (modifiers.length > 0) {
+        keydowns.push({ key, altKey: modifiers.includes('Alt'), ctrlKey: modifiers.includes('Control'),
+          metaKey: modifiers.includes('Meta'), shiftKey: false, prevented: false, preventDefaultCalls: 0 })
+        return
+      }
       if (key === 'ArrowRight') index = Math.min(DEMO_CONTRACT.step_count - 1, index + 1)
       if (key === 'ArrowLeft') index = Math.max(0, index - 1)
     },
-    async swipe(direction) {
+    async swipe(direction, { selector = null } = {}) {
+      if (selector !== null) return true
       await this.press(direction === 'left' ? 'ArrowRight' : 'ArrowLeft')
+      return true
+    },
+    async installKeyInstrumentation() { keydowns = []; return { installed: true } },
+    async readKeyInstrumentation({ reset = false } = {}) {
+      const read = { installed: true, unloaded: false, url: `http://demo/${DEMO_CONTRACT.route}`, keydowns: [...keydowns] }
+      if (reset) keydowns = []
+      return read
+    },
+    async controlTargets() {
+      return { controls: [{ kind: 'mode', name: 'Browse mode', selector: '#mode', hook: '[data-presentation-mode-toggle]',
+        position: null }], looked_for: ['[data-presentation-mode-toggle]'] }
     },
     async activate(name) { index = Number(name.replace('Step ', '')) - 1 },
     async focus() {},
@@ -1358,7 +1378,7 @@ test('completed judge units are rehashed and reused while identity-sensitive pha
 
   const judging = await readJson(join(context.runDir, 'phases/product-judging.json'))
   assert.deepEqual(judging.reused_jobs.sort(), [
-    'assumption-handling', 'demo-integration', 'presentation-skill',
+    'assumption-handling', 'demo-integration', 'engineering-quality', 'presentation-skill',
     'scene-kit', 'testing-evidence', 'verification-tooling',
   ])
   assert.ok(result.completed.includes('agent-runner'))
@@ -1401,8 +1421,8 @@ test('exhausted required judge output is a harness failure that preserves other 
   // The scene-kit job owns every scene-kit criterion, so its surviving
   // checkpoint keeps a complete component score while another job fails.
   const sceneKit = score.components.find(({ id }) => id === 'scene-kit-correctness')
-  assert.equal(sceneKit.points_awarded, 24)
-  assert.equal(sceneKit.points_observed, 24)
+  assert.equal(sceneKit.points_awarded, 20)
+  assert.equal(sceneKit.points_observed, 20)
 })
 
 test('fresh collisions and legacy checkpoint-only runs are not silently resumed', async () => {
@@ -1495,6 +1515,51 @@ test('a rescore restores a missing Runner session under the run directory and re
   const written = await readJson(join(context.runDir, 'result.json'))
   assert.deepEqual(written.workflow.events[0].session_reconstruction,
     { source: 'evidence/candidate/artifacts', files: 3 })
+})
+
+// A source scored under an older rubric has no engineering-quality verdicts and
+// no input-hygiene browser evidence. A rescore re-runs the browser probes and
+// every judge job under the current rubric, so its result carries both.
+test('a rescore of an older run scores the engineering-quality component afresh', async () => {
+  const context = await environment()
+  const judged = new Map()
+  let servedIdentity = null
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    controllerChangeName: null,
+    verifyDelivery: async () => {
+      throw new Error('rescore must not rediscover historical artifact paths')
+    },
+    loadRescoreSource: async () => importedRescore(context),
+    browserDriver: browserDemo(),
+    isProcessAlive: () => true,
+    candidateServer: {
+      probe: async () => ({ ok: true, candidate_identity: servedIdentity }),
+      start: async ({ candidate }) => { servedIdentity = candidate; return { pid: 9876, url: 'http://127.0.0.1:4319/' } },
+      stop: async () => {},
+    },
+    judgeInvoke: async (request) => {
+      if (request.job === 'second-opinion') return JSON.stringify({ decision: 'uphold', rationale: 'the recorded failure stands',
+        mismeasured_step: null, measurement_fault: null, citations: [], log_citations: [], replay: null })
+      if (request.job === 'ambiguity-diagnostics') return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
+      judged.set(request.job, request.criteria)
+      return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict: 'pass',
+        rationale: 'fixture evidence', evidence: ['src/index.ts:1'] })) })
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
+  assert.equal(judged.get('engineering-quality')?.length, 14)
+  assert.ok(!judged.get('engineering-quality').some((id) => id.startsWith('input-')))
+  const written = await readJson(join(context.runDir, 'result.json'))
+  const component = written.score.components.find(({ id }) => id === 'engineering-quality')
+  assert.equal(component.points_possible, 8)
+  const criteria = component.subcomponents.flatMap(({ criteria: rows }) => rows)
+  assert.equal(criteria.length, 16)
+  assert.ok(criteria.every(({ verdict }) => verdict === 'pass'), JSON.stringify(criteria))
+  const browser = await readJson(join(context.runDir, 'phases/browser-evaluation.json'))
+  for (const id of ['input-modifier-keys-pass-through', 'input-swipe-from-control-ignored']) {
+    assert.equal(browser.criteria.find((row) => row.id === id)?.verdict, 'pass', id)
+  }
 })
 
 test('a host rescore leaves an existing Agent Runner projects store in the home untouched', async () => {
@@ -1746,7 +1811,7 @@ test('browser probes are durable hashed evaluator-owned work units even when a p
   assert.equal(result.exitCode, 0, JSON.stringify(result.outcome))
   const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
   const units = state.phases['browser-evaluation'].units
-  assert.equal(Object.keys(units).length, 14)
+  assert.equal(Object.keys(units).length, 16)
   assert.ok(Object.values(units).every(({ state: unitState }) => unitState === 'complete'))
   for (const [id, unit] of Object.entries(units)) {
     assert.equal(unit.outputs.length, 1, id)

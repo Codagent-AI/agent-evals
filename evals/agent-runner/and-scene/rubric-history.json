@@ -40,9 +40,13 @@
     ],
     "13.0.0": [
       "4120a38136cf742ca82082a918dedeeee273654535744bf73d4ff9fd689f44d3"
+    ],
+    "14.0.0": [
+      "f058cdee671480dd247f6782069c8b3d4a6c1ec466ded56fee092e73d2dbc8d7"
     ]
   },
   "changes": {
-    "13.0.0": "Judging protocol changed to cross-family-panel-v1, with the shared requirement-question rule in every judge, decider, audit, check, and second-opinion prompt, and a dissent check that confirms only when the cited fact decides the quoted requirement the way the dissent claims. It also carries the 12.4.0 attribution guidance. No criterion changed. Results before 13.0.0 form a different scoring series."
+    "13.0.0": "Judging protocol changed to cross-family-panel-v1, with the shared requirement-question rule in every judge, decider, audit, check, and second-opinion prompt, and a dissent check that confirms only when the cited fact decides the quoted requirement the way the dissent claims. It also carries the 12.4.0 attribution guidance. No criterion changed. Results before 13.0.0 form a different scoring series.",
+    "14.0.0": "Adds the 8-point engineering quality beyond the spec component: fourteen criteria judged by a new engineering-quality panel job and two input-hygiene browser probes (input-modifier-keys-pass-through, input-swipe-from-control-ignored), each falling back to demo-integration. Demo technical quality and scene kit correctness drop from 24 to 20 points with floors from 15 to 12.5. The reference is scored on the new component too, so five shared components are adjudicated. Class A review guidance is added to existing criteria. Built on 13.0.0's cross-family-panel-v1 judging; results before 14.0.0 have no engineering-quality score and form a different scoring series."
   }
 }
