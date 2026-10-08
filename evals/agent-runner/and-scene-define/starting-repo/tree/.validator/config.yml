@@ -1,2 +1,21 @@
 base_branch: main
-entry_points: []
+cli:
+  default_preference:
+    - claude
+  adapters:
+    claude:
+      allow_tool_use: false
+      thinking_budget: low
+      model: claude-sonnet-5-5
+entry_points:
+  - path: .
+    checks:
+      - build:
+          command: npm run build
+      - lint:
+          command: npm run lint
+      - typecheck:
+          command: npx tsc -b --noEmit
+    reviews:
+      - all-reviewers:
+          builtin: all-reviewers
