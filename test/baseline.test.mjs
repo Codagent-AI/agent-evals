@@ -147,6 +147,31 @@ test('a result without the engineering-quality component lacks complete shared s
   assert.match(comparison.reason, /re-judged with --rescore-from/)
 })
 
+// Rubric 13.0.0 (#83) moved judging to the cross-family panel without this
+// component, so its results are refused like 12.x results until re-judged.
+test('a result scored under rubric 13.0.0 without engineering quality is refused with the rescore hint', () => {
+  const fourShared = [
+    { id: 'demo-technical-quality', applicable: true, points_awarded: 22, points_possible: 24, subcomponents: [] },
+    { id: 'scene-kit-correctness', applicable: true, points_awarded: 22, points_possible: 24, subcomponents: [] },
+    { id: 'presentation-skill-correctness', applicable: true, points_awarded: 7, points_possible: 7, subcomponents: [] },
+    { id: 'verification-tool-correctness', applicable: true, points_awarded: 7, points_possible: 7, subcomponents: [] },
+  ]
+  const current = { ...RUBRICS, automated: { ...RUBRICS.automated, version: '14.0.0' } }
+  const panelOnly = { ...RUBRICS, automated: { ...RUBRICS.automated, version: '13.0.0', sha256: 'd'.repeat(64) } }
+  const older = result({ runId: 'baseline-13', mode: 'reference-baseline', official: 84, rubrics: panelOnly, components: fourShared, human: 30 })
+
+  const versionRefusal = compareToBaseline({ candidate: result({ rubrics: current }), baseline: older })
+  assert.equal(versionRefusal.comparable, false)
+  assert.match(versionRefusal.reason, /rubric version differs: candidate 14\.0\.0, baseline 13\.0\.0/)
+  assert.match(versionRefusal.reason, /re-judged with --rescore-from/)
+
+  // Two 13.0.0 results agree on the rubric but still lack the component.
+  const bothOlder = compareToBaseline({ candidate: result({ rubrics: panelOnly, components: fourShared }), baseline: older })
+  assert.equal(bothOlder.comparable, false)
+  assert.match(bothOlder.reason, /no engineering-quality component score; it was scored under an older automated rubric/)
+  assert.match(bothOlder.reason, /re-judged with --rescore-from/)
+})
+
 test('workflow-quality components are excluded from the shared comparison', () => {
   const comparison = compareToBaseline({
     candidate: result(),
