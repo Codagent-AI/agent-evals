@@ -2,4 +2,4 @@ artifacts/
 validator_logs/
 .DS_Store
 node_modules/
-/openspec/changes/eval-the-whole-workflow/poc/runs/claude-20261004T022704Z/
+/openspec/changes/archive/2026-10-08-eval-the-whole-workflow/poc/runs/claude-20261004T022704Z/
