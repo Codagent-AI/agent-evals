@@ -1,3 +1,5 @@
+**Shipped as 14.0.0 (2026-10-07).** The eval-the-whole-workflow change (PR #83) lands first with its own rubric 13.0.0, so this change ships as automated rubric 14.0.0 on top of #83's 13.0.0 content. Its engineering-quality job runs through #83's cross-family panel (`cross-family-panel-v1`). The text below is left as written; where it says 13.0.0 for this change's rubric, read 14.0.0.
+
 ## Context
 
 Issue agent-evals#77 is the source of every criterion here. Its body lists the qualities, and its comments hold the per-run inventory and the full text of each finding. Read it before writing judge guidance, because the variants it lists are what each criterion must catch. The automated rubric is `evals/agent-runner/and-scene/automated-rubric.json`, at version 12.4.0 when this change started.

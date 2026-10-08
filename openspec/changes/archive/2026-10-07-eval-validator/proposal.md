@@ -1,3 +1,5 @@
+**Shipped as 14.0.0 (2026-10-07).** The eval-the-whole-workflow change (PR #83) lands first with its own rubric 13.0.0, so this change ships as automated rubric 14.0.0 on top of #83's 13.0.0 content. Its engineering-quality job runs through #83's cross-family panel (`cross-family-panel-v1`). The text below is left as written; where it says 13.0.0 for this change's rubric, read 14.0.0.
+
 ## Why
 
 The and-scene automated rubric scores behaviour that the fixture's planning documents require. The implementation validator, however, mostly enforces engineering qualities that those documents never state, and the implementor fixes almost everything it flags. In the stopped no-validator eval (agent-evals#71), automated scores matched the validator-on baseline within noise. A candidate that skips this work currently loses nothing, so the eval cannot show what the validator is worth.

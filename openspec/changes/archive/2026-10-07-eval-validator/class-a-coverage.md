@@ -1,5 +1,7 @@
 # Class A coverage audit
 
+**Shipped as 14.0.0 (2026-10-07).** The eval-the-whole-workflow change (PR #83) lands first with its own rubric 13.0.0, so this change ships as automated rubric 14.0.0 on top of #83's 13.0.0 content. Its engineering-quality job runs through #83's cross-family panel (`cross-family-panel-v1`). The text below is left as written; where it says 13.0.0 for this change's rubric, read 14.0.0.
+
 This audit checks each item in agent-evals#77's "Already required by the spec (class A)" section against automated rubric 12.4.0 (`evals/agent-runner/and-scene/automated-rubric.json`). It also checks item 2a, item 3's drift clause, item 4's verify clause, item 5, and item 7's narrow-viewport clause.
 
 **Outcome (2026-10-06).** The maintainer adopted P5, P6 and P7; they are applied as `review_guidance` lines in automated rubric 13.0.0. P1, P2, P3 and P4 are not adopted in this change and are deferred follow-ups (see "Deferred proposals"). The open gaps stay open, except B7.

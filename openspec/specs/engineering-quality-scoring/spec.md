@@ -33,11 +33,15 @@ The component SHALL apply to both candidates and the reference baseline. The sco
 - **THEN** each engineering-quality criterion is recorded with owner `eval` and a reason that states its pass condition
 
 ### Requirement: Engineering-quality judge job
-The evaluator SHALL run a focused `engineering-quality` source-review judge job. The job SHALL return exactly the fourteen LLM-judged engineering-quality criteria. The job SHALL receive the same neutral source snapshot, neutral requirements bundle, and untrusted-data handling as the other implementation source-review jobs, and SHALL use the same judging protocol they use. Like every other deterministic browser criterion, `input-modifier-keys-pass-through` and `input-swipe-from-control-ignored` SHALL each declare the `demo-integration` judge as their fallback.
+The evaluator SHALL run a focused `engineering-quality` source-review judge job. The job SHALL return exactly the fourteen LLM-judged engineering-quality criteria. The job SHALL receive the same neutral source snapshot, neutral requirements bundle, and untrusted-data handling as the other implementation source-review jobs, and SHALL use the same judging protocol they use: the cross-family panel (`cross-family-panel-v1`) of one Claude-family and two Codex-family judges with the line-cited decider, for candidates and for the reference baseline alike. Like every other deterministic browser criterion, `input-modifier-keys-pass-through` and `input-swipe-from-control-ignored` SHALL each declare the `demo-integration` judge as their fallback.
 
 #### Scenario: The job returns exactly its criteria
 - **WHEN** the engineering-quality job completes
 - **THEN** it returns exactly the fourteen LLM-judged engineering-quality criteria, whether or not either input-hygiene probe was observed
+
+#### Scenario: The job is judged by the cross-family panel
+- **WHEN** the engineering-quality job runs for a candidate or for the reference baseline
+- **THEN** its criteria are judged by the same cross-family panel as the other scored judge jobs, and a criterion the panel disputes is settled by the line-cited decider
 
 #### Scenario: A not-observed input-hygiene probe falls back to demo integration
 - **WHEN** `input-swipe-from-control-ignored` is recorded as not observed
