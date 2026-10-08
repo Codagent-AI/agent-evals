@@ -520,6 +520,8 @@ const repairPolicy = join(root, 'evals/agent-runner/and-scene/evidence-repair.sh
 
 test('evidence repair runs at most once and deducts no product points', async () => {
   const dir = await makeTempDir(join(tmpdir(), 'evidence-repair-'))
+  const repairTmp = join(dir, 'tmp')
+  await mkdir(repairTmp)
   const manifest = join(dir, 'manifest.json')
   const helper = join(dir, 'screenshot.mjs')
   await writeFile(helper, 'original helper\n')
@@ -541,7 +543,7 @@ ensure_complete_evidence capture repair ${JSON.stringify(manifest)} ${JSON.strin
 printf '%s %s %s %s %s\\n' "$captures" "$repairs" "$EVIDENCE_REPAIR_ATTEMPTED" \
   "$EVIDENCE_REPAIR_SUCCEEDED" "${'${EVIDENCE_REPAIR_PENALTY-unset}'}"
 `
-  const result = spawnSync('bash', ['-c', script], { encoding: 'utf8' })
+  const result = spawnSync('bash', ['-c', script], { encoding: 'utf8', env: { ...process.env, TMPDIR: repairTmp } })
   assert.equal(result.status, 0, result.stderr)
   // The repair is recorded diagnostically; it carries no penalty at all.
   assert.equal(result.stdout.trim(), '2 1 true true unset')
@@ -549,6 +551,8 @@ printf '%s %s %s %s %s\\n' "$captures" "$repairs" "$EVIDENCE_REPAIR_ATTEMPTED" \
 
 test('evidence repair may edit only its temporary helper copy', async () => {
   const dir = await makeTempDir(join(tmpdir(), 'evidence-repair-isolation-'))
+  const repairTmp = join(dir, 'tmp')
+  await mkdir(repairTmp)
   const manifest = join(dir, 'manifest.json')
   const helper = join(dir, 'screenshot.mjs')
   await writeFile(helper, 'original helper\n')
@@ -562,13 +566,14 @@ repair() {
 }
 ensure_complete_evidence capture repair ${JSON.stringify(manifest)} ${JSON.stringify(helper)} || true
 `
-  const result = spawnSync('bash', ['-c', script], { encoding: 'utf8' })
+  const result = spawnSync('bash', ['-c', script], { encoding: 'utf8', env: { ...process.env, TMPDIR: repairTmp } })
   assert.equal(result.status, 0, result.stderr)
 
   const workspace = result.stdout.trim().split('\n').pop()
   assert.equal(await readFile(helper, 'utf8'), 'original helper\n')
   assert.equal(await readFile(join(workspace, 'screenshot.mjs'), 'utf8'), 'repaired helper\n')
   assert.notEqual(dirname(workspace), dirname(helper))
+  assert.equal(dirname(workspace), repairTmp)
 })
 
 test('screenshot helper uses the spec contract and reports complete coverage', async () => {
