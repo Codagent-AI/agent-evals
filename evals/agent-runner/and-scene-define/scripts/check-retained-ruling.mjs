@@ -11,7 +11,7 @@
 // scratch directory outside the run, which the output names.
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { SUITE_ROOT, readJson } from '../lib/files.mjs'
 import { loadJudgingInputs } from '../lib/judging.mjs'
@@ -81,6 +81,14 @@ export async function main(argv, { decider = null, log = line => console.log(lin
   const recordPath = resolve(options.record)
   const runDir = resolve(options.runDir ?? dirname(dirname(recordPath)))
   const suiteRoot = resolve(options.suiteRoot ?? SUITE_ROOT)
+  if (options.scratchDir) {
+    // The check is read-only: the decider's logs may never land in the record's run.
+    const inside = relative(runDir, resolve(options.scratchDir))
+    if (inside === '' || (!inside.startsWith('..') && !isAbsolute(inside))) {
+      log(`--scratch-dir must lie outside the record's run directory ${runDir}\n\n${RETAINED_RULING_HELP}`)
+      return { exitCode: 2 }
+    }
+  }
   const record = await readJson(recordPath)
   const data = await loadJudgingInputs({ runDir, suiteRoot })
   const gates = (await readJson(join(runDir, 'judges/gates.json'))).gates

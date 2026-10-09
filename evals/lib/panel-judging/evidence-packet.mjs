@@ -43,7 +43,13 @@ function blockBody(text, begin, end, from = null) {
   const at = from === null ? value.indexOf(`${begin}\n`) : (value.startsWith(`${begin}\n`, from) ? from : -1)
   if (at < 0) return null
   const start = at + begin.length + 1
-  const stop = value.indexOf(`\n${end}`, start - 1)
+  // END must be a whole line, so candidate text such as `${end} extra` never closes the block.
+  let stop = value.indexOf(`\n${end}`, start - 1)
+  while (stop >= 0) {
+    const after = stop + end.length + 1
+    if (after === value.length || value[after] === '\n') break
+    stop = value.indexOf(`\n${end}`, stop + 1)
+  }
   if (stop < start - 1) return null
   return { body: value.slice(start, Math.max(start, stop)), next: stop + end.length + 2 }
 }
@@ -136,8 +142,20 @@ export function roleSections(layout, roles, lines) {
 }
 
 // The verified index the packet quotes, parsed; null when absent or invalid.
+// It is read only where the harness writes it, directly after the frame (or at
+// the top of a packet without one), so candidate text that imitates the index
+// can never be parsed in its place.
 export function packetIndex(text) {
-  const block = blockBody(text, '# BEGIN VERIFIED INDEX', '# END VERIFIED INDEX')
+  const value = String(text ?? '')
+  let from = 0
+  const cutBlock = blockBody(value, CUT_INDEX_BEGIN, CUT_INDEX_END, 0)
+  if (cutBlock) {
+    const layoutBlock = blockBody(value, LAYOUT_BEGIN, LAYOUT_END, cutBlock.next)
+    if (!layoutBlock) return null
+    from = layoutBlock.next
+    while (value[from] === '\n') from++
+  }
+  const block = blockBody(value, '# BEGIN VERIFIED INDEX', '# END VERIFIED INDEX', from)
   if (!block) return null
   try {
     return JSON.parse(block.body)

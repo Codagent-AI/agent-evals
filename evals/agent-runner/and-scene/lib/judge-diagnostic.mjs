@@ -215,7 +215,7 @@ export async function writeDiagnosticResult(runDir, value) {
 export async function compareDiagnostics({ expectedPath, runDirs }) {
   const expectedSha = await hashFile(expectedPath)
   if (expectedSha === null) throw diagnosticError('invalid-expected', `the expected-verdict file does not exist: ${expectedPath}`)
-  const expected = validateExpectedVerdicts(JSON.parse(await readFile(expectedPath, 'utf8')))
+  const expected = parseExpectedFile({ path: expectedPath, bytes: await readFile(expectedPath) })
   const runs = []
   for (const runDir of runDirs) {
     const diagnostic = await readDiagnostic(runDir)

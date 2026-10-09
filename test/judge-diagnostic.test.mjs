@@ -127,3 +127,11 @@ test('the comparison reports verdict, basis and match per criterion and repeat, 
   assert.equal(refused.stdout, '')
   assert.match(refused.stderr, /refusing to report matches/)
 })
+
+test('a malformed expected-verdict file is refused naming the file', async () => {
+  const base = await makeTempDir(join(tmpdir(), 'judge-diagnostic-malformed-'))
+  const expectedPath = join(base, 'expected.json')
+  await writeFile(expectedPath, '{ not json')
+  await assert.rejects(compareDiagnostics({ expectedPath, runDirs: [] }),
+    (error) => error.code === 'invalid-expected' && error.message.includes(expectedPath))
+})

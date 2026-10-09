@@ -414,3 +414,13 @@ test('the blocker sums settlement and mixed points for the named rep, excluding 
   assert.equal(unnamed.status, 2)
   assert.match(unnamed.stderr, /names no --rep/)
 })
+
+test('a flipped criterion without points_possible fails the comparison instead of counting as zero points', () => {
+  const rescore = (label, verdict) => ({
+    label, judges: {},
+    score: { rubrics: { automated: { sha256: 'f'.repeat(64) } },
+      components: [{ id: 'demo-technical-quality', subcomponents: [{ job: 'demo-integration',
+        criteria: [{ id: 'untiered', verdict, points_possible: null }] }] }] },
+  })
+  assert.throws(() => comparePair(rescore('r1', 'pass'), rescore('r2', 'fail')), /untiered flipped between r1 and r2 but has no points_possible/)
+})

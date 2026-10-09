@@ -85,7 +85,7 @@ function scoredCriteria(score) {
           component: component.id,
           job: subcomponent.job ?? criterion.fallback_job ?? null,
           verdict: criterion.verdict ?? null,
-          points: criterion.points_possible ?? 0,
+          points: criterion.points_possible ?? null,
         })
       }
     }
@@ -135,6 +135,9 @@ export function comparePair(a, b) {
         ruling: !same(layers[0].ruling, layers[1].ruling),
       }
       flipClass = classifyFlip(differs)
+    }
+    if (!Number.isFinite(first.points) || !Number.isFinite(second.points)) {
+      throw new Error(`${id} flipped between ${a.label} and ${b.label} but has no points_possible to weigh it`)
     }
     flips.push({
       criterion: id, component: first.component, job: first.job, engineering,

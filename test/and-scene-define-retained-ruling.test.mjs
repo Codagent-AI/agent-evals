@@ -119,3 +119,15 @@ test('the script refuses unknown criteria and usage errors without a model call'
   assert.equal(seen.length, 0)
   assert.match(RETAINED_RULING_HELP, /--record/); assert.match(RETAINED_RULING_HELP, /--criterion/)
 })
+
+test('the script refuses a scratch directory inside the record run directory without a model call', async t => {
+  const f = await retainedRun(t)
+  const seen = []; const lines = []
+  for (const scratch of [f.runDir, join(f.runDir, 'judges/decider-logs')]) {
+    const outcome = await main(['--record', f.recordPath, '--criterion', 'INV-093', '--suite-root', f.suiteRoot, '--scratch-dir', scratch],
+      { decider: cannedDecider('confirmed', seen), log: line => lines.push(line) })
+    assert.equal(outcome.exitCode, 2)
+  }
+  assert.equal(seen.length, 0)
+  assert.match(lines.join('\n'), /--scratch-dir must lie outside the record's run directory/)
+})

@@ -372,18 +372,29 @@ function repositoryPermissionLevel(repository, worktree, exec) {
 // A refused resume changes nothing in the directory.
 export async function runEvaluation(args) {
   const diagnostic = { writable: false, runDir: null, runId: null, judgeJobs: null, sourceRunId: null, expectedSha256: null }
-  const result = await evaluateRun(args, diagnostic)
+  const record = (errors) => writeDiagnosticResult(diagnostic.runDir, {
+    run_id: diagnostic.runId,
+    status: diagnosticStatus({ errors }),
+    source_run_id: diagnostic.sourceRunId,
+    judge_jobs: diagnostic.judgeJobs,
+    expected_sha256: diagnostic.expectedSha256,
+    errors,
+    verdicts: {},
+  })
+  let result
+  try {
+    result = await evaluateRun(args, diagnostic)
+  } catch (error) {
+    // An unexpected throw still leaves the failure record a diagnostic
+    // promises; the original error is rethrown either way.
+    if (diagnostic.writable) {
+      await record([{ code: 'diagnostic-error', message: error?.message ?? String(error) }]).catch(() => {})
+    }
+    throw error
+  }
   if (diagnostic.writable && result.exitCode === 2 && result.errors?.length > 0) {
     try {
-      await writeDiagnosticResult(diagnostic.runDir, {
-        run_id: diagnostic.runId,
-        status: diagnosticStatus({ errors: result.errors }),
-        source_run_id: diagnostic.sourceRunId,
-        judge_jobs: diagnostic.judgeJobs,
-        expected_sha256: diagnostic.expectedSha256,
-        errors: result.errors,
-        verdicts: {},
-      })
+      await record(result.errors)
     } catch (error) {
       result.errors.push({ code: 'diagnostic-result', message: `cannot write diagnostic-result.json: ${error.message}` })
     }
