@@ -386,7 +386,7 @@ test('a batched decider rules only on the disputed criteria of a partly disputed
   assert.deepEqual(outcome.results.map(r => [r.id, r.basis]), [['x', 'decider-pass'], ['y', 'consensus-pass']])
   const reseen = []
   const rerun = await rerunDecider({ record: outcome.record, decider: schemaFollowingDecider(reseen), buildPrompt: partlyDisputed().buildPrompt, schema: scopedSchema, validateCitations: async () => true })
-  assert.deepEqual(rerun.rulings, [{ id: 'x', recorded: 'pass', rerun: 'pass', flipped: false }])
+  assert.deepEqual(rerun.rulings, [{ id: 'x', recorded: 'pass', rerun: 'pass', flipped: false, recorded_ruling: 'pass', rerun_ruling: 'pass', overrule_check: null }])
   assert.equal(reseen[0].prompt, seen[0].prompt)
   assert.deepEqual(reseen[0].schema, seen[0].schema)
 })

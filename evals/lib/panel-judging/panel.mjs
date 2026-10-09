@@ -423,11 +423,14 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
 }
 
 // Re-runs only the decider stages of a completed record on its recorded panel
-// outputs: the batched decider ruling and each targeted dissent check, built
+// outputs: the batched decider ruling, the overrule check of each re-run ruling
+// that overrules a two-vote verdict, and each targeted dissent check, built
 // exactly as runPanelJob built them. The record is not changed; callers compare
 // the fresh outcomes with the recorded ones (calibration's ruling-flip rate).
-// A confirmed dissent check changes the verdict; any other classification keeps
-// the majority's, so a check flips when confirmation changes.
+// A ruling flips when the verdict it settles, after its overrule check,
+// differs from the recorded settled verdict. A confirmed dissent check changes
+// the verdict; any other classification keeps the majority's, so a check flips
+// when confirmation changes.
 export async function rerunDecider({ record, decider, buildPrompt, schema, validateCitations }) {
   if (typeof validateCitations !== 'function') throw new Error('decider re-run needs a citation validator')
   if (record?.protocol !== PANEL_PROTOCOL || record.ok !== true) throw new Error('decider re-run needs a complete panel record')
@@ -436,19 +439,8 @@ export async function rerunDecider({ record, decider, buildPrompt, schema, valid
   if (request.panel_line_citations) throw new Error('decider re-run does not support line-cited tiebreaks')
   const scopeRule = request.scope_rule ?? [JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE].join('\n')
   const usage = {}
-  const call = async (next, stage, parser) => {
-    let lastError
-    for (let attempt = 1; attempt <= JUDGE_ATTEMPTS; attempt++) {
-      usage[stage] = (usage[stage] ?? 0) + 1
-      try {
-        return await parser(await decider.invoke({ ...next, authority: { cli: 'claude', model: decider.model, effort: decider.effort }, usage_phase: stage }))
-      } catch (error) {
-        lastError = error
-        if (error.retryable === false) break
-      }
-    }
-    throw lastError
-  }
+  const call = deciderCall(decider, usage)
+  const settledVerdicts = new Map(resolvePanel(record).results.map(r => [r.id, r.verdict]))
   const rulings = []
   const pending = (record.rulings ?? []).map(r => r.id)
   if (pending.length) {
@@ -460,9 +452,18 @@ export async function rerunDecider({ record, decider, buildPrompt, schema, valid
       return parsed
     })
     for (const recorded of record.rulings) {
-      const before = recorded.vote ?? recorded.verdict
-      const rerun = results.find(r => r.id === recorded.id).verdict
-      rulings.push({ id: recorded.id, recorded: before, rerun, flipped: rerun !== before })
+      const fresh = results.find(r => r.id === recorded.id)
+      const overruled = overruledVerdict(record, fresh, order)
+      let check = null
+      if (overruled !== null) {
+        const next = await overruleCheckRequest({ request, scopeRule, id: fresh.id, ruling: fresh, overruled, order })
+        ;[check] = await call(next, 'overrule-check-rerun', text => parseCheck(request, next, fresh.id, text))
+        settledCheck(check, 'overrule check')
+      }
+      const before = settledVerdicts.get(recorded.id)
+      const rerun = overruled !== null && check.classification !== 'confirmed' ? overruled : fresh.verdict
+      rulings.push({ id: recorded.id, recorded: before, rerun, flipped: rerun !== before,
+        recorded_ruling: recorded.vote ?? recorded.verdict, rerun_ruling: fresh.verdict, overrule_check: check?.classification ?? null })
     }
   }
   const checks = []
@@ -474,4 +475,21 @@ export async function rerunDecider({ record, decider, buildPrompt, schema, valid
       flipped: (check.classification === 'confirmed') !== (fresh.classification === 'confirmed') })
   }
   return { job, rulings, checks, usage_by_stage: usage }
+}
+
+// A decider-only call with the panel's bounded retries, outside any record.
+function deciderCall(decider, usage) {
+  return async (next, stage, parser) => {
+    let lastError
+    for (let attempt = 1; attempt <= JUDGE_ATTEMPTS; attempt++) {
+      usage[stage] = (usage[stage] ?? 0) + 1
+      try {
+        return await parser(await decider.invoke({ ...next, authority: deciderAuthority(decider), usage_phase: stage }))
+      } catch (error) {
+        lastError = error
+        if (error.retryable === false) break
+      }
+    }
+    throw lastError
+  }
 }

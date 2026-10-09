@@ -189,11 +189,52 @@ test('rerunDefinitionDecider re-runs only the decider on the recorded panel outp
   const runs = []
   for (let n = 0; n < 3; n++) runs.push(await rerunDefinitionDecider({ job, decider, record: outcome.record }))
   assert.equal(JSON.stringify(outcome.record), before)
-  assert.deepEqual(calls, ['decider-rerun', 'dissent-check-rerun', 'decider-rerun', 'dissent-check-rerun', 'decider-rerun', 'dissent-check-rerun'])
+  // The second re-run's met overrules the two Codex judges, so it is checked first.
+  assert.deepEqual(calls, ['decider-rerun', 'dissent-check-rerun', 'decider-rerun', 'overrule-check-rerun', 'dissent-check-rerun', 'decider-rerun', 'dissent-check-rerun'])
   assert.deepEqual(runs.map(r => r.rulings[0].rerun), ['missing', 'met', 'missing'])
+  assert.deepEqual(runs.map(r => r.rulings[0].overrule_check), [null, 'confirmed', null])
   assert.deepEqual(runs.map(r => r.checks[0].rerun), ['confirmed', 'contradicted', 'confirmed'])
   const flips = deciderFlips([{ input_id: 'reference', repeat: 1, job: job.name, runs }])
   assert.equal(flips.flips, 2); assert.deepEqual(flips.flipped_items.map(x => x.id), [A, B])
+})
+
+// INT-003: the INV-093 shape re-run. Claude `met`, both Codex judges `partial`;
+// the recorded decider ruled `met` and its overrule check did not confirm it,
+// so the recorded verdict is the two-vote `partial`. Each re-run ruling that
+// overrules is checked, and flips count on the verdict after that check.
+test('rerunDefinitionDecider checks each re-run overrule and reports flips on the final verdict', async () => {
+  const job = { name: 'coverage:test', kind: 'coverage', criteria: [A], inputs: { artifacts: { 'proposal.md': 'One evolving scene.\n' }, gates: [], conversation: [], items: picked.slice(0, 1) } }
+  const panel = ['met', 'partial', 'partial'].map((verdict, n) => ({ family: n ? 'codex' : 'claude', model: 'stub', effort: 'high', invoke: async req => JSON.stringify({ results: req.criteria.map(id => vote(id, verdict)) }) }))
+  // Recorded run, then three re-runs: met unconfirmed, met confirmed, partial.
+  const rulings = ['met', 'met', 'met', 'partial']
+  const checks = ['contradicted', 'insufficient', 'confirmed']
+  const calls = []
+  const decider = { family: 'claude', model: 'stub-decider', effort: 'high', invoke: async req => {
+    calls.push(req.usage_phase)
+    if (req.audit_stage) {
+      assert.equal(req.audit_stage, 'overrule-check'); assert.equal(req.authority.model, 'stub-decider')
+      return JSON.stringify({ results: req.criteria.map(id => ({ id, classification: checks.shift(), rationale: 'Checked.', evidence: ['source'] })) })
+    }
+    const verdict = rulings.shift()
+    return JSON.stringify({ results: req.criteria.map(id => vote(id, verdict)) })
+  } }
+  const outcome = await runDefinitionPanel({ job, panel, decider })
+  assert.equal(outcome.ok, true, JSON.stringify(outcome.failure))
+  assert.equal(outcome.results[0].basis, 'majority-partial')
+  calls.length = 0
+  const runs = []
+  for (let n = 0; n < 3; n++) runs.push(await rerunDefinitionDecider({ job, decider, record: outcome.record }))
+  assert.deepEqual(calls, ['decider-rerun', 'overrule-check-rerun', 'decider-rerun', 'overrule-check-rerun', 'decider-rerun'])
+  assert.deepEqual(runs.map(r => r.rulings[0]), [
+    { id: A, recorded: 'partial', rerun: 'partial', flipped: false, recorded_ruling: 'met', rerun_ruling: 'met', overrule_check: 'insufficient' },
+    { id: A, recorded: 'partial', rerun: 'met', flipped: true, recorded_ruling: 'met', rerun_ruling: 'met', overrule_check: 'confirmed' },
+    { id: A, recorded: 'partial', rerun: 'partial', flipped: false, recorded_ruling: 'met', rerun_ruling: 'partial', overrule_check: null },
+  ])
+  const flips = deciderFlips([{ input_id: 'restructured-degraded-quality', repeat: 1, job: job.name, runs }])
+  assert.equal(flips.flips, 1); assert.equal(flips.comparisons, 3)
+  // A re-run still accepts only a complete record under the current protocol.
+  await assert.rejects(rerunDefinitionDecider({ job, decider, record: { ...outcome.record, protocol: 'cross-family-panel-v1' } }), /complete panel record/)
+  await assert.rejects(rerunDefinitionDecider({ job, decider, record: { ...outcome.record, ok: false } }), /complete panel record/)
 })
 
 // ---------------------------------------------------------------- end to end with stub judges
@@ -243,7 +284,8 @@ function stubJudges() {
   let reruns = 0
   const decider = { family: 'claude', model: 'stub-decider', effort: 'high', invoke: async req => {
     calls.push({ who: 'decider', input: inputOf(req.prompt), stage: req.usage_phase })
-    if (req.audit_stage) return JSON.stringify({ results: req.criteria.map(id => ({ id, classification: 'confirmed', rationale: 'Checked.', evidence: ['source'] })) })
+    // Dissent checks confirm; no overrule check does.
+    if (req.audit_stage) return JSON.stringify({ results: req.criteria.map(id => ({ id, classification: req.audit_stage === 'overrule-check' ? 'contradicted' : 'confirmed', rationale: 'Checked.', evidence: ['source'] })) })
     if (req.usage_phase === 'decider-rerun') reruns++
     return JSON.stringify({ results: req.criteria.map(id => vote(id, req.usage_phase === 'decider-rerun' && reruns % 2 === 1 ? 'met' : 'missing')) })
   } }
@@ -272,7 +314,11 @@ test('--calibrate judges each input three independent times through the candidat
   // Decider re-runs: three per first-repeat record that reached the decider or a dissent check.
   assert.equal(calls.filter(x => x.stage === 'decider-rerun').length, 3)
   assert.equal(calls.filter(x => x.stage === 'dissent-check-rerun').length, 3)
-  assert.equal(report.decider_flips.flips, 2); assert.deepEqual(report.decider_flips.flipped_items.map(x => [x.input_id, x.id]), [['reference', B]])
+  // Re-runs 1 and 3 rule met against the two Codex judges' missing. Each overrule
+  // is checked before it counts, and neither check confirms, so nothing flips.
+  assert.equal(calls.filter(x => x.stage === 'overrule-check-rerun').length, 2)
+  assert.equal(report.decider_flips.flips, 0); assert.deepEqual(report.decider_flips.flipped_items, [])
+  assert.deepEqual(report.decider_flips.items.find(x => x.id === B && x.kind === 'decider').reruns, ['missing', 'missing', 'missing'])
   assert.equal(report.identical_rescore.input_id, 'reference'); assert.equal(report.identical_rescore.available, true)
   assert.deepEqual(report.identical_rescore.differing_items, [])
   // Scripted failures: restructured loses A, C, D (4 > 3); degraded's removed A met in repeat 2 and spreads.
