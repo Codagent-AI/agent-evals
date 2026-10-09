@@ -343,9 +343,12 @@ the macOS Google Chrome app, `chromium`, or `google-chrome`). With a binary, the
 controller starts headless Chrome on `AND_SCENE_HOST_DEVTOOLS_PORT` (default
 9333) only for the browser evaluation and for second-opinion replays, with
 flags that disable the GPU, extensions, background networking, site isolation,
-and caches, cap renderer processes at two, and cap the JavaScript heap; it
+caches, and the macOS code-sign clone (a full copy of the Chrome app per
+launch), cap renderer processes at two, and cap the JavaScript heap; it
 stops Chrome and removes its profile as soon as each of those phases ends, so
-no browser runs during source judging (`lib/host-browser.mjs`).
+no browser runs during source judging (`lib/host-browser.mjs`). It also stops
+Chrome and the AXI bridge when the rescore fails or is interrupted with SIGINT
+or SIGTERM.
 
 **Run host rescores one at a time on a small machine.** A long-lived headless
 Chrome reached about 9 GB on a 16 GB Mac, and two parallel rescores exhausted

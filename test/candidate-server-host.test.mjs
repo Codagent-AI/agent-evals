@@ -309,3 +309,85 @@ test('releasing the host browser never fails the phase that used it', async t =>
   assert.ok(removals[0].maxRetries >= 3)
   assert.deepEqual(killed[0], [5151, 'SIGTERM'])
 })
+
+// Without MacAppCodeSignClone disabled, every Chrome launch on macOS copies the
+// whole app into a temp folder, and a Chrome that is killed leaves it behind.
+test('the host browser disables the macOS code-sign clone in its one disable-features switch', async () => {
+  const { HOST_CHROME_FLAGS } = await import('../evals/agent-runner/and-scene/lib/host-browser.mjs')
+  const disabled = HOST_CHROME_FLAGS.filter((flag) => flag.startsWith('--disable-features='))
+  assert.equal(disabled.length, 1, 'Chrome keeps only the last --disable-features switch')
+  assert.ok(disabled[0].slice('--disable-features='.length).split(',').includes('MacAppCodeSignClone'))
+})
+
+// A rescore that threw, or was stopped with Ctrl-C or kill, left its headless
+// Chrome and the AXI bridge running.
+test('the host browser is released when the evaluation throws or the process is signalled', async () => {
+  const { withHostBrowser } = await import('../evals/agent-runner/and-scene/lib/host-browser.mjs')
+  const { EventEmitter } = await import('node:events')
+  const fakeProcess = () => Object.assign(new EventEmitter(), { exits: [], exit(code) { this.exits.push(code) } })
+  let releases = 0
+  const browser = { release: async () => { releases += 1 } }
+
+  const thrown = fakeProcess()
+  await assert.rejects(withHostBrowser(browser, async () => { throw new Error('judge failed') }, { processImpl: thrown }), /judge failed/)
+  assert.equal(releases, 1)
+  assert.equal(thrown.listenerCount('SIGINT') + thrown.listenerCount('SIGTERM'), 0)
+
+  const done = fakeProcess()
+  assert.equal(await withHostBrowser(browser, async () => 'scored', { processImpl: done }), 'scored')
+  assert.equal(releases, 2)
+
+  for (const [name, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
+    const signalled = fakeProcess()
+    let started
+    const running = new Promise((resolve) => { started = resolve })
+    withHostBrowser(browser, () => { started(); return new Promise(() => {}) }, { processImpl: signalled })
+    await running
+    const before = releases
+    signalled.emit(name)
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.equal(releases, before + 1, name)
+    assert.deepEqual(signalled.exits, [code], name)
+  }
+
+  assert.equal(await withHostBrowser(null, async () => 'no browser', { processImpl: fakeProcess() }), 'no browser')
+})
+
+// A signal that arrives while a phase is already releasing the browser must not
+// exit before that release has stopped Chrome and removed its profile.
+test('a release that starts while another is running waits for the same cleanup', async t => {
+  const { createHostBrowser } = await import('../evals/agent-runner/and-scene/lib/host-browser.mjs')
+  const { EventEmitter } = await import('node:events')
+  let chrome = null
+  let finishStop
+  let profileRemoved = null
+  const browser = createHostBrowser({
+    chromePath: '/fake/chrome', port: 9557, env: {},
+    spawnImpl: () => {
+      chrome = Object.assign(new EventEmitter(), { pid: 6161, exitCode: null, kill: () => true })
+      return chrome
+    },
+    killGroup: () => {
+      chrome.exitCode = 0
+      setImmediate(() => chrome.emit('exit', 0))
+    },
+    log: () => {},
+    fetchImpl: async () => ({ ok: true }),
+    axi: () => new Promise((resolve) => { finishStop = resolve }),
+    rmImpl: async (path) => { profileRemoved = path },
+    sleep: async () => {},
+  })
+  t.after(() => browser.release())
+  await browser.ensure()
+  const first = browser.release()
+  let secondDone = false
+  const second = browser.release().then(() => { secondDone = true })
+  for (let tick = 0; tick < 5; tick += 1) await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(secondDone, false, 'the second release waits while AXI is still stopping')
+  assert.equal(profileRemoved, null, 'the profile stays until Chrome has stopped')
+  finishStop()
+  await Promise.all([first, second])
+  assert.equal(chrome.exitCode, 0)
+  // The fake rmImpl removed nothing; remove the real temp profile.
+  await rm(profileRemoved, { recursive: true, force: true })
+})
