@@ -47,9 +47,7 @@ export const WORKFLOW_QUALITY_CRITERION_IDS = Object.freeze({
 // is eval-owned, belongs to the engineering-quality component, and is never a
 // legacy criterion. The two input-hygiene probes are browser-owned; the rest
 // belong to the focused engineering-quality judge. Membership is fixed per
-// subcomponent because a criterion's points are its subcomponent's points
-// divided among that subcomponent's criteria, so moving one across a boundary
-// changes its weight even when the flattened order is unchanged.
+// subcomponent because the engineering-quality spec groups them that way.
 export const ENGINEERING_QUALITY_SUBCOMPONENT_CRITERIA = Object.freeze({
   'engineering-input-hygiene': [
     'input-modifier-keys-pass-through',
@@ -77,21 +75,25 @@ export const ENGINEERING_QUALITY_SUBCOMPONENT_CRITERIA = Object.freeze({
   ],
 })
 
-// A criterion's points are its subcomponent's points divided among its
-// criteria, so a transfer between subcomponents changes every share.
-export const ENGINEERING_QUALITY_SUBCOMPONENT_POINTS = Object.freeze({
-  'engineering-input-hygiene': 2,
-  'engineering-verification-tooling-robustness': 3,
-  'engineering-skill-instructions-and-templates': 1.5,
-  'engineering-presentation-code-and-tests': 1.5,
-})
-
 export const ENGINEERING_QUALITY_CRITERION_IDS = Object.freeze({
   'deterministic-browser': ENGINEERING_QUALITY_SUBCOMPONENT_CRITERIA['engineering-input-hygiene'],
   'engineering-quality': Object.entries(ENGINEERING_QUALITY_SUBCOMPONENT_CRITERIA)
     .filter(([id]) => id !== 'engineering-input-hygiene')
     .flatMap(([, criteria]) => criteria),
 })
+
+// Importance tiers, from most to least important. A component weights each
+// tier it uses; within it, every criterion of one tier earns the same points.
+export const TIERS = ['critical', 'major', 'minor']
+// A zero-point gate input is listed and observed like any criterion, so its
+// browser observation, fallback judge, and second opinion keep working, but it
+// earns no points: it exists only to feed a hard gate.
+export const GATE_INPUT_TIER = 'gate-input'
+// The only gate inputs: verification-sample-outline is derived from them.
+export const OUTLINE_GATE_INPUTS = Object.freeze(['demo-route-and-registration', 'demo-nine-step-content-and-order'])
+const MAX_TIER_WEIGHT = 2
+// Weights are sixteenths of a point, so every sum is exact in binary floating point.
+const WEIGHT_UNIT = 16
 
 const COMPONENT_POLICY = [
   ['demo-technical-quality', 20, 12.5],
@@ -178,9 +180,17 @@ export const LEGACY_CRITERION_IDS = [
   'visual-helper-attribution-warning',
 ]
 
-// Flatten the rubric into one row per scored criterion. Points are carried at
-// the subcomponent level because a row's points are divided equally among its
-// criteria and the scorer must not round the intermediate share.
+// A criterion's points are its component's weight for its tier, whatever its
+// subcomponent; a gate input earns none. An untiered criterion has no weight,
+// which validation rejects.
+export function criterionWeight(component, subcomponent, id) {
+  const tier = subcomponent.tiers?.[id] ?? null
+  if (tier === GATE_INPUT_TIER) return 0
+  return component.tier_weights?.[tier] ?? null
+}
+
+// Flatten the rubric into one row per listed criterion, including the
+// zero-point gate inputs, with the tier that sets its points.
 export function rubricCriteria(rubric) {
   const rows = []
   for (const component of rubric.components ?? []) {
@@ -192,13 +202,73 @@ export function rubricCriteria(rubric) {
           subcomponent: subcomponent.id,
           evaluator: subcomponent.evaluator,
           job: subcomponent.job ?? null,
+          tier: subcomponent.tiers?.[id] ?? null,
           subcomponent_points: subcomponent.points,
-          criterion_points: subcomponent.points / subcomponent.criteria.length,
+          criterion_points: criterionWeight(component, subcomponent, id),
         })
       }
     }
   }
   return rows
+}
+
+// The tier rules of the product-quality spec: a strictly decreasing ladder of
+// positive sixteenths no greater than 2, a tier for every listed criterion, and
+// declared points that are exactly the sum of the criteria's weights.
+function tierErrors(component) {
+  const errors = []
+  const weights = component.tier_weights
+  if (!weights || typeof weights !== 'object' || Array.isArray(weights)) {
+    return [`component ${component.id} requires tier_weights`]
+  }
+  for (const [tier, weight] of Object.entries(weights)) {
+    if (!TIERS.includes(tier)) {
+      errors.push(`component ${component.id} has unknown tier weight ${tier}`)
+    } else if (typeof weight !== 'number' || !Number.isFinite(weight) || weight <= 0) {
+      errors.push(`component ${component.id} tier weight ${tier} ${weight} must be a positive number`)
+    } else if (weight > MAX_TIER_WEIGHT) {
+      errors.push(`component ${component.id} tier weight ${tier} ${weight} exceeds ${MAX_TIER_WEIGHT}`)
+    } else if (!Number.isInteger(weight * WEIGHT_UNIT)) {
+      errors.push(`component ${component.id} tier weight ${tier} ${weight} is not a multiple of 1/${WEIGHT_UNIT}`)
+    }
+  }
+  const ladder = TIERS.filter((tier) => tier in weights).map((tier) => weights[tier])
+  if (ladder.some((weight, index) => index > 0 && !(weight < ladder[index - 1]))) {
+    errors.push(`component ${component.id} tier weights must decrease strictly from critical to minor`)
+  }
+  for (const subcomponent of component.subcomponents ?? []) {
+    const tiers = subcomponent.tiers
+    if (!tiers || typeof tiers !== 'object' || Array.isArray(tiers)) {
+      errors.push(`subcomponent ${subcomponent.id} requires tiers`)
+      continue
+    }
+    const criteria = subcomponent.criteria ?? []
+    for (const id of Object.keys(tiers)) {
+      if (!criteria.includes(id)) errors.push(`subcomponent ${subcomponent.id} tiers unknown criterion ${id}`)
+    }
+    let sum = 0
+    for (const id of criteria) {
+      const tier = tiers[id]
+      if (tier === undefined) {
+        errors.push(`criterion ${id} has no tier`)
+      } else if (tier === GATE_INPUT_TIER) {
+        if (!OUTLINE_GATE_INPUTS.includes(id)) errors.push(`criterion ${id} cannot be a gate-input`)
+      } else if (!TIERS.includes(tier)) {
+        errors.push(`criterion ${id} has unknown tier ${tier}`)
+      } else if (!(tier in weights)) {
+        errors.push(`criterion ${id} tier ${tier} has no weight in component ${component.id}`)
+      } else {
+        sum += weights[tier]
+      }
+      if (OUTLINE_GATE_INPUTS.includes(id) && tier !== GATE_INPUT_TIER) {
+        errors.push(`outline input ${id} must be a gate-input`)
+      }
+    }
+    if (subcomponent.points !== sum) {
+      errors.push(`subcomponent ${subcomponent.id} points ${subcomponent.points} are not the sum of its criterion weights ${sum}`)
+    }
+  }
+  return errors
 }
 
 // Every criterion and gate must say where its requirement comes from. A
@@ -297,6 +367,7 @@ export function validateAutomatedRubric(rubric) {
       }
       errors.push(...definitionErrors(subcomponent))
     }
+    errors.push(...tierErrors(component))
   }
   if (automated !== rubric.automated_points) {
     errors.push(`component points sum to ${automated}, expected automated_points ${rubric.automated_points}`)
@@ -400,10 +471,6 @@ export function validateAutomatedRubric(rubric) {
     const approved = ENGINEERING_QUALITY_SUBCOMPONENT_CRITERIA[subcomponent.id]
     if (approved && JSON.stringify(subcomponent.criteria) !== JSON.stringify(approved)) {
       errors.push(`subcomponent ${subcomponent.id} must own exactly its approved engineering-quality criteria`)
-    }
-    const points = ENGINEERING_QUALITY_SUBCOMPONENT_POINTS[subcomponent.id]
-    if (points !== undefined && subcomponent.points !== points) {
-      errors.push(`subcomponent ${subcomponent.id} must award its approved ${points} points`)
     }
   }
   // Judges and second-opinion verifiers read an eval-owned reason as the
