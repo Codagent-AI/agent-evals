@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { buildRubric, checkJudgingInputs } from '../evals/agent-runner/and-scene-define/lib/rubric.mjs'
 import { SUITE_ROOT } from '../evals/agent-runner/and-scene-define/lib/files.mjs'
 import { accuracy, stability, basisShares, familyDistribution, rescoreDiff, deciderFlips, aggregateCalibration, loadCalibrationSet, allExpected, renderCalibrationMarkdown, CALIBRATION_MODE } from '../evals/agent-runner/and-scene-define/lib/calibration.mjs'
-import { runCalibration, parseCalibrateArguments, assertAnchorsReviewed, CALIBRATE_HELP } from '../evals/agent-runner/and-scene-define/calibrate.mjs'
+import { runCalibration, parseCalibrateArguments, assertAnchorsReviewed, CALIBRATE_HELP, CALIBRATION_CONCURRENCY, CALIBRATION_JOB_CONCURRENCY } from '../evals/agent-runner/and-scene-define/calibrate.mjs'
 import { runDefinitionPanel, rerunDefinitionDecider } from '../evals/agent-runner/and-scene-define/lib/judge-jobs.mjs'
 import { publicationEligibility, publishRun } from '../evals/agent-runner/and-scene-define/lib/publication.mjs'
 import { parseArguments } from '../evals/agent-runner/and-scene-define/controller.mjs'
@@ -366,6 +366,28 @@ test('calibration judges several repeats at once and reports them in input and r
   assert.deepEqual(many.report.inputs.map(x => x.scores.per_repeat), one.report.inputs.map(x => x.scores.per_repeat))
   assert.deepEqual(many.report.failures, one.report.failures)
   for (const id of ['reference', 'restructured', 'degraded']) assert.deepEqual((await readdir(join(f.outDir, 'inputs', id))).sort(), ['repeat-1', 'repeat-2', 'repeat-3'])
+})
+
+// INT-007 / E2E-006 setup: calibration already judges repeats concurrently, so
+// the jobs within each repeat run one at a time while repeats keep their own
+// concurrency of six.
+test('calibration judges the jobs within a repeat one at a time while repeats keep concurrency 6', async t => {
+  assert.equal(CALIBRATION_JOB_CONCURRENCY, 1); assert.equal(CALIBRATION_CONCURRENCY, 6)
+  const f = await suiteFixture(t)
+  const { judges } = steadyJudges()
+  // Each repeat has a coverage and a quality job; with one repeat at a time,
+  // more than one job in flight would mean the repeat ran its jobs together.
+  const active = new Map(); let peak = 0
+  const track = member => ({ ...member, invoke: async req => {
+    active.set(req.job, (active.get(req.job) ?? 0) + 1)
+    peak = Math.max(peak, [...active.values()].filter(n => n > 0).length)
+    try { return await member.invoke(req) } finally { active.set(req.job, active.get(req.job) - 1) }
+  } })
+  await runCalibration({ suiteRoot: f.suiteRoot, calibrationDir: f.calibrationDir, outDir: f.outDir, repoRoot: f.root, concurrency: 1 },
+    { judges: { panel: judges.panel.map(track), decider: track(judges.decider) }, gateCommand })
+  assert.equal(peak, 1)
+  const dry = await runCalibration({ suiteRoot: f.suiteRoot, calibrationDir: f.calibrationDir, outDir: join(f.root, 'dry'), repoRoot: f.root, dryRun: true })
+  assert.equal(dry.plan.concurrency, CALIBRATION_CONCURRENCY)
 })
 
 test('a failed repeat stops new calibration work, lets in-flight repeats finish, and fails the calibration', async t => {

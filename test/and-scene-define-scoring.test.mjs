@@ -259,7 +259,7 @@ test('quality inputs contain no hidden material; fidelity excludes graded subjec
 })
 
 import { runGates } from '../evals/agent-runner/and-scene-define/lib/gates.mjs'
-import { createJudgingPhases } from '../evals/agent-runner/and-scene-define/lib/judging.mjs'
+import { createJudgingPhases, DEFINITION_JUDGE_CONCURRENCY } from '../evals/agent-runner/and-scene-define/lib/judging.mjs'
 import { createCheckpoint } from '../evals/agent-runner/and-scene-define/lib/checkpoint.mjs'
 import { runDiscovery } from '../evals/agent-runner/and-scene-define/lib/judge-jobs.mjs'
 const exchange = { step: 'define.specs', step_id: 'specs', attempt: 1, turn: 1, agent_message: 'Requirements?', reply: 'Here is an answer.', reply_type: 'answer' }
@@ -551,4 +551,76 @@ test('a citation path carrying the reference change directory resolves to the co
     for (const judge of judges.panel) judge.invoke = async req => JSON.stringify({ results: req.criteria.map(id => result(id, 'met', [{ ...citation, path }])) })
     assert.equal((await runDefinitionPanel({ job, ...judges })).ok, false, path)
   }
+})
+
+// INT-007: define judging runs its coverage, quality and fidelity units through
+// the shared pool, three at a time, after the disclosure audit.
+async function poolFixture(t, { failQuality = false } = {}) {
+  const runDir = await makeTempDir(join(tmpdir(), 'define-pool-')); t.after(() => rm(runDir, { recursive: true, force: true }))
+  await mkdir(join(runDir, 'collected'))
+  await writeFile(join(runDir, 'collected/proposal.md'), inputs.artifacts['proposal.md'])
+  // One graded item per area: five coverage jobs, then quality and fidelity.
+  const graded = inventory.items.filter(x => x.class !== 'preference')
+  const spread = { ...inventory, items: [...new Set(graded.map(x => x.area))].map(area => graded.find(x => x.area === area)) }
+  const rubric = buildRubric(spread)
+  let checkpoint = createCheckpoint({ run_id: 'pool', identity: { series_identity: { fixture: 'pool' } } })
+  const log = []; const active = new Map(); let peak = 0
+  let persisting = 0; let persistOverlap = 0; let persists = 0
+  const wait = ms => new Promise(done => setTimeout(done, ms))
+  const answer = async req => {
+    log.push({ job: req.job, stage: req.audit_stage ?? 'vote' })
+    active.set(req.job, (active.get(req.job) ?? 0) + 1)
+    peak = Math.max(peak, [...active.entries()].filter(([job, n]) => n > 0 && job !== 'disclosure-audit').length)
+    try {
+      // The first coverage job frees its slot early, so job 3 starts while 1 and
+      // 2 run; quality then starts beside the long jobs 3 and 4, so completion
+      // order differs from job order and a quality failure lands while every
+      // other slot is busy.
+      await wait(req.job.startsWith('coverage:') ? [5, 50, 50, 200, 200][spread.items.findIndex(x => req.job === `coverage:${x.area}`)] : 3)
+      if (failQuality && req.job === 'artifact-quality') throw Object.assign(new Error('quality judge down'), { retryable: false })
+      if (req.audit_stage) return JSON.stringify({ results: req.criteria.map(id => ({ id, classification: 'confirmed', rationale: 'Checked.', evidence: ['e'] })) })
+      return JSON.stringify({ results: req.criteria.map(id => result(id, 'missing', req.job === 'fidelity' || req.job === 'disclosure-audit' ? [exchangeCitation] : [{ ...citation, start_line: null, end_line: null }])) })
+    } finally { active.set(req.job, active.get(req.job) - 1) }
+  }
+  const judges = { panel: [0, 1, 2].map(n => ({ family: n ? 'codex' : 'claude', model: 'stub', effort: 'high', invoke: answer })), decider: { family: 'claude', model: 'stub', effort: 'high', invoke: answer } }
+  const phases = createJudgingPhases({ runDir, judges, getCheckpoint: () => checkpoint, setCheckpoint: x => { checkpoint = x },
+    persist: async () => { persists++; persisting++; persistOverlap = Math.max(persistOverlap, persisting); await wait(1); persisting-- },
+    loadInputs: async () => ({ inventory: spread, rubric, artifacts: inputs.artifacts, conversation: [exchange], reference: [], policy: 'Answer only what was asked.' }),
+    gateCommand: async () => ({ status: 0, stdout: '', stderr: '' }) })
+  const expectedJobs = makeJobs({ inventory: spread, rubric, artifacts: inputs.artifacts, conversation: [exchange], gates: [] }).filter(x => ['coverage', 'quality', 'fidelity'].includes(x.kind)).map(x => x.name)
+  return { runDir, phases, log, expectedJobs, stats: { get peak() { return peak }, get persistOverlap() { return persistOverlap }, get persists() { return persists }, get inFlight() { return [...active.values()].reduce((a, b) => a + b, 0) } }, checkpoint: () => checkpoint }
+}
+test('INT-007 define judging runs at most three jobs at once, checkpoints one at a time, and records results in job order', async t => {
+  const f = await poolFixture(t)
+  assert.equal(DEFINITION_JUDGE_CONCURRENCY, 3)
+  assert.equal(f.expectedJobs.length, 7)
+  await f.phases['disclosure-audit'](); await f.phases['gates-and-judging']()
+  assert.equal(f.stats.peak, DEFINITION_JUDGE_CONCURRENCY)
+  assert.equal(f.stats.persistOverlap, 1); assert.ok(f.stats.persists >= 2 * f.expectedJobs.length)
+  const scored = JSON.parse(await readFile(join(f.runDir, 'judges/score.json'), 'utf8'))
+  assert.deepEqual(scored.panel_records.map(x => x.record.job), f.expectedJobs)
+  // Completion order differed from job order, so the order above is the pool's.
+  const finished = Object.entries(f.checkpoint().phases['gates-and-judging'].units).filter(([unit]) => unit !== 'gates').sort((a, b) => a[1].completed_at.localeCompare(b[1].completed_at))
+  assert.equal(finished.length, 7)
+  assert.ok(finished.every(([, unit]) => unit.state === 'complete'))
+  // The disclosure audit finished before any coverage job started.
+  const lastAudit = f.log.findLastIndex(x => x.job === 'disclosure-audit')
+  const firstCoverage = f.log.findIndex(x => x.job.startsWith('coverage:'))
+  assert.ok(lastAudit >= 0 && lastAudit < firstCoverage)
+})
+test('INT-007 define judging starts no coverage job before the disclosure audit is recorded', async t => {
+  const f = await poolFixture(t)
+  await assert.rejects(f.phases['gates-and-judging'](), { code: 'ENOENT' })
+  assert.equal(f.log.length, 0)
+})
+test('INT-007 a failed define job stops new jobs and lets in-flight jobs settle before the phase fails', async t => {
+  const f = await poolFixture(t, { failQuality: true })
+  await f.phases['disclosure-audit']()
+  await assert.rejects(f.phases['gates-and-judging'](), /quality judge down/)
+  assert.equal(f.stats.inFlight, 0)
+  const units = f.checkpoint().phases['gates-and-judging'].units
+  assert.equal(units['artifact-quality'].state, 'failed')
+  // Fidelity is queued behind the failed quality job and never starts.
+  assert.equal(units.fidelity, undefined)
+  assert.ok(!f.log.some(x => x.job === 'fidelity'))
 })
