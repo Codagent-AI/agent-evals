@@ -23,7 +23,11 @@
 //   first verdicts and spans;
 // - the first verdicts must name exactly the record's decider criteria, every
 //   audited ruling must have been a pass, and a ruling the record never
-//   re-cited must equal its recorded verdict and spans.
+//   re-cited must equal its recorded verdict and spans;
+// - a logged span path is the model's raw citation: a judge working from the
+//   neutral root may prefix it with `source/` or `./`, which the harness strips
+//   before recording it (`inventoryPath`), so spans are compared, and replayed,
+//   without that prefix.
 // A job with no log file at all falls back to reconstruction. Any other
 // departure — an unparseable line, a missing event, a criterion, model, or
 // attempt count that does not match — is an error and never a fallback.
@@ -42,8 +46,10 @@ const DECIDER_STAGES = new Set(['tiebreak', 'tiebreak-recite'])
 export class ReplayInputError extends Error {}
 
 const fail = (message) => { throw new ReplayInputError(message) }
+// A cited path as the harness records it: without the neutral root's prefix.
+const recordedPath = (path) => String(path).replace(/^\.\//, '').replace(/^source\//, '')
 const spanKey = (citations) => JSON.stringify((citations ?? []).map((span) => (typeof span === 'object' && span !== null
-  ? [span.path, span.start_line, span.end_line] : span)))
+  ? [recordedPath(span.path), span.start_line, span.end_line] : span)))
 
 async function isDirectory(path) {
   return (await stat(path).catch(() => null))?.isDirectory() ?? false
@@ -148,7 +154,8 @@ export function firstDeciderVotes({ record, logs, run }) {
     source: 'replay',
     logs: [...firsts.values()].map(({ name }) => name),
     results: expected.map((id) => results.find((result) => result.id === id))
-      .map((result) => ({ ...result, rationale: result.rationale ?? '', evidence: result.evidence ?? [] })),
+      .map((result) => ({ ...result, rationale: result.rationale ?? '', evidence: result.evidence ?? [],
+        citations: result.citations.map((span) => ({ ...span, path: recordedPath(span.path) })) })),
   }
 }
 

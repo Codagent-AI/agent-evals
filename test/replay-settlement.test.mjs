@@ -207,6 +207,24 @@ test('an absent raw-log archive or job log falls back to a labelled reconstructi
   assert.equal(row(partial.report, ACTIVE).first_vote.source, 'replay')
 })
 
+test('a first decider log citing through the neutral root prefix matches its recorded ruling', async () => {
+  // The harness strips a `source/` or `./` prefix from a model's citation before
+  // recording it, so the raw log can name the same span with the prefix.
+  const raw = rawLogs()
+  const prefixed = FIRST_ACTIVE.map((span, index) => ({ ...span, path: `${index % 2 ? './' : 'source/'}${span.path}` }))
+  raw['07-verification-tooling'] = events(OPUS, verdicts([ACTIVE, 'pass', prefixed]))
+  const result = replay(await archives({ raw }))
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(result.report.label, 'replay')
+  assert.deepEqual(row(result.report, ACTIVE).first_vote, { verdict: 'pass', citations: FIRST_ACTIVE, source: 'replay' })
+  assert.equal(row(result.report, ACTIVE).new.basis, 'consensus-pass')
+  // A prefix never hides a different span.
+  raw['07-verification-tooling'] = events(OPUS, verdicts([ACTIVE, 'pass', [{ ...prefixed[0], end_line: 51 }]]))
+  const differing = replay(await archives({ raw }), [])
+  assert.equal(differing.status, 2)
+  assert.match(differing.stderr, /does not match its recorded, never re-cited ruling/)
+})
+
 test('a malformed or mismatched raw log fails the replay instead of falling back', async () => {
   const cases = [
     ['an unparseable line', (raw) => { raw['02-testing-evidence'] += '\n{not json' }, /malformed raw judge log 02-testing-evidence/],
