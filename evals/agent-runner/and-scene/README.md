@@ -59,9 +59,13 @@ otherwise the majority stands.
 
 Each source judge keeps its closed-world source audit and one focused re-cite.
 An audit contradiction marks the vote disputed. Opus checks that same stated
-contradiction; only confirmation turns the vote. An insufficient audit after
-one re-cite leaves the vote standing, except an unconfirmed browser fallback
-pass fails. Judges, audits, checks, the decider, and browser second opinions
+contradiction, with the vote's citations and the files the audit cited; only
+confirmation turns the vote. A check that refutes or cannot decide leaves the
+vote standing, except a browser-fallback pass the check cannot decide, which
+stays disputed. A turned vote in a split goes to the decider even when the
+remaining votes form a Claude-backed majority. An insufficient audit after one
+re-cite leaves the vote standing, except an unconfirmed browser fallback pass
+fails. Judges, audits, checks, the decider, and browser second opinions
 retain the shared scope rule, the shared requirement-question rule (every
 verdict answers whether the quoted requirement is met; an accurate observation
 decides nothing by itself, and a fail must name the unmet part of the
@@ -71,19 +75,26 @@ criterion.
 The decider sees unchanged job context and all three votes, labelled A/B/C in
 seeded order without model identities. It must choose a panel verdict. A pass
 requires 1–12 valid line spans, each under 200 lines, in the verified neutral
-source inventory or materialized evidence view, resolving without symlinks.
-A closed-world span audit checks every requirement clause, with one re-cite on
-insufficient evidence; the re-cite tells the decider to change a verdict whose
-proving lines do not exist rather than cite weaker lines. A contradiction withdraws the pass only when Opus
-confirms that same contradiction. A still-insufficient audit leaves the pass
-standing with that recorded, except an unconfirmed browser fallback pass fails.
-Invalid output is retried; exhausted calls leave the job unobserved.
+source inventory or materialized evidence view, resolving without symlinks. A
+fail cites a counterexample's spans, or for an absence its search scope and
+missing obligation; a fail citing neither is invalid. A closed-world span
+audit checks every ruling, pass or fail. An insufficient pass or
+counterexample fail gets one re-cite, which may replace citations but never
+the verdict; an inadequate absence scope gets one repair round with the
+inventory files the audit names. A contradiction reverses the ruling only when
+Opus confirms that same contradiction (for a fail, every clause met). A
+still-insufficient audit leaves the ruling standing with that recorded, except
+an unconfirmed browser fallback pass fails. Audits and checks that need
+material the harness withheld or could not read (`missing-material`), or an
+absence scope still inadequate after its repair (`scope-inadequate`), fail the
+job as non-resumable harness failures naming the criteria. Invalid output is
+retried; exhausted calls leave the job unobserved.
 
 Criterion records and reports show the basis (`consensus-pass/fail`,
 `majority-pass/fail`, `checked-dissent-pass`, or `decider-pass/fail`) and all
 family-labelled votes, targeted checks, and rulings. Cache reuse requires
-`cross-family-panel-v1` and reproduction from the recorded votes, checks, and
-rulings. Rubric **13.0.0** starts a new scoring series; no criterion changed,
+`cross-family-panel-v2` and reproduction from the recorded votes, checks, and
+rulings, each ruling from its settled audit cycle alone. Rubric **13.0.0** starts a new scoring series; no criterion changed,
 and earlier results stay published. Acceptance `E2E-004` pairs baseline
 rescores under this panel.
 

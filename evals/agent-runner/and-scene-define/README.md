@@ -283,7 +283,7 @@ node evals/agent-runner/and-scene-define/scripts/build-rubric.mjs
 node evals/agent-runner/and-scene-define/scripts/build-rubric.mjs --check
 ```
 
-The host judges use the shared `cross-family-panel-v1` protocol with Sonnet
+The host judges use the shared `cross-family-panel-v2` protocol with Sonnet
 5.5, two independent `gpt-6-luna` samples, and Opus 5.5 for decisions and
 checks, all at high effort. Claude receives inlined inputs with no tools;
 Codex receives only the job packet in a scratch working directory and a private
