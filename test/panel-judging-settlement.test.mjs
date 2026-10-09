@@ -390,3 +390,26 @@ test('a batched decider rules only on the disputed criteria of a partly disputed
   assert.equal(reseen[0].prompt, seen[0].prompt)
   assert.deepEqual(reseen[0].schema, seen[0].schema)
 })
+
+
+test('a decider dissent rerun needing missing material fails instead of reporting a flip', async () => {
+  const marker = '[omitted: design.md could not be read]'
+  const options = setup(['fail', 'fail', 'pass'], {
+    buildPrompt: () => ({ prompt: `unchanged context\n${marker}` }),
+    decider: dissentCheck('confirmed'),
+  })
+  const outcome = await runPanelJob(options)
+  assert.equal(outcome.ok, true)
+  let calls = 0
+  await assert.rejects(rerunDecider({ record: outcome.record, buildPrompt: options.buildPrompt,
+    schema: options.schema, validateCitations: options.validateCitations,
+    decider: { model: 'opus', effort: 'medium', invoke: async request => {
+      calls++
+      assert.equal(request.usage_phase, 'dissent-check-rerun')
+      return JSON.stringify({ results: [{ id: 'x', classification: 'missing-material',
+        rationale: 'The dissent needs the omitted design.', evidence: ['marker'], citations: [], marker }] })
+    } },
+  }), error => error.code === 'missing-material' && error.resumable === false
+    && error.retryable === false && error.criteria.join(',') === 'x')
+  assert.equal(calls, 1)
+})

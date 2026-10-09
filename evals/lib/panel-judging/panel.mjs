@@ -492,6 +492,7 @@ export async function rerunDecider({ record, decider, buildPrompt, schema, valid
     const original = record.votes.find(v => v.id === check.id && v.panel_index === check.panel_index)
     const next = await dissentCheckRequest({ request, scopeRule, id: check.id, original })
     const [fresh] = await call(next, 'dissent-check-rerun', text => parseCheck(request, next, check.id, text))
+    settledCheck(fresh, 'dissent check')
     checks.push({ id: check.id, panel_index: check.panel_index, recorded: check.classification, rerun: fresh.classification,
       flipped: (check.classification === 'confirmed') !== (fresh.classification === 'confirmed') })
   }
