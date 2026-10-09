@@ -96,7 +96,16 @@ export function createHostBrowser({
   }
 
   // Releasing is cleanup: it never fails the browser phase that used Chrome.
-  async function release() {
+  // A release that starts while another is running, such as a signal during a
+  // phase's cleanup, waits for that one rather than returning before Chrome
+  // has stopped.
+  let releasing = null
+  function release() {
+    releasing ??= stopAndRemove().finally(() => { releasing = null })
+    return releasing
+  }
+
+  async function stopAndRemove() {
     const running = child
     child = null
     if (running) {
@@ -136,6 +145,7 @@ const SIGNAL_EXIT_CODES = { SIGINT: 130, SIGTERM: 143 }
 export async function withHostBrowser(browser, run, { processImpl = process } = {}) {
   if (!browser) return run()
   const handlers = Object.keys(SIGNAL_EXIT_CODES).map((name) => {
+    // release() is single-flight, so this waits for a cleanup already running.
     const handler = () => {
       browser.release().finally(() => processImpl.exit(SIGNAL_EXIT_CODES[name]))
     }

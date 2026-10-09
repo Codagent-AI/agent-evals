@@ -352,3 +352,42 @@ test('the host browser is released when the evaluation throws or the process is 
 
   assert.equal(await withHostBrowser(null, async () => 'no browser', { processImpl: fakeProcess() }), 'no browser')
 })
+
+// A signal that arrives while a phase is already releasing the browser must not
+// exit before that release has stopped Chrome and removed its profile.
+test('a release that starts while another is running waits for the same cleanup', async t => {
+  const { createHostBrowser } = await import('../evals/agent-runner/and-scene/lib/host-browser.mjs')
+  const { EventEmitter } = await import('node:events')
+  let chrome = null
+  let finishStop
+  let profileRemoved = null
+  const browser = createHostBrowser({
+    chromePath: '/fake/chrome', port: 9557, env: {},
+    spawnImpl: () => {
+      chrome = Object.assign(new EventEmitter(), { pid: 6161, exitCode: null, kill: () => true })
+      return chrome
+    },
+    killGroup: () => {
+      chrome.exitCode = 0
+      setImmediate(() => chrome.emit('exit', 0))
+    },
+    log: () => {},
+    fetchImpl: async () => ({ ok: true }),
+    axi: () => new Promise((resolve) => { finishStop = resolve }),
+    rmImpl: async (path) => { profileRemoved = path },
+    sleep: async () => {},
+  })
+  t.after(() => browser.release())
+  await browser.ensure()
+  const first = browser.release()
+  let secondDone = false
+  const second = browser.release().then(() => { secondDone = true })
+  for (let tick = 0; tick < 5; tick += 1) await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(secondDone, false, 'the second release waits while AXI is still stopping')
+  assert.equal(profileRemoved, null, 'the profile stays until Chrome has stopped')
+  finishStop()
+  await Promise.all([first, second])
+  assert.equal(chrome.exitCode, 0)
+  // The fake rmImpl removed nothing; remove the real temp profile.
+  await rm(profileRemoved, { recursive: true, force: true })
+})
