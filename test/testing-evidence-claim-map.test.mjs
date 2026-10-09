@@ -513,6 +513,18 @@ test('unanimous evidence seats where one reports missing material fail the crite
   for (const stage of ['tiebreak', 'contradiction-check', 'dissent-check']) assert.equal(ofStage(outcome.seen, stage).length, 0)
 })
 
+test('majority evidence seats where a seat reports missing material fail the criterion before settlement', async () => {
+  const { views, idOf } = await evidenceViews({ artifacts: deepRecord() })
+  const session = idOf('session-report.md')
+  // Claude and one Codex seat pass; the other Codex seat fails, and one passing seat reports missing material.
+  const seat = (id, sample) => (id === PROOF && sample === 3 ? 'fail'
+    : id === PROOF && sample === 2 ? vote(id, 'pass', { missing_material: `[truncated: ${session}` }) : 'pass')
+  const outcome = await judgeTestingOnly(views, { seat })
+  assert.equal(outcome.failures['testing-evidence'].code, 'missing-material')
+  assert.deepEqual(outcome.failures['testing-evidence'].criteria, [PROOF])
+  for (const stage of ['tiebreak', 'contradiction-check', 'dissent-check']) assert.equal(ofStage(outcome.seen, stage).length, 0)
+})
+
 test('a decider reporting missing material fails the criterion before its audits', async () => {
   const { views, idOf } = await evidenceViews({ artifacts: deepRecord() })
   const { proof, honest } = fixtureOneRulings(views['testing-evidence'].packet)

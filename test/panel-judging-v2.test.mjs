@@ -121,6 +121,8 @@ test('the active-state route: a confirmed contradiction turns a vote and a Claud
   const material = JSON.parse(section(check.prompt, 'STATED CONTRADICTIONS'))[0].material
   assert.deepEqual(material, [{ path: 'src/impl.ts', content: IMPL }, { path: 'test/impl.test.ts', content: TEST }])
   assert.deepEqual(check.schema, judgeResultSchemaFor(PANEL_CHECK_RESULT_SCHEMA, [ID]))
+  // Checks run on the decider's pinned model, not the seat's.
+  assert.deepEqual(check.authority, { cli: 'claude', model: 'opus', effort: 'medium' })
   // The decider sees the audit's stated contradiction and the check's confirmation.
   const decider = seen.find((next) => next.judge_stage === 'tiebreak')
   assert.match(decider.prompt, /The source contradiction was independently confirmed: the helper compares the active step with the Previous control The contradiction check confirmed it: the comparison with previous is confirmed/)
@@ -222,6 +224,38 @@ test('a decider fail about absence is audited against its scope files, its oblig
   assert.deepEqual(spanAudit.schema, judgeResultSchemaFor(PANEL_AUDIT_RESULT_SCHEMA, [ID]))
   assert.ok(outcome.results[0].evidence.includes('search scope: test/impl.test.ts'))
   assertReplay(outcome)
+})
+
+for (const check of ['confirmed', 'contradicted']) {
+  test(`an absence fail its audit contradicts goes to a check, and is reversed only when the check ${check === 'confirmed' ? 'confirms' : 'refutes nothing'}`, async () => {
+    const root = await sourceTree()
+    const seen = []
+    const outcome = await runPanelJob(deciderSplit(root, { tiebreak: [ruling('fail', { search_scope: ['src/impl.ts'],
+      missing_obligation: 'a focused test of the active state' })],
+    'tiebreak-span-audit': [audit('contradicted', { rationale: 'the focused test exists', citations: ['test/impl.test.ts'] })],
+    'contradiction-check': [audit(check, { rationale: `the test ${check}` })] }, { seen }))
+    assert.equal(outcome.ok, true, outcome.record.error)
+    assert.equal(outcome.results[0].basis, check === 'confirmed' ? 'decider-pass' : 'decider-fail')
+    // The check receives the scope file and the test the audit cited.
+    const [stated] = JSON.parse(section(seen.find((next) => next.audit_stage === 'contradiction-check').prompt, 'STATED CONTRADICTIONS'))
+    assert.deepEqual(stated.material, [{ path: 'src/impl.ts', content: IMPL }, { path: 'test/impl.test.ts', content: TEST }])
+    assertReplay(outcome)
+  })
+}
+
+test('an absence audit lists a long inventory in full, including a path longer than 200 characters', async () => {
+  const root = await sourceTree()
+  const long = `src/${'deeply-nested-'.repeat(16)}module.ts`
+  assert.ok(long.length > 200)
+  const inventory = [...INVENTORY, long, ...Array.from({ length: 220 }, (_, index) => `src/generated/file-${index}.ts`)]
+  const seen = []
+  const job = deciderSplit(root, { tiebreak: [ruling('fail', { search_scope: ['test/impl.test.ts'], missing_obligation: 'a focused test' })],
+    'tiebreak-span-audit': [audit('confirmed')] }, { seen })
+  job.buildPrompt = () => ({ ...sourceRequest(root), verified_source_paths: inventory })
+  const outcome = await runPanelJob(job)
+  assert.equal(outcome.ok, true, outcome.record.error)
+  const listing = section(seen.find((next) => next.audit_stage === 'tiebreak-span-audit').prompt, 'COMPLETE VERIFIED INVENTORY').split('\n')
+  for (const path of inventory) assert.ok(listing.includes(`- ${path}`), path)
 })
 
 test('a decider fail citing neither a counterexample nor a search scope is retried, then fails the job', async () => {
