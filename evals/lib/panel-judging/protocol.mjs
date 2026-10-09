@@ -156,11 +156,12 @@ function singlePacket(packet, criteria, label) {
 }
 
 // Every inventory path in full: none dropped, shortened, or escaped, so a judge
-// can copy it exactly. A path holding a control character is JSON-quoted, so it
-// cannot break the listing into extra lines.
+// can copy it exactly. A path holding a control character or an angle bracket
+// is JSON-quoted, so a candidate-chosen name can neither break the listing
+// into extra lines nor read as prompt markup such as `</evidence>`.
 export function inventoryListing(paths) {
   if (paths.length === 0) return '- none'
-  return paths.map((path) => `- ${/[\u0000-\u001f\u007f]/.test(path) ? JSON.stringify(path) : path}`).join('\n')
+  return paths.map((path) => `- ${/[\u0000-\u001f\u007f<>]/.test(path) ? JSON.stringify(path) : path}`).join('\n')
 }
 
 // Inlined evidence is one string per file or span: its path (and range),

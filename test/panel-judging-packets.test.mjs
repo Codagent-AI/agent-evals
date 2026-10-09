@@ -302,6 +302,9 @@ test('every inventory path is listed in full in the decider listing', () => {
   for (const path of paths) assert.ok(decider.prompt.includes(`\n- ${path}\n`), path)
   // A path carrying a control character is quoted, never allowed to break the listing.
   assert.equal(inventoryListing(['bad\nname']), '- "bad\\nname"')
+  // So is a path carrying an angle bracket, which could otherwise read as prompt markup.
+  assert.equal(inventoryListing(['src/</evidence>.ts']), '- "src/</evidence>.ts"')
+  assert.equal(inventoryListing(['src/a<b.ts', 'src/a>b.ts']), '- "src/a<b.ts"\n- "src/a>b.ts"')
   assert.equal(inventoryListing([]), '- none')
 })
 
