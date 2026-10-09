@@ -74,14 +74,19 @@ test('a confirmed contradiction turned into a consensus vote is quoted escaped o
 test('decider span-audit rulings quote audits and line references escaped once', () => {
   const spans = { x: [{ path: 'a&b', start_line: 1, end_line: 1, lines: [{ line: 1, text: 'mechanism' }] }] }
   const result = { id: 'x', verdict: 'pass', rationale: 'reason', evidence: ['a'], citations: [{ path: 'a&b', start_line: 1, end_line: 1 }] }
-  const contradicted = resolveLineCitedRecord({ results: [result], spans,
-    audit_results: [parsedAudit('contradicted')], contradiction_checks: [parsedAudit('confirmed')] })[0].result
+  // A v2 record names each audit part's cycle and part, and its settlement.
+  const part = (audit) => ({ ...audit, criterion: 'x', cycle: 'initial', part: 0 })
+  const settlement = { x: { cycles: [{ cycle: 'initial', expected_parts: [0] }], settled_cycle: 'initial' } }
+  const contradicted = resolveLineCitedRecord({ results: [result], first_results: [result], spans, settlement,
+    audit_results: [part(parsedAudit('contradicted'))], contradiction_checks: [part(parsedAudit('confirmed'))] })[0].result
   assert.equal(contradicted.verdict, 'fail')
   assertSinglyEscaped(contradicted.rationale)
   for (const item of contradicted.evidence.filter((entry) => entry.startsWith('span audit'))) assertSinglyEscaped(item)
   assert.ok(contradicted.evidence.includes('quoted lines: a&amp;b:1-1'))
-  const fallback = resolveLineCitedRecord({ results: [result], spans,
-    audit_results: [parsedAudit('insufficient')] }, ['x'])[0].result
+  // An unconfirmed browser-fallback pass after its single re-cite fails.
+  const fallback = resolveLineCitedRecord({ results: [result], first_results: [result], spans,
+    settlement: { x: { cycles: [{ cycle: 'initial', expected_parts: [0] }, { cycle: 'recite', expected_parts: [0] }], settled_cycle: 'recite' } },
+    audit_results: [part(parsedAudit('insufficient')), { ...part(parsedAudit('insufficient')), cycle: 'recite' }] }, ['x'])[0].result
   assert.equal(fallback.verdict, 'fail')
   assertSinglyEscaped(fallback.rationale)
 })

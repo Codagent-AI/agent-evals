@@ -1,11 +1,11 @@
 // Cross-family settlement. Suites own prompts, scales, citations and optional audits.
 import { hashJson } from './hash.mjs'
-import { JUDGE_ATTEMPTS, JudgeOutputError, SOURCE_AUDIT_RESULT_SCHEMA, judgeResultSchemaFor, judgeFailure,
-  parseSourceAuditOutput, buildContradictionCheckRequest, sourceMaterial, runTiebreak, resolveLineCitedRecord, JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE, OMITTED_MATERIAL_RULE,
-  MAX_AUDIT_PACKET_CHARS, PacketOverflowError, compactMaterial } from './protocol.mjs'
-export { judgeFailure } from './protocol.mjs'
+import { JUDGE_ATTEMPTS, JudgeOutputError, PANEL_CHECK_RESULT_SCHEMA, CHECK_OUTCOMES, judgeResultSchemaFor, judgeFailure,
+  parseSourceAuditOutput, buildContradictionCheckRequest, sourceMaterial, runTiebreak, resolveLineCitedRecord, JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE, MISSING_MATERIAL_RULE,
+  MAX_AUDIT_PACKET_CHARS, PacketOverflowError, HarnessMaterialError, compactMaterial, lineCitationInventory } from './protocol.mjs'
+export { judgeFailure, HarnessMaterialError } from './protocol.mjs'
 
-export const PANEL_PROTOCOL = 'cross-family-panel-v1'
+export const PANEL_PROTOCOL = 'cross-family-panel-v2'
 
 function parse(output, criteria, verdicts) {
   let results
@@ -24,11 +24,21 @@ function turned(verdict, order) {
   throw new JudgeOutputError(`a confirmed contradiction of the middle verdict ${verdict} names no corrected verdict`)
 }
 
-function effective(vote, checks, order) {
-  if (!vote.disputed) return { verdict: vote.verdict, disputed: false }
-  const check = checks.find(c => c.stage === 'contradiction-check' && c.id === vote.id && c.panel_index === vote.panel_index)
-  if (!check || check.classification === 'insufficient') return { verdict: vote.verdict, disputed: true }
-  return { verdict: check.classification === 'confirmed' ? turned(vote.verdict, order) : vote.verdict, disputed: false }
+const contradictionCheckOf = (vote, checks) => checks.find(c => c.stage === 'contradiction-check' && c.id === vote.id && c.panel_index === vote.panel_index)
+
+// A disputed vote turns only on a confirmed check. A check that refutes the
+// contradiction or cannot decide it leaves the vote standing as cast, except a
+// browser-fallback pass, which must be proven from source and so stays
+// disputed for the decider when its check cannot decide.
+function effective(vote, checks, order, fallbackIds = []) {
+  if (!vote.disputed) return { verdict: vote.verdict, disputed: false, turned: false }
+  const check = contradictionCheckOf(vote, checks)
+  if (!check) return { verdict: vote.verdict, disputed: true, turned: false }
+  if (check.classification === 'confirmed') return { verdict: turned(vote.verdict, order), disputed: false, turned: true }
+  if (check.classification === 'insufficient' && vote.verdict === order[0] && fallbackIds.includes(vote.id)) {
+    return { verdict: vote.verdict, disputed: true, turned: false }
+  }
+  return { verdict: vote.verdict, disputed: false, turned: false }
 }
 
 // Each dissent citation is validated alone so one bad citation cannot discard
@@ -57,7 +67,7 @@ async function backDissent(vote, request, validateCitations, validateCitation) {
 }
 
 function dissentCheckPrompt({ request, scopeRule, id, original, material }) {
-  const schema = judgeResultSchemaFor(SOURCE_AUDIT_RESULT_SCHEMA, [id])
+  const schema = judgeResultSchemaFor(PANEL_CHECK_RESULT_SCHEMA, [id])
   material = compactMaterial(material)
   // The dissent and its complete material are measured; the job's own context is not.
   const packet = JSON.stringify({ id, rationale: original.rationale, citations: original.citations, material })
@@ -68,14 +78,17 @@ function dissentCheckPrompt({ request, scopeRule, id, original, material }) {
       'it must show a clause of the requirement unmet; for a higher verdict, every clause the verdict credits met.',
       'Contradicted when the material does not show it, or when the fact is accurate but the requirement does not',
       'depend on it (an assumption, scenario, or element the requirement and its review guidance do not name).',
-      'Insufficient when the material cannot settle it.', OMITTED_MATERIAL_RULE].join(' '),
-    'Return confirmed if it holds, contradicted if refuted, insufficient if undecided.',
+      'Insufficient when the complete, in-scope material cannot settle it.', MISSING_MATERIAL_RULE].join(' '),
+    'Return confirmed if it holds, contradicted if refuted, insufficient if undecided, missing-material if it depends on marked material.',
     '# BEGIN UNTRUSTED DISSENT', JSON.stringify({ id, rationale: original.rationale, citations: original.citations, material, evidence: request.input_roots?.evidence ? request.prompt_body ?? request.prompt : null }), '# END UNTRUSTED DISSENT', '# Response', `Reply with JSON matching this schema: ${JSON.stringify(schema)}`].join('\n')
 }
 
-function route(votes, checks, order) {
-  const effectiveVotes = votes.map(v => ({ ...v, ...effective(v, checks, order) }))
+function route(votes, checks, order, fallbackIds = []) {
+  const effectiveVotes = votes.map(v => ({ ...v, ...effective(v, checks, order, fallbackIds) }))
   if (effectiveVotes.some(v => v.disputed)) return { kind: 'decider' }
+  // Confirmed negative evidence is adjudicated: a turned vote in a split
+  // goes to the decider before any majority can outvote it.
+  if (effectiveVotes.some(v => v.turned) && new Set(effectiveVotes.map(v => v.verdict)).size > 1) return { kind: 'decider', routed_by: 'confirmed-contradiction' }
   const counts = new Map()
   for (const v of effectiveVotes) counts.set(v.verdict, (counts.get(v.verdict) ?? 0) + 1)
   const majority = [...counts].find(([, n]) => n >= 2)?.[0]
@@ -91,10 +104,14 @@ function route(votes, checks, order) {
 // family, or model in the prompt. Shared by runPanelJob and rerunDecider so a
 // re-run sends exactly the request the recorded panel outputs produced.
 // `ids` narrows the votes to some criteria, as a batched line-cited decider needs.
+// A turned vote carries the audit's stated contradiction and the check's confirmation.
 function deciderVotes({ job, criteria, record, order, scopeRule, ids = criteria }) {
   const shuffled = [0, 1, 2].sort((a, b) => hashJson({ job, criteria, index: a }).localeCompare(hashJson({ job, criteria, index: b })))
-  const blind = shuffled.map((index, n) => ({ label: String.fromCharCode(65 + n), results: record.votes.filter(v => v.panel_index === index && ids.includes(v.id)).map(vote => ({ id: vote.id, verdict: effective(vote, record.checks, order).verdict,
-    rationale: effective(vote, record.checks, order).verdict !== vote.verdict ? `The source contradiction was independently confirmed: ${vote.contradiction.rationale}` : vote.rationale,
+  const fallbackIds = record.fallback_ids ?? []
+  const blind = shuffled.map((index, n) => ({ label: String.fromCharCode(65 + n), results: record.votes.filter(v => v.panel_index === index && ids.includes(v.id)).map(vote => ({ id: vote.id, verdict: effective(vote, record.checks, order, fallbackIds).verdict,
+    rationale: effective(vote, record.checks, order, fallbackIds).turned
+      ? `The source contradiction was independently confirmed: ${vote.contradiction.rationale} The contradiction check confirmed it: ${contradictionCheckOf(vote, record.checks).rationale}`
+      : vote.rationale,
     citations: vote.citations, evidence: vote.evidence })) }))
   return ['# Untrusted panel votes', JSON.stringify(blind), 'Rule only a verdict one of these panel judges gave.', scopeRule].join('\n')
 }
@@ -117,18 +134,35 @@ function batchedDeciderRequest(deciderRequest, pending) {
 }
 
 function validDeciderVerdicts(record, order, results) {
-  for (const r of results) if (!record.votes.some(v => v.id === r.id && effective(v, record.checks, order).verdict === r.verdict)) throw new JudgeOutputError('decider verdict was not a panel vote')
+  for (const r of results) if (!record.votes.some(v => v.id === r.id && effective(v, record.checks, order, record.fallback_ids ?? []).verdict === r.verdict)) throw new JudgeOutputError('decider verdict was not a panel vote')
+}
+
+// Checks follow the panel audit contract: their citations lie in the job's
+// verified inventory, and missing material names a marker the packet holds.
+async function parseCheck(request, next, id, text) {
+  const inventory = (request.input_roots?.source || request.input_roots?.evidence) ? (await lineCitationInventory(request)).paths : null
+  return parseSourceAuditOutput(text, [id], request.job, { outcomes: CHECK_OUTCOMES, inventory, packet: next.prompt })
+}
+
+// A check that needed withheld material leaves no vote standing.
+function settledCheck(check, stage) {
+  if (check.classification === 'missing-material') {
+    throw new HarnessMaterialError(`${check.id}: the ${stage} needs missing material ${check.marker}`, 'missing-material', [check.id])
+  }
+  return check
 }
 
 async function dissentCheckRequest({ request, scopeRule, id, original }) {
   const material = await sourceMaterial(request, [original])
-  return { ...request, criteria: [id], schema: judgeResultSchemaFor(SOURCE_AUDIT_RESULT_SCHEMA, [id]),
+  return { ...request, criteria: [id], schema: judgeResultSchemaFor(PANEL_CHECK_RESULT_SCHEMA, [id]),
     input_roots: null, audit_stage: 'dissent-check',
     prompt: dissentCheckPrompt({ request, scopeRule, id, original, material }) }
 }
 
 // Pure reproduction from the recorded votes, targeted checks, and rulings.
 export function resolvePanel({ criteria, order, votes, checks = [], rulings = [], decider = null, fallback_ids = [] }) {
+  // Known missing material fails the job; no settled record can hold it.
+  if (checks.some(c => !['confirmed', 'contradicted', 'insufficient'].includes(c.classification))) throw new JudgeOutputError('panel record settles a check on missing material')
   if (decider) {
     const reproduced = resolveLineCitedRecord(decider, fallback_ids)
     if (hashJson(reproduced) !== hashJson(rulings)) throw new JudgeOutputError('cached decider ruling does not reproduce from its audits and checks')
@@ -137,15 +171,15 @@ export function resolvePanel({ criteria, order, votes, checks = [], rulings = []
   const results = criteria.map(id => {
     const own = votes.filter(v => v.id === id)
     if (own.length !== 3 || own.filter(v => v.family === 'claude').length !== 1 || own.filter(v => v.family === 'codex').length !== 2) throw new JudgeOutputError('panel record lacks three cross-family votes')
-    const decision = route(own, checks, order)
+    const decision = route(own, checks, order, fallback_ids)
     let verdict = decision.verdict
     let basis = `${decision.kind}-${verdict}`
-    let chosen = own.find(v => effective(v, checks, order).verdict === verdict)
+    let chosen = own.find(v => effective(v, checks, order, fallback_ids).verdict === verdict)
     const ownChecks = checks.filter(c => c.id === id)
     let ruling = null
     if (decision.kind === 'decider') {
       ruling = rulings.find(r => r.id === id)
-      if (!ruling || !own.some(v => effective(v, checks, order).verdict === (ruling.vote ?? ruling.verdict))) throw new JudgeOutputError('missing or invalid decider ruling')
+      if (!ruling || !own.some(v => effective(v, checks, order, fallback_ids).verdict === (ruling.vote ?? ruling.verdict))) throw new JudgeOutputError('missing or invalid decider ruling')
       chosen = ruling.result ?? ruling
       verdict = chosen.verdict
       basis = `decider-${verdict}`
@@ -159,7 +193,7 @@ export function resolvePanel({ criteria, order, votes, checks = [], rulings = []
       }
     }
     const turned = chosen.verdict !== verdict
-    return { id, verdict, basis, votes: own, checks: ownChecks, ruling,
+    return { id, verdict, basis, ...(decision.routed_by ? { routed_by: decision.routed_by } : {}), votes: own, checks: ownChecks, ruling,
       rationale: turned ? `The source contradiction was independently confirmed: ${chosen.contradiction?.rationale}` : chosen.rationale,
       citations: chosen.citations ?? [], evidence: [...(chosen.evidence ?? []), `judging basis: ${basis}`] }
   })
@@ -246,15 +280,17 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
     record.votes = outcomes.flatMap((o, index) => o.results.map(r => ({ ...r, family: panel[index].family, model: panel[index].model, effort: panel[index].effort, panel_index: index })))
     for (const vote of record.votes) {
       if (!vote.disputed) continue
-      const material = await sourceMaterial(request, [vote])
+      // The vote's own citations and the files its audit cited.
+      const material = await sourceMaterial(request, [vote], vote.contradiction?.citations ?? [])
       const next = buildContradictionCheckRequest({ request, claims: [{ ...vote, material }] })
-      const [check] = await call(next, decider, 'contradiction-check', text => parseSourceAuditOutput(text, [vote.id], job))
+      const [check] = await call(next, decider, 'contradiction-check', text => parseCheck(request, next, vote.id, text))
       record.checks.push({ ...check, stage: 'contradiction-check', panel_index: vote.panel_index })
+      settledCheck(check, 'contradiction check')
     }
     const pending = []
     for (const id of criteria) {
       const votes = record.votes.filter(v => v.id === id)
-      const decision = route(votes, record.checks, order)
+      const decision = route(votes, record.checks, order, record.fallback_ids)
       if (decision.kind === 'decider') { pending.push(id); continue }
       if (!decision.dissent) continue
       const original = record.votes.find(v => v.id === id && v.panel_index === decision.dissent.panel_index)
@@ -271,8 +307,9 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
       }
       if (!original.citations_valid) continue
       const next = await dissentCheckRequest({ request, scopeRule, id, original })
-      const [check] = await call(next, decider, 'dissent-check', text => parseSourceAuditOutput(text, [id], job))
+      const [check] = await call(next, decider, 'dissent-check', text => parseCheck(request, next, id, text))
       record.checks.push({ ...check, stage: 'dissent-check', panel_index: original.panel_index })
+      settledCheck(check, 'dissent check')
     }
     if (pending.length) {
       const validVerdicts = results => validDeciderVerdicts(record, order, results)
@@ -354,7 +391,7 @@ export async function rerunDecider({ record, decider, buildPrompt, schema, valid
   for (const check of record.checks.filter(c => c.stage === 'dissent-check')) {
     const original = record.votes.find(v => v.id === check.id && v.panel_index === check.panel_index)
     const next = await dissentCheckRequest({ request, scopeRule, id: check.id, original })
-    const [fresh] = await call(next, 'dissent-check-rerun', text => parseSourceAuditOutput(text, [check.id], job))
+    const [fresh] = await call(next, 'dissent-check-rerun', text => parseCheck(request, next, check.id, text))
     checks.push({ id: check.id, panel_index: check.panel_index, recorded: check.classification, rerun: fresh.classification,
       flipped: (check.classification === 'confirmed') !== (fresh.classification === 'confirmed') })
   }

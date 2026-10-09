@@ -11,6 +11,8 @@ import { test } from 'node:test'
 import { AMBIGUITY_RESULT_SCHEMA, parseAmbiguityOutput } from '../evals/agent-runner/and-scene/lib/ambiguity.mjs'
 import {
   JUDGE_RESULT_SCHEMA,
+  PANEL_AUDIT_RESULT_SCHEMA,
+  PANEL_CHECK_RESULT_SCHEMA,
   SOURCE_AUDIT_RESULT_SCHEMA,
   SOURCE_JUDGE_RESULT_SCHEMA,
 } from '../evals/agent-runner/and-scene/lib/judge-jobs.mjs'
@@ -35,6 +37,8 @@ const CODEX_JUDGE_SCHEMAS = {
   JUDGE_RESULT_SCHEMA,
   SOURCE_JUDGE_RESULT_SCHEMA,
   SOURCE_AUDIT_RESULT_SCHEMA,
+  PANEL_AUDIT_RESULT_SCHEMA,
+  PANEL_CHECK_RESULT_SCHEMA,
   PRICING_FINDING_SCHEMA,
   LINE_CITED_RESULT_SCHEMA,
   SECOND_OPINION_SCHEMA,

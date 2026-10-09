@@ -495,7 +495,7 @@ function criteriaSection(result) {
 }
 
 function panelSection(result) {
-  if (result.judging?.judging_protocol !== 'cross-family-panel-v1') return ''
+  if (!['cross-family-panel-v1', 'cross-family-panel-v2'].includes(result.judging?.judging_protocol)) return ''
   const rows = Object.entries(result.judging.judges ?? {}).flatMap(([job, results]) =>
     (results ?? []).map(({ id, verdict, basis, votes }) => [job, id, verdict, basis,
       (votes ?? []).map(vote => `${vote.family} (${vote.model}): ${vote.verdict}`).join(' | ')]))

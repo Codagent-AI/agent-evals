@@ -133,7 +133,9 @@ for (const check of ['confirmed', 'contradicted', 'insufficient']) test(`source 
   const { options, seen } = await sourceSetup(t, ['pass', 'pass', 'pass'], { sourceAudit: 'contradicted', check })
   const outcome = await runPanelJob(options)
   assert.equal(outcome.ok, true)
-  assert.equal(outcome.results[0].basis, check === 'contradicted' ? 'consensus-pass' : 'decider-pass')
+  // v2: a check that refutes or cannot decide leaves the vote standing; only a
+  // confirmed one turns it and sends the split to the decider.
+  assert.equal(outcome.results[0].basis, check === 'confirmed' ? 'decider-pass' : 'consensus-pass')
   assert.ok(seen.some(r => r.usage_phase === 'contradiction-check'))
   assert.equal(outcome.results[0].checks[0].classification, check)
 })
@@ -327,9 +329,13 @@ test('a confirmed contradiction turns a vote to the opposite end of the job scal
     /contradiction of the middle verdict partial names no corrected verdict/)
 })
 
-test('re-cite asks the decider to change a verdict its lines cannot prove', () => {
-  const recite = buildReciteRequest({ tiebreakRequest: { job: 'job', prompt_body: 'context' }, claims: [{ id: 'x', audit: { rationale: 'missing clause' } }] })
-  assert.match(recite.prompt, /If the lines that would prove your verdict do not exist, change your verdict rather than citing weaker lines\./)
+// v2: a re-cite may replace citations only, and its prompt never invites a verdict change.
+test('re-cite asks for the same verdict with better citations', () => {
+  const recite = buildReciteRequest({ tiebreakRequest: { job: 'job', prompt_body: 'context' }, claims: [{ id: 'x', verdict: 'pass', audit: { rationale: 'missing clause' } }] })
+  assert.match(recite.prompt, /return the same verdict you\ngave/)
+  assert.match(recite.prompt, /Only the citations may change/)
+  assert.match(recite.prompt, /- x \(your verdict: pass\): missing clause/)
+  assert.doesNotMatch(recite.prompt, /change your verdict/)
 })
 
 test('definition judging uses a definition scope rule and requirement question, not the implementation scope rule', async () => {

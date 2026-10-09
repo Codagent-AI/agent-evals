@@ -81,7 +81,8 @@ test('audit, check and decider packets are compact and quote evidence as numbere
   const span = buildSpanAuditRequest({ request, passes: [{ id: 'x', rationale: 'reason' }], spans })
   const claims = section(span.prompt, 'LINE-CITED CLAIMS')
   assert.equal(claims, JSON.stringify(JSON.parse(claims)))
-  assert.deepEqual(JSON.parse(claims), [{ id: 'x', rationale: 'reason', quoted_spans: ['a:1-2\n1|mechanism\n2|focused test'] }])
+  // v2 claims name their audit direction; a claim without a verdict is a pass.
+  assert.deepEqual(JSON.parse(claims), [{ id: 'x', claim: 'pass', rationale: 'reason', quoted_spans: ['a:1-2\n1|mechanism\n2|focused test'] }])
 
   const check = buildContradictionCheckRequest({ request, claims: [{ id: 'x', verdict: 'pass', rationale: 'reason',
     contradiction: { rationale: 'c', evidence: ['e'] }, material: spans.get('x') }] })
@@ -251,8 +252,9 @@ test('a contradiction check whose cited files exceed half the limit but fit rece
   const size = Math.ceil(LIMIT * 0.3)
   const root = await tree({ a: 'A'.repeat(size), b: 'B'.repeat(size) })
   const checks = []
+  // v2 shows a path outside the verified inventory as nonexistent, so the files are inventoried.
   const outcome = await runPanelJob({ job: 'job', criteria: ['x'], verdicts: ['pass', 'fail'], order: ['pass', 'fail'], schema: {},
-    buildPrompt: () => sourceRequest(root, ['x']), audit: ({ request, invoke }) => runJudgeJob({ request, invoke }),
+    buildPrompt: () => sourceRequest(root, ['x'], { verified_source_paths: ['a', 'b'] }), audit: ({ request, invoke }) => runJudgeJob({ request, invoke }),
     panel: panel(['pass', 'pass', 'pass']).map((member, i) => ({ ...member, invoke: async next => next.audit_stage
       ? audited(next.criteria, i === 0 ? 'contradicted' : 'confirmed')
       : JSON.stringify({ results: [vote('x', 'pass', { citations: ['a', 'b'] })] }) })),
@@ -275,7 +277,7 @@ test('a contradiction check whose single claim cannot fit fails the job instead 
   const root = await tree({ huge: 'H'.repeat(LIMIT + 1) })
   let deciderCalls = 0
   const outcome = await runPanelJob({ job: 'job', criteria: ['x'], verdicts: ['pass', 'fail'], order: ['pass', 'fail'], schema: {},
-    buildPrompt: () => sourceRequest(root, ['x'], { source_audit: false }),
+    buildPrompt: () => sourceRequest(root, ['x'], { source_audit: false, verified_source_paths: ['huge'] }),
     // The seat's own audit contradicted its pass, citing a file too large to show.
     audit: async ({ request }) => ({ ok: true, attempts: [], audit_attempts: [], results: [vote('x', 'pass', {
       citations: ['huge'], disputed: request.judge_sample === 1, ...(request.judge_sample === 1
@@ -318,7 +320,7 @@ test('a backed dissent whose cited material cannot fit fails the job instead of 
   const root = await tree({ huge: 'H'.repeat(LIMIT + 1) })
   let checks = 0
   const outcome = await runPanelJob({ job: 'job', criteria: ['x'], verdicts: ['pass', 'fail'], order: ['pass', 'fail'], schema: {},
-    buildPrompt: () => sourceRequest(root, ['x'], { source_audit: false }), validateCitations: async () => true,
+    buildPrompt: () => sourceRequest(root, ['x'], { source_audit: false, verified_source_paths: ['huge'] }), validateCitations: async () => true,
     panel: panel(['fail', 'fail', 'pass']).map(member => ({ ...member, invoke: async () => JSON.stringify({ results: [vote('x', member.verdict, { citations: ['huge'] })] }) })),
     decider: { model: 'opus', effort: 'medium', invoke: async () => { checks++; return audited(['x'], 'insufficient') } } })
   assert.equal(outcome.ok, false)

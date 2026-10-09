@@ -2209,7 +2209,8 @@ test('published result reports the leaf of the last nested workflow step', async
   assert.deepEqual(written.workflow.observed_steps.at(-1).step_path, ['verify-change'])
 })
 
-for (const [code, resumable] of [['claude-quota', true], ['judge-schema-invalid', false], ['packet-overflow', false]]) test(`judge ${code} survives into the durable harness outcome`, async () => {
+for (const [code, resumable] of [['claude-quota', true], ['judge-schema-invalid', false], ['packet-overflow', false],
+  ['missing-material', false], ['scope-inadequate', false]]) test(`judge ${code} survives into the durable harness outcome`, async () => {
   const context = await environment()
   const result = await evaluate(context, profiles, {
     judgeInvoke: async request => {
@@ -2228,4 +2229,21 @@ for (const [code, resumable] of [['claude-quota', true], ['judge-schema-invalid'
   assert.equal(judging.failures['testing-evidence'].code, code)
   const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
   assert.match(state.phases['product-judging'].units['testing-evidence'].error, new RegExp(`original ${code} diagnostic`))
+})
+
+// Resuming cannot supply missing material, so it outranks a resumable failure.
+test('judge missing-material outranks a resumable quota failure in the durable harness outcome', async () => {
+  const context = await environment()
+  const harness = (code, resumable) => Object.assign(new Error(`original ${code} diagnostic`), { code, resumable, retryable: false, owner: 'evaluation-harness' })
+  const result = await evaluate(context, profiles, {
+    judgeInvoke: async request => {
+      if (request.job === 'testing-evidence') throw harness('claude-quota', true)
+      if (request.job === 'assumption-handling') throw harness('missing-material', false)
+      if (!Array.isArray(request.criteria)) return JSON.stringify({ findings: [], coverage: 'complete', proposals: [] })
+      return JSON.stringify({ results: request.criteria.map(id => ({ id, verdict: 'pass', rationale: 'fixture proof', evidence: ['fixture'] })) })
+    },
+  })
+  assert.equal(result.outcome.evaluation_status, 'evaluation-harness-failed')
+  assert.equal(result.outcome.failure.code, 'missing-material')
+  assert.equal(result.outcome.resumable, false)
 })

@@ -303,7 +303,7 @@ test('engineering-quality is judged by the cross-family panel for candidates and
     })
     assert.equal(outcome.failed_jobs.includes('engineering-quality'), false, mode)
     const record = saved.find(({ id }) => id === 'engineering-quality')
-    assert.equal(record.protocol, 'cross-family-panel-v1', mode)
+    assert.equal(record.protocol, 'cross-family-panel-v2', mode)
     assert.deepEqual(seats.sort(), PRODUCT_JUDGE_PROFILE.panel.map(({ family, model }) => `${family}:${model}`).sort(), mode)
     for (const result of outcome.judges['engineering-quality']) {
       assert.equal(result.basis, 'consensus-pass', mode)
@@ -1376,7 +1376,7 @@ const NAV_SOURCE = [
 
 test('the protocol runs three cross-family judges per job', () => {
   assert.equal(JUDGE_SAMPLES, 3)
-  assert.equal(JUDGING_PROTOCOL, 'cross-family-panel-v1')
+  assert.equal(JUDGING_PROTOCOL, 'cross-family-panel-v2')
 })
 
 // Successful checks, decider calls, and re-cite cycles are protocol calls, not
@@ -1572,7 +1572,9 @@ test('a majority pass is withdrawn only when the check confirms the same stated 
   }
 })
 
-test('a third-sample fail settles a disagreement without line citations', async () => {
+// Under cross-family-panel-v2 a decider fail without line citations must cite
+// its search scope and missing obligation, and it is span-audited like a pass.
+test('a third-sample fail without line citations settles a disagreement after its search scope is audited', async () => {
   const tree = await neutralTree({ 'src/nav.ts': NAV_SOURCE })
   const stages = []
   try {
@@ -1580,13 +1582,17 @@ test('a third-sample fail settles a disagreement without line citations', async 
       request: tree.request(['navigation-touch-swipe']),
       invoke: async (request) => {
         stages.push(stageOf(request))
-        if (request.judge_stage === 'tiebreak') return lineCited({ 'navigation-touch-swipe': ['fail'] })
+        if (request.audit_stage === 'tiebreak-span-audit') return auditOutput(request.criteria)
+        if (request.judge_stage === 'tiebreak') {
+          return JSON.stringify({ results: [{ id: 'navigation-touch-swipe', verdict: 'fail', rationale: 'no swipe test',
+            evidence: ['src/nav.ts'], citations: [], search_scope: ['src/nav.ts'], missing_obligation: 'a focused swipe test' }] })
+        }
         return verdicts({ 'navigation-touch-swipe': request.judge_sample === 1 ? 'pass' : 'fail' })
       },
     })
     assert.equal(outcome.results[0].verdict, 'fail')
     assert.equal(outcome.consensus[0].basis, 'majority-fail')
-    assert.equal(stages.includes('tiebreak-span-audit'), false)
+    assert.equal(stages.filter((stage) => stage === 'tiebreak-span-audit').length, 1)
   } finally {
     await rm(tree.root, { recursive: true, force: true })
   }
@@ -2185,7 +2191,7 @@ test('a dispute on all fourteen engineering-quality criteria settles through the
   assert.ok(packet.length <= MAX_AUDIT_PACKET_CHARS, `${packet.length} > ${MAX_AUDIT_PACKET_CHARS}`)
   assert.ok(outcome.judges[job].every(({ basis }) => basis === 'decider-pass'))
   assert.equal(saved.find(({ id }) => id === job).protocol, JUDGING_PROTOCOL)
-  assert.equal(JUDGING_PROTOCOL, 'cross-family-panel-v1')
+  assert.equal(JUDGING_PROTOCOL, 'cross-family-panel-v2')
 })
 
 // INT-001: a long verified source inventory reaches the seats in full.
