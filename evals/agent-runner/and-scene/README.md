@@ -366,6 +366,70 @@ running. Panel judges use their restricted invokers against the run's
 neutral inputs. A rescore never starts or reads Agent Runner, so it leaves the
 home's `~/.agent-runner/projects` untouched.
 
+### Job-filtered judging diagnostic
+
+To calibrate a criterion or check known answers on retained runs, judge only
+the named scored jobs under the current rubric and judging protocol:
+
+```bash
+evals/agent-runner/and-scene/run.sh \
+  --run-agent --host \
+  --rescore-from artifacts/evals/and-scene/<completed-run-id> \
+  --artifact-dir artifacts/evals/and-scene-diagnostic/<diagnostic-id> \
+  --judge-jobs scene-kit,verification-tooling \
+  --expected expected-verdicts.json
+```
+
+The expected-verdict file is JSON keyed by source run id:
+`{ "<source-run-id>": { "<criterion>": "pass" | "fail" } }`. Fix and freeze it
+before judging: its SHA-256 is recorded, and changing an expectation
+invalidates every diagnostic that used it. The diagnostic refuses a file with
+no verdicts for its source, or one naming a criterion the selected jobs do not
+judge.
+
+The diagnostic runs on the host only. Before judging it writes
+`diagnostic.json`, holding `mode: judge-diagnostic`, the normalized job list
+(sorted, unique, each a known scored job), the source run's path and verified
+provenance hash, the evaluator commit, an evaluator content hash (a sorted
+manifest of path and SHA-256 for every file under `evals/lib/` and this suite,
+excluding `results/`, committed or not), the judge profiles, the rubric hash,
+and the expected file's SHA-256. It then runs the rescore pipeline: input
+verification, the candidate build and browser evaluation (so judges receive
+current-harness browser facts), and only the named judge jobs. It skips second
+opinions, ambiguity diagnostics, pricing, scoring, human-review setup, and
+publication. It writes the judge outputs (`phases/judges/<job>.json`,
+`phases/product-judging.json`) and `diagnostic-result.json`, never
+`result.json`, a score, or a publication record. A failure or early exit also
+writes `diagnostic-result.json`: `unloadable` when the retained run fails input
+verification or no longer builds or serves, `failed` when a judge job fails.
+Its results are calibration diagnostics, never a prerequisite or runtime gate
+for a candidate evaluation.
+
+Resume an interrupted diagnostic in its own directory with `--resume` and the
+same `--judge-jobs` and `--expected`; `--rescore-from` may be omitted, since the
+source is restored from `diagnostic.json`. Before any checkpoint is reused, the
+controller recomputes the identity and refuses the resume, naming the field,
+when the jobs, source, expected-file hash, evaluator commit, evaluator content
+hash, rubric hash, or judge profiles differ, or when the diagnostic flags are
+missing. A refused resume changes nothing in the directory. Completed
+`product-judging/<job>` checkpoints are reused. An ordinary `--rescore-from`
+still cannot be resumed.
+
+Each repeat is a separate run directory. Compare the repeats with the expected
+verdicts:
+
+```bash
+node evals/agent-runner/and-scene/judge-diagnostic.mjs \
+  --expected expected-verdicts.json \
+  artifacts/evals/and-scene-diagnostic/<diagnostic-id>...
+```
+
+It first checks every directory's recorded expected-file hash against the
+file and refuses to report anything on a mismatch (exit 2). It then prints, for
+every judged criterion in every repeat, the verdict, its judging basis, the
+expected verdict, and whether it matches. It exits 0 only when every expected
+verdict was judged and matched.
+
 Evaluate an existing candidate as a reference baseline without invoking Agent
 Runner. Role profiles are neither required nor applicable:
 

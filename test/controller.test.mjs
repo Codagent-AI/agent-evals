@@ -1,5 +1,7 @@
 import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { lstat, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -2246,4 +2248,203 @@ test('judge missing-material outranks a resumable quota failure in the durable h
   assert.equal(result.outcome.evaluation_status, 'evaluation-harness-failed')
   assert.equal(result.outcome.failure.code, 'missing-material')
   assert.equal(result.outcome.resumable, false)
+})
+
+// INT-006: the job-filtered judging diagnostic through the controller.
+async function diagnosticInputs(context) {
+  const expectedPath = join(context.root, 'expected.json')
+  await writeFile(expectedPath, `${JSON.stringify({
+    'completed-candidate-run': { 'navigation-active-state': 'pass', 'visual-helper-active-state-warning': 'fail' },
+  })}\n`)
+  // A small evaluator tree stands in for evals/lib and the suite, so the test
+  // can make uncommitted edits without touching the real evaluator.
+  const evaluator = join(context.root, 'evaluator')
+  const files = {
+    'evals/lib/panel-judging/protocol.mjs': '// span audit prompt v1\n',
+    'evals/agent-runner/and-scene/controller.mjs': '// controller v1\n',
+    'evals/agent-runner/and-scene/fixture-snapshot/openspec/specs/scene-kit/spec.md': '# Scene kit requirement\n',
+    'evals/agent-runner/and-scene/results/2026/result.json': '{}\n',
+  }
+  for (const [path, content] of Object.entries(files)) {
+    await mkdir(dirname(join(evaluator, path)), { recursive: true })
+    await writeFile(join(evaluator, path), content)
+  }
+  return {
+    expectedPath,
+    evaluator,
+    evaluatorRoots: {
+      'evals/lib': join(evaluator, 'evals/lib'),
+      'evals/agent-runner/and-scene': join(evaluator, 'evals/agent-runner/and-scene'),
+    },
+  }
+}
+
+function diagnosticJudge(calls, { fail = () => false, onCall = () => {} } = {}) {
+  return async (request) => {
+    onCall(request)
+    calls.push(request.job)
+    if (fail(request)) throw Object.assign(new Error(`judge for ${request.job} was interrupted`), { resumable: true })
+    if (Array.isArray(request.criteria)) {
+      return JSON.stringify({ results: request.criteria.map((id) => ({
+        id, verdict: 'pass', rationale: 'controller fixture evidence supports this criterion', evidence: ['controller-fixture:verified'],
+      })) })
+    }
+    return JSON.stringify({ results: [] })
+  }
+}
+
+async function diagnose(context, inputs, extra, overrides = {}) {
+  return evaluate(context, [...extra, '--expected', inputs.expectedPath], {
+    controllerChangeName: null,
+    verifyDelivery: async () => { throw new Error('a diagnostic must not rediscover historical artifact paths') },
+    loadRescoreSource: async () => importedRescore(context),
+    evaluatorRoots: inputs.evaluatorRoots,
+    readEvaluatorCommit: () => 'c'.repeat(40),
+    ...overrides,
+  })
+}
+
+test('a job-filtered diagnostic records its identity, judges only the named jobs, and resumes', async () => {
+  const context = await environment()
+  const inputs = await diagnosticInputs(context)
+  const calls = []
+  let recordedBeforeJudging = null
+  const first = await diagnose(context, inputs,
+    ['--rescore-from', '/rescore-source', '--judge-jobs', 'verification-tooling,scene-kit,scene-kit'], {
+      judgeInvoke: diagnosticJudge(calls, {
+        fail: ({ job }) => job === 'verification-tooling',
+        onCall: () => { recordedBeforeJudging ??= existsSync(join(context.runDir, 'diagnostic.json')) },
+      }),
+    })
+
+  assert.equal(first.exitCode, 1, JSON.stringify(first.errors))
+  assert.equal(recordedBeforeJudging, true)
+  assert.deepEqual([...new Set(calls)].sort(), ['scene-kit', 'verification-tooling'])
+  const diagnostic = await readJson(join(context.runDir, 'diagnostic.json'))
+  assert.equal(diagnostic.mode, 'judge-diagnostic')
+  assert.deepEqual(diagnostic.judge_jobs, ['scene-kit', 'verification-tooling'])
+  assert.equal(diagnostic.source.path, '/rescore-source')
+  assert.equal(diagnostic.source.run_id, 'completed-candidate-run')
+  assert.equal(diagnostic.source.provenance_sha256, '9'.repeat(64))
+  assert.equal(diagnostic.evaluator_commit, 'c'.repeat(40))
+  assert.match(diagnostic.evaluator_content_sha256, /^[a-f0-9]{64}$/)
+  assert.ok(diagnostic.evaluator_content_manifest.some(({ path }) => path === 'evals/agent-runner/and-scene/controller.mjs'))
+  assert.ok(!diagnostic.evaluator_content_manifest.some(({ path }) => path.includes('/results/')))
+  assert.equal(diagnostic.judge_profiles.panel.decider.model, 'claude-opus-5-5')
+  assert.match(diagnostic.rubric_sha256, /^[a-f0-9]{64}$/)
+  assert.equal(diagnostic.expected.sha256, createHash('sha256').update(await readFile(inputs.expectedPath)).digest('hex'))
+
+  // Partway failure: only diagnostic artifacts, naming the failure.
+  const failed = await readJson(join(context.runDir, 'diagnostic-result.json'))
+  assert.equal(failed.status, 'failed')
+  assert.equal(failed.official, false)
+  assert.deepEqual(failed.judging.failed_jobs, ['verification-tooling'])
+  assert.match(failed.outcome.failure.reason, /verification-tooling/)
+  assert.equal(existsSync(join(context.runDir, 'result.json')), false)
+  assert.equal(existsSync(join(context.runDir, 'phases/score.json')), false)
+  const interrupted = await loadCheckpoint(join(context.runDir, 'run-state.json'))
+  assert.equal(interrupted.phases['product-judging'].units['scene-kit'].state, 'complete')
+
+  // Every changed identity is refused before any checkpoint is reused.
+  const stateBefore = await readFile(join(context.runDir, 'run-state.json'), 'utf8')
+  const resultBefore = await readFile(join(context.runDir, 'diagnostic-result.json'), 'utf8')
+  const resume = ['--resume', '--judge-jobs', 'scene-kit,verification-tooling']
+  const refused = async (field, extra, overrides = {}) => {
+    const attempted = []
+    const result = await diagnose(context, inputs, extra, { judgeInvoke: diagnosticJudge(attempted), ...overrides })
+    assert.equal(result.exitCode, 2, `${field}: ${JSON.stringify(result.outcome)}`)
+    assert.ok(result.errors.some((error) => error.code === 'diagnostic-identity-mismatch' && error.field === field),
+      `${field}: ${JSON.stringify(result.errors)}`)
+    assert.deepEqual(attempted, [], field)
+    assert.equal(await readFile(join(context.runDir, 'run-state.json'), 'utf8'), stateBefore, field)
+    assert.equal(await readFile(join(context.runDir, 'diagnostic-result.json'), 'utf8'), resultBefore, field)
+  }
+  await refused('judge_jobs', ['--resume', '--judge-jobs', 'scene-kit'])
+  await refused('judge_profiles', [...resume, '--judge-model', 'gpt-6-other'])
+  await refused('evaluator_commit', resume, { readEvaluatorCommit: () => 'd'.repeat(40) })
+  await refused('source', [...resume, '--rescore-from', '/other-source'], {
+    loadRescoreSource: async () => ({ ...importedRescore(context), source_dir: '/other-source', provenance_sha256: '8'.repeat(64) }),
+  })
+  const expectedBytes = await readFile(inputs.expectedPath)
+  await writeFile(inputs.expectedPath, '{"completed-candidate-run":{"navigation-active-state":"fail"}}\n')
+  await refused('expected_sha256', resume)
+  await writeFile(inputs.expectedPath, expectedBytes)
+  for (const path of [
+    'evals/lib/panel-judging/protocol.mjs',
+    'evals/agent-runner/and-scene/controller.mjs',
+    'evals/agent-runner/and-scene/fixture-snapshot/openspec/specs/scene-kit/spec.md',
+  ]) {
+    const original = await readFile(join(inputs.evaluator, path))
+    await writeFile(join(inputs.evaluator, path), `${original}// uncommitted edit\n`)
+    await refused('evaluator_content_sha256', resume)
+    await writeFile(join(inputs.evaluator, path), original)
+  }
+  // A diagnostic directory resumed as an ordinary evaluation is refused.
+  const bare = await evaluate(context, ['--resume'], { controllerChangeName: null, judgeInvoke: diagnosticJudge([]) })
+  assert.equal(bare.exitCode, 2)
+  assert.ok(bare.errors.some(({ code }) => code === 'diagnostic-flags-missing'), JSON.stringify(bare.errors))
+  assert.equal(await readFile(join(context.runDir, 'run-state.json'), 'utf8'), stateBefore)
+
+  // The matching resume keeps the completed judging and runs only the rest.
+  const resumedCalls = []
+  const resumed = await diagnose(context, inputs, resume, { judgeInvoke: diagnosticJudge(resumedCalls) })
+  assert.equal(resumed.exitCode, 0, JSON.stringify({ errors: resumed.errors, outcome: resumed.outcome }))
+  assert.deepEqual([...new Set(resumedCalls)], ['verification-tooling'])
+  const complete = await readJson(join(context.runDir, 'diagnostic-result.json'))
+  assert.equal(complete.status, 'complete')
+  assert.deepEqual(complete.judging.reused_jobs, ['scene-kit'])
+  assert.equal(complete.verdicts['navigation-active-state'].verdict, 'pass')
+  assert.equal(complete.verdicts['navigation-active-state'].job, 'scene-kit')
+  assert.equal(complete.verdicts['navigation-active-state'].basis, 'consensus-pass')
+  assert.ok(Object.values(complete.verdicts).every(({ job }) => ['scene-kit', 'verification-tooling'].includes(job)))
+  for (const path of ['result.json', 'report.html', 'phases/score.json', 'phases/second-opinions.json', 'publication.json',
+    'phases/ambiguity-diagnostics.json', 'phases/metrics-pricing.json']) {
+    assert.equal(existsSync(join(context.runDir, path)), false, path)
+  }
+})
+
+test('an ordinary rescore cannot be resumed, and diagnostic flags need each other and a source', async () => {
+  const context = await environment()
+  const inputs = await diagnosticInputs(context)
+  const ordinary = await evaluate(context, ['--rescore-from', '/rescore-source', '--resume'], { controllerChangeName: null })
+  assert.equal(ordinary.exitCode, 2)
+  assert.match(ordinary.errors[0].message, /--rescore-from cannot be combined with --resume/)
+  const alone = await evaluate(context, ['--rescore-from', '/rescore-source', '--judge-jobs', 'scene-kit'], { controllerChangeName: null })
+  assert.match(alone.errors[0].message, /--judge-jobs and --expected/)
+  const sourceless = await diagnose(context, inputs, ['--judge-jobs', 'scene-kit'])
+  assert.match(sourceless.errors[0].message, /--judge-jobs requires --rescore-from/)
+  const unknown = await diagnose(context, inputs, ['--rescore-from', '/rescore-source', '--judge-jobs', 'scene-kit,no-such-job'])
+  assert.equal(unknown.exitCode, 2)
+  assert.match(unknown.errors[0].message, /unknown scored judge jobs: no-such-job/)
+  const notDiagnostic = await diagnose(context, inputs, ['--resume', '--judge-jobs', 'scene-kit'])
+  assert.ok(notDiagnostic.errors.some(({ code }) => code === 'diagnostic-state-missing'), JSON.stringify(notDiagnostic.errors))
+})
+
+test('a diagnostic whose retained run fails input verification reports it unloadable without judging', async () => {
+  const context = await environment()
+  const inputs = await diagnosticInputs(context)
+  const calls = []
+  const result = await diagnose(context, inputs, ['--rescore-from', '/rescore-source', '--judge-jobs', 'scene-kit'], {
+    judgeInvoke: diagnosticJudge(calls),
+    loadRescoreSource: async () => { throw new Error('rescore source acceptance evidence hash mismatch: /artifacts/x') },
+  })
+  assert.equal(result.exitCode, 2)
+  assert.deepEqual(calls, [])
+  const written = await readJson(join(context.runDir, 'diagnostic-result.json'))
+  assert.equal(written.status, 'unloadable')
+  assert.equal(written.official, false)
+  assert.match(written.errors[0].message, /hash mismatch/)
+  assert.equal(existsSync(join(context.runDir, 'result.json')), false)
+})
+
+test('a diagnostic refuses expected verdicts that the selected jobs cannot judge', async () => {
+  const context = await environment()
+  const inputs = await diagnosticInputs(context)
+  const calls = []
+  const result = await diagnose(context, inputs, ['--rescore-from', '/rescore-source', '--judge-jobs', 'scene-kit'], {
+    judgeInvoke: diagnosticJudge(calls),
+  })
+  assert.equal(result.exitCode, 2)
+  assert.match(result.errors[0].message, /do not judge: visual-helper-active-state-warning/)
+  assert.deepEqual(calls, [])
 })
