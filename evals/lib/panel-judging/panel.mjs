@@ -1,14 +1,11 @@
 // Cross-family settlement. Suites own prompts, scales, citations and optional audits.
 import { hashJson } from './hash.mjs'
-import { JUDGE_ATTEMPTS, JudgeOutputError, SOURCE_AUDIT_RESULT_SCHEMA, judgeResultSchemaFor,
-  parseSourceAuditOutput, buildContradictionCheckRequest, sourceMaterial, runTiebreak, resolveLineCitedRecord, JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE, OMITTED_MATERIAL_RULE } from './protocol.mjs'
+import { JUDGE_ATTEMPTS, JudgeOutputError, SOURCE_AUDIT_RESULT_SCHEMA, judgeResultSchemaFor, judgeFailure,
+  parseSourceAuditOutput, buildContradictionCheckRequest, sourceMaterial, runTiebreak, resolveLineCitedRecord, JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE, OMITTED_MATERIAL_RULE,
+  MAX_AUDIT_PACKET_CHARS, PacketOverflowError, compactMaterial } from './protocol.mjs'
+export { judgeFailure } from './protocol.mjs'
 
 export const PANEL_PROTOCOL = 'cross-family-panel-v1'
-
-export function judgeFailure(error) {
-  return { message: error?.message ?? String(error),
-    ...Object.fromEntries(['code', 'resumable', 'retryable', 'owner'].filter(key => error?.[key] !== undefined).map(key => [key, error[key]])) }
-}
 
 function parse(output, criteria, verdicts) {
   let results
@@ -61,6 +58,10 @@ async function backDissent(vote, request, validateCitations, validateCitation) {
 
 function dissentCheckPrompt({ request, scopeRule, id, original, material }) {
   const schema = judgeResultSchemaFor(SOURCE_AUDIT_RESULT_SCHEMA, [id])
+  material = compactMaterial(material)
+  // The dissent and its complete material are measured; the job's own context is not.
+  const packet = JSON.stringify({ id, rationale: original.rationale, citations: original.citations, material })
+  if (packet.length > MAX_AUDIT_PACKET_CHARS) throw new PacketOverflowError(`${request.job} dissent check exceeds the ${MAX_AUDIT_PACKET_CHARS}-character packet limit: ${id}`, [id])
   return [request.prompt_body ?? request.prompt, scopeRule,
     ['Check only the dissent\'s stated reason. Confirm only when both hold: the cited material shows what the dissent',
       'says, and that fact decides the criterion\'s quoted requirement the way the dissent claims. For a lower verdict,',
@@ -89,13 +90,20 @@ function route(votes, checks, order) {
 // The decider sees the votes blind: a stable seeded order, with no provider,
 // family, or model in the prompt. Shared by runPanelJob and rerunDecider so a
 // re-run sends exactly the request the recorded panel outputs produced.
-function deciderRequestFor({ job, criteria, request, record, order, decider, scopeRule }) {
+// `ids` narrows the votes to some criteria, as a batched line-cited decider needs.
+function deciderVotes({ job, criteria, record, order, scopeRule, ids = criteria }) {
   const shuffled = [0, 1, 2].sort((a, b) => hashJson({ job, criteria, index: a }).localeCompare(hashJson({ job, criteria, index: b })))
-  const blind = shuffled.map((index, n) => ({ label: String.fromCharCode(65 + n), results: record.votes.filter(v => v.panel_index === index).map(vote => ({ id: vote.id, verdict: effective(vote, record.checks, order).verdict,
+  const blind = shuffled.map((index, n) => ({ label: String.fromCharCode(65 + n), results: record.votes.filter(v => v.panel_index === index && ids.includes(v.id)).map(vote => ({ id: vote.id, verdict: effective(vote, record.checks, order).verdict,
     rationale: effective(vote, record.checks, order).verdict !== vote.verdict ? `The source contradiction was independently confirmed: ${vote.contradiction.rationale}` : vote.rationale,
     citations: vote.citations, evidence: vote.evidence })) }))
-  const deciderRequest = { ...request, authority: { cli: 'claude', model: decider.model, effort: decider.effort },
-    prompt_body: [request.prompt_body ?? request.prompt, '# Untrusted panel votes', JSON.stringify(blind), 'Rule only a verdict one of these panel judges gave.', scopeRule].join('\n') }
+  return ['# Untrusted panel votes', JSON.stringify(blind), 'Rule only a verdict one of these panel judges gave.', scopeRule].join('\n')
+}
+
+const deciderAuthority = decider => ({ cli: 'claude', model: decider.model, effort: decider.effort })
+
+function deciderRequestFor({ job, criteria, request, record, order, decider, scopeRule }) {
+  const deciderRequest = { ...request, authority: deciderAuthority(decider),
+    prompt_body: [request.prompt_body ?? request.prompt, deciderVotes({ job, criteria, record, order, scopeRule })].join('\n') }
   deciderRequest.prompt = deciderRequest.prompt_body
   return deciderRequest
 }
@@ -267,16 +275,22 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
       record.checks.push({ ...check, stage: 'dissent-check', panel_index: original.panel_index })
     }
     if (pending.length) {
-      const deciderRequest = deciderRequestFor({ job, criteria, request, record, order, decider, scopeRule })
       const validVerdicts = results => validDeciderVerdicts(record, order, results)
       if (request.panel_line_citations) {
-        const ruling = await runTiebreak({ request: deciderRequest, criteria: pending, invoke: wrap(decider, 'decider'), validateVerdicts: validVerdicts })
+        // The votes are the per-criterion part a too-large request batches.
+        const ruling = await runTiebreak({ request: { ...request, authority: deciderAuthority(decider) }, criteria: pending,
+          invoke: wrap(decider, 'decider'), validateVerdicts: validVerdicts,
+          criterionMaterial: ids => deciderVotes({ job, criteria, record, order, scopeRule, ids }) })
         record.decider = ruling
         record.attempts.push(...ruling.attempts)
         record.audit_attempts.push(...ruling.audit_attempts)
-        if (!ruling.ok) return done()
+        if (!ruling.ok) {
+          if (ruling.failure) record.failure = ruling.failure
+          return done()
+        }
         record.rulings = ruling.decisions
       } else {
+        const deciderRequest = deciderRequestFor({ job, criteria, request, record, order, decider, scopeRule })
         record.rulings = await call(batchedDeciderRequest(deciderRequest, pending), decider, 'decider', async text => {
           const results = parse(text, pending, verdicts)
           validVerdicts(results)

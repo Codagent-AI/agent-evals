@@ -6,7 +6,7 @@ import { bounded, normalizeEvidence } from './text.mjs'
 // escaping it again would turn `&amp;` into `&amp;amp;`.
 const reframed = (text, maxChars) => normalizeEvidence(text, maxChars)
 import { hashJson } from './hash.mjs'
-import { lstat, readFile, readdir, realpath } from 'node:fs/promises'
+import { lstat, readFile, readdir, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 export const JUDGE_ATTEMPTS = 3
@@ -45,7 +45,6 @@ const SOURCE_AUDIT_CYCLES = 2
 // is quoted evidence inside a delimited block, never instruction, and it is
 // escaped and truncated before it is ever concatenated into a prompt.
 export const MAX_EVIDENCE_ITEMS = 60
-export const MAX_SOURCE_PATHS = 200
 const MAX_RATIONALE_CHARS = 4000
 const MAX_SOURCE_CITATIONS = 24
 const MAX_SOURCE_PATH_CHARS = 500
@@ -60,6 +59,85 @@ export class JudgeOutputError extends Error {
     this.partial = partial
   }
 }
+
+// A packet that cannot hold a claim's complete material. Retrying cannot shrink
+// the material, and omitting part of it would let a stage settle a criterion on
+// what it never saw, so the job fails as the harness's own failure, naming the
+// criteria left unresolved.
+export class PacketOverflowError extends Error {
+  constructor(message, criteria) {
+    super(message)
+    this.name = 'PacketOverflowError'
+    this.code = 'packet-overflow'
+    this.owner = 'evaluation-harness'
+    this.resumable = false
+    this.retryable = false
+    this.criteria = [...new Set(criteria)]
+  }
+}
+
+// The durable form of a job failure: its message and the metadata that decides
+// whether the run may resume.
+export function judgeFailure(error) {
+  return { message: error?.message ?? String(error),
+    ...Object.fromEntries(['code', 'resumable', 'retryable', 'owner', 'criteria'].filter(key => error?.[key] !== undefined).map(key => [key, error[key]])) }
+}
+
+const claimCriterion = (claim) => claim.criterion ?? claim.id
+
+// Packs whole claims, in their given order, into as few packets as fit under
+// `limit`. `render(claims)` returns the packet text for a batch, including the
+// material every batch repeats, so `render([])` measures that shared material.
+// A claim never splits across batches: one that cannot fit beside the shared
+// material on its own raises PacketOverflowError naming its criterion, and
+// shared material that cannot fit at all names every criterion. Each batch keeps
+// a stable index, in order, so a caller can merge results in criterion order.
+export function batchClaims(claims, render, limit = MAX_AUDIT_PACKET_CHARS, label = 'packet') {
+  if (claims.length === 0) return []
+  const size = (batch) => render(batch).length
+  if (size([]) > limit) {
+    const criteria = claims.map(claimCriterion)
+    throw new PacketOverflowError(`${label}: shared material cannot fit within the ${limit}-character packet limit; pending criteria: ${[...new Set(criteria)].join(', ')}`, criteria)
+  }
+  const oversized = claims.filter((claim) => size([claim]) > limit).map(claimCriterion)
+  if (oversized.length > 0) {
+    throw new PacketOverflowError(`${label}: the complete material for ${[...new Set(oversized)].join(', ')} cannot fit within the ${limit}-character packet limit`, oversized)
+  }
+  const batches = []
+  let current = []
+  for (const claim of claims) {
+    if (current.length > 0 && size([...current, claim]) > limit) {
+      batches.push(current)
+      current = []
+    }
+    current.push(claim)
+  }
+  batches.push(current)
+  return batches.map((batch, index) => ({ index, criteria: [...new Set(batch.map(claimCriterion))], claims: batch, packet: render(batch) }))
+}
+
+// One measured packet: overflow names every criterion it carries.
+function singlePacket(packet, criteria, label) {
+  if (packet.length > MAX_AUDIT_PACKET_CHARS) {
+    throw new PacketOverflowError(`${label} exceeds the ${MAX_AUDIT_PACKET_CHARS}-character packet limit: ${criteria.join(', ')}`, criteria)
+  }
+  return packet
+}
+
+// Every inventory path in full: none dropped, shortened, or escaped, so a judge
+// can copy it exactly. A path holding a control character is JSON-quoted, so it
+// cannot break the listing into extra lines.
+export function inventoryListing(paths) {
+  if (paths.length === 0) return '- none'
+  return paths.map((path) => `- ${/[\u0000-\u001f\u007f]/.test(path) ? JSON.stringify(path) : path}`).join('\n')
+}
+
+// Inlined evidence is one string per file or span: its path (and range),
+// then one `N|text` line per line, keeping line numbers explicit.
+const numberedLines = (header, lines) => [header, ...lines.map(({ line, text }) => `${line}|${text}`)].join('\n')
+const numberedFile = (path, text) => numberedLines(path, text.split('\n').map((line, index) => ({ line: index + 1, text: line })))
+const numberedSpan = (span) => (Array.isArray(span?.lines) ? numberedLines(spanReference(span), span.lines) : span)
+export const compactMaterial = (material) => (material ?? []).map(numberedSpan)
 
 // The schema the judge must satisfy. Validation happens here rather than in the
 // prompt, because a prompt is a request and this is the contract.
@@ -303,47 +381,51 @@ export async function citationTarget(sourceRoot, citation) {
   return canonicalTarget
 }
 
-export async function buildSourceAuditRequest({
-  request,
-  primaryResults,
-  priorCitations = [],
-}) {
+// The cited files of each criterion's claim, read in full. A criterion's
+// claim carries the paths it cites now and those it cited in an earlier focused
+// cycle; `priorCitations` is either one list for every claim or a map by id.
+async function sourceAuditClaims({ request, primaryResults, priorCitations = [] }) {
   const sourceRoot = request.input_roots?.source
   if (!sourceRoot) {
     throw new JudgeOutputError(`${request.job} source audit has no neutral source root`)
   }
-  const citations = [...new Set([
-    ...priorCitations,
-    ...primaryResults.flatMap((result) => result.citations ?? []),
-  ])].sort()
-  if (citations.length === 0) {
+  const prior = (id) => (Array.isArray(priorCitations) ? priorCitations : priorCitations[id] ?? [])
+  const claims = primaryResults.map((result) => ({ id: result.id, result,
+    paths: [...new Set([...prior(result.id), ...(result.citations ?? [])])].sort() }))
+  const paths = [...new Set(claims.flatMap((claim) => claim.paths))].sort()
+  if (paths.length === 0) {
     throw new JudgeOutputError(`${request.job} source audit has no cited source files`)
   }
-
-  const files = []
-  let packetChars = 0
-  for (const citation of citations) {
+  const contents = new Map()
+  for (const citation of paths) {
     const target = await citationTarget(sourceRoot, citation)
-    let content
     try {
-      content = await readFile(target, 'utf8')
+      contents.set(citation, await readFile(target, 'utf8'))
     } catch (error) {
       throw new JudgeOutputError(
         `${request.job} source citation cannot be read: ${citation}: ${error.message}`,
       )
     }
-    packetChars += citation.length + content.length
-    if (packetChars > MAX_AUDIT_PACKET_CHARS) {
-      throw new JudgeOutputError(
-        `${request.job} source audit packet exceeds its bounded size; complete cited files are required`,
-      )
-    }
-    files.push({
-      path: citation,
-      content,
-    })
   }
+  return { claims, contents }
+}
 
+// The measured packet of one batch: its claims and every file they cite, once.
+function sourceAuditPacket(claims, contents) {
+  const files = [...new Set(claims.flatMap((claim) => claim.paths))].sort()
+    .map((path) => ({ path, content: contents.get(path) }))
+  return [
+    '# BEGIN PRIMARY CLAIMS',
+    JSON.stringify(claims.map((claim) => claim.result)),
+    '# END PRIMARY CLAIMS',
+    '',
+    '# BEGIN CLOSED-WORLD SOURCE PACKET',
+    JSON.stringify(files),
+    '# END CLOSED-WORLD SOURCE PACKET',
+  ].join('\n')
+}
+
+function sourceAuditRequest(request, criteria, packet) {
   const prompt = [
     `You are the independent source-evidence auditor for ${request.job}.`,
     '',
@@ -387,13 +469,7 @@ export async function buildSourceAuditRequest({
     '# Rubric contract',
     request.rubric_slice ?? '',
     '',
-    '# BEGIN PRIMARY CLAIMS',
-    JSON.stringify(primaryResults, null, 2),
-    '# END PRIMARY CLAIMS',
-    '',
-    '# BEGIN CLOSED-WORLD SOURCE PACKET',
-    JSON.stringify(files, null, 2),
-    '# END CLOSED-WORLD SOURCE PACKET',
+    packet,
     '',
     '# Response',
     `Reply with JSON matching this schema: ${JSON.stringify(SOURCE_AUDIT_RESULT_SCHEMA)}`,
@@ -401,6 +477,7 @@ export async function buildSourceAuditRequest({
 
   return {
     ...request,
+    criteria,
     audit_stage: 'source-pass-audit',
     schema: SOURCE_AUDIT_RESULT_SCHEMA,
     source_access: 'closed-world-packet',
@@ -414,6 +491,23 @@ export async function buildSourceAuditRequest({
     },
     prompt,
   }
+}
+
+// A seat's source audit in batches of whole criteria, each under the packet
+// limit and in criterion order: [{ index, criteria, request }].
+export async function buildSourceAuditRequests(args) {
+  const { claims, contents } = await sourceAuditClaims(args)
+  return batchClaims(claims, (batch) => sourceAuditPacket(batch, contents), MAX_AUDIT_PACKET_CHARS,
+    `${args.request.job} source audit`)
+    .map(({ index, criteria, packet }) => ({ index, criteria, request: sourceAuditRequest(args.request, criteria, packet) }))
+}
+
+// The whole source audit as one request; it overflows rather than batch.
+export async function buildSourceAuditRequest(args) {
+  const { claims, contents } = await sourceAuditClaims(args)
+  const criteria = claims.map(({ id }) => id)
+  return sourceAuditRequest(args.request, criteria,
+    singlePacket(sourceAuditPacket(claims, contents), criteria, `${args.request.job} source audit packet`))
 }
 
 export function parseSourceAuditOutput(text, expectedIds, job) {
@@ -545,14 +639,26 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
   const auditHistory = []
   const resolvedResults = new Map()
   const auditedResults = new Map()
-  const accumulatedCitations = new Set()
+  // Each criterion's citations from earlier cycles, audited beside its current ones.
+  const accumulatedCitations = {}
   const priorInsufficientProof = new Map()
   let activeRequest = request
   let lastAuditResults = null
+  // A non-retryable error, such as a packet overflow, ends the job with its metadata.
+  let failure = null
+  const failed = () => ({
+    job: request.job,
+    ok: false,
+    results: null,
+    attempts: history,
+    audit_results: lastAuditResults,
+    audit_attempts: auditHistory,
+    ...(failure ? { failure } : {}),
+  })
 
   for (let cycle = 1; cycle <= SOURCE_AUDIT_CYCLES; cycle += 1) {
     let primaryResults = null
-    let auditRequest = null
+    let auditBatches = null
     let attemptRequest = activeRequest
     const partialResults = new Map()
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -574,15 +680,16 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
           result.verdict === 'pass' && fallbackIds.includes(result.id)
         ))
         if (request.source_audit || fallbackPass) {
-          const currentCitations = results.flatMap((result) => result.citations ?? [])
-          auditRequest = await buildSourceAuditRequest({
+          auditBatches = await buildSourceAuditRequests({
             request: activeRequest,
             primaryResults: results,
-            priorCitations: [...accumulatedCitations],
+            priorCitations: accumulatedCitations,
           })
-          for (const citation of currentCitations) accumulatedCitations.add(citation)
+          for (const result of results) {
+            accumulatedCitations[result.id] = [...new Set([...(accumulatedCitations[result.id] ?? []), ...(result.citations ?? [])])]
+          }
         } else {
-          auditRequest = null
+          auditBatches = null
         }
         primaryResults = results
         history.push({ cycle, attempt, ok: true, error: null })
@@ -598,21 +705,15 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
           history.push({ cycle, attempt, ok: false, error: error.message })
           partialResults.clear()
           attemptRequest = activeRequest
-          if (error?.retryable === false) break
+          if (error?.retryable === false) {
+            failure = judgeFailure(error)
+            break
+          }
         }
       }
     }
-    if (!primaryResults) {
-      return {
-        job: request.job,
-        ok: false,
-        results: null,
-        attempts: history,
-        audit_results: lastAuditResults,
-        audit_attempts: auditHistory,
-      }
-    }
-    if (!auditRequest) {
+    if (!primaryResults) return failed()
+    if (!auditBatches) {
       return {
         job: request.job,
         ok: true,
@@ -623,28 +724,30 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
       }
     }
 
-    let auditResults = null
-    for (let attempt = 1; attempt <= attempts; attempt += 1) {
-      try {
-        const output = await invoke(auditRequest)
-        auditResults = parseSourceAuditOutput(output, activeRequest.criteria, request.job)
-        auditHistory.push({ cycle, attempt, ok: true, error: null })
-        break
-      } catch (error) {
-        auditHistory.push({ cycle, attempt, ok: false, error: error.message })
-        if (error?.retryable === false) break
+    // Batches run in criterion order; a split audit's attempts name their batch.
+    const batched = auditBatches.length > 1
+    const audited = new Map()
+    for (const batch of auditBatches) {
+      let parsed = null
+      for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        const where = { cycle, attempt, ...(batched ? { batch: batch.index } : {}) }
+        try {
+          const output = await invoke(batch.request)
+          parsed = parseSourceAuditOutput(output, batch.criteria, request.job)
+          auditHistory.push({ ...where, ok: true, error: null })
+          break
+        } catch (error) {
+          auditHistory.push({ ...where, ok: false, error: error.message })
+          if (error?.retryable === false) {
+            failure = judgeFailure(error)
+            break
+          }
+        }
       }
+      if (!parsed) return failed()
+      for (const result of parsed) audited.set(result.id, result)
     }
-    if (!auditResults) {
-      return {
-        job: request.job,
-        ok: false,
-        results: null,
-        attempts: history,
-        audit_results: lastAuditResults,
-        audit_attempts: auditHistory,
-      }
-    }
+    const auditResults = activeRequest.criteria.map((id) => audited.get(id))
     for (const result of auditResults) auditedResults.set(result.id, result)
     lastAuditResults = request.criteria
       .map((id) => auditedResults.get(id))
@@ -711,14 +814,7 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
 
   // Structurally valid but unresolved judge evidence is a harness-owned
   // observation failure. It never becomes a candidate criterion failure.
-  return {
-    job: request.job,
-    ok: false,
-    results: null,
-    attempts: history,
-    audit_results: lastAuditResults,
-    audit_attempts: auditHistory,
-  }
+  return failed()
 }
 
 // ---------------------------------------------------------------------------
@@ -762,6 +858,14 @@ function isEvidenceJob(request) {
   return request.line_citations === 'evidence-view'
 }
 
+async function isFile(path) {
+  try {
+    return (await stat(path)).isFile()
+  } catch {
+    return false
+  }
+}
+
 async function listViewFiles(root) {
   const files = []
   async function walk(directory) {
@@ -788,10 +892,13 @@ async function listViewFiles(root) {
 export async function lineCitationInventory(request) {
   if (isEvidenceJob(request)) {
     const root = request.input_roots?.evidence ?? null
-    const paths = root ? await listViewFiles(root) : []
     // A panel cited only the bounded packet.txt it was given; screenshots and
-    // raw candidate files beside it would overflow the decider's packet.
-    return { root, kind: 'evidence view', paths: request.panel_line_citations && paths.includes('packet.txt') ? ['packet.txt'] : paths }
+    // raw candidate files beside it would overflow the decider's packet. The
+    // packet is found by its path, since the view listing stops at a file cap.
+    if (root && request.panel_line_citations && await isFile(join(root, 'packet.txt'))) {
+      return { root, kind: 'evidence view', paths: ['packet.txt'] }
+    }
+    return { root, kind: 'evidence view', paths: root ? await listViewFiles(root) : [] }
   }
   return {
     root: request.input_roots?.source ?? null,
@@ -799,6 +906,10 @@ export async function lineCitationInventory(request) {
     paths: [...new Set(request.verified_source_paths ?? [])].sort(),
   }
 }
+
+// The inventory a decider cites from, every path in full. It is shared
+// material, measured with each decider request.
+const inventoryHeading = (inventory) => [`# ${inventory.kind} files`, inventoryListing(inventory.paths)].join('\n')
 
 // The disputed criteria go to a decider with the job's full, unchanged
 // context. It never sees the first two verdicts, so it is an independent vote;
@@ -822,8 +933,7 @@ export function buildTiebreakRequest({ request, criteria, inventory }) {
     '- A fail needs a rationale naming the counterexample or the missing mechanism. Cite the lines of a',
     '  counterexample when one exists; otherwise citations may be empty.',
     '',
-    `# ${inventory.kind} files`,
-    inventory.paths.slice(0, MAX_SOURCE_PATHS).map((path) => `- ${bounded(path)}`).join('\n') || '- none',
+    inventoryHeading(inventory),
   ].join('\n')
   return {
     ...request,
@@ -939,16 +1049,25 @@ export async function validateLineCitations(result, request) {
   return quoteSpans(parsed, await lineCitationInventory(request), request.job)
 }
 
+const spanAuditPacket = (passes, spans) => JSON.stringify(passes.map((result) => ({
+  id: result.id,
+  rationale: result.rationale,
+  quoted_spans: compactMaterial(spans.get(result.id)),
+})))
+
+// Span audits in batches of whole claims: [{ index, criteria, request }].
+export function buildSpanAuditRequests({ request, passes, spans }) {
+  return batchClaims(passes, (claims) => spanAuditPacket(claims, spans), MAX_AUDIT_PACKET_CHARS, `${request.job} span audit`)
+    .map(({ index, criteria, claims, packet }) => ({ index, criteria, request: spanAuditRequest(request, claims, packet) }))
+}
+
 export function buildSpanAuditRequest({ request, passes, spans }) {
   const criteria = passes.map(({ id }) => id)
-  const packet = JSON.stringify(passes.map((result) => ({
-    id: result.id,
-    rationale: result.rationale,
-    quoted_spans: spans.get(result.id) ?? [],
-  })), null, 2)
-  if (packet.length > MAX_AUDIT_PACKET_CHARS) {
-    throw new JudgeOutputError(`${request.job} span audit packet exceeds its bounded size`)
-  }
+  return spanAuditRequest(request, passes, singlePacket(spanAuditPacket(passes, spans), criteria, `${request.job} span audit packet`))
+}
+
+function spanAuditRequest(request, passes, packet) {
+  const criteria = passes.map(({ id }) => id)
   const schema = judgeResultSchemaFor(SOURCE_AUDIT_RESULT_SCHEMA, criteria)
   return {
     job: request.job,
@@ -999,16 +1118,27 @@ export function buildSpanAuditRequest({ request, passes, spans }) {
 // The second call on a contradiction does not audit afresh: it decides whether
 // the first audit's stated contradiction holds. Two different reasons can no
 // longer add up to a withdrawal.
+const contradictionPacket = (claims) => JSON.stringify(claims.map(({ id, verdict, rationale, contradiction, material }) => ({
+  id, verdict, claim_rationale: rationale,
+  stated_contradiction: { rationale: contradiction.rationale, evidence: contradiction.evidence },
+  material: compactMaterial(material),
+})))
+
+// Contradiction checks in batches of whole claims: [{ index, criteria, request }].
+// Each claim carries its complete material; none is omitted for size.
+export function buildContradictionCheckRequests({ request, claims }) {
+  return batchClaims(claims, contradictionPacket, MAX_AUDIT_PACKET_CHARS, `${request.job} contradiction check`)
+    .map(({ index, criteria, claims: batch, packet }) => ({ index, criteria, request: contradictionCheckRequest(request, batch, packet) }))
+}
+
 export function buildContradictionCheckRequest({ request, claims }) {
   const criteria = claims.map(({ id }) => id)
-  const packet = JSON.stringify(claims.map(({ id, verdict, rationale, contradiction, material }) => ({
-    id, verdict, claim_rationale: rationale,
-    stated_contradiction: { rationale: contradiction.rationale, evidence: contradiction.evidence },
-    material,
-  })), null, 2)
-  if (packet.length > MAX_AUDIT_PACKET_CHARS) {
-    throw new JudgeOutputError(`${request.job} contradiction check packet exceeds its bounded size`)
-  }
+  return contradictionCheckRequest(request, claims,
+    singlePacket(contradictionPacket(claims), criteria, `${request.job} contradiction check packet`))
+}
+
+function contradictionCheckRequest(request, claims, packet) {
+  const criteria = claims.map(({ id }) => id)
   const schema = judgeResultSchemaFor(SOURCE_AUDIT_RESULT_SCHEMA, criteria)
   return {
     job: request.job,
@@ -1057,26 +1187,28 @@ export function buildContradictionCheckRequest({ request, claims }) {
   }
 }
 
+// A packet too large for one claim raises PacketOverflowError to the caller.
 async function checkContradictions({ request, claims, invoke, attempts, log }) {
   if (claims.length === 0) return new Map()
-  let checkRequest
-  try {
-    checkRequest = buildContradictionCheckRequest({ request, claims })
-  } catch (error) {
-    log.push({ attempt: 0, ok: false, error: error.message })
-    return null
-  }
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    try {
-      const parsed = parseSourceAuditOutput(await invoke(checkRequest), checkRequest.criteria, request.job)
-      log.push({ attempt, ok: true, error: null })
-      return new Map(parsed.map((entry) => [entry.id, entry]))
-    } catch (error) {
-      log.push({ attempt, ok: false, error: error instanceof Error ? error.message : String(error) })
-      if (error?.retryable === false) break
+  const batches = buildContradictionCheckRequests({ request, claims })
+  const checks = new Map()
+  for (const batch of batches) {
+    let parsed = null
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      const where = { attempt, ...(batches.length > 1 ? { batch: batch.index } : {}) }
+      try {
+        parsed = parseSourceAuditOutput(await invoke(batch.request), batch.criteria, request.job)
+        log.push({ ...where, ok: true, error: null })
+        break
+      } catch (error) {
+        log.push({ ...where, ok: false, error: error instanceof Error ? error.message : String(error) })
+        if (error?.retryable === false) break
+      }
     }
+    if (!parsed) return null
+    for (const entry of parsed) checks.set(entry.id, entry)
   }
-  return null
+  return checks
 }
 
 const spanReference = ({ path, start_line: start, end_line: end }) => `${path}:${start}-${end}`
@@ -1220,34 +1352,64 @@ export function resolveLineCitedRecord(record, fallbackIds = []) {
     .map((result, index) => ({ id: result.id, vote: record.results[index].verdict, result }))
 }
 
-export async function runTiebreak({ request, criteria, invoke, attempts = JUDGE_ATTEMPTS, validateVerdicts = () => {} }) {
+// `criterionMaterial(ids)`, when supplied, renders the per-criterion part of a
+// decider request, such as the panel's votes on those criteria. It is batched
+// with its criteria, while the shared evidence and inventory listing repeat in
+// every batch; a batched decider's rulings merge into one record in criterion
+// order, as if returned together. A packet that cannot hold a criterion's
+// complete material fails the tiebreak with a non-retryable packet-overflow.
+export async function runTiebreak({ request, criteria, invoke, attempts = JUDGE_ATTEMPTS, validateVerdicts = () => {}, criterionMaterial = null }) {
   const inventory = await lineCitationInventory(request)
-  let contextRequest = request
+  const history = []
+  const auditHistory = []
+  const record = { criteria, inventory_kind: inventory.kind, attempts: history, results: null, spans: null,
+    audit_results: [], contradiction_checks: [], audit_attempts: auditHistory, decisions: null }
+  try {
+    return await settleTiebreak({ request, criteria, invoke, attempts, validateVerdicts, criterionMaterial, inventory, record })
+  } catch (error) {
+    if (!(error instanceof PacketOverflowError)) throw error
+    return { ok: false, failure: judgeFailure(error), ...record }
+  }
+}
+
+async function settleTiebreak({ request, criteria, invoke, attempts, validateVerdicts, criterionMaterial, inventory, record }) {
+  const { attempts: history, audit_attempts: auditHistory } = record
+  // Shared material: every evidence file inlined as numbered lines. Material
+  // that cannot fit even alone names every criterion pending for the decider.
+  let evidence = ''
   if (request.panel_line_citations && isEvidenceJob(request)) {
     const files = []
     let size = 0
     for (const path of inventory.paths) {
-      const text = await readFile(await citationTarget(inventory.root, path), 'utf8')
-      size += text.length
-      if (size > MAX_AUDIT_PACKET_CHARS) throw new JudgeOutputError('decider evidence packet exceeds its bounded size')
-      files.push({ path, lines: text.split('\n').map((text, index) => ({ line: index + 1, text })) })
+      const file = numberedFile(path, await readFile(await citationTarget(inventory.root, path), 'utf8'))
+      size += file.length
+      if (size > MAX_AUDIT_PACKET_CHARS) {
+        throw new PacketOverflowError(`${request.job} decider evidence cannot fit within the ${MAX_AUDIT_PACKET_CHARS}-character packet limit; pending criteria: ${criteria.join(', ')}`, criteria)
+      }
+      files.push(file)
     }
-    contextRequest = { ...request, prompt_body: [request.prompt_body ?? request.prompt,
-      '# BEGIN LINE-NUMBERED UNTRUSTED EVIDENCE', JSON.stringify(files), '# END LINE-NUMBERED UNTRUSTED EVIDENCE'].join('\n') }
+    evidence = ['# BEGIN LINE-NUMBERED UNTRUSTED EVIDENCE', JSON.stringify(files), '# END LINE-NUMBERED UNTRUSTED EVIDENCE'].join('\n')
   }
-  const tiebreakRequest = buildTiebreakRequest({ request: contextRequest, criteria, inventory })
-  const history = []
-  const auditHistory = []
+  const listing = inventoryHeading(inventory)
+  const material = (ids) => (criterionMaterial ? criterionMaterial(ids) : '')
+  // A claim is { id, note? }; a re-cite's note is the audit reason it answers.
+  const deciderPacket = (claims) => [material(claims.map(({ id }) => id)), ...claims.map(({ note }) => note ?? ''), evidence, listing].join('\n')
+  const deciderRequests = (claims, build) => batchClaims(claims, deciderPacket, MAX_AUDIT_PACKET_CHARS, `${request.job} decider request`)
+    .map(({ index, criteria: ids, claims: batch }) => {
+      const contextRequest = { ...request, prompt_body: [request.prompt_body ?? request.prompt, material(ids), evidence].filter(Boolean).join('\n') }
+      return { index, criteria: ids, request: build(buildTiebreakRequest({ request: contextRequest, criteria: ids, inventory }), batch) }
+    })
   // One call with retries for malformed or invalid output; null when exhausted.
-  const run = async (next, log, parse) => {
+  // A batched call's attempts name its batch.
+  const run = async (next, log, parse, batch = null) => {
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      const where = { stage: next.judge_stage ?? next.audit_stage, attempt, ...(batch === null ? {} : { batch }) }
       try {
         const value = await parse(await invoke(next))
-        log.push({ stage: next.judge_stage ?? next.audit_stage, attempt, ok: true, error: null })
+        log.push({ ...where, ok: true, error: null })
         return value
       } catch (error) {
-        log.push({ stage: next.judge_stage ?? next.audit_stage, attempt, ok: false,
-          error: error instanceof Error ? error.message : String(error) })
+        log.push({ ...where, ok: false, error: error instanceof Error ? error.message : String(error) })
         if (error?.retryable === false) break
       }
     }
@@ -1258,20 +1420,32 @@ export async function runTiebreak({ request, criteria, invoke, attempts = JUDGE_
     validateVerdicts(parsed)
     return { parsed, spans: await quoteSpans(parsed, inventory, request.job) }
   }
-  const audit = async (passes, spans) => {
-    let auditRequest
-    try {
-      auditRequest = buildSpanAuditRequest({ request, passes, spans })
-    } catch (error) {
-      auditHistory.push({ attempt: 0, ok: false, error: error.message })
-      return null
+  const decide = async (claims, build) => {
+    const batches = deciderRequests(claims, build)
+    const parsed = new Map()
+    const quoted = new Map()
+    for (const batch of batches) {
+      const value = await run(batch.request, history, parseCited(batch.criteria), batches.length > 1 ? batch.index : null)
+      if (!value) return null
+      for (const result of value.parsed) parsed.set(result.id, result)
+      for (const [id, list] of value.spans) quoted.set(id, list)
     }
-    return run(auditRequest, auditHistory, async (output) => parseSourceAuditOutput(output, auditRequest.criteria, request.job))
+    return { parsed: claims.map(({ id }) => parsed.get(id)), spans: quoted }
   }
-  const record = { criteria, inventory_kind: inventory.kind, attempts: history, results: null, spans: null,
-    audit_results: [], contradiction_checks: [], audit_attempts: auditHistory, decisions: null }
+  // Span audits in batches of whole claims: [{ index, criteria, results }].
+  const audit = async (passes, spans) => {
+    const batches = buildSpanAuditRequests({ request, passes, spans })
+    const parts = []
+    for (const batch of batches) {
+      const results = await run(batch.request, auditHistory,
+        async (output) => parseSourceAuditOutput(output, batch.criteria, request.job), batches.length > 1 ? batch.index : null)
+      if (!results) return null
+      parts.push({ index: batch.index, criteria: batch.criteria, results })
+    }
+    return parts
+  }
 
-  const first = await run(tiebreakRequest, history, parseCited(criteria))
+  const first = await decide(criteria.map((id) => ({ id })), (next) => next)
   if (!first) return { ok: false, ...record }
   const results = [...first.parsed]
   const spans = new Map(first.spans)
@@ -1284,16 +1458,15 @@ export async function runTiebreak({ request, criteria, invoke, attempts = JUDGE_
 
   const pending = results.filter(({ verdict }) => verdict === 'pass')
   if (pending.length > 0) {
-    const audits = await audit(pending, spans)
+    const audits = (await audit(pending, spans))?.flatMap((part) => part.results)
     if (!audits) return { ok: false, ...record }
     remember(audits)
 
     // Undecided: the same decider re-cites once.
     const undecided = audits.filter(({ classification }) => classification === 'insufficient')
     if (undecided.length > 0) {
-      const ids = undecided.map(({ id }) => id)
-      const recited = await run(buildReciteRequest({ tiebreakRequest,
-        claims: undecided.map((entry) => ({ id: entry.id, audit: entry })) }), history, parseCited(ids))
+      const recited = await decide(undecided.map((entry) => ({ id: entry.id, audit: entry, note: `- ${entry.id}: ${entry.rationale}` })),
+        (tiebreakRequest, claims) => buildReciteRequest({ tiebreakRequest, claims }))
       if (!recited) return { ok: false, ...record }
       for (const result of recited.parsed) {
         results[results.findIndex(({ id }) => id === result.id)] = result
@@ -1301,7 +1474,7 @@ export async function runTiebreak({ request, criteria, invoke, attempts = JUDGE_
       }
       const recitedPasses = recited.parsed.filter(({ verdict }) => verdict === 'pass')
       if (recitedPasses.length > 0) {
-        const reaudit = await audit(recitedPasses, spans)
+        const reaudit = (await audit(recitedPasses, spans))?.flatMap((part) => part.results)
         if (!reaudit) return { ok: false, ...record }
         remember(reaudit)
       }
@@ -1333,7 +1506,9 @@ export async function runTiebreak({ request, criteria, invoke, attempts = JUDGE_
   return { ok: true, ...record }
 }
 
-// The closed-world packet a sample's audit saw: the files it cited.
+// The closed-world packet a sample's audit saw: the files it cited, each in
+// full. Size never omits a file: the check request that carries this material
+// is measured, batched by whole claim, and overflows rather than drop any.
 export async function sourceMaterial(request, results) {
   if (request.input_roots?.evidence) {
     const material = []
@@ -1344,13 +1519,7 @@ export async function sourceMaterial(request, results) {
   if (!sourceRoot) return []
   const files = []
   const omit = (path, reason) => files.push({ path, omitted: `[omitted: ${path} — ${reason}]` })
-  let chars = 0
-  let full = false
   for (const path of [...new Set(results.flatMap((result) => result.citations ?? []))].sort()) {
-    if (full) {
-      omit(path, OMITTED_FOR_SIZE)
-      continue
-    }
     let content
     try {
       content = await readFile(await citationTarget(sourceRoot, path), 'utf8')
@@ -1360,18 +1529,10 @@ export async function sourceMaterial(request, results) {
       omit(path, omissionReason(error))
       continue
     }
-    chars += content.length
-    if (chars > MAX_AUDIT_PACKET_CHARS / 2) {
-      full = true
-      omit(path, OMITTED_FOR_SIZE)
-      continue
-    }
     files.push({ path, content })
   }
   return files
 }
-
-const OMITTED_FOR_SIZE = 'exceeds the contradiction-check packet size limit'
 
 // System error messages carry host paths, so only the leading description and
 // the error code reach the model's packet.
@@ -1422,9 +1583,15 @@ export async function runRobustJudgeJob({ request, invoke, samples = JUDGE_SAMPL
     const disputedResults = sample.results.filter((result) => result.disputed)
     if (disputedResults.length === 0) continue
     const material = await sourceMaterial(request, disputedResults)
-    const checks = await checkContradictions({ request, invoke, attempts, log: base.audit_attempts,
-      claims: disputedResults.map((result) => ({ id: result.id, verdict: result.verdict,
-        rationale: result.rationale, contradiction: result.contradiction, material })) })
+    let checks
+    try {
+      checks = await checkContradictions({ request, invoke, attempts, log: base.audit_attempts,
+        claims: disputedResults.map((result) => ({ id: result.id, verdict: result.verdict,
+          rationale: result.rationale, contradiction: result.contradiction, material })) })
+    } catch (error) {
+      if (!(error instanceof PacketOverflowError)) throw error
+      return { ...base, ok: false, failure: judgeFailure(error), results: null, consensus: null, tiebreak: null }
+    }
     if (!checks) return { ...base, ok: false, results: null, consensus: null, tiebreak: null }
     sample.results = sample.results.map((result) => (result.disputed
       ? { ...result, contradiction_confirmed: checks.get(result.id)?.classification === 'confirmed' } : result))

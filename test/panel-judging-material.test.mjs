@@ -32,7 +32,7 @@ test('cited files the contradiction check cannot read are marked omitted with th
   assert.ok(!JSON.stringify(material).includes(root))
 })
 
-test('cited files past the packet size limit are marked omitted', async (t) => {
+test('cited files past half the packet size limit are collected in full, never omitted for size', async (t) => {
   const root = await sourceRoot(t)
   await writeFile(join(root, 'source/b'), 'x'.repeat(MAX_AUDIT_PACKET_CHARS / 2))
   await writeFile(join(root, 'source/c'), 'small\n')
@@ -40,9 +40,19 @@ test('cited files past the packet size limit are marked omitted', async (t) => {
     [{ id: 'x', citations: ['a', 'b', 'c'] }])
   assert.deepEqual(material, [
     { path: 'a', content: 'mechanism\n' },
-    { path: 'b', omitted: '[omitted: b — exceeds the contradiction-check packet size limit]' },
-    { path: 'c', omitted: '[omitted: c — exceeds the contradiction-check packet size limit]' },
+    { path: 'b', content: 'x'.repeat(MAX_AUDIT_PACKET_CHARS / 2) },
+    { path: 'c', content: 'small\n' },
   ])
+})
+
+test('a contradiction check whose material cannot fit raises packet-overflow naming the criterion', async (t) => {
+  const root = await sourceRoot(t)
+  await writeFile(join(root, 'source/huge'), 'x'.repeat(MAX_AUDIT_PACKET_CHARS + 1))
+  const request = { job: 'job', input_roots: { source: join(root, 'source') } }
+  const material = await sourceMaterial(request, [{ id: 'x', citations: ['huge'] }])
+  assert.throws(() => buildContradictionCheckRequest({ request, claims: [{ id: 'x', verdict: 'pass', rationale: 'reason',
+    contradiction: { rationale: 'huge lacks it', evidence: ['huge'] }, material }] }),
+  (error) => error.code === 'packet-overflow' && error.retryable === false && error.criteria.join() === 'x')
 })
 
 test('the contradiction check carries omission markers and treats omitted material as insufficient', async (t) => {

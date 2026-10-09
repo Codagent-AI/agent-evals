@@ -14,8 +14,8 @@
 import {
   JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE,
   SOURCE_JUDGE_RESULT_SCHEMA, LINE_CITED_RESULT_SCHEMA,
-  MAX_EVIDENCE_ITEMS, MAX_SOURCE_PATHS,
-  judgeResultSchemaFor,
+  MAX_EVIDENCE_ITEMS,
+  judgeResultSchemaFor, inventoryListing,
   runJudgeJob, citationTarget, validateLineCitations,
 } from '../../../lib/panel-judging/protocol.mjs'
 export * from '../../../lib/panel-judging/protocol.mjs'
@@ -197,7 +197,8 @@ function sourceJudgePrompt({ definition, slice, sources, evidence }) {
     slice,
     '',
     '# NEUTRAL SOURCE FILES',
-    sources.slice(0, MAX_SOURCE_PATHS).map((path) => `- ${bounded(path)}`).join('\n'),
+    // Every verified path in full, so a seat can cite any of them exactly.
+    sources.length ? inventoryListing(sources) : '',
     '',
     '# BEGIN ALLOWED DETERMINISTIC FACTS',
     quoteEvidence(evidence),

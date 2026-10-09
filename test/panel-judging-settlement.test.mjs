@@ -184,7 +184,7 @@ test('evidence decider receives line-numbered files inlined without a tools inst
   assert.equal(outcome.ok, true)
   const request = seen.find(r => r.usage_phase === 'decider')
   assert.match(request.prompt, /LINE-NUMBERED UNTRUSTED EVIDENCE/)
-  assert.match(request.prompt, /"line":1,"text":"mechanism"/)
+  assert.match(request.prompt, /"a\\n1\|mechanism\\n2\|focused test/)
   assert.match(request.prompt, /do not use tools/)
   assert.doesNotMatch(request.prompt, /You may read/)
 })
@@ -208,7 +208,7 @@ test('an evidence decider inlines only the packet the panel saw, not other view 
   const outcome = await runPanelJob(options)
   assert.equal(outcome.ok, true, outcome.record.error)
   const request = seen.find(r => r.judge_stage === 'tiebreak')
-  assert.match(request.prompt, /"path":"packet.txt"/)
+  assert.match(request.prompt, /"packet\.txt\\n1\|mechanism/)
   assert.doesNotMatch(request.prompt, /step-01\.png|not in the packet/)
 })
 
