@@ -2448,3 +2448,23 @@ test('a diagnostic refuses expected verdicts that the selected jobs cannot judge
   assert.match(result.errors[0].message, /do not judge: visual-helper-active-state-warning/)
   assert.deepEqual(calls, [])
 })
+
+test('a diagnostic of a rep the current harness cannot build is unloadable, with no second opinion or judging', async () => {
+  const context = await environment()
+  const inputs = await diagnosticInputs(context)
+  const calls = []
+  const result = await diagnose(context, inputs, ['--rescore-from', '/rescore-source', '--judge-jobs', 'scene-kit,verification-tooling'], {
+    judgeInvoke: diagnosticJudge(calls),
+    verifyCandidate: async () => ({ build: { ok: false, log: 'tsc failed' }, verification: { machine_readable: false, passed: null },
+      timings: [], product_failure: { stage: 'build', gate: 'verification-build-whole-app', reason: 'build failed' } }),
+  })
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.deepEqual(calls, [])
+  const written = await readJson(join(context.runDir, 'diagnostic-result.json'))
+  assert.equal(written.status, 'unloadable')
+  assert.equal(written.outcome.product_failure.gate, 'verification-build-whole-app')
+  assert.equal(written.outcome.product_failure.second_opinion, undefined)
+  assert.deepEqual(written.verdicts, {})
+  assert.equal(existsSync(join(context.runDir, 'result.json')), false)
+  assert.equal(existsSync(join(context.runDir, 'phases/second-opinions')), false)
+})

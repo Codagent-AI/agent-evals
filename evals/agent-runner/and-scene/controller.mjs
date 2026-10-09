@@ -559,6 +559,7 @@ async function evaluateRun({
           path: importedRun.source_dir,
           run_id: importedRun.source_run_id,
           provenance_sha256: importedRun.provenance_sha256,
+          manifest_hashes: importedRun.manifest_hashes ?? null,
           final_sha: importedRun.delivery?.final_sha ?? null,
         },
         evaluator_commit: readEvaluatorCommit(),
