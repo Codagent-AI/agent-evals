@@ -127,6 +127,38 @@ phase outcomes.
 `rubric-history.json` records the content hash of every automated rubric
 version; a test fails when the rubric changes without a new version.
 
+### Settlement replay
+
+`scripts/replay-settlement.mjs` feeds recorded `cross-family-panel-v1` judging
+through the v2 settlement rules with no model call:
+
+```bash
+node evals/agent-runner/and-scene/scripts/replay-settlement.mjs \
+  e78-rep2-judging-records.tar.gz e78-rep2-judge-raw-logs.tar.gz [--json]
+```
+
+Each archive is extracted into its own temporary directory. The records
+archive holds run directories with `phases/judges/<job>.json`; the raw-log
+archive holds the same run directories with
+`.runtime/judge-claude/<NN>-<job>.events.jsonl`. A v1 record keeps only the
+decider's re-cited verdicts, so the replay reads the decider's first verdicts
+and spans from those logs, then applies the v2 `effective()` route and the
+immutable re-cite rule through the pure settlement functions (`resolvePanel`,
+`auditState`, `tiebreakDecisions`). It prints old and new verdicts, bases, and
+points (current automated rubric weights from `rubricCriteria()`) per criterion
+and per run in total.
+
+The output is headed **partial settlement counterfactual**: it excludes
+confirmed-contradiction routing the recorded run never sent to the decider
+(such a criterion keeps its recorded verdict, basis `not-modelled`), fail
+audits, auditor citations, the re-cite cycle's own audit, and any new model
+response. The header says `replay` when the raw logs supplied every first vote,
+and `reconstruction` when the raw-log archive is absent or a job has no log, in
+which case the first votes are inferred (v1 audited and re-cited only passes).
+A malformed log, or one whose criteria, decider model, attempt count, or
+never-re-cited ruling does not match the record, fails the replay (exit 2) and
+never falls back. `lib/settlement-replay.mjs` documents the log contract.
+
 ## Fixture traceability
 
 Every automated criterion and gate has a `criterion_sources` entry in
