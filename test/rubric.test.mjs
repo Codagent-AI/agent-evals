@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
+import { makeTempDir } from './temp-dir.mjs'
 
 import {
   AUTOMATED_RUBRIC_PATH,
@@ -1169,6 +1171,15 @@ test('rubric validation rejects a rubric that breaks the tier rules', async () =
       row.points = row.criteria.reduce((sum, id) => sum + kit.tier_weights[row.tiers[id]], 0)
     }
   }), /component scene-kit-correctness subcomponent points sum to 18\.75, expected 20/)
+})
+
+test('a rubric file that breaks the tier rules cannot be loaded, so nothing is scored with it', async () => {
+  const directory = await makeTempDir(join(tmpdir(), 'rubric-tiers-'))
+  const broken = await automatedRubric()
+  broken.components.find(({ id }) => id === 'demo-technical-quality').tier_weights.critical = 2.5
+  const automatedPath = join(directory, 'automated-rubric.json')
+  await writeFile(automatedPath, JSON.stringify(broken))
+  await assert.rejects(loadRubrics({ automatedPath }), /automated-rubric\.json is invalid: .*tier weight critical 2\.5 exceeds 2/)
 })
 
 test('the ungrouped-transition morph criterion is a major scene-kit criterion traced to persisting morphs', async () => {

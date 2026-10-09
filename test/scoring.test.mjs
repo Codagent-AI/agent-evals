@@ -637,6 +637,26 @@ test('rubric 15.0.0 validates and scores every verdict set by tier weight', () =
   for (const result of [allPass, critical, minor, mixed]) assert.equal(outlineGate(result).verdict, 'pass')
 })
 
+// Skill and verification contracts: every judged criterion, failed alone,
+// costs exactly its tier weight from the spec tables.
+for (const [job, componentId, weights] of [
+  ['presentation-skill', 'presentation-skill-correctness', { critical: 0.75, major: 0.375, minor: 0.125 }],
+  ['verification-tooling', 'verification-tool-correctness', { critical: 1.25, major: 0.625, minor: 0.375 }],
+]) {
+  test(`each ${job} criterion failed alone costs its tier weight`, () => {
+    const ids = criteriaForJob(automated, job)
+    assert.ok(ids.length > 0)
+    const full = component(scoreProduct(inputs()), componentId).points_awarded
+    for (const id of ids) {
+      const result = scoreProduct(inputs({ failures: [id] }))
+      const row = criterionRow(result, id)
+      assert.equal(row.verdict, 'fail', id)
+      assert.equal(row.points_possible, weights[row.tier], id)
+      assert.equal(full - component(result, componentId).points_awarded, weights[row.tier], id)
+    }
+  })
+}
+
 test('a critical engineering failure leaves 6.625 of 8 engineering points', () => {
   const result = scoreProduct(inputs({ failures: ['engineering-templates-build-at-destination'] }))
   const engineering = component(result, 'engineering-quality')

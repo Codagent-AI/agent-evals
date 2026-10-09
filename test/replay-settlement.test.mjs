@@ -319,6 +319,22 @@ const flipped = {
   F: { verdict: 'fail' },
 }
 
+test('a decider ruling or decider audit present in only one record is a settlement-side difference', () => {
+  const seats = votes(USABLE, ['pass', 'fail', 'fail'])
+  const plain = { order: ['pass', 'fail'], votes: seats, checks: [], rulings: [] }
+  const ruled = { ...plain, rulings: [{ id: USABLE, vote: 'fail', result: { verdict: 'fail' } }],
+    decider: { audit_results: [{ id: USABLE, criterion: USABLE, cycle: 'initial', part: 'rows-1', classification: 'confirmed' }],
+      contradiction_checks: [{ id: USABLE, criterion: USABLE, cycle: 'initial', part: 'completeness', classification: 'insufficient' }] } }
+  const [left, right] = [plain, ruled].map((record) => criterionLayers(record, USABLE))
+  assert.deepEqual(left.seats, right.seats)
+  assert.deepEqual(left.effective, right.effective)
+  assert.equal(left.ruling, null)
+  assert.deepEqual(right.ruling, { vote: 'fail', verdict: 'fail' })
+  assert.deepEqual(right.checks.filter(({ key }) => /^(span-audit|ruling-check):/.test(key)),
+    [{ key: 'ruling-check:initial:completeness', classification: 'insufficient' }, { key: 'span-audit:initial:rows-1', classification: 'confirmed' }])
+  assert.equal(classifyFlip({ seats: false, checks: true, effective: false, ruling: true }), 'settlement')
+})
+
 test('flip attribution separates settlement, seat noise and mixed flips from the four recorded layers', async () => {
   const base = await makeTempDir(join(tmpdir(), 'and-scene-flips-'))
   const one = await loadRescore(await rescoreDir(base, 'r1', stable), 'r1')

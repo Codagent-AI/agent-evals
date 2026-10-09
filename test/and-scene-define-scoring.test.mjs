@@ -565,7 +565,7 @@ async function poolFixture(t, { failQuality = false } = {}) {
   const rubric = buildRubric(spread)
   let checkpoint = createCheckpoint({ run_id: 'pool', identity: { series_identity: { fixture: 'pool' } } })
   const log = []; const active = new Map(); let peak = 0
-  let persisting = 0; let persistOverlap = 0; let persists = 0
+  let persisting = 0; let persistOverlap = 0; let persists = 0; let failPersistAt = null
   const wait = ms => new Promise(done => setTimeout(done, ms))
   const answer = async req => {
     log.push({ job: req.job, stage: req.audit_stage ?? 'vote' })
@@ -584,11 +584,15 @@ async function poolFixture(t, { failQuality = false } = {}) {
   }
   const judges = { panel: [0, 1, 2].map(n => ({ family: n ? 'codex' : 'claude', model: 'stub', effort: 'high', invoke: answer })), decider: { family: 'claude', model: 'stub', effort: 'high', invoke: answer } }
   const phases = createJudgingPhases({ runDir, judges, getCheckpoint: () => checkpoint, setCheckpoint: x => { checkpoint = x },
-    persist: async () => { persists++; persisting++; persistOverlap = Math.max(persistOverlap, persisting); await wait(1); persisting-- },
+    persist: async () => {
+      persists++; persisting++; persistOverlap = Math.max(persistOverlap, persisting); await wait(1); persisting--
+      if (failPersistAt !== null && persists >= failPersistAt) throw new Error('checkpoint disk full')
+    },
     loadInputs: async () => ({ inventory: spread, rubric, artifacts: inputs.artifacts, conversation: [exchange], reference: [], policy: 'Answer only what was asked.' }),
     gateCommand: async () => ({ status: 0, stdout: '', stderr: '' }) })
   const expectedJobs = makeJobs({ inventory: spread, rubric, artifacts: inputs.artifacts, conversation: [exchange], gates: [] }).filter(x => ['coverage', 'quality', 'fidelity'].includes(x.kind)).map(x => x.name)
-  return { runDir, phases, log, expectedJobs, stats: { get peak() { return peak }, get persistOverlap() { return persistOverlap }, get persists() { return persists }, get inFlight() { return [...active.values()].reduce((a, b) => a + b, 0) } }, checkpoint: () => checkpoint }
+  return { runDir, phases, log, expectedJobs, stats: { get peak() { return peak }, get persistOverlap() { return persistOverlap }, get persists() { return persists }, get inFlight() { return [...active.values()].reduce((a, b) => a + b, 0) } }, checkpoint: () => checkpoint,
+    failPersistAfter: n => { failPersistAt = persists + n } }
 }
 test('INT-007 define judging runs at most three jobs at once, checkpoints one at a time, and records results in job order', async t => {
   const f = await poolFixture(t)
@@ -612,6 +616,17 @@ test('INT-007 define judging starts no coverage job before the disclosure audit 
   const f = await poolFixture(t)
   await assert.rejects(f.phases['gates-and-judging'](), { code: 'ENOENT' })
   assert.equal(f.log.length, 0)
+})
+test('INT-007 a throwing define checkpoint stops new jobs and lets in-flight jobs settle before the phase fails', async t => {
+  const f = await poolFixture(t)
+  await f.phases['disclosure-audit']()
+  // The gates unit persists first; a later checkpoint, during the jobs, fails.
+  f.failPersistAfter(4)
+  await assert.rejects(f.phases['gates-and-judging'](), /checkpoint disk full/)
+  assert.equal(f.stats.inFlight, 0)
+  const started = new Set(f.log.map(x => x.job).filter(job => job !== 'disclosure-audit'))
+  assert.ok(started.size > 0 && started.size < f.expectedJobs.length, [...started].join(', '))
+  assert.ok(!f.log.some(x => x.job === 'fidelity'), 'the last job never starts')
 })
 test('INT-007 a failed define job stops new jobs and lets in-flight jobs settle before the phase fails', async t => {
   const f = await poolFixture(t, { failQuality: true })

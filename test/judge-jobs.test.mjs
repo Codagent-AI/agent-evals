@@ -115,6 +115,29 @@ test('a fallback request adds not-observed scene criteria and requires source ci
   )
 })
 
+// A zero-point gate input awards no points, but its fallback pass still feeds
+// the outline gate, so it is held to the same source-citation rule.
+test('a not-observed zero-point gate input is fallback-judged and its pass must cite source', async () => {
+  const gateInput = 'demo-nine-step-content-and-order'
+  const notObserved = [{ id: gateInput, rationale: 'mode mismatch', looked_for: ['data-mode'], evidence: ['probe.json'] }]
+  const request = buildJudgeRequest({ rubrics, job: 'demo-integration', authority, sources: ['src/demo.tsx'], notObserved })
+  assert.ok(request.criteria.includes(gateInput))
+  const seats = []
+  const outcome = await runProductJudging({
+    rubrics, authority, evidence: [], sources: ['src/demo.tsx'], notObserved,
+    invoke: async (next) => {
+      if (next.job === 'demo-integration' && !next.audit_stage && !next.judge_stage) seats.push(next)
+      return JSON.stringify({ results: next.criteria.map((id) => ({ id, verdict: 'pass', rationale: 'implemented', evidence: ['source'],
+        ...(id === gateInput ? {} : { citations: ['src/demo.tsx'] }) })) })
+    },
+  })
+  assert.ok(seats.length > 0)
+  for (const seat of seats) assert.deepEqual(seat.requireSourceCitationsFor, [gateInput])
+  assert.ok(outcome.failed_jobs.includes('demo-integration'))
+  assert.ok(outcome.attempts['demo-integration'].some(({ error }) => /source citations/i.test(error ?? '')),
+    JSON.stringify(outcome.attempts['demo-integration'].map(({ error }) => error)))
+})
+
 test('demo fallback criteria are required by the per-job schema and appear inside the criteria section', () => {
   const request = buildJudgeRequest({
     rubrics, job: 'demo-integration', authority, sources: ['src/demo.tsx'],
@@ -1712,6 +1735,10 @@ test('evidence judges judge testing evidence against the evidence basis, not the
   assert.match(request.prompt, /does not depend on the candidate's exploration plan/)
   assert.match(request.prompt, /Complete and honest record does not compare the exploration plan with the log/)
   assert.match(request.prompt, /Traceable coverage alone scores an omitted behavior/)
+  // A build claim is material through the basis scenario requiring the build to succeed, and a fail names the claim.
+  assert.match(request.prompt, /A claim about building or verifying the product counts when it maps to a\s+basis scenario, such as one requiring the build to succeed/)
+  assert.match(request.prompt, /fails only on a named material claim: its fail names the basis scenario, the claim, and the evidence\s+that is missing or defective, including a claim with no artifact at all/)
+  assert.match(request.prompt, /A claim that maps to no basis scenario\s+does not fail usable proof/)
 })
 
 test('a cached single-sample judge output is not reused under the dual-sample protocol', async () => {

@@ -230,6 +230,34 @@ test('the assumption packet holds its four primary records in full, and a long r
   assert.deepEqual(outcome.failures['assumption-handling'].criteria, criteriaForJob(automated, 'assumption-handling'))
 })
 
+test('a long assumptions ledger reaches every seat and the decider whole, its last line is cited and audited, and primary records over budget fail the job', async () => {
+  const ledger = `# Assumptions\n${filler('ledger', 60_000)}\nLAST LEDGER ENTRY: U9 needs a decision.\n`
+  const { views } = await evidenceViews({ artifacts: [...deepRecord(), { role: 'assumptions-ledger', name: 'assumptions.md', text: ledger }] })
+  const packet = views['assumption-handling'].packet
+  const last = lineOf(packet, 'LAST LEDGER ENTRY')
+  const [first] = criteriaForJob(automated, 'assumption-handling')
+  const outcome = await judgeTestingOnly(views, { job: 'assumption-handling',
+    seat: (id, sample) => (id === first && sample !== 1 ? 'fail' : 'pass'),
+    stages: { tiebreak: () => out(ruling(first, 'pass', { citations: [span(last)] })), 'tiebreak-span-audit': confirmAll } })
+  assert.deepEqual(outcome.failed_jobs, [], JSON.stringify(outcome.failures))
+  const seats = ofStage(outcome.seen, 'seat', 'assumption-handling')
+  const [decider] = ofStage(outcome.seen, 'tiebreak', 'assumption-handling')
+  assert.equal(seats.length, 3)
+  for (const next of [...seats, decider]) assert.ok(next.prompt.includes('LAST LEDGER ENTRY: U9 needs a decision.'), stageOf(next))
+  const [audited] = ofStage(outcome.seen, 'tiebreak-span-audit', 'assumption-handling').flatMap(auditClaims)
+  assert.ok(audited.quoted_spans[0].startsWith(`packet.txt:${last}-${last} [artifact`) && audited.quoted_spans[0].endsWith(`${last}|LAST LEDGER ENTRY: U9 needs a decision.`))
+  assert.equal(Object.fromEntries(outcome.judges['assumption-handling'].map((result) => [result.id, result.basis]))[first], 'decider-pass')
+
+  // Primary records too large for the packet fail the assumption job, naming its criteria, and nothing is judged.
+  const huge = await evidenceViews({ artifacts: [...deepRecord().slice(0, 4),
+    { role: 'assumptions-ledger', name: 'assumptions.md', text: filler('ledger', JUDGE_PACKET_MAX_CHARS) }] })
+  assert.equal(huge.views['assumption-handling'].failure.code, 'packet-overflow')
+  const failed = await judgeTestingOnly(huge.views, { job: 'assumption-handling' })
+  assert.equal(failed.failures['assumption-handling'].code, 'packet-overflow')
+  assert.deepEqual(failed.failures['assumption-handling'].criteria, criteriaForJob(automated, 'assumption-handling'))
+  assert.equal(failed.seen.filter((next) => next.job === 'assumption-handling').length, 0)
+})
+
 // --- Canned judging ------------------------------------------------------------
 
 const out = (...results) => JSON.stringify({ results })
@@ -441,6 +469,9 @@ test('a map of all 68 basis scenarios validates, is audited in whole-row batches
   const [decider] = ofStage(outcome.seen, 'tiebreak')
   assert.equal(decider.schema.properties.results.items.properties.claim_map.properties.scenarios.maxItems, 68)
   assert.match(decider.prompt, /# Claim map/)
+  // A scenario claimed at several viewports or revisions keeps every claim in its one row; CI status lies outside the basis.
+  assert.match(decider.prompt, /holding every claim the record makes about that\s+scenario, across revisions, viewports, or runs \(1-6 claims a row, one row a scenario\)/)
+  assert.match(decider.prompt, /other_claims: at most 24 claims and disclosures outside the basis that complete and honest record judges: CI\s+status \(kind ci\)/)
   const parts = ofStage(outcome.seen, 'tiebreak-span-audit').flatMap(auditClaims).filter(({ id }) => id === PROOF)
   const rowParts = parts.filter(({ audit_part: part }) => part === 'claim map rows')
   assert.ok(rowParts.length > 1, 'the rows need more than one batch')
@@ -469,6 +500,12 @@ test('every claim-map bound is enforced as invalid decider output', () => {
   const row = (scenario, count = 1) => ({ scenario, claims: Array.from({ length: count }, () => claim()) })
   const other = (count) => Array.from({ length: count }, () => ({ kind: 'ci', ...claim() }))
   assert.equal(parse({ scenarios: BASIS.map((scenario) => row(scenario, 6)), other_claims: other(24) })[0].claim_map.scenarios.length, 68)
+  // One scenario claimed at two viewports and two revisions: one row of four claims, each with its own evidence.
+  const fourClaims = [10, 20, 30, 40].map((line) => claim({ claim_span: span(line), evidence_spans: [span(line + 1, line + 3)] }))
+  const [several] = parse({ scenarios: [{ scenario: BASIS[3], claims: fourClaims }], other_claims: [] })[0].claim_map.scenarios
+  assert.equal(several.scenario, BASIS[3])
+  assert.deepEqual(several.claims.map(({ claim_span: claimSpan, evidence_spans: evidence }) => [claimSpan.start_line, evidence[0].start_line]),
+    [[10, 11], [20, 21], [30, 31], [40, 41]])
   for (const [map, pattern] of [
     [{ scenarios: [row(BASIS[0]), row(BASIS[0])], other_claims: [] }, /more than one row/],
     [{ scenarios: [row('A scenario the specs do not hold')], other_claims: [] }, /not a basis scenario heading/],
