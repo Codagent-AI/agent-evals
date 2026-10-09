@@ -13,6 +13,10 @@ import { join } from 'node:path'
 
 // Flags that cut background work, extra processes, and caches. The candidate
 // page is a local static app, so site isolation and the GPU are not needed.
+// MacAppCodeSignClone stops macOS Chrome from copying its whole app into a
+// temp folder on every launch, a copy a killed Chrome leaves behind. Chrome
+// keeps only the last --disable-features switch, so every feature is listed in
+// this one.
 export const HOST_CHROME_FLAGS = [
   '--disable-gpu',
   '--disable-extensions',
@@ -25,7 +29,7 @@ export const HOST_CHROME_FLAGS = [
   '--mute-audio',
   '--renderer-process-limit=2',
   '--disable-site-isolation-trials',
-  '--disable-features=site-per-process,Translate,BackForwardCache,MediaRouter,OptimizationHints',
+  '--disable-features=site-per-process,Translate,BackForwardCache,MediaRouter,OptimizationHints,MacAppCodeSignClone',
   '--disk-cache-size=1048576',
 ]
 const JS_HEAP_MB = 1024
@@ -121,4 +125,27 @@ export function createHostBrowser({
   }
 
   return { ensure, release, url }
+}
+
+const SIGNAL_EXIT_CODES = { SIGINT: 130, SIGTERM: 143 }
+
+// Runs an evaluation that may use the host browser and releases the browser
+// however it ends: returning, throwing, or the process being told to stop.
+// Chrome is detached in its own process group, so without this a failed or
+// interrupted rescore left it and the AXI bridge running.
+export async function withHostBrowser(browser, run, { processImpl = process } = {}) {
+  if (!browser) return run()
+  const handlers = Object.keys(SIGNAL_EXIT_CODES).map((name) => {
+    const handler = () => {
+      browser.release().finally(() => processImpl.exit(SIGNAL_EXIT_CODES[name]))
+    }
+    processImpl.once(name, handler)
+    return [name, handler]
+  })
+  try {
+    return await run()
+  } finally {
+    for (const [name, handler] of handlers) processImpl.removeListener(name, handler)
+    await browser.release()
+  }
 }
