@@ -2209,7 +2209,7 @@ test('published result reports the leaf of the last nested workflow step', async
   assert.deepEqual(written.workflow.observed_steps.at(-1).step_path, ['verify-change'])
 })
 
-for (const [code, resumable] of [['claude-quota', true], ['judge-schema-invalid', false]]) test(`judge ${code} survives into the durable harness outcome`, async () => {
+for (const [code, resumable] of [['claude-quota', true], ['judge-schema-invalid', false], ['packet-overflow', false]]) test(`judge ${code} survives into the durable harness outcome`, async () => {
   const context = await environment()
   const result = await evaluate(context, profiles, {
     judgeInvoke: async request => {

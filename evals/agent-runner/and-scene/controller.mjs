@@ -1648,7 +1648,10 @@ export async function runEvaluation({
         )
         error.code = 'judge-output'
         const failures = Object.values(record.judging?.failures ?? {})
+        // A non-resumable harness failure outranks a resumable one: resuming
+        // would only rebuild the same packet.
         const failure = failures.find(failure => failure.code === 'judge-schema-invalid')
+          ?? failures.find(failure => failure.code === 'packet-overflow')
           ?? failures.find(failure => failure.code === 'claude-quota')
         if (failure) {
           const { message, ...metadata } = failure
