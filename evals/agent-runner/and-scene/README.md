@@ -115,7 +115,10 @@ Evidence panel judges and deciders report in `missing_material` the marker a
 verdict depends on, which fails the criterion as missing material. The
 testing-evidence decider also returns a bounded claim map for usable proof and
 complete and honest record, audited in whole-row batches plus one completeness
-audit over the full claim-bearing records. Every judging
+audit over the full claim-bearing records. Evidence audits and checks cite the
+packet as `packet.txt:<start>-<end>`; a bare `packet.txt` citation is invalid
+output and retried, since it would pull the whole packet into the next check.
+Every judging
 run and rescore in the sandbox implies `--mount-claude-auth` and requires
 `~/.claude/.credentials.json` or, for a login kept in the macOS Keychain, a
 `claude setup-token` token as `CLAUDE_CODE_OAUTH_TOKEN` in the environment or

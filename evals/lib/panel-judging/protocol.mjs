@@ -588,7 +588,9 @@ export async function buildSourceAuditRequest(args) {
 // A panel audit's structured paths: bounded, and each one in the verified
 // inventory when the job has one. A path outside it is invalid audit output.
 // `lineCounts` (an evidence view's line count per inventory path) also admits
-// a line citation, `path:<line>` or `path:<start>-<end>`, inside that file.
+// a line citation, `path:<line>` or `path:<start>-<end>`, inside that file, and
+// then requires one: a bare citation of a counted file such as packet.txt would
+// pull the whole packet into the check that follows, so it is invalid output.
 function auditPaths(value, max, field, id, job, inventory, lineCounts = null) {
   if (value === undefined) return []
   if (!Array.isArray(value) || value.length > max
@@ -609,7 +611,11 @@ function auditPaths(value, max, field, id, job, inventory, lineCounts = null) {
       spans.add(`${path}:${start}-${end}`)
       return `${path}:${start}-${end}`
     }
-    return inventory ? inventoryPath(trimmed, inventory) : trimmed
+    const cited = inventory ? inventoryPath(trimmed, inventory) : trimmed
+    if (lineCounts?.has(cited)) {
+      throw new JudgeOutputError(`${job} audit ${field} for ${id} cites ${cited} without a line range; cite ${cited}:<start>-<end>`)
+    }
+    return cited
   }))]
   const outside = inventory ? paths.filter((path) => !inventory.has(path) && !spans.has(path)) : []
   if (outside.length) {
@@ -1479,12 +1485,19 @@ const spanAuditPacket = (claims, inventory, cutIndex = null) => [
     ? ['', '# BEGIN COMPLETE VERIFIED INVENTORY', inventoryHeading(inventory), '# END COMPLETE VERIFIED INVENTORY'] : []),
 ].join('\n')
 
+// How every evidence audit and check cites the packet: by line range, since a
+// bare packet.txt citation is invalid output.
+export const EVIDENCE_CITATION_RULE = [
+  'Cite packet lines in citations as packet.txt:<start>-<end>; a citation of packet.txt without a line range is',
+  'invalid output.',
+].join(' ')
+
 // Read by every evidence audit and check: what a label and the cut index mean.
 const EVIDENCE_PACKET_AUDIT_RULE = [
   'Each quoted packet.txt span is labelled with the artifact it lies in and, when the packet cut that artifact, its marker;',
   'the cut index above lists every artifact the packet truncated or omitted. A span from a cut artifact shows only what',
   'the packet kept: when deciding needs the part that was cut, classify missing-material and copy that marker exactly',
-  'from the cut index. Cite packet lines in citations as packet.txt:<start>-<end>.',
+  'from the cut index.', EVIDENCE_CITATION_RULE,
 ].join(' ')
 
 // The two parts of a claim-map audit.
@@ -1498,7 +1511,7 @@ const CLAIM_MAP_AUDIT_RULES = [
   'A claim with audit_part "completeness" carries the claim-bearing records in full, line-numbered as packet.txt lines,',
   'and mapped_claim_locations, the lines each mapped claim and its evidence occupy, without quoted text. Check that the',
   'map is complete against the records: classify the ruling contradicted when the records make a claim the map omits',
-  'that would change the ruling, and cite the omitted claim\'s record and line in citations (as packet.txt:<line>) and',
+  'that would change the ruling, and cite the omitted claim\'s record and lines in citations (as packet.txt:<start>-<end>) and',
   'in evidence; confirmed when the map holds every claim that bears on the ruling.',
 ].join(' ')
 

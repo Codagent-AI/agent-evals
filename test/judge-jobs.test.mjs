@@ -1961,6 +1961,8 @@ for (const job of ['testing-evidence', 'assumption-handling']) test(`evidence-vi
         checks.push(request)
         assert.match(request.prompt, /candidate exercised the requirement/)
         assert.match(request.prompt, /"packet\.txt:1-1\\n1\|candidate exercised the requirement"/)
+        // An evidence check cites the packet by line range, as its parser requires.
+        assert.match(request.prompt, /Cite packet lines in citations as packet\.txt:<start>-<end>; a citation of packet\.txt without a line range is invalid output\./)
         return auditOutput(request.criteria)
       }
       const dissent = request.job === job && request.judge_sample === 3

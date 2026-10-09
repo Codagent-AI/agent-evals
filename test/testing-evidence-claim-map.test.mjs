@@ -359,6 +359,46 @@ test('the decider maps claims, a completeness audit finds the omitted deep claim
   }
 })
 
+test('an evidence audit or check citing packet.txt without a line range is invalid output and retried', async () => {
+  const { views } = await evidenceViews({ artifacts: deepRecord() })
+  const packet = views['testing-evidence'].packet
+  const { proof, honest, deep } = fixtureOneRulings(packet)
+  let audited = 0
+  let checked = 0
+  const outcome = await judgeTestingOnly(views, { seat: toDecider, stages: {
+    tiebreak: () => out(proof, honest),
+    // The first completeness answer cites the whole packet; the retry cites the omitted line.
+    'tiebreak-span-audit': audits((claim) => (claim.id === PROOF && claim.audit_part === 'completeness'
+      ? auditOf(PROOF, 'contradicted', { rationale: 'the map omits the deep claim', evidence: [DEEP_CLAIM],
+        citations: [audited++ === 0 ? 'packet.txt' : `packet.txt:${deep}-${deep}`] })
+      : auditOf(claim.id, 'confirmed'))),
+    'contradiction-check': (next) => out(...checkClaims(next).map(({ id }) => auditOf(id, 'confirmed',
+      { citations: [checked++ === 0 ? 'packet.txt' : `packet.txt:${deep}-${deep}`] }))),
+  } })
+  assert.deepEqual(outcome.failed_jobs, [], JSON.stringify(outcome.failures))
+  const errors = outcome.audit_attempts['testing-evidence'].filter(({ ok }) => !ok).map(({ error }) => error)
+  assert.equal(errors.length, 2, JSON.stringify(outcome.audit_attempts['testing-evidence']))
+  for (const error of errors) assert.match(error, /cites packet\.txt without a line range; cite packet\.txt:<start>-<end>/)
+  // Both the audit and the check were told to cite by line range.
+  const rule = 'Cite packet lines in citations as packet.txt:<start>-<end>; a citation of packet.txt without a line range is invalid output.'
+  for (const next of [...ofStage(outcome.seen, 'tiebreak-span-audit'), ...ofStage(outcome.seen, 'contradiction-check')]) {
+    assert.ok(next.prompt.includes(rule), stageOf(next))
+  }
+  // The retried check quotes only the cited line, never the whole packet.
+  const [, retried] = ofStage(outcome.seen, 'contradiction-check')
+  assert.ok(!retried.prompt.includes('session filler'))
+  const results = Object.fromEntries(outcome.judges['testing-evidence'].map((result) => [result.id, result]))
+  assert.equal(results[PROOF].basis, 'decider-fail')
+  const record = outcome.saved.find(({ id }) => id === 'testing-evidence')
+  assert.deepEqual(verifyCachedPanelJob(record).results, outcome.judges['testing-evidence'])
+  // The parser alone: a bare packet citation fails, a range or single line parses.
+  const parse = (citation) => parseSourceAuditOutput(out(auditOf('x', 'confirmed', { citations: [citation] })), ['x'], 'job',
+    { outcomes: CHECK_OUTCOMES, inventory: ['packet.txt'], lineCounts: new Map([['packet.txt', 10]]) })
+  assert.throws(() => parse('packet.txt'), /cites packet\.txt without a line range/)
+  assert.deepEqual(parse('packet.txt:2-4')[0].citations, ['packet.txt:2-4'])
+  assert.deepEqual(parse('packet.txt:3')[0].citations, ['packet.txt:3-3'])
+})
+
 // Fixture 2: a record that claims every basis scenario, each claim and its
 // evidence in separate places, plus CI and limitation claims.
 const EVIDENCE_LINE = 'observed as the scenario states'

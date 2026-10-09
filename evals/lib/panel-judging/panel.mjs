@@ -2,7 +2,8 @@
 import { hashJson } from './hash.mjs'
 import { JUDGE_ATTEMPTS, JudgeOutputError, PANEL_CHECK_RESULT_SCHEMA, CHECK_OUTCOMES, judgeResultSchemaFor, judgeFailure,
   parseSourceAuditOutput, buildContradictionCheckRequest, sourceMaterial, runTiebreak, resolveLineCitedRecord, JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE, MISSING_MATERIAL_RULE,
-  MAX_AUDIT_PACKET_CHARS, PacketOverflowError, HarnessMaterialError, compactMaterial, lineCitationInventory, evidenceLineCounts } from './protocol.mjs'
+  MAX_AUDIT_PACKET_CHARS, PacketOverflowError, HarnessMaterialError, compactMaterial, lineCitationInventory, evidenceLineCounts,
+  EVIDENCE_CITATION_RULE } from './protocol.mjs'
 export { judgeFailure, HarnessMaterialError } from './protocol.mjs'
 
 export const PANEL_PROTOCOL = 'cross-family-panel-v2'
@@ -67,7 +68,7 @@ async function backDissent(vote, request, validateCitations, validateCitation) {
   }
 }
 
-function dissentCheckPrompt({ request, scopeRule, id, original, material }) {
+function dissentCheckPrompt({ request, scopeRule, id, original, material, lineCited = false }) {
   const schema = judgeResultSchemaFor(PANEL_CHECK_RESULT_SCHEMA, [id])
   material = compactMaterial(material)
   // The dissent and its complete material are measured; the job's own context is not.
@@ -79,7 +80,8 @@ function dissentCheckPrompt({ request, scopeRule, id, original, material }) {
       'it must show a clause of the requirement unmet; for a higher verdict, every clause the verdict credits met.',
       'Contradicted when the material does not show it, or when the fact is accurate but the requirement does not',
       'depend on it (an assumption, scenario, or element the requirement and its review guidance do not name).',
-      'Insufficient when the complete, in-scope material cannot settle it.', MISSING_MATERIAL_RULE].join(' '),
+      'Insufficient when the complete, in-scope material cannot settle it.', MISSING_MATERIAL_RULE,
+      ...(lineCited ? [EVIDENCE_CITATION_RULE] : [])].join(' '),
     'Return confirmed if it holds, contradicted if refuted, insufficient if undecided, missing-material if it depends on marked material.',
     '# BEGIN UNTRUSTED DISSENT', JSON.stringify({ id, rationale: original.rationale, citations: original.citations, material, evidence: request.input_roots?.evidence ? request.prompt_body ?? request.prompt : null }), '# END UNTRUSTED DISSENT', '# Response', `Reply with JSON matching this schema: ${JSON.stringify(schema)}`].join('\n')
 }
@@ -156,9 +158,11 @@ function settledCheck(check, stage) {
 
 async function dissentCheckRequest({ request, scopeRule, id, original }) {
   const material = await sourceMaterial(request, [original])
+  // An evidence packet's check cites it by line range, as its parser requires.
+  const lineCited = Boolean(await evidenceLineCounts(request))
   return { ...request, criteria: [id], schema: judgeResultSchemaFor(PANEL_CHECK_RESULT_SCHEMA, [id]),
     input_roots: null, audit_stage: 'dissent-check',
-    prompt: dissentCheckPrompt({ request, scopeRule, id, original, material }) }
+    prompt: dissentCheckPrompt({ request, scopeRule, id, original, material, lineCited }) }
 }
 
 // The verdict exactly two effective votes gave, or null for a consensus or a
