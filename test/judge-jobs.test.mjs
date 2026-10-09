@@ -1703,9 +1703,15 @@ test('every judge prompt carries each criterion\'s fixture requirement', () => {
   assert.match(evidence.rubric_slice, /Requirement \(eval-owned\): Judges implementation-workflow evidence/)
 })
 
-test('evidence judges compare the exploration plan with what was observed or disclosed', () => {
+// INT-005: the evidence basis replaced comparing the plan with the log, which
+// scored one omission under two criteria.
+test('evidence judges judge testing evidence against the evidence basis, not the exploration plan', () => {
   const request = buildJudgeRequest({ rubrics, job: 'testing-evidence', authority })
-  assert.match(request.prompt, /exploration plan[^.]*commits[\s\S]*observed or disclosed/i)
+  assert.doesNotMatch(request.prompt, /Compare every behavior the exploration plan commits to/)
+  assert.match(request.prompt, /evidence basis is the scenarios of the approved specs/)
+  assert.match(request.prompt, /does not depend on the candidate's exploration plan/)
+  assert.match(request.prompt, /Complete and honest record does not compare the exploration plan with the log/)
+  assert.match(request.prompt, /Traceable coverage alone scores an omitted behavior/)
 })
 
 test('a cached single-sample judge output is not reused under the dual-sample protocol', async () => {

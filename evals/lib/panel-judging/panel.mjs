@@ -2,7 +2,7 @@
 import { hashJson } from './hash.mjs'
 import { JUDGE_ATTEMPTS, JudgeOutputError, PANEL_CHECK_RESULT_SCHEMA, CHECK_OUTCOMES, judgeResultSchemaFor, judgeFailure,
   parseSourceAuditOutput, buildContradictionCheckRequest, sourceMaterial, runTiebreak, resolveLineCitedRecord, JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE, MISSING_MATERIAL_RULE,
-  MAX_AUDIT_PACKET_CHARS, PacketOverflowError, HarnessMaterialError, compactMaterial, lineCitationInventory } from './protocol.mjs'
+  MAX_AUDIT_PACKET_CHARS, PacketOverflowError, HarnessMaterialError, compactMaterial, lineCitationInventory, evidenceLineCounts } from './protocol.mjs'
 export { judgeFailure, HarnessMaterialError } from './protocol.mjs'
 
 export const PANEL_PROTOCOL = 'cross-family-panel-v2'
@@ -141,7 +141,8 @@ function validDeciderVerdicts(record, order, results) {
 // verified inventory, and missing material names a marker the packet holds.
 async function parseCheck(request, next, id, text) {
   const inventory = (request.input_roots?.source || request.input_roots?.evidence) ? (await lineCitationInventory(request)).paths : null
-  return parseSourceAuditOutput(text, [id], request.job, { outcomes: CHECK_OUTCOMES, inventory, packet: next.prompt })
+  return parseSourceAuditOutput(text, [id], request.job, { outcomes: CHECK_OUTCOMES, inventory, packet: next.prompt,
+    lineCounts: await evidenceLineCounts(request) })
 }
 
 // A check that needed withheld material leaves no vote standing.
@@ -210,9 +211,20 @@ export async function overruleCheckRequest({ request, scopeRule = null, id, ruli
     prompt: overruleCheckPrompt({ request, scopeRule: scopeRule ?? [JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE].join('\n'), id, ruling, overruled, order, material }) }
 }
 
+// An evidence seat that reports its verdict depends on material the packet
+// withheld makes its criterion a harness failure before any vote settles it,
+// whether the votes are unanimous, a majority, or bound for the decider.
+function rejectMarkedVotes(votes) {
+  const marked = votes.filter(v => v.missing_material)
+  if (!marked.length) return
+  throw new HarnessMaterialError(`panel judges' verdicts depend on missing material: ${marked
+    .map(v => `${v.id} (${v.missing_material})`).join(', ')}`, 'missing-material', marked.map(v => v.id))
+}
+
 // Pure reproduction from the recorded votes, targeted checks, and rulings.
 export function resolvePanel({ criteria, order, votes, checks = [], rulings = [], decider = null, fallback_ids = [] }) {
   // Known missing material fails the job; no settled record can hold it.
+  rejectMarkedVotes(votes)
   if (checks.some(c => !['confirmed', 'contradicted', 'insufficient'].includes(c.classification))) throw new JudgeOutputError('panel record settles a check on missing material')
   if (decider) {
     const reproduced = resolveLineCitedRecord(decider, fallback_ids)
@@ -348,6 +360,7 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
       return done()
     }
     record.votes = outcomes.flatMap((o, index) => o.results.map(r => ({ ...r, family: panel[index].family, model: panel[index].model, effort: panel[index].effort, panel_index: index })))
+    rejectMarkedVotes(record.votes)
     for (const vote of record.votes) {
       if (!vote.disputed) continue
       // The vote's own citations and the files its audit cited.

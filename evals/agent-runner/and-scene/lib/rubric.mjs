@@ -27,6 +27,8 @@ export const JUDGE_JOBS = [
   'assumption-handling',
 ]
 
+const EVIDENCE_JUDGE_JOBS = ['testing-evidence', 'assumption-handling']
+
 export const WORKFLOW_QUALITY_CRITERION_IDS = Object.freeze({
   'testing-evidence': [
     'testing-evidence-traceable-coverage',
@@ -407,6 +409,10 @@ export function validateAutomatedRubric(rubric) {
   for (const [id, fallback] of Object.entries(rubric.fallbacks ?? {})) {
     if (!deterministic.has(id)) errors.push(`fallback ${id} must name a deterministic-browser criterion`)
     if (!JUDGE_JOBS.includes(fallback?.job)) errors.push(`fallback ${id} has unknown judge job ${fallback?.job}`)
+    // A fallback pass must be proven from delivered source, and a confirmed
+    // reversal of a fallback fail must cite it; an evidence job cites only its
+    // evidence packet, so it can never answer for a browser criterion.
+    else if (EVIDENCE_JUDGE_JOBS.includes(fallback.job)) errors.push(`fallback ${id} names evidence job ${fallback.job}, which cannot cite delivered source`)
     if (typeof fallback?.requirement !== 'string' || fallback.requirement.trim().length === 0) {
       errors.push(`fallback ${id} requires a requirement`)
     }

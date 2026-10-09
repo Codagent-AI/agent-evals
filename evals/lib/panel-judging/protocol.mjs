@@ -7,6 +7,7 @@ import { bounded, normalizeEvidence } from './text.mjs'
 const reframed = (text, maxChars) => normalizeEvidence(text, maxChars)
 import { hashJson } from './hash.mjs'
 import { lstat, readFile, readdir, realpath, stat } from 'node:fs/promises'
+import { PACKET_PATH, cutIndexText, matchCutMarker, packetCuts, packetLayout, roleSections, spanLabel } from './evidence-packet.mjs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 export const JUDGE_ATTEMPTS = 3
@@ -166,7 +167,8 @@ export function inventoryListing(paths) {
 // then one `N|text` line per line, keeping line numbers explicit.
 const numberedLines = (header, lines) => [header, ...lines.map(({ line, text }) => `${line}|${text}`)].join('\n')
 const numberedFile = (path, text) => numberedLines(path, text.split('\n').map((line, index) => ({ line: index + 1, text: line })))
-const numberedSpan = (span) => (Array.isArray(span?.lines) ? numberedLines(spanReference(span), span.lines) : span)
+const numberedSpan = (span) => (Array.isArray(span?.lines)
+  ? numberedLines(span.label ? `${spanReference(span)} ${span.label}` : spanReference(span), span.lines) : span)
 export const compactMaterial = (material) => (material ?? []).map(numberedSpan)
 
 // The schema the judge must satisfy. Validation happens here rather than in the
@@ -304,7 +306,7 @@ export function parseJudgeOutput(
   text,
   expectedIds,
   job,
-  { requireSourceCitations = false, requireSourceCitationsFor = [], preserveLineCitations = false } = {},
+  { requireSourceCitations = false, requireSourceCitationsFor = [], preserveLineCitations = false, cuts = null } = {},
 ) {
   let payload
   try {
@@ -364,8 +366,10 @@ export function parseJudgeOutput(
       throw new JudgeOutputError(`${job} has malformed evidence line citations for ${result.id}`)
     }
     if (preserveLineCitations && result.citations?.length) {
-      lineCitations = parseLineCitedOutput(JSON.stringify({ results: [result] }), [result.id], job)[0].citations
+      lineCitations = parseLineCitedOutput(JSON.stringify({ results: [{ ...result, missing_material: '' }] }), [result.id], job)[0].citations
     }
+    // An evidence seat names the cut-index marker its verdict depends on.
+    const missingMaterial = Array.isArray(cuts) ? reportedMaterial(result.missing_material, cuts, result.id, job, 'judge') : ''
     if (seen.has(result.id)) duplicates.push(result.id)
     // A criterion belonging to another component is out of this job's scope,
     // so it is rejected rather than quietly folded into someone else's score.
@@ -378,6 +382,7 @@ export function parseJudgeOutput(
       ...(citationsRequired
         ? { citations: [...new Set(result.citations.map((item) => item.trim()))] }
         : preserveLineCitations ? { citations: lineCitations ?? [] } : {}),
+      ...(missingMaterial ? { missing_material: missingMaterial } : {}),
     })
   }
   if (duplicates.length > 0) {
@@ -582,14 +587,31 @@ export async function buildSourceAuditRequest(args) {
 
 // A panel audit's structured paths: bounded, and each one in the verified
 // inventory when the job has one. A path outside it is invalid audit output.
-function auditPaths(value, max, field, id, job, inventory) {
+// `lineCounts` (an evidence view's line count per inventory path) also admits
+// a line citation, `path:<line>` or `path:<start>-<end>`, inside that file.
+function auditPaths(value, max, field, id, job, inventory, lineCounts = null) {
   if (value === undefined) return []
   if (!Array.isArray(value) || value.length > max
     || value.some((item) => typeof item !== 'string' || !item.trim() || item.length > MAX_SOURCE_PATH_CHARS)) {
     throw new JudgeOutputError(`${job} audit has malformed ${field} for ${id}`)
   }
-  const paths = [...new Set(value.map((item) => (inventory ? inventoryPath(item.trim(), inventory) : item.trim())))]
-  const outside = inventory ? paths.filter((path) => !inventory.has(path)) : []
+  const spans = new Set()
+  const paths = [...new Set(value.map((item) => {
+    const trimmed = item.trim()
+    const span = lineCounts && inventory ? /^(.+?):(\d+)(?:-(\d+))?$/.exec(trimmed) : null
+    const path = span ? inventoryPath(span[1], inventory) : null
+    if (span && lineCounts.has(path)) {
+      const start = Number(span[2])
+      const end = Number(span[3] ?? span[2])
+      if (start < 1 || end < start || end > lineCounts.get(path) || end - start + 1 >= MAX_SPAN_LINES) {
+        throw new JudgeOutputError(`${job} audit ${field} for ${id} has an invalid line range: ${trimmed}`)
+      }
+      spans.add(`${path}:${start}-${end}`)
+      return `${path}:${start}-${end}`
+    }
+    return inventory ? inventoryPath(trimmed, inventory) : trimmed
+  }))]
+  const outside = inventory ? paths.filter((path) => !inventory.has(path) && !spans.has(path)) : []
   if (outside.length) {
     throw new JudgeOutputError(`${job} audit ${field} for ${id} names a path outside the verified inventory: ${outside.join(', ')}`)
   }
@@ -639,13 +661,17 @@ export function parseSourceAuditOutput(text, expectedIds, job, panel = null) {
     }
     if (panel) {
       const inventory = panel.inventory ? new Set(panel.inventory) : null
-      parsed.citations = auditPaths(result.citations, MAX_AUDIT_CITATIONS, 'citations', result.id, job, inventory)
+      parsed.citations = auditPaths(result.citations, MAX_AUDIT_CITATIONS, 'citations', result.id, job, inventory, panel.lineCounts ?? null)
       if (result.marker !== undefined && typeof result.marker !== 'string') {
         throw new JudgeOutputError(`${job} audit has a malformed marker for ${result.id}`)
       }
-      const marker = result.classification === 'missing-material' ? (result.marker ?? '').trim() : ''
+      const reported = result.classification === 'missing-material' ? (result.marker ?? '').trim() : ''
+      // A marker the packet's cut index lists may be named by its bare prefix;
+      // any other marker must occur verbatim in the audited packet.
+      const listed = panel.packet === undefined ? null : matchCutMarker(reported, packetCuts(panel.packet))
+      const marker = listed ?? reported
       if (result.classification === 'missing-material'
-        && (!marker || (panel.packet !== undefined && !String(panel.packet).includes(marker)))) {
+        && (!marker || (panel.packet !== undefined && !listed && !String(panel.packet).includes(marker)))) {
         throw new JudgeOutputError(`${job} audit reports missing material for ${result.id} without a marker its packet holds`)
       }
       parsed.marker = bounded(marker)
@@ -755,6 +781,9 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
   let lastAuditResults = null
   // A non-retryable error, such as a packet overflow, ends the job with its metadata.
   let failure = null
+  // An evidence seat's prompt quotes its packet, whose cut index is the only
+  // material a missing_material report may name.
+  const evidenceCuts = request.line_citations === 'evidence-view' ? packetCuts(request.prompt ?? request.prompt_body ?? '') : null
   const failed = () => ({
     job: request.job,
     ok: false,
@@ -776,6 +805,7 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
         const fallbackIds = request.requireSourceCitationsFor ?? []
         const parsed = parseJudgeOutput(output, attemptRequest.criteria, request.job, {
           preserveLineCitations: request.line_citations === 'evidence-view',
+          cuts: evidenceCuts,
           requireSourceCitations: request.source_audit === true,
           requireSourceCitationsFor: fallbackIds,
         })
@@ -957,7 +987,7 @@ export const LINE_CITED_RESULT_SCHEMA = {
       type: 'array',
       items: {
         type: 'object',
-        required: ['id', 'verdict', 'rationale', 'evidence', 'citations', 'search_scope', 'missing_obligation'],
+        required: ['id', 'verdict', 'rationale', 'evidence', 'citations', 'search_scope', 'missing_obligation', 'missing_material'],
         additionalProperties: false,
         properties: {
           id: { type: 'string' },
@@ -969,11 +999,127 @@ export const LINE_CITED_RESULT_SCHEMA = {
           // empty for a pass or a counterexample fail.
           search_scope: pathList(MAX_SCOPE_PATHS),
           missing_obligation: { type: 'string' },
+          // The evidence packet's cut-index marker the verdict depends on;
+          // empty unless it does, and always empty for a source job.
+          missing_material: { type: 'string' },
         },
       },
     },
   },
 }
+
+// The testing-evidence claim map's bounds: one row per basis scenario, 24
+// rows outside the basis, six claims a row, and per claim one claim span and
+// four evidence spans of at most 40 lines. A record that claims every basis
+// scenario with separate claim and evidence locations fits.
+export const CLAIM_MAP_BOUNDS = Object.freeze({ otherRows: 24, claimsPerRow: 6, evidenceSpans: 4, spanLines: 40 })
+const CLAIM_STATUSES = ['supported', 'defective', 'missing']
+const OTHER_CLAIM_KINDS = ['ci', 'limitation', 'completion', 'other']
+const MAPPED_CLAIM_PROPERTIES = {
+  claim_span: SPAN_SCHEMA,
+  evidence_spans: { type: 'array', maxItems: CLAIM_MAP_BOUNDS.evidenceSpans, items: SPAN_SCHEMA },
+  status: { enum: CLAIM_STATUSES },
+}
+const claimMapSchema = (maxScenarios) => ({
+  type: 'object',
+  required: ['scenarios', 'other_claims'],
+  additionalProperties: false,
+  properties: {
+    scenarios: { type: 'array', maxItems: maxScenarios, items: { type: 'object', required: ['scenario', 'claims'], additionalProperties: false,
+      properties: { scenario: { type: 'string', minLength: 1 },
+        claims: { type: 'array', minItems: 1, maxItems: CLAIM_MAP_BOUNDS.claimsPerRow, items: { type: 'object',
+          required: ['claim_span', 'evidence_spans', 'status'], additionalProperties: false, properties: MAPPED_CLAIM_PROPERTIES } } } } },
+    other_claims: { type: 'array', maxItems: CLAIM_MAP_BOUNDS.otherRows, items: { type: 'object',
+      required: ['kind', 'claim_span', 'evidence_spans', 'status'], additionalProperties: false,
+      properties: { kind: { enum: OTHER_CLAIM_KINDS }, ...MAPPED_CLAIM_PROPERTIES } } },
+  },
+})
+// Strict structured output cannot make a field conditional on the criterion,
+// so a decider whose request carries a claim map returns claim_map for every
+// criterion: the map for a claim-map criterion, and the empty form (no
+// scenarios and no other claims) for every other one.
+const withClaimMap = (schema, maxScenarios) => {
+  const items = schema.properties.results.items
+  return { ...schema, properties: { ...schema.properties, results: { ...schema.properties.results, items: { ...items,
+    required: [...items.required, 'claim_map'], properties: { ...items.properties, claim_map: claimMapSchema(maxScenarios) } } } } }
+}
+// The claim-map decider schema for the 68 basis scenarios the and-scene
+// fixture has today; requests size it to their own basis.
+export const LINE_CITED_CLAIM_MAP_RESULT_SCHEMA = withClaimMap(LINE_CITED_RESULT_SCHEMA, 68)
+
+// The decider (and re-cite) schema of a request: the claim map joins it only
+// when the request carries a claim map for some of these criteria.
+export function lineCitedSchemaFor(request, criteria) {
+  const schema = judgeResultSchemaFor(LINE_CITED_RESULT_SCHEMA, criteria)
+  const map = request?.claim_map
+  return map?.criteria?.some((id) => criteria.includes(id)) ? withClaimMap(schema, map.scenarios?.length ?? 0) : schema
+}
+
+// A reported missing_material value: empty, or the canonical cut-index marker
+// it names. Any other value is invalid output and is retried.
+function reportedMaterial(value, cuts, id, job, stage) {
+  if (value !== undefined && value !== null && typeof value !== 'string') {
+    throw new JudgeOutputError(`${job} ${stage} has a malformed missing_material for ${id}`)
+  }
+  const reported = (value ?? '').trim()
+  if (!reported) return ''
+  const marker = matchCutMarker(reported, cuts ?? [])
+  if (!marker) {
+    throw new JudgeOutputError(`${job} ${stage} reports missing material for ${id} that names no marker in the packet's cut index: ${bounded(reported, 200)}`)
+  }
+  return marker
+}
+
+const isSpan = (item) => item && typeof item === 'object' && typeof item.path === 'string'
+  && Number.isInteger(item.start_line) && Number.isInteger(item.end_line)
+
+// A claim map, validated against its bounds and the basis. Span ranges are
+// checked against the file when the spans are quoted.
+function parseClaimMap(value, id, job, scenarios) {
+  const invalid = (why) => new JudgeOutputError(`${job} tiebreak has an invalid claim map for ${id}: ${why}`)
+  if (!value || typeof value !== 'object' || !Array.isArray(value.scenarios) || !Array.isArray(value.other_claims)) {
+    throw invalid('it needs scenarios and other_claims arrays')
+  }
+  const basis = new Set(scenarios)
+  const span = (item, where) => {
+    if (!isSpan(item)) throw invalid(`${where} is not a line span`)
+    if (item.start_line < 1 || item.end_line < item.start_line || item.end_line - item.start_line + 1 > CLAIM_MAP_BOUNDS.spanLines) {
+      throw invalid(`${where} ${item.path}:${item.start_line}-${item.end_line} is not 1-${CLAIM_MAP_BOUNDS.spanLines} lines`)
+    }
+    return { path: item.path.trim(), start_line: item.start_line, end_line: item.end_line }
+  }
+  const claim = (item, where) => {
+    if (!item || typeof item !== 'object') throw invalid(`${where} is not a claim`)
+    if (!CLAIM_STATUSES.includes(item.status)) throw invalid(`${where} has status ${JSON.stringify(item.status)}`)
+    if (!Array.isArray(item.evidence_spans) || item.evidence_spans.length > CLAIM_MAP_BOUNDS.evidenceSpans) {
+      throw invalid(`${where} needs at most ${CLAIM_MAP_BOUNDS.evidenceSpans} evidence spans`)
+    }
+    if (item.status !== 'missing' && item.evidence_spans.length === 0) throw invalid(`${where} is ${item.status} but cites no evidence`)
+    return { claim_span: span(item.claim_span, `${where} claim_span`),
+      evidence_spans: item.evidence_spans.map((entry, index) => span(entry, `${where} evidence span ${index + 1}`)), status: item.status }
+  }
+  const seen = new Set()
+  const rows = value.scenarios.map((row, index) => {
+    if (!row || typeof row.scenario !== 'string' || !basis.has(row.scenario)) {
+      throw invalid(`row ${index + 1} names ${JSON.stringify(row?.scenario)}, not a basis scenario heading`)
+    }
+    if (seen.has(row.scenario)) throw invalid(`scenario ${JSON.stringify(row.scenario)} has more than one row`)
+    seen.add(row.scenario)
+    if (!Array.isArray(row.claims) || row.claims.length === 0 || row.claims.length > CLAIM_MAP_BOUNDS.claimsPerRow) {
+      throw invalid(`scenario ${JSON.stringify(row.scenario)} needs 1-${CLAIM_MAP_BOUNDS.claimsPerRow} claims`)
+    }
+    return { scenario: row.scenario, claims: row.claims.map((item, number) => claim(item, `scenario row ${index + 1} claim ${number + 1}`)) }
+  })
+  if (value.other_claims.length > CLAIM_MAP_BOUNDS.otherRows) throw invalid(`it has more than ${CLAIM_MAP_BOUNDS.otherRows} rows outside the basis`)
+  const other = value.other_claims.map((item, index) => {
+    if (!OTHER_CLAIM_KINDS.includes(item?.kind)) throw invalid(`other claim ${index + 1} has kind ${JSON.stringify(item?.kind)}`)
+    return { kind: item.kind, ...claim(item, `other claim ${index + 1}`) }
+  })
+  return { scenarios: rows, other_claims: other }
+}
+
+const emptyClaimMap = (value) => value === undefined || value === null
+  || (typeof value === 'object' && !(value.scenarios?.length) && !(value.other_claims?.length))
 
 // A pass, a fail citing a counterexample's lines, or a fail about absence
 // citing where it looked. Each kind gets its own span-audit direction.
@@ -1044,8 +1190,9 @@ const inventoryHeading = (inventory) => [`# ${inventory.kind} files`, inventoryL
 // only its citation format differs, because a pass it casts must be provable
 // from quoted lines alone.
 export function buildTiebreakRequest({ request, criteria, inventory }) {
-  const schema = judgeResultSchemaFor(LINE_CITED_RESULT_SCHEMA, criteria)
+  const schema = lineCitedSchemaFor(request, criteria)
   const evidenceJob = isEvidenceJob(request)
+  const mapped = (request.claim_map?.criteria ?? []).filter((id) => criteria.includes(id))
   const promptBody = [
     request.prompt_body ?? request.prompt ?? '',
     '',
@@ -1066,6 +1213,8 @@ export function buildTiebreakRequest({ request, criteria, inventory }) {
     '    missing_obligation exactly what is missing. The auditor reads those files in full beside the complete file',
     '    list and judges whether they are where the obligation would live.',
     '  A fail citing neither is invalid. A pass leaves search_scope and missing_obligation empty.',
+    ...(evidenceJob ? DECIDER_MISSING_MATERIAL_RULES : ['Leave missing_material empty.']),
+    ...(mapped.length ? claimMapRules(mapped, request.claim_map) : []),
     '',
     inventoryHeading(inventory),
   ].join('\n')
@@ -1088,7 +1237,43 @@ export function buildTiebreakRequest({ request, criteria, inventory }) {
   }
 }
 
-export function parseLineCitedOutput(text, criteria, job) {
+// `options.claimMap` (the request's claim map) makes the claim map required
+// for its criteria and empty for every other one; `options.cuts` (the evidence
+// packet's cut index) is what a missing_material report must name. Without a
+// cut index, as for a source job, any report is invalid.
+const DECIDER_MISSING_MATERIAL_RULES = [
+  'The evidence packet opens with a cut index listing every artifact its budget truncated or omitted, each also marked in',
+  'place. Marked material is missing, not absent from the candidate. Set missing_material to the marker copied exactly',
+  'from that cut index when your ruling depends on material it withheld, and leave it empty otherwise; such a report',
+  'makes the criterion a harness failure rather than a ruling.',
+]
+
+// The claim map a testing-evidence decider returns beside its ruling, which a
+// row audit and a completeness audit check.
+function claimMapRules(mapped, claimMap) {
+  const { claimsPerRow, otherRows, evidenceSpans, spanLines } = CLAIM_MAP_BOUNDS
+  return [
+    '',
+    '# Claim map',
+    `For ${mapped.join(' and ')}, also return claim_map, which independent auditors check row by row and against the`,
+    `claim-bearing records (${(claimMap.roles ?? []).join(', ')}) in full:`,
+    '- scenarios: one row for each basis scenario the record claims was exercised, its scenario copied exactly from a',
+    '  scenario heading of approved_requirements in the verified index, holding every claim the record makes about that',
+    `  scenario, across revisions, viewports, or runs (1-${claimsPerRow} claims a row, one row a scenario);`,
+    `- other_claims: at most ${otherRows} claims and disclosures outside the basis that complete and honest record judges: CI`,
+    '  status (kind ci), stated limitations (limitation), completion or outcome claims (completion), and any other (other).',
+    'Each claim gives claim_span, the packet.txt lines that make the claim; evidence_spans, at most',
+    `${evidenceSpans} spans of the evidence offered for it, empty when none was found; and status: supported (the evidence`,
+    'proves the claim), defective (the evidence offered does not prove it), or missing (no evidence was found). Every',
+    `span is at most ${spanLines} lines.`,
+    'Map every claim these records make that bears on the ruling: the completeness audit reads them in full, and a map',
+    'that omits a claim that would change the ruling withdraws it. A claim that maps to no basis scenario goes in',
+    'other_claims: it earns no usable-proof credit and is judged under complete and honest record.',
+    'For every other criterion, return claim_map with empty scenarios and other_claims.',
+  ]
+}
+
+export function parseLineCitedOutput(text, criteria, job, { claimMap = null, cuts = [] } = {}) {
   let payload
   try {
     payload = JSON.parse(text)
@@ -1137,6 +1322,12 @@ export function parseLineCitedOutput(text, criteria, job) {
     if (absence && (scope.length === 0 || !obligation.trim())) {
       throw new JudgeOutputError(`${job} tiebreak fail ${result.id} cites neither a counterexample nor a search scope with its missing obligation`)
     }
+    const missingMaterial = reportedMaterial(result.missing_material, cuts, result.id, job, 'tiebreak')
+    const mapped = claimMap?.criteria?.includes(result.id)
+    if (claimMap && !mapped && !emptyClaimMap(result.claim_map)) {
+      throw new JudgeOutputError(`${job} tiebreak returns a claim map for ${result.id}, which takes none; return its empty form`)
+    }
+    const map = mapped ? parseClaimMap(result.claim_map, result.id, job, claimMap.scenarios ?? []) : null
     seen.set(result.id, {
       id: result.id,
       verdict: result.verdict,
@@ -1147,6 +1338,8 @@ export function parseLineCitedOutput(text, criteria, job) {
       })),
       search_scope: absence ? [...new Set(scope.map((item) => item.trim()))] : [],
       missing_obligation: absence ? bounded(obligation, MAX_RATIONALE_CHARS) : '',
+      ...(missingMaterial ? { missing_material: missingMaterial } : {}),
+      ...(map ? { claim_map: map } : {}),
     })
   }
   const missing = criteria.filter((id) => !seen.has(id))
@@ -1166,11 +1359,45 @@ export function inventoryPath(path, inventory) {
   return allowed.has(stripped) ? stripped : path
 }
 
-async function quoteSpans(results, inventory, job) {
+// Quotes each result's spans, after validating them against the inventory.
+// A span of an evidence packet is labelled with the artifact it lies in and,
+// when that artifact was cut, its marker, so a stage shown only these lines
+// still knows what was cut. `maps`, when given, receives each claim map with
+// its claim and evidence spans quoted the same way.
+async function quoteSpans(results, inventory, job, maps = null) {
   const allowed = new Set(inventory.paths)
   const quoted = new Map()
+  const files = new Map()
+  const fileOf = async (path) => {
+    if (!files.has(path)) {
+      const text = await readFile(await citationTarget(inventory.root, path), 'utf8')
+      files.set(path, { lines: text.split('\n'),
+        layout: inventory.kind === 'evidence view' && path === PACKET_PATH ? packetLayout(text) : null })
+    }
+    return files.get(path)
+  }
+  const quote = async (citation) => {
+    if (!inventory.root) throw new JudgeOutputError(`${job} tiebreak has no ${inventory.kind} root to validate citations`)
+    const path = inventoryPath(citation.path, allowed)
+    if (!allowed.has(path)) {
+      throw new JudgeOutputError(`${job} tiebreak cites a path outside the verified ${inventory.kind}: ${path}`)
+    }
+    const { lines, layout } = await fileOf(path)
+    if (citation.start_line < 1 || citation.end_line < citation.start_line
+      || citation.end_line > lines.length
+      || citation.end_line - citation.start_line + 1 >= MAX_SPAN_LINES) {
+      throw new JudgeOutputError(`${job} tiebreak has an invalid line range: ${path}:${citation.start_line}-${citation.end_line}`)
+    }
+    const label = spanLabel(layout, citation.start_line, citation.end_line)
+    return {
+      ...citation,
+      path,
+      lines: lines.slice(citation.start_line - 1, citation.end_line)
+        .map((text, offset) => ({ line: citation.start_line + offset, text })),
+      ...(label ? { label } : {}),
+    }
+  }
   for (const result of results) {
-    const spans = []
     result.citations = result.citations.map((citation) => ({ ...citation, path: inventoryPath(citation.path, allowed) }))
     // An absence fail's scope is validated against the inventory like a span path.
     result.search_scope = [...new Set((result.search_scope ?? []).map((path) => inventoryPath(path, allowed)))]
@@ -1178,27 +1405,37 @@ async function quoteSpans(results, inventory, job) {
     if (outside.length) {
       throw new JudgeOutputError(`${job} tiebreak search scope names a path outside the verified ${inventory.kind}: ${outside.join(', ')}`)
     }
-    for (const citation of result.citations) {
-      if (!inventory.root) throw new JudgeOutputError(`${job} tiebreak has no ${inventory.kind} root to validate citations`)
-      if (!allowed.has(citation.path)) {
-        throw new JudgeOutputError(`${job} tiebreak cites a path outside the verified ${inventory.kind}: ${citation.path}`)
-      }
-      const file = await citationTarget(inventory.root, citation.path)
-      const lines = (await readFile(file, 'utf8')).split('\n')
-      if (citation.start_line < 1 || citation.end_line < citation.start_line
-        || citation.end_line > lines.length
-        || citation.end_line - citation.start_line + 1 >= MAX_SPAN_LINES) {
-        throw new JudgeOutputError(`${job} tiebreak has an invalid line range: ${citation.path}:${citation.start_line}-${citation.end_line}`)
-      }
-      spans.push({
-        ...citation,
-        lines: lines.slice(citation.start_line - 1, citation.end_line)
-          .map((text, offset) => ({ line: citation.start_line + offset, text })),
-      })
-    }
+    const spans = []
+    for (const citation of result.citations) spans.push(await quote(citation))
     quoted.set(result.id, spans)
+    if (result.claim_map) {
+      const claim = async ({ claim_span: claimSpan, evidence_spans: evidence, status }) => ({ status,
+        claim: await quote(claimSpan), evidence: await Promise.all(evidence.map(quote)) })
+      for (const item of [...result.claim_map.scenarios.flatMap(({ claims }) => claims), ...result.claim_map.other_claims]) {
+        for (const span of [item.claim_span, ...item.evidence_spans]) span.path = inventoryPath(span.path, allowed)
+      }
+      const map = {
+        scenarios: await Promise.all(result.claim_map.scenarios.map(async ({ scenario, claims }) => ({ scenario,
+          claims: await Promise.all(claims.map(claim)) }))),
+        other_claims: await Promise.all(result.claim_map.other_claims.map(async (item) => ({ kind: item.kind, ...(await claim(item)) }))),
+      }
+      maps?.set(result.id, map)
+    }
   }
   return quoted
+}
+
+// An evidence view's packet line count, which bounds an evidence check's line
+// citations; null for a source job or a view without a packet.
+export async function evidenceLineCounts(request) {
+  if (!isEvidenceJob(request) && !request.input_roots?.evidence) return null
+  const inventory = await lineCitationInventory(request)
+  if (!inventory.root || !inventory.paths.includes(PACKET_PATH)) return null
+  try {
+    return new Map([[PACKET_PATH, (await readFile(await citationTarget(inventory.root, PACKET_PATH), 'utf8')).split('\n').length]])
+  } catch {
+    return null
+  }
 }
 
 export async function validateLineCitations(result, request) {
@@ -1211,23 +1448,59 @@ const CLAIM_DIRECTIONS = { pass: 'pass', counterexample: 'counterexample fail', 
 // One audited claim. A pass or counterexample fail carries its quoted lines; an
 // absence fail carries its scope files in full and the obligation it found
 // missing, beside the complete inventory its packet lists once.
+// A claim-map part carries the ruling's own material only in its first row
+// part (`carries_ruling`); the completeness part carries the claim-bearing
+// records and the locations the map cites, never quoted evidence.
+const mappedClaimJson = ({ status, claim, evidence }) => ({ status, claim_lines: numberedSpan(claim),
+  evidence_lines: evidence.map(numberedSpan) })
 const auditClaimJson = (claim) => ({
   id: claim.id,
   claim: CLAIM_DIRECTIONS[claim.kind],
   rationale: claim.rationale,
-  ...(claim.kind === 'absence'
-    ? { missing_obligation: claim.missing_obligation, search_scope: claim.scope_files.map(({ path }) => path),
-        scope_files: claim.scope_files.map(({ path, content }) => numberedFile(path, content)) }
-    : { quoted_spans: compactMaterial(claim.spans) }),
+  ...(claim.audit_part === 'completeness'
+    ? { audit_part: 'completeness', mapped_claim_locations: claim.locations, claim_bearing_records: compactMaterial(claim.records) }
+    : claim.carries_ruling === false ? {}
+      : claim.kind === 'absence'
+        ? { missing_obligation: claim.missing_obligation, search_scope: claim.scope_files.map(({ path }) => path),
+            scope_files: claim.scope_files.map(({ path, content }) => numberedFile(path, content)) }
+        : { quoted_spans: compactMaterial(claim.spans) }),
+  ...(claim.audit_part === 'rows'
+    ? { audit_part: 'claim map rows', claim_map_rows: claim.rows.map(({ row, claims }) => ({ row, claims: claims.map(mappedClaimJson) })) }
+    : {}),
 })
 
-const spanAuditPacket = (claims, inventory) => [
+// The cut index leads an evidence audit's packet, so it is measured with it.
+const spanAuditPacket = (claims, inventory, cutIndex = null) => [
+  ...(cutIndex ? [cutIndex, ''] : []),
   '# BEGIN LINE-CITED CLAIMS',
   JSON.stringify(claims.map(auditClaimJson)),
   '# END LINE-CITED CLAIMS',
-  ...(inventory && claims.some(({ kind }) => kind === 'absence')
+  ...(inventory && claims.some(({ kind, carries_ruling: carries }) => kind === 'absence' && carries !== false)
     ? ['', '# BEGIN COMPLETE VERIFIED INVENTORY', inventoryHeading(inventory), '# END COMPLETE VERIFIED INVENTORY'] : []),
 ].join('\n')
+
+// Read by every evidence audit and check: what a label and the cut index mean.
+const EVIDENCE_PACKET_AUDIT_RULE = [
+  'Each quoted packet.txt span is labelled with the artifact it lies in and, when the packet cut that artifact, its marker;',
+  'the cut index above lists every artifact the packet truncated or omitted. A span from a cut artifact shows only what',
+  'the packet kept: when deciding needs the part that was cut, classify missing-material and copy that marker exactly',
+  'from the cut index. Cite packet lines in citations as packet.txt:<start>-<end>.',
+].join(' ')
+
+// The two parts of a claim-map audit.
+const CLAIM_MAP_AUDIT_RULES = [
+  'A claim with audit_part "claim map rows" carries a batch of the decider\'s claim-map rows, each claim with its quoted',
+  'claim lines and evidence lines and its status: supported (the evidence proves the claim), defective (the evidence',
+  'offered does not prove it), or missing (no evidence was found). Judge each mapped claim\'s evidence. Classify the part',
+  'contradicted when a row shows the ruling wrong, for example a claim that a basis scenario was exercised marked',
+  'supported whose evidence does not prove it, or a claim the evidence shows false or overstated; confirmed when every',
+  'status holds and nothing in the rows defeats the ruling. A claim outside the basis earns no usable-proof credit.',
+  'A claim with audit_part "completeness" carries the claim-bearing records in full, line-numbered as packet.txt lines,',
+  'and mapped_claim_locations, the lines each mapped claim and its evidence occupy, without quoted text. Check that the',
+  'map is complete against the records: classify the ruling contradicted when the records make a claim the map omits',
+  'that would change the ruling, and cite the omitted claim\'s record and line in citations (as packet.txt:<line>) and',
+  'in evidence; confirmed when the map holds every claim that bears on the ruling.',
+].join(' ')
 
 // The audit claims of decider rulings. A result without a verdict is a pass,
 // as earlier callers passed only passes. `scopes` maps an absence fail to its
@@ -1255,7 +1528,7 @@ export function buildSpanAuditRequest({ request, rulings, passes, spans, scopes,
   return spanAuditRequest(request, claims, singlePacket(spanAuditPacket(claims, inventory), criteria, `${request.job} span audit packet`))
 }
 
-function spanAuditRequest(request, claims, packet) {
+function spanAuditRequest(request, claims, packet, { evidence = false } = {}) {
   const criteria = [...new Set(claims.map(({ id }) => id))]
   const schema = judgeResultSchemaFor(PANEL_AUDIT_RESULT_SCHEMA, criteria)
   return {
@@ -1295,6 +1568,8 @@ function spanAuditRequest(request, claims, packet) {
       '- missing-material: deciding the claim needs material marked truncated or omitted; name that marker.',
       'Use scope-inadequate only for an absence fail, and leave scope_repair empty otherwise.',
       MISSING_MATERIAL_RULE,
+      ...(evidence ? [EVIDENCE_PACKET_AUDIT_RULE] : []),
+      ...(claims.some(({ audit_part: part }) => part) ? [CLAIM_MAP_AUDIT_RULES] : []),
       'Do not infer behavior from unquoted files, names, comments, or plausible conventions, and do not',
       'require anything the requirement and its review guidance do not state.',
       JUDGE_SCOPE_RULE,
@@ -1322,9 +1597,12 @@ const contradictionPacket = (claims) => JSON.stringify(claims.map(({ id, verdict
 
 // Contradiction checks in batches of whole claims: [{ index, criteria, request }].
 // Each claim carries its complete material; none is omitted for size.
-export function buildContradictionCheckRequests({ request, claims }) {
-  return batchClaims(claims, contradictionPacket, MAX_AUDIT_PACKET_CHARS, `${request.job} contradiction check`)
-    .map(({ index, criteria, claims: batch, packet }) => ({ index, criteria, request: contradictionCheckRequest(request, batch, packet) }))
+// An evidence check also receives the packet's cut index, measured with it.
+export function buildContradictionCheckRequests({ request, claims, cutIndex = null }) {
+  const measured = (batch) => [...(cutIndex ? [cutIndex] : []), contradictionPacket(batch)].join('\n')
+  return batchClaims(claims, measured, MAX_AUDIT_PACKET_CHARS, `${request.job} contradiction check`)
+    .map(({ index, criteria, claims: batch }) => ({ index, criteria,
+      request: contradictionCheckRequest(request, batch, contradictionPacket(batch), cutIndex) }))
 }
 
 export function buildContradictionCheckRequest({ request, claims }) {
@@ -1333,7 +1611,7 @@ export function buildContradictionCheckRequest({ request, claims }) {
     singlePacket(contradictionPacket(claims), criteria, `${request.job} contradiction check packet`))
 }
 
-function contradictionCheckRequest(request, claims, packet) {
+function contradictionCheckRequest(request, claims, packet, cutIndex = null) {
   const criteria = claims.map(({ id }) => id)
   const schema = judgeResultSchemaFor(PANEL_CHECK_RESULT_SCHEMA, criteria)
   return {
@@ -1370,12 +1648,14 @@ function contradictionCheckRequest(request, claims, packet) {
       '- insufficient: the complete, in-scope material cannot settle the stated reason.',
       '- missing-material: settling it needs material marked truncated or omitted; name that marker.',
       MISSING_MATERIAL_RULE,
+      ...(cutIndex ? [EVIDENCE_PACKET_AUDIT_RULE] : []),
       JUDGE_SCOPE_RULE,
       REQUIREMENT_QUESTION_RULE,
       '',
       '# Rubric contract',
       request.rubric_slice ?? '',
       '',
+      ...(cutIndex ? [cutIndex, ''] : []),
       '# BEGIN STATED CONTRADICTIONS',
       packet,
       '# END STATED CONTRADICTIONS',
@@ -1388,9 +1668,10 @@ function contradictionCheckRequest(request, claims, packet) {
 
 // A packet too large for one claim raises PacketOverflowError to the caller.
 // Checks follow the panel audit contract: citations must lie in `inventory`.
-async function checkContradictions({ request, claims, invoke, attempts, log, inventory = request.verified_source_paths ?? [], where: extra = {} }) {
+async function checkContradictions({ request, claims, invoke, attempts, log, inventory = request.verified_source_paths ?? [], where: extra = {},
+  cutIndex = null, lineCounts = null }) {
   if (claims.length === 0) return new Map()
-  const batches = buildContradictionCheckRequests({ request, claims })
+  const batches = buildContradictionCheckRequests({ request, claims, cutIndex })
   const checks = new Map()
   for (const batch of batches) {
     let parsed = null
@@ -1398,7 +1679,7 @@ async function checkContradictions({ request, claims, invoke, attempts, log, inv
       const where = { ...extra, attempt, ...(batches.length > 1 ? { batch: batch.index } : {}) }
       try {
         parsed = parseSourceAuditOutput(await invoke(batch.request), batch.criteria, request.job,
-          { outcomes: CHECK_OUTCOMES, inventory, packet: batch.request.prompt })
+          { outcomes: CHECK_OUTCOMES, inventory, packet: batch.request.prompt, lineCounts })
         log.push({ ...where, ok: true, error: null })
         break
       } catch (error) {
@@ -1469,7 +1750,7 @@ function tiebreakDecisions({ results, spans, outcomes, fallbackIds }) {
 // so the prompt never invites one.
 export function buildReciteRequest({ tiebreakRequest, claims }) {
   const criteria = claims.map(({ id }) => id)
-  const schema = judgeResultSchemaFor(LINE_CITED_RESULT_SCHEMA, criteria)
+  const schema = lineCitedSchemaFor(tiebreakRequest, criteria)
   const promptBody = [
     tiebreakRequest.prompt_body,
     '',
@@ -1644,6 +1925,12 @@ function verifySettlement(record, result) {
   if (names[0] !== 'initial' || names.length > 2 || new Set(names).size !== names.length
     || names.some((name) => !AUDIT_CYCLES.includes(name))) reject('records an invalid audit cycle sequence')
   if (entry.settled_cycle !== names.at(-1)) reject('does not settle on its last audit cycle')
+  if (result.missing_material) reject('depends on missing material, which settles nothing')
+  // A claim-map ruling is audited in row parts and one completeness part.
+  if (result.claim_map && entry.cycles.some(({ expected_parts: parts }) => !Array.isArray(parts)
+    || !parts.includes('completeness') || !parts.some((part) => String(part).startsWith('rows-')))) {
+    reject('lacks its claim-map row or completeness audit part')
+  }
   const first = (record.first_results ?? []).find((item) => item.id === id)
   if (!first || first.verdict !== result.verdict) reject('changed its verdict on re-cite')
   if (!names.includes('recite') && hashJson(first) !== hashJson(result)) reject('changed its citations without a re-cite')
@@ -1748,6 +2035,22 @@ async function settleTiebreak({ request, criteria, invoke, attempts, validateVer
     }
     evidence = ['# BEGIN LINE-NUMBERED UNTRUSTED EVIDENCE', JSON.stringify(files), '# END LINE-NUMBERED UNTRUSTED EVIDENCE'].join('\n')
   }
+  // An evidence packet's frame: the cut index every audit and check receives
+  // and a missing_material report must name, its line count for line
+  // citations, and its layout for the completeness audit's records.
+  const packet = isEvidenceJob(request) && inventory.root && inventory.paths.includes(PACKET_PATH)
+    ? await readInventoryFile(inventory, PACKET_PATH, request.job, criteria) : null
+  const cuts = packet === null ? [] : packetCuts(packet, { atStart: true })
+  const cutIndex = packet === null ? null : cutIndexText(packet)
+  const lineCounts = packet === null ? null : new Map([[PACKET_PATH, packet.split('\n').length]])
+  // A ruling that depends on material the packet withheld settles nothing.
+  const rejectMissingMaterial = (rulings) => {
+    const marked = rulings.filter(({ missing_material: marker }) => marker)
+    if (marked.length) {
+      throw new HarnessMaterialError(`${request.job} decider rulings depend on missing material: ${marked
+        .map(({ id, missing_material: marker }) => `${id} (${marker})`).join(', ')}`, 'missing-material', marked.map(({ id }) => id))
+    }
+  }
   const listing = inventoryHeading(inventory)
   const material = (ids) => (criterionMaterial ? criterionMaterial(ids) : '')
   // A claim is { id, note? }; a re-cite's note is the audit reason it answers.
@@ -1776,7 +2079,7 @@ async function settleTiebreak({ request, criteria, invoke, attempts, validateVer
   // A re-cite keeps each first verdict, and a fail its counterexample kind;
   // any other change is invalid output and is retried.
   const parseCited = (ids, first) => async (output) => {
-    const parsed = parseLineCitedOutput(output, ids, request.job)
+    const parsed = parseLineCitedOutput(output, ids, request.job, { claimMap: request.claim_map ?? null, cuts })
     for (const result of first ? parsed : []) {
       const before = first.get(result.id)
       if (result.verdict !== before.verdict) {
@@ -1787,25 +2090,31 @@ async function settleTiebreak({ request, criteria, invoke, attempts, validateVer
       }
     }
     validateVerdicts(parsed)
-    return { parsed, spans: await quoteSpans(parsed, inventory, request.job) }
+    const maps = new Map()
+    return { parsed, spans: await quoteSpans(parsed, inventory, request.job, maps), maps }
   }
   const decide = async (claims, build, first = null) => {
     const batches = deciderRequests(claims, build)
     const parsed = new Map()
     const quoted = new Map()
+    const maps = new Map()
     for (const batch of batches) {
       const value = await run(batch.request, history, parseCited(batch.criteria, first), batches.length > 1 ? batch.index : null)
       if (!value) return null
       for (const result of value.parsed) parsed.set(result.id, result)
       for (const [id, list] of value.spans) quoted.set(id, list)
+      for (const [id, map] of value.maps) maps.set(id, map)
     }
-    return { parsed: claims.map(({ id }) => parsed.get(id)), spans: quoted }
+    rejectMissingMaterial([...parsed.values()])
+    return { parsed: claims.map(({ id }) => parsed.get(id)), spans: quoted, maps }
   }
 
   const first = await decide(criteria.map((id) => ({ id })), (next) => next)
   if (!first) return { ok: false, ...record }
   const results = [...first.parsed]
   const spans = new Map(first.spans)
+  // Each claim-map ruling's map, with its claim and evidence lines quoted.
+  const quotedMaps = new Map(first.maps)
   record.first_results = first.parsed.map((result) => structuredClone(result))
   record.first_spans = Object.fromEntries(first.spans)
   record.results = results
@@ -1825,13 +2134,46 @@ async function settleTiebreak({ request, criteria, invoke, attempts, validateVer
         for (const path of scope) files.push({ path, content: await readInventoryFile(inventory, path, request.job, [id]) })
       }
       const [claim] = spanAuditClaims({ rulings: [result], spans, scopes: new Map([[id, files]]) })
-      const parts = auditClaims ? auditClaims(claim, result) : [claim]
+      const parts = quotedMaps.has(id) ? claimMapParts(claim, quotedMaps.get(id))
+        : auditClaims ? auditClaims(claim, result) : [claim]
       if (parts.length > 1 && new Set(parts.map(({ part }) => part)).size !== parts.length) {
         throw new Error(`audit parts of ${id} need unique part labels`)
       }
       claims.push(...parts)
     }
     return claims
+  }
+  // A claim-map ruling's audit parts: its rows in whole-row batches, the first
+  // also carrying the ruling's own material, and one completeness part with
+  // the claim-bearing records in full and an index of the mapped locations.
+  const packetLines = packet === null ? [] : packet.split('\n')
+  const layout = packet === null ? null : packetLayout(packet)
+  const claimMapParts = (claim, map) => {
+    const rows = [
+      ...map.scenarios.map(({ scenario, claims }) => ({ row: `scenario: ${scenario}`, claims })),
+      ...map.other_claims.map((item) => ({ row: `outside the basis (${item.kind})`, claims: [item] })),
+    ]
+    const own = claim.kind === 'absence' ? claim.scope_files : claim.spans
+    const rowPart = (batch, index) => {
+      const carries = batch.some(({ ruling: own }) => own)
+      const partRows = batch.filter(({ row }) => row).map(({ row }) => row)
+      const quoted = partRows.flatMap(({ claims }) => claims.flatMap(({ claim: span, evidence }) => [span, ...evidence]))
+      const unique = [...new Map(quoted.map((span) => [spanReference(span), span])).values()]
+      return { ...claim, part: `rows-${index + 1}`, audit_part: 'rows', carries_ruling: carries,
+        spans: carries ? claim.spans : [], scope_files: carries ? claim.scope_files : [], rows: partRows,
+        material: [...(carries ? own : []), ...unique] }
+    }
+    const items = [{ criterion: claim.id, ruling: true }, ...rows.map((row) => ({ criterion: claim.id, row }))]
+    const parts = batchClaims(items, (batch) => spanAuditPacket([rowPart(batch, 0)], inventory, cutIndex), MAX_AUDIT_PACKET_CHARS,
+      `${request.job} claim-map row audit`).map(({ claims: batch, index }) => rowPart(batch, index))
+    // Without a packet layout, the whole packet stands in for the records.
+    const records = layout ? roleSections(layout, request.claim_map.roles ?? [], packetLines)
+      : packetLines.length ? [{ path: PACKET_PATH, start_line: 1, end_line: packetLines.length,
+        lines: packetLines.map((text, offset) => ({ line: offset + 1, text })) }] : []
+    const locations = rows.flatMap(({ row, claims }) => claims.map(({ status, claim: span, evidence }) => (
+      `${row}: ${status}; claim ${spanReference(span)}; evidence ${evidence.map(spanReference).join(', ') || 'none found'}`)))
+    return [...parts, { ...claim, part: 'completeness', audit_part: 'completeness', carries_ruling: false, spans: [], scope_files: [],
+      records, locations, material: records }]
   }
   // A scope-inadequate audit is valid only for an absence fail, and in the
   // first cycle only when it names the inventory files that would repair it.
@@ -1857,17 +2199,17 @@ async function settleTiebreak({ request, criteria, invoke, attempts, validateVer
     }
     const expected = new Map()
     for (const layer of layers) {
-      const batches = batchClaims(layer, (batch) => spanAuditPacket(batch, inventory), MAX_AUDIT_PACKET_CHARS, `${request.job} span audit`)
+      const batches = batchClaims(layer, (batch) => spanAuditPacket(batch, inventory, cutIndex), MAX_AUDIT_PACKET_CHARS, `${request.job} span audit`)
       for (const batch of batches) {
-        const next = spanAuditRequest(request, batch.claims, batch.packet)
+        const next = spanAuditRequest(request, batch.claims, batch.packet, { evidence: cutIndex !== null })
         const parse = async (output) => validAudit(batch.claims, cycle)(parseSourceAuditOutput(output, batch.criteria, request.job,
-          { outcomes: AUDIT_OUTCOMES, inventory: inventory.paths, packet: next.prompt }))
+          { outcomes: AUDIT_OUTCOMES, inventory: inventory.paths, packet: next.prompt, lineCounts }))
         const audited = await run(next, auditHistory, parse, batches.length > 1 || layers.length > 1 ? batch.index : null, { cycle })
         if (!audited) return false
         for (const claim of batch.claims) {
           const part = claim.part ?? batch.index
           record.audit_results.push({ ...audited.find(({ id }) => id === claim.id), criterion: claim.id, cycle, part })
-          partMaterial.set(materialKey(claim.id, cycle, part), claim.kind === 'absence' ? claim.scope_files : claim.spans)
+          partMaterial.set(materialKey(claim.id, cycle, part), claim.material ?? (claim.kind === 'absence' ? claim.scope_files : claim.spans))
           expected.set(claim.id, [...(expected.get(claim.id) ?? []), part])
         }
       }
@@ -1905,7 +2247,8 @@ async function settleTiebreak({ request, criteria, invoke, attempts, validateVer
           contradiction: { rationale: stated.map(({ rationale }) => rationale).join(' | '), evidence: stated.flatMap(({ evidence }) => evidence) },
           material: [...audited, ...cited.filter(({ path }) => !shown.has(path))] })
       }
-      const checks = await checkContradictions({ request, claims, invoke, attempts, log: auditHistory, inventory: inventory.paths, where: { cycle } })
+      const checks = await checkContradictions({ request, claims, invoke, attempts, log: auditHistory, inventory: inventory.paths, where: { cycle },
+        cutIndex, lineCounts })
       if (!checks) return false
       for (const { id, result, part, covered } of round) {
         record.contradiction_checks.push({ ...checks.get(id), criterion: id, cycle, part: part.part,
@@ -1941,6 +2284,7 @@ async function settleTiebreak({ request, criteria, invoke, attempts, validateVer
     for (const result of recited.parsed) {
       results[results.findIndex(({ id }) => id === result.id)] = result
       spans.set(result.id, recited.spans.get(result.id))
+      if (recited.maps.has(result.id)) quotedMaps.set(result.id, recited.maps.get(result.id))
     }
     if (!await auditCycle('recite', await claimsFor(recite))) return { ok: false, ...record }
     if (!await checkCycle('recite', recite)) return { ok: false, ...record }
@@ -1978,9 +2322,21 @@ export async function sourceMaterial(request, results, extraPaths = [], criteria
   const inventory = await lineCitationInventory(request)
   if (!inventory.root) return material
   const allowed = new Set(inventory.paths)
+  // An evidence audit's line citation (`path:<start>-<end>`) is quoted, and
+  // labelled, rather than read as its whole file.
+  const lineCitations = evidenceJob ? extraPaths.flatMap((entry) => {
+    const span = /^(.+?):(\d+)-(\d+)$/.exec(entry)
+    return span && allowed.has(inventoryPath(span[1], allowed))
+      ? [{ entry, citation: { path: span[1], start_line: Number(span[2]), end_line: Number(span[3]) } }] : []
+  }) : []
+  if (lineCitations.length) {
+    const quoted = await quoteSpans([{ id: 'audit-citations', citations: lineCitations.map(({ citation }) => citation) }], inventory, request.job)
+    material.push(...quoted.get('audit-citations'))
+  }
+  const spanEntries = new Set(lineCitations.map(({ entry }) => entry))
   const cited = evidenceJob ? [] : results.flatMap(({ citations }) => citations ?? [])
     .filter((path) => typeof path === 'string').map((path) => inventoryPath(path, allowed))
-  for (const path of [...new Set([...cited, ...extraPaths.map((path) => inventoryPath(path, allowed))])].sort()) {
+  for (const path of [...new Set([...cited, ...extraPaths.filter((entry) => !spanEntries.has(entry)).map((path) => inventoryPath(path, allowed))])].sort()) {
     if (!allowed.has(path)) {
       if (!cited.includes(path)) throw new JudgeOutputError(`${request.job} audit citation is outside the verified ${inventory.kind}: ${path}`)
       material.push({ path, not_in_inventory: `[not in inventory: ${path}]` })
