@@ -140,6 +140,13 @@ function validDeciderVerdicts(record, order, results) {
   for (const r of results) if (!record.votes.some(v => v.id === r.id && effective(v, record.checks, order, record.fallback_ids ?? []).verdict === r.verdict)) throw new JudgeOutputError('decider verdict was not a panel vote')
 }
 
+async function parseDeciderOutput(text, criteria, record, request, validateCitations) {
+  const results = parse(text, criteria, record.verdicts)
+  validDeciderVerdicts(record, record.order, results)
+  for (const r of results) if (!(await validateCitations(r, request))) throw new JudgeOutputError('invalid decider citations')
+  return results
+}
+
 // Checks follow the panel audit contract: their citations lie in the job's
 // verified inventory, and missing material names a marker the packet holds.
 async function parseCheck(request, next, id, text) {
@@ -419,12 +426,7 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
         record.rulings = ruling.decisions
       } else {
         const deciderRequest = deciderRequestFor({ job, criteria, request, record, order, decider, scopeRule })
-        record.rulings = await call(batchedDeciderRequest(deciderRequest, pending), decider, 'decider', async text => {
-          const results = parse(text, pending, verdicts)
-          validVerdicts(results)
-          for (const r of results) if (!(await validateCitations(r, request))) throw new JudgeOutputError('invalid decider citations')
-          return results
-        })
+        record.rulings = await call(batchedDeciderRequest(deciderRequest, pending), decider, 'decider', text => parseDeciderOutput(text, pending, record, request, validateCitations))
         for (const ruling of record.rulings) {
           const overruled = overruledVerdict(record, ruling, order)
           if (overruled === null) continue
@@ -455,7 +457,7 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
 export async function rerunDecider({ record, decider, buildPrompt, schema, validateCitations }) {
   if (typeof validateCitations !== 'function') throw new Error('decider re-run needs a citation validator')
   if (record?.protocol !== PANEL_PROTOCOL || record.ok !== true) throw new Error('decider re-run needs a complete panel record')
-  const { job, criteria, verdicts, order } = record
+  const { job, criteria, order } = record
   const request = { job, criteria, schema, ...(await buildPrompt({ job, criteria, schema })) }
   if (request.panel_line_citations) throw new Error('decider re-run does not support line-cited tiebreaks')
   const scopeRule = request.scope_rule ?? [JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE].join('\n')
@@ -466,12 +468,7 @@ export async function rerunDecider({ record, decider, buildPrompt, schema, valid
   const pending = (record.rulings ?? []).map(r => r.id)
   if (pending.length) {
     const deciderRequest = deciderRequestFor({ job, criteria, request, record, order, decider, scopeRule })
-    const results = await call(batchedDeciderRequest(deciderRequest, pending), 'decider-rerun', async text => {
-      const parsed = parse(text, pending, verdicts)
-      validDeciderVerdicts(record, order, parsed)
-      for (const r of parsed) if (!(await validateCitations(r, request))) throw new JudgeOutputError('invalid decider citations')
-      return parsed
-    })
+    const results = await call(batchedDeciderRequest(deciderRequest, pending), 'decider-rerun', text => parseDeciderOutput(text, pending, record, request, validateCitations))
     for (const recorded of record.rulings) {
       const fresh = results.find(r => r.id === recorded.id)
       const overruled = overruledVerdict(record, fresh, order)
