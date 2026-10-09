@@ -480,6 +480,7 @@ function criteriaSection(result) {
     (component.subcomponents ?? []).flatMap((sub) => (sub.criteria ?? []).map((criterion) => [
       criterion.id,
       sub.id,
+      criterionPoints(criterion),
       `${verdictCell(criterion.verdict)}${criterion.verdict_source === 'fallback' ? ' (decided by the LLM because the browser check could not observe it)' : ''}`,
       `${criterion.rationale ?? 'not observed'}${criterion.not_observed ? ` | Browser: ${criterion.not_observed.rationale ?? 'not observed'}; looked for ${(criterion.not_observed.looked_for ?? []).join(', ')}` : ''}`
         + (criterion.second_opinion ? ` | second opinion: ${{
@@ -491,7 +492,17 @@ function criteriaSection(result) {
   ))
   const fallback = result.fallback ?? result.score?.fallback
   const summary = fallback?.criteria ? `<p>${escapeHtml(`${fallback.criteria} criteria (${points(fallback.points)} points) were decided by fallback LLM review.`)}</p>` : ''
-  return section('Automated criteria', summary + table(['Criterion', 'Subcomponent', 'Verdict', 'Rationale', 'Evidence'], rows))
+  return section('Automated criteria', summary + table(['Criterion', 'Subcomponent', 'Points', 'Verdict', 'Rationale', 'Evidence'], rows))
+}
+
+// Tier weights are sixteenths of a point, so they print exactly. A record from
+// before rubric 15.0.0 has no tier, and its equal shares keep the usual rounding.
+function criterionPoints(criterion) {
+  const exact = (value) => (Number.isFinite(value) && Number.isInteger(value * 16) ? String(value) : points(value))
+  const awarded = criterion.points_awarded === null || criterion.points_awarded === undefined
+    ? 'not available' : exact(criterion.points_awarded)
+  const tier = criterion.tier === 'gate-input' ? 'gate input' : criterion.tier
+  return `${awarded} of ${exact(criterion.points_possible)}${tier ? ` (${tier})` : ''}`
 }
 
 function panelSection(result) {

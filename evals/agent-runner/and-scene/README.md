@@ -651,6 +651,29 @@ candidate took, never against a fixed test-plan case list. Each testing-evidence
 criterion's definition comes from `criterion_definitions` in the automated
 rubric and is shown to the judge beside its identifier.
 
+Automated rubric 15.0.0 makes points follow importance. Each criterion's tier
+sets its points within its component: demo technical quality 2/1/0.5 for
+critical/major/minor, scene kit 1.5625/0.75/0.25, presentation skill
+0.75/0.375/0.125, verification tooling 1.25/0.625/0.375, engineering quality
+1.375/0.625/0.375, and 1 for every testing-evidence and assumption-handling
+criterion. This replaces equal division within subcomponents, under which one
+verdict was worth anywhere from 0.33 to 4 points. The two outline inputs become
+zero-point gate inputs, `demo-step-and-transition-reliability` stays scored at
+the minor tier because it also checks step-index progression, and the major
+scene-kit criterion `entity-ungrouped-transition-morph` fails a step transition
+that removes the outgoing step before mounting the incoming one, so an entity
+persisting across ungrouped steps vanishes and reappears (for example
+`AnimatePresence` with `mode="wait"`). The guidance for `entity-departing-exit`
+credits an opt-in exit wrapper the sample uses, `visual-helper-overlap-warning`
+fails a comparison that drops textless chrome only when the presentation renders
+some, and `visual-helper-active-state-warning` fails a comparison against the
+Previous or Next control. Usable proof and the complete and honest record are
+judged against the scenarios of the approved specs, and only traceable coverage
+scores an omitted behavior. Component totals, the 12.5 floors, the 70 automated
+points, the 100-point total, and the 40/70 threshold are unchanged. 15.0.0
+results start a new series and compare with earlier ones only after
+`--rescore-from`.
+
 Automated rubric 14.0.0 adds an 8-point "Engineering quality beyond the spec"
 component (`engineering-quality`, issue #77). The implementation validator
 mostly enforces engineering qualities the fixture's planning documents never
@@ -1052,8 +1075,20 @@ hard-gate reasons. Consumers must not recalculate the 40-point policy.
 `automated-rubric.json` and `human-rubric.json` own criterion identifiers,
 evaluator assignment, points, gates, and thresholds. Neither the judge nor the
 human-review interface may change them, and every result records both rubrics'
-version and SHA-256 hash. Each row's points divide equally among its criteria,
-and intermediate values are never rounded.
+version and SHA-256 hash. Since rubric 15.0.0 every scored criterion carries
+an importance tier (critical, major, or minor) and earns its component's
+`tier_weights` entry for that tier, whatever subcomponent it sits in; a
+subcomponent is a reporting group whose points are the sum of its criteria's
+weights. Rubric validation rejects a criterion without a tier, tier weights that
+do not decrease strictly from critical to minor, a weight above 2 or not a
+multiple of 1/16, and subcomponent or component points that are not those sums.
+The two outline inputs, `demo-route-and-registration` and
+`demo-nine-step-content-and-order`, are tiered `gate-input`: they earn no points
+and never hold their component incomplete, but they are still observed,
+fallback-judged, given second opinions, and reported, and they decide
+`verification-sample-outline`. An unresolved gate input leaves that gate
+unobserved and automated eligibility unavailable. Intermediate values are never
+rounded.
 
 Deterministic browser checks exercise the built, running demo: routing, the
 canonical nine steps, evolving-scene structure, present/browse modes,
