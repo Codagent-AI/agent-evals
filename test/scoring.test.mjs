@@ -752,6 +752,29 @@ test('an unresolved gate input leaves the outline gate unobserved while the demo
   assert.equal(unjudged.gates_passed, null)
 })
 
+test('a browser-failed gate input awaiting its second opinion leaves the outline gate unobserved', () => {
+  // The nine-step input's second opinion never settled, so its verdict is unresolved.
+  const pending = scoreProduct({
+    ...inputs({ failures: ['demo-nine-step-content-and-order'], humanReview: fullHumanReview }),
+    pendingSecondOpinions: [{ kind: 'criterion', id: 'demo-nine-step-content-and-order' }],
+  })
+  const demo = component(pending, 'demo-technical-quality')
+  assert.equal(demo.complete, true)
+  assert.equal(demo.points_awarded, 20)
+  assert.equal(pending.automated_subtotal.points, 70)
+  assert.equal(criterionRow(pending, 'demo-nine-step-content-and-order').verdict, null)
+  assert.equal(outlineGate(pending).verdict, null)
+  assert.equal(outlineGate(pending).observed, false)
+  assert.equal(pending.gates_passed, null)
+  assert.equal(pending.automated_pass, null)
+  assert.deepEqual(pending.incomplete, ['hard-gates'])
+  assert.equal(pending.official_score, null)
+  assert.equal(pending.official_pass, null)
+  // An unresolved input is neither a gate pass nor a product failure.
+  assert.deepEqual(pending.automated_failures, [])
+  assert.deepEqual(pending.pass_failures, [])
+})
+
 test('an overturned outline input passes the derived gate without changing any points', () => {
   const id = 'demo-nine-step-content-and-order'
   const data = inputs({ failures: [id], humanReview: fullHumanReview })
