@@ -2437,6 +2437,23 @@ test('a diagnostic whose retained run fails input verification reports it unload
   assert.equal(existsSync(join(context.runDir, 'result.json')), false)
 })
 
+test('a diagnostic that throws unexpectedly still writes its failure record and rethrows', async () => {
+  const context = await environment()
+  const inputs = await diagnosticInputs(context)
+  const calls = []
+  // Malformed retained workflow arguments make the controller throw after the
+  // fresh diagnostic directory is writable, outside any phase handler.
+  await assert.rejects(diagnose(context, inputs, ['--rescore-from', '/rescore-source', '--judge-jobs', 'scene-kit'], {
+    judgeInvoke: diagnosticJudge(calls),
+    loadRescoreSource: async () => ({ ...importedRescore(context), workflow: { arguments: 42 } }),
+  }), TypeError)
+  assert.deepEqual(calls, [])
+  const written = await readJson(join(context.runDir, 'diagnostic-result.json'))
+  assert.equal(written.official, false)
+  assert.equal(written.errors[0].code, 'diagnostic-error')
+  assert.equal(existsSync(join(context.runDir, 'result.json')), false)
+})
+
 test('a diagnostic refuses expected verdicts that the selected jobs cannot judge', async () => {
   const context = await environment()
   const inputs = await diagnosticInputs(context)
