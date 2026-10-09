@@ -159,6 +159,57 @@ async function dissentCheckRequest({ request, scopeRule, id, original }) {
     prompt: dissentCheckPrompt({ request, scopeRule, id, original, material }) }
 }
 
+// The verdict exactly two effective votes gave, or null for a consensus or a
+// three-way split.
+function twoVoteVerdict(votes, checks, order, fallbackIds = []) {
+  const counts = new Map()
+  for (const v of votes) {
+    const { verdict } = effective(v, checks, order, fallbackIds)
+    counts.set(verdict, (counts.get(verdict) ?? 0) + 1)
+  }
+  return [...counts].find(([, n]) => n === 2)?.[0] ?? null
+}
+
+// A batched decider ruling overrules the panel when it differs from a verdict
+// exactly two effective votes gave; a three-way split has none to restore.
+function overruledVerdict(record, ruling, order) {
+  const votes = record.votes.filter(v => v.id === ruling.id)
+  const two = twoVoteVerdict(votes, record.checks ?? [], order, record.fallback_ids ?? [])
+  return two !== null && two !== ruling.verdict ? two : null
+}
+
+function overruleCheckPrompt({ request, scopeRule, id, ruling, overruled, order, material }) {
+  const schema = judgeResultSchemaFor(PANEL_CHECK_RESULT_SCHEMA, [id])
+  material = compactMaterial(material)
+  const claim = { id, verdict: ruling.verdict, overruled_verdict: overruled, rationale: ruling.rationale, evidence: ruling.evidence, citations: ruling.citations, material }
+  // The ruling and its complete material are measured; the job's own context is not.
+  const packet = JSON.stringify(claim)
+  if (packet.length > MAX_AUDIT_PACKET_CHARS) throw new PacketOverflowError(`${request.job} overrule check exceeds the ${MAX_AUDIT_PACKET_CHARS}-character packet limit: ${id}`, [id])
+  const higher = order.indexOf(ruling.verdict) < order.indexOf(overruled)
+  return [request.prompt_body ?? request.prompt, scopeRule,
+    [`The decider ruled ${ruling.verdict}, overruling the ${overruled} verdict two panel judges gave.`,
+      'Check only the decider\'s stated reason against its citations. Confirm only when both hold: the cited material shows what',
+      'the ruling says, and that fact decides the criterion\'s quoted requirement the way the ruling claims.',
+      higher ? 'The ruling credits more than the two judges did, so every clause it credits must be shown met.'
+        : 'The ruling credits less than the two judges did, so it must show a clause of the requirement unmet.',
+      'Contradicted when the citations do not show it, or when the fact is accurate but the requirement does not',
+      'depend on it (an assumption, scenario, or element the requirement and its review guidance do not name).',
+      'Insufficient when the complete, in-scope material cannot settle it. Your classification never names a verdict:',
+      `an unconfirmed ruling leaves the two judges' ${overruled} standing.`, MISSING_MATERIAL_RULE].join(' '),
+    'Return confirmed if it holds, contradicted if refuted, insufficient if undecided, missing-material if it depends on marked material.',
+    '# BEGIN UNTRUSTED RULING', packet, '# END UNTRUSTED RULING', '# Response', `Reply with JSON matching this schema: ${JSON.stringify(schema)}`].join('\n')
+}
+
+// The targeted check of a decider ruling that overrules a two-vote verdict.
+// It mirrors the dissent check: the decider's pinned model judges the ruling's
+// stated reason and citations against their closed-world material.
+export async function overruleCheckRequest({ request, scopeRule = null, id, ruling, overruled, order }) {
+  const material = await sourceMaterial(request, [ruling])
+  return { ...request, criteria: [id], schema: judgeResultSchemaFor(PANEL_CHECK_RESULT_SCHEMA, [id]),
+    input_roots: null, audit_stage: 'overrule-check',
+    prompt: overruleCheckPrompt({ request, scopeRule: scopeRule ?? [JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE].join('\n'), id, ruling, overruled, order, material }) }
+}
+
 // Pure reproduction from the recorded votes, targeted checks, and rulings.
 export function resolvePanel({ criteria, order, votes, checks = [], rulings = [], decider = null, fallback_ids = [] }) {
   // Known missing material fails the job; no settled record can hold it.
@@ -177,12 +228,30 @@ export function resolvePanel({ criteria, order, votes, checks = [], rulings = []
     let chosen = own.find(v => effective(v, checks, order, fallback_ids).verdict === verdict)
     const ownChecks = checks.filter(c => c.id === id)
     let ruling = null
+    let overrule = null
+    const overruleCheck = ownChecks.find(c => c.stage === 'overrule-check')
     if (decision.kind === 'decider') {
       ruling = rulings.find(r => r.id === id)
       if (!ruling || !own.some(v => effective(v, checks, order, fallback_ids).verdict === (ruling.vote ?? ruling.verdict))) throw new JudgeOutputError('missing or invalid decider ruling')
       chosen = ruling.result ?? ruling
       verdict = chosen.verdict
       basis = `decider-${verdict}`
+      // A batched ruling that overrules two votes stands only when its check
+      // confirms it; otherwise the two votes' verdict stands.
+      const overruled = decider ? null : overruledVerdict({ votes: own, checks, fallback_ids }, ruling, order)
+      if (overruled === null && overruleCheck) throw new JudgeOutputError('overrule check recorded for a ruling that overrules no two-vote verdict')
+      if (overruled !== null) {
+        if (!overruleCheck) throw new JudgeOutputError('overruling decider ruling has no overrule check')
+        const upheld = overruleCheck.classification === 'confirmed'
+        overrule = { classification: overruleCheck.classification, outcome: upheld ? 'upheld' : 'rejected' }
+        if (!upheld) {
+          verdict = overruled
+          chosen = own.find(v => effective(v, checks, order, fallback_ids).verdict === verdict)
+          basis = `majority-${verdict}`
+        }
+      }
+    } else if (overruleCheck) {
+      throw new JudgeOutputError('overrule check recorded for a criterion the decider did not rule')
     } else if (decision.dissent?.citations_valid) {
       const check = ownChecks.find(c => c.stage === 'dissent-check' && c.panel_index === decision.dissent.panel_index)
       if (!check) throw new JudgeOutputError('backed dissent has no targeted check')
@@ -194,6 +263,7 @@ export function resolvePanel({ criteria, order, votes, checks = [], rulings = []
     }
     const turned = chosen.verdict !== verdict
     return { id, verdict, basis, ...(decision.routed_by ? { routed_by: decision.routed_by } : {}), votes: own, checks: ownChecks, ruling,
+      ...(overrule ? { overrule_check: overrule } : {}),
       rationale: turned ? `The source contradiction was independently confirmed: ${chosen.contradiction?.rationale}` : chosen.rationale,
       citations: chosen.citations ?? [], evidence: [...(chosen.evidence ?? []), `judging basis: ${basis}`] }
   })
@@ -334,6 +404,14 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
           for (const r of results) if (!(await validateCitations(r, request))) throw new JudgeOutputError('invalid decider citations')
           return results
         })
+        for (const ruling of record.rulings) {
+          const overruled = overruledVerdict(record, ruling, order)
+          if (overruled === null) continue
+          const next = await overruleCheckRequest({ request, scopeRule, id: ruling.id, ruling, overruled, order })
+          const [check] = await call(next, decider, 'overrule-check', text => parseCheck(request, next, ruling.id, text))
+          record.checks.push({ ...check, stage: 'overrule-check' })
+          settledCheck(check, 'overrule check')
+        }
       }
     }
     record.results = resolvePanel(record).results

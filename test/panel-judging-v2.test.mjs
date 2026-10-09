@@ -144,12 +144,24 @@ for (const fallback of [false, true]) {
   })
 }
 
-test('the INV-093 shape settles as a decider ruling on the define scale (the overrule check is slice S3)', () => {
+test('the INV-093 shape: an unconfirmed overrule leaves the two-seat partial standing', () => {
   const votes = ['met', 'partial', 'partial'].map((verdict, index) => ({ ...seatVote(verdict), family: index === 0 ? 'claude' : 'codex', panel_index: index }))
   const met = { id: ID, verdict: 'met', rationale: 'decider met', evidence: ['e'], citations: [] }
-  const { results } = resolvePanel({ criteria: [ID], order: ['met', 'partial', 'missing'], votes, rulings: [met] })
-  assert.equal(results[0].basis, 'decider-met')
-  assert.equal(results[0].routed_by, undefined)
+  const check = (classification) => ({ ...audit(classification), stage: 'overrule-check' })
+  const settle = (checks) => resolvePanel({ criteria: [ID], order: ['met', 'partial', 'missing'], votes, checks, rulings: [met] }).results[0]
+  // The check does not confirm the decider's met, so the two Codex seats' partial stands.
+  for (const classification of ['contradicted', 'insufficient']) {
+    const result = settle([check(classification)])
+    assert.equal(result.verdict, 'partial'); assert.equal(result.basis, 'majority-partial')
+    assert.deepEqual(result.overrule_check, { classification, outcome: 'rejected' })
+    assert.equal(result.ruling, met)
+    assert.equal(result.routed_by, undefined)
+  }
+  // Only a confirmed check lets the overrule stand.
+  const upheld = settle([check('confirmed')])
+  assert.equal(upheld.basis, 'decider-met'); assert.deepEqual(upheld.overrule_check, { classification: 'confirmed', outcome: 'upheld' })
+  // An overruling ruling with no recorded check does not reproduce.
+  assert.throws(() => settle([]), /no overrule check/)
   // The Codex pair alone never settles it; without a ruling there is no result.
   assert.throws(() => resolvePanel({ criteria: [ID], order: ['met', 'partial', 'missing'], votes }), /missing or invalid decider ruling/)
 })

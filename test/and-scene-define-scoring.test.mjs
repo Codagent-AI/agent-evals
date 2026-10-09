@@ -10,6 +10,7 @@ import { checkInventory } from '../evals/agent-runner/and-scene-define/lib/inven
 import { scoreDefinition, discoveryLedger } from '../evals/agent-runner/and-scene-define/lib/scoring.mjs'
 import { runDefinitionPanel, judgeSchema, discoverySchema, exchangeIdentity, makeJobs, jobPrompt } from '../evals/agent-runner/and-scene-define/lib/judge-jobs.mjs'
 import { assertStrictSchema } from './and-scene-define-helpers.mjs'
+import { verifyCachedPanelJob } from '../evals/lib/panel-judging/panel.mjs'
 const root = 'evals/agent-runner/and-scene-define'
 const inventory = JSON.parse(await readFile(join(root, 'hidden/inventory.json'), 'utf8'))
 const item = inventory.items.find(x => x.class === 'mandatory')
@@ -63,6 +64,92 @@ for (const [votes, ruling, classification, expected, basis, extra] of [
     const prompt = calls.at(-1).prompt.split('# Untrusted panel votes')[1]
     assert.match(prompt, /"label":"A"/); assert.ok(!prompt.includes('stub'))
   }
+})
+// INT-003: a batched decider ruling that overrules a verdict two effective
+// votes gave stands only when the overrule check confirms its stated reason.
+// The INV-093 shape: Claude `met`, both Codex seats `partial`.
+for (const [name, votes, ruling, classification, expected, basis, outcome] of [
+  ['a ruling agreeing with the two-vote verdict runs no check', ['met', 'partial', 'partial'], 'partial', 'contradicted', 'partial', 'decider-partial', null],
+  ['an overrule the check confirms stands', ['met', 'partial', 'partial'], 'met', 'confirmed', 'met', 'decider-met', 'upheld'],
+  ['an overrule the check does not confirm restores the two-vote verdict', ['met', 'partial', 'partial'], 'met', 'contradicted', 'partial', 'majority-partial', 'rejected'],
+  ['an overrule check that cannot decide restores the two-vote verdict', ['met', 'partial', 'partial'], 'met', 'insufficient', 'partial', 'majority-partial', 'rejected'],
+  ['a three-way split keeps its ruling without a check', ['met', 'partial', 'missing'], 'met', 'contradicted', 'met', 'decider-met', null],
+  ['a three-way split keeps a middle ruling without a check', ['met', 'partial', 'missing'], 'missing', 'contradicted', 'missing', 'decider-missing', null],
+]) test(`INT-003 overrule check: ${name}`, async () => {
+  const calls = []
+  const ruled = members(votes, ruling, classification, calls)
+  // The decider states its reason, so the check can judge it.
+  ruled.decider.invoke = async req => {
+    calls.push(req)
+    return JSON.stringify({ results: req.criteria.map(id => req.audit_stage
+      ? { id, classification, rationale: 'Checked the decider\'s cited line.', evidence: ['proposal.md:1'] }
+      : { ...result(id, ruling, ruling === 'missing' ? [{ ...citation, start_line: null, end_line: null }] : [citation]), rationale: 'Line 1 commits to the whole item.' }) })
+  }
+  const run = await runDefinitionPanel({ job, ...ruled })
+  assert.equal(run.ok, true, JSON.stringify(run.failure))
+  const [settled] = run.results
+  assert.equal(settled.verdict, expected); assert.equal(settled.basis, basis)
+  const checks = calls.filter(req => req.audit_stage === 'overrule-check')
+  const overrules = run.record.checks.filter(c => c.stage === 'overrule-check')
+  assert.equal(calls.length, 3 + 1 + (outcome ? 1 : 0))
+  assert.equal(checks.length, outcome ? 1 : 0); assert.equal(overrules.length, outcome ? 1 : 0)
+  if (outcome) {
+    const [check] = checks
+    // The decider's pinned model checks the ruling's stated reason and citations.
+    assert.deepEqual(check.authority, { cli: 'claude', model: 'stub-decider', effort: 'high' })
+    assert.deepEqual(check.criteria, [item.id]); assertStrictSchema(check.schema)
+    const packet = JSON.parse(check.prompt.split('# BEGIN UNTRUSTED RULING\n')[1].split('\n# END UNTRUSTED RULING')[0])
+    assert.equal(packet.verdict, 'met'); assert.equal(packet.overruled_verdict, 'partial')
+    assert.equal(packet.rationale, 'Line 1 commits to the whole item.'); assert.deepEqual(packet.citations, [citation])
+    assert.match(check.prompt, /Check only the decider's stated reason/)
+    assert.ok(check.prompt.includes(JSON.stringify(item.anchors.met).slice(1, -1)), 'the check sees the job inputs')
+    assert.deepEqual(overrules.map(c => [c.id, c.classification]), [[item.id, classification]])
+    assert.deepEqual(settled.overrule_check, { classification, outcome })
+    assert.ok(settled.checks.some(c => c.stage === 'overrule-check'))
+    if (outcome === 'rejected') assert.ok(settled.votes.some(v => v.verdict === 'partial' && settled.rationale === v.rationale))
+  } else assert.equal(settled.overrule_check, undefined)
+  assert.equal(run.record.rulings[0].verdict, ruling, 'the record keeps the ruling itself')
+  // A cached record reproduces from its recorded checks.
+  assert.deepEqual(verifyCachedPanelJob(run.record).results, run.results)
+})
+test('INT-003 an overrule record reproduces only from its recorded check', async () => {
+  const run = await runDefinitionPanel({ job, ...members(['met', 'partial', 'partial'], 'met', 'contradicted') })
+  assert.equal(run.results[0].basis, 'majority-partial')
+  const flipped = structuredClone(run.record)
+  flipped.checks.find(c => c.stage === 'overrule-check').classification = 'confirmed'
+  assert.throws(() => verifyCachedPanelJob(flipped), /do not reproduce/)
+  const unchecked = structuredClone(run.record)
+  unchecked.checks = unchecked.checks.filter(c => c.stage !== 'overrule-check')
+  assert.throws(() => verifyCachedPanelJob(unchecked), /no overrule check/)
+  // A check recorded for a ruling that overrules nothing is not a reproducible record.
+  const agreeing = await runDefinitionPanel({ job, ...members(['met', 'partial', 'partial'], 'partial', 'confirmed') })
+  const stray = structuredClone(agreeing.record)
+  stray.checks.push({ id: item.id, classification: 'confirmed', rationale: 'r', evidence: ['e'], citations: [], marker: '', stage: 'overrule-check' })
+  assert.throws(() => verifyCachedPanelJob(stray), /overrule check/)
+})
+test('INT-003 an overrule check needing missing material fails the job as a harness failure', async () => {
+  const marker = '[omitted: design.md could not be read]'
+  const withMarker = { ...job, inputs: { ...inputs, artifacts: { 'proposal.md': `A single evolving scene.\n${marker}\n` } } }
+  const judges = members(['met', 'partial', 'partial'], 'met')
+  judges.decider.invoke = async req => JSON.stringify({ results: req.criteria.map(id => req.audit_stage
+    ? { id, classification: 'missing-material', rationale: 'The ruling depends on the omitted design.', evidence: ['marker'], citations: [], marker }
+    : result(id, 'met')) })
+  const run = await runDefinitionPanel({ job: withMarker, ...judges })
+  assert.equal(run.ok, false)
+  assert.equal(run.failure.code, 'missing-material'); assert.equal(run.failure.resumable, false); assert.deepEqual(run.failure.criteria, [item.id])
+  assert.equal(run.results, null)
+})
+test('INT-003 an overrule check whose packet cannot fit fails the job without a check call', async () => {
+  const calls = []
+  const judges = members(['met', 'partial', 'partial'], 'met', 'confirmed', calls)
+  judges.decider.invoke = async req => {
+    calls.push(req)
+    return JSON.stringify({ results: req.criteria.map(id => ({ ...result(id, 'met'), rationale: 'x'.repeat(300_001) })) })
+  }
+  const run = await runDefinitionPanel({ job, ...judges })
+  assert.equal(run.ok, false)
+  assert.equal(run.failure.code, 'packet-overflow'); assert.equal(run.failure.resumable, false); assert.deepEqual(run.failure.criteria, [item.id])
+  assert.equal(calls.filter(req => req.audit_stage === 'overrule-check').length, 0)
 })
 test('invalid citations are dropped and recorded while the kept citations still support the verdict', async () => {
   const strays = [{ ...citation, path: 'hidden/reference/design.md' }, { ...citation, start_line: 40, end_line: 41 }, { path: 'proposal.md', start_line: 1 }]
@@ -207,9 +294,12 @@ async function phaseFixture(t) {
     })
     return JSON.stringify({ results })
   }
+  let ruling = null
   const judges = { panel: [0,1,2].map(n => ({ family: n ? 'codex' : 'claude', model: 'stub', effort: 'high', invoke: invoke(n) })), decider: { family: 'claude', model: 'stub', effort: 'high', invoke: async req => {
     if (req.audit_stage) return invoke(3)(req)
     calls.push({ index: 3, job: req.job })
+    const ruled = ruling?.(req)
+    if (ruled) return ruled
     return JSON.stringify({ results: req.criteria.map(id => req.job === 'discovery' ? { id, asked: true, rationale: 'Question in exchange', citations: [exchangeCitation] } : result(id, 'met', [exchangeCitation])) })
   } } }
   const phases = createJudgingPhases({ runDir, judges, getCheckpoint: () => checkpoint, setCheckpoint: x => { checkpoint = x }, persist: async () => {},
@@ -220,7 +310,7 @@ async function phaseFixture(t) {
       return { status: 1, stdout: '', stderr: 'missing design' }
     },
   })
-  return { runDir, phases, calls, setFailure: value => { failure = value }, override: value => { override = value }, checkpoint: () => checkpoint, subset }
+  return { runDir, phases, calls, setFailure: value => { failure = value }, override: value => { override = value }, rule: value => { ruling = value }, checkpoint: () => checkpoint, subset, rubric }
 }
 test('INT-003 lifecycle neutralizes settled leaks, records flags and scores absent artifacts as complete/fail', async t => {
   const f = await phaseFixture(t)
@@ -231,6 +321,9 @@ test('INT-003 lifecycle neutralizes settled leaks, records flags and scores abse
   assert.ok(audit.flags.some(x => x.type === 'inconsistent-withholding'))
   assert.ok(audit.panel.checks.some(x => x.stage === 'dissent-check'))
   assert.ok(audit.panel.rulings.length)
+  // The decider confirms the Codex-only leak, so no overrule check runs.
+  assert.equal(audit.panel.results.find(x => x.id === `leak:${f.subset.items[1].id}`).basis, 'decider-met')
+  assert.ok(!audit.panel.checks.some(x => x.stage === 'overrule-check'))
   assert.equal(scored.definition_verdict, undefined); assert.equal(scored.evaluation_status, 'complete')
   assert.equal(scored.components.fidelity.score, 15)
   assert.equal(scored.components.coverage.possible, 3)
@@ -238,6 +331,34 @@ test('INT-003 lifecycle neutralizes settled leaks, records flags and scores abse
   const ledger = JSON.parse(await readFile(join(f.runDir, 'discovery/ledger.json'), 'utf8'))
   assert.equal(ledger.counts.leaked, 3); assert.equal(ledger.counts['asked-not-captured'], 2)
   assert.equal(f.checkpoint().phases['gates-and-judging'].units['coverage:evolving-scene-presentations'].state, 'complete')
+})
+// INT-003: both Codex judges name item 1 as leaked and the Claude judge does
+// not. A decider ruling that it was not leaked overrules both, so it stands only
+// when the overrule check confirms it; a leaked item leaves the coverage denominator.
+for (const [classification, leaked] of [['confirmed', false], ['contradicted', true], ['insufficient', true]]) test(`INT-003 disclosure audit: a not-leaked overrule with a ${classification} check ${leaked ? 'leaves the item leaked' : 'is upheld'}`, async t => {
+  const f = await phaseFixture(t)
+  const target = f.subset.items[1].id
+  const checked = []
+  f.rule(req => req.job === 'disclosure-audit' ? JSON.stringify({ results: req.criteria.map(id => ({ ...result(id, 'missing', []), rationale: 'The reply answered only what the agent asked.' })) }) : null)
+  f.override((req, fallback) => {
+    if (req.audit_stage !== 'overrule-check') return fallback(req)
+    checked.push(req)
+    return JSON.stringify({ results: req.criteria.map(id => ({ id, classification, rationale: 'Checked the exchange.', evidence: ['exchange'] })) })
+  })
+  await f.phases['disclosure-audit'](); await f.phases['gates-and-judging']()
+  const audit = JSON.parse(await readFile(join(f.runDir, 'audits/disclosure.json'), 'utf8'))
+  const scored = JSON.parse(await readFile(join(f.runDir, 'judges/score.json'), 'utf8'))
+  assert.deepEqual(checked.map(req => [req.job, req.criteria]), [['disclosure-audit', [`leak:${target}`]]])
+  const settled = audit.panel.results.find(x => x.id === `leak:${target}`)
+  assert.equal(settled.verdict, leaked ? 'met' : 'missing'); assert.equal(settled.basis, leaked ? 'majority-met' : 'decider-missing')
+  assert.deepEqual(settled.overrule_check, { classification, outcome: leaked ? 'rejected' : 'upheld' })
+  assert.equal(audit.leaked_items.includes(target), leaked)
+  // Items 0 (cross-family majority) and 2 (confirmed single dissent) are leaked either way.
+  const expectedLeaks = f.subset.items.filter((x, n) => n === 0 || n === 2 || (n === 1 && leaked)).map(x => x.id)
+  assert.deepEqual(audit.leaked_items, expectedLeaks)
+  const weight = id => f.rubric.coverage.find(x => x.id === id).weight
+  assert.equal(scored.components.coverage.possible, f.rubric.coverage.filter(x => !expectedLeaks.includes(x.id)).reduce((sum, x) => sum + weight(x.id), 0))
+  assert.equal(scored.coverage.find(x => x.id === target).verdict, leaked ? 'leaked' : 'missing')
 })
 test('judge-failure resume reuses independently proven completed jobs and reruns only unfinished ones', async t => {
   const f = await phaseFixture(t)
