@@ -2007,7 +2007,9 @@ function staggeredJudge(log) {
 test('product judging runs independent jobs concurrently up to its limit', async () => {
   const wide = []
   await runProductJudging({ rubrics, authority, invoke: staggeredJudge(wide).invoke })
-  assert.ok(Math.max(...wide.map(({ jobs }) => jobs)) > 1, 'jobs ran one at a time')
+  // INT-007: the shared pool's default bound for product judging is three jobs.
+  assert.equal(PRODUCT_JUDGE_CONCURRENCY, 3)
+  assert.equal(Math.max(...wide.map(({ jobs }) => jobs)), PRODUCT_JUDGE_CONCURRENCY)
   const capped = []
   await runProductJudging({ rubrics, authority, concurrency: 2, invoke: staggeredJudge(capped).invoke })
   assert.equal(Math.max(...capped.map(({ jobs }) => jobs)), 2)

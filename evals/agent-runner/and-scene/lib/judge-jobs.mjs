@@ -20,6 +20,7 @@ import {
 } from '../../../lib/panel-judging/protocol.mjs'
 export * from '../../../lib/panel-judging/protocol.mjs'
 import { runPanelJob, verifyCachedPanelJob, PANEL_PROTOCOL, judgeFailure } from '../../../lib/panel-judging/panel.mjs'
+import { runJobPool } from '../../../lib/panel-judging/job-pool.mjs'
 import { PRODUCT_JUDGE_PROFILE } from './judge-profile.mjs'
 export { PRODUCT_JUDGE_PROFILE } from './judge-profile.mjs'
 export { runPanelJob, verifyCachedPanelJob } from '../../../lib/panel-judging/panel.mjs'
@@ -397,17 +398,11 @@ export async function runProductJudging({
   const disputeChecks = {}
 
   // Jobs are independent: each builds its own request from the same inputs, so
-  // they run together up to `concurrency`. Checkpoint callbacks run one at a
-  // time because they rewrite one checkpoint file, each job is checkpointed as
-  // soon as it finishes, and results are recorded in job order so the outcome
-  // does not depend on which job finishes first.
-  let queue = Promise.resolve()
-  const serial = (callback) => {
-    const next = queue.then(callback)
-    queue = next.catch(() => {})
-    return next
-  }
-  const judgeJob = async ({ id }) => {
+  // they run together through the shared pool up to `concurrency`. Each job is
+  // checkpointed through the pool's serial queue as soon as it finishes, and
+  // results are recorded in job order so the outcome does not depend on which
+  // job finishes first.
+  const judgeJob = async ({ id }, index, { checkpoint: serial }) => {
     const request = buildJudgeRequest({
       rubrics, job: id, authority, evidence, sources, neutral, evidenceViews, notObserved,
     })
@@ -495,25 +490,9 @@ export async function runProductJudging({
     outputHashes[id] = hashJson(outcome.results)
   }
 
-  const judged = new Array(jobs.length)
-  let nextJob = 0
-  let stopped = false
-  const worker = async () => {
-    while (!stopped && nextJob < jobs.length) {
-      const index = nextJob++
-      try {
-        judged[index] = await judgeJob(jobs[index])
-      } catch (error) {
-        stopped = true
-        throw error
-      }
-    }
-  }
   // A failed checkpoint callback stops new jobs, and the failure is reported
   // only after running workers settle, so no checkpoint is written after it.
-  const settled = await Promise.allSettled(Array.from({ length: Math.max(1, Math.min(concurrency, jobs.length)) }, worker))
-  const rejected = settled.find(({ status }) => status === 'rejected')
-  if (rejected) throw rejected.reason
+  const judged = await runJobPool({ jobs, concurrency, run: judgeJob })
   for (const job of judged) recordJob(job)
 
   return {
