@@ -101,7 +101,21 @@ rescores under this panel.
 Claude source judges use only Read/Grep/Glob inside the evaluation sandbox.
 Evidence and closed-world packets are inlined with no tools. Evidence panel
 votes may back a dissent with validated spans in the materialized `packet.txt`,
-which contains the exact inlined packet. Every judging
+which contains the exact inlined packet. Each evidence packet holds its job's
+primary records whole: the acceptance flow record, exploration log, final
+handoff and findings history for testing evidence, and the assumptions ledger,
+final handoff, findings history and exploration log, with the complete approved
+requirements, for assumption handling. When they cannot fit the 220,000-character
+packet, or collection skipped one for its size, or a requirement document
+exceeds 40,000 characters, that job fails with `packet-overflow`. Other
+artifacts may be cut or dropped; each is marked in place
+(`[truncated: …]` or `[omitted: …]`) and listed in the cut index at the top of
+the packet, beside a layout that labels every quoted span with its artifact.
+Evidence panel judges and deciders report in `missing_material` the marker a
+verdict depends on, which fails the criterion as missing material. The
+testing-evidence decider also returns a bounded claim map for usable proof and
+complete and honest record, audited in whole-row batches plus one completeness
+audit over the full claim-bearing records. Every judging
 run and rescore in the sandbox implies `--mount-claude-auth` and requires
 `~/.claude/.credentials.json` or, for a login kept in the macOS Keychain, a
 `claude setup-token` token as `CLAUDE_CODE_OAUTH_TOKEN` in the environment or
