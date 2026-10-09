@@ -704,19 +704,29 @@ test('a not-observed gate input is fallback-judged for the outline gate and carr
 })
 
 test('an unresolved gate input leaves the outline gate unobserved while the demo component stays complete', () => {
-  // The nine-step input's second opinion never settled, so its verdict is unresolved.
-  const pending = scoreProduct({
-    ...inputs({ failures: ['demo-nine-step-content-and-order'], humanReview: fullHumanReview }),
-    pendingSecondOpinions: [{ kind: 'criterion', id: 'demo-nine-step-content-and-order' }],
-  })
+  // The nine-step input is not observed and its fallback verdict is unresolved
+  // because its second opinion never settled.
+  const id = 'demo-nine-step-content-and-order'
+  const pendingData = inputs({ humanReview: fullHumanReview })
+  pendingData.deterministic = pendingData.deterministic.map((row) => row.id === id
+    ? { ...row, verdict: null, outcome: 'not-observed', looked_for: ['data-presentation-title'], observed: false }
+    : row)
+  pendingData.judges['demo-integration'] = [...pendingData.judges['demo-integration'],
+    { id, verdict: 'fail', rationale: 'the sample has eight steps', evidence: ['src/demo.tsx:1'], citations: ['src/demo.tsx'] }]
+  const pending = scoreProduct({ ...pendingData, pendingSecondOpinions: [{ kind: 'criterion', id }] })
   const demo = component(pending, 'demo-technical-quality')
   assert.equal(demo.complete, true)
   assert.equal(demo.points_awarded, 20)
-  assert.equal(criterionRow(pending, 'demo-nine-step-content-and-order').verdict, null)
   assert.equal(outlineGate(pending).verdict, null)
   assert.equal(outlineGate(pending).observed, false)
   assert.equal(pending.gates_passed, null)
   assert.equal(pending.automated_pass, null)
+  // The unresolved input is reported: its row keeps the browser evidence and
+  // no verdict, and the unobserved gate set is listed as incomplete.
+  const pendingRow = criterionRow(pending, id)
+  assert.deepEqual([pendingRow.verdict, pendingRow.observed, pendingRow.verdict_source, pendingRow.fallback_job],
+    [null, false, 'fallback', 'demo-integration'])
+  assert.deepEqual(pendingRow.not_observed.looked_for, ['data-presentation-title'])
   assert.deepEqual(pending.incomplete, ['hard-gates'])
   assert.equal(pending.official_score, null)
   assert.equal(pending.official_pass, null)
