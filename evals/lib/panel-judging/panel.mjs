@@ -493,3 +493,37 @@ function deciderCall(decider, usage) {
     throw lastError
   }
 }
+
+// Runs the overrule check against one retained batched decider ruling, of any
+// protocol, and reports the verdict v2 settlement would give it with the
+// recorded votes. It reads the record only: nothing is written, cached, or
+// returned as a judging record, so a retained record is never reused as v2
+// judging. A ruling that overrules no two-vote verdict needs no check.
+export async function checkRecordedRuling({ record, id, decider, buildPrompt, schema }) {
+  if (record?.decider) throw new Error('the retained-ruling check applies only to batched decider rulings')
+  const { job, criteria, order } = record ?? {}
+  if (!Array.isArray(order) || !Array.isArray(criteria)) throw new Error('retained record names no verdict order or criteria')
+  const ruling = (record.rulings ?? []).find(r => r.id === id)
+  if (!ruling) throw new Error(`retained record ${job} holds no decider ruling for ${id}`)
+  const votes = (record.votes ?? []).filter(v => v.id === id)
+  const priorChecks = (record.checks ?? []).filter(c => c.id === id && c.stage !== 'overrule-check')
+  const fallback_ids = record.fallback_ids ?? []
+  const overruled = overruledVerdict({ votes, checks: priorChecks, fallback_ids }, ruling, order)
+  let check = null
+  const usage = {}
+  if (overruled !== null) {
+    const request = { job, criteria, schema, ...(await buildPrompt({ job, criteria, schema })) }
+    const scopeRule = request.scope_rule ?? [JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE].join('\n')
+    const next = await overruleCheckRequest({ request, scopeRule, id, ruling, overruled, order })
+    ;[check] = await deciderCall(decider, usage)(next, 'retained-overrule-check', text => parseCheck(request, next, id, text))
+    settledCheck(check, 'overrule check')
+  }
+  const [settled] = resolvePanel({ criteria: [id], order, votes, rulings: [ruling], fallback_ids,
+    checks: [...priorChecks, ...(check ? [{ ...check, stage: 'overrule-check' }] : [])] }).results
+  const recorded = (record.results ?? []).find(r => r.id === id) ?? null
+  return { job, id, recorded_protocol: record.protocol ?? null,
+    votes: votes.map(({ family, panel_index, verdict }) => ({ family, panel_index, verdict })),
+    ruling: { verdict: ruling.vote ?? ruling.verdict, rationale: ruling.rationale, citations: ruling.citations ?? [] },
+    recorded_verdict: recorded?.verdict ?? null, recorded_basis: recorded?.basis ?? null,
+    overruled_verdict: overruled, check, verdict: settled.verdict, basis: settled.basis, usage_by_stage: usage }
+}
