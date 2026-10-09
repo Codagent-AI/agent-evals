@@ -3,11 +3,13 @@
 // Candidate files are copied as opaque bytes after delivery identity is known.
 // Parsing below only adds evaluator findings; it never repairs or replaces the
 // bytes a candidate produced.
-import { lstat, mkdir, open, readFile, readdir, realpath, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 import { hashJson, hashString, writeJsonAtomic } from './persistence.mjs'
+import { PacketOverflowError } from '../../../lib/panel-judging/protocol.mjs'
+import { layoutLine, omittedMarker, packetFrame, truncatedMarker } from '../../../lib/panel-judging/evidence-packet.mjs'
 
 export const CANDIDATE_EVIDENCE_SCHEMA_VERSION = 1
 export const EVALUATOR_EVIDENCE_SCHEMA_VERSION = 1
@@ -792,9 +794,13 @@ export async function buildCandidateEvidenceManifest({
       .localeCompare(`${right.role}:${right.origin.namespace}:${right.origin.relative_path}`)
   ))) {
     if (source.bytes.length > MAX_ARTIFACT_BYTES || totalBytes + source.bytes.length > MAX_TOTAL_BYTES) {
+      // The role and path let judging fail a job whose primary record was
+      // skipped, rather than judge that record as absent.
       findings.push(finding(
         'artifact-bounds-exceeded',
         `candidate evidence exceeds the byte budget: ${source.origin.relative_path}`,
+        null,
+        { role: source.role, path: source.origin.relative_path, bytes: source.bytes.length },
       ))
       continue
     }
@@ -1491,16 +1497,33 @@ async function copyViewArtifacts({ runDir, root, artifacts }) {
   return copied
 }
 
-const JUDGE_PACKET_MAX_CHARS = 220_000
+export const JUDGE_PACKET_MAX_CHARS = 220_000
 const JUDGE_PACKET_ARTIFACT_MAX_CHARS = 50_000
-// Packet order under the character budget: the current acceptance record
-// first, then earlier-pass records, then referenced supporting material.
-const TESTING_PACKET_ROLES = [
+// An approved requirement document the assumption judge receives as reference
+// must arrive whole; a longer one fails the job rather than being cut.
+const REQUIREMENT_DOCUMENT_MAX_CHARS = 40_000
+// The claim-bearing records of the testing-evidence job. They lead its packet
+// and are never cut: every panel judge and the decider must see each claim the
+// record makes, and the completeness audit checks the claim map against them.
+export const TESTING_PRIMARY_ROLES = Object.freeze([
   'acceptance-flow-record',
   'exploration-log',
   'final-handoff',
-  'acceptance-gate-notice',
   'findings-history',
+])
+// The assumption-handling job's primary records, held in full the same way.
+export const ASSUMPTION_PRIMARY_ROLES = Object.freeze([
+  'assumptions-ledger',
+  'final-handoff',
+  'findings-history',
+  'exploration-log',
+])
+// Packet order under the character budget: the claim-bearing records first and
+// whole, then earlier-pass records and referenced supporting material, which
+// the budget may cut or drop, each marked in place.
+const TESTING_PACKET_ROLES = [
+  ...TESTING_PRIMARY_ROLES,
+  'acceptance-gate-notice',
   'assumptions-ledger',
   'screenshot-metadata',
   'tested-revision',
@@ -1551,46 +1574,150 @@ async function approvedRequirementTexts(requirementsRoot) {
   }
   const documents = []
   for (const name of names) {
-    documents.push({ document: name, text: (await readFile(join(requirementsRoot, name), 'utf8')).slice(0, 40_000) })
+    const text = await readFile(join(requirementsRoot, name), 'utf8')
+    if (text.length > REQUIREMENT_DOCUMENT_MAX_CHARS) {
+      throw new PacketOverflowError(`approved requirement document ${name} has ${text.length} characters, over the `
+        + `${REQUIREMENT_DOCUMENT_MAX_CHARS}-character limit for a reference the judge must receive whole`, [])
+    }
+    documents.push({ document: name, text })
   }
   return documents.length > 0 ? documents : null
 }
 
-async function evidenceJudgePacket({ runDir, index, artifacts }) {
-  let packet = [
-    '# BEGIN VERIFIED INDEX',
-    JSON.stringify(index, null, 2),
-    '# END VERIFIED INDEX',
-  ].join('\n')
-  if (packet.length > JUDGE_PACKET_MAX_CHARS) {
-    throw new Error('verified evidence index exceeds the judge packet character budget')
-  }
-  for (const artifact of artifacts) {
-    if (!String(artifact.media_type ?? '').startsWith('text/')) continue
-    const prefix = `# BEGIN UNTRUSTED CANDIDATE ARTIFACT ${artifact.id} (${artifact.role})`
-    const suffix = `# END UNTRUSTED CANDIDATE ARTIFACT ${artifact.id}`
-    const wrapperChars = 2 + prefix.length + 1 + 1 + suffix.length
-    const contentBudget = Math.min(
-      JUDGE_PACKET_ARTIFACT_MAX_CHARS,
-      JUDGE_PACKET_MAX_CHARS - packet.length - wrapperChars,
-    )
-    if (contentBudget <= 0) break
+// The per-line character cost of lines joined by newlines.
+const linesCost = (lines) => lines.reduce((total, line) => total + line.length + 1, 0)
+// The largest packet line number, for sizing layout lines before the packet
+// exists: a packet within its character budget has no more lines than this.
+const MAX_LINE_NUMBER = JUDGE_PACKET_MAX_CHARS
 
-    const handle = await open(join(resolve(runDir), artifact.path), 'r')
-    let content
-    try {
-      const buffer = Buffer.alloc(contentBudget)
-      const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
-      content = buffer.subarray(0, bytesRead).toString('utf8')
-    } finally {
-      await handle.close()
+// The judge packet: the harness frame (cut index and layout), the verified
+// index, the primary records in full, then supporting artifacts under the
+// budget. A supporting artifact longer than the per-artifact cap, or than the
+// budget left, is cut and marked after the cut; one with no room left is
+// replaced by an omission marker. Every marker is listed in the cut index, so
+// nothing is cut or dropped silently. The primary records are never cut: when
+// they, with the index and frame, cannot fit, the packet overflows.
+export function buildEvidenceJudgePacket({ index, primary, supporting,
+  maxChars = JUDGE_PACKET_MAX_CHARS, artifactMaxChars = JUDGE_PACKET_ARTIFACT_MAX_CHARS }) {
+  const indexLines = ['# BEGIN VERIFIED INDEX', ...JSON.stringify(index, null, 2).split('\n'), '# END VERIFIED INDEX']
+  const prefix = ({ id, role }) => `# BEGIN UNTRUSTED CANDIDATE ARTIFACT ${id} (${role})`
+  const suffix = ({ id }) => `# END UNTRUSTED CANDIDATE ARTIFACT ${id}`
+  const layoutCost = (artifact, marker) => layoutLine({ ...artifact, marker,
+    start: marker?.startsWith('[omitted') ? null : MAX_LINE_NUMBER, end: MAX_LINE_NUMBER }).length + 1
+  // Blank line, header, content, optional marker, footer.
+  const blockCost = (artifact, chars, marker = null) => prefix(artifact).length + suffix(artifact).length + chars + 4
+    + (marker ? marker.length + 1 : 0) + layoutCost(artifact, marker) + (marker ? marker.length + 3 : 0)
+  const omissionCost = (artifact) => {
+    const marker = omittedMarker(artifact.id, artifact.role, artifact.text.length)
+    return marker.length + 2 + layoutCost(artifact, marker) + marker.length + 3
+  }
+  const frameCost = linesCost(packetFrame({ cuts: [], entries: [] }))
+  let used = frameCost + linesCost(indexLines) - 1
+  if (used > maxChars) {
+    throw new PacketOverflowError(`the verified evidence index needs ${used} characters, over the ${maxChars}-character judge packet budget`, [])
+  }
+  for (const artifact of primary) used += blockCost(artifact, artifact.text.length)
+  if (used > maxChars) {
+    throw new PacketOverflowError(`the primary claim-bearing records (${primary.map(({ id, role }) => `${id} (${role})`).join(', ')}) `
+      + `need ${used} characters in full, over the ${maxChars}-character judge packet budget`, [])
+  }
+  // Every supporting artifact's omission marker is reserved before any is
+  // placed, so a later one can always be marked rather than vanish.
+  const reserve = supporting.map(omissionCost)
+  let reserved = reserve.reduce((total, cost) => total + cost, 0)
+  if (used + reserved > maxChars) {
+    throw new PacketOverflowError(`the judge packet cannot hold the omission markers of its ${supporting.length} supporting artifacts beside the primary records`, [])
+  }
+  const placed = primary.map((artifact) => ({ artifact, text: artifact.text, marker: null }))
+  for (const [position, artifact] of supporting.entries()) {
+    reserved -= reserve[position]
+    const available = maxChars - used - reserved
+    const total = artifact.text.length
+    const full = blockCost(artifact, total)
+    if (total <= artifactMaxChars && full <= available) {
+      placed.push({ artifact, text: artifact.text, marker: null })
+      used += full
+      continue
     }
-    packet += `\n\n${prefix}\n${content}\n${suffix}`
+    const widest = truncatedMarker(artifact.id, total, total)
+    const kept = Math.min(artifactMaxChars, total - 1, available - blockCost(artifact, 0, widest))
+    if (kept > 0) {
+      const marker = truncatedMarker(artifact.id, kept, total)
+      placed.push({ artifact, text: artifact.text.slice(0, kept), marker })
+      used += blockCost(artifact, kept, marker)
+      continue
+    }
+    placed.push({ artifact, text: null, marker: omittedMarker(artifact.id, artifact.role, total) })
+    used += reserve[position]
   }
-  if (packet.length > JUDGE_PACKET_MAX_CHARS) {
-    throw new Error('verified evidence packet exceeds its character budget')
+
+  // Lay the packet out: the frame's size depends only on its entry count, so
+  // each artifact's packet lines are known before the frame is written.
+  const cuts = placed.filter(({ marker }) => marker).map(({ marker }) => marker)
+  const frameLines = packetFrame({ cuts, entries: placed.map(({ artifact }) => artifact) }).length
+  const body = [...indexLines]
+  const entries = []
+  for (const { artifact, text, marker } of placed) {
+    body.push('')
+    if (text === null) {
+      body.push(marker)
+      entries.push({ id: artifact.id, role: artifact.role, start: null, end: null, marker })
+      continue
+    }
+    body.push(prefix(artifact))
+    const start = frameLines + body.length + 1
+    body.push(...text.split('\n'))
+    if (marker) body.push(marker)
+    entries.push({ id: artifact.id, role: artifact.role, start, end: frameLines + body.length, marker })
+    body.push(suffix(artifact))
   }
-  return packet
+  const packet = [...packetFrame({ cuts, entries }), ...body].join('\n')
+  if (packet.length > maxChars) throw new Error('verified evidence packet exceeds its character budget')
+  return { packet, cuts, entries }
+}
+
+// Reads a view's artifacts and builds its packet. Primary-role artifacts are
+// read whole whatever their media type; supporting ones only when textual.
+async function evidenceJudgePacket({ runDir, index, artifacts, primaryRoles }) {
+  const read = async (artifact) => ({ ...artifact, text: await readFile(join(resolve(runDir), artifact.path), 'utf8') })
+  const primary = []
+  for (const role of primaryRoles) {
+    for (const artifact of artifacts.filter((item) => item.role === role)) primary.push(await read(artifact))
+  }
+  const supporting = []
+  for (const artifact of artifacts) {
+    if (primaryRoles.includes(artifact.role) || !String(artifact.media_type ?? '').startsWith('text/')) continue
+    supporting.push(await read(artifact))
+  }
+  return buildEvidenceJudgePacket({ index, primary, supporting }).packet
+}
+
+// A primary record that collection skipped for its size can never be judged
+// whole, so its view fails rather than judge the record without it.
+function skippedPrimaryRecords(candidate, primaryRoles) {
+  return (candidate?.findings ?? []).filter(({ code, role, path, message }) => code === 'artifact-bounds-exceeded'
+    && primaryRoles.includes(role ?? roleFor(path ?? String(message ?? '').split(': ').slice(1).join(': '))))
+}
+
+// One view's packet, or the view's harness failure: a packet that cannot hold
+// its primary records, its approved requirements, or a skipped primary record
+// fails that view's job, never the other view.
+async function viewPacket({ root, build, candidate, primaryRoles }) {
+  const packetPath = join(root, 'packet.txt')
+  try {
+    const skipped = skippedPrimaryRecords(candidate, primaryRoles)
+    if (skipped.length > 0) {
+      throw new PacketOverflowError(`evidence collection skipped primary records for their size: ${skipped
+        .map(({ role, path, message }) => `${role ?? 'unknown role'} ${path ?? message}`).join('; ')}`, [])
+    }
+    const packet = await build()
+    await writeFile(packetPath, packet)
+    return { packet }
+  } catch (error) {
+    if (!(error instanceof PacketOverflowError)) throw error
+    await rm(packetPath, { force: true })
+    return { failure: { code: error.code, owner: error.owner, resumable: false, retryable: false, message: error.message } }
+  }
 }
 
 export async function materializeEvidenceJudgeViews({
@@ -1639,19 +1766,24 @@ export async function materializeEvidenceJudgeViews({
     lineage,
   }
   await writeJsonAtomic(join(testingRoot, 'index.json'), testingIndex)
-  const testingPacket = await evidenceJudgePacket({
-    runDir,
-    index: testingIndex,
-    artifacts: testingArtifacts
-      .filter(({ role }) => TESTING_PACKET_ROLES.includes(role))
-      .sort((left, right) => TESTING_PACKET_ROLES.indexOf(left.role) - TESTING_PACKET_ROLES.indexOf(right.role)),
+  const testingPacket = await viewPacket({
+    root: testingRoot,
+    candidate,
+    primaryRoles: TESTING_PRIMARY_ROLES,
+    build: () => evidenceJudgePacket({
+      runDir,
+      index: testingIndex,
+      primaryRoles: TESTING_PRIMARY_ROLES,
+      artifacts: testingArtifacts
+        .filter(({ role }) => TESTING_PACKET_ROLES.includes(role))
+        .sort((left, right) => TESTING_PACKET_ROLES.indexOf(left.role) - TESTING_PACKET_ROLES.indexOf(right.role)),
+    }),
   })
-
-  await writeFile(join(testingRoot, 'packet.txt'), testingPacket)
 
   // Pass records reached this view as referenced session material before they
   // had a role of their own, so they stay here.
-  // Packet order under the character budget: the decision records first.
+  // The roles this view copies; its packet leads with ASSUMPTION_PRIMARY_ROLES
+  // in full, and the others follow under the budget in this order.
   const assumptionRoles = [
     'assumptions-ledger',
     'final-handoff',
@@ -1669,7 +1801,15 @@ export async function materializeEvidenceJudgeViews({
       .filter(({ role }) => assumptionRoles.includes(role))
       .sort((left, right) => assumptionRoles.indexOf(left.role) - assumptionRoles.indexOf(right.role)),
   })
-  const requirementTexts = await approvedRequirementTexts(requirementsRoot)
+  // A requirement document too long to arrive whole fails this view's job.
+  let requirementTexts = null
+  let requirementFailure = null
+  try {
+    requirementTexts = await approvedRequirementTexts(requirementsRoot)
+  } catch (error) {
+    if (!(error instanceof PacketOverflowError)) throw error
+    requirementFailure = error
+  }
   const assumptionIndex = {
     ownership_boundary: 'untrusted candidate ambiguity sources',
     permissions: {
@@ -1692,27 +1832,36 @@ export async function materializeEvidenceJudgeViews({
     lineage,
   }
   await writeJsonAtomic(join(assumptionRoot, 'index.json'), assumptionIndex)
-  const assumptionPacket = await evidenceJudgePacket({
-    runDir,
-    index: assumptionIndex,
-    artifacts: assumptionArtifacts,
+  const assumptionPacket = await viewPacket({
+    root: assumptionRoot,
+    candidate,
+    primaryRoles: ASSUMPTION_PRIMARY_ROLES,
+    build: () => {
+      if (requirementFailure) throw requirementFailure
+      return evidenceJudgePacket({
+        runDir,
+        index: assumptionIndex,
+        primaryRoles: ASSUMPTION_PRIMARY_ROLES,
+        artifacts: assumptionArtifacts,
+      })
+    },
   })
-
-  await writeFile(join(assumptionRoot, 'packet.txt'), assumptionPacket)
 
   return {
     'testing-evidence': {
       root: relative(runRoot, testingRoot).split(sep).join('/'),
       index: relative(runRoot, join(testingRoot, 'index.json')).split(sep).join('/'),
       permissions: testingIndex.permissions,
-      packet: testingPacket,
+      primary_roles: [...TESTING_PRIMARY_ROLES],
+      ...testingPacket,
     },
     'assumption-handling': {
       root: relative(runRoot, assumptionRoot).split(sep).join('/'),
       index: relative(runRoot, join(assumptionRoot, 'index.json')).split(sep).join('/'),
       permissions: assumptionIndex.permissions,
       roles: assumptionRoles,
-      packet: assumptionPacket,
+      primary_roles: [...ASSUMPTION_PRIMARY_ROLES],
+      ...assumptionPacket,
     },
   }
 }
