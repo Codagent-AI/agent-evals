@@ -30,7 +30,7 @@
     {
       "path": ".validator/config.yml",
       "reason": "Replace product identity, target guidance, or product-specific page with neutral scaffold content.",
-      "sha256": "df4d22048988af3ecaf9b53f12731b039c7c73c3e7b0f44cc7f761ac0bdb6167"
+      "sha256": "4504a6ffd3e424e0307dfa90b7a4b8bc01d101dfad52caa249aab5281dbccece"
     },
     {
       "path": "AGENTS.md",
@@ -96,7 +96,7 @@
     {
       "path": ".validator/config.yml",
       "mode": "100644",
-      "sha256": "df4d22048988af3ecaf9b53f12731b039c7c73c3e7b0f44cc7f761ac0bdb6167",
+      "sha256": "4504a6ffd3e424e0307dfa90b7a4b8bc01d101dfad52caa249aab5281dbccece",
       "source_sha256": "3bf64fa15548997d2f61e546369bce0a9733bf1f993e9e76599cdb5ab4a2ee09",
       "source_path": ".validator/config.yml"
     },
@@ -206,5 +206,5 @@
       "source_path": "vite.config.ts"
     }
   ],
-  "tree_hash": "f348de85cf22a29d6a67bb123356d8f95e7c03fb"
+  "tree_hash": "75f22e8390f3972bb057c98d62988ca5228a0861"
 }

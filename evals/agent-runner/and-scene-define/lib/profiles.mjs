@@ -14,8 +14,12 @@ export function validateProfiles(profiles) {
   return profiles
 }
 // JSON strings are valid YAML scalars and cannot introduce config fields.
+// This is the sandbox's global config: Runner refuses active_profile there and
+// selects the `default` profile set. A role without `extends` must name its mode;
+// the lead is interactive so the external user answers its turns.
+const DEFAULT_MODES = { lead: 'interactive', crosscheck: 'autonomous' }
 export function runnerConfig(profiles) {
   validateProfiles(profiles)
-  return `active_profile: eval\nprofiles:\n  eval:\n    agents:\n${['lead', 'crosscheck'].map(role => `      ${role}:\n${Object.entries(profiles[role]).map(([key, value]) => `        ${key}: ${JSON.stringify(value)}\n`).join('')}`).join('')}`
+  return `profiles:\n  default:\n    agents:\n${Object.entries(DEFAULT_MODES).map(([role, mode]) => `      ${role}:\n        default_mode: ${mode}\n${['cli', 'model', 'effort'].map(key => `        ${key}: ${JSON.stringify(profiles[role][key])}\n`).join('')}`).join('')}`
 }
 export const RUNNER_SETTINGS = 'autonomous_permission_mode: yolo\n'

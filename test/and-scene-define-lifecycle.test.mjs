@@ -16,7 +16,7 @@ async function fixture(t, outcome = 'interrupted') {
   const session = join(options.runDir, 'sandbox/.runtime/agent-runner-projects/project/runs/runner-one')
   async function state(kind) {
     await mkdir(session, { recursive: true })
-    await writeFile(join(session, 'state.json'), JSON.stringify({ workflowName: 'openspec:change', currentStep: { stepId: 'define', completed: kind === 'capped' }, completed: false }))
+    await writeFile(join(session, 'state.json'), JSON.stringify({ workflowName: 'change', workflowFile: 'builtin:openspec/change-v2.0.yaml', currentStep: { stepId: 'define', completed: kind === 'capped' }, completed: false }))
     await writeFile(join(session, 'audit.log'), kind === 'failed' ? '2026-10-05T00:00:00Z [define, sub:define-change, design] step_end {"outcome":"failed","error":"CLI failed"}\n' : kind === 'capped' ? '2026-10-05T00:00:00Z [define] step_end {"outcome":"success"}\n2026-10-05T00:00:00Z run_end {"outcome":"success","completed":false}\n' : '2026-10-05T00:00:00Z [define, sub:define-change, specs] step_start {}\n')
     await mkdir(join(session, 'external-user'), { recursive: true })
     await mkdir(join(session, 'output'), { recursive: true })
@@ -26,7 +26,7 @@ async function fixture(t, outcome = 'interrupted') {
     await writeFile(join(session, 'output/define_proposal.attempt-1.turn-1.out'), '{"type":"turn.completed"}\n')
     await writeFile(join(session, 'external-user/exchanges.jsonl'), '')
     await writeFile(join(options.runDir, 'conversation.jsonl'), '')
-    await writeFile(join(session, 'run-metrics.json'), JSON.stringify({ schema_version: 3, run_id: 'runner-one', workflow: 'openspec:change', history_complete: false, steps: [{ id: 'proposal', prefix: 'define/proposal', cli: 'codex', agent_invoked: true, session_id: 'lead' }] }))
+    await writeFile(join(session, 'run-metrics.json'), JSON.stringify({ schema_version: 3, run_id: 'runner-one', workflow: 'change', history_complete: false, steps: [{ id: 'proposal', prefix: 'define/proposal', cli: 'codex', agent_invoked: true, session_id: 'lead' }] }))
   }
   class FakeSandbox extends LocalSandbox {
     plan() { return { command: ['fake'], output: 'fake-plan' } }
@@ -415,4 +415,15 @@ test('rescore from a directory that is not a collected run fails with a clear me
   assert.equal(corrupt.code, 1)
   assert.match(corrupt.stderr, /^and-scene-define: /)
   assert.match(corrupt.stderr, /\n\s+at /)
+})
+test('resume refuses Runner state from a workflow other than the builtin openspec change', async t => {
+  const f = await fixture(t)
+  await runEvaluation(f.options, f.deps)
+  const statePath = join(f.options.runDir, 'sandbox/.runtime/agent-runner-projects/project/runs/runner-one/state.json')
+  const state = JSON.parse(await readFile(statePath, 'utf8'))
+  await writeFile(statePath, JSON.stringify({ ...state, workflowFile: 'builtin:core/define-change-v1.0.yaml' }))
+  const resumed = await runEvaluation({ ...f.options, resume: true }, f.deps)
+  assert.equal(resumed.result.evaluation_status, 'evaluation-harness-failed')
+  assert.match(resumed.result.observed_error, /unexpected Agent Runner workflow change \(builtin:core\/define-change-v1\.0\.yaml\)/)
+  assert.deepEqual(f.modes, [{ kind: 'fresh' }])
 })
