@@ -9,6 +9,9 @@ import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 
 import { loadRubrics, rubricCriteria } from '../evals/agent-runner/and-scene/lib/rubric.mjs'
+import {
+  blockerCheck, classifyFlip, comparePair, compareRep, criterionLayers, loadRescore,
+} from '../evals/agent-runner/and-scene/lib/flip-attribution.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const script = join(root, 'evals/agent-runner/and-scene/scripts/replay-settlement.mjs')
@@ -229,4 +232,151 @@ test('a malformed or mismatched raw log fails the replay instead of falling back
     assert.match(result.stderr, message, label)
     assert.doesNotMatch(result.stderr, /reconstruction/, label)
   }
+})
+
+// Flip attribution over canned rescore pairs.
+const flipScript = join(root, 'evals/agent-runner/and-scene/scripts/compare-rescores.mjs')
+
+const CRITERIA = {
+  A: { job: 'scene-kit', component: 'scene-kit-correctness', points: 1 },
+  B: { job: 'scene-kit', component: 'scene-kit-correctness', points: 0.5 },
+  C: { job: 'testing-evidence', component: 'testing-evidence-quality', points: 1 },
+  D: { job: 'testing-evidence', component: 'testing-evidence-quality', points: 1 },
+  E: { job: 'engineering-quality', component: 'engineering-quality', points: 0.5 },
+  F: { job: null, component: 'engineering-quality', points: 1 },
+}
+
+// spec: { <criterion>: { verdict, seats?, disputed?, checks?, ruling? } }
+async function rescoreDir(base, name, spec, { gate = 'pass', belowFloor = false, pass = true } = {}) {
+  const runDir = join(base, name)
+  await mkdir(join(runDir, 'phases/judges'), { recursive: true })
+  const components = [...new Set(Object.values(CRITERIA).map(({ component }) => component))].map((component) => ({
+    id: component,
+    floor: component === 'scene-kit-correctness' ? 12.5 : null,
+    points_awarded: component === 'scene-kit-correctness' && belowFloor ? 10 : 15,
+    subcomponents: [{
+      id: `${component}-all`,
+      job: null,
+      criteria: Object.entries(CRITERIA).filter(([, value]) => value.component === component)
+        .map(([id, value]) => ({ id, verdict: spec[id].verdict, points_possible: value.points, fallback_job: value.job })),
+    }],
+  }))
+  await writeFile(join(runDir, 'phases/score.json'), JSON.stringify({
+    rubrics: { automated: { version: '15.0.0', sha256: 'f'.repeat(64) } },
+    components, gates: [{ id: 'verification-sample-outline', verdict: gate }],
+    automated_pass: pass, automated_subtotal: { points: 50 },
+  }))
+  for (const job of new Set(Object.values(CRITERIA).map(({ job }) => job).filter(Boolean))) {
+    const ids = Object.keys(CRITERIA).filter((id) => CRITERIA[id].job === job)
+    const record = { protocol: 'cross-family-panel-v2', job, criteria: ids, order: ['pass', 'fail'], fallback_ids: [],
+      votes: [], checks: [], rulings: [], samples: [] }
+    for (const id of ids) {
+      const { seats = ['pass', 'pass', 'pass'], disputed = [], checks = [], ruling = null } = spec[id]
+      record.votes.push(...seats.map((verdict, index) => ({ id, verdict, panel_index: index, family: index === 0 ? 'claude' : 'codex',
+        rationale: `free text ${name}`, ...(disputed.includes(index) ? { disputed: true, contradiction: { rationale: `audit ${name}` } } : {}) })))
+      record.checks.push(...checks.map(([index, classification]) => ({ id, stage: 'contradiction-check', panel_index: index, classification, rationale: `check ${name}` })))
+      if (ruling) record.rulings.push({ id, vote: ruling, result: { id, verdict: ruling } })
+    }
+    await writeFile(join(runDir, `phases/judges/${job}.json`), JSON.stringify(record))
+  }
+  return runDir
+}
+
+const stable = {
+  A: { verdict: 'pass', disputed: [1], checks: [[1, 'insufficient']] },
+  B: { verdict: 'pass', seats: ['pass', 'pass', 'fail'] },
+  C: { verdict: 'pass', seats: ['pass', 'fail', 'fail'], ruling: 'pass' },
+  D: { verdict: 'pass' },
+  E: { verdict: 'pass', seats: ['pass', 'pass', 'fail'] },
+  F: { verdict: 'pass' },
+}
+const flipped = {
+  // The regression: identical seats whose effective votes differ through a check.
+  A: { verdict: 'fail', disputed: [1], checks: [[1, 'confirmed']], ruling: 'fail' },
+  B: { verdict: 'fail', seats: ['fail', 'fail', 'pass'] },
+  C: { verdict: 'fail', seats: ['fail', 'fail', 'fail'] },
+  // A check, and so a decider, present in only this rescore.
+  D: { verdict: 'fail', disputed: [2], checks: [[2, 'confirmed']], ruling: 'fail' },
+  E: { verdict: 'fail', seats: ['fail', 'fail', 'pass'] },
+  F: { verdict: 'fail' },
+}
+
+test('flip attribution separates settlement, seat noise and mixed flips from the four recorded layers', async () => {
+  const base = await makeTempDir(join(tmpdir(), 'and-scene-flips-'))
+  const one = await loadRescore(await rescoreDir(base, 'r1', stable), 'r1')
+  const two = await loadRescore(await rescoreDir(base, 'r2', flipped, { gate: 'fail', belowFloor: true, pass: false }), 'r2')
+
+  const layersA = [one, two].map(({ judges }) => criterionLayers(judges['scene-kit'], 'A'))
+  assert.deepEqual(layersA[0].seats, layersA[1].seats)
+  assert.notDeepEqual(layersA[0].effective, layersA[1].effective)
+
+  const pair = comparePair(one, two)
+  const flips = Object.fromEntries(pair.flips.map((flip) => [flip.criterion, flip]))
+  assert.equal(flips.A.class, 'settlement')
+  assert.deepEqual(flips.A.differs, { seats: false, checks: true, effective: true, ruling: true })
+  assert.equal(flips.B.class, 'seat-noise')
+  assert.deepEqual(flips.B.differs, { seats: true, checks: false, effective: true, ruling: false })
+  assert.equal(flips.C.class, 'mixed')
+  assert.deepEqual(flips.C.differs, { seats: true, checks: false, effective: true, ruling: true })
+  assert.equal(flips.D.class, 'settlement')
+  assert.equal(flips.D.differs.checks, true)
+  assert.equal(flips.E.class, 'seat-noise')
+  assert.equal(flips.F.class, 'deterministic')
+  assert.equal(pair.flipped_points, 3.5)
+  assert.equal(pair.target_met, false)
+  assert.deepEqual(pair.by_class, { settlement: 2, 'seat-noise': 0.5, mixed: 1, deterministic: 0, unattributed: 0 })
+  assert.equal(pair.engineering_flipped_points, 1.5)
+  assert.deepEqual(pair.engineering_by_class, { settlement: 0, 'seat-noise': 0.5, mixed: 0, deterministic: 1, unattributed: 0 })
+  assert.deepEqual(pair.changes.gates, [{ id: 'verification-sample-outline', verdicts: ['pass', 'fail'] }])
+  assert.deepEqual(pair.changes.floors, [{ component: 'scene-kit-correctness', below_floor: [false, true] }])
+  assert.deepEqual(pair.changes.eligibility.automated_pass, [true, false])
+
+  assert.equal(classifyFlip({ seats: false, checks: false, effective: false, ruling: false }), 'unattributed')
+})
+
+test('opposing flips never cancel, and disagreement counts carry their denominators', async () => {
+  const base = await makeTempDir(join(tmpdir(), 'and-scene-flips-rep-'))
+  const r1 = await loadRescore(await rescoreDir(base, 'r1', stable), 'r1')
+  const r2 = await loadRescore(await rescoreDir(base, 'r2', { ...stable, B: { verdict: 'fail', seats: ['fail', 'fail', 'pass'] } }), 'r2')
+  const r3 = await loadRescore(await rescoreDir(base, 'r3', { ...stable, A: flipped.A }), 'r3')
+  const rep = compareRep('baseline-1', [r1, r2, r3])
+  // r2 -> r3 turns A pass -> fail and B fail -> pass: 1.5 flipped points, not a net 0.5.
+  assert.deepEqual(rep.pairs.map(({ pair, flipped_points: points }) => [pair.join('/'), points]), [['r1/r2', 0.5], ['r1/r3', 1], ['r2/r3', 1.5]])
+  const counts = Object.fromEntries(rep.disagreements.map(({ criterion, disagreements, pairs }) => [criterion, `${disagreements}/${pairs}`]))
+  assert.deepEqual(counts, { A: '2/3', B: '2/3', C: '0/3', D: '0/3', E: '0/3', F: '0/3' })
+  assert.ok(rep.disagreements.filter(({ engineering }) => engineering).every(({ pairs }) => pairs === 3))
+})
+
+test('the blocker sums settlement and mixed points for the named rep, excluding engineering quality', async () => {
+  const base = await makeTempDir(join(tmpdir(), 'and-scene-flips-blocker-'))
+  const e78 = [await rescoreDir(base, 'e78-a', stable), await rescoreDir(base, 'e78-b', flipped)]
+  const noisy = [await rescoreDir(base, 'base-a', stable),
+    await rescoreDir(base, 'base-b', { ...stable, B: { verdict: 'fail', seats: ['fail', 'fail', 'pass'] }, E: flipped.E, F: flipped.F })]
+  const load = (dirs) => Promise.all(dirs.map((dir) => loadRescore(dir, dir)))
+  const blocked = blockerCheck(compareRep('e78-rep-2', await load(e78)))
+  assert.equal(blocked.pairs[0].settlement_and_mixed_points, 3)
+  assert.equal(blocked.blocked, true)
+  // Seat noise and engineering-quality flips never block.
+  const quiet = blockerCheck(compareRep('baseline-1', await load(noisy)))
+  assert.equal(quiet.pairs[0].settlement_and_mixed_points, 0)
+  assert.equal(quiet.blocked, false)
+  const engineering = [await rescoreDir(base, 'eq-a', { ...stable, E: { verdict: 'pass', disputed: [1], checks: [[1, 'insufficient']] } }),
+    await rescoreDir(base, 'eq-b', { ...stable, E: { verdict: 'fail', disputed: [1], checks: [[1, 'confirmed']], ruling: 'fail' } })]
+  const eqOnly = blockerCheck(compareRep('e78-rep-2', await load(engineering)))
+  assert.equal(eqOnly.pairs[0].settlement_and_mixed_points, 0)
+  assert.equal(eqOnly.blocked, false)
+
+  // The rep that counts is an input to the command, never a hard-coded run.
+  const cli = (args) => spawnSync(process.execPath, [flipScript, ...args], { encoding: 'utf8' })
+  const named = cli(['--rep', 'e78-rep-2', ...e78, '--rep', 'baseline-1', ...noisy, '--blocker-rep', 'e78-rep-2'])
+  assert.equal(named.status, 1, named.stderr)
+  assert.match(named.stdout, /MERGE BLOCKED/)
+  assert.match(named.stdout, /A: pass -> fail \(1\) settlement; differs: checks\+effective\+ruling/)
+  assert.match(named.stdout, /E \[engineering\]: 1\/1/)
+  const other = cli(['--rep', 'e78-rep-2', ...e78, '--rep', 'baseline-1', ...noisy, '--blocker-rep', 'baseline-1'])
+  assert.equal(other.status, 0, other.stderr)
+  assert.match(other.stdout, /not blocked/)
+  const unnamed = cli(['--rep', 'e78-rep-2', ...e78, '--blocker-rep', 'missing'])
+  assert.equal(unnamed.status, 2)
+  assert.match(unnamed.stderr, /names no --rep/)
 })

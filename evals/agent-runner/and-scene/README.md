@@ -159,6 +159,39 @@ A malformed log, or one whose criteria, decider model, attempt count, or
 never-re-cited ruling does not match the record, fails the replay (exit 2) and
 never falls back. `lib/settlement-replay.mjs` documents the log contract.
 
+### Rescore flip attribution
+
+`scripts/compare-rescores.mjs` compares rescores of the same code under one
+automated rubric and attributes every verdict flip:
+
+```bash
+node evals/agent-runner/and-scene/scripts/compare-rescores.mjs \
+  --rep e78-rep-2 <rescore-dir> <rescore-dir> <rescore-dir> \
+  --rep baseline-1 <rescore-dir> <rescore-dir> <rescore-dir> \
+  --blocker-rep e78-rep-2 [--json]
+```
+
+Every pair within a rep is compared. For each criterion whose verdict differs,
+it records separately whether the original seat verdicts, the audits and
+checks, the effective votes, and the decider ruling differ; a check or ruling
+present in only one rescore is a difference, and free text is ignored. A flip
+is `settlement` when the seat verdicts are identical but a check, effective
+vote or ruling differs, `seat-noise` when the seat verdicts differ and every
+check and ruling is the same, and `mixed` when both differ (`deterministic`
+for a flip of a criterion no judge decided). The labels say where the recorded
+outputs differ, not which difference caused the flip.
+
+Per pair it reports total flipped points (the sum of every changed verdict's
+points, so opposing flips never cancel) against the 1.0-point target, with
+engineering quality excluded and reported separately; points by class; and
+gate, floor and eligibility changes. Per rep it reports per-criterion
+disagreement counts with their denominators, always including every
+engineering-quality criterion. `--blocker-rep` names the rep that decides
+merge (#78 rep 2 for the `followups` change): when any of its pairs has more
+than 1.0 settlement and mixed points outside engineering quality, the command
+prints `MERGE BLOCKED` and exits 1. Seat-noise points and misses on other reps
+are reported but never block.
+
 ## Fixture traceability
 
 Every automated criterion and gate has a `criterion_sources` entry in
