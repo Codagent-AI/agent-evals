@@ -29,8 +29,9 @@ const contradictionCheckOf = (vote, checks) => checks.find(c => c.stage === 'con
 // A disputed vote turns only on a confirmed check. A check that refutes the
 // contradiction or cannot decide it leaves the vote standing as cast, except a
 // browser-fallback pass, which must be proven from source and so stays
-// disputed for the decider when its check cannot decide.
-function effective(vote, checks, order, fallbackIds = []) {
+// disputed for the decider when its check cannot decide. Exported for the
+// and-scene flip attribution, which compares effective votes across rescores.
+export function effective(vote, checks, order, fallbackIds = []) {
   if (!vote.disputed) return { verdict: vote.verdict, disputed: false, turned: false }
   const check = contradictionCheckOf(vote, checks)
   if (!check) return { verdict: vote.verdict, disputed: true, turned: false }

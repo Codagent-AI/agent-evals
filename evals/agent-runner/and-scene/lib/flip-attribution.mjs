@@ -14,30 +14,13 @@
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 
+import { effective } from '../../../lib/panel-judging/panel.mjs'
 import { hashJson, readJson } from './persistence.mjs'
 
 export const FLIP_CLASSES = ['settlement', 'seat-noise', 'mixed', 'deterministic', 'unattributed']
 export const ENGINEERING_COMPONENT = 'engineering-quality'
 export const FLIP_TARGET_POINTS = 1.0
 export const BLOCKER_POINTS = 1.0
-
-// Mirrors the v2 effective() rule in evals/lib/panel-judging/panel.mjs, which
-// does not export it: a disputed vote turns only on a confirmed contradiction
-// check, and an undecided check leaves it standing except a browser-fallback
-// pass, which stays disputed.
-function effectiveVote(vote, checks, order, fallbackIds) {
-  if (!vote.disputed) return { verdict: vote.verdict, disputed: false, turned: false }
-  const check = checks.find((entry) => entry.stage === 'contradiction-check' && entry.id === vote.id && entry.panel_index === vote.panel_index)
-  if (!check) return { verdict: vote.verdict, disputed: true, turned: false }
-  if (check.classification === 'confirmed') {
-    const verdict = vote.verdict === order[0] ? order.at(-1) : vote.verdict === order.at(-1) ? order[0] : vote.verdict
-    return { verdict, disputed: false, turned: true }
-  }
-  if (check.classification === 'insufficient' && vote.verdict === order[0] && fallbackIds.includes(vote.id)) {
-    return { verdict: vote.verdict, disputed: true, turned: false }
-  }
-  return { verdict: vote.verdict, disputed: false, turned: false }
-}
 
 const byKey = (left, right) => (left.key < right.key ? -1 : left.key > right.key ? 1 : 0)
 
@@ -65,7 +48,7 @@ export function criterionLayers(record, id) {
   return {
     seats: votes.map((vote) => ({ panel_index: vote.panel_index, family: vote.family, verdict: vote.verdict })),
     checks: audits,
-    effective: votes.map((vote) => ({ panel_index: vote.panel_index, ...effectiveVote(vote, checks, order, fallbackIds) })),
+    effective: votes.map((vote) => ({ panel_index: vote.panel_index, ...effective(vote, checks, order, fallbackIds) })),
     ruling: ruling ? { vote: ruling.vote ?? ruling.verdict, verdict: ruling.result?.verdict ?? ruling.verdict } : null,
   }
 }
