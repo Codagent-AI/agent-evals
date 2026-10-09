@@ -217,7 +217,7 @@ export function replayJob({ record, first = null, weights, run = '.' }) {
     const recorded = (record.results ?? []).find((result) => result.id === id)
     const settle = (withRulings) => resolvePanel({
       criteria: [id], order: record.order, votes: record.votes, checks: record.checks ?? [],
-      rulings: withRulings, fallback_ids: record.fallback_ids ?? [],
+      rulings: withRulings, fallback_ids: record.fallback_ids ?? [], line_cited: true,
     }).results[0]
     let settled = null
     let note = null

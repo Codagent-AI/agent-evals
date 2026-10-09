@@ -222,7 +222,10 @@ function rejectMarkedVotes(votes) {
 }
 
 // Pure reproduction from the recorded votes, targeted checks, and rulings.
-export function resolvePanel({ criteria, order, votes, checks = [], rulings = [], decider = null, fallback_ids = [] }) {
+// `line_cited` marks rulings of a line-cited decider supplied directly rather
+// than reproduced from its record (the and-scene settlement replay): like a
+// reproduced line-cited ruling, it takes no overrule check.
+export function resolvePanel({ criteria, order, votes, checks = [], rulings = [], decider = null, fallback_ids = [], line_cited = false }) {
   // Known missing material fails the job; no settled record can hold it.
   rejectMarkedVotes(votes)
   if (checks.some(c => !['confirmed', 'contradicted', 'insufficient'].includes(c.classification))) throw new JudgeOutputError('panel record settles a check on missing material')
@@ -250,7 +253,7 @@ export function resolvePanel({ criteria, order, votes, checks = [], rulings = []
       basis = `decider-${verdict}`
       // A batched ruling that overrules two votes stands only when its check
       // confirms it; otherwise the two votes' verdict stands.
-      const overruled = decider ? null : overruledVerdict({ votes: own, checks, fallback_ids }, ruling, order)
+      const overruled = decider || line_cited ? null : overruledVerdict({ votes: own, checks, fallback_ids }, ruling, order)
       if (overruled === null && overruleCheck) throw new JudgeOutputError('overrule check recorded for a ruling that overrules no two-vote verdict')
       if (overruled !== null) {
         if (!overruleCheck) throw new JudgeOutputError('overruling decider ruling has no overrule check')
