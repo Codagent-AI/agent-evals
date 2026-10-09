@@ -1,6 +1,7 @@
+import { makeTempDir } from './temp-dir.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
+import { mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runEvaluation } from '../evals/agent-runner/and-scene-define/controller.mjs'
@@ -9,7 +10,7 @@ import { repoGit } from '../evals/agent-runner/and-scene-define/lib/starting-rep
 import { runPhases, AUTOMATED_PHASES } from '../evals/agent-runner/and-scene-define/lib/phases.mjs'
 const profiles = { lead: { cli: 'codex', model: 'gpt-6', effort: 'high' }, crosscheck: { cli: 'claude', model: 'opus', effort: 'high' } }
 async function fixture(t, outcome = 'interrupted') {
-  const root = await mkdtemp(join(tmpdir(), 'define-life-')); t.after(() => rm(root, { recursive: true, force: true }))
+  const root = await makeTempDir(join(tmpdir(), 'define-life-')); t.after(() => rm(root, { recursive: true, force: true }))
   const options = { runDir: join(root, 'run'), profiles, timeLimitMs: 10000, runnerDir: root, skillsDir: root }
   const modes = []; let stopCount = 0; let next = outcome
   const session = join(options.runDir, 'sandbox/.runtime/agent-runner-projects/project/runs/runner-one')
@@ -259,7 +260,7 @@ async function evaluatorSuite(t, rubricChange) {
   const { cp } = await import('node:fs/promises')
   const { createHash } = await import('node:crypto')
   const { SUITE_ROOT } = await import('../evals/agent-runner/and-scene-define/lib/files.mjs')
-  const suiteRoot = await mkdtemp(join(tmpdir(), 'define-suite-')); t.after(() => rm(suiteRoot, { recursive: true, force: true }))
+  const suiteRoot = await makeTempDir(join(tmpdir(), 'define-suite-')); t.after(() => rm(suiteRoot, { recursive: true, force: true }))
   await cp(SUITE_ROOT, suiteRoot, { recursive: true, filter: source => !/\/(results|calibration)(\/|$)/.test(source.slice(SUITE_ROOT.length)) })
   const hash = text => createHash('sha256').update(text).digest('hex')
   const versions = JSON.parse(await readFile(join(suiteRoot, 'versions.json'), 'utf8'))
@@ -397,7 +398,7 @@ for (const corrupt of ['judges/score.json', 'audits/disclosure.json']) {
 
 test('rescore from a directory that is not a collected run fails with a clear message, not a stack trace', async t => {
   const { execFile } = await import('node:child_process')
-  const root = await mkdtemp(join(tmpdir(), 'define-bad-rescore-'))
+  const root = await makeTempDir(join(tmpdir(), 'define-bad-rescore-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   await mkdir(join(root, 'source'))
   const run = () => new Promise(done => execFile(process.execPath, ['evals/agent-runner/and-scene-define/controller.mjs', '--rescore-from', join(root, 'source'), '--run-dir', join(root, 'out')], (error, stdout, stderr) => done({ code: error?.code ?? 0, stdout, stderr })))

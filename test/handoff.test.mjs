@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -66,7 +67,7 @@ AT-001
 `
 
 async function environment() {
-  const root = await mkdtemp(join(tmpdir(), 'agent-evals-handoff-'))
+  const root = await makeTempDir(join(tmpdir(), 'agent-evals-handoff-'))
   const agentRunnerDir = join(root, 'agent-runner')
   const agentSkillsDir = join(root, 'agent-skills')
   await mkdir(join(agentRunnerDir, 'workflows/core'), { recursive: true })

@@ -1,6 +1,7 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -71,6 +72,22 @@ test('only criteria the fixture does not describe are eval-owned', async () => {
     'demo-clear-code-boundaries',
     'demo-scene-kit-api-use',
     'demo-scope-discipline',
+    'engineering-bootstrap-scripts-generic',
+    'engineering-checks-read-rendered-page',
+    'engineering-diagnostics-cover-presentation',
+    'engineering-inspect-fails-loudly',
+    'engineering-presentation-css-scoped',
+    'engineering-preview-readiness-bounded',
+    'engineering-preview-terminated-on-every-exit',
+    'engineering-skill-completion-report',
+    'engineering-skill-description-triggers',
+    'engineering-skill-out-of-scope-redirects',
+    'engineering-templates-build-at-destination',
+    'engineering-tests-isolate-resources',
+    'engineering-tests-wait-on-state',
+    'engineering-typed-kit-primitives',
+    'input-modifier-keys-pass-through',
+    'input-swipe-from-control-ignored',
     'testing-evidence-complete-honest-record',
     'testing-evidence-final-revision-applicability',
     'testing-evidence-traceable-coverage',
@@ -112,7 +129,7 @@ test('traceability accepts values backed by a multi-citation source on guidance,
 })
 
 test('snapshot refresh copies fixture files with their git blob ids only at the fixture pin', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'fixture-snapshot-'))
+  const directory = await makeTempDir(join(tmpdir(), 'fixture-snapshot-'))
   const checkout = join(directory, 'checkout')
   const snapshot = join(directory, 'snapshot')
   await mkdir(join(checkout, 'openspec/changes/create-and-scene/specs'), { recursive: true })

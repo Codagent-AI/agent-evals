@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -34,7 +35,7 @@ const identity = {
 }
 
 async function evidence(contents = 'verdict\n') {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-checkpoint-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-checkpoint-'))
   const path = join(dir, 'unit-output.json')
   await writeFile(path, contents)
   return { dir, path }
@@ -270,7 +271,7 @@ test('a checkpoint survives a save and load round trip', async () => {
 })
 
 test('loadCheckpoint returns null for a fresh run directory', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-checkpoint-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-checkpoint-'))
 
   assert.equal(await loadCheckpoint(join(dir, 'checkpoint.json')), null)
 })
@@ -440,7 +441,7 @@ test('reference run-state explicitly marks delivery-only identity not applicable
 })
 
 test('old boundary-era checkpoint files cannot be loaded as run-state', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-checkpoint-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-checkpoint-'))
   const path = join(dir, 'run-state.json')
   await writeFile(path, JSON.stringify({
     schema_version: 1,

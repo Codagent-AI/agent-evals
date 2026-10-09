@@ -20,6 +20,8 @@ test('INT-009: recorded robust jobs reproduce identical results, consensus, hash
   const replay = await runProductJudging({ ...inputs,
     loadJob: async ({ id, inputHash }) => {
       const record = baseline.records.find(entry => entry.id === id)
+      // engineering-quality (rubric 14.0.0) postdates the legacy baseline.
+      if (!record) return null
       assert.notEqual(inputHash, record.inputHash)
       return record
     },

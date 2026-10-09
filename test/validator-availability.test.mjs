@@ -1,6 +1,7 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { chmod, mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -23,7 +24,7 @@ async function installedValidator(root) {
 }
 
 test('skip-validator agents resolve every validator command to a refusing shim', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'agent-evals-validator-hidden-'))
+  const root = await makeTempDir(join(tmpdir(), 'agent-evals-validator-hidden-'))
   const realBin = await installedValidator(root)
   const runDir = join(root, 'run')
 
@@ -57,7 +58,7 @@ test('skip-validator agents resolve every validator command to a refusing shim',
 })
 
 test('the shim lives outside the candidate worktree and is reusable on resume', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'agent-evals-validator-hidden-'))
+  const root = await makeTempDir(join(tmpdir(), 'agent-evals-validator-hidden-'))
   const runDir = join(root, 'run')
 
   const first = await hideValidatorFromAgents({ runDir, env: { PATH: '/usr/bin:/bin' } })
@@ -70,7 +71,7 @@ test('the shim lives outside the candidate worktree and is reusable on resume', 
 })
 
 test('an explicit Validator executable override does not reach skip-validator agents', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'agent-evals-validator-hidden-'))
+  const root = await makeTempDir(join(tmpdir(), 'agent-evals-validator-hidden-'))
 
   const hidden = await hideValidatorFromAgents({
     runDir: join(root, 'run'),
@@ -81,7 +82,7 @@ test('an explicit Validator executable override does not reach skip-validator ag
 })
 
 test('a PATH that cannot carry the shim fails instead of claiming the validator is hidden', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'agent-evals-validator-hidden-'))
+  const root = await makeTempDir(join(tmpdir(), 'agent-evals-validator-hidden-'))
   const realBin = await installedValidator(root)
 
   await assert.rejects(
@@ -91,7 +92,7 @@ test('a PATH that cannot carry the shim fails instead of claiming the validator 
 })
 
 test('a blocked attempt still reaches the agent transcript when the log is unwritable', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'agent-evals-validator-hidden-'))
+  const root = await makeTempDir(join(tmpdir(), 'agent-evals-validator-hidden-'))
   const runDir = join(root, 'run')
   const hidden = await hideValidatorFromAgents({ runDir, env: { PATH: '/usr/bin:/bin' } })
   await chmod(join(runDir, 'logs'), 0o500)

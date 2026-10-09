@@ -1,7 +1,8 @@
+import { makeTempDir } from './temp-dir.mjs'
 // Publication as the human-review command performs it: after finalization, from
 // the agent-evals working directory, against a disposable repository and remote.
 import assert from 'node:assert/strict'
-import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -124,7 +125,7 @@ function realGit(fail = () => null) {
 }
 
 test('a confirmed review publishes the finalized result and pushes it upstream', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-publish-cmd-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-publish-cmd-'))
   const { repo, remote } = await disposableRepo(dir)
   const run = await pendingRun(dir)
   await mkdir(join(run.runDir, '.runtime'), { recursive: true })
@@ -162,7 +163,7 @@ test('a confirmed review publishes the finalized result and pushes it upstream',
 })
 
 test('an unconfirmed review publishes nothing', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-publish-cmd-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-publish-cmd-'))
   const { repo } = await disposableRepo(dir)
   const run = await pendingRun(dir)
   const before = git(repo, 'rev-parse', 'HEAD')
@@ -181,7 +182,7 @@ test('an unconfirmed review publishes nothing', async () => {
 })
 
 test('a push failure exits nonzero and resume retries publication without re-asking the review', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-publish-cmd-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-publish-cmd-'))
   const { repo, remote } = await disposableRepo(dir)
   const run = await pendingRun(dir)
   await mkdir(join(run.runDir, '.runtime'), { recursive: true })
@@ -231,7 +232,7 @@ test('a push failure exits nonzero and resume retries publication without re-ask
 })
 
 test('without a configured publication target the review finalizes and publishes nothing', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-publish-cmd-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-publish-cmd-'))
   const run = await pendingRun(dir)
 
   const outcome = await runHumanReview({
@@ -246,7 +247,7 @@ test('without a configured publication target the review finalizes and publishes
 // A caller that saves the finalized result itself, such as the agent factory,
 // passes --no-publish so the review never commits or pushes from its checkout.
 test('--no-publish finalizes the review and publishes nothing even with a configured target', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-publish-cmd-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-publish-cmd-'))
   const { repo, remote } = await disposableRepo(dir)
   const run = await pendingRun(dir)
   const before = git(remote, 'rev-parse', 'HEAD')

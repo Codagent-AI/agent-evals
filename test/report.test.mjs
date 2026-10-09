@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { ReportConsistencyError, escapeHtml, renderReport } from '../evals/agent-runner/and-scene/lib/report.mjs'
+import { criteriaForJob, deterministicCriteria, loadRubrics } from '../evals/agent-runner/and-scene/lib/rubric.mjs'
+import { scoreProduct } from '../evals/agent-runner/and-scene/lib/scorer.mjs'
 
 function result(overrides = {}) {
   return {
@@ -711,4 +713,35 @@ test('report shows per-criterion panel basis and family-labelled votes', () => {
   assert.match(html, /majority-pass/)
   assert.match(html, /claude \(claude-sonnet-5-5\): pass/)
   assert.match(html, /codex \(gpt-6-sol\): fail/)
+})
+
+test('the engineering-quality component renders with its points, no floor, subcomponents, and criteria', async () => {
+  const rubrics = await loadRubrics()
+  const automated = rubrics.automated.rubric
+  const pass = (ids, failing = []) => ids.map((id) => ({
+    id, verdict: failing.includes(id) ? 'fail' : 'pass', rationale: 'judged', evidence: ['src/example.ts:1'],
+  }))
+  const failing = ['engineering-tests-wait-on-state', 'input-modifier-keys-pass-through']
+  const judges = Object.fromEntries([...new Set(automated.components.flatMap(({ subcomponents }) => (
+    subcomponents.map(({ job }) => job).filter(Boolean)
+  )))].map((job) => [job, pass(criteriaForJob(automated, job), failing)]))
+  const score = scoreProduct({
+    rubrics,
+    deterministic: pass(deterministicCriteria(automated), failing),
+    judges,
+    gates: pass(automated.gates.map(({ id }) => id)),
+  })
+  const engineering = score.components.find(({ id }) => id === 'engineering-quality')
+  assert.equal(engineering.points_awarded, 8 - 1.5 / 4 - 1)
+
+  const base = result()
+  const html = renderReport(result({ score: { ...base.score, components: score.components } }))
+  assert.match(html, /<td>engineering-quality<\/td><td>Engineering quality beyond the spec<\/td>/)
+  assert.match(html, /<td>engineering-quality<\/td><td>Engineering quality beyond the spec<\/td>(?:<td>[^<]*<\/td>){3}<td>8<\/td><td>none<\/td>/)
+  for (const id of [
+    'engineering-input-hygiene', 'engineering-verification-tooling-robustness',
+    'engineering-skill-instructions-and-templates', 'engineering-presentation-code-and-tests',
+    'input-modifier-keys-pass-through', 'engineering-tests-wait-on-state', 'engineering-typed-kit-primitives',
+  ]) assert.match(html, new RegExp(id), id)
+  assert.match(html, /<td>demo-technical-quality<\/td><td>[^<]*<\/td>(?:<td>[^<]*<\/td>){3}<td>20<\/td><td>12\.5<\/td>/)
 })

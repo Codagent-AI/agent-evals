@@ -1,6 +1,7 @@
+import { makeTempDir } from './temp-dir.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, writeFile, rename, rm, stat } from 'node:fs/promises'
+import { mkdir, readFile, writeFile, rename, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { runResponder } from '../evals/agent-runner/and-scene-define/lib/responder.mjs'
@@ -11,7 +12,7 @@ import { claudeStub, stream } from './and-scene-define-helpers.mjs'
 const delay = ms => new Promise(r => setTimeout(r, ms))
 const request = (turn, overrides = {}) => ({ schema_version: 1, run_id: 'runner-1', step: 'define.proposal', step_id: 'proposal', attempt: 1, turn, cli: 'codex', session_id: 'session', agent_message: 'What should I build?', empty_turn: false, ...overrides })
 async function setup(t) {
-  const runDir = await mkdtemp(join(tmpdir(), 'define-responder-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'define-responder-'))
   const exchangeDir = join(runDir, 'exchange'); await mkdir(exchangeDir)
   t.after(() => rm(runDir, { recursive: true, force: true }))
   return { runDir, exchangeDir }
@@ -146,7 +147,7 @@ test('INT-001: stub claude replays a clean recorded whole-turn response across s
     }
   `], { stdio: ['ignore', 'ignore', 'pipe'] })
   const runnerDone = new Promise((resolve, reject) => { runner.on('error', reject); runner.on('close', code => code === 0 ? resolve() : reject(new Error('fake Runner failed'))) })
-  t.after(() => runner.kill())
+  t.after(async () => { runner.kill(); await runnerDone.catch(() => {}) })
   // The fake Runner waits for replies indefinitely; fail as soon as the
   // responder stops instead of hanging the test file.
   await Promise.race([runnerDone, done.then(outcome => { throw new Error(`responder stopped before the fake Runner finished: ${outcome?.status}`) })])

@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -64,6 +65,7 @@ function completeJudging() {
       'scene-kit',
       'presentation-skill',
       'verification-tooling',
+      'engineering-quality',
       'testing-evidence',
       'assumption-handling',
     ],
@@ -72,6 +74,7 @@ function completeJudging() {
       'scene-kit',
       'presentation-skill',
       'verification-tooling',
+      'engineering-quality',
       'testing-evidence',
       'assumption-handling',
     ].map((id) => [id, [{ id: `${id}-criterion`, verdict: 'pass' }]])),
@@ -166,10 +169,11 @@ test('a complete reference result records the 92-point denominator and N/A compo
   const referenceScore = score({
     official: 92,
     components: [
-      { ...component('demo-technical-quality', 24), applicable: true, points_possible: 24 },
-      { ...component('scene-kit-correctness', 24), applicable: true, points_possible: 24 },
+      { ...component('demo-technical-quality', 20), applicable: true, points_possible: 20 },
+      { ...component('scene-kit-correctness', 20), applicable: true, points_possible: 20 },
       { ...component('presentation-skill-correctness', 7), applicable: true, points_possible: 7 },
       { ...component('verification-tool-correctness', 7), applicable: true, points_possible: 7 },
+      { ...component('engineering-quality', 8), applicable: true, points_possible: 8 },
       {
         ...component('testing-evidence-quality', 0),
         applicable: false,
@@ -508,7 +512,7 @@ test('a finalized human review is carried with its responses and rationales', ()
 // --- Artifact manifest -----------------------------------------------------
 
 async function runDirectory() {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-result-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-result-'))
   await mkdir(join(dir, 'phases'), { recursive: true })
   await mkdir(join(dir, '.runtime/candidate-worktree'), { recursive: true })
   await writeFile(join(dir, 'phases/score.json'), '{}\n')

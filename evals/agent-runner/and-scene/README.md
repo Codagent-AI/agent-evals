@@ -343,9 +343,12 @@ the macOS Google Chrome app, `chromium`, or `google-chrome`). With a binary, the
 controller starts headless Chrome on `AND_SCENE_HOST_DEVTOOLS_PORT` (default
 9333) only for the browser evaluation and for second-opinion replays, with
 flags that disable the GPU, extensions, background networking, site isolation,
-and caches, cap renderer processes at two, and cap the JavaScript heap; it
+caches, and the macOS code-sign clone (a full copy of the Chrome app per
+launch), cap renderer processes at two, and cap the JavaScript heap; it
 stops Chrome and removes its profile as soon as each of those phases ends, so
-no browser runs during source judging (`lib/host-browser.mjs`).
+no browser runs during source judging (`lib/host-browser.mjs`). It also stops
+Chrome and the AXI bridge when the rescore fails or is interrupted with SIGINT
+or SIGTERM.
 
 **Run host rescores one at a time on a small machine.** A long-lived headless
 Chrome reached about 9 GB on a 16 GB Mac, and two parallel rescores exhausted
@@ -401,7 +404,8 @@ Calibration asserts that:
   stays a product regression rather than becoming a harness failure — collateral
   damage to any other component or gate fails the case just as surely as a
   target that never moved;
-- the four product judge jobs all run and none fails; and
+- every applicable product judge job runs and none fails — five
+  source-review jobs for the reference, seven jobs for a candidate; and
 - synthetic human answers exercise rating validation, the 30-point arithmetic,
   the human gates, resume at the first unanswered question, refusal of an edited
   saved review, and report rendering.
@@ -638,6 +642,46 @@ is judged against those user-visible behaviors, whatever testing approach the
 candidate took, never against a fixed test-plan case list. Each testing-evidence
 criterion's definition comes from `criterion_definitions` in the automated
 rubric and is shown to the judge beside its identifier.
+
+Automated rubric 14.0.0 adds an 8-point "Engineering quality beyond the spec"
+component (`engineering-quality`, issue #77). The implementation validator
+mostly enforces engineering qualities the fixture's planning documents never
+state, so before 14.0.0 a candidate that skipped that work lost nothing. The
+component has no floor and sixteen narrow, eval-owned criteria whose recorded
+reasons state their full pass conditions: input hygiene (2 points, two
+deterministic browser probes for modified arrow keys and swipes that start on a
+control), verification tooling robustness (3), skill instructions and templates
+(1.5), and presentation code and tests (1.5). The fourteen source-reviewed
+criteria belong to a focused `engineering-quality` judge job that runs for
+candidates and the reference through the same cross-family panel as every
+other job (seven jobs for a candidate, five for the reference). Both browser
+probes start from a middle step in present mode. The modifier probe presses
+ArrowRight and ArrowLeft holding Alt, Control, and Meta in turn, and fails a
+step change or a prevented default; its keydown instrumentation is installed
+before the first press, since chrome-devtools-axi has no init-script primitive.
+A press that leaves the document passes through, and the probe reloads and
+continues. The swipe probe
+swipes from the mode control (or, failing that, a step or Previous/Next
+control) in whichever mode exposes one, as touch and then pointer events. Each
+declares the `demo-integration` fallback judge, which decides it only when the
+deck has no middle step or, for the swipe, no discoverable control. The points come from demo
+technical quality and scene-kit correctness, cut from 24 to 20 each (canonical
+content 5→4, navigation and modes 5→4, runtime reliability 4→3, code
+boundaries 3→2; step model 4→3, entity transitions 7→6, modes and navigation
+6→5, style and attribution 5→4). Their floors move from 15 to 12.5, keeping the
+same 62.5% ratio. The 70 automated points, the 100-point total, the 40/70
+eligibility threshold, and the reference's shared 92 are unchanged. The issue's
+class A coverage audit also adds four guidance lines that restate fixture
+requirements: `skill-checks-run-before-done` requires a narrow-viewport check
+for responsive-sensitive presentations, `skill-empty-directory-scaffold` fails
+a bootstrap scene kit that differs in behavior or public types from the
+canonical kit and fails a delivery that never installs the Playwright Chromium
+browser or checks that it is available before the render check, and
+`verification-step-error-fails` fails a verifier that reads missing or
+non-numeric step hooks as progress. Scores are
+not comparable with results from earlier rubrics (12.x, or 13.0.0, which
+introduced the panel without this component) until those runs are re-judged
+with `--rescore-from`. 14.0.0 is built on 13.0.0's panel judging.
 
 Automated rubric 10.0.0 defines the terms the round-2 audit found judges
 splitting on: a stable step id survives insertion and reordering, a warning
@@ -879,6 +923,65 @@ no question and reruns no evaluation: it resumes at the recorded stage, reuses a
 existing result commit rather than creating a second one, and retries only the
 unfinished push.
 
+## Experiment baseline
+
+The experiment baseline records the published repetitions that represent the current
+Agent Runner configuration, their common identity, score and resource summaries, a
+frozen anchor, and replacement history. It is separate from the reference baseline
+used by `--reference-baseline` and `result.json.baseline`.
+
+Run these commands from the repository root (each accepts `--record <path>` to use a
+separate record file):
+
+```sh
+node evals/agent-runner/and-scene/experiments.mjs baseline set evals/agent-runner/and-scene/results/<run-id> --source manual --reason "initial baseline"
+node evals/agent-runner/and-scene/experiments.mjs baseline add-rep evals/agent-runner/and-scene/results/<control-run-id>
+node evals/agent-runner/and-scene/experiments.mjs baseline anchor --from-current --reason "initial anchor"
+node evals/agent-runner/and-scene/experiments.mjs baseline show
+```
+
+`set` accepts one or more result directories and requires a complete human review
+of their median repetition. It replaces `current`, preserving the old value in
+`history`. `add-rep` appends one control repetition and recomputes the median and
+summaries. If the median moves away from the reviewed repetition, the record and
+`show` flag the divergence; `anchor` then requires a fresh `set` that includes
+that median's review. `anchor` freezes a copy of `current`; replacing it archives
+the old anchor. A `profile-change` set clears and archives any anchor.
+For a rescored result without a complete review, `set` and `add-rep` look through
+the rescore's source chain in sibling published result directories. They carry the
+first complete review only when its human rubric sha256 matches the rescore's,
+then recompute the official score from rescored automated points and awarded human
+points. The record and `show` name the review source. An unavailable review or
+rubric mismatch leaves a rescored median ineligible for `set`.
+
+Only schema-8 and schema-9 Agent Runner candidate results are admitted. Every repetition must
+have the same runner commit; `--allow-mismatch <reason>` cannot waive this rule.
+It can waive differences in the skills commit, workflow settings, fixture commit,
+configured role profiles, or rubrics. The waived fields and reason are saved on
+the repetition. Observed models are recorded but do not affect identity.
+Infrastructure failures must be rerun. Product failures, including those without
+an automated score, are kept. An unscored failure ranks below scored repetitions
+and makes the score summary incomplete. A rescore and its source cannot both be
+counted; rebuild with `set` using only the corrected result directory.
+
+The summary computes each metric only when every repetition has a complete value.
+Otherwise it reports the missing run ids, including for tokens, active time, and
+cost. The identity cannot compare the agent-evals or Agent Validator revisions
+because `result.json` does not yet record them; keep repetitions from the same
+factory evaluation when possible and note relevant differences in the reason.
+
+Exit code 0 means success, including `show` and `--help`; 1 means an admission
+refusal; 2 means a usage, invalid-record, or I/O error. Refusals are JSON lines
+on stderr. Writes are atomic and the record is intended for git review.
+
+The first baseline is seeded manually after the factory has saved all three
+agent-evals#67 result directories. Run `set` with those three directories,
+`--source profile-change`, and a reason describing the profile change. Check
+that rep 2 is the reviewed median, then run `anchor --from-current` with a
+reason. Commit the resulting `experiments/baseline.json` separately.
+If rep 2 was rescored, use its rescored directory. Its prior review carries over
+from the published source directory when the human rubric still matches.
+
 ## Outcomes
 
 `evaluation_status` is exactly one of `complete`, `pending-human-review`,
@@ -889,7 +992,7 @@ reference score uses `not-applicable` and the `REFERENCE — COMPLETE` headline.
 
 Execution status and product quality are independent. A failed workflow or
 harness never becomes a product failure. A complete automated score below 40 of
-70, either automated component below its 15-of-24 floor, or any failed hard gate
+70, either automated component below its 12.5-of-20 floor, or any failed hard gate
 does become a conclusive product failure because human review cannot make that
 candidate pass. A durably recorded product verdict survives a later harness
 failure — reported as `PASS — HARNESS FAILURE` or `FAIL — HARNESS FAILURE`. A
@@ -912,17 +1015,18 @@ excluding `.runtime`.
 
 ## Scoring
 
-The candidate score is 100 points: 24 for demo presentation technical quality,
-24 for scene-kit correctness, 7 for presentation-skill correctness, 7 for
-verification-tool correctness, 4 for testing-evidence quality, 4 for
-assumption-handling quality, and 30 for human review. A reference applies only
-the four shared automated components and human review, for an unscaled
-denominator of 92. Runner health, workflow
+The candidate score is 100 points: 20 for demo presentation technical quality,
+20 for scene-kit correctness, 7 for presentation-skill correctness, 7 for
+verification-tool correctness, 8 for engineering quality beyond the spec, 4 for
+testing-evidence quality, 4 for assumption-handling quality, and 30 for human
+review. A reference applies only the five shared automated components and human
+review, for an unscaled denominator of 92; a technical adjudication replaces
+exactly those five shared component scores. Runner health, workflow
 completion, evidence collection, judge execution, cost, timing, retries, and
 evidence repair award and deduct no product points; they are recorded
 diagnostically. Until a human review exists, a run reports its automated
 subtotal out of 70 and no official total. A complete automated result must score
-at least 40 of 70, meet both automated 15-of-24 component floors, and pass all
+at least 40 of 70, meet both automated 12.5-of-20 component floors, and pass all
 four hard gates to proceed to human review. A failed requirement produces
 `evaluation_status=complete` and `product_verdict=fail` without inventing an
 official score. Incomplete automated evidence instead produces the owning
@@ -973,10 +1077,11 @@ model calls on identical evidence.
 Four hard gates sit outside the point total: `verification-build-whole-app`,
 `verification-sample-outline`, `verification-every-produced-step-renders`, and
 `verification-clear-outcome`. A failed gate ends automated eligibility without
-erasing the numerical score. An official pass needs at least 70 overall, 15 of
-24 for demo quality, 15 of 24 for scene-kit correctness, 15 of 30 for human
-review, no individual human rating of 1, all four gates, and every required
-phase complete.
+erasing the numerical score. An official pass needs at least 70 overall, 12.5
+of 20 for demo quality, 12.5 of 20 for scene-kit correctness, 15 of 30 for
+human review, no individual human rating of 1, all four gates, and every
+required phase complete. Presentation skill, verification tooling, engineering
+quality, testing evidence, and assumption handling have no floor.
 
 Judges are given the bounded list of delivered source paths alongside the
 deterministic source evidence. When no candidate source is available they are

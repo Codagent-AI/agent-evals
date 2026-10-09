@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { access, lstat, mkdir, mkdtemp, readFile, readlink, symlink, writeFile } from 'node:fs/promises'
+import { access, lstat, mkdir, readFile, readlink, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -31,7 +32,7 @@ async function exists(path) {
 }
 
 test('Codex rollouts and Claude transcripts survive a replacement home without persisting credentials', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-session-state-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-session-state-'))
   const stateRoot = join(dir, 'evaluation-a')
   const firstHome = join(dir, 'home-a')
   const replacementHome = join(dir, 'home-b')
@@ -85,7 +86,7 @@ test('Codex rollouts and Claude transcripts survive a replacement home without p
 })
 
 test('a different evaluation receives an isolated empty session store', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-session-isolation-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-session-isolation-'))
   const firstStateRoot = join(dir, 'evaluation-a')
   const secondStateRoot = join(dir, 'evaluation-b')
   const firstHome = join(dir, 'home-a')
@@ -104,7 +105,7 @@ test('a different evaluation receives an isolated empty session store', async ()
 })
 
 test('recovery refuses a session-state directory redirected outside the evaluation', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-session-symlink-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-session-symlink-'))
   const stateRoot = join(dir, 'evaluation-a')
   const foreign = join(dir, 'foreign')
   const home = join(dir, 'home')
@@ -120,7 +121,7 @@ test('recovery refuses a session-state directory redirected outside the evaluati
 })
 
 test('recovery refuses a symlinked ancestor of the session-state directory', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-session-ancestor-symlink-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-session-ancestor-symlink-'))
   const evaluationRoot = join(dir, 'evaluation-a')
   const foreign = join(dir, 'foreign')
   const stateRoot = join(evaluationRoot, '.runtime', 'agent-session-state')
@@ -137,7 +138,7 @@ test('recovery refuses a symlinked ancestor of the session-state directory', asy
 })
 
 test('recovery refuses a session-state grandparent redirected outside the evaluation', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-session-grandparent-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-session-grandparent-'))
   const foreign = join(dir, 'foreign')
   const stateRoot = join(dir, 'redirected', 'runtime', 'agent-session-state')
   const home = join(dir, 'home')
@@ -152,7 +153,7 @@ test('recovery refuses a session-state grandparent redirected outside the evalua
 })
 
 test('recovery refuses a CLI home redirected outside the evaluation', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-evals-session-cli-home-'))
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-session-cli-home-'))
   const stateRoot = join(dir, 'evaluation-a')
   const foreign = join(dir, 'foreign')
   const home = join(dir, 'home')

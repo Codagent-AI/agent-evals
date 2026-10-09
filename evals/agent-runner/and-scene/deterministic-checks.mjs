@@ -2,7 +2,7 @@
 // Static source evidence about the delivered candidate.
 //
 // These scans no longer produce criterion verdicts of their own. The scored
-// criteria come from the live browser evaluation and the four product judges;
+// criteria come from the live browser evaluation and the focused product judges;
 // what this module produces is bounded, cited evidence those judges reason
 // over, plus the source half of the canonical-sample hard gate.
 import { opendir, readFile, stat, writeFile } from 'node:fs/promises'

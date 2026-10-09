@@ -1,6 +1,7 @@
+import { makeTempDir } from './temp-dir.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
+import { mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { validateProfiles, runnerConfig } from '../evals/agent-runner/and-scene-define/lib/profiles.mjs'
@@ -53,7 +54,7 @@ test('mount preflight inspects build and command containers, modes, and environm
   assert.throws(() => verifyMountPlan(command.replace(' image', ' --env-file /secrets image'), options), /env-file/)
 })
 test('collection freezes files and records SHA-256 and HEAD', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'define-collection-')); t.after(() => rm(root, { recursive: true, force: true, maxRetries: 3 }))
+  const root = await makeTempDir(join(tmpdir(), 'define-collection-')); t.after(() => rm(root, { recursive: true, force: true, maxRetries: 3 }))
   const repo = join(root, 'repo'); const change = join(repo, 'openspec/changes/add-presentation-skill')
   await mkdir(change, { recursive: true }); await writeFile(join(change, 'proposal.md'), 'proposal')
   repoGit(repo, ['init', '--initial-branch=main']); repoGit(repo, ['add', '.']); repoGit(repo, ['commit', '-m', 'test: fixture'])
@@ -84,7 +85,7 @@ test('sandbox driver creates the pinned repository, preserves all CLI sessions, 
   const { readlink } = await import('node:fs/promises')
   const { materialize } = await import('../evals/agent-runner/and-scene-define/lib/starting-repo.mjs')
   const { stageRuntime } = await import('../evals/agent-runner/and-scene-define/lib/sandbox.mjs')
-  const root = await mkdtemp(join(tmpdir(), 'define-driver-')); t.after(() => rm(root, { recursive: true, force: true, maxRetries: 3 }))
+  const root = await makeTempDir(join(tmpdir(), 'define-driver-')); t.after(() => rm(root, { recursive: true, force: true, maxRetries: 3 }))
   const starting = await materialize(join(root, 'starting'))
   const input = join(root, 'input'); const home = join(root, 'home'); const artifacts = join(root, 'sandbox'); const bin = join(root, 'bin'); const skills = join(root, 'skills')
   for (const dir of [home, bin, skills]) await mkdir(dir)
@@ -108,7 +109,7 @@ test('sandbox driver creates the pinned repository, preserves all CLI sessions, 
 async function preflightFixture(t) {
   const { cp } = await import('node:fs/promises')
   const { SUITE_ROOT } = await import('../evals/agent-runner/and-scene-define/lib/files.mjs')
-  const root = await mkdtemp(join(tmpdir(), 'define-pins-')); t.after(() => rm(root, { recursive: true, force: true, maxRetries: 3 }))
+  const root = await makeTempDir(join(tmpdir(), 'define-pins-')); t.after(() => rm(root, { recursive: true, force: true, maxRetries: 3 }))
   const runner = join(root, 'runner'); const skills = join(root, 'skills'); const suite = join(root, 'suite'); const home = join(root, 'home')
   for (const dir of [join(runner, 'workflows/openspec'), join(runner, 'workflows/core'), join(skills, '.claude-plugin'), join(skills, '.codex-plugin'), join(skills, '.cursor-plugin'), join(home, '.codex'), join(home, '.cursor')]) await mkdir(dir, { recursive: true })
   await writeFile(join(runner, 'workflows/openspec/change-v2.0.yaml'), 'steps:\n  - id: create\n  - id: define\n    workflow: ../core/define-change-v1.0.yaml\n')
@@ -177,7 +178,7 @@ test('failed subprocess diagnostics retain exit status when stderr is empty', as
 test('active-container lookup tolerates absent artifact directories and still detects their mounts', async t => {
   const { LocalSandbox } = await import('../evals/agent-runner/and-scene-define/lib/sandbox.mjs')
   const { realpath } = await import('node:fs/promises')
-  const root = await mkdtemp(join(tmpdir(), 'define-active-')); t.after(() => rm(root, { recursive: true, force: true, maxRetries: 3 }))
+  const root = await makeTempDir(join(tmpdir(), 'define-active-')); t.after(() => rm(root, { recursive: true, force: true, maxRetries: 3 }))
   let source = '/unrelated/artifacts'
   const command = (_command, args) => ({ ok: true, stdout: args[0] === 'ps' ? 'other-container\n' : JSON.stringify([{ Mounts: [{ Source: source }] }]), stderr: '' })
   const sandbox = new LocalSandbox({ runDir: root, runnerDir: root, skillsDir: root, command })

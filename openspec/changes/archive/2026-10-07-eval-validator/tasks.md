@@ -1,0 +1,7 @@
+- [x] Implement the change described by these files:
+  - [proposal.md](proposal.md)
+  - [specs/engineering-quality-scoring/spec.md](specs/engineering-quality-scoring/spec.md)
+  - [specs/product-quality-scoring/spec.md](specs/product-quality-scoring/spec.md)
+  - [specs/failure-second-opinion/spec.md](specs/failure-second-opinion/spec.md)
+  - [specs/runner-workflow-execution/spec.md](specs/runner-workflow-execution/spec.md)
+  - [design.md](design.md)

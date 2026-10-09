@@ -1,6 +1,7 @@
+import { makeTempDir } from './temp-dir.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFile, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { readFile, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildRubric, checkRubric, verifyJudgingInputs, rubricSettings, RUBRIC_SETTINGS_DEFAULTS } from '../evals/agent-runner/and-scene-define/lib/rubric.mjs'
@@ -177,7 +178,7 @@ import { runDiscovery } from '../evals/agent-runner/and-scene-define/lib/judge-j
 const exchange = { step: 'define.specs', step_id: 'specs', attempt: 1, turn: 1, agent_message: 'Requirements?', reply: 'Here is an answer.', reply_type: 'answer' }
 const exchangeCitation = { path: null, start_line: null, end_line: null, gate: null, exchange: exchangeIdentity(exchange) }
 async function phaseFixture(t) {
-  const runDir = await mkdtemp(join(tmpdir(), 'define-score-')); t.after(() => rm(runDir, { recursive: true, force: true }))
+  const runDir = await makeTempDir(join(tmpdir(), 'define-score-')); t.after(() => rm(runDir, { recursive: true, force: true }))
   await mkdir(join(runDir, 'collected'))
   await writeFile(join(runDir, 'collected/proposal.md'), inputs.artifacts['proposal.md'])
   const subset = { ...inventory, items: inventory.items.filter(x => x.class !== 'preference').slice(0, 5) }

@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { chmod, mkdtemp, mkdir, readFile, readlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, readlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { test } from 'node:test'
@@ -14,7 +15,7 @@ async function fixture({
   cursorPluginName = 'codagent',
   includeCursorPlugin = true,
 } = {}) {
-  const root = await mkdtemp(join(tmpdir(), 'agent-skills-bootstrap-'))
+  const root = await makeTempDir(join(tmpdir(), 'agent-skills-bootstrap-'))
   const source = join(root, 'agent-skills')
   const bin = join(root, 'bin')
   const calls = join(root, 'calls.log')

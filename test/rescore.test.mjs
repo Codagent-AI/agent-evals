@@ -1,5 +1,6 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -22,7 +23,7 @@ async function sourceRun({
   corruptEvidence = false,
   changeName = 'create-and-scene',
 } = {}) {
-  const sourceDir = await mkdtemp(join(tmpdir(), 'and-scene-rescore-source-'))
+  const sourceDir = await makeTempDir(join(tmpdir(), 'and-scene-rescore-source-'))
   const sessionDir = join(sourceDir, '.runtime/runner-session')
   const outputDir = join(sessionDir, 'output')
   await mkdir(join(outputDir, 'acceptance-screenshots'), { recursive: true })
@@ -279,7 +280,7 @@ async function retainEvidenceOnly(context, { corruptRetained = false, staleManif
 test('a source whose runner session is gone is rescored from hash-matching retained evidence', async () => {
   const context = await sourceRun()
   await retainEvidenceOnly(context)
-  const stagingDir = join(await mkdtemp(join(tmpdir(), 'and-scene-rescore-staging-')), 'session')
+  const stagingDir = join(await makeTempDir(join(tmpdir(), 'and-scene-rescore-staging-')), 'session')
 
   const imported = await loadCandidateRescoreSource({ sourceDir: context.sourceDir, stagingDir })
 
@@ -302,7 +303,7 @@ test('a source whose runner session is gone is rescored from hash-matching retai
 test('retained evidence whose bytes do not match the recorded hash is refused', async () => {
   const context = await sourceRun()
   await retainEvidenceOnly(context, { corruptRetained: true })
-  const stagingDir = join(await mkdtemp(join(tmpdir(), 'and-scene-rescore-staging-')), 'session')
+  const stagingDir = join(await makeTempDir(join(tmpdir(), 'and-scene-rescore-staging-')), 'session')
 
   await assert.rejects(
     () => loadCandidateRescoreSource({ sourceDir: context.sourceDir, stagingDir }),
@@ -313,7 +314,7 @@ test('retained evidence whose bytes do not match the recorded hash is refused', 
 test('a retained evidence manifest that differs from the recorded manifest hash is refused', async () => {
   const context = await sourceRun()
   await retainEvidenceOnly(context, { staleManifest: true })
-  const stagingDir = join(await mkdtemp(join(tmpdir(), 'and-scene-rescore-staging-')), 'session')
+  const stagingDir = join(await makeTempDir(join(tmpdir(), 'and-scene-rescore-staging-')), 'session')
 
   await assert.rejects(
     () => loadCandidateRescoreSource({ sourceDir: context.sourceDir, stagingDir }),
@@ -334,7 +335,7 @@ test('a missing runner session without a staging directory is refused', async ()
 test('a referenced worktree file that was not retained in place is verified against its retained copy', async () => {
   const context = await sourceRun()
   await retainEvidenceOnly(context, { worktreeFile: { bytes: '# Skill\n' } })
-  const stagingDir = join(await mkdtemp(join(tmpdir(), 'and-scene-rescore-staging-')), 'session')
+  const stagingDir = join(await makeTempDir(join(tmpdir(), 'and-scene-rescore-staging-')), 'session')
 
   const imported = await loadCandidateRescoreSource({ sourceDir: context.sourceDir, stagingDir })
 
@@ -345,7 +346,7 @@ test('a referenced worktree file that was not retained in place is verified agai
 test('a referenced worktree file whose retained copy differs is refused', async () => {
   const context = await sourceRun()
   await retainEvidenceOnly(context, { worktreeFile: { bytes: '# Skill\n', retained: '# Other\n' } })
-  const stagingDir = join(await mkdtemp(join(tmpdir(), 'and-scene-rescore-staging-')), 'session')
+  const stagingDir = join(await makeTempDir(join(tmpdir(), 'and-scene-rescore-staging-')), 'session')
 
   await assert.rejects(
     () => loadCandidateRescoreSource({ sourceDir: context.sourceDir, stagingDir }),

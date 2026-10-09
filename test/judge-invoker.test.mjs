@@ -1,7 +1,8 @@
+import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { writeFileSync } from 'node:fs'
-import { mkdir, mkdtemp, open, readdir, readFile } from 'node:fs/promises'
+import { mkdir, open, readdir, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -45,7 +46,7 @@ function writeFinalOutput(args, text) {
 }
 
 test('Codex judge invoker enforces the schema and scopes web access per job', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const candidateWorktree = join(runDir, 'candidate')
   const spawnImpl = fakeSpawn((child, { args }) => {
     writeFinalOutput(args, '{"results":[]}')
@@ -132,7 +133,7 @@ test('Codex judge invoker enforces the schema and scopes web access per job', as
 })
 
 test('eval-owned usage survives a new invoker process for the same run directory', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const candidateWorktree = join(runDir, 'candidate')
   const first = createCodexJudgeInvoker({
     runDir,
@@ -157,7 +158,7 @@ test('eval-owned usage survives a new invoker process for the same run directory
 })
 
 test('Codex judge invoker reports a failed CLI without accepting stale output', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const invoke = createCodexJudgeInvoker({
     runDir,
     candidateWorktree: join(runDir, 'candidate'),
@@ -179,7 +180,7 @@ test('Codex judge invoker reports a failed CLI without accepting stale output', 
 })
 
 test('Codex judge invoker accepts only explicitly allowed read-only judge roots', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const neutralRoot = join(runDir, 'neutral')
   await mkdir(neutralRoot)
   const calls = []
@@ -230,7 +231,7 @@ async function readOrEmpty(path) {
 }
 
 test('Codex judge invoker streams events and stderr to disk while the call runs', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const judgeDir = join(runDir, '.runtime', 'judge')
   const started = JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' })
   const invoke = createCodexJudgeInvoker({
@@ -263,7 +264,7 @@ test('Codex judge invoker streams events and stderr to disk while the call runs'
 })
 
 test('Codex judge invoker omits shell command output from persisted events', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const invoke = createCodexJudgeInvoker({
     runDir,
     candidateWorktree: join(runDir, 'candidate'),
@@ -297,7 +298,7 @@ test('Codex judge invoker omits shell command output from persisted events', asy
 })
 
 test('Codex judge invoker stops a stalled call and retries it once', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const judgeDir = join(runDir, '.runtime', 'judge')
   const spawnImpl = fakeSpawn((child, { args }, attempt) => {
     if (attempt === 1) {
@@ -348,7 +349,7 @@ test('Codex judge invoker stops a stalled call and retries it once', async () =>
 })
 
 test('Codex judge invoker keeps usage a timed-out call reported before stalling', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const invoke = createCodexJudgeInvoker({
     runDir,
     candidateWorktree: join(runDir, 'candidate'),
@@ -374,7 +375,7 @@ test('Codex judge invoker keeps usage a timed-out call reported before stalling'
 })
 
 test('Codex judge invoker force-kills a timed-out call that ignores SIGTERM', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const spawnImpl = fakeSpawn((child) => {
     child.on('kill', (signal) => { if (signal === 'SIGKILL') child.exit(null, signal) })
   })
@@ -398,7 +399,7 @@ test('Codex judge invoker force-kills a timed-out call that ignores SIGTERM', as
 })
 
 test('Codex judge invoker keeps an earlier process attempt evidence for the same call', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const judgeDir = join(runDir, '.runtime', 'judge')
   await mkdir(judgeDir, { recursive: true })
   writeFileSync(join(judgeDir, '01-scene-kit.events.jsonl'), 'killed attempt\n')
@@ -421,7 +422,7 @@ test('Codex judge invoker keeps an earlier process attempt evidence for the same
 })
 
 test('Codex judge invoker reports a Codex launch failure', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const invoke = createCodexJudgeInvoker({
     runDir,
     candidateWorktree: join(runDir, 'candidate'),
@@ -439,7 +440,7 @@ test('Codex judge invoker reports a Codex launch failure', async () => {
 })
 
 test('Codex judge invoker does not wait on pipes a stopped call left open', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const spawnImpl = fakeSpawn((child, { args }, attempt) => {
     if (attempt === 1) {
       // A descendant still holds stdout, so Codex exits without `close`.
@@ -463,7 +464,7 @@ test('Codex judge invoker does not wait on pipes a stopped call left open', asyn
 })
 
 test('Codex judge invoker still force-kills a stopped call whose descendant outlives it', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const spawnImpl = fakeSpawn((child, { args }, attempt) => {
     if (attempt === 1) {
       // Codex exits on SIGTERM, but a descendant in its group still runs.
@@ -496,7 +497,7 @@ test('Codex judge invoker still force-kills a stopped call whose descendant outl
 })
 
 test('Codex judge invoker settles a timed-out call whose Codex exited before the stop', { timeout: 2000 }, async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const spawnImpl = fakeSpawn((child, { args }, attempt) => {
     if (attempt === 1) {
       // Codex exits normally while a descendant holds its output pipes.
@@ -520,7 +521,7 @@ test('Codex judge invoker settles a timed-out call whose Codex exited before the
 })
 
 test('Codex judge invoker fails a call whose evidence cannot be written', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const invoke = createCodexJudgeInvoker({
     runDir,
     candidateWorktree: join(runDir, 'candidate'),
@@ -546,7 +547,7 @@ test('Codex judge invoker fails a call whose evidence cannot be written', async 
 })
 
 test('Codex judge invoker stops reading output until it is written', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   let release
   const blocked = new Promise((resolveBlocked) => { release = resolveBlocked })
   const invoke = createCodexJudgeInvoker({
@@ -578,7 +579,7 @@ test('Codex judge invoker stops reading output until it is written', async () =>
 })
 
 test('Codex judge invoker stops a call that exceeds its stdout limit', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const spawnImpl = fakeSpawn((child) => {
     child.on('kill', (signal) => child.exit(null, signal))
     child.stdout.write(`${JSON.stringify({ type: 'turn.started' })}\n`)
@@ -606,7 +607,7 @@ test('Codex judge invoker stops a call that exceeds its stdout limit', async () 
 })
 
 test('eval-owned usage records the judging stage so sample and adjudication cost is measurable', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const candidateWorktree = join(runDir, 'candidate')
   const invoke = createCodexJudgeInvoker({
     runDir,
@@ -636,7 +637,7 @@ const CAPACITY_EVENTS = [
 // Round-1 audit: capacity rejections left 0-5 ledger entries "unavailable"
 // per run and spent judge attempts.
 test('a capacity rejection is waited out and recorded as a call that consumed no tokens', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const waits = []
   const spawnImpl = fakeSpawn((child, { args }, count) => {
     if (count <= 2) {
@@ -667,7 +668,7 @@ test('a capacity rejection is waited out and recorded as a call that consumed no
 })
 
 test('a capacity rejection that never clears still fails the call', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const spawnImpl = fakeSpawn((child) => {
     child.stdout.write(`${CAPACITY_EVENTS}\n`)
     child.exit(1)
@@ -685,7 +686,7 @@ test('a capacity rejection that never clears still fails the call', async () => 
 
 // Agent-evals #79: a schema OpenAI rejects fails identically on every retry.
 test('an invalid_json_schema rejection fails fast as a non-retryable harness error', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const message = JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', code: 'invalid_json_schema',
     message: "Invalid schema for response_format 'codex_output_schema'" }, status: 400 })
   const spawnImpl = fakeSpawn((child) => {
@@ -709,7 +710,7 @@ test('an invalid_json_schema rejection fails fast as a non-retryable harness err
 })
 
 test('the judge reasoning effort is pinned explicitly rather than left to the CLI default', async () => {
-  const runDir = await mkdtemp(join(tmpdir(), 'and-scene-judge-'))
+  const runDir = await makeTempDir(join(tmpdir(), 'and-scene-judge-'))
   const spawnImpl = fakeSpawn((child, { args }) => {
     writeFinalOutput(args, '{}')
     child.exit(0)
