@@ -1532,22 +1532,24 @@ const TESTING_PACKET_ROLES = [
   'referenced-material',
 ]
 
+async function approvedRequirementFiles(requirementsRoot) {
+  if (!requirementsRoot) return []
+  try {
+    return (await readdir(requirementsRoot)).filter((name) => name.endsWith('.md')).sort()
+  } catch (error) {
+    if (error.code === 'ENOENT') return []
+    throw error
+  }
+}
+
 // The requirement and scenario headings of the approved specs, so the testing
 // judge measures coverage against what the change adds rather than against a
 // test plan's case list. Headings only: the judge needs to know which
 // behaviors exist, and the full text would crowd candidate evidence out of the
 // bounded packet.
 async function approvedRequirementInventory(requirementsRoot) {
-  if (!requirementsRoot) return null
-  let names
-  try {
-    names = (await readdir(requirementsRoot)).filter((name) => name.endsWith('.md')).sort()
-  } catch (error) {
-    if (error.code === 'ENOENT') return null
-    throw error
-  }
   const documents = []
-  for (const name of names) {
+  for (const name of await approvedRequirementFiles(requirementsRoot)) {
     const requirements = []
     for (const line of (await readFile(join(requirementsRoot, name), 'utf8')).split(/\r?\n/)) {
       const requirement = line.match(/^#{2,4}\s+Requirement:\s*(.+?)\s*$/)
@@ -1564,16 +1566,8 @@ async function approvedRequirementInventory(requirementsRoot) {
 // check: it must see what a requirement demands to notice a deviation the
 // candidate's own log shows but never surfaces.
 async function approvedRequirementTexts(requirementsRoot) {
-  if (!requirementsRoot) return null
-  let names
-  try {
-    names = (await readdir(requirementsRoot)).filter((name) => name.endsWith('.md')).sort()
-  } catch (error) {
-    if (error.code === 'ENOENT') return null
-    throw error
-  }
   const documents = []
-  for (const name of names) {
+  for (const name of await approvedRequirementFiles(requirementsRoot)) {
     const text = await readFile(join(requirementsRoot, name), 'utf8')
     if (text.length > REQUIREMENT_DOCUMENT_MAX_CHARS) {
       throw new PacketOverflowError(`approved requirement document ${name} has ${text.length} characters, over the `
