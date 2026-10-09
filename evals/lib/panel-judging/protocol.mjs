@@ -1700,8 +1700,9 @@ const spanReference = ({ path, start_line: start, end_line: end }) => `${path}:$
 // only when a check confirms every clause met, and on a browser-fallback
 // criterion only when that check cites delivered source. An undecided or
 // unconfirmed state leaves the ruling standing, except that a browser-fallback
-// pass must be proven and so fails unless confirmed.
-function tiebreakDecisions({ results, spans, outcomes, fallbackIds }) {
+// pass must be proven and so fails unless confirmed. Exported, pure, for the
+// and-scene settlement replay.
+export function tiebreakDecisions({ results, spans, outcomes, fallbackIds }) {
   return results.map((result) => {
     const quoted = spans.get(result.id) ?? []
     const references = quoted.map(spanReference).map((item) => bounded(`quoted lines: ${item}`))

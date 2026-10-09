@@ -440,8 +440,11 @@ export async function runProductJudging({
   failJob = null,
   invoke,
   concurrency = PRODUCT_JUDGE_CONCURRENCY,
+  // The job-filtered diagnostic judges only these jobs; null judges every one.
+  jobs: selectedJobs = null,
 }) {
   const jobs = productJudgeJobs(rubrics, { mode, notObserved })
+    .filter(({ id }) => selectedJobs === null || selectedJobs.includes(id))
   const judges = {}
   const retries = {}
   const failedJobs = []
