@@ -923,9 +923,9 @@ Hard-gate handling of unobserved evidence SHALL NOT change, except that `verific
 - **AND** every criterion's owner, points, and subcomponent are unchanged, while the rubric version and hash differ from the prior rubric
 
 #### Scenario: A zero-point gate input stays unresolved
-- **WHEN** `demo-nine-step-content-and-order` is not observed and its fallback verdict is missing after retries, and every scored demo criterion is resolved
+- **WHEN** `demo-nine-step-content-and-order` is not observed and its fallback verdict is unresolved, for example while its second opinion is pending, and every scored demo criterion is resolved
 - **THEN** the demo component is complete and reports its points
-- **AND** `verification-sample-outline` is unobserved, automated eligibility is unavailable, and the harness failure is reported
+- **AND** `verification-sample-outline` is unobserved, automated eligibility is unavailable, and the unresolved gate input is reported
 
 ## ADDED Requirements
 
