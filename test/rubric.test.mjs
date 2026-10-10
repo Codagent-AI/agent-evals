@@ -692,6 +692,7 @@ test('rubric 14.0 fails a scaffold that never installs or checks for the Chromiu
   assert.match(b7, /Playwright Chromium browser/)
   assert.match(b7, /Credit SKILL\.md, the bootstrap scripts, or the verify step when they install Chromium or check that it is available before the render check/)
   assert.match(b7, /Fail when none of them installs it or checks for it/)
+  assert.match(b7, /A sentence saying Chromium is required, and a browser launch that simply fails when it is missing, are neither an install nor an availability check/)
 
   const citations = rubric.criterion_sources['skill-empty-directory-scaffold'].sources
   assert.ok(citations?.some(({ document, quote }) => (
