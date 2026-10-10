@@ -268,6 +268,28 @@ test('scored mode passes a selected logical workflow to the controller and skill
   assert.match(result.output, /IMPLEMENTATION_WORKFLOW_PATH=workflows\/core\/orchestrated-implement-change-v1\.2\.yaml/)
 })
 
+test('an exported WORKFLOW variable never selects the evaluated workflow', async () => {
+  const context = await setup({
+    extraWorkflows: {
+      'workflows/core/orchestrated-implement-change-v1.2.yaml': 'name: orchestrated-implement-change\n',
+    },
+  })
+  const withStrayWorkflow = { ...context, env: { WORKFLOW: 'core:orchestrated-implement-change' } }
+
+  const result = await scored(withStrayWorkflow, ['--skip-validator', ...profileArgs])
+
+  assert.equal(result.status, 0, result.output)
+  assert.match(result.output, /--workflow core:plan-and-implement-change/)
+  assert.ok(!result.output.includes('orchestrated-implement-change'), result.output)
+
+  const source = join(context.dir, 'completed-candidate')
+  await mkdir(source)
+  const rescore = await scored(withStrayWorkflow, ['--rescore-from', source])
+  assert.equal(rescore.status, 0, rescore.output)
+  assert.ok(!rescore.output.includes('--workflow'), rescore.output)
+  assert.ok(!rescore.output.includes('orchestrated-implement-change'), rescore.output)
+})
+
 test('scored mode rejects a workflow file path or malformed reference', async () => {
   const context = await setup()
 

@@ -23,8 +23,10 @@ fi
 CHANGE_NAME="${CHANGE_NAME:-create-and-scene}"
 # The evaluated workflow is a logical Agent Runner reference. The harness treats
 # it as opaque and records whichever clean Agent Runner revision supplies it
-# rather than pinning a commit.
-WORKFLOW="${WORKFLOW:-core:plan-and-implement-change}"
+# rather than pinning a commit. Only --workflow selects it: an inherited
+# WORKFLOW variable is ignored, so it can neither change the evaluated workflow
+# nor slip past the --rescore-from guard.
+WORKFLOW="core:plan-and-implement-change"
 WORKFLOW_PROVIDED=0
 WORKFLOW_RELATIVE_PATH=""
 # sandbox-run.sh mounts the validated host checkout here with its Git metadata.
