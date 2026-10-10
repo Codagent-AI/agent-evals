@@ -69,23 +69,31 @@ None.
 // starting-line preflight must reject.
 async function writePlanningArtifacts(source, {
   omit = [],
+  empty = [],
   taskArtifacts = {},
   testPlan = null,
 } = {}) {
   const changeDir = join(source, 'openspec/changes/create-and-scene')
   const omitted = new Set(omit)
+  const emptied = new Set(empty)
+  // An emptied artifact is present but holds only whitespace.
+  const content = (path, text) => (emptied.has(path) ? ' \n\n' : text)
   await mkdir(join(changeDir, 'specs/demo'), { recursive: true })
-  if (!omitted.has('proposal.md')) await writeFile(join(changeDir, 'proposal.md'), '# Proposal\n')
-  if (!omitted.has('design.md')) await writeFile(join(changeDir, 'design.md'), '# Design\n')
-  if (!omitted.has('specs/demo/spec.md')) {
-    await writeFile(join(changeDir, 'specs/demo/spec.md'), '# Demo specification\n')
+  if (!omitted.has('proposal.md')) {
+    await writeFile(join(changeDir, 'proposal.md'), content('proposal.md', '# Proposal\n'))
   }
-  for (const [path, content] of Object.entries(taskArtifacts)) {
+  if (!omitted.has('design.md')) {
+    await writeFile(join(changeDir, 'design.md'), content('design.md', '# Design\n'))
+  }
+  if (!omitted.has('specs/demo/spec.md')) {
+    await writeFile(join(changeDir, 'specs/demo/spec.md'), content('specs/demo/spec.md', '# Demo specification\n'))
+  }
+  for (const [path, text] of Object.entries(taskArtifacts)) {
     await mkdir(dirname(join(changeDir, path)), { recursive: true })
-    await writeFile(join(changeDir, path), content)
+    await writeFile(join(changeDir, path), text)
   }
   if (!omitted.has('test-plan.md')) {
-    await writeFile(join(changeDir, 'test-plan.md'), testPlan ?? validPlanningTestPlan)
+    await writeFile(join(changeDir, 'test-plan.md'), content('test-plan.md', testPlan ?? validPlanningTestPlan))
   }
 }
 
@@ -93,6 +101,7 @@ async function repository({
   validatorConfig = true,
   planningArtifacts = true,
   omitPlanning = [],
+  emptyPlanning = [],
   taskArtifacts = {},
   testPlan = null,
 } = {}) {
@@ -107,6 +116,7 @@ async function repository({
   }
   if (planningArtifacts) await writePlanningArtifacts(source, {
     omit: omitPlanning,
+    empty: emptyPlanning,
     taskArtifacts,
     testPlan,
   })
@@ -420,6 +430,36 @@ for (const [requiredArtifact, expected] of [
         return true
       },
     )
+  })
+}
+
+for (const [emptyArtifact, expected] of [
+  ['proposal.md', /planning contract.*missing or empty openspec\/changes\/create-and-scene\/proposal\.md/i],
+  ['design.md', /planning contract.*missing or empty openspec\/changes\/create-and-scene\/design\.md/i],
+  ['test-plan.md', /planning contract.*missing or empty openspec\/changes\/create-and-scene\/test-plan\.md/i],
+  ['specs/demo/spec.md', /planning contract.*no non-empty specification under openspec\/changes\/create-and-scene\/specs\//i],
+]) {
+  test(`a scored candidate rejects a fixture whose ${emptyArtifact} is present but empty before creating its branch`, async () => {
+    const repo = await repository({ emptyPlanning: [emptyArtifact] })
+    const worktree = join(repo.root, 'candidate')
+
+    await assert.rejects(
+      prepareCandidateWorktree({
+        repo: repo.source,
+        worktree,
+        ref: repo.fixture,
+        resume: false,
+        runId: `run-with-empty-${emptyArtifact.replaceAll('/', '-')}`,
+        kind: 'candidate',
+        exec,
+      }),
+      (error) => {
+        assert.equal(error.code, 'fixture-planning-contract')
+        assert.match(error.message, expected)
+        return true
+      },
+    )
+    assert.equal(git(worktree, 'branch', '--show-current'), git(repo.source, 'branch', '--show-current'))
   })
 }
 
