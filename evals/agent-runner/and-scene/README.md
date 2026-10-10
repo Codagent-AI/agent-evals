@@ -80,7 +80,9 @@ fail cites a counterexample's spans, or for an absence its search scope and
 missing obligation; a fail citing neither is invalid. A closed-world span
 audit checks every ruling, pass or fail. An insufficient pass or
 counterexample fail gets one re-cite, which may replace citations but never
-the verdict; an inadequate absence scope gets one repair round with the
+the verdict or turn a counterexample fail into an absence fail. A re-cite whose
+every attempt is invalid output leaves the first ruling on its undecided audit
+(recorded as `recite_exhausted`) rather than failing the job; an inadequate absence scope gets one repair round with the
 inventory files the audit names. A contradiction reverses the ruling only when
 Opus confirms that same contradiction (for a fail, every clause met). A
 still-insufficient audit leaves the ruling standing with that recorded, except

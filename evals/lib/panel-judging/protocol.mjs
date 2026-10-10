@@ -1974,6 +1974,13 @@ function verifySettlement(record, result) {
     }
     if (nextAuditCycle(earlier) !== names[1]) reject(`has an initial audit cycle that does not lead to its ${names[1]} cycle`)
   }
+  // An exhausted re-cite leaves the ruling on its undecided initial audit.
+  if (entry.recite_exhausted !== undefined) {
+    if (entry.recite_exhausted !== true || names.length !== 1) reject('records an exhausted re-cite beside another audit cycle')
+    let initial = null
+    try { initial = auditState(record, id, { cycle: 'initial' }) } catch { initial = null }
+    if (!initial || nextAuditCycle(initial) !== 'recite') reject('records an exhausted re-cite its initial audit never needed')
+  }
 }
 
 // Reproduce an audited line-cited ruling without trusting its saved decisions:
@@ -1991,7 +1998,8 @@ export function resolveLineCitedRecord(record, fallbackIds = []) {
       throw error
     }
     const next = nextAuditCycle(state)
-    if (next) throw new JudgeOutputError(`cached decider ruling ${result.id} stopped before its ${next} cycle`)
+    const exhausted = next === 'recite' && record.settlement[result.id].recite_exhausted === true
+    if (next && !exhausted) throw new JudgeOutputError(`cached decider ruling ${result.id} stopped before its ${next} cycle`)
     outcomes.set(result.id, state)
   }
   return tiebreakDecisions({ results: record.results ?? [], spans, outcomes, fallbackIds })
@@ -2077,6 +2085,7 @@ async function settleTiebreak({ request, criteria, invoke, attempts, validateVer
     })
   // One call with retries for malformed or invalid output; null when exhausted.
   // A batched call's attempts name its batch, and an audit's its cycle.
+  let lastFailure = null
   const run = async (next, log, parse, batch = null, extra = {}) => {
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       const where = { stage: next.judge_stage ?? next.audit_stage, ...extra, attempt, ...(batch === null ? {} : { batch }) }
@@ -2085,6 +2094,7 @@ async function settleTiebreak({ request, criteria, invoke, attempts, validateVer
         log.push({ ...where, ok: true, error: null })
         return value
       } catch (error) {
+        lastFailure = error
         log.push({ ...where, ok: false, error: error instanceof Error ? error.message : String(error) })
         if (error?.retryable === false) break
       }
@@ -2295,14 +2305,22 @@ async function settleTiebreak({ request, criteria, invoke, attempts, validateVer
     const recited = await decide(recite.map((id) => ({ id, verdict: ruling(id).verdict, audit: { rationale: reasons(id) },
       note: `- ${id}: ${reasons(id)}` })), (tiebreakRequest, claims) => buildReciteRequest({ tiebreakRequest, claims }),
     new Map(recite.map((id) => [id, ruling(id)])))
-    if (!recited) return { ok: false, ...record }
-    for (const result of recited.parsed) {
-      results[results.findIndex(({ id }) => id === result.id)] = result
-      spans.set(result.id, recited.spans.get(result.id))
-      if (recited.maps.has(result.id)) quotedMaps.set(result.id, recited.maps.get(result.id))
+    if (recited) {
+      for (const result of recited.parsed) {
+        results[results.findIndex(({ id }) => id === result.id)] = result
+        spans.set(result.id, recited.spans.get(result.id))
+        if (recited.maps.has(result.id)) quotedMaps.set(result.id, recited.maps.get(result.id))
+      }
+      if (!await auditCycle('recite', await claimsFor(recite))) return { ok: false, ...record }
+      if (!await checkCycle('recite', recite)) return { ok: false, ...record }
+    } else {
+      // The re-cite only repairs citations. When every attempt is invalid
+      // output, such as a counterexample fail re-cited as an absence fail, the
+      // first ruling stands on its undecided initial audit. Any other failure
+      // (a quota limit, a rejected schema) remains the harness's.
+      if (!(lastFailure instanceof JudgeOutputError)) return { ok: false, ...record }
+      for (const id of recite) record.settlement[id].recite_exhausted = true
     }
-    if (!await auditCycle('recite', await claimsFor(recite))) return { ok: false, ...record }
-    if (!await checkCycle('recite', recite)) return { ok: false, ...record }
   }
 
   const outcomes = new Map()

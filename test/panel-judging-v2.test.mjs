@@ -373,6 +373,36 @@ test('a counterexample fail undecided by its audit is re-cited once and must cit
   assertReplay(outcome)
 })
 
+test('a re-cite that stays invalid output leaves the first ruling standing on its undecided audit', async () => {
+  const root = await sourceTree()
+  const absence = ruling('fail', { search_scope: ['test/impl.test.ts'], missing_obligation: 'a test' })
+  const outcome = await runPanelJob(deciderSplit(root, { tiebreak: [ruling('fail', { citations: [span('src/impl.ts', 1)] })],
+    'tiebreak-span-audit': [audit('insufficient')], 'tiebreak-recite': [absence] }))
+  assert.equal(outcome.ok, true, outcome.record.error)
+  const decider = outcome.record.decider
+  const recites = decider.attempts.filter(({ stage }) => stage === 'tiebreak-recite')
+  assert.ok(recites.length > 1 && recites.every(({ ok, error }) => !ok && /must cite its counterexample's lines/.test(error)))
+  assert.equal(outcome.results[0].basis, 'decider-fail')
+  assert.deepEqual(decider.results[0].citations, [span('src/impl.ts', 1)])
+  assert.deepEqual(decider.audit_results.map(({ cycle }) => cycle), ['initial'])
+  assert.deepEqual(decider.settlement[ID], { cycles: [{ cycle: 'initial', expected_parts: [0] }], settled_cycle: 'initial', recite_exhausted: true })
+  assert.equal(decider.decisions[0].result.evidence.at(-1), 'decider ruling: fail; the span audit could not confirm or refute it')
+  assertReplay(outcome)
+  // A replayed record must not claim an exhausted re-cite its audit never needed.
+  const tampered = structuredClone(outcome.record)
+  tampered.decider.audit_results[0].classification = 'confirmed'
+  assert.throws(() => verifyCachedPanelJob(tampered), /exhausted re-cite its initial audit never needed/)
+})
+
+test('a re-cite stopped by a quota limit still fails the job', async () => {
+  const root = await sourceTree()
+  const limit = () => { throw Object.assign(new Error('Claude judge limit requires resume'), { code: 'claude-quota', resumable: true, retryable: false }) }
+  const outcome = await runPanelJob(deciderSplit(root, { tiebreak: [ruling('fail', { citations: [span('src/impl.ts', 1)] })],
+    'tiebreak-span-audit': [audit('insufficient')], 'tiebreak-recite': [limit] }))
+  assert.equal(outcome.ok, false)
+  assert.equal(outcome.record.decider.settlement[ID].recite_exhausted, undefined)
+})
+
 // --- Citations and material -------------------------------------------------
 
 test('a vote citing a path outside the verified inventory shows it to the check as nonexistent', async () => {
