@@ -8,6 +8,19 @@ export { judgeFailure, HarnessMaterialError } from './protocol.mjs'
 
 export const PANEL_PROTOCOL = 'cross-family-panel-v2'
 
+// Three judges with both families seated; each suite pins its own mix.
+function crossFamilyPanel(members) {
+  return members.length === 3 && members.every(m => m.family === 'claude' || m.family === 'codex')
+    && new Set(members.map(m => m.family)).size === 2
+}
+
+// A family's only seat is `panel-<family>`; several are numbered in order.
+function panelStage(panel, index) {
+  const { family } = panel[index]
+  const seats = panel.filter(p => p.family === family).length
+  return seats === 1 ? `panel-${family}` : `panel-${family}-${panel.slice(0, index + 1).filter(p => p.family === family).length}`
+}
+
 function parse(output, criteria, verdicts) {
   let results
   try { results = JSON.parse(output).results } catch { throw new JudgeOutputError('panel output is not valid JSON') }
@@ -104,7 +117,9 @@ function route(votes, checks, order, fallbackIds = []) {
   const majority = [...counts].find(([, n]) => n >= 2)?.[0]
   if (!majority) return { kind: 'decider' }
   if (counts.get(majority) === 3) return { kind: 'consensus', verdict: majority }
-  if (!effectiveVotes.some(v => v.family === 'claude' && v.verdict === majority)) return { kind: 'decider' }
+  // A majority settles alone only across both families; one family's two
+  // votes, such as two samples of one model, go to the decider.
+  if (new Set(effectiveVotes.filter(v => v.verdict === majority).map(v => v.family)).size < 2) return { kind: 'decider' }
   const dissent = effectiveVotes.find(v => v.verdict !== majority)
   return { kind: 'majority', verdict: majority,
     dissent: order.indexOf(dissent.verdict) < order.indexOf(majority) ? dissent : null }
@@ -257,7 +272,7 @@ export function resolvePanel({ criteria, order, votes, checks = [], rulings = []
   }
   const results = criteria.map(id => {
     const own = votes.filter(v => v.id === id)
-    if (own.length !== 3 || own.filter(v => v.family === 'claude').length !== 1 || own.filter(v => v.family === 'codex').length !== 2) throw new JudgeOutputError('panel record lacks three cross-family votes')
+    if (!crossFamilyPanel(own)) throw new JudgeOutputError('panel record lacks three cross-family votes')
     const decision = route(own, checks, order, fallback_ids)
     let verdict = decision.verdict
     let basis = `${decision.kind}-${verdict}`
@@ -321,7 +336,7 @@ export function verifyCachedPanelJob(record) {
 // dissent citation; validateCitations(result, request) validates a whole result.
 export async function runPanelJob({ job, criteria, verdicts, order, panel, decider, buildPrompt, schema,
   validateCitations = async () => false, validateCitation = null, audit = null, cache = null }) {
-  if (panel.length !== 3 || panel.filter(p => p.family === 'claude').length !== 1 || panel.filter(p => p.family === 'codex').length !== 2) throw new Error('panel requires one Claude and two Codex judges')
+  if (!crossFamilyPanel(panel)) throw new Error('panel requires three Claude and Codex judges spanning both families')
   if (order.length !== verdicts.length || new Set(order).size !== verdicts.length || order.some(v => !verdicts.includes(v))) throw new Error('order must rank every verdict')
   const request = { job, criteria, schema, ...(await buildPrompt({ job, criteria, schema })) }
   const scopeRule = request.scope_rule ?? [JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE].join('\n')
@@ -369,7 +384,7 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
   }
   try {
     const settled = await Promise.allSettled(panel.map(async (member, index) => {
-      const stage = index === panel.findIndex(p => p.family === 'claude') ? 'panel-claude' : `panel-codex-${panel.slice(0, index + 1).filter(p => p.family === 'codex').length}`
+      const stage = panelStage(panel, index)
       if (audit) return audit({ request: { ...request, judge_sample: index + 1 }, invoke: wrap(member, stage) })
       return { ok: true, results: await call(request, member, stage, text => parse(text, criteria, verdicts)), attempts: [], audit_attempts: [] }
     }))

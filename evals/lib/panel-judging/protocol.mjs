@@ -2116,7 +2116,10 @@ async function settleTiebreak({ request, criteria, invoke, attempts, validateVer
     return null
   }
   // A re-cite keeps each first verdict, and a fail its counterexample kind;
-  // any other change is invalid output and is retried.
+  // any other change is invalid output and is retried. A re-cite that turned a
+  // counterexample fail into an absence fail is remembered: its absence scope
+  // was never audited, so its exhaustion cannot leave the fail standing.
+  const reciteClaimedAbsence = new Set()
   const parseCited = (ids, first) => async (output) => {
     const parsed = parseLineCitedOutput(output, ids, request.job, { claimMap: request.claim_map ?? null, cuts })
     for (const result of first ? parsed : []) {
@@ -2125,6 +2128,7 @@ async function settleTiebreak({ request, criteria, invoke, attempts, validateVer
         throw new JudgeOutputError(`${request.job} re-cite changed the verdict of ${result.id} from ${before.verdict} to ${result.verdict}`)
       }
       if (rulingKind(result) !== rulingKind(before)) {
+        reciteClaimedAbsence.add(result.id)
         throw new JudgeOutputError(`${request.job} re-cite of the ${result.id} fail must cite its counterexample's lines`)
       }
     }
@@ -2329,10 +2333,11 @@ async function settleTiebreak({ request, criteria, invoke, attempts, validateVer
       if (!await checkCycle('recite', recite)) return { ok: false, ...record }
     } else {
       // The re-cite only repairs citations. When every attempt is invalid
-      // output, such as a counterexample fail re-cited as an absence fail, the
-      // first ruling stands on its undecided initial audit. Any other failure
-      // (a quota limit, a rejected schema) remains the harness's.
-      if (!(lastFailure instanceof JudgeOutputError)) return { ok: false, ...record }
+      // output, such as an invalid span, the first ruling stands on its
+      // undecided initial audit. A fail any attempt re-cited as an absence fail
+      // has an unaudited absence scope, and any other failure (a quota limit, a
+      // rejected schema) remains the harness's.
+      if (!(lastFailure instanceof JudgeOutputError) || recite.some((id) => reciteClaimedAbsence.has(id))) return { ok: false, ...record }
       for (const id of recite) record.settlement[id].recite_exhausted = true
     }
   }

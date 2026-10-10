@@ -379,13 +379,13 @@ test('a counterexample fail undecided by its audit is re-cited once and must cit
 
 test('a re-cite that stays invalid output leaves the first ruling standing on its undecided audit', async () => {
   const root = await sourceTree()
-  const absence = ruling('fail', { search_scope: ['test/impl.test.ts'], missing_obligation: 'a test' })
+  const outside = ruling('fail', { citations: [span('src/unlisted.ts', 1)] })
   const outcome = await runPanelJob(deciderSplit(root, { tiebreak: [ruling('fail', { citations: [span('src/impl.ts', 1)] })],
-    'tiebreak-span-audit': [audit('insufficient')], 'tiebreak-recite': [absence] }))
+    'tiebreak-span-audit': [audit('insufficient')], 'tiebreak-recite': [outside] }))
   assert.equal(outcome.ok, true, outcome.record.error)
   const decider = outcome.record.decider
   const recites = decider.attempts.filter(({ stage }) => stage === 'tiebreak-recite')
-  assert.ok(recites.length > 1 && recites.every(({ ok, error }) => !ok && /must cite its counterexample's lines/.test(error)))
+  assert.ok(recites.length > 1 && recites.every(({ ok }) => !ok))
   assert.equal(outcome.results[0].basis, 'decider-fail')
   assert.deepEqual(decider.results[0].citations, [span('src/impl.ts', 1)])
   assert.deepEqual(decider.audit_results.map(({ cycle }) => cycle), ['initial'])
@@ -396,6 +396,19 @@ test('a re-cite that stays invalid output leaves the first ruling standing on it
   const tampered = structuredClone(outcome.record)
   tampered.decider.audit_results[0].classification = 'confirmed'
   assert.throws(() => verifyCachedPanelJob(tampered), /exhausted re-cite its initial audit never needed/)
+})
+
+test('a re-cite that turns a counterexample fail into an absence fail fails the job when exhausted', async () => {
+  const root = await sourceTree()
+  const absence = ruling('fail', { search_scope: ['test/impl.test.ts'], missing_obligation: 'a test' })
+  const outside = ruling('fail', { citations: [span('src/unlisted.ts', 1)] })
+  // Even when its last attempt is a plain invalid span, the absence claim was never scope-audited.
+  const outcome = await runPanelJob(deciderSplit(root, { tiebreak: [ruling('fail', { citations: [span('src/impl.ts', 1)] })],
+    'tiebreak-span-audit': [audit('insufficient')], 'tiebreak-recite': [absence, outside] }))
+  assert.equal(outcome.ok, false)
+  const decider = outcome.record.decider
+  assert.ok(decider.attempts.some(({ stage, error }) => stage === 'tiebreak-recite' && /must cite its counterexample's lines/.test(error ?? '')))
+  assert.equal(decider.settlement[ID].recite_exhausted, undefined)
 })
 
 test('a re-cite stopped by a quota limit still fails the job', async () => {

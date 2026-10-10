@@ -45,10 +45,11 @@ and source-judged fallbacks, cannot be replayed and use the span and log audit.
 ## Robust judging
 
 Every scored job runs three independent panel judges concurrently on identical
-inputs: `claude-sonnet-5-5` and two `gpt-6-sol` samples, all at pinned medium
-effort. `claude-opus-5-5`, medium, decides Codex-only majorities, three-way
-splits, and unresolved disputes. A unanimous verdict stands. A two-to-one
-majority stands when it includes Claude, except that a higher-credit dissent
+inputs: two `claude-sonnet-5-5` samples and one `gpt-6.1-sol`, all at pinned high
+effort. `claude-opus-5-5`, high, decides a majority of the two Sonnet samples
+against Sol, three-way splits, and unresolved disputes. A unanimous verdict
+stands. A two-to-one majority stands when it spans both families (one Sonnet
+sample and Sol), except that a higher-credit dissent
 with at least one validated citation gets an Opus check of its stated reason.
 Each dissent citation is validated alone; invalid ones are dropped and recorded
 as `dropped_citations` rather than discarding the dissent. The check confirms
@@ -84,7 +85,9 @@ audit checks every ruling, pass or fail. An insufficient pass or
 counterexample fail gets one re-cite, which may replace citations but never
 the verdict or turn a counterexample fail into an absence fail. A re-cite whose
 every attempt is invalid output leaves the first ruling on its undecided audit
-(recorded as `recite_exhausted`) rather than failing the job; an inadequate absence scope gets one repair round with the
+(recorded as `recite_exhausted`) rather than failing the job, unless an attempt
+re-cited the fail as an absence fail: that absence scope was never audited, so
+the job fails as exhausted judge output. An inadequate absence scope gets one repair round with the
 inventory files the audit names. A contradiction reverses the ruling only when
 Opus confirms that same contradiction (for a fail, every clause met). A
 still-insufficient audit leaves the ruling standing with that recorded, except
@@ -137,7 +140,7 @@ panel settlement with canned invokers; an injected live invoker uses the
 profile too.
 
 `phases/eval-owned-usage.jsonl` records provider, model and stage:
-`panel-claude`, `panel-codex-1`, `panel-codex-2`, `source-audit`,
+`panel-claude-1`, `panel-claude-2`, `panel-codex`, `source-audit`,
 `contradiction-check`, `dissent-check`, `decider`, `span-audit`, and
 `decider-recite`. This usage is not priced or included in implementation cost.
 Capacity rejections before model output record zero tokens and back off without

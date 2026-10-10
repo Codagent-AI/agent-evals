@@ -402,7 +402,7 @@ Deterministic source facts supplied to an LLM source judge SHALL be treated as l
 ### Requirement: Scene kit correctness
 The evaluation SHALL score the reusable scene kit out of 20 using LLM review of delivered source and structured browser evidence. The judge SHALL assess implementation of the technical contracts rather than the aesthetic quality of the demo that uses them.
 
-For transition sequencing, the judge SHALL require persisting motion and newcomer delay to share one settlement contract or executable proof that newcomers wait until continuing entities settle; the presence of timing constants or named primitives alone SHALL NOT earn credit. Sharing or importing a timing value SHALL be insufficient unless persistent motion consumes that exact configuration, or newcomer admission waits on an observable completion signal from persistent motion. Newcomer sequencing SHALL follow the fixture design's timing mechanism: a newcomer entry delay at least as long as the continuing layout transition, applied to the newcomer only, SHALL satisfy `entity-newcomer-after-settle`; the same delay applied to the continuing motion, an entry that can start early, or no entry motion SHALL fail it. A step id SHALL be stable only when it survives inserting, removing, or reordering steps; a position-derived id fails `scene-step-narration-and-identity`. Newcomer timing SHALL be judged on the visible entry, so a zero-delay wrapper around an inner node whose entry is delayed past the layout transition passes. A warning SHALL identify an element by its visible text, or for a textless element by its accessible name, a stable hook, or a selector path. In present mode the marker is a visible indicator of the active step's position or section beside the title. Uniform fit SHALL be judged at the eval-owned reference viewports 1280×720 and 390×844 in both modes. Touch navigation SHALL be judged against the fixture scenario only: a horizontal swipe to the left advances one step and a swipe to the right goes back one step. The judge SHALL NOT require rejection of vertical scrolling or multi-touch gestures, which the fixture does not state.
+For transition sequencing, the judge SHALL require persisting motion and newcomer delay to share one settlement contract or executable proof that newcomers wait until continuing entities settle; the presence of timing constants or named primitives alone SHALL NOT earn credit. Sharing or importing a timing value SHALL be insufficient unless persistent motion consumes that exact configuration, or newcomer admission waits on an observable completion signal from persistent motion. Newcomer sequencing SHALL follow the fixture design's timing mechanism: a newcomer entry delay at least as long as the continuing layout transition, applied to the newcomer only, SHALL satisfy `entity-newcomer-after-settle`; the same delay applied to the continuing motion, an entry that can start early, or no entry motion SHALL fail it. Every entity the delivered sample introduces, meaning each element it gives a stable identity, SHALL be judged by whatever path renders it, including plain markup outside the kit's animated primitives; a structural wrapper the sample gives no identity SHALL NOT count as an entity. For `style-kit-hooks`, a spacing scale SHALL mean a spacing system the kit makes presentations adopt, such as spacing tokens, theme variables, or spacing applied to presentation content; fixed insets, offsets, padding, and gaps that lay out and place the kit's own chrome, overridable through its hooks, SHALL be chrome-placement geometry and SHALL NOT fail it. A step id SHALL be stable only when it survives inserting, removing, or reordering steps; a position-derived id fails `scene-step-narration-and-identity`. Newcomer timing SHALL be judged on the visible entry, so a zero-delay wrapper around an inner node whose entry is delayed past the layout transition passes. A warning SHALL identify an element by its visible text, or for a textless element by its accessible name, a stable hook, or a selector path. In present mode the marker is a visible indicator of the active step's position or section beside the title. Uniform fit SHALL be judged at the eval-owned reference viewports 1280×720 and 390×844 in both modes. Touch navigation SHALL be judged against the fixture scenario only: a horizontal swipe to the left advances one step and a swipe to the right goes back one step. The judge SHALL NOT require rejection of vertical scrolling or multi-touch gestures, which the fixture does not state.
 
 The step number SHALL count as on screen only when it is rendered visibly; an `aria-label`, other attribute, or visually hidden text SHALL NOT satisfy `scene-order-derived-numbering`. The default attribution SHALL link to the and-scene GitHub repository, `https://github.com/Codagent-AI/and-scene`; a link to another owner or repository path SHALL fail `attribution-default-link`. The deterministic attribution fact SHALL report the GitHub targets the source contains so the judge sees a wrong target by name. No network request decides the link; a reachability probe would make identical evidence score differently.
 
@@ -466,6 +466,14 @@ The component's tier weights SHALL be critical 1.5625, major 0.75, and minor 0.2
 #### Scenario: Overlapping steps whose entity primitives hide the persisting entity
 - **WHEN** the kit's step transition keeps both ungrouped steps mounted, for example with `mode="popLayout"`, but its entity primitives keep the incoming copy invisible until the outgoing copy has faded out, so the persisting entity disappears and then reappears
 - **THEN** `entity-ungrouped-transition-morph` fails
+
+#### Scenario: A sample newcomer bypasses the kit's delayed entry
+- **WHEN** the kit's motion primitives delay newcomer entry past the layout transition, but the delivered sample introduces an identified entity on a step through a plain element with no entry motion
+- **THEN** `entity-newcomer-after-settle` fails
+
+#### Scenario: Kit chrome has fixed placement padding
+- **WHEN** the kit's own stylesheet sets fixed padding and gaps to lay out its header, footer, and controls, exposes stable hooks for them, and imposes no spacing tokens or content spacing
+- **THEN** `style-kit-hooks` is not failed for that padding
 
 ### Requirement: Presentation skill correctness
 The evaluation SHALL score the delivered presentation skill out of seven points using LLM review of the skill, its templates, delivered source, and workflow evidence.
@@ -618,7 +626,7 @@ The replaced concerns SHALL remain observable through the testing-evidence crite
 - **AND** it is not counted among the 68 legacy criteria
 
 ### Requirement: Robust judge verdicts
-No single model call SHALL decide a scored criterion, and no criterion SHALL be decided by Codex-family judges alone. Every scored judge job SHALL be judged by a cross-family panel of three independent judges with identical inputs, run concurrently, each at an explicitly pinned model and reasoning effort: one Claude-family judge and two independent Codex-family samples. The judging protocol SHALL be identified as `cross-family-panel-v2`.
+No single model call SHALL decide a scored criterion, and no criterion SHALL be decided by the judges of one model family alone. Every scored judge job SHALL be judged by a cross-family panel of three independent judges with identical inputs, run concurrently, each at an explicitly pinned model and reasoning effort: two independent Claude-family samples and one Codex-family judge. The judging protocol SHALL be identified as `cross-family-panel-v2`.
 
 A verdict SHALL stand under uncertainty only when the material its settlement requires was supplied and its scope was adequate. Known missing required material SHALL produce an explicit evaluation-harness failure naming the criteria, never an undecided verdict. Every audit and check SHALL therefore classify its claim `confirmed`, `contradicted`, `insufficient`, or `missing-material`, and the span audit of an absence fail MAY also classify it `scope-inadequate`:
 - `insufficient` SHALL mean only that the material supplied, complete and in scope, does not decide the claim;
@@ -637,9 +645,9 @@ Every audit SHALL return the paths its classification relies on as structured ci
 
 Votes SHALL settle as follows, with no vote disputed:
 - a verdict all three judges give SHALL stand, pass or fail;
-- when a confirmed contradiction check has turned any vote and the votes are not unanimous after the turn, the decider SHALL settle the criterion, even when the remaining votes form a majority that includes the Claude-family judge;
-- otherwise, a verdict two judges give SHALL stand when the two include the Claude-family judge, unless the dissent is a pass backed by citations that pass validation. Such a backed dissent SHALL go to a targeted check, by a pinned Claude-family decider, of the dissent's stated reason, given beside the two majority votes' stated reasons and with both sides' cited material. The check SHALL confirm the dissent only when the material also refutes each clause a majority vote states is unmet; an accurate fact the dissent cites SHALL NOT confirm it while a majority reason it does not answer stands. The dissent's verdict SHALL stand when the check confirms it, and the majority's otherwise;
-- a verdict the two Codex-family judges give against the Claude-family judge, and a criterion whose vote remains disputed, SHALL be settled by the decider.
+- when a confirmed contradiction check has turned any vote and the votes are not unanimous after the turn, the decider SHALL settle the criterion, even when the remaining votes form a majority that spans both families;
+- otherwise, a verdict two judges give SHALL stand when the two are a Claude-family judge and the Codex-family judge, unless the dissent is a pass backed by citations that pass validation. Such a backed dissent SHALL go to a targeted check, by a pinned Claude-family decider, of the dissent's stated reason, given beside the two majority votes' stated reasons and with both sides' cited material. The check SHALL confirm the dissent only when the material also refutes each clause a majority vote states is unmet; an accurate fact the dissent cites SHALL NOT confirm it while a majority reason it does not answer stands. The dissent's verdict SHALL stand when the check confirms it, and the majority's otherwise;
+- a verdict the two Claude-family judges give against the Codex-family judge, and a criterion whose vote remains disputed, SHALL be settled by the decider.
 
 The decider SHALL receive the job's unchanged context and all three votes with their rationales and citations, without being told which model gave which. For a vote that a confirmed check turned, it SHALL also receive the audit's stated contradiction and the check's confirmation. It SHALL rule pass or fail.
 
@@ -651,7 +659,7 @@ Every decider ruling SHALL carry citations whose paths are in the verified neutr
 For `testing-evidence-usable-proof` and `testing-evidence-complete-honest-record`, a decider ruling SHALL additionally return the claim mapping that the testing-evidence-evaluation capability defines.
 
 A closed-world span audit SHALL check every decider ruling, pass or fail, against every clause of the criterion's requirement and review guidance. It SHALL receive the quoted lines, the files of a fail's search scope, and any claim mapping with the lines it references. For a fail about absence, the audit SHALL also receive the complete verified inventory, every path in full, and SHALL judge whether the stated scope is where the obligation would be found. It SHALL confirm the fail when an adequate scope demonstrably omits the obligation, or when no file in the inventory could hold it, and SHALL classify it contradicted when the audited material shows the obligation met. When it finds the scope inadequate, it SHALL name the inventory files where the obligation would be found, and the harness SHALL run exactly one repair round that audits the fail again with those files added to its scope. After that round, an adequate scope whose material does not decide the claim SHALL be `insufficient` and leave the fail standing, and a scope still inadequate SHALL be `scope-inadequate`. No second repair round SHALL run. An absence fail's scope SHALL be repaired only by this round, never by a re-cite.
-- `insufficient` on a pass or a counterexample fail SHALL ask the decider to re-cite once. A re-cite MAY replace the ruling's citations and SHALL NOT change its verdict, and the re-cite prompt SHALL NOT invite a verdict change. The result SHALL record the first and the re-cited citations separately. A re-cite of a counterexample fail SHALL keep citing a counterexample: it SHALL NOT turn the fail into an absence fail, and a re-cite that does SHALL be invalid decider output. When every re-cite attempt is invalid output, the first ruling SHALL stand on its undecided initial audit, with the exhausted re-cite recorded, and the job SHALL NOT fail; a re-cite stopped by anything else, such as a usage limit, SHALL remain a harness failure. An audit that still cannot decide SHALL leave the ruling standing, with that recorded;
+- `insufficient` on a pass or a counterexample fail SHALL ask the decider to re-cite once. A re-cite MAY replace the ruling's citations and SHALL NOT change its verdict, and the re-cite prompt SHALL NOT invite a verdict change. The result SHALL record the first and the re-cited citations separately. A re-cite of a counterexample fail SHALL keep citing a counterexample: it SHALL NOT turn the fail into an absence fail, and a re-cite that does SHALL be invalid decider output. When every re-cite attempt is invalid output, such as an invalid span, the first ruling SHALL stand on its undecided initial audit, with the exhausted re-cite recorded, and the job SHALL NOT fail. An exhausted re-cite SHALL instead remain a harness failure when any attempt turned a counterexample fail into an absence fail, because that absence claim's scope was never audited, and when the re-cite was stopped by anything other than invalid output, such as a usage limit. An audit that still cannot decide SHALL leave the ruling standing, with that recorded;
 - `contradicted` SHALL be checked by an independent contradiction check that judges that audit's stated contradiction against the audited material and the rubric. The ruling SHALL be reversed, a pass to a fail or a fail to a pass, only when the check confirms that same contradiction, and both SHALL be recorded. A check SHALL confirm the contradiction of a fail only when the audited material meets every clause of the requirement and its review guidance, not merely when the decider's stated reason is refuted. A fail on a browser-fallback criterion SHALL be reversed only when that confirmation rests on cited delivered source. A check that refutes the contradiction or cannot decide it SHALL leave the ruling standing.
 
 An audit that runs in several parts, such as the claim mapping's row audits and completeness audit, SHALL record each part with its part identity and its audit cycle. The first audit, the audit after a re-cite, and the audit after a repair round SHALL be separate cycles, and a ruling SHALL be judged on the parts of one cycle only:
@@ -690,16 +698,16 @@ Every response schema the harness sends SHALL satisfy strict structured-output r
 - **THEN** that verdict stands without a decider call
 
 #### Scenario: Samples disagree
-- **WHEN** both Codex-family judges pass a criterion and the Claude-family judge fails it
+- **WHEN** both Claude-family judges pass a criterion and the Codex-family judge fails it
 - **THEN** the decider decides it
 - **AND** its pass must cite mechanically valid line spans
 
 #### Scenario: Cross-family majority stands
-- **WHEN** the Claude-family judge and one Codex-family judge fail a criterion, and the other Codex-family judge also fails it or passes it without citations that pass validation
+- **WHEN** one Claude-family judge and the Codex-family judge fail a criterion, and the other Claude-family judge also fails it or passes it without citations that pass validation
 - **THEN** the criterion fails without a decider call
 
 #### Scenario: Backed dissent is checked
-- **WHEN** the Claude-family judge and one Codex-family judge fail a criterion, and the other Codex-family judge passes it with citations that pass validation
+- **WHEN** one Claude-family judge and the Codex-family judge fail a criterion, and the other Claude-family judge passes it with citations that pass validation
 - **THEN** the decider checks that dissent's stated reason, and the criterion passes only when the check confirms it
 
 #### Scenario: A backed dissent must answer the majority's reason
@@ -765,7 +773,7 @@ Every response schema the harness sends SHALL satisfy strict structured-output r
 - **AND** the decider receives the audit's stated contradiction and the check's confirmation
 
 #### Scenario: A turned vote leaves a Claude-backed majority
-- **WHEN** a confirmed contradiction turns one Codex-family pass to fail, and the Claude-family judge and the other Codex-family judge still pass
+- **WHEN** a confirmed contradiction turns one Claude-family pass to fail, and the other Claude-family judge and the Codex-family judge still pass
 - **THEN** the criterion goes to the decider rather than standing as a majority pass
 
 #### Scenario: A re-cite cannot change the decider's verdict
@@ -879,9 +887,14 @@ Every response schema the harness sends SHALL satisfy strict structured-output r
 - **AND** a retry after a usage limit or transport failure repeats the request unchanged
 
 #### Scenario: A re-cite that stays invalid leaves the first ruling standing
-- **WHEN** every re-cite attempt of an undecided counterexample fail cites only a search scope
+- **WHEN** every re-cite attempt of an undecided counterexample fail cites a span outside the verified inventory
 - **THEN** the job completes and the first fail stands on its undecided initial audit
 - **AND** the record marks the re-cite as exhausted, and a replay accepts it only where the initial audit needed a re-cite
+
+#### Scenario: A re-cite that claims absence cannot leave the fail standing
+- **WHEN** a re-cite attempt of an undecided counterexample fail cites only a search scope, and the re-cite's attempts are exhausted
+- **THEN** the job fails as an evaluation-harness failure for exhausted judge output
+- **AND** the fail does not stand on an absence scope no audit has judged
 
 #### Scenario: An evidence audit cites the whole packet
 - **WHEN** an evidence audit or check cites the judge packet without a line range

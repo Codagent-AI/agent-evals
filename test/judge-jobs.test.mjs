@@ -330,7 +330,7 @@ test('engineering-quality is judged by the cross-family panel for candidates and
     assert.deepEqual(seats.sort(), PRODUCT_JUDGE_PROFILE.panel.map(({ family, model }) => `${family}:${model}`).sort(), mode)
     for (const result of outcome.judges['engineering-quality']) {
       assert.equal(result.basis, 'consensus-pass', mode)
-      assert.deepEqual(result.votes.map(({ family }) => family).sort(), ['claude', 'codex', 'codex'], mode)
+      assert.deepEqual(result.votes.map(({ family }) => family).sort(), ['claude', 'claude', 'codex'], mode)
     }
   }
 })
@@ -1994,7 +1994,8 @@ for (const job of ['testing-evidence', 'assumption-handling']) test(`evidence-vi
         assert.match(request.prompt, /Cite packet lines in citations as packet\.txt:<start>-<end>; a citation of packet\.txt without a line range is invalid output\./)
         return auditOutput(request.criteria)
       }
-      const dissent = request.job === job && request.judge_sample === 3
+      // One Claude seat dissents from the cross-family majority of the other Claude seat and the Codex seat.
+      const dissent = request.job === job && request.judge_sample === 1
       return JSON.stringify({ results: request.criteria.map(id => ({ id, verdict: request.job !== job || dissent ? 'pass' : 'fail',
         rationale: 'the packet proves the criterion', evidence: ['packet.txt'],
         ...(request.job === job ? { citations: dissent ? [{ path: 'packet.txt', start_line: 1, end_line: 1 }] : [] } : {}),
@@ -2208,9 +2209,9 @@ test('a dispute on all fourteen engineering-quality criteria settles through the
           id, verdict: 'pass', rationale, evidence: [files[index % files.length]], citations: spansFor(index),
         })) })
       }
-      // The Claude seat (sample 1) fails every engineering-quality criterion
-      // and both Codex seats pass it: a Codex-only majority the decider rules on.
-      const verdict = request.job === job && request.judge_sample === 1 ? 'fail' : 'pass'
+      // The Codex seat (sample 3) fails every engineering-quality criterion
+      // and both Claude seats pass it: a one-family majority the decider rules on.
+      const verdict = request.job === job && request.judge_sample === 3 ? 'fail' : 'pass'
       return JSON.stringify({ results: request.criteria.map((id) => ({ id, verdict, rationale,
         evidence: [files[0]], citations: [files[0]] })) })
     },

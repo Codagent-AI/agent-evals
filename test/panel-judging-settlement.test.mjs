@@ -62,6 +62,51 @@ test('Codex-only majority goes to blind decider and invalid rulings retry', asyn
   assert.equal(calls, 2)
   assert.equal(outcome.results[0].basis, 'decider-pass')
 })
+// The and-scene mix: two Claude seats and one Codex seat.
+const twoClaude = (votes, extra = {}) => {
+  const options = setup(votes, extra)
+  options.panel = options.panel.map((member, i) => ({ ...member, family: i < 2 ? 'claude' : 'codex' }))
+  return options
+}
+test('a majority of one family goes to the decider, so two Claude seats never outvote the Codex seat alone', async () => {
+  const stages = []
+  const outcome = await runPanelJob(twoClaude(['pass', 'pass', 'fail'], {
+    decider: { model: 'opus', effort: 'high', invoke: async request => {
+      stages.push(request.usage_phase)
+      // The ruling overrules the two Claude seats, so its overrule check runs.
+      return JSON.stringify({ results: [request.usage_phase === 'decider' ? result('fail')
+        : { id: 'x', classification: 'confirmed', rationale: 'checked reason', evidence: ['a'] }] })
+    } },
+  }))
+  assert.equal(outcome.ok, true, outcome.record.error)
+  assert.deepEqual(stages, ['decider', 'overrule-check'])
+  assert.equal(outcome.results[0].basis, 'decider-fail')
+  assert.equal(outcome.results[0].overrule_check.outcome, 'upheld')
+  assert.deepEqual(outcome.results[0].votes.map(v => v.family), ['claude', 'claude', 'codex'])
+  assert.deepEqual(verifyCachedPanelJob(outcome.record).results, outcome.results)
+})
+test('a majority across both families stands, and a higher Claude dissent gets the targeted check', async () => {
+  const stages = []
+  const outcome = await runPanelJob(twoClaude(['pass', 'fail', 'fail'], {
+    decider: { model: 'opus', effort: 'high', invoke: async request => {
+      stages.push(request.usage_phase)
+      return JSON.stringify({ results: [{ id: 'x', classification: 'contradicted', rationale: 'checked reason', evidence: ['a'] }] })
+    } },
+  }))
+  assert.equal(outcome.ok, true, outcome.record.error)
+  assert.deepEqual(stages, ['dissent-check'])
+  assert.equal(outcome.results[0].basis, 'majority-fail')
+})
+test('each seat is staged by family, numbered only when its family has several', async () => {
+  const stagesOf = async (options) => Object.keys((await runPanelJob(options)).usage_by_stage).sort()
+  assert.deepEqual(await stagesOf(setup(['pass', 'pass', 'pass'])), ['panel-claude', 'panel-codex-1', 'panel-codex-2'])
+  assert.deepEqual(await stagesOf(twoClaude(['pass', 'pass', 'pass'])), ['panel-claude-1', 'panel-claude-2', 'panel-codex'])
+})
+test('a panel without both families is refused', async () => {
+  const options = setup(['pass', 'pass', 'pass'])
+  options.panel = options.panel.map(member => ({ ...member, family: 'claude' }))
+  await assert.rejects(runPanelJob(options), /spanning both families/)
+})
 test('three-way split decider must pick a panel verdict', async () => {
   const outcome = await runPanelJob({ ...setup(['met', 'partial', 'missing']), verdicts: ['met', 'partial', 'missing'], order: ['met', 'partial', 'missing'],
     decider: { model: 'opus', effort: 'high', invoke: async () => JSON.stringify({ results: [result('partial')] }) } })

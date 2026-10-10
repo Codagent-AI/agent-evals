@@ -237,7 +237,7 @@ test('a long assumptions ledger reaches every seat and the decider whole, its la
   const last = lineOf(packet, 'LAST LEDGER ENTRY')
   const [first] = criteriaForJob(automated, 'assumption-handling')
   const outcome = await judgeTestingOnly(views, { job: 'assumption-handling',
-    seat: (id, sample) => (id === first && sample !== 1 ? 'fail' : 'pass'),
+    seat: (id, sample) => (id === first && sample !== 3 ? 'fail' : 'pass'),
     stages: { tiebreak: () => out(ruling(first, 'pass', { citations: [span(last)] })), 'tiebreak-span-audit': confirmAll } })
   assert.deepEqual(outcome.failed_jobs, [], JSON.stringify(outcome.failures))
   const seats = ofStage(outcome.seen, 'seat', 'assumption-handling')
@@ -274,9 +274,9 @@ const stageOf = (next) => next.judge_stage ?? next.audit_stage ?? 'seat'
 const section = (prompt, name) => prompt.split(`# BEGIN ${name}\n`)[1].split(`\n# END ${name}`)[0]
 const auditClaims = (next) => JSON.parse(section(next.prompt, 'LINE-CITED CLAIMS'))
 const checkClaims = (next) => JSON.parse(section(next.prompt, 'STATED CONTRADICTIONS'))
-// Claude (sample 1) passes and both Codex samples fail: the Codex pair against
-// the Claude judge goes to the decider.
-const toDecider = (id, sample) => (MAPPED.includes(id) ? (sample === 1 ? 'pass' : 'fail') : 'pass')
+// Codex (sample 3) passes and both Claude samples fail: the Claude pair against
+// the Codex judge goes to the decider.
+const toDecider = (id, sample) => (MAPPED.includes(id) ? (sample === 3 ? 'pass' : 'fail') : 'pass')
 
 // Runs product judging with every job but `job` passing unanimously, and the
 // canned stages of `job`. `seat(id, sample, next)` returns a verdict or a vote;
@@ -553,8 +553,8 @@ test('unanimous evidence seats where one reports missing material fail the crite
 test('majority evidence seats where a seat reports missing material fail the criterion before settlement', async () => {
   const { views, idOf } = await evidenceViews({ artifacts: deepRecord() })
   const session = idOf('session-report.md')
-  // Claude and one Codex seat pass; the other Codex seat fails, and one passing seat reports missing material.
-  const seat = (id, sample) => (id === PROOF && sample === 3 ? 'fail'
+  // One Claude seat and the Codex seat pass; the other Claude seat fails, and one passing seat reports missing material.
+  const seat = (id, sample) => (id === PROOF && sample === 1 ? 'fail'
     : id === PROOF && sample === 2 ? vote(id, 'pass', { missing_material: `[truncated: ${session}` }) : 'pass')
   const outcome = await judgeTestingOnly(views, { seat })
   assert.equal(outcome.failures['testing-evidence'].code, 'missing-material')
@@ -620,7 +620,7 @@ test('an audit or check names a cut by its bare prefix, never by a paraphrase', 
 // --- Seats on every path -------------------------------------------------------
 
 test('unanimous and majority seats receive the deep claim in their packet, and settle without the decider', async () => {
-  for (const [name, seat] of [['unanimous', () => 'pass'], ['majority', (id, sample) => (MAPPED.includes(id) && sample === 3 ? 'fail' : 'pass')]]) {
+  for (const [name, seat] of [['unanimous', () => 'pass'], ['majority', (id, sample) => (MAPPED.includes(id) && sample === 1 ? 'fail' : 'pass')]]) {
     const { views } = await evidenceViews({ artifacts: deepRecord() })
     const outcome = await judgeTestingOnly(views, { seat })
     assert.deepEqual(outcome.failed_jobs, [], name)

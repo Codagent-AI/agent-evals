@@ -36,7 +36,7 @@ The component SHALL apply to both candidates and the reference baseline. The sco
 - **THEN** the component reports 6.625 of 8
 
 ### Requirement: Engineering-quality judge job
-The evaluator SHALL run a focused `engineering-quality` source-review judge job. The job SHALL return exactly the fourteen LLM-judged engineering-quality criteria. The job SHALL receive the same neutral source snapshot, neutral requirements bundle, and untrusted-data handling as the other implementation source-review jobs, and SHALL use the same judging protocol they use: the cross-family panel (`cross-family-panel-v2`) of one Claude-family and two Codex-family judges with the line-cited decider, for candidates and for the reference baseline alike. Like every other deterministic browser criterion, `input-modifier-keys-pass-through` and `input-swipe-from-control-ignored` SHALL each declare the `demo-integration` judge as their fallback.
+The evaluator SHALL run a focused `engineering-quality` source-review judge job. The job SHALL return exactly the fourteen LLM-judged engineering-quality criteria. The job SHALL receive the same neutral source snapshot, neutral requirements bundle, and untrusted-data handling as the other implementation source-review jobs, and SHALL use the same judging protocol they use: the cross-family panel (`cross-family-panel-v2`) of two Claude-family judges and one Codex-family judge with the line-cited decider, for candidates and for the reference baseline alike. Like every other deterministic browser criterion, `input-modifier-keys-pass-through` and `input-swipe-from-control-ignored` SHALL each declare the `demo-integration` judge as their fallback.
 
 #### Scenario: The job returns exactly its criteria
 - **WHEN** the engineering-quality job completes

@@ -1222,6 +1222,15 @@ test('rubric 15.0.0 fixes the departing-exit, overlap, and active-state guidance
   assert.match(transitions, /An opt-in exit wrapper the sample uses satisfies it/)
   assert.match(transitions, /do not additionally require the scene-kit boundary to preserve entities removed by plain conditional rendering, or a focused integration test/)
   assert.doesNotMatch(transitions, /an opt-in wrapper alone is insufficient/)
+  // Every identified sample newcomer is judged, including one rendered outside the kit's animated primitives.
+  assert.match(transitions, /when any entity the delivered sample introduces has no entry motion at all/)
+  assert.match(transitions, /Judge every entity the delivered sample introduces on a step, meaning each element the sample gives a stable identity/)
+  assert.match(transitions, /a delayed kit path that most newcomers use does not excuse one that appears with no entry motion/)
+  assert.match(transitions, /A structural wrapper the sample gives no identity is not an entity for this criterion\./)
+  // Fixed chrome padding and gaps are placement geometry, not a spacing scale.
+  const style = guidance('scene-style-and-attribution')
+  assert.match(style, /For style-kit-hooks, a spacing scale is a spacing system the kit makes presentations adopt/)
+  assert.match(style, /chrome-placement geometry the requirement calls layout behavior[^\n]*they do not fail this criterion\./)
   const warnings = guidance('verification-warnings')
   assert.doesNotMatch(warnings, /Fail when the comparison drops chrome that has no text content\./)
   assert.match(warnings, /drops chrome without text content fails only when the candidate's presentation renders textless chrome/)
