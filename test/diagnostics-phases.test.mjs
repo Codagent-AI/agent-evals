@@ -85,6 +85,7 @@ function attempt(overrides = {}) {
     record_id: 'implement-tasks#1',
     prefix: 'implement-tasks:0/implement-single-task/sub:implement-task',
     id: 'generate-code',
+    role: 'implementor',
     kind: 'step',
     type: 'agent',
     attempt: 1,

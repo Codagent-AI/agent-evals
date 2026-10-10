@@ -442,3 +442,33 @@ test('a reference baseline reports every workflow role not applicable', () => {
   assert.equal(report.roles.tester.configured, 'not-applicable')
   assert.equal(report.incomplete, false)
 })
+
+test('an attempt with no recorded agent is reported unattributed rather than guessed', () => {
+  const { profiles } = validateRoleProfiles({ lead, crosscheck, implementor, tester, capabilities })
+
+  const report = reconcileRoleAttempts(profiles, [
+    { agent_role: null, attempt_id: 'a-1', cli: 'claude', provider: 'anthropic', model: 'opus', effort: 'high', session: 'acceptance-tester', step: 'implement-tasks', prefix: 'implement-tasks:0' },
+    { agent_role: 'acceptance-tester', attempt_id: 'a-2', cli: 'claude', provider: 'anthropic', model: 'opus', effort: 'high' },
+  ])
+
+  assert.deepEqual(report.unattributed.map((entry) => entry.observed.attempt), ['a-1', 'a-2'])
+  assert.equal(report.unattributed[0].observed.step, 'implement-tasks')
+  for (const role of ['lead', 'crosscheck', 'implementor', 'tester']) {
+    assert.deepEqual(report.roles[role].attempts, [], role)
+  }
+})
+
+test('Validator attempts are reported under the Validator and linked to their invoking attempt', () => {
+  const { profiles } = validateRoleProfiles({ lead, crosscheck, implementor, tester, capabilities })
+
+  const report = reconcileRoleAttempts(profiles, [
+    { agent_role: 'implementor', attempt_id: 'task-1', cli: 'claude', provider: 'anthropic', model: 'sonnet', effort: 'medium' },
+    { agent_role: 'implementation-validator', tool: 'agent-validator', attempt_id: 'v-1', invoked_by_attempt: 'task-1', cli: 'codex', provider: 'openai', model: 'gpt-5', effort: 'high' },
+  ])
+
+  assert.equal(report.validator.length, 1)
+  assert.equal(report.validator[0].observed.attempt, 'v-1')
+  assert.equal(report.validator[0].invoked_by_attempt, 'task-1')
+  assert.deepEqual(report.unattributed, [])
+  assert.equal(report.roles.implementor.attempts.length, 1)
+})

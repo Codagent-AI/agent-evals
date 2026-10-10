@@ -305,13 +305,6 @@ function validateNativeMeasurement(measurement, label) {
   }
 }
 
-// Agent Runner joins nesting segments with `/` and renders a loop iteration as
-// `<step-id>:<n>` (`executionIdentityPrefix` in internal/exec/step_audit.go), so
-// per-task work sits under `implement-tasks:<n>`. The same validator
-// sub-workflow also runs as the workflow's final `run-validator` step, and only
-// this position distinguishes the two.
-const TASK_LOOP_PREFIX = /^implement-tasks(?::\d+)?(?:\/|$)/
-
 function nonEmptyString(value) {
   return typeof value === 'string' && value.length > 0
 }
@@ -337,13 +330,13 @@ function usageStateOf(usage, invokedCli) {
   return invokedCli ? 'unavailable' : 'not-applicable'
 }
 
-function agentRole(raw) {
-  if (!raw.agent_invoked) return null
-  if (raw.kind === 'agent-call' && raw.target_name === 'acceptance-tester') return 'acceptance-reviewer'
-  if (typeof raw.prefix === 'string' && TASK_LOOP_PREFIX.test(raw.prefix)) {
-    return 'task-implementor'
-  }
-  return 'lead-agent'
+// The role is the Agent Runner agent Runner records for the attempt: the step's
+// agent profile, or the target of an agent call. It is never inferred from the
+// attempt's step, path, session name, or position; an attempt without a
+// recorded agent stays unattributed.
+function recordedAgent(raw) {
+  const role = raw?.role ?? raw?.agent_role
+  return nonEmptyString(role) && role !== 'legacy-unknown' ? role : null
 }
 
 // Agent Runner preserves category details and separately provides canonical
@@ -705,7 +698,7 @@ function normalizeNativeMeasurement(raw, step) {
     },
     step: raw.attribution.step_id,
     prefix: raw.attribution.prefix,
-    agent_role: step?.role ?? agentRole(step ?? { agent_invoked: true, prefix: raw.attribution.prefix }),
+    agent_role: recordedAgent(step),
     tool: step?.tool ?? 'agent-runner',
     invoked_cli: true,
     cli: profile.cli,
@@ -794,6 +787,10 @@ function normalizeValidatorAttempt(head) {
     step: head.attribution.step_id,
     prefix: head.attribution.prefix,
     agent_role: 'implementation-validator',
+    // The Runner attempt that invoked this Validator attempt, from Runner's
+    // own attribution rather than from where the attempt sits in the workflow.
+    invoked_by_attempt: nonEmptyString(head.attribution.parent_attempt_id)
+      ? head.attribution.parent_attempt_id : null,
     tool: 'agent-validator',
     invoked_cli: true,
     cli: profile.cli ?? raw.adapter,
@@ -850,7 +847,7 @@ function normalizeAttempt(raw, index) {
     attempt_id: attemptId,
     step: raw.id ?? raw.step ?? null,
     prefix: raw.prefix ?? null,
-    agent_role: raw.role ?? raw.agent_role ?? agentRole(raw),
+    agent_role: recordedAgent(raw),
     tool: raw.tool ?? null,
     invoked_cli: invokedCli,
     cli: effectiveIdentityValue(identity, 'effective_cli', rawUsage?.cli, raw.cli),

@@ -170,6 +170,9 @@ export function compareRoleSelections(recorded, requested) {
 }
 
 const AGENT_ROLES = Object.fromEntries(Object.entries(ROLE_AGENTS).map(([role, agent]) => [agent, role]))
+// Runner records the agent of each attempt. The three labels below are what an
+// earlier harness stored in results a rescore re-reads; they are read back as
+// recorded, never derived here from a step, path, or session name.
 const REPORTED_ROLES = {
   lead: 'lead',
   crosscheck: 'crosscheck',
@@ -177,14 +180,31 @@ const REPORTED_ROLES = {
   tester: 'tester',
   'lead-agent': 'lead',
   'task-implementor': 'implementor',
-  'acceptance-tester': 'tester',
   'acceptance-reviewer': 'tester',
+}
+const VALIDATOR_ROLE = 'implementation-validator'
+
+function observedOf(attempt, role) {
+  return {
+    role,
+    agent: attempt.agent ?? attempt.agent_role ?? null,
+    cli: attempt.cli ?? null,
+    provider: attempt.provider ?? null,
+    model: attempt.model ?? null,
+    effort: attempt.effort ?? null,
+    session: attempt.session ?? null,
+    step: attempt.step ?? null,
+    attempt: attempt.attempt ?? attempt.attempt_id ?? null,
+  }
 }
 
 // Configured settings are never presented as observed ones. An attempt without
 // complete evidence is marked incomplete instead.
 // A role absent from the profiles (a legacy run recorded before it existed) is
 // not reported. A configured role with no attempts is reported not invoked.
+// Agent Validator attempts are reported under the Validator, linked to the
+// Runner attempt that invoked them; an attempt whose agent Runner did not
+// record is reported unattributed.
 export function reconcileRoleAttempts(profiles, attempts = []) {
   const configuredRoles = ROLES.filter((role) => Object.hasOwn(profiles, role))
   const applicable = configuredRoles.every((role) => profiles[role] !== NOT_APPLICABLE)
@@ -192,22 +212,26 @@ export function reconcileRoleAttempts(profiles, attempts = []) {
     configuredRoles.map((role) => [role, { configured: profiles[role], invocation: null, attempts: [] }]),
   )
   const mismatches = []
+  const validator = []
+  const unattributed = []
   let incomplete = false
 
   for (const attempt of attempts) {
-    const role = AGENT_ROLES[attempt.agent] ?? REPORTED_ROLES[attempt.agent_role]
-    if (!role || !roles[role]) continue
-    const observed = {
-      role,
-      agent: attempt.agent ?? attempt.agent_role,
-      cli: attempt.cli ?? null,
-      provider: attempt.provider ?? null,
-      model: attempt.model ?? null,
-      effort: attempt.effort ?? null,
-      session: attempt.session ?? null,
-      step: attempt.step ?? null,
-      attempt: attempt.attempt ?? attempt.attempt_id ?? null,
+    if (attempt.agent_role === VALIDATOR_ROLE) {
+      validator.push({
+        observed: observedOf(attempt, 'validator'),
+        invoked_by_attempt: attempt.invoked_by_attempt ?? null,
+      })
+      continue
     }
+    const role = AGENT_ROLES[attempt.agent] ?? REPORTED_ROLES[attempt.agent_role]
+    if (!role || !roles[role]) {
+      // A recognized role the source never configured (a legacy three-role
+      // run) is not reported; anything else lacks a usable recorded agent.
+      if (!role) unattributed.push({ observed: observedOf(attempt, null) })
+      continue
+    }
+    const observed = observedOf(attempt, role)
     const configured = roles[role].configured
     const complete = PROFILE_FIELDS.every((field) => observed[field] !== null)
     if (!complete) incomplete = true
@@ -243,5 +267,5 @@ export function reconcileRoleAttempts(profiles, attempts = []) {
     else entry.invocation = entry.attempts.length > 0 ? 'invoked' : 'not-invoked'
   }
 
-  return { applicable, roles, mismatches, incomplete }
+  return { applicable, roles, validator, unattributed, mismatches, incomplete }
 }
