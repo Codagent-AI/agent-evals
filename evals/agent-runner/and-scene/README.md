@@ -128,9 +128,14 @@ reason. Refresh the offline snapshot from the pinned fixture checkout with:
 node evals/agent-runner/and-scene/fixture-snapshot.mjs --checkout /path/to/and-scene
 ```
 
-This suite gives an implementation agent a reviewed OpenSpec change with no
-implementation, runs the real Agent Runner workflow in a browser-capable Docker
-sandbox, and grades the result.
+The snapshot copies the fixture README and the change's proposal, design,
+specs, and test plan; it no longer copies `tasks.md`. The committed
+`fixture-snapshot/snapshot.json` still records the earlier pin's `tasks.md` and
+is regenerated when the definition-only fixture is pinned.
+
+This suite gives the evaluated workflow a reviewed OpenSpec change that has
+definition artifacts and no tasks or implementation, runs the real Agent Runner
+workflow in a browser-capable Docker sandbox, and grades the result.
 
 Run commands from the `agent-evals` repository root. The entry point is
 `evals/agent-runner/and-scene/run.sh`.
@@ -151,9 +156,10 @@ Agent Runner owns the sandbox image, local-source build, authentication
 forwarding, and devcontainer. This suite calls its `scripts/sandbox-run.sh`
 adapter and mounts only this suite at `/eval-input`.
 
-Each lead, implementor, and tester profile selects its own CLI
-adapter (`claude`, `codex`, or `cursor`), and eval-owned judging always runs
-through the cross-family panel. The adapter mounts the host authentication matching the selected
+Each lead, crosscheck, implementor, and tester profile selects its own CLI
+adapter (`claude`, `codex`, or `cursor`); a new run rejects a `cursor` lead (see
+[Run the suite](#run-the-suite)). Eval-owned judging always runs through the
+cross-family panel. The adapter mounts the host authentication matching the selected
 adapters plus Claude and Codex. Model identifiers are passed through unchanged: Cursor
 accepts a versioned id such as `grok-4.6` or a full Cursor id such as
 `cursor-grok-4.6-high`. A bare family such as `grok` is passed through, but the
@@ -163,11 +169,15 @@ against the pinned Agent Skills checkout and installs that local plugin for
 each selected CLI. Missing literal sub-workflows fail preflight; templated
 references emit a warning because their skills cannot be checked statically.
 
-The profile names match the workflow's `lead`, `implementor`, and `tester`
-agents; acceptance work runs through the `acceptance-tester` named session.
-Agent Runner records the `tester` role for those attempts; attempts delegated
-through `call_agent` by earlier Runner revisions use the `acceptance-reviewer`
-role name.
+The profile names match the evaluated workflow's `lead`, `crosscheck`,
+`implementor`, and `tester` agents. Each attempt's role is the agent Agent
+Runner records for it: the step's agent profile, or the target of an agent
+call. The suite never infers a role from a step name, step path, session name,
+or position, so it attributes any workflow the same way. An attempt with no
+usable recorded agent is reported as unattributed rather than guessed, and
+Agent Validator attempts are reported under the Validator, linked to the
+attempt that invoked them. A role the source run never configured, such as
+crosscheck in an earlier three-role run, is not reported.
 
 The implementation agents use unrestricted permissions inside the container.
 The container is the isolation boundary. Run trusted fixtures and pass only the
@@ -223,45 +233,51 @@ standalone maintainer diagnostic and is not required before `--run-agent`:
 evals/agent-runner/and-scene/run.sh --calibrate
 ```
 
-Run the evaluation. All three role profiles are required and each independently
-selects a CLI adapter, model, and effort:
+Run the evaluation. All four role profiles (lead, crosscheck, implementor, and
+tester) are required and each independently selects a CLI adapter, model, and
+effort. `--workflow` selects the Agent Runner workflow to evaluate and defaults
+to `core:plan-and-implement-change`:
 
 ```bash
 evals/agent-runner/and-scene/run.sh \
   --run-agent \
   --skip-validator \
   --lead-cli claude --lead-model opus --lead-effort high \
+  --crosscheck-cli codex --crosscheck-model gpt-6 --crosscheck-effort high \
   --implementor-cli claude --implementor-model sonnet --implementor-effort medium \
   --tester-cli claude --tester-model opus --tester-effort high
 ```
 
 Cursor profiles take a versioned id or a full Cursor model id. The suite does
 not rewrite either form. `grok-4.6` works; a bare family such as `grok` does
-not:
+not. A new run rejects a `cursor` lead before any model call: the lead makes
+agent calls, and nothing has yet shown that Cursor can make them in the
+sandbox. `--proof-browser` and `--dry-run` launch no lead, so neither can prove
+it. Cursor remains available for the other roles:
 
 ```bash
 evals/agent-runner/and-scene/run.sh \
   --run-agent \
   --skip-validator \
-  --lead-cli cursor --lead-model grok-4.6 --lead-effort high \
+  --lead-cli claude --lead-model opus --lead-effort high \
+  --crosscheck-cli cursor --crosscheck-model grok-4.6 --crosscheck-effort high \
   --implementor-cli cursor --implementor-model cursor-grok-4.6-high --implementor-effort medium \
   --tester-cli claude --tester-model opus --tester-effort high
 ```
 
-`--skip-validator` passes `skip_validator=true` to skip all workflow-owned
-Agent Validator execution: task-level compliance, the final Validator, and
-acceptance-remediation Validator calls. Without it, all of those Validator
-paths remain enabled. Both modes still complete the draft-PR,
-acceptance-preparation, and handoff-verification steps. In skipped mode the
-harness requires an explicit skipped outcome for the final `run-validator`
-step; an absent, interrupted, or unexpectedly successful step is not accepted
-as proof of intentional skipping.
+`--skip-validator` passes `skip_validator=true` to the evaluated workflow;
+without it the suite passes `skip_validator=false`. The workflow owns what the
+argument means; for the default workflow it skips every workflow-owned Agent
+Validator path. The suite records the requested mode as workflow provenance and
+baseline identity, and derives the recorded `task_level_compliance` and
+`final_validator` values from it. It does not verify the mode from named
+workflow steps or their outcomes.
 Skipped mode also keeps Agent Validator away from the run's agents: the
 controller starts Agent Runner with a `PATH` whose first entry shadows
 `agent-validator` and `agent-validate` with a shim that exits 127. The shim
 appends each attempt to `logs/blocked-validator-invocations.log`, and the
-workflow events record a `validator-unavailable` entry. Runner needs no
-Validator when every Validator step is skipped. The sandbox is unprivileged,
+workflow events record a `validator-unavailable` entry. The evaluated workflow
+is expected to need no Validator in skipped mode. The sandbox is unprivileged,
 so the installed binary still exists; only name lookup is blocked. Validator-on
 runs are unchanged.
 The first complete benchmark candidate explicitly uses `--skip-validator`.
@@ -275,6 +291,7 @@ evals/agent-runner/and-scene/run.sh \
   --run-agent --resume --artifact-dir artifacts/evals/and-scene/<run-id> \
   --skip-validator \
   --lead-cli claude --lead-model opus --lead-effort high \
+  --crosscheck-cli codex --crosscheck-model gpt-6 --crosscheck-effort high \
   --implementor-cli claude --implementor-model sonnet --implementor-effort medium \
   --tester-cli claude --tester-model opus --tester-effort high
 ```
@@ -282,7 +299,8 @@ evals/agent-runner/and-scene/run.sh \
 Resume reuses the recorded Agent Runner run rather than starting a second one.
 It verifies live process ownership before waiting, resumes only the exact
 inactive unfinished run, and rejects a changed fixture, role profile, Runner
-revision, workflow hash, Agent Skills revision or manifest, branch, draft PR,
+revision or CLI version, workflow reference, resolved workflow hash,
+Runner-reported workflow name, Agent Skills revision or manifest, branch, draft PR,
 final SHA, rubric hash, evidence identity, or other score-affecting input.
 The run's private `.runtime/agent-session-state/` also retains the Codex rollout
 directories, Claude project transcripts, and Cursor chat store addressed by
@@ -291,8 +309,9 @@ directories into their otherwise disposable home, so genuine CLI continuation
 survives without retaining auth files, CLI settings, or the rest of either home
 directory.
 
-If a Claude lead, implementor, or acceptance tester exhausts its session allowance,
-the controller recognizes the Claude/Anthropic identity and limit message in
+If an agent running on Claude, in any role, exhausts its session allowance,
+the controller recognizes the limit from the recorded CLI or provider and
+agent, and the limit message in
 the current Agent Runner execution's durable `audit.log`. When that record also
 contains an explicit UTC reset no more than six hours away, the controller
 waits until one minute after the reset and resumes the exact persisted Runner
@@ -453,6 +472,7 @@ evals/agent-runner/and-scene/run.sh \
   --run-agent --skip-validator \
   --artifact-dir artifacts/evals/and-scene/candidate-1 \
   --lead-cli claude --lead-model opus --lead-effort high \
+  --crosscheck-cli codex --crosscheck-model gpt-6 --crosscheck-effort high \
   --implementor-cli claude --implementor-model sonnet --implementor-effort medium \
   --tester-cli claude --tester-model opus --tester-effort high
 ```
@@ -473,54 +493,70 @@ retry.
 
 ## What it evaluates
 
-The suite measures implementation of the `create-and-scene` OpenSpec change.
-The score does not measure proposal, specification, test-plan, or task
-generation. Before creating the candidate branch or invoking Agent Runner, the
-suite therefore verifies that the selected fixture contains the complete
-structured planning contract: non-empty proposal, design, specifications,
-test plan, task index, and linked task files; the required test-plan sections;
-and at least one fully defined `AT-*` obligation represented in the coverage
-map. An incompatible fixture exits as `fixture-planning-contract`, with no
-agent call.
+The suite measures how the evaluated Agent Runner workflow takes the
+`create-and-scene` OpenSpec change from its definition to a delivered
+implementation. The fixture presents the change as definition artifacts only,
+so the workflow plans its own tasks before implementing them. Before creating
+the candidate branch or invoking Agent Runner, the suite verifies at the pinned
+fixture commit that `openspec/changes/create-and-scene/` has a non-empty
+proposal, design, test plan, and at least one specification; that the test plan
+has the required sections and at least one fully defined `AT-*` obligation
+represented in the coverage map; and that the change has no `tasks.md` and no
+`tasks/` directory. A fixture that fails exits as `fixture-planning-contract`,
+naming the missing definition artifact or the task artifact that is present,
+with no agent call. The suite never deletes, generates, or rewrites fixture
+files to pass this check. A new run and `--resume` apply it; an evaluator-only
+rescore keeps its source's starting line and skips it.
 
 The external fixture is pinned to commit
 `f0695b96c0c23b2d17ecc6cfbaf8be1fcdedd6f8` in
-`https://github.com/Codagent-AI/and-scene.git`. The implemented reference commit
-`171c7def1e12aca2a5f605a5e5feafb20d4e4d19` is the comparable reference baseline.
-It is not a similarity target. The fixture includes the reviewed structured test
-plan merged by `Codagent-AI/and-scene#11`; advance it only to another reviewed
-planning-only fixture revision. Its `.validator/config.yml` runs the checks and
-`all-reviewers` on the root entry point and scopes the `skill-quality` review
-to a separate `skills` entry point, so that review runs only when files under
-`skills/` change. The pinned commit is kept reachable on the and-scene branch
-`eval/fixture-baseline-scrub`.
+`https://github.com/Codagent-AI/and-scene.git`, on the and-scene branch
+`eval/fixture-baseline-scrub`. That commit still carries the hand-written
+`tasks.md` and `tasks/` used by earlier `core:implement-change` runs, so a new
+run against it fails the definition-only check until the definition-only
+fixture commit is cut and pinned (agent-evals#78). The implemented reference
+commit `171c7def1e12aca2a5f605a5e5feafb20d4e4d19` is the comparable reference
+baseline. It is not a similarity target. The fixture's `.validator/config.yml`
+runs the checks and `all-reviewers` on the root entry point and scopes the
+`skill-quality` review to a separate `skills` entry point, so that review runs
+only when files under `skills/` change.
 
-The suite runs Agent Runner's exact
-`workflows/core/implement-change-v1.0.yaml` workflow through completion, invoked
-as `core:implement-change` with the OpenSpec artifact parameters supplied by the suite.
-There is no early `--until` boundary. `--skip-validator` skips task-level,
-final, and acceptance-remediation Agent Validator execution while the draft
-pull request, acceptance preparation, and handoff verification always remain
-required. The final `run-validator` step must be recorded as `skipped` in that
-mode and `success` when validation is enabled.
+Product judging reads the approved requirements from the evaluated change at
+the recorded fixture commit, never from the candidate's copy, so a workflow that
+edits the proposal, design, specs, or test plan on its branch is still graded
+against the pinned definition. Results from the definition-only starting line
+form a new series: their recorded workflow and fixture commit differ from
+earlier results, so the experiment baseline refuses to mix them without an
+explicit identity-mismatch override.
 
-Current Agent Runner delegates those final steps (`run-validator`,
-`open-draft-pr`, `verify-draft-pr`, `prepare-acceptance`, and
-`verify-acceptance-handoff`) to the `core:verify-change` sub-workflow,
-`workflows/core/verify-change-v1.0.yaml`, through a top-level `verify-change`
-step. The suite then checks the contract in that file, requires
-`agent-runner debug --show-workflow core:verify-change` to match it, records its
-hash as `verification_workflow_sha256`, and reads the final step outcomes at
-`verify-change > sub:verify-change > <step>` in the run history. Earlier Runner
-revisions declared the same steps at the top level of implement-change; that
-layout is still accepted so their runs remain verifiable and rescorable. Delivery
-and the published workflow result report the leaf step (for example
-`run-validator`) and retain the full `step_path` in the history entry. The
-sub-workflow shares its parent's session directory, so acceptance evidence is
-still discovered under the run's `output/` directory. The Agent Runner checkout must be a clean Git worktree; the suite
-records whichever commit, workflow hash, and CLI version it used. The Agent
-Skills checkout must also be clean; the suite records its commit and plugin
-manifest hash.
+`--workflow <logical-ref>` selects the evaluated workflow and defaults to
+`core:plan-and-implement-change`. The suite treats it as opaque. It depends only
+on the logical reference, the workflow's declared parameters, and the
+`codagent:*` skills its files name, never on step identifiers, step order,
+nesting, named sessions, or recorded step paths. The workflow must declare
+`change_name`, `change_dir`, `change_label`, `change_kind`,
+`artifact_validation_instruction`, and `skip_validator`; the suite supplies
+fully resolved values for each and fails preflight naming any parameter the
+workflow lacks. The workflow runs to completion with no `--until` boundary.
+
+The suite records two workflow identities: the requested logical reference and
+the Runner-reported name, which is the `name` the resolved definition declares
+(`plan-and-implement-change` for the default). It records the SHA-256 of the
+definition `agent-runner debug --show-workflow <ref>` resolves, and accepts run
+state, discovered runs, and `run-metrics.json` only when they report the
+expected name. The Agent Runner checkout must be a clean Git worktree; the
+suite records whichever commit, workflow hash, and CLI version it used. The
+Agent Skills checkout must also be clean; the suite records its commit and
+plugin manifest hash.
+
+Delivery is verified from outcomes alone, whatever steps the workflow ran:
+Agent Runner's completion status, the candidate branch and remote head, the open
+draft pull request, the unarchived change, and the acceptance artifacts under
+the Runner session's `output/` directory. The publication-boundary check is
+final-state-only. It sees the pull request's state and draft status, the remote
+candidate branch, and the OpenSpec change directory as they are when the
+workflow finishes; an effect reversed before completion, or a product release,
+is invisible to it, and `result.json` discloses that scope.
 
 ## Architecture
 
@@ -797,10 +833,11 @@ The automated command runs these phases in order:
    Agent Skills checkout and required skills, publishing credentials, profiles,
    evaluator inputs, and run directory.
 2. Start, wait for, resume, or continue the one recorded complete Runner run.
-3. Verify the delivered branch, remote head, and open draft PR whose base
-   exactly matches the recorded `origin/HEAD`, plus its head, the final
-   Validator's required successful or intentional skipped outcome, unarchived
-   change, and acceptance handoff. Tracked changes and arbitrary untracked files
+3. Verify Agent Runner reported the run completed, then the delivered branch,
+   remote head, and open draft PR whose base exactly matches the recorded
+   `origin/HEAD`, plus its head, the unarchived change, and the acceptance
+   handoff in the session output. No workflow step or step outcome is read.
+   Tracked changes and arbitrary untracked files
    still fail delivery; untracked raster screenshots under
    `artifacts/presentation-inspection/` are retained as explicitly identified
    candidate evidence and do not make the committed product revision dirty.
@@ -828,9 +865,14 @@ Unsupported outer or nested versions are rejected instead of falling back to
 an older compatibility view. `result.json` and `report.html` show implementation
 usage by role, tool, provider, model, and allocation, including dispatch and
 participation counts, canonical totals, pricing source, verification state, and
-independent completeness dimensions. Eval-owned Codex judge usage is captured
+independent completeness dimensions. Implementation cost covers every agent
+invocation inside the evaluated Agent Runner run, whichever part of the
+workflow made it, including planning, crosscheck, implementation, and
+acceptance work; total and active duration cover the whole run. Eval-owned
+Claude and Codex usage, such as panel judging, deciders, and audits, is captured
 separately in `phases/eval-owned-usage.jsonl`; it is never priced or included in
-implementation cost.
+implementation cost. Cost is report-only and never affects points, gates, or
+pass status.
 
 ## Human review
 
@@ -969,8 +1011,11 @@ rubric mismatch leaves a rescored median ineligible for `set`.
 
 Only schema-8 and schema-9 Agent Runner candidate results are admitted. Every repetition must
 have the same runner commit; `--allow-mismatch <reason>` cannot waive this rule.
-It can waive differences in the skills commit, workflow settings, fixture commit,
-configured role profiles, or rubrics. The waived fields and reason are saved on
+It can waive differences in the skills commit, workflow settings (including the
+evaluated workflow reference and requested Validator mode), fixture commit,
+configured role profiles, or rubrics. Results from the definition-only starting
+line therefore start a new series; adding an earlier `core:implement-change`
+repetition is refused as a workflow and fixture-commit mismatch unless waived. The waived fields and reason are saved on
 the repetition. Observed models are recorded but do not affect identity.
 Infrastructure failures must be rerun. Product failures, including those without
 an automated score, are kept. An unscored failure ranks below scored repetitions
@@ -1137,9 +1182,9 @@ an implementation agent or producing a score.
 
 ## Configuration
 
-Run `evals/agent-runner/and-scene/run.sh --help` for every option. The
-implementation workflow and its full delivery contract are hard-coded; there is no
-`--workflow`, `--until`, or `--workflow-arg` override. Update
+Run `evals/agent-runner/and-scene/run.sh --help` for every option. `--workflow`
+selects the evaluated workflow; its arguments and delivery contract are fixed by
+the suite, and there is no `--until` or `--workflow-arg` override. Update
 `agent-runner-capabilities.json` deliberately when the recorded Agent Runner
 revision gains or drops an adapter, role, or effort. Model availability is
 resolved by Agent Runner and the selected CLI when the workflow runs.
@@ -1157,11 +1202,14 @@ phases and work units completed and the hashes that must still match before
 they can be reused.
 
 Preflight failures exit 2 before any workflow starts and name the exact cause: a
-dirty Agent Runner or Agent Skills checkout, a missing or non-conforming
-`implement-change-v1.0.yaml` or delegated `verify-change-v1.0.yaml`, a missing
-Codagent skill named by the workflow or a sub-workflow it invokes, missing
-publishing credentials, an invalid role profile with its role and field, a
-role-profile mismatch on resume, a resume-provenance change (including a changed delegated verification workflow when recorded), or a stale
+fixture that is not definition-only (`fixture-planning-contract`, naming the
+missing artifact or the task artifact present), a dirty Agent Runner or Agent
+Skills checkout, a workflow that does not resolve or lacks a required
+parameter, a missing Codagent skill named by the workflow or a sub-workflow it
+invokes, missing publishing credentials, an invalid role profile with its role
+and field (including a missing crosscheck profile or a `cursor` lead), a
+role-profile mismatch on resume, a resume-provenance change (workflow reference,
+resolved hash, Runner-reported name, Runner commit, or CLI version), or a stale
 run-state identity.
 
 To diagnose or review scoring behavior, run `--calibrate` and read
@@ -1184,14 +1232,14 @@ same run directory to retry only the unfinished work.
 
 For implementation failures, `result.json` records the Agent Runner run
 identifier, session directory, candidate branch, retained draft PR, final SHA,
-and every observed step outcome. A declared or observed merge, ready, close,
+and the last observed step as Agent Runner reports it, for diagnosis only. A declared or observed merge, ready, close,
 archive, release, or branch deletion is reported as
 `workflow-side-effect-violation`; no CI checks or status endpoints are queried.
 
 ## Maintenance
 
-Update the fixture SHA deliberately when the implementation-ready snapshot
-changes. Keep runs pinned to exact commits, and update
+Update the fixture SHA deliberately, only to a reviewed definition-only
+fixture revision, and regenerate `fixture-snapshot/` at the new pin. Keep runs pinned to exact commits, and update
 `agent-runner-capabilities.json` when the recorded Agent Runner revision changes
 its supported adapters, roles, or efforts. Run calibration while reviewing
 rubric, scorer, gate, or reporting changes, then run targeted tests during

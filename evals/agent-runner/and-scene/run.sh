@@ -102,7 +102,9 @@ Options:
                           proof: artifacts/evals/and-scene-proof/<timestamp>
                           run:   artifacts/evals/and-scene/<timestamp>
   --repo URL             and-scene repository URL.
-  --fixture-ref REF      Implementation-ready fixture ref.
+  --fixture-ref REF      Definition-only fixture ref: the change has a proposal,
+                          design, test plan, and specs, and no tasks.md or
+                          tasks/. A fixture that still has tasks fails preflight.
                           Default: f0695b96c0c23b2d17ecc6cfbaf8be1fcdedd6f8
   --reference-ref REF    Implemented/reference ref.
                           Default: 171c7def1e12aca2a5f605a5e5feafb20d4e4d19
@@ -132,17 +134,17 @@ Options:
   --lead-model MODEL     Lead-agent model.
   --lead-effort EFFORT   Lead-agent effort. A cursor lead is rejected until
                           Cursor agent calls are verified in the sandbox.
-  --crosscheck-cli CLI   Crosscheck CLI adapter (the agent task review calls).
+  --crosscheck-cli CLI   Crosscheck CLI adapter (the workflow's crosscheck agent).
   --crosscheck-model MODEL
                           Crosscheck model.
   --crosscheck-effort EFFORT
                           Crosscheck effort.
-  --implementor-cli CLI  Task-implementor CLI adapter.
+  --implementor-cli CLI  Implementor CLI adapter (the workflow's implementor agent).
   --implementor-model MODEL
-                          Task-implementor model.
+                          Implementor model.
   --implementor-effort EFFORT
-                          Task-implementor effort.
-  --tester-cli CLI       Tester CLI adapter.
+                          Implementor effort.
+  --tester-cli CLI       Tester CLI adapter (the workflow's tester agent).
   --tester-model MODEL   Tester model.
   --tester-effort EFFORT Tester effort.
   --judge-model MODEL    Eval-owned judge model. Default: gpt-6-sol.

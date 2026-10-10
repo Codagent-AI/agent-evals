@@ -691,6 +691,12 @@ test('help documents the exact fixture pin, role profiles, and validator option'
   assert.ok(result.stdout.includes('--calibrate'))
   assert.ok(result.stdout.includes('--mount-cursor-auth'))
   assert.ok(!result.stdout.includes('--calibration-record'))
+  // The starting line is definition-only and the workflow is opaque, so the
+  // help names neither a task-ready fixture nor workflow-specific steps.
+  assert.match(result.stdout, /--fixture-ref REF\s+Definition-only fixture ref/)
+  for (const workflowSpecific of ['Implementation-ready', 'implement-change lead', 'Task-implementor', 'task review']) {
+    assert.ok(!result.stdout.includes(workflowSpecific), `help still says ${workflowSpecific}`)
+  }
 })
 
 test('calibration runs the reference and degraded mutations without Docker, Agent Runner, or Claude auth', async () => {

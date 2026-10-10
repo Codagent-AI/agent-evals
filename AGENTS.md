@@ -49,6 +49,10 @@ consult `run.sh --help` before constructing an unfamiliar invocation.
   Runner and Agent Skills `main` (and Agent Validator `main` on Fly). A change merged here applies
   to the next eval with no factory deploy.
 
+- New runs and `--resume` require the pinned fixture change to be
+  definition-only: proposal, design, test plan, and specs, with no `tasks.md`
+  or `tasks/`. Preflight otherwise fails with `fixture-planning-contract`.
+  Rescores keep their source's starting line.
 - Start with `evals/agent-runner/and-scene/run.sh --proof-browser` when checking
   a local Runner/sandbox/browser setup. It does not run implementation agents.
 - Use `--calibrate` only when changing or reviewing the rubric, scoring, gates,
@@ -57,12 +61,12 @@ consult `run.sh --help` before constructing an unfamiliar invocation.
 - When a rubric change moves points onto LLM-judged criteria, measure how often
   each new criterion's verdict flips across repeated rescores of the same code
   before relying on calibration or comparing scores across rubric versions.
-- A paid candidate run needs `--run-agent`, all three role profiles
-  (`--lead-*`, `--implementor-*`, and `--tester-*`), a clean Agent Runner
-  checkout, a clean pinned Agent Skills checkout, Docker, valid CLI auth, and
-  GitHub credentials permitted to push a candidate branch and create a draft
-  PR. Use `--dry-run` to inspect the planned sandbox invocation without Docker
-  or model calls.
+- A paid candidate run needs `--run-agent`, all four role profiles
+  (`--lead-*`, `--crosscheck-*`, `--implementor-*`, and `--tester-*`; a
+  `cursor` lead is rejected), a clean Agent Runner checkout, a clean pinned
+  Agent Skills checkout, Docker, valid CLI auth, and GitHub credentials
+  permitted to push a candidate branch and create a draft PR. Use `--dry-run`
+  to inspect the planned sandbox invocation without Docker or model calls.
 - To continue an interrupted run, reuse its exact artifact directory with
   `--resume` and the same profiles and score-affecting inputs. Do not start a
   second run in that directory. `result.json` and `run-state.json` explain the
@@ -74,7 +78,8 @@ consult `run.sh --help` before constructing an unfamiliar invocation.
   symlinks before creating it; this prevents state escaping the evaluation.
 - `--skip-validator` intentionally skips every workflow-owned Agent Validator
   path, including the final Validator; it does not skip eval-owned scoring.
-  The harness requires an explicit skipped Validator outcome as evidence.
+  The harness passes `skip_validator=true` and records the requested Validator
+  mode as provenance; it does not verify the mode from workflow steps.
 
 ## Operational diagnostics
 
