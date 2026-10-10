@@ -1204,6 +1204,8 @@ test('the ungrouped-transition morph criterion is a major scene-kit criterion tr
   assert.match(guidance, /For entity-ungrouped-transition-morph[^\n]*do not share a scene group[^\n]*vanishes and reappears/)
   assert.match(guidance, /AnimatePresence with mode="wait"/)
   assert.match(guidance, /mode="popLayout"[^\n]*mode="sync" when the outgoing step is taken out of layout flow/)
+  assert.match(guidance, /keeps both steps mounted while the entity primitives hide the incoming copy until the outgoing copy has faded out/)
+  assert.match(guidance, /the persisting entity stays visible while it animates[^\n]*The mode alone does not establish a pass\./)
   assert.match(guidance, /Do not deduct entity-persisting-morph for a step transition that hides the morph across ungrouped steps[^\n]*only under entity-ungrouped-transition-morph/)
   const owned = new Map(rubric.eval_owned_values.map(({ value, reason }) => [value, reason]))
   for (const value of ['AnimatePresence', 'mode="wait"', 'popLayout', 'sync']) {

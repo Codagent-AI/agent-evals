@@ -806,10 +806,12 @@ criterion. This replaces equal division within subcomponents, under which one
 verdict was worth anywhere from 0.33 to 4 points. The two outline inputs become
 zero-point gate inputs, `demo-step-and-transition-reliability` stays scored at
 the minor tier because it also checks step-index progression, and the major
-scene-kit criterion `entity-ungrouped-transition-morph` fails a step transition
-that removes the outgoing step before mounting the incoming one, so an entity
-persisting across ungrouped steps vanishes and reappears (for example
-`AnimatePresence` with `mode="wait"`). The guidance for `entity-departing-exit`
+scene-kit criterion `entity-ungrouped-transition-morph` fails when an entity
+persisting across ungrouped steps vanishes and reappears: either the step
+transition removes the outgoing step before mounting the incoming one (for
+example `AnimatePresence` with `mode="wait"`), or both steps stay mounted but the
+kit's entity primitives hide the incoming copy until the outgoing one has faded.
+The transition mode alone does not establish a pass. The guidance for `entity-departing-exit`
 credits an opt-in exit wrapper the sample uses, `visual-helper-overlap-warning`
 fails a comparison that drops textless chrome only when the presentation renders
 some, and `visual-helper-active-state-warning` fails a comparison against the
