@@ -18,13 +18,14 @@ const citation = { path: 'proposal.md', start_line: 1, end_line: 1, gate: null, 
 const result = (id, verdict, citations = [citation]) => ({ id, verdict, rationale: 'The cited commitment establishes the requirement.', evidence: ['inspected'], citations, subject_id: null, added_scope: [] })
 const inputs = { artifacts: { 'proposal.md': 'A single evolving scene.\n' }, gates: [], conversation: [], items: [item] }
 const job = { name: 'coverage:test', kind: 'coverage', criteria: [item.id], inputs }
+// A vote the decider rejects is checked; the stub's check refutes it, so the ruling stands.
 function members(votes, deciderVote = null, check = 'confirmed', calls = []) {
   return { panel: votes.map((verdict, n) => ({ family: n ? 'codex' : 'claude', model: 'stub', effort: 'high', invoke: async req => {
     calls.push(req)
     return JSON.stringify({ results: req.criteria.map(id => result(id, verdict)) })
   } })), decider: { family: 'claude', model: 'stub-decider', effort: 'high', invoke: async req => {
     calls.push(req)
-    return JSON.stringify({ results: req.criteria.map(id => req.audit_stage ? { id, classification: check, rationale: 'Checked the commitment.', evidence: ['source'] } : result(id, deciderVote)) })
+    return JSON.stringify({ results: req.criteria.map(id => req.audit_stage ? { id, classification: req.audit_stage === 'ruling-dissent-check' ? 'contradicted' : check, rationale: 'Checked the commitment.', evidence: ['source'] } : result(id, deciderVote)) })
   } } }
 }
 test('anchors and generated rubric are pinned; preflight refuses review gaps and needs no pass threshold', async () => {
@@ -54,8 +55,9 @@ for (const [votes, ruling, classification, expected, basis, extra] of [
   [['met','met','missing'],null,'confirmed','met','majority',0],
   [['missing','missing','met'],null,'confirmed','met','checked-dissent',1],
   [['missing','missing','met'],null,'contradicted','missing','majority',1],
-  [['met','missing','missing'],'missing','confirmed','missing','decider',1],
-  [['met','partial','missing'],'partial','confirmed','partial','decider',1],
+  // Each vote the decider rejects is checked too: one rejected vote here, two in the split.
+  [['met','missing','missing'],'missing','confirmed','missing','decider',2],
+  [['met','partial','missing'],'partial','confirmed','partial','decider',3],
 ]) test(`INT-003 shared panel settles ${votes} with ${classification}`, async () => {
   const calls = []
   const outcome = await runDefinitionPanel({ job, ...members(votes, ruling, classification, calls) })
@@ -65,20 +67,22 @@ for (const [votes, ruling, classification, expected, basis, extra] of [
   assert.equal(calls.length, 3 + extra)
   for (const call of calls) { assertStrictSchema(call.schema); assert.match(call.prompt, /Judge only/); assert.ok(call.prompt.includes(JSON.stringify(item.anchors.met).slice(1, -1))); assert.ok(call.prompt.includes(JSON.stringify(item.sources[0].quote).slice(1, -1))) }
   if (basis === 'decider') {
-    const prompt = calls.at(-1).prompt.split('# Untrusted panel votes')[1]
+    const prompt = calls.find(call => call.prompt.includes('# Untrusted panel votes')).prompt.split('# Untrusted panel votes')[1]
     assert.match(prompt, /"label":"A"/); assert.ok(!prompt.includes('stub'))
   }
 })
 // INT-003: a batched decider ruling that overrules a verdict two effective
 // votes gave stands only when the overrule check confirms its stated reason.
 // The INV-093 shape: Claude `met`, both Codex seats `partial`.
-for (const [name, votes, ruling, classification, expected, basis, outcome] of [
-  ['a ruling agreeing with the two-vote verdict runs no check', ['met', 'partial', 'partial'], 'partial', 'contradicted', 'partial', 'decider-partial', null],
-  ['an overrule the check confirms stands', ['met', 'partial', 'partial'], 'met', 'confirmed', 'met', 'decider-met', 'upheld'],
-  ['an overrule the check does not confirm restores the two-vote verdict', ['met', 'partial', 'partial'], 'met', 'contradicted', 'partial', 'majority-partial', 'rejected'],
-  ['an overrule check that cannot decide restores the two-vote verdict', ['met', 'partial', 'partial'], 'met', 'insufficient', 'partial', 'majority-partial', 'rejected'],
-  ['a three-way split keeps its ruling without a check', ['met', 'partial', 'missing'], 'met', 'contradicted', 'met', 'decider-met', null],
-  ['a three-way split keeps a middle ruling without a check', ['met', 'partial', 'missing'], 'missing', 'contradicted', 'missing', 'decider-missing', null],
+// `rejected` counts the votes the standing ruling rejects, each checked as a
+// dissent; a ruling its overrule check rejects has none checked.
+for (const [name, votes, ruling, classification, expected, basis, outcome, rejected] of [
+  ['a ruling agreeing with the two-vote verdict runs no check', ['met', 'partial', 'partial'], 'partial', 'contradicted', 'partial', 'decider-partial', null, 1],
+  ['an overrule the check confirms stands', ['met', 'partial', 'partial'], 'met', 'confirmed', 'met', 'decider-met', 'upheld', 2],
+  ['an overrule the check does not confirm restores the two-vote verdict', ['met', 'partial', 'partial'], 'met', 'contradicted', 'partial', 'majority-partial', 'rejected', 0],
+  ['an overrule check that cannot decide restores the two-vote verdict', ['met', 'partial', 'partial'], 'met', 'insufficient', 'partial', 'majority-partial', 'rejected', 0],
+  ['a three-way split keeps its ruling without a check', ['met', 'partial', 'missing'], 'met', 'contradicted', 'met', 'decider-met', null, 2],
+  ['a three-way split keeps a middle ruling without a check', ['met', 'partial', 'missing'], 'missing', 'contradicted', 'missing', 'decider-missing', null, 2],
 ]) test(`INT-003 overrule check: ${name}`, async () => {
   const calls = []
   const ruled = members(votes, ruling, classification, calls)
@@ -86,7 +90,7 @@ for (const [name, votes, ruling, classification, expected, basis, outcome] of [
   ruled.decider.invoke = async req => {
     calls.push(req)
     return JSON.stringify({ results: req.criteria.map(id => req.audit_stage
-      ? { id, classification, rationale: 'Checked the decider\'s cited line.', evidence: ['proposal.md:1'] }
+      ? { id, classification: req.audit_stage === 'ruling-dissent-check' ? 'contradicted' : classification, rationale: 'Checked the decider\'s cited line.', evidence: ['proposal.md:1'] }
       : { ...result(id, ruling, ruling === 'missing' ? [{ ...citation, start_line: null, end_line: null }] : [citation]), rationale: 'Line 1 commits to the whole item.' }) })
   }
   const run = await runDefinitionPanel({ job, ...ruled })
@@ -95,8 +99,9 @@ for (const [name, votes, ruling, classification, expected, basis, outcome] of [
   assert.equal(settled.verdict, expected); assert.equal(settled.basis, basis)
   const checks = calls.filter(req => req.audit_stage === 'overrule-check')
   const overrules = run.record.checks.filter(c => c.stage === 'overrule-check')
-  assert.equal(calls.length, 3 + 1 + (outcome ? 1 : 0))
+  assert.equal(calls.length, 3 + 1 + (outcome ? 1 : 0) + rejected)
   assert.equal(checks.length, outcome ? 1 : 0); assert.equal(overrules.length, outcome ? 1 : 0)
+  assert.equal(calls.filter(req => req.audit_stage === 'ruling-dissent-check').length, rejected)
   if (outcome) {
     const [check] = checks
     // The decider's pinned model checks the ruling's stated reason and citations.
@@ -121,7 +126,8 @@ test('INT-003 an overrule record reproduces only from its recorded check', async
   assert.equal(run.results[0].basis, 'majority-partial')
   const flipped = structuredClone(run.record)
   flipped.checks.find(c => c.stage === 'overrule-check').classification = 'confirmed'
-  assert.throws(() => verifyCachedPanelJob(flipped), /do not reproduce/)
+  // Upheld, the ruling would reject the two partial votes, which were never checked.
+  assert.throws(() => verifyCachedPanelJob(flipped), /rejected vote has no citation check/)
   const unchecked = structuredClone(run.record)
   unchecked.checks = unchecked.checks.filter(c => c.stage !== 'overrule-check')
   assert.throws(() => verifyCachedPanelJob(unchecked), /no overrule check/)
@@ -344,7 +350,13 @@ for (const [classification, leaked] of [['confirmed', false], ['contradicted', t
   const target = f.subset.items[1].id
   const checked = []
   f.rule(req => req.job === 'disclosure-audit' ? JSON.stringify({ results: req.criteria.map(id => ({ ...result(id, 'missing', []), rationale: 'The reply answered only what the agent asked.' })) }) : null)
+  // An upheld ruling rejects both Codex leak votes; each is checked and refuted.
+  const rejectedChecks = []
   f.override((req, fallback) => {
+    if (req.audit_stage === 'ruling-dissent-check') {
+      rejectedChecks.push(req.criteria)
+      return JSON.stringify({ results: req.criteria.map(id => ({ id, classification: 'contradicted', rationale: 'Checked the exchange.', evidence: ['exchange'] })) })
+    }
     if (req.audit_stage !== 'overrule-check') return fallback(req)
     checked.push(req)
     return JSON.stringify({ results: req.criteria.map(id => ({ id, classification, rationale: 'Checked the exchange.', evidence: ['exchange'] })) })
@@ -353,6 +365,7 @@ for (const [classification, leaked] of [['confirmed', false], ['contradicted', t
   const audit = JSON.parse(await readFile(join(f.runDir, 'audits/disclosure.json'), 'utf8'))
   const scored = JSON.parse(await readFile(join(f.runDir, 'judges/score.json'), 'utf8'))
   assert.deepEqual(checked.map(req => [req.job, req.criteria]), [['disclosure-audit', [`leak:${target}`]]])
+  assert.deepEqual(rejectedChecks, leaked ? [] : [[`leak:${target}`], [`leak:${target}`]])
   const settled = audit.panel.results.find(x => x.id === `leak:${target}`)
   assert.equal(settled.verdict, leaked ? 'met' : 'missing'); assert.equal(settled.basis, leaked ? 'majority-met' : 'decider-missing')
   assert.deepEqual(settled.overrule_check, { classification, outcome: leaked ? 'rejected' : 'upheld' })
@@ -504,7 +517,13 @@ test('a coverage job with one disputed item sends the decider only that item, in
   const panel = ['partial', 'met', 'met'].map((verdict, n) => ({ family: n ? 'codex' : 'claude', model: 'stub', effort: 'high',
     invoke: async req => JSON.stringify({ results: req.criteria.map(id => result(id, id === first.id ? verdict : 'met')) }) }))
   // Like a real model, the decider answers every criterion its schema allows.
+  // The rejected partial is checked, scoped to its item, and refuted.
+  const checked = []
   const decider = { family: 'claude', model: 'stub-decider', effort: 'high', invoke: async req => {
+    if (req.audit_stage === 'ruling-dissent-check') {
+      checked.push(req.criteria)
+      return JSON.stringify({ results: req.criteria.map(id => ({ id, classification: 'contradicted', rationale: 'Checked the commitment.', evidence: ['source'] })) })
+    }
     seen.push(req)
     return JSON.stringify({ results: req.schema.properties.results.items.properties.id.enum.map(id => result(id, 'met')) })
   } }
@@ -512,6 +531,7 @@ test('a coverage job with one disputed item sends the decider only that item, in
   assert.equal(outcome.ok, true, outcome.record.error)
   assert.deepEqual(seen.map(req => req.schema.properties.results.items.properties.id.enum), [[first.id]])
   assert.deepEqual(outcome.results.map(r => [r.id, r.basis]), [[first.id, 'decider-met'], [second.id, 'consensus-met']])
+  assert.deepEqual(checked, [[first.id]])
 })
 test('every judging job with a conversation has a strict schema Codex accepts', () => {
   const jobs = makeJobs({ inventory, rubric: buildRubric(inventory), artifacts: inputs.artifacts, conversation: [exchange], gates: [] })

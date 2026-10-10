@@ -82,11 +82,15 @@ async function backDissent(vote, request, validateCitations, validateCitation) {
 }
 
 // The majority's stated reasons join the dissent: a dissent overturns two
-// votes only when the check answers why they gave the verdict they did.
-function dissentCheckPrompt({ request, scopeRule, id, original, majority = [], material, lineCited = false }) {
+// votes only when the check answers why they gave the verdict they did. A vote
+// a decider ruling rejected is checked the same way, beside the votes that gave
+// the ruling's verdict and the ruling's own reason.
+function dissentCheckPrompt({ request, scopeRule, id, original, majority = [], ruling = null, material, lineCited = false }) {
   const schema = judgeResultSchemaFor(PANEL_CHECK_RESULT_SCHEMA, [id])
   material = compactMaterial(material)
   const reasons = majority.map(({ verdict, rationale, citations }) => ({ verdict, rationale, citations }))
+  if (ruling) reasons.push({ decider_ruling: true, verdict: ruling.verdict, rationale: ruling.rationale, citations: ruling.citations,
+    ...(ruling.cited_files_omitted ? { cited_files_omitted: 'the decider\'s cited files did not fit this packet; judge its reason from the material shown' } : {}) })
   // The dissent, the majority's reasons and the complete material are measured; the job's own context is not.
   const packet = JSON.stringify({ id, rationale: original.rationale, citations: original.citations, majority: reasons, material })
   if (packet.length > MAX_AUDIT_PACKET_CHARS) throw new PacketOverflowError(`${request.job} dissent check exceeds the ${MAX_AUDIT_PACKET_CHARS}-character packet limit: ${id}`, [id])
@@ -96,7 +100,8 @@ function dissentCheckPrompt({ request, scopeRule, id, original, majority = [], m
       'it must show a clause of the requirement unmet; for a higher verdict, every clause the verdict credits met.',
       'Contradicted when the material does not show it, or when the fact is accurate but the requirement does not',
       'depend on it (an assumption, scenario, or element the requirement and its review guidance do not name).',
-      'The two majority votes and their stated reasons are given beside the dissent. Confirm a higher verdict only when',
+      ruling ? 'The decider ruled against this vote. The votes that gave its verdict and the ruling, each with its stated reason, are given beside the dissent as the majority; the decider ruling is marked. Confirm a higher verdict only when'
+        : 'The two majority votes and their stated reasons are given beside the dissent. Confirm a higher verdict only when',
       'the material also refutes each clause a majority vote states is unmet; a dissent that does not answer that reason',
       'is contradicted when the material shows the clause unmet, and insufficient otherwise. An accurate fact the dissent',
       'cites never confirms it while a majority reason it does not answer still stands.',
@@ -125,6 +130,13 @@ function route(votes, checks, order, fallbackIds = []) {
     dissent: order.indexOf(dissent.verdict) < order.indexOf(majority) ? dissent : null }
 }
 
+// The decider answers every judge it rules against; a ruling that leaves a
+// judge's reason unanswered is checked after it (`rejectedVotes`).
+export const DECIDER_REASONS_RULE = ['Before ruling, check the material each judge cites for every verdict you do not rule.',
+  'Your rationale must name each such judge by its label and state why the material shows its stated reason does not',
+  'decide the criterion\'s requirement. When the material bears out a judge\'s reason and that reason decides the',
+  'requirement, rule that judge\'s verdict.'].join(' ')
+
 // The decider sees the votes blind: a stable seeded order, with no provider,
 // family, or model in the prompt. Shared by runPanelJob and rerunDecider so a
 // re-run sends exactly the request the recorded panel outputs produced.
@@ -138,7 +150,7 @@ function deciderVotes({ job, criteria, record, order, scopeRule, ids = criteria 
       ? `The source contradiction was independently confirmed: ${vote.contradiction.rationale} The contradiction check confirmed it: ${contradictionCheckOf(vote, record.checks).rationale}`
       : vote.rationale,
     citations: vote.citations, evidence: vote.evidence })) }))
-  return ['# Untrusted panel votes', JSON.stringify(blind), 'Rule only a verdict one of these panel judges gave.', scopeRule].join('\n')
+  return ['# Untrusted panel votes', JSON.stringify(blind), 'Rule only a verdict one of these panel judges gave.', DECIDER_REASONS_RULE, scopeRule].join('\n')
 }
 
 const deciderAuthority = decider => ({ cli: 'claude', model: decider.model, effort: decider.effort })
@@ -169,6 +181,40 @@ async function parseDeciderOutput(text, criteria, record, request, validateCitat
   return results
 }
 
+// Every vote a decider ruling rejects is checked as a dissent when its
+// citations validate, unless an unconfirmed overrule check already restored
+// it. A confirmed check lets that vote's verdict stand (`resolvePanel`).
+async function checkRejectedVotes({ request, scopeRule, record, order, validateCitations, validateCitation, check }) {
+  const fallbackIds = record.fallback_ids ?? []
+  for (const ruling of record.rulings) {
+    const { id } = ruling
+    const overrule = record.checks.find(c => c.stage === 'overrule-check' && c.id === id)
+    if (overrule && overrule.classification !== 'confirmed') continue
+    const decided = rulingResult(ruling)
+    const own = record.votes.filter(v => v.id === id)
+    const keptVerdict = own.filter(v => effective(v, record.checks, order, fallbackIds).verdict === decided.verdict)
+    for (const original of rejectedVotes(own, record.checks, order, fallbackIds, decided.verdict)) {
+      const backing = await backDissent(original, request, validateCitations, validateCitation)
+      original.citations_valid = backing.valid
+      if (backing.dropped.length) {
+        original.dropped_citations = backing.dropped
+        original.citations = backing.kept
+      }
+      if (backing.error || backing.dropped.length) {
+        record.citation_checks ??= []
+        record.citation_checks.push({ id, panel_index: original.panel_index, valid: backing.valid, dropped: backing.dropped.length,
+          ...(backing.error ? { error: backing.error } : {}) })
+      }
+      if (!original.citations_valid) continue
+      const next = await dissentCheckRequest({ request, scopeRule, id, original, majority: keptVerdict, ruling: decided })
+      const result = await check(next, id)
+      record.checks.push({ ...result, stage: 'ruling-dissent-check', panel_index: original.panel_index })
+      settledCheck(result, 'ruling dissent check')
+    }
+  }
+  record.ruling_checks = true
+}
+
 // Checks follow the panel audit contract: their citations lie in the job's
 // verified inventory, and missing material names a marker the packet holds.
 async function parseCheck(request, next, id, text) {
@@ -185,15 +231,38 @@ function settledCheck(check, stage) {
   return check
 }
 
-// `majority` is the criterion's other two votes; their cited files join the material.
-async function dissentCheckRequest({ request, scopeRule, id, original, majority = [] }) {
-  const material = await sourceMaterial(request, [original, ...majority])
+// `majority` is the criterion's other two votes; their cited files join the
+// material. With `ruling`, `majority` is the votes that gave the ruling's
+// verdict, and the ruling's cited files join too when the packet can hold
+// them; otherwise the check still sees the ruling's reason and citations, and
+// is told its files were left out.
+async function dissentCheckRequest({ request, scopeRule, id, original, majority = [], ruling = null }) {
   // An evidence packet's check cites it by line range, as its parser requires.
   const lineCited = Boolean(await evidenceLineCounts(request))
+  const prompt = async (cited) => dissentCheckPrompt({ request, scopeRule, id, original, majority, ruling, lineCited,
+    material: await sourceMaterial(request, [original, ...majority, ...cited]) })
+  let text
+  try {
+    text = await prompt(ruling ? [ruling] : [])
+  } catch (error) {
+    if (!ruling || !(error instanceof PacketOverflowError)) throw error
+    text = await dissentCheckPrompt({ request, scopeRule, id, original, majority, ruling: { ...ruling, cited_files_omitted: true }, lineCited,
+      material: await sourceMaterial(request, [original, ...majority]) })
+  }
   return { ...request, criteria: [id], schema: judgeResultSchemaFor(PANEL_CHECK_RESULT_SCHEMA, [id]),
-    input_roots: null, audit_stage: 'dissent-check',
-    prompt: dissentCheckPrompt({ request, scopeRule, id, original, majority, material, lineCited }) }
+    input_roots: null, audit_stage: ruling ? 'ruling-dissent-check' : 'dissent-check', prompt: text }
 }
+
+// The votes a decider ruling rejected: each kept its own verdict, which the
+// ruling does not give. A vote a confirmed contradiction turned is already
+// answered by that check.
+function rejectedVotes(votes, checks, order, fallbackIds, verdict) {
+  return votes.filter(v => {
+    const e = effective(v, checks, order, fallbackIds)
+    return !e.turned && e.verdict !== verdict
+  })
+}
+const rulingResult = ruling => ruling.result ?? ruling
 const majorityVotes = (votes, id, original) => votes.filter(v => v.id === id && v.panel_index !== original.panel_index)
 
 // The verdict exactly two effective votes gave, or null for a consensus or a
@@ -261,7 +330,9 @@ function rejectMarkedVotes(votes) {
 // `line_cited` marks rulings of a line-cited decider supplied directly rather
 // than reproduced from its record (the and-scene settlement replay): like a
 // reproduced line-cited ruling, it takes no overrule check.
-export function resolvePanel({ criteria, order, votes, checks = [], rulings = [], decider = null, fallback_ids = [], line_cited = false }) {
+// `ruling_checks` marks a record whose decider rulings had every rejected vote
+// checked (`checkRejectedVotes`); replays of records made before that do not.
+export function resolvePanel({ criteria, order, votes, checks = [], rulings = [], decider = null, fallback_ids = [], line_cited = false, ruling_checks = false }) {
   // Known missing material fails the job; no settled record can hold it.
   rejectMarkedVotes(votes)
   if (checks.some(c => !['confirmed', 'contradicted', 'insufficient'].includes(c.classification))) throw new JudgeOutputError('panel record settles a check on missing material')
@@ -301,6 +372,28 @@ export function resolvePanel({ criteria, order, votes, checks = [], rulings = []
           basis = `majority-${verdict}`
         }
       }
+      const rulingChecks = ownChecks.filter(c => c.stage === 'ruling-dissent-check')
+      if (overrule?.outcome === 'rejected') {
+        if (rulingChecks.length) throw new JudgeOutputError('ruling dissent check recorded for a ruling its overrule check rejected')
+      } else if (ruling_checks) {
+        // A rejected vote whose check confirms it stands; two confirmed
+        // checks for different verdicts cannot both hold, so the ruling stands.
+        const rejected = rejectedVotes(own, checks, order, fallback_ids, verdict)
+        for (const c of rulingChecks) if (!rejected.some(v => v.panel_index === c.panel_index && v.citations_valid === true)) throw new JudgeOutputError('ruling dissent check recorded for a vote the ruling did not reject')
+        for (const v of rejected) {
+          if (typeof v.citations_valid !== 'boolean') throw new JudgeOutputError('rejected vote has no citation check')
+          if (v.citations_valid && !rulingChecks.some(c => c.panel_index === v.panel_index)) throw new JudgeOutputError('backed rejected vote has no ruling dissent check')
+        }
+        const confirmed = rejected.filter(v => rulingChecks.some(c => c.panel_index === v.panel_index && c.classification === 'confirmed'))
+        const verdicts = new Set(confirmed.map(v => effective(v, checks, order, fallback_ids).verdict))
+        if (verdicts.size === 1) {
+          chosen = confirmed[0]
+          verdict = [...verdicts][0]
+          basis = `checked-dissent-${verdict}`
+        }
+      } else if (rulingChecks.length) {
+        throw new JudgeOutputError('ruling dissent check recorded for a record that does not check rejected votes')
+      }
     } else if (overruleCheck) {
       throw new JudgeOutputError('overrule check recorded for a criterion the decider did not rule')
     } else if (decision.dissent?.citations_valid) {
@@ -323,6 +416,7 @@ export function resolvePanel({ criteria, order, votes, checks = [], rulings = []
 
 export function verifyCachedPanelJob(record) {
   if (record?.protocol !== PANEL_PROTOCOL || record.ok !== true) throw new JudgeOutputError('cached job predates panel protocol or is incomplete')
+  if (record.rulings?.length && record.ruling_checks !== true) throw new JudgeOutputError('cached job predates the rejected-vote checks')
   const reproduced = resolvePanel(record)
   if (hashJson(reproduced.results) !== hashJson(record.results)) throw new JudgeOutputError('cached panel results do not reproduce')
   return reproduced
@@ -462,6 +556,8 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
           settledCheck(check, 'overrule check')
         }
       }
+      await checkRejectedVotes({ request, scopeRule, record, order, validateCitations, validateCitation,
+        check: async (next, id) => (await call(next, decider, 'ruling-dissent-check', text => parseCheck(request, next, id, text)))[0] })
     }
     record.results = resolvePanel(record).results
     record.consensus = record.results.map(({ id, basis, votes }) => ({ id, basis, votes }))
@@ -511,12 +607,19 @@ export async function rerunDecider({ record, decider, buildPrompt, schema, valid
     }
   }
   const checks = []
-  for (const check of record.checks.filter(c => c.stage === 'dissent-check')) {
+  for (const check of record.checks.filter(c => c.stage === 'dissent-check' || c.stage === 'ruling-dissent-check')) {
     const original = record.votes.find(v => v.id === check.id && v.panel_index === check.panel_index)
-    const next = await dissentCheckRequest({ request, scopeRule, id: check.id, original, majority: majorityVotes(record.votes, check.id, original) })
+    let next
+    if (check.stage === 'dissent-check') {
+      next = await dissentCheckRequest({ request, scopeRule, id: check.id, original, majority: majorityVotes(record.votes, check.id, original) })
+    } else {
+      const decided = rulingResult(record.rulings.find(r => r.id === check.id))
+      const kept = record.votes.filter(v => v.id === check.id && effective(v, record.checks, order, record.fallback_ids ?? []).verdict === decided.verdict)
+      next = await dissentCheckRequest({ request, scopeRule, id: check.id, original, majority: kept, ruling: decided })
+    }
     const [fresh] = await call(next, 'dissent-check-rerun', text => parseCheck(request, next, check.id, text))
     settledCheck(fresh, 'dissent check')
-    checks.push({ id: check.id, panel_index: check.panel_index, recorded: check.classification, rerun: fresh.classification,
+    checks.push({ id: check.id, stage: check.stage, panel_index: check.panel_index, recorded: check.classification, rerun: fresh.classification,
       flipped: (check.classification === 'confirmed') !== (fresh.classification === 'confirmed') })
   }
   return { job, rulings, checks, usage_by_stage: usage }

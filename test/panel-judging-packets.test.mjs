@@ -237,12 +237,23 @@ test('decider passes whose quoted lines are too large together are span-audited 
     panel: panel(['fail', 'pass', 'pass']).map(member => ({ ...member, invoke: async () => JSON.stringify({ results: ['x', 'y'].map(id => vote(id, member.verdict)) }) })),
     decider: { model: 'opus', effort: 'medium', invoke: async next => {
       seen.push(next)
+      // Each rejected Claude fail is checked and refuted, so the rulings stand.
+      if (next.audit_stage === 'ruling-dissent-check') return audited(next.criteria, 'contradicted')
       if (next.audit_stage) return audited(next.criteria)
       return JSON.stringify({ results: next.criteria.map(id => vote(id, 'pass', {
         citations: [{ path: id === 'x' ? 'a' : 'b', start_line: 1, end_line: 199 }] })) })
     } } })
   assert.equal(outcome.ok, true, outcome.record.error)
   assert.deepEqual(seen.filter(next => next.audit_stage === 'tiebreak-span-audit').map(next => next.criteria), [['x'], ['y']])
+  // y's ruling cites b, which cannot fit beside the votes' a, so its check
+  // carries the ruling's reason and citations without b's content.
+  const checks = seen.filter(next => next.audit_stage === 'ruling-dissent-check')
+  assert.deepEqual(checks.map(next => next.criteria), [['x'], ['y']])
+  assert.ok(checks[0].prompt.includes('q'.repeat(900)))
+  assert.ok(!checks[1].prompt.includes('r'.repeat(900)))
+  assert.match(checks[1].prompt, /"decider_ruling":true/)
+  assert.match(checks[1].prompt, /"cited_files_omitted":"the decider's cited files did not fit/)
+  assert.doesNotMatch(checks[0].prompt, /cited_files_omitted/)
   assert.deepEqual(outcome.record.decider.audit_results.map(({ id }) => id), ['x', 'y'])
   assert.deepEqual(outcome.results.map(({ basis }) => basis), ['decider-pass', 'decider-pass'])
   assert.deepEqual(verifyCachedPanelJob(outcome.record).results, outcome.results)

@@ -65,7 +65,8 @@ function scripted(queues, seen) {
 }
 
 // Three audited seats (Claude first) and a scripted decider. `seats[i]` lists
-// seat i's source-audit answers in order.
+// seat i's source-audit answers in order. A vote the decider rejects is
+// checked, and by default the check refutes it so the ruling stands.
 function panelJob(root, { votes = ['pass', 'pass', 'pass'], seats = [], decider = {}, fallback = false, seen = [] }) {
   return {
     job: 'job', criteria: [ID], verdicts: ['pass', 'fail'], order: ['pass', 'fail'], schema: SOURCE_JUDGE_RESULT_SCHEMA,
@@ -75,7 +76,7 @@ function panelJob(root, { votes = ['pass', 'pass', 'pass'], seats = [], decider 
     panel: votes.map((verdict, index) => ({ family: index === 0 ? 'claude' : 'codex', model: `m${index}`, effort: 'medium',
       invoke: scripted({ seat: [typeof verdict === 'string' ? seatVote(verdict) : verdict],
         'source-pass-audit': seats[index] ?? [audit('confirmed')] }, seen) })),
-    decider: { model: 'opus', effort: 'medium', invoke: scripted(decider, seen) },
+    decider: { model: 'opus', effort: 'medium', invoke: scripted({ 'ruling-dissent-check': [audit('contradicted')], ...decider }, seen) },
   }
 }
 

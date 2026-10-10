@@ -76,7 +76,9 @@ requirement), and the full fixture requirement or eval-owned reason beside each
 criterion.
 
 The decider sees unchanged job context and all three votes, labelled A/B/C in
-seeded order without model identities. It must choose a panel verdict. A pass
+seeded order without model identities. It must choose a panel verdict, and its
+rationale must answer, by label, the stated reason of each vote it rules
+against. A pass
 requires 1–12 valid line spans, each under 200 lines, in the verified neutral
 source inventory or materialized evidence view, resolving without symlinks. A
 fail cites a counterexample's spans, or for an absence its search scope and
@@ -99,8 +101,15 @@ retried, and each such retry appends the reason the previous reply was rejected
 (other failures retry the request unchanged); exhausted calls leave the job
 unobserved.
 
+Once a ruling settles, each vote it rejected whose citations validate, other
+than a vote a confirmed contradiction turned, gets a `ruling-dissent-check`: the
+dissent check, given that vote's reason beside the agreeing votes' reasons and
+the ruling's own. A confirmed check lets the rejected vote's verdict stand
+(`checked-dissent-pass/fail`), so a lone Codex fail that two Claude passes and
+the decider never answered can still decide the criterion.
+
 Criterion records and reports show the basis (`consensus-pass/fail`,
-`majority-pass/fail`, `checked-dissent-pass`, or `decider-pass/fail`) and all
+`majority-pass/fail`, `checked-dissent-pass/fail`, or `decider-pass/fail`) and all
 family-labelled votes, targeted checks, and rulings. Cache reuse requires
 `cross-family-panel-v2` and reproduction from the recorded votes, checks, and
 rulings, each ruling from its settled audit cycle alone. Rubric **13.0.0** starts a new scoring series; no criterion changed,
@@ -141,8 +150,8 @@ profile too.
 
 `phases/eval-owned-usage.jsonl` records provider, model and stage:
 `panel-claude-1`, `panel-claude-2`, `panel-codex`, `source-audit`,
-`contradiction-check`, `dissent-check`, `decider`, `span-audit`, and
-`decider-recite`. This usage is not priced or included in implementation cost.
+`contradiction-check`, `dissent-check`, `decider`, `span-audit`,
+`decider-recite`, and `ruling-dissent-check`. This usage is not priced or included in implementation cost.
 Capacity rejections before model output record zero tokens and back off without
 spending a judge attempt. Schema rejection fails fast. Identified Claude
 subscription limits with an explicit UTC reset within six hours wait and

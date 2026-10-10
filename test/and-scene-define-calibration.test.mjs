@@ -176,6 +176,8 @@ test('rerunDefinitionDecider re-runs only the decider on the recorded panel outp
   let rerun = 0
   const decider = { family: 'claude', model: 'stub-decider', effort: 'high', invoke: async req => {
     calls.push(req.usage_phase)
+    // The decider's rejection of A's met vote is checked and refuted, on every run.
+    if (req.audit_stage === 'ruling-dissent-check') return JSON.stringify({ results: req.criteria.map(id => ({ id, classification: 'contradicted', rationale: 'Checked.', evidence: ['source'] })) })
     if (req.audit_stage) return JSON.stringify({ results: req.criteria.map(id => ({ id, classification: req.usage_phase === 'dissent-check-rerun' && rerun === 2 ? 'contradicted' : 'confirmed', rationale: 'Checked.', evidence: ['source'] })) })
     if (req.usage_phase === 'decider-rerun') rerun++
     return JSON.stringify({ results: req.criteria.map(id => vote(id, req.usage_phase === 'decider-rerun' && rerun === 2 ? 'met' : 'missing')) })
@@ -190,10 +192,13 @@ test('rerunDefinitionDecider re-runs only the decider on the recorded panel outp
   for (let n = 0; n < 3; n++) runs.push(await rerunDefinitionDecider({ job, decider, record: outcome.record }))
   assert.equal(JSON.stringify(outcome.record), before)
   // The second re-run's met overrules the two Codex judges, so it is checked first.
-  assert.deepEqual(calls, ['decider-rerun', 'dissent-check-rerun', 'decider-rerun', 'overrule-check-rerun', 'dissent-check-rerun', 'decider-rerun', 'dissent-check-rerun'])
+  // Each run then re-runs B's dissent check and the recorded check of A's rejected vote.
+  assert.deepEqual(calls, ['decider-rerun', 'dissent-check-rerun', 'dissent-check-rerun', 'decider-rerun', 'overrule-check-rerun',
+    'dissent-check-rerun', 'dissent-check-rerun', 'decider-rerun', 'dissent-check-rerun', 'dissent-check-rerun'])
   assert.deepEqual(runs.map(r => r.rulings[0].rerun), ['missing', 'met', 'missing'])
   assert.deepEqual(runs.map(r => r.rulings[0].overrule_check), [null, 'confirmed', null])
   assert.deepEqual(runs.map(r => r.checks[0].rerun), ['confirmed', 'contradicted', 'confirmed'])
+  assert.deepEqual(runs.map(r => [r.checks[1].id, r.checks[1].stage, r.checks[1].rerun, r.checks[1].flipped]), Array(3).fill([A, 'ruling-dissent-check', 'contradicted', false]))
   const flips = deciderFlips([{ input_id: 'reference', repeat: 1, job: job.name, runs }])
   assert.equal(flips.flips, 2); assert.deepEqual(flips.flipped_items.map(x => x.id), [A, B])
 })
@@ -284,8 +289,8 @@ function stubJudges() {
   let reruns = 0
   const decider = { family: 'claude', model: 'stub-decider', effort: 'high', invoke: async req => {
     calls.push({ who: 'decider', input: inputOf(req.prompt), stage: req.usage_phase })
-    // Dissent checks confirm; no overrule check does.
-    if (req.audit_stage) return JSON.stringify({ results: req.criteria.map(id => ({ id, classification: req.audit_stage === 'overrule-check' ? 'contradicted' : 'confirmed', rationale: 'Checked.', evidence: ['source'] })) })
+    // Dissent checks confirm; no overrule check, or check of a vote the ruling rejected, does.
+    if (req.audit_stage) return JSON.stringify({ results: req.criteria.map(id => ({ id, classification: req.audit_stage === 'overrule-check' || req.audit_stage === 'ruling-dissent-check' ? 'contradicted' : 'confirmed', rationale: 'Checked.', evidence: ['source'] })) })
     if (req.usage_phase === 'decider-rerun') reruns++
     return JSON.stringify({ results: req.criteria.map(id => vote(id, req.usage_phase === 'decider-rerun' && reruns % 2 === 1 ? 'met' : 'missing')) })
   } }
@@ -313,7 +318,8 @@ test('--calibrate judges each input three independent times through the candidat
   assert.ok(report.overall.family_distribution.families.codex.leniency < report.overall.family_distribution.families.claude.leniency)
   // Decider re-runs: three per first-repeat record that reached the decider or a dissent check.
   assert.equal(calls.filter(x => x.stage === 'decider-rerun').length, 3)
-  assert.equal(calls.filter(x => x.stage === 'dissent-check-rerun').length, 3)
+  // Each re-run repeats D's dissent check and the check of the met vote B's ruling rejected.
+  assert.equal(calls.filter(x => x.stage === 'dissent-check-rerun').length, 6)
   // Re-runs 1 and 3 rule met against the two Codex judges' missing. Each overrule
   // is checked before it counts, and neither check confirms, so nothing flips.
   assert.equal(calls.filter(x => x.stage === 'overrule-check-rerun').length, 2)

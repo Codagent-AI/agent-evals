@@ -2202,6 +2202,8 @@ test('a dispute on all fourteen engineering-quality criteria settles through the
         spanAudit = request
         return auditOutput(request.criteria)
       }
+      // Each rejected Codex fail is checked; the check refutes it, so the ruling stands.
+      if (request.audit_stage === 'ruling-dissent-check') return auditOutput(request.criteria, Object.fromEntries(request.criteria.map((id) => [id, 'contradicted'])))
       if (request.audit_stage) return auditOutput(request.criteria)
       if (request.judge_stage === 'tiebreak') {
         decider = request
@@ -2230,6 +2232,7 @@ test('a dispute on all fourteen engineering-quality criteria settles through the
   t.diagnostic(`span-audit packet ${packet.length} of ${MAX_AUDIT_PACKET_CHARS}; decider prompt ${decider.prompt.length}`)
   assert.ok(packet.length <= MAX_AUDIT_PACKET_CHARS, `${packet.length} > ${MAX_AUDIT_PACKET_CHARS}`)
   assert.ok(outcome.judges[job].every(({ basis }) => basis === 'decider-pass'))
+  assert.equal(stages.filter((stage) => stage === 'ruling-dissent-check').length, 14)
   assert.equal(saved.find(({ id }) => id === job).protocol, JUDGING_PROTOCOL)
   assert.equal(JUDGING_PROTOCOL, 'cross-family-panel-v2')
 })

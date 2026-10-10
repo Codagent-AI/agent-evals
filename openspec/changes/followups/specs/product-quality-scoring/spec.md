@@ -649,7 +649,7 @@ Votes SHALL settle as follows, with no vote disputed:
 - otherwise, a verdict two judges give SHALL stand when the two are a Claude-family judge and the Codex-family judge, unless the dissent is a pass backed by citations that pass validation. Such a backed dissent SHALL go to a targeted check, by a pinned Claude-family decider, of the dissent's stated reason, given beside the two majority votes' stated reasons and with both sides' cited material. The check SHALL confirm the dissent only when the material also refutes each clause a majority vote states is unmet; an accurate fact the dissent cites SHALL NOT confirm it while a majority reason it does not answer stands. The dissent's verdict SHALL stand when the check confirms it, and the majority's otherwise;
 - a verdict the two Claude-family judges give against the Codex-family judge, and a criterion whose vote remains disputed, SHALL be settled by the decider.
 
-The decider SHALL receive the job's unchanged context and all three votes with their rationales and citations, without being told which model gave which. For a vote that a confirmed check turned, it SHALL also receive the audit's stated contradiction and the check's confirmation. It SHALL rule pass or fail.
+The decider SHALL receive the job's unchanged context and all three votes with their rationales and citations, without being told which model gave which. For a vote that a confirmed check turned, it SHALL also receive the audit's stated contradiction and the check's confirmation. It SHALL rule pass or fail. It SHALL be instructed to check the material each vote cites for the verdict it does not rule, and its rationale SHALL answer each such vote's stated reason by the vote's label, saying why the material shows that reason does not decide the requirement; a reason the material bears out that decides the requirement SHALL decide the ruling.
 
 Every decider ruling SHALL carry citations whose paths are in the verified neutral source inventory for a source job, or the materialized evidence view for an evidence job, and resolve inside that root without a symbolic link:
 - a pass SHALL cite between one and twelve line spans, each under 200 lines and lying inside its file;
@@ -671,6 +671,8 @@ An audit that runs in several parts, such as the claim mapping's row audits and 
 
 A re-cite SHALL re-run every part as a new cycle. A record SHALL persist each cycle's required parts and the cycle it settled on. It SHALL reproduce its outcome from that cycle's parts alone, under the same rules live settlement applies, including the confirmed-contradiction exception, and each retained check SHALL be verified against the part and cycle it checked. A record whose settled cycle lacks a required part, or that combines parts of different cycles in one settlement, SHALL NOT verify.
 
+Once a decider ruling has settled, after its span audit and any contradiction check, every vote whose verdict the ruling rejects SHALL go to the targeted dissent check when its citations pass validation, except a vote a confirmed contradiction check turned. The check SHALL judge that vote's stated reason beside the stated reasons of the votes that gave the ruling's verdict and the ruling's own stated reason, marked as the decider's, with the votes' complete cited material and the ruling's cited files when the packet can hold them, under the confirmation rules of the dissent check above. When the ruling's files cannot fit, the check SHALL be told they were left out, and the packet SHALL still hold the rejected vote's and the agreeing votes' complete material or fail as a packet overflow. The rejected vote's verdict SHALL stand, as `checked-dissent-pass` or `checked-dissent-fail`, when the check confirms it, and the ruling's verdict otherwise. A rejected vote whose citations fail validation SHALL get no check. A cached record SHALL NOT be reused unless every backed rejected vote has its check.
+
 A browser-fallback decider pass that its span audit does not confirm SHALL fail. Invalid decider output, including an invalid span or a fail that cites neither a counterexample nor a search scope, SHALL be retried and, once exhausted, SHALL leave the job unobserved as a harness failure, as SHALL an exhausted panel judge; an exhausted re-cite instead leaves the first ruling standing, as above. Each retry after invalid output from a panel judge, audit, check, or decider SHALL state, after the unchanged request, the reason the previous reply was rejected; a retry after any other failure SHALL repeat the request unchanged. Contradiction checks and targeted dissent checks SHALL run on the decider's pinned model.
 
 Audit, contradiction-check, and decider request packets SHALL be serialized compactly. When the combined packet of an audit, a check, or a decider request would exceed the packet limit, the harness SHALL split its per-claim or per-criterion material into batches that each hold whole claims or whole criteria, repeating the material all of them share. When a single claim or criterion cannot fit within the limit on its own, the harness SHALL leave that criterion unresolved and record an evaluation-harness failure that names it. When the shared material alone, such as a decider's evidence view, cannot fit, the harness SHALL record an evaluation-harness failure naming every criterion pending for that request. It SHALL NOT settle any criterion on material it silently omitted.
@@ -682,7 +684,7 @@ Every truncation or omission in an evidence judge packet SHALL be marked in plac
 Every panel judge, decider, and audit SHALL see, beside each criterion, the requirement it traces to: the full fixture scenario from the pinned snapshot for a fixture-owned criterion, or the eval-owned reason. A pass SHALL meet every clause of that requirement as clarified by its review guidance, and judges SHALL NOT add requirements the requirement and its guidance do not state. Source judges SHALL trace a constant, member, prop, or input through every use before calling it dead, and SHALL treat shown, visible, or on-screen content as rendered content, not an `aria-label`, attribute, or visually hidden text. Evidence judges SHALL judge testing evidence against the evidence basis that the testing-evidence-evaluation capability defines, and the assumption judge SHALL receive the full approved requirements as reference for its omission check.
 
 Each criterion result SHALL record:
-- its judging basis: `consensus-pass`, `consensus-fail`, `majority-pass`, `majority-fail`, `checked-dissent-pass`, `decider-pass`, or `decider-fail`;
+- its judging basis: `consensus-pass`, `consensus-fail`, `majority-pass`, `majority-fail`, `checked-dissent-pass`, `checked-dissent-fail`, `decider-pass`, or `decider-fail`;
 - every panel verdict, with the model family that gave it;
 - every audit and contradiction check, and whether a confirmed contradiction routed the criterion to the decider;
 - for a decider ruling, its first and any re-cited citations, its span audit, and whether that audit or a check reversed it.
@@ -709,6 +711,15 @@ Every response schema the harness sends SHALL satisfy strict structured-output r
 #### Scenario: Backed dissent is checked
 - **WHEN** one Claude-family judge and the Codex-family judge fail a criterion, and the other Claude-family judge passes it with citations that pass validation
 - **THEN** the decider checks that dissent's stated reason, and the criterion passes only when the check confirms it
+
+#### Scenario: The decider answers a judge it rules against
+- **WHEN** the two Claude-family judges pass a criterion, the Codex-family judge fails it with citations that pass validation, and the decider rules pass
+- **THEN** the decider's rationale answers the failing judge's stated reason, and the targeted dissent check judges that reason beside the two passes and the ruling's reason
+- **AND** the criterion fails as `checked-dissent-fail` when the check confirms the reason, and passes on the ruling otherwise
+
+#### Scenario: A rejected vote without valid citations is not checked
+- **WHEN** the decider rules against a vote whose citations fail validation
+- **THEN** no check runs for that vote and the ruling stands
 
 #### Scenario: A backed dissent must answer the majority's reason
 - **WHEN** two votes fail a criterion because one clause is unmet, and a backed pass dissent cites accurate facts about other clauses without addressing that one

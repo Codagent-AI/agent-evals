@@ -310,6 +310,15 @@ define panel job gets the check, including the disclosure audit, where a
 not-leaked ruling against two Codex judges leaves the item leaked unless the
 check confirms it.
 
+The decider must answer, by label, the stated reason of each vote it rules
+against. Once a ruling stands, each vote it rejected whose citations validate
+gets a `ruling-dissent-check`: the dissent check, given that vote's reason
+beside the agreeing votes' reasons and the ruling's own. A confirmed check lets
+the rejected vote's verdict stand (`checked-dissent-<verdict>`); two confirmed
+checks for different verdicts leave the ruling standing. A ruling its overrule
+check rejected needs none. The shared panel module runs these checks for every
+suite.
+
 The disclosure audit runs first, because its leaked items change coverage:
 `gates-and-judging` reads `audits/disclosure.json` before it starts any job.
 The coverage (one job per area), quality and fidelity jobs then run through the
