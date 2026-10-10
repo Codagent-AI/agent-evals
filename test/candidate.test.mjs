@@ -898,6 +898,27 @@ test('an evaluator-only rescore rejects a source branch that moved from the reco
   )
 })
 
+test('an evaluator-only rescore whose candidate branch was deleted reports an unavailable source', async () => {
+  const repo = await repository()
+
+  const error = await prepareCandidateRescoreWorktree({
+    repo: repo.source,
+    worktree: join(repo.root, 'rescore'),
+    source: {
+      repository: repo.source,
+      fixture_commit: repo.fixture,
+      final_sha: repo.reference,
+      branch: 'eval/and-scene/cleaned-up',
+      base_branch: git(repo.source, 'branch', '--show-current'),
+    },
+    exec,
+  }).then(() => assert.fail('expected the rescore checkout to reject'), (rejected) => rejected)
+
+  assert.equal(error.code, 'rescore-source-unavailable')
+  assert.equal(error.owner, 'evaluation-harness')
+  assert.match(error.message, /eval\/and-scene\/cleaned-up.*no longer matches the retained record/)
+})
+
 test('resume rejects a repository default base branch that changed after delivery began', async () => {
   const repo = await repository()
   const worktree = join(repo.root, 'candidate')

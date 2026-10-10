@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { spawnSync } from 'node:child_process'
 import { test } from 'node:test'
 
 import { hashJson, hashString } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
@@ -482,4 +483,129 @@ test('rescore delivery refuses an outcome that no longer matches the recorded de
     }),
     /final_sha/,
   )
+})
+
+// A real candidate repository on disk, so the rescore runs the real outcome
+// checks; only the remote branch lookup and the GitHub CLI are answered here.
+async function liveRescoreCandidate() {
+  const root = await makeTempDir(join(tmpdir(), 'and-scene-rescore-live-'))
+  const worktree = join(root, 'candidate')
+  const sessionDir = join(root, 'session')
+  const branch = 'eval/and-scene/run-123'
+  const git = (...args) => {
+    const result = spawnSync('git', ['-c', 'user.name=Eval', '-c', 'user.email=eval@example.invalid', ...args], { cwd: worktree, encoding: 'utf8' })
+    assert.equal(result.status, 0, result.stderr)
+    return result.stdout.trim()
+  }
+  await mkdir(join(worktree, 'openspec/changes/create-and-scene'), { recursive: true })
+  await writeFile(join(worktree, 'openspec/changes/create-and-scene/proposal.md'), '# Proposal\n')
+  git('init', '-q', '-b', 'main')
+  git('add', '.')
+  git('commit', '-qm', 'fixture')
+  const fixture = git('rev-parse', 'HEAD')
+  git('checkout', '-qb', branch)
+  await writeFile(join(worktree, 'demo.js'), 'export const demo = true\n')
+  git('add', '.')
+  git('commit', '-qm', 'implementation')
+  const head = git('rev-parse', 'HEAD')
+  await mkdir(join(sessionDir, 'output'), { recursive: true })
+  await writeFile(join(sessionDir, 'output', 'acceptance-handoff.md'), '# Handoff\n')
+
+  const pullRequest = {
+    number: 53,
+    url: 'https://github.com/Codagent-AI/and-scene/pull/53',
+    state: 'OPEN',
+    draft: true,
+    base: 'main',
+    head_branch: branch,
+    head_sha: head,
+  }
+  const imported = {
+    change_name: 'create-and-scene',
+    run_completed: true,
+    runner: { session_dir: sessionDir },
+    candidate_source: { fixture_commit: fixture, branch, base_branch: 'main' },
+    delivery: {
+      verified: true,
+      branch,
+      final_sha: head,
+      pull_request: pullRequest,
+      acceptance_artifacts: [{ role: 'final-handoff', path: '/artifacts/handoff.md', sha256: 'a'.repeat(64) }],
+    },
+  }
+  const verify = ({ remote = `${head}\trefs/heads/${branch}\n`, pull = {} } = {}) => verifyRescoreDelivery({
+    imported,
+    worktree,
+    exec: (command, args, options) => {
+      if (command === 'git' && args.includes('ls-remote')) return { status: 0, stdout: remote }
+      if (command === 'gh') {
+        const live = { ...pullRequest, ...pull }
+        return {
+          status: 0,
+          stdout: JSON.stringify([{
+            number: live.number,
+            url: live.url,
+            state: live.state,
+            isDraft: live.draft,
+            baseRefName: live.base,
+            headRefName: live.head_branch,
+            headRefOid: live.head_sha,
+          }]),
+        }
+      }
+      return spawnSync(command, args, { encoding: 'utf8', ...options })
+    },
+  })
+  return { imported, head, verify }
+}
+
+test('a rescore whose live branch and pull request still match the record verifies through the real checks', async () => {
+  const context = await liveRescoreCandidate()
+  const delivery = await context.verify()
+  assert.equal(delivery.verified, true)
+  assert.equal(delivery.final_sha, context.head)
+  assert.equal(delivery.remote_sha, context.head)
+  assert.equal(delivery.publication_boundary.verified, true)
+  assert.deepEqual(delivery.acceptance_artifacts, context.imported.delivery.acceptance_artifacts)
+})
+
+async function rescoreRejection(promise) {
+  try {
+    await promise
+  } catch (error) {
+    return error
+  }
+  assert.fail('expected rescore delivery verification to reject')
+}
+
+test('a candidate branch deleted after the source run makes the rescore source unavailable, not a workflow violation', async () => {
+  const context = await liveRescoreCandidate()
+  const error = await rescoreRejection(context.verify({ remote: '' }))
+  assert.equal(error.code, 'rescore-source-unavailable')
+  assert.equal(error.owner, 'evaluation-harness')
+  assert.equal(error.unexpected_action, undefined)
+  assert.equal(error.post_run_change, 'delete-candidate-branch')
+  assert.match(error.message, /no longer matches the retained record/)
+})
+
+test('a pull request closed, merged, or marked ready after the source run makes the rescore source unavailable', async () => {
+  const context = await liveRescoreCandidate()
+  for (const [pull, change] of [
+    [{ state: 'CLOSED' }, 'close-pull-request'],
+    [{ state: 'MERGED', draft: false }, 'merge-pull-request'],
+    [{ draft: false }, 'mark-ready-for-review'],
+  ]) {
+    const error = await rescoreRejection(context.verify({ pull }))
+    assert.equal(error.code, 'rescore-source-unavailable')
+    assert.equal(error.owner, 'evaluation-harness')
+    assert.equal(error.post_run_change, change)
+    assert.match(error.message, /no longer matches the retained record/)
+  }
+})
+
+test('a rescore still fails a genuine delivery identity mismatch as before', async () => {
+  const context = await liveRescoreCandidate()
+  const error = await rescoreRejection(context.verify({ pull: { head_sha: 'f'.repeat(40) } }))
+  assert.equal(error.code, 'pull-request-identity-mismatch')
+  assert.equal(error.owner, 'implementation-workflow')
 })

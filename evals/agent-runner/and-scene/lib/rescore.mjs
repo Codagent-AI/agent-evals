@@ -298,6 +298,37 @@ export async function loadCandidateRescoreSource({ sourceDir, stagingDir = null 
 
 const PULL_REQUEST_IDENTITY = ['number', 'url', 'state', 'draft', 'base', 'head_branch', 'head_sha']
 
+// Live remote state a rescore observes but the source run did not leave behind.
+// The source was accepted only with a verified delivery whose remote branch was
+// at its final SHA and whose pull request was an open draft, so a branch that
+// is now gone or moved, or a pull request now closed, merged, or ready, changed
+// after the evaluated workflow finished: typically operator cleanup. Such a
+// change says nothing about the workflow, so it is a harness-owned unavailable
+// source rather than a side-effect verdict. An archived change is not listed:
+// it is read from the recorded final commit itself, so it is the workflow's.
+const POST_RUN_STATE_CHANGES = new Set([
+  'delete-candidate-branch',
+  'remote-branch-moved',
+  'close-pull-request',
+  'merge-pull-request',
+  'mark-ready-for-review',
+])
+
+function rescoreSourceUnavailable(violation, recorded) {
+  const error = new Error(
+    `rescore-source-unavailable: the live candidate branch or pull request no longer matches the retained record `
+    + `(branch ${recorded.branch ?? null}, pull request ${recorded.pull_request?.url ?? null}); `
+    + `it changed after the source run, so this is not a verdict about the evaluated workflow: ${violation.message}`,
+  )
+  error.code = 'rescore-source-unavailable'
+  error.owner = 'evaluation-harness'
+  error.resumable = false
+  error.post_run_change = violation.unexpected_action
+  if (violation.remote_sha !== undefined) error.remote_sha = violation.remote_sha
+  if (violation.pull_request !== undefined) error.observed_pull_request = violation.pull_request
+  return error
+}
+
 // Delivery for an imported run goes through the same outcome-based checks as a
 // new run, with the source's retained completion status in place of live
 // Runner status and its retained or restored session as the session output.
@@ -310,16 +341,24 @@ export async function verifyRescoreDelivery({
   verify = verifyCandidateDelivery,
 }) {
   const recorded = imported.delivery
-  const observed = await verify({
-    worktree,
-    fixtureCommit: imported.candidate_source.fixture_commit,
-    branch: imported.candidate_source.branch,
-    expectedBase: imported.candidate_source.base_branch,
-    changeName: imported.change_name,
-    sessionDir: imported.runner.session_dir,
-    runCompleted: imported.run_completed,
-    ...(exec ? { exec } : {}),
-  })
+  let observed
+  try {
+    observed = await verify({
+      worktree,
+      fixtureCommit: imported.candidate_source.fixture_commit,
+      branch: imported.candidate_source.branch,
+      expectedBase: imported.candidate_source.base_branch,
+      changeName: imported.change_name,
+      sessionDir: imported.runner.session_dir,
+      runCompleted: imported.run_completed,
+      ...(exec ? { exec } : {}),
+    })
+  } catch (error) {
+    if (error?.code === 'workflow-side-effect-violation' && POST_RUN_STATE_CHANGES.has(error.unexpected_action)) {
+      throw rescoreSourceUnavailable(error, recorded)
+    }
+    throw error
+  }
   for (const field of ['branch', 'final_sha']) {
     same(`delivery ${field}`, observed?.[field], recorded[field])
   }

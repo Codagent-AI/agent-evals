@@ -344,6 +344,16 @@ same outcome checks as a new run, with the source's retained completion status
 in place of live Runner state, and must still match the recorded draft PR and
 final SHA.
 
+The source was accepted only with its remote branch at the final SHA and its
+pull request an open draft, so a branch since deleted or moved, or a pull
+request since closed, merged, or marked ready, changed after the workflow
+finished, usually through manual cleanup. A rescore reports that as the
+harness-owned `rescore-source-unavailable`, saying the live branch or pull
+request no longer matches the retained record, rather than as a
+`workflow-side-effect-violation`. Restore the branch or pull request to rescore
+the run. A pull request whose number, base, or head no longer matches the record
+still fails as an identity mismatch.
+
 A factory artifact may no longer hold `.runtime/agent-runner-projects`, where
 the recorded Runner session lived. The rescore then restores the session's
 acceptance evidence from `evidence/candidate/artifacts` into
@@ -1235,6 +1245,8 @@ identifier, session directory, candidate branch, retained draft PR, final SHA,
 and the last observed step as Agent Runner reports it, for diagnosis only. A declared or observed merge, ready, close,
 archive, release, or branch deletion is reported as
 `workflow-side-effect-violation`; no CI checks or status endpoints are queried.
+A rescore reports such a branch or pull-request change as
+`rescore-source-unavailable` instead, since it happened after the source run.
 
 ## Maintenance
 
