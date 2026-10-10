@@ -318,7 +318,9 @@ function rescoreSourceUnavailable(violation, recorded) {
   const error = new Error(
     `rescore-source-unavailable: the live candidate branch or pull request no longer matches the retained record `
     + `(branch ${recorded.branch ?? null}, pull request ${recorded.pull_request?.url ?? null}); `
-    + `it changed after the source run, so this is not a verdict about the evaluated workflow: ${violation.message}`,
+    + `it changed after the source run, so this is not a verdict about the evaluated workflow: `
+    + violation.message.replace(/^workflow-side-effect-violation:\s*/, ''),
+    { cause: violation },
   )
   error.code = 'rescore-source-unavailable'
   error.owner = 'evaluation-harness'

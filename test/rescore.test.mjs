@@ -586,6 +586,8 @@ test('a candidate branch deleted after the source run makes the rescore source u
   assert.equal(error.unexpected_action, undefined)
   assert.equal(error.post_run_change, 'delete-candidate-branch')
   assert.match(error.message, /no longer matches the retained record/)
+  assert.doesNotMatch(error.message, /workflow-side-effect-violation/)
+  assert.equal(error.cause.code, 'workflow-side-effect-violation')
 })
 
 test('a pull request closed, merged, or marked ready after the source run makes the rescore source unavailable', async () => {

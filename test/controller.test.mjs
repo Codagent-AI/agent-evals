@@ -112,6 +112,9 @@ async function environment({
   await mkdir(home)
 
   const invocations = []
+  // A rescore's source run pushed its candidate branch, so the remote ref
+  // exists then; a fresh run's branch must not exist yet.
+  const remote = { candidateBranchPublished: false }
   const exec = (command, args, options = {}) => {
     invocations.push({ command, args: [...args], options })
     if (command === 'git') {
@@ -130,7 +133,11 @@ async function environment({
       if (joined.includes('show') && /\/specs\/[^/]+\/spec\.md/.test(joined)) {
         return { status: 0, stdout: '# Specification\n' }
       }
-      if (joined.includes('show-ref --verify --quiet')) return { status: 1, stdout: '' }
+      if (joined.includes('show-ref --verify --quiet')) {
+        return remote.candidateBranchPublished && joined.includes('refs/remotes/origin/')
+          ? { status: 0, stdout: '' }
+          : { status: 1, stdout: '' }
+      }
       if (joined.includes('--is-inside-work-tree')) return { status: 0, stdout: 'true\n' }
       if (joined.includes('remote get-url origin')) {
         return { status: 0, stdout: 'https://github.com/Codagent-AI/and-scene.git\n' }
@@ -197,7 +204,7 @@ async function environment({
       status: 'closed',
     }],
   }))
-  return { root, runDir, home, agentRunnerDir, agentSkillsDir, exec, invocations, commit, sessionDir }
+  return { root, runDir, home, agentRunnerDir, agentSkillsDir, exec, invocations, commit, sessionDir, remote }
 }
 
 function runnerInvocations(context) {
@@ -316,6 +323,7 @@ async function evaluate(context, extra = [], overrides = {}) {
     ...dependencies
   } = overrides
   const readState = readRunnerState ?? completedReader(context)
+  context.remote.candidateBranchPublished = extra.includes('--rescore-from')
   return runEvaluation({
     argv: [
       '--run-dir', context.runDir,

@@ -496,30 +496,29 @@ export async function prepareCandidateRescoreWorktree({
     'candidate rescore final SHA lookup',
   )
   assertSame('candidate final SHA', finalSha, source.final_sha)
-  let remoteBranchSha
-  try {
-    remoteBranchSha = run(
-      exec,
-      'git',
-      [
-        '-C', worktree, 'rev-parse', '--verify', '--end-of-options',
-        `refs/remotes/origin/${source.branch}^{commit}`,
-      ],
-      {},
-      'candidate rescore remote branch lookup',
-    )
-  } catch (error) {
-    // The branch was there when the source run was verified, so its absence is
-    // a later change such as operator cleanup, not a fact about the workflow.
+  // The branch was there when the source run was verified, so its absence is
+  // a later change such as operator cleanup, not a fact about the workflow.
+  // Only a ref Git reports absent (show-ref exit 1) counts; a ref that exists
+  // but cannot be resolved fails the ordinary lookup below.
+  const remoteRef = `refs/remotes/origin/${source.branch}`
+  const presence = exec('git', ['-C', worktree, 'show-ref', '--verify', '--quiet', remoteRef], { encoding: 'utf8' })
+  if (presence.status === 1 && !presence.error) {
     const unavailable = new Error(
       `rescore-source-unavailable: candidate branch ${source.branch} no longer matches the retained record; `
-      + `it is missing from the candidate repository: ${error.message}`,
+      + 'it is missing from the candidate repository',
     )
     unavailable.code = 'rescore-source-unavailable'
     unavailable.owner = 'evaluation-harness'
     unavailable.resumable = false
     throw unavailable
   }
+  const remoteBranchSha = run(
+    exec,
+    'git',
+    ['-C', worktree, 'rev-parse', '--verify', '--end-of-options', `${remoteRef}^{commit}`],
+    {},
+    'candidate rescore remote branch lookup',
+  )
   if (remoteBranchSha !== finalSha) {
     throw new Error(
       `candidate branch ${source.branch} is ${remoteBranchSha}, `

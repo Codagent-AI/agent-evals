@@ -919,6 +919,32 @@ test('an evaluator-only rescore whose candidate branch was deleted reports an un
   assert.match(error.message, /eval\/and-scene\/cleaned-up.*no longer matches the retained record/)
 })
 
+test('an evaluator-only rescore keeps a failed branch lookup an ordinary error', async () => {
+  const repo = await repository()
+  const branch = 'eval/and-scene/completed'
+  git(repo.source, 'branch', branch, repo.reference)
+
+  const error = await prepareCandidateRescoreWorktree({
+    repo: repo.source,
+    worktree: join(repo.root, 'rescore'),
+    source: {
+      repository: repo.source,
+      fixture_commit: repo.fixture,
+      final_sha: repo.reference,
+      branch,
+      base_branch: git(repo.source, 'branch', '--show-current'),
+    },
+    exec: (command, args, options) => (
+      command === 'git' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))
+        ? { status: 128, stdout: '', stderr: 'fatal: unable to read the repository' }
+        : exec(command, args, options)
+    ),
+  }).then(() => assert.fail('expected the rescore checkout to reject'), (rejected) => rejected)
+
+  assert.notEqual(error.code, 'rescore-source-unavailable')
+  assert.match(error.message, /remote branch lookup failed: fatal: unable to read the repository/)
+})
+
 test('resume rejects a repository default base branch that changed after delivery began', async () => {
   const repo = await repository()
   const worktree = join(repo.root, 'candidate')
