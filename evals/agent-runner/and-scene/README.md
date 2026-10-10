@@ -362,6 +362,14 @@ against the manifest hash the source recorded and every retained copy against
 the recorded acceptance hashes. Any mismatch refuses the source. The
 `imported-completed-run` event records the reconstruction.
 
+Role attribution uses only the agent Agent Runner recorded for each attempt.
+When a rescore reads an old run's `run-metrics.json`, an attempt that recorded
+no role (`legacy-unknown`, or no role at all) is unattributed, so its cost rows
+move to unattributed; earlier results labelled them `legacy-unknown` or
+inferred a role from the step's position. When comparing per-role cost between
+a rescore and its source, or across a series that spans this change, read that
+shift as a reporting change, not a change in what the workflow ran.
+
 Without Docker, add `--host` to run the same controller on this machine:
 
 ```bash
@@ -596,7 +604,10 @@ focused modules under `lib/`:
 | `lib/subprocess.mjs` | Subprocess execution with active machine timing |
 | `lib/provenance.mjs` | Agent Runner and Agent Skills clean-checkout, revision, workflow, manifest, and CLI-version provenance |
 | `lib/profiles.mjs` | Role profile validation, eval-scoped config, effective-profile reconciliation |
-| `lib/workflow.mjs` | Full-workflow contract, prohibited-side-effect checks, Runner run classification |
+| `lib/workflow.mjs` | Logical workflow resolution, required-parameter checks, workflow arguments and Validator mode, Runner run classification, observed-step summaries |
+| `lib/candidate.mjs` | Fixture starting-line preflight, candidate and rescore worktrees, outcome-based delivery verification and prohibited-side-effect checks, source freeze |
+| `lib/rescore.mjs` | Read-only import of a completed source run and rescore delivery verification against its retained record |
+| `lib/runner-metrics.mjs` | Ingesting Agent Runner `run-metrics.json` with the agent Runner recorded for each attempt |
 | `lib/evidence.mjs` | Role-based candidate intake, byte integrity, lineage, evaluator evidence, contradictions, and bounded judge views |
 | `lib/neutral-source.mjs` | Byte-exact final-commit source under neutralized paths plus identity-free approved requirements pinned to the recorded fixture commit |
 | `lib/runner-state.mjs` | Reading Agent Runner run state by identifier or newest timestamp |
@@ -1267,6 +1278,24 @@ its supported adapters, roles, or efforts. Run calibration while reviewing
 rubric, scorer, gate, or reporting changes, then run targeted tests during
 development and `npm run check` before trusting a change. Candidate execution
 does not depend on retaining calibration artifacts.
+
+### Workflow input regression detection
+
+`npm run check` includes a workflow input check in `test/workflow.test.mjs`. It
+verifies that the default evaluated workflow, `core:plan-and-implement-change`,
+exists in a real Agent Runner checkout and declares every required workflow
+parameter, with no network access, built Runner, or workflow run. It reads the
+checkout named by `AGENT_RUNNER_DIR`, or else the sibling `agent-runner`
+checkout beside this repository, and skips with a message naming that path when
+neither is readable.
+
+CI skips this check: `.github/workflows/ci.yml` runs `npm run check` without an
+Agent Runner checkout. Run it locally before merging a change that touches the
+default workflow or its required parameters:
+
+```bash
+AGENT_RUNNER_DIR=<runner checkout> npm run check
+```
 
 ### Real candidate end-to-end check
 
