@@ -54,7 +54,9 @@ Each dissent citation is validated alone; invalid ones are dropped and recorded
 as `dropped_citations` rather than discarding the dissent. The check confirms
 only when the cited material shows what the dissent says and that fact decides
 the quoted requirement the way the dissent claims; an accurate fact the
-requirement does not depend on is contradicted. A confirmed dissent stands;
+requirement does not depend on is contradicted. The check also receives the two
+majority votes' reasons and cited files, and confirms a higher dissent only when
+the material refutes each clause the majority states is unmet. A confirmed dissent stands;
 otherwise the majority stands.
 
 Each source judge keeps its closed-world source audit and one focused re-cite.

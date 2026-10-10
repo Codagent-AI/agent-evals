@@ -638,7 +638,7 @@ Every audit SHALL return the paths its classification relies on as structured ci
 Votes SHALL settle as follows, with no vote disputed:
 - a verdict all three judges give SHALL stand, pass or fail;
 - when a confirmed contradiction check has turned any vote and the votes are not unanimous after the turn, the decider SHALL settle the criterion, even when the remaining votes form a majority that includes the Claude-family judge;
-- otherwise, a verdict two judges give SHALL stand when the two include the Claude-family judge, unless the dissent is a pass backed by citations that pass validation. Such a backed dissent SHALL go to a targeted check, by a pinned Claude-family decider, of the dissent's stated reason. The dissent's verdict SHALL stand when the check confirms that reason, and the majority's otherwise;
+- otherwise, a verdict two judges give SHALL stand when the two include the Claude-family judge, unless the dissent is a pass backed by citations that pass validation. Such a backed dissent SHALL go to a targeted check, by a pinned Claude-family decider, of the dissent's stated reason, given beside the two majority votes' stated reasons and with both sides' cited material. The check SHALL confirm the dissent only when the material also refutes each clause a majority vote states is unmet; an accurate fact the dissent cites SHALL NOT confirm it while a majority reason it does not answer stands. The dissent's verdict SHALL stand when the check confirms it, and the majority's otherwise;
 - a verdict the two Codex-family judges give against the Claude-family judge, and a criterion whose vote remains disputed, SHALL be settled by the decider.
 
 The decider SHALL receive the job's unchanged context and all three votes with their rationales and citations, without being told which model gave which. For a vote that a confirmed check turned, it SHALL also receive the audit's stated contradiction and the check's confirmation. It SHALL rule pass or fail.
@@ -701,6 +701,11 @@ Every response schema the harness sends SHALL satisfy strict structured-output r
 #### Scenario: Backed dissent is checked
 - **WHEN** the Claude-family judge and one Codex-family judge fail a criterion, and the other Codex-family judge passes it with citations that pass validation
 - **THEN** the decider checks that dissent's stated reason, and the criterion passes only when the check confirms it
+
+#### Scenario: A backed dissent must answer the majority's reason
+- **WHEN** two votes fail a criterion because one clause is unmet, and a backed pass dissent cites accurate facts about other clauses without addressing that one
+- **THEN** the dissent check receives the majority's stated reasons and does not confirm the dissent
+- **AND** the majority's fail stands
 
 #### Scenario: A sample's own audit contradicts its vote
 - **WHEN** all three panel judges pass a criterion and one judge's source audit classifies its pass as contradicted

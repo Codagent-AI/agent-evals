@@ -68,11 +68,14 @@ async function backDissent(vote, request, validateCitations, validateCitation) {
   }
 }
 
-function dissentCheckPrompt({ request, scopeRule, id, original, material, lineCited = false }) {
+// The majority's stated reasons join the dissent: a dissent overturns two
+// votes only when the check answers why they gave the verdict they did.
+function dissentCheckPrompt({ request, scopeRule, id, original, majority = [], material, lineCited = false }) {
   const schema = judgeResultSchemaFor(PANEL_CHECK_RESULT_SCHEMA, [id])
   material = compactMaterial(material)
-  // The dissent and its complete material are measured; the job's own context is not.
-  const packet = JSON.stringify({ id, rationale: original.rationale, citations: original.citations, material })
+  const reasons = majority.map(({ verdict, rationale, citations }) => ({ verdict, rationale, citations }))
+  // The dissent, the majority's reasons and the complete material are measured; the job's own context is not.
+  const packet = JSON.stringify({ id, rationale: original.rationale, citations: original.citations, majority: reasons, material })
   if (packet.length > MAX_AUDIT_PACKET_CHARS) throw new PacketOverflowError(`${request.job} dissent check exceeds the ${MAX_AUDIT_PACKET_CHARS}-character packet limit: ${id}`, [id])
   return [request.prompt_body ?? request.prompt, scopeRule,
     ['Check only the dissent\'s stated reason. Confirm only when both hold: the cited material shows what the dissent',
@@ -80,10 +83,14 @@ function dissentCheckPrompt({ request, scopeRule, id, original, material, lineCi
       'it must show a clause of the requirement unmet; for a higher verdict, every clause the verdict credits met.',
       'Contradicted when the material does not show it, or when the fact is accurate but the requirement does not',
       'depend on it (an assumption, scenario, or element the requirement and its review guidance do not name).',
+      'The two majority votes and their stated reasons are given beside the dissent. Confirm a higher verdict only when',
+      'the material also refutes each clause a majority vote states is unmet; a dissent that does not answer that reason',
+      'is contradicted when the material shows the clause unmet, and insufficient otherwise. An accurate fact the dissent',
+      'cites never confirms it while a majority reason it does not answer still stands.',
       'Insufficient when the complete, in-scope material cannot settle it.', MISSING_MATERIAL_RULE,
       ...(lineCited ? [EVIDENCE_CITATION_RULE] : [])].join(' '),
     'Return confirmed if it holds, contradicted if refuted, insufficient if undecided, missing-material if it depends on marked material.',
-    '# BEGIN UNTRUSTED DISSENT', JSON.stringify({ id, rationale: original.rationale, citations: original.citations, material, evidence: request.input_roots?.evidence ? request.prompt_body ?? request.prompt : null }), '# END UNTRUSTED DISSENT', '# Response', `Reply with JSON matching this schema: ${JSON.stringify(schema)}`].join('\n')
+    '# BEGIN UNTRUSTED DISSENT', JSON.stringify({ id, rationale: original.rationale, citations: original.citations, majority: reasons, material, evidence: request.input_roots?.evidence ? request.prompt_body ?? request.prompt : null }), '# END UNTRUSTED DISSENT', '# Response', `Reply with JSON matching this schema: ${JSON.stringify(schema)}`].join('\n')
 }
 
 function route(votes, checks, order, fallbackIds = []) {
@@ -163,14 +170,16 @@ function settledCheck(check, stage) {
   return check
 }
 
-async function dissentCheckRequest({ request, scopeRule, id, original }) {
-  const material = await sourceMaterial(request, [original])
+// `majority` is the criterion's other two votes; their cited files join the material.
+async function dissentCheckRequest({ request, scopeRule, id, original, majority = [] }) {
+  const material = await sourceMaterial(request, [original, ...majority])
   // An evidence packet's check cites it by line range, as its parser requires.
   const lineCited = Boolean(await evidenceLineCounts(request))
   return { ...request, criteria: [id], schema: judgeResultSchemaFor(PANEL_CHECK_RESULT_SCHEMA, [id]),
     input_roots: null, audit_stage: 'dissent-check',
-    prompt: dissentCheckPrompt({ request, scopeRule, id, original, material, lineCited }) }
+    prompt: dissentCheckPrompt({ request, scopeRule, id, original, majority, material, lineCited }) }
 }
+const majorityVotes = (votes, id, original) => votes.filter(v => v.id === id && v.panel_index !== original.panel_index)
 
 // The verdict exactly two effective votes gave, or null for a consensus or a
 // three-way split.
@@ -406,7 +415,7 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
           ...(backing.error ? { error: backing.error } : {}) })
       }
       if (!original.citations_valid) continue
-      const next = await dissentCheckRequest({ request, scopeRule, id, original })
+      const next = await dissentCheckRequest({ request, scopeRule, id, original, majority: majorityVotes(record.votes, id, original) })
       const [check] = await call(next, decider, 'dissent-check', text => parseCheck(request, next, id, text))
       record.checks.push({ ...check, stage: 'dissent-check', panel_index: original.panel_index })
       settledCheck(check, 'dissent check')
@@ -489,7 +498,7 @@ export async function rerunDecider({ record, decider, buildPrompt, schema, valid
   const checks = []
   for (const check of record.checks.filter(c => c.stage === 'dissent-check')) {
     const original = record.votes.find(v => v.id === check.id && v.panel_index === check.panel_index)
-    const next = await dissentCheckRequest({ request, scopeRule, id: check.id, original })
+    const next = await dissentCheckRequest({ request, scopeRule, id: check.id, original, majority: majorityVotes(record.votes, check.id, original) })
     const [fresh] = await call(next, 'dissent-check-rerun', text => parseCheck(request, next, check.id, text))
     settledCheck(fresh, 'dissent check')
     checks.push({ id: check.id, panel_index: check.panel_index, recorded: check.classification, rerun: fresh.classification,

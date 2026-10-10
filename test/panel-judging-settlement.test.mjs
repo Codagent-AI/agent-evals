@@ -36,6 +36,11 @@ for (const classification of ['confirmed', 'contradicted', 'insufficient']) test
       assert.match(request.prompt, /Confirm only when both hold/)
       assert.match(request.prompt, /the fact is accurate but the requirement does not depend on it/)
       assert.match(request.prompt, /For a lower verdict, it must show a clause of the requirement unmet; for a higher verdict, every clause the verdict credits met/)
+      // A higher dissent must also answer the reasons the two majority votes gave.
+      assert.match(request.prompt, /Confirm a higher verdict only when the material also refutes each clause a majority vote states is unmet/)
+      const dissent = JSON.parse(request.prompt.split('# BEGIN UNTRUSTED DISSENT\n')[1].split('\n# END UNTRUSTED DISSENT')[0])
+      assert.deepEqual(dissent.majority.map(({ verdict }) => verdict), ['fail', 'fail'])
+      assert.ok(dissent.majority.every(({ rationale }) => typeof rationale === 'string'))
       return JSON.stringify({ results: [{ id: 'x', classification, rationale: 'checked reason', evidence: ['a'] }] })
     } },
   }))
