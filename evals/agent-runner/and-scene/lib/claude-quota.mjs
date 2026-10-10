@@ -4,7 +4,13 @@ import { join } from 'node:path'
 const MAX_QUOTA_WAIT_MS = 6 * 60 * 60 * 1000
 const RESET_GRACE_MS = 60 * 1000
 
-const CLAUDE_IDENTITY = /(?:"cli":"claude"|"provider":"anthropic"|acceptance-tester|tester profile is backed by claude)/i
+// Claude identity comes only from the recorded CLI or provider, or from an
+// agent's explicit statement that a role profile is backed by Claude (a child
+// agent call reported by its caller). Session and step names are never
+// evidence: a workflow may rename them or reuse them for another CLI.
+const ROLE_NAMES = 'lead|crosscheck|implementor|tester'
+const CLAUDE_IDENTITY = new RegExp(`(?:"cli":"claude"|"provider":"anthropic"|\\b(?:${ROLE_NAMES}) profile is backed by claude)`, 'i')
+const STATED_ROLE = new RegExp(`\\b(${ROLE_NAMES}) profile is backed by claude`, 'i')
 const QUOTA_LIMIT = /(?:hit your(?: org(?:anization)?'s)? (?:monthly spend |session )?limit|organization spend\/rate[- ]limit|organization-level overage disabled)/i
 
 function latestExecution(audit) {
@@ -63,13 +69,23 @@ function parseReset(line) {
   return reset
 }
 
+// The recorded Agent Runner agent names the role. Without one the role stays
+// unknown rather than being guessed from a session or step name.
+const RECORDED_ROLES = {
+  lead: 'lead',
+  'lead-agent': 'lead',
+  crosscheck: 'crosscheck',
+  implementor: 'implementor',
+  'task-implementor': 'implementor',
+  tester: 'tester',
+  'acceptance-reviewer': 'tester',
+}
+
 function quotaRole(line) {
-  if (/acceptance-tester|tester profile/i.test(line)) return 'tester'
-  const recorded = line.match(/"role":"([^"]+)"/i)?.[1]?.toLowerCase()
-  if (recorded === 'lead' || recorded === 'lead-agent') return 'lead'
-  if (recorded === 'tester' || recorded === 'acceptance-reviewer') return 'tester'
-  if (recorded === 'implementor' || recorded === 'task-implementor') return 'implementor'
-  return null
+  const stated = line.match(STATED_ROLE)?.[1]?.toLowerCase()
+  if (stated) return stated
+  const recorded = line.match(/"(?:role|agent)":"([^"]+)"/i)?.[1]?.toLowerCase()
+  return RECORDED_ROLES[recorded] ?? null
 }
 
 export function detectClaudeQuotaReset({ audit, now = new Date(), maxWaitMs = MAX_QUOTA_WAIT_MS }) {
@@ -107,7 +123,7 @@ export async function waitForClaudeQuotaReset({
   const detected = detectClaudeQuotaReset({ audit: durableAudit, now: now() })
   if (!detected) return { waited: false }
 
-  log(`Claude ${detected.role} quota reached; waiting until ${detected.reset_at} before resuming Agent Runner`)
+  log(`Claude ${detected.role ?? 'unattributed'} quota reached; waiting until ${detected.reset_at} before resuming Agent Runner`)
   await sleep(detected.wait_ms)
   return { waited: true, ...detected }
 }
