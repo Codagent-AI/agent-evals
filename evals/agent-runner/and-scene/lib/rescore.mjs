@@ -7,7 +7,6 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { loadCheckpoint } from './checkpoint.mjs'
 import { hashFile, hashJson, hashString, readJson } from './persistence.mjs'
 import { normalizeRoleProfiles } from './profiles.mjs'
-import { checkWorkflowHistory } from './workflow.mjs'
 
 const ARTIFACT_ROOT = '/artifacts'
 
@@ -33,7 +32,7 @@ function sourcePath(sourceDir, recordedPath) {
   return path
 }
 
-function validateDelivery(state, delivery, { skipValidator }) {
+function validateDelivery(state, delivery) {
   if (delivery?.verified !== true) throw new Error('rescore source delivery was not verified')
   for (const field of ['fixture_commit', 'branch', 'base_branch', 'final_sha']) {
     same(`delivery ${field}`, state.delivery?.[field], delivery[field])
@@ -57,10 +56,16 @@ function validateDelivery(state, delivery, { skipValidator }) {
   ) {
     throw new Error('rescore source does not describe an aligned open draft pull request')
   }
-  const history = checkWorkflowHistory(delivery.workflow_history ?? [], { skipValidator })
-  if (!history.ok) {
-    throw new Error('rescore source did not complete the full implementation workflow')
-  }
+}
+
+// The source's own retained completion record, never its step layout. Results
+// written before the harness recorded Agent Runner's completion status carry
+// only their own history verdict, which is read as that record.
+function sourceCompleted(workflow) {
+  if (workflow?.run_completed !== undefined) return workflow.run_completed === true
+  return workflow?.history_complete === true
+    && (workflow?.missing_steps ?? []).length === 0
+    && (workflow?.prohibited_effects ?? []).length === 0
 }
 
 function skipValidatorFromWorkflow(workflow) {
@@ -148,15 +153,13 @@ export async function loadCandidateRescoreSource({ sourceDir, stagingDir = null 
     result?.run_kind !== 'candidate'
     || result.mode !== 'agent-runner'
     || result.workflow?.full_workflow !== true
-    || result.workflow?.history_complete !== true
-    || (result.workflow?.missing_steps ?? []).length > 0
-    || (result.workflow?.prohibited_effects ?? []).length > 0
+    || !sourceCompleted(result.workflow)
   ) {
     throw new Error('rescore source did not complete the full implementation workflow')
   }
   same('run id', state.run_id, result.run_id)
-  const skipValidator = skipValidatorFromWorkflow(result.workflow)
-  validateDelivery(state, delivery, { skipValidator })
+  skipValidatorFromWorkflow(result.workflow)
+  validateDelivery(state, delivery)
   const changeName = changeNameFromWorkflow(result.workflow)
 
   const recordedArtifacts = delivery.acceptance_artifacts ?? []

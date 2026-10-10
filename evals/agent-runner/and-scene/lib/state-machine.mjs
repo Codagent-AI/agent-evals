@@ -76,7 +76,8 @@ export function createRunState({
       runner: applicable ? (delivery.runner ?? null) : null,
       pull_request: applicable ? (delivery.pull_request ?? null) : null,
       final_sha: applicable ? (delivery.final_sha ?? null) : null,
-      final_validator: applicable ? (delivery.final_validator ?? null) : null,
+      run_status: applicable ? (delivery.run_status ?? null) : null,
+      publication_boundary: applicable ? (delivery.publication_boundary ?? null) : null,
       acceptance: applicable ? (delivery.acceptance ?? null) : null,
       retained_for_manual_cleanup: applicable,
     },
@@ -115,18 +116,12 @@ export function applyRunStateEvent(state, event) {
         runner: event.runner,
         pull_request: event.pull_request,
         final_sha: event.final_sha,
-        final_validator: event.final_validator,
+        run_status: event.run_status,
+        publication_boundary: event.publication_boundary,
         acceptance: event.acceptance,
       }
       const delivery = { ...state.delivery }
       for (const [field, value] of Object.entries(update)) {
-        if (field === 'final_validator'
-          && delivery.final_validator
-          && !delivery.final_validator.step_path
-          && value?.step === 'run-validator'
-          && delivery.final_validator.step === value?.step_path?.[0]) {
-          delivery.final_validator = { ...delivery.final_validator, step: value.step }
-        }
         delivery[field] = mergeStableIdentity(delivery[field], value, `delivery.${field}`)
       }
       return appendEvent({ ...state, delivery }, event)

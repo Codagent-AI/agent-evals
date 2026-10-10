@@ -252,6 +252,8 @@ const FIELD_LABELS = {
   workflow_provenance: 'workflow source and version details',
   agent_runner_provenance: 'Agent Runner source and version details',
   rubric_provenance: 'rubric source and version details',
+  publication_boundary: 'publication boundary (checks final state only)',
+  validator_mode: 'requested Validator mode',
 }
 
 function keyValueRows(record) {

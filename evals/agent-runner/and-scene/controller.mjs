@@ -109,13 +109,12 @@ import {
 import { runTimed, summarizeTimings } from './lib/subprocess.mjs'
 import { waitForClaudeQuotaReset as waitForDetectedClaudeQuota } from './lib/claude-quota.mjs'
 import {
-  checkWorkflowHistory,
   classifyRunnerRun,
-  IMPLEMENTATION_WORKFLOW_INSPECTION_REF,
-  IMPLEMENTATION_WORKFLOW_LOGICAL_NAME,
-  VERIFICATION_WORKFLOW_INSPECTION_REF,
+  DEFAULT_WORKFLOW,
+  parseLogicalWorkflowRef,
   resolveBoundary,
-  verifyWorkflowContract,
+  summarizeObservedSteps,
+  verifyWorkflowInputs,
 } from './lib/workflow.mjs'
 
 const SUITE_DIR = dirname(fileURLToPath(import.meta.url))
@@ -145,6 +144,7 @@ const VALUES = new Map([
   ['--rescore-from', 'rescoreFrom'],
   ['--judge-model', 'judgeModel'],
   ['--capabilities', 'capabilitiesPath'],
+  ['--workflow', 'workflow'],
   ['--lead-cli', 'leadCli'],
   ['--lead-model', 'leadModel'],
   ['--lead-effort', 'leadEffort'],
@@ -170,6 +170,8 @@ export function parseArgs(argv) {
     repo: 'https://github.com/Codagent-AI/and-scene.git',
     fixtureRef: 'f0695b96c0c23b2d17ecc6cfbaf8be1fcdedd6f8',
     capabilitiesPath: DEFAULT_CAPABILITIES,
+    workflow: DEFAULT_WORKFLOW,
+    workflowProvided: false,
   }
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index]
@@ -183,6 +185,7 @@ export function parseArgs(argv) {
     if (value === undefined) throw new Error(`missing value for ${argument}`)
     options[key] = value
     if (key === 'changeName') options.changeNameProvided = true
+    if (key === 'workflow') options.workflowProvided = true
     index += 1
   }
   if (!options.runDir) throw new Error('--run-dir is required')
@@ -191,6 +194,11 @@ export function parseArgs(argv) {
       '--rescore-from cannot be combined with --resume, --reference-baseline, or --candidate-ref',
     )
   }
+  // A rescore keeps the workflow its source recorded rather than selecting one.
+  if (options.rescoreFrom && options.workflowProvided) {
+    throw new Error('--rescore-from cannot be combined with --workflow')
+  }
+  parseLogicalWorkflowRef(options.workflow)
   options.runId ??= basename(resolve(options.runDir))
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(options.runId)) {
     throw new Error('--run-id must be a single safe path component')
@@ -411,13 +419,6 @@ export async function runEvaluation({
 
   const importedSkipValidator = importedRun?.workflow?.arguments
     ?.includes('skip_validator=true')
-  const boundary = resolveBoundary({
-    skipValidator: importedRun ? importedSkipValidator : options.skipValidator,
-    changeName,
-  })
-  if (importedRun?.workflow?.arguments) {
-    boundary.workflow_arguments = [...importedRun.workflow.arguments]
-  }
 
   let rubrics
   try {
@@ -432,8 +433,6 @@ export async function runEvaluation({
   // Runner, so it needs no clean checkout or workflow contract.
   let provenance = null
   let agentSkillsProvenance = null
-  let workflowText = ''
-  let delegatedVerification = false
   if (rescore) {
     provenance = importedRun.agent_runner_provenance
     agentSkillsProvenance = importedRun.agent_skills_provenance
@@ -453,7 +452,11 @@ export async function runEvaluation({
       }])
     }
     try {
-      provenance = await readWorkflowProvenance({ agentRunnerDir: resolve(options.agentRunnerDir), exec })
+      provenance = await readWorkflowProvenance({
+        agentRunnerDir: resolve(options.agentRunnerDir),
+        workflow: options.workflow,
+        exec,
+      })
       agentSkillsProvenance = await readAgentSkillsProvenance({
         agentSkillsDir: resolve(options.agentSkillsDir),
         exec,
@@ -467,15 +470,14 @@ export async function runEvaluation({
         message: 'Agent Skills provenance is incomplete',
       }])
     }
-    workflowText = await readFile(provenance.workflow_path, 'utf8')
-    const verificationText = provenance.verification_workflow_path
-      ? await readFile(provenance.verification_workflow_path, 'utf8')
-      : null
-    const contract = verifyWorkflowContract(workflowText, { verificationText })
-    if (!contract.ok) {
-      return failure(contract.errors.map((message) => ({ code: 'workflow-contract', message })))
+    // The harness depends only on the parameters the workflow declares and the
+    // name it records runs under, never on its steps.
+    const inputs = verifyWorkflowInputs(await readFile(provenance.workflow_path, 'utf8'), {
+      workflow: options.workflow,
+    })
+    if (!inputs.ok) {
+      return failure(inputs.errors.map((message) => ({ code: 'workflow-parameters', message })))
     }
-    delegatedVerification = contract.layout === 'verify-change'
     const credentials = exec('gh', ['auth', 'status'], { cwd: resolve(options.agentRunnerDir) })
     if (credentials.status !== 0 || credentials.error) {
       return failure([{
@@ -483,6 +485,28 @@ export async function runEvaluation({
         message: 'GitHub credentials capable of pushing the candidate branch and managing its draft pull request are required',
       }])
     }
+  }
+
+  // The evaluated workflow's identity: the logical reference requested, the
+  // hash of the definition it resolves to, and the name that definition
+  // declares, which Agent Runner records runs under. A rescore keeps whatever
+  // its source recorded.
+  const boundary = resolveBoundary({
+    skipValidator: importedRun ? importedSkipValidator : options.skipValidator,
+    changeName,
+    workflow: options.workflow,
+    definitionSha256: provenance?.workflow_sha256 ?? null,
+    reportedName: provenance?.runner_workflow_name ?? null,
+  })
+  if (importedRun) {
+    const source = importedRun.workflow ?? {}
+    boundary.workflow = source.workflow ?? null
+    // Results recorded before the logical reference was kept stored the
+    // Runner-reported name under `workflow`.
+    boundary.runner_workflow_name = source.runner_workflow_name ?? source.workflow ?? null
+    boundary.workflow_sha256 = source.workflow_sha256 ?? provenance?.workflow_sha256 ?? null
+    boundary.workflow_path = source.workflow_path ?? null
+    if (source.arguments) boundary.workflow_arguments = [...source.arguments]
   }
 
   await prepareRunDirectory(runDir)
@@ -544,13 +568,9 @@ export async function runEvaluation({
     return failure([{ code: error.code ?? 'candidate-worktree', message: error.message }])
   }
   if (mode === 'agent-runner' && !rescore) {
-    // Agent Runner runs its embedded workflows, so each verified checkout file
-    // must be exactly what the installed CLI resolves.
-    const inspected = [[IMPLEMENTATION_WORKFLOW_INSPECTION_REF, provenance.workflow_sha256]]
-    if (delegatedVerification) {
-      inspected.push([VERIFICATION_WORKFLOW_INSPECTION_REF, provenance.verification_workflow_sha256])
-    }
-    for (const [workflowRef, expectedSha256] of inspected) {
+    // Agent Runner runs its embedded workflows, so the verified checkout file
+    // must be exactly what the installed CLI resolves for the logical reference.
+    for (const [workflowRef, expectedSha256] of [[options.workflow, provenance.workflow_sha256]]) {
       const resolvedWorkflow = exec(
         'agent-runner',
         ['debug', '--show-workflow', workflowRef],
@@ -603,7 +623,9 @@ export async function runEvaluation({
     fixture_revision: frozenCandidate?.fixture_commit ?? candidateSource.fixture_commit,
     agent_runner_provenance: hashJson({
       commit: provenance?.commit ?? null,
-      workflow_sha256: provenance?.workflow_sha256 ?? null,
+      workflow: boundary.workflow,
+      workflow_sha256: boundary.workflow_sha256,
+      runner_workflow_name: boundary.runner_workflow_name,
       cli_version: provenance?.cli_version ?? null,
       rescore_source: importedRun?.provenance_sha256 ?? null,
     }),
@@ -725,18 +747,8 @@ export async function runEvaluation({
   }
 
   const record = {
-    workflowHistory: rescore
-      ? checkWorkflowHistory(importedRun.workflow.observed_steps, {
-          skipValidator: importedSkipValidator,
-        })
-      : {
-          ok: mode === 'reference-baseline',
-          missing_steps: [],
-          invalid_outcomes: [],
-          prohibited_effects: [],
-          observed_steps: [],
-        },
     observed_steps: importedRun?.workflow.observed_steps ?? [],
+    runCompleted: false,
     events: rescore
       ? [{
           event: 'imported-completed-run',
@@ -931,7 +943,6 @@ export async function runEvaluation({
           role_profiles: validation.profiles,
           events: record.events,
           history: record.observed_steps,
-          history_verification: record.workflowHistory,
           imported_from: importedRunReference(importedRun),
         })
         return
@@ -957,6 +968,9 @@ export async function runEvaluation({
 
       let state = await readState(checkpoint.agent_runner?.run_id ?? null)
       let runnerStateSnapshot = state
+      // Persisted runs are checked against the name the resolved definition
+      // declares, never against their own reported name.
+      const workflowName = boundary.runner_workflow_name
       let decision = classifyRunnerRun({
         recorded: checkpoint.agent_runner,
         state,
@@ -965,6 +979,7 @@ export async function runEvaluation({
         // starting a second implementation workflow.
         discovered: checkpoint.agent_runner?.run_id ? null : state,
         isProcessAlive: isRunnerProcessAlive,
+        workflowName,
       })
       while (decision.action !== 'continue') {
         const action = decision.action
@@ -976,7 +991,9 @@ export async function runEvaluation({
           adopted: decision.adopted ?? false,
         })
         log(`agent-runner: ${action}`)
-        if (action === 'error') throw new Error(decision.reason)
+        if (action === 'error') {
+          throw Object.assign(new Error(decision.reason), decision.code ? { code: decision.code } : {})
+        }
 
         // Adopting a persisted run records its identity before any further
         // work, so a second interruption cannot lose it again.
@@ -990,7 +1007,7 @@ export async function runEvaluation({
         let waitedState = null
         if (action === 'start') {
           const timing = runTimed('agent-runner', [
-            'run', IMPLEMENTATION_WORKFLOW_LOGICAL_NAME,
+            'run', boundary.workflow,
             ...boundary.workflow_arguments,
           ], {
             label: 'agent-runner',
@@ -1040,6 +1057,7 @@ export async function runEvaluation({
           recorded: observedRun,
           state,
           isProcessAlive: isRunnerProcessAlive,
+          workflowName,
         })
         if (decision.action === 'resume' && action !== 'wait' && !quotaWaited) {
           throw new Error(
@@ -1054,9 +1072,9 @@ export async function runEvaluation({
         await persistRunnerState(state)
       }
 
-      // core:implement-change never auto-launches an audit. When the completed
-      // source has no link, start the explicit replay for its finalized
-      // top-level execution, then reuse the wait path below.
+      // When the completed source has no audit link (the evaluated workflow
+      // launched none), start the explicit replay for its finalized top-level
+      // execution, then reuse the wait path below.
       if (runnerStateSnapshot?.run_id && !hasLinkedAudits(runnerStateSnapshot)) {
         let sessionId
         try {
@@ -1140,11 +1158,10 @@ export async function runEvaluation({
         log(`agent-runner: linked audit failed: ${failedAudits.map((audit) => `${audit.run_id}: ${audit.reason}`).join('; ')}`)
       }
       record.events.push({ event: 'continue', status: decision.status, reason: null, adopted: false })
+      record.runCompleted = decision.status === 'completed'
 
+      // Observed steps are recorded as Agent Runner reports them, as data only.
       record.observed_steps = await readSteps(runnerStateSnapshot)
-      record.workflowHistory = checkWorkflowHistory(record.observed_steps, {
-        skipValidator: boundary.skip_validator === 'true',
-      })
       await writeJsonAtomic(join(runDir, 'phases/workflow-execution.json'), {
         run: record.run,
         workflow: boundary,
@@ -1153,7 +1170,6 @@ export async function runEvaluation({
         events: record.events,
         linked_audits: record.linkedAudits,
         history: record.observed_steps,
-        history_verification: record.workflowHistory,
       })
     },
 
@@ -1177,8 +1193,7 @@ export async function runEvaluation({
             expectedBase: candidateSource.base_branch,
             changeName,
             sessionDir: record.run?.session_dir,
-            workflowHistory: record.observed_steps,
-            skipValidator: boundary.skip_validator === 'true',
+            runCompleted: record.runCompleted,
             exec,
           })
         }
@@ -1194,10 +1209,10 @@ export async function runEvaluation({
         branch: candidateSource.branch,
         pull_request: record.delivery.pull_request,
         final_sha: record.delivery.final_sha,
-        final_validator: record.delivery.final_validator,
+        run_status: record.delivery.run_status,
+        publication_boundary: record.delivery.publication_boundary,
         acceptance: {
           artifacts: record.delivery.acceptance_artifacts,
-          workflow_history: record.delivery.workflow_history,
         },
       })
       await writeJsonAtomic(join(runDir, 'phases/delivery-verification.json'), record.delivery)
@@ -1250,7 +1265,6 @@ export async function runEvaluation({
         owner: 'evaluation-harness',
         acceptance: {
           artifacts: record.delivery.acceptance_artifacts,
-          workflow_history: record.delivery.workflow_history,
           manifest_sha256: record.candidateEvidence.manifest_sha256,
           lineage: record.evidenceLineage,
         },
@@ -1712,7 +1726,7 @@ export async function runEvaluation({
         record.metrics = await readRunnerMetrics({
           sessionDir: record.run?.session_dir ?? null,
           runId: record.run?.run_id ?? runId,
-          workflow: boundary.workflow,
+          workflow: boundary.runner_workflow_name,
         })
       }
       // The pinned table is a local read and the catalog a network fetch; neither
@@ -1814,20 +1828,22 @@ export async function runEvaluation({
         terminalFailure: record.terminalFailure,
         workflow: {
           workflow: boundary.workflow,
+          runner_workflow_name: boundary.runner_workflow_name,
+          workflow_sha256: boundary.workflow_sha256,
           workflow_path: boundary.workflow_path,
           skip_validator: boundary.skip_validator,
+          validator_mode: boundary.validator_mode ?? null,
           task_level_compliance: boundary.task_level_compliance,
           final_validator: boundary.final_validator,
           arguments: boundary.workflow_arguments,
           full_workflow: true,
-          configured_stop_step: null,
-          last_observed_step: record.workflowHistory.last_observed_step,
-          unexpected_step: record.workflowHistory.prohibited_effects[0]?.step ?? null,
-          observed_steps: record.observed_steps,
-          history_complete: record.workflowHistory.ok,
-          missing_steps: record.workflowHistory.missing_steps,
-          invalid_outcomes: record.workflowHistory.invalid_outcomes,
-          prohibited_effects: record.workflowHistory.prohibited_effects,
+          // Agent Runner's own completion status for the evaluated run.
+          run_completed: rescore
+            ? (importedRun.workflow.run_completed ?? importedRun.workflow.history_complete ?? null)
+            : (mode === 'reference-baseline' ? null : record.runCompleted),
+          ...summarizeObservedSteps(record.observed_steps),
+          publication_boundary: record.delivery?.publication_boundary
+            ?? checkpoint.delivery?.publication_boundary ?? null,
           run_id: record.run?.run_id ?? null,
           session_dir: record.run?.session_dir ?? null,
           provenance,

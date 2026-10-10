@@ -1,6 +1,6 @@
 import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -13,8 +13,7 @@ import {
   verifyCandidateDelivery,
   verifyRecordedDeliveryIdentity,
 } from '../evals/agent-runner/and-scene/lib/candidate.mjs'
-import { buildCandidateEvidenceManifest, testedRevisionFacts, validateEvidenceLineage } from '../evals/agent-runner/and-scene/lib/evidence.mjs'
-import { checkWorkflowHistory, finalWorkflowStepEntry } from '../evals/agent-runner/and-scene/lib/workflow.mjs'
+import { buildCandidateEvidenceManifest, inspectCandidateEvidenceReadiness, testedRevisionFacts, validateEvidenceLineage } from '../evals/agent-runner/and-scene/lib/evidence.mjs'
 
 function exec(command, args, options = {}) {
   return spawnSync(command, args, { encoding: 'utf8', ...options })
@@ -897,13 +896,7 @@ test('delivery verification proves branch, remote head, draft PR identity, and f
     expectedBase: 'main',
     changeName: 'create-and-scene',
     sessionDir,
-    workflowHistory: [
-      { step: 'run-validator', outcome: 'success' },
-      { step: 'open-draft-pr', outcome: 'success' },
-      { step: 'verify-draft-pr', outcome: 'success' },
-      { step: 'prepare-acceptance', outcome: 'success' },
-      { step: 'verify-acceptance-handoff', outcome: 'success' },
-    ],
+    runCompleted: true,
     exec: (command, args, options) => {
       calls.push([command, ...args])
       if (command === 'git' && args.includes('ls-remote')) {
@@ -930,31 +923,6 @@ test('delivery verification proves branch, remote head, draft PR identity, and f
     command === 'gh' && /check|status|ci/i.test(args.join(' '))
   )), JSON.stringify(calls))
 
-  const skippedDelivery = await verifyCandidateDelivery({
-    worktree,
-    fixtureCommit: repo.fixture,
-    branch: 'eval/and-scene/run-123',
-    expectedBase: 'main',
-    changeName: 'create-and-scene',
-    sessionDir,
-    skipValidator: true,
-    workflowHistory: [
-      { step: 'run-validator', outcome: 'skipped' },
-      { step: 'open-draft-pr', outcome: 'success' },
-      { step: 'verify-draft-pr', outcome: 'success' },
-      { step: 'prepare-acceptance', outcome: 'success' },
-      { step: 'verify-acceptance-handoff', outcome: 'success' },
-    ],
-    exec: (command, args, options) => {
-      if (command === 'git' && args.includes('ls-remote')) {
-        return { status: 0, stdout: `${head}\trefs/heads/eval/and-scene/run-123\n` }
-      }
-      return exec(command, args, options)
-    },
-    inspectPullRequest: async () => delivery.pull_request,
-  })
-  assert.equal(skippedDelivery.final_validator.outcome, 'skipped')
-
   await assert.rejects(
     verifyCandidateDelivery({
       worktree,
@@ -963,28 +931,7 @@ test('delivery verification proves branch, remote head, draft PR identity, and f
       expectedBase: 'main',
       changeName: 'create-and-scene',
       sessionDir,
-      skipValidator: true,
-      workflowHistory: delivery.workflow_history,
-      exec: (command, args, options) => {
-        if (command === 'git' && args.includes('ls-remote')) {
-          return { status: 0, stdout: `${head}\trefs/heads/eval/and-scene/run-123\n` }
-        }
-        return exec(command, args, options)
-      },
-      inspectPullRequest: async () => delivery.pull_request,
-    }),
-    /run-validator.*expected skipped.*observed success/i,
-  )
-
-  await assert.rejects(
-    verifyCandidateDelivery({
-      worktree,
-      fixtureCommit: repo.fixture,
-      branch: 'eval/and-scene/run-123',
-      expectedBase: 'main',
-      changeName: 'create-and-scene',
-      sessionDir,
-      workflowHistory: delivery.workflow_history,
+      runCompleted: true,
       exec: (command, args, options) => {
         if (command === 'git' && args.includes('ls-remote')) {
           return { status: 0, stdout: `${head}\trefs/heads/eval/and-scene/run-123\n` }
@@ -1000,7 +947,7 @@ test('delivery verification proves branch, remote head, draft PR identity, and f
   )
 })
 
-test('delivery verification accepts verify-change delivery and its shared session evidence', async () => {
+test('a workflow with different steps delivers through the same session output contract', async () => {
   const repo = await repository()
   const worktree = join(repo.root, 'candidate')
   const sessionDir = join(repo.root, 'session')
@@ -1014,8 +961,8 @@ test('delivery verification accepts verify-change delivery and its shared sessio
     exec,
   })
   await mkdir(join(worktree, 'openspec/changes/create-and-scene'), { recursive: true })
-  // verify-change shares its parent's session directory, so exploratory
-  // acceptance writes into the same output directory as before.
+  // Whatever the workflow's steps, its acceptance artifacts are discovered
+  // only under the Runner session's output/ directory.
   await mkdir(join(sessionDir, 'output'), { recursive: true })
   const head = git(worktree, 'rev-parse', 'HEAD')
   const outputs = {
@@ -1031,15 +978,6 @@ test('delivery verification accepts verify-change delivery and its shared sessio
     await writeFile(join(sessionDir, 'output', file), content)
   }
 
-  const verify = ['verify-change', 'sub:verify-change']
-  const workflowHistory = [
-    { step: 'implement-tasks', step_path: ['implement-tasks', 'implement-single-task', 'sub:implement-task', 'run-validator'], outcome: 'skipped' },
-    { step: 'verify-change', step_path: [...verify, 'run-validator'], event: 'step_start', outcome: null },
-    { step: 'verify-change', step_path: [...verify, 'run-validator'], event: 'step_end', outcome: 'skipped' },
-    ...['open-draft-pr', 'verify-draft-pr', 'prepare-acceptance', 'verify-acceptance-handoff']
-      .map((step) => ({ step: 'verify-change', step_path: [...verify, step], event: 'step_end', outcome: 'success' })),
-    { step: 'verify-change', step_path: ['verify-change'], event: 'step_end', outcome: 'success' },
-  ]
   const delivery = await verifyCandidateDelivery({
     worktree,
     fixtureCommit: repo.fixture,
@@ -1047,8 +985,7 @@ test('delivery verification accepts verify-change delivery and its shared sessio
     expectedBase: 'main',
     changeName: 'create-and-scene',
     sessionDir,
-    skipValidator: true,
-    workflowHistory,
+    runCompleted: true,
     exec: (command, args, options) => {
       if (command === 'git' && args.includes('ls-remote')) {
         return { status: 0, stdout: `${head}\trefs/heads/eval/and-scene/run-123\n` }
@@ -1066,7 +1003,7 @@ test('delivery verification accepts verify-change delivery and its shared sessio
     }),
   })
 
-  assert.deepEqual(delivery.final_validator, { ...workflowHistory[2], step: 'run-validator' })
+  assert.equal(Object.hasOwn(delivery, 'final_validator'), false)
   const recorded = delivery.acceptance_artifacts.map(({ path }) => basename(path))
   for (const file of ['acceptance-handoff.md', 'acceptance-findings.md', 'acceptance-assumptions.md', 'exploration-log.md']) {
     assert.ok(recorded.includes(file), `${file} in ${JSON.stringify(recorded)}`)
@@ -1099,13 +1036,7 @@ test('delivery verification freezes an identifiable candidate when acceptance ev
     expectedBase: 'main',
     changeName: 'create-and-scene',
     sessionDir,
-    workflowHistory: [
-      { step: 'run-validator', outcome: 'success' },
-      { step: 'open-draft-pr', outcome: 'success' },
-      { step: 'verify-draft-pr', outcome: 'success' },
-      { step: 'prepare-acceptance', outcome: 'success' },
-      { step: 'verify-acceptance-handoff', outcome: 'success' },
-    ],
+    runCompleted: true,
     exec: (command, args, options) => {
       if (command === 'git' && args.includes('ls-remote')) {
         return { status: 0, stdout: `${head}\trefs/heads/eval/and-scene/run-123\n` }
@@ -1160,13 +1091,7 @@ test('delivery accepts untracked inspection screenshots but still identifies the
     expectedBase: 'main',
     changeName: 'create-and-scene',
     sessionDir,
-    workflowHistory: [
-      { step: 'run-validator', outcome: 'success' },
-      { step: 'open-draft-pr', outcome: 'success' },
-      { step: 'verify-draft-pr', outcome: 'success' },
-      { step: 'prepare-acceptance', outcome: 'success' },
-      { step: 'verify-acceptance-handoff', outcome: 'success' },
-    ],
+    runCompleted: true,
     exec: (command, args, options) => {
       if (command === 'git' && args.includes('ls-remote')) {
         return { status: 0, stdout: `${head}\trefs/heads/eval/and-scene/run-123\n` }
@@ -1190,27 +1115,147 @@ test('delivery accepts untracked inspection screenshots but still identifies the
   )))
 })
 
-test('an observed prohibited delivery effect has typed workflow-side-effect ownership', async () => {
-  let error
-  try {
-    await verifyCandidateDelivery({
-      worktree: '/unused',
-      fixtureCommit: 'fixture',
-      branch: 'eval/and-scene/run-123',
-      expectedBase: 'main',
-      changeName: 'create-and-scene',
-      sessionDir: '/unused',
-      workflowHistory: [{ step: 'merge-pr', outcome: 'success' }],
-      exec,
-      inspectPullRequest: async () => null,
-    })
-    assert.fail('expected delivery verification to reject the prohibited effect')
-  } catch (caught) {
-    error = caught
+async function deliveredCandidate() {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
+  const sessionDir = join(repo.root, 'session')
+  await prepareCandidateWorktree({
+    repo: repo.source,
+    worktree,
+    ref: repo.fixture,
+    resume: false,
+    runId: 'run-123',
+    kind: 'candidate',
+    exec,
+  })
+  await mkdir(join(worktree, 'openspec/changes/create-and-scene'), { recursive: true })
+  await mkdir(join(sessionDir, 'output'), { recursive: true })
+  await writeFile(join(sessionDir, 'output', 'acceptance-handoff.md'), '# Handoff\n')
+  const head = git(worktree, 'rev-parse', 'HEAD')
+  const pullRequest = {
+    number: 53,
+    url: 'https://github.com/Codagent-AI/and-scene/pull/53',
+    state: 'OPEN',
+    draft: true,
+    base: 'main',
+    head_branch: 'eval/and-scene/run-123',
+    head_sha: head,
   }
+  const verify = ({ remote = `${head}\trefs/heads/eval/and-scene/run-123\n`, remoteFails = false,
+    pull = async () => pullRequest, runCompleted = true } = {}) => verifyCandidateDelivery({
+    worktree,
+    fixtureCommit: repo.fixture,
+    branch: 'eval/and-scene/run-123',
+    expectedBase: 'main',
+    changeName: 'create-and-scene',
+    sessionDir,
+    runCompleted,
+    exec: (command, args, options) => {
+      if (command === 'git' && args.includes('ls-remote')) {
+        return remoteFails ? { status: 128, stderr: 'could not read from remote' } : { status: 0, stdout: remote }
+      }
+      return exec(command, args, options)
+    },
+    inspectPullRequest: pull,
+  })
+  return { repo, worktree, sessionDir, head, pullRequest, verify }
+}
 
+async function rejection(promise) {
+  try {
+    await promise
+  } catch (error) {
+    return error
+  }
+  assert.fail('expected delivery verification to reject')
+}
+
+test('a prohibited effect visible in final pull-request state is a workflow side-effect violation', async () => {
+  const context = await deliveredCandidate()
+  for (const [observed, action] of [
+    [{ state: 'MERGED', draft: false }, 'merge-pull-request'],
+    [{ state: 'CLOSED', draft: true }, 'close-pull-request'],
+    [{ state: 'OPEN', draft: false }, 'mark-ready-for-review'],
+  ]) {
+    const error = await rejection(context.verify({ pull: async () => ({ ...context.pullRequest, ...observed }) }))
+    assert.equal(error.code, 'workflow-side-effect-violation')
+    assert.equal(error.owner, 'implementation-workflow')
+    assert.equal(error.unexpected_action, action)
+  }
+})
+
+test('a missing or moved remote candidate branch is a workflow side-effect violation', async () => {
+  const context = await deliveredCandidate()
+  const missing = await rejection(context.verify({ remote: '' }))
+  assert.equal(missing.code, 'workflow-side-effect-violation')
+  assert.equal(missing.unexpected_action, 'delete-candidate-branch')
+  const moved = await rejection(context.verify({ remote: `${'f'.repeat(40)}\trefs/heads/eval/and-scene/run-123\n` }))
+  assert.equal(moved.code, 'workflow-side-effect-violation')
+})
+
+test('an archived change directory is a workflow side-effect violation', async () => {
+  const context = await deliveredCandidate()
+  git(context.worktree, 'rm', '-rq', 'openspec/changes/create-and-scene')
+  git(context.worktree, 'commit', '-qm', 'archive the change')
+  const head = git(context.worktree, 'rev-parse', 'HEAD')
+  const error = await rejection(context.verify({
+    remote: `${head}\trefs/heads/eval/and-scene/run-123\n`,
+    pull: async () => ({ ...context.pullRequest, head_sha: head }),
+  }))
   assert.equal(error.code, 'workflow-side-effect-violation')
+  assert.equal(error.unexpected_action, 'archive-change')
+})
+
+test('unavailable branch or pull-request observations are a harness failure, not a verified boundary', async () => {
+  const context = await deliveredCandidate()
+  const remote = await rejection(context.verify({ remoteFails: true }))
+  assert.equal(remote.code, 'delivery-observation-unavailable')
+  assert.equal(remote.owner, 'evaluation-harness')
+
+  const pull = await rejection(context.verify({
+    pull: async () => { throw new Error('draft pull-request metadata lookup failed: HTTP 502') },
+  }))
+  assert.equal(pull.code, 'delivery-observation-unavailable')
+  assert.equal(pull.owner, 'evaluation-harness')
+})
+
+test('a branch without any pull request is missing delivery output', async () => {
+  const context = await deliveredCandidate()
+  const error = await rejection(context.verify({
+    pull: async () => {
+      throw Object.assign(new Error('expected exactly one pull request'), { code: 'pull-request-identity-mismatch', owner: 'implementation-workflow' })
+    },
+  }))
+  assert.equal(error.code, 'pull-request-identity-mismatch')
   assert.equal(error.owner, 'implementation-workflow')
+})
+
+test('a run Agent Runner did not report completed is not an evaluable delivery', async () => {
+  const context = await deliveredCandidate()
+  const error = await rejection(context.verify({ runCompleted: false }))
+  assert.equal(error.code, 'workflow-not-completed')
+  assert.equal(error.owner, 'implementation-workflow')
+})
+
+test('a clean final state passes whatever steps ran, and discloses its final-state-only scope', async () => {
+  const context = await deliveredCandidate()
+  const delivery = await context.verify()
+  assert.equal(delivery.run_status, 'completed')
+  assert.equal(delivery.publication_boundary.verified, true)
+  assert.equal(delivery.publication_boundary.scope, 'final-state-only')
+  assert.ok(delivery.publication_boundary.not_detectable.some((item) => /reversed before completion/.test(item)))
+  assert.ok(delivery.publication_boundary.not_detectable.some((item) => /release/.test(item)))
+  assert.equal(Object.hasOwn(delivery, 'workflow_history'), false)
+})
+
+test('acceptance artifacts outside the session output anchor leave delivery evidence missing', async () => {
+  const context = await deliveredCandidate()
+  await rm(join(context.sessionDir, 'output'), { recursive: true, force: true })
+  await mkdir(join(context.sessionDir, 'output'), { recursive: true })
+  await writeFile(join(context.worktree, 'acceptance-handoff.md'), '# Handoff in the repository\n')
+  const readiness = await inspectCandidateEvidenceReadiness({ worktree: context.worktree, sessionDir: context.sessionDir })
+  assert.equal(readiness.artifacts.length, 0)
+  assert.ok(readiness.missing_roles.includes('final-handoff'))
 })
 
 test('resume revalidates the recorded branch, PR, and final SHA before Runner action', async () => {
@@ -1255,7 +1300,7 @@ test('resume revalidates the recorded branch, PR, and final SHA before Runner ac
   )
 })
 
-test('runner main session layout produces verified scoring lineage and nested delivery identity', async () => {
+test('runner main session layout produces verified scoring lineage and delivery identity', async () => {
   const repo = await repository()
   const worktree = join(repo.root, 'candidate')
   const sessionDir = join(repo.root, 'session')
@@ -1285,30 +1330,6 @@ test('runner main session layout produces verified scoring lineage and nested de
   for (const [path, content] of Object.entries(output)) {
     await writeFile(join(sessionDir, 'output', path), content)
   }
-  const verify = ['verify-change', 'sub:verify-change']
-  const pair = (step, step_path, outcome = 'success') => [
-    { step, step_path, event: 'step_start' },
-    { step, step_path, event: 'step_end', outcome },
-  ]
-  const workflowHistory = [
-    { step: 'verify-change', step_path: ['verify-change'], event: 'step_start' },
-    { step: 'verify-change', step_path: [...verify, 'run-validator'], event: 'step_start' },
-    ...pair('verify-change', [...verify, 'run-validator', 'sub:run-validator', 'validator-retry', 'run-validator']),
-    { step: 'verify-change', step_path: [...verify, 'run-validator'], event: 'step_end', outcome: 'success' },
-    ...pair('verify-change', [...verify, 'open-draft-pr']),
-    ...pair('verify-change', [...verify, 'verify-draft-pr']),
-    { step: 'verify-change', step_path: [...verify, 'prepare-acceptance'], event: 'step_start' },
-    ...pair('verify-change', [...verify, 'prepare-acceptance', 'sub:prepare-acceptance', 'acceptance-validator', 'sub:acceptance-validator', 'run-validator']),
-    { step: 'verify-change', step_path: [...verify, 'prepare-acceptance'], event: 'step_end', outcome: 'success' },
-    ...pair('verify-change', [...verify, 'verify-acceptance-handoff']),
-    { step: 'verify-change', step_path: ['verify-change'], event: 'step_end', outcome: 'success' },
-  ]
-  const history = checkWorkflowHistory(workflowHistory, { skipValidator: false })
-  assert.equal(history.ok, true)
-  assert.equal(history.last_observed_step, 'verify-acceptance-handoff')
-  assert.deepEqual(history.last_observed_step_path, [...verify, 'verify-acceptance-handoff'])
-  assert.equal(finalWorkflowStepEntry(workflowHistory, 'run-validator').outcome, 'success')
-  assert.deepEqual(finalWorkflowStepEntry(workflowHistory, 'run-validator').step_path, [...verify, 'run-validator'])
   const delivery = await verifyCandidateDelivery({
     worktree,
     fixtureCommit: repo.fixture,
@@ -1316,8 +1337,7 @@ test('runner main session layout produces verified scoring lineage and nested de
     expectedBase: 'main',
     changeName: 'create-and-scene',
     sessionDir,
-    skipValidator: false,
-    workflowHistory,
+    runCompleted: true,
     exec: (command, args, options) => command === 'git' && args.includes('ls-remote')
       ? { status: 0, stdout: `${finalSha}\trefs/heads/eval/and-scene/run-layout\n` }
       : exec(command, args, options),
@@ -1348,9 +1368,6 @@ test('runner main session layout produces verified scoring lineage and nested de
   })
   assert.equal(lineage.accepted, true)
   assert.equal(lineage.mode, 'tested-revision-final')
-  assert.equal(delivery.final_validator.step, 'run-validator')
-  assert.equal(delivery.final_validator.outcome, 'success')
-  assert.deepEqual(delivery.final_validator.step_path, [...verify, 'run-validator'])
   assert.equal(delivery.pull_request.head_sha, finalSha)
   assert.equal(delivery.pull_request.base, 'main')
 })

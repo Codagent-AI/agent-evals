@@ -11,7 +11,6 @@ import { fileURLToPath } from 'node:url'
 
 import { hashFile, hashJson, hashString, writeJsonAtomic } from './persistence.mjs'
 import { inspectCandidateEvidenceReadiness } from './evidence.mjs'
-import { checkWorkflowHistory, finalWorkflowStepEntry } from './workflow.mjs'
 
 export const CANDIDATE_SOURCE_MANIFEST_SCHEMA_VERSION = 1
 export const EVAL_GIT_EXCLUDES = ['/.agent-runner/config.yaml']
@@ -746,6 +745,37 @@ export async function verifyRecordedDeliveryIdentity({
   return { verified: true, branch, final_sha: recorded.final_sha ?? null }
 }
 
+function observationUnavailable(observation, error) {
+  const failure = new Error(
+    `cannot observe the ${observation} after workflow completion, so the publication boundary is unverified: ${error.message}`,
+  )
+  failure.code = 'delivery-observation-unavailable'
+  failure.owner = 'evaluation-harness'
+  failure.resumable = true
+  failure.observation = observation
+  return failure
+}
+
+// What the publication-boundary check can and cannot see. Prohibited effects
+// are detected only from observable final state, wherever in the workflow they
+// were caused; effects reversed before completion and releases are invisible.
+export const PUBLICATION_BOUNDARY_SCOPE = {
+  scope: 'final-state-only',
+  observed: [
+    'pull request state and draft status',
+    'remote candidate branch existence and head',
+    'OpenSpec change directory presence',
+  ],
+  not_detectable: [
+    'effects reversed before completion (ready then back to draft, branch deleted and recreated, archive reverted)',
+    'product releases',
+  ],
+}
+
+// Delivery is established from outcomes alone: Agent Runner's completion
+// status, the candidate repository and branch, pull-request metadata, and the
+// acceptance artifacts under the Runner session's output/ directory. No named
+// workflow step, step path, or step outcome is consulted.
 export async function verifyCandidateDelivery({
   worktree,
   fixtureCommit,
@@ -753,40 +783,22 @@ export async function verifyCandidateDelivery({
   expectedBase,
   changeName,
   sessionDir,
-  workflowHistory,
-  skipValidator = false,
+  runCompleted,
   exec = defaultExec,
   inspectPullRequest = (options) => inspectDraftPullRequest({ ...options, exec }),
 }) {
+  if (runCompleted !== true) {
+    throw deliveryError(
+      'workflow-not-completed',
+      'Agent Runner did not report the evaluated workflow run as completed successfully',
+      { missing_delivery_output: 'runner-completion' },
+    )
+  }
   if (!expectedBase) {
     throw deliveryError(
       'missing-delivery-identity',
       'candidate delivery has no recorded expected base branch',
       { missing_delivery_output: 'candidate-base-branch' },
-    )
-  }
-  const history = checkWorkflowHistory(workflowHistory, { skipValidator })
-  if (history.prohibited_effects.length > 0) {
-    const unexpected = history.prohibited_effects[0]
-    throw deliveryError(
-      'workflow-side-effect-violation',
-      `workflow-side-effect-violation: observed prohibited action ${unexpected.step}`,
-      { unexpected_action: unexpected.step, workflow_history: workflowHistory },
-    )
-  }
-  if (history.missing_steps.length > 0) {
-    throw deliveryError(
-      'incomplete-workflow-history',
-      `completed workflow history is missing: ${history.missing_steps.join(', ')}`,
-      { missing_delivery_output: history.missing_steps },
-    )
-  }
-  if (history.invalid_outcomes.length > 0) {
-    const invalid = history.invalid_outcomes[0]
-    throw deliveryError(
-      'invalid-workflow-step-outcome',
-      `${invalid.step} expected ${invalid.expected}, observed ${invalid.observed}`,
-      { invalid_workflow_outcome: invalid },
     )
   }
 
@@ -829,18 +841,24 @@ export async function verifyCandidateDelivery({
     )
   }
 
-  const remote = run(
-    exec,
-    'git',
-    ['-C', worktree, 'ls-remote', '--heads', 'origin', `refs/heads/${branch}`],
-    {},
-    'remote candidate branch lookup',
-  )
+  let remote
+  try {
+    remote = run(
+      exec,
+      'git',
+      ['-C', worktree, 'ls-remote', '--heads', 'origin', `refs/heads/${branch}`],
+      {},
+      'remote candidate branch lookup',
+    )
+  } catch (error) {
+    throw observationUnavailable('remote candidate branch', error)
+  }
   const remoteSha = remote.split(/\s+/)[0] || null
   if (remoteSha !== finalSha) {
     throw deliveryError(
-      'remote-branch-mismatch',
-      `remote candidate branch ${branch} is ${remoteSha ?? 'missing'}, expected ${finalSha}`,
+      'workflow-side-effect-violation',
+      `workflow-side-effect-violation: remote candidate branch ${branch} is ${remoteSha ?? 'missing'}, expected ${finalSha}`,
+      { unexpected_action: remoteSha ? 'remote-branch-moved' : 'delete-candidate-branch', remote_sha: remoteSha },
     )
   }
 
@@ -853,7 +871,18 @@ export async function verifyCandidateDelivery({
     )
   }
 
-  const pullRequest = normalizePullRequest(await inspectPullRequest({ worktree, branch }))
+  let observedPullRequest
+  try {
+    observedPullRequest = await inspectPullRequest({ worktree, branch })
+  } catch (error) {
+    // No pull request for the branch is missing delivery output; an
+    // unreadable answer leaves the boundary unobserved.
+    if (error.code !== 'pull-request-identity-mismatch') {
+      throw observationUnavailable('pull-request metadata', error)
+    }
+    throw error
+  }
+  const pullRequest = normalizePullRequest(observedPullRequest)
   if (!pullRequest
     || pullRequest.state !== 'OPEN'
     || pullRequest.draft !== true
@@ -866,7 +895,11 @@ export async function verifyCandidateDelivery({
       prohibited
         ? 'workflow-side-effect-violation: candidate pull request is closed, merged, or ready for review'
         : 'draft pull request does not match the recorded candidate branch and final HEAD',
-      { pull_request: pullRequest },
+      {
+        pull_request: pullRequest,
+        ...(prohibited ? { unexpected_action: pullRequest.state === 'MERGED' ? 'merge-pull-request'
+          : pullRequest.state !== 'OPEN' ? 'close-pull-request' : 'mark-ready-for-review' } : {}),
+      },
     )
   }
   if (pullRequest.base !== expectedBase) {
@@ -887,14 +920,14 @@ export async function verifyCandidateDelivery({
 
   return {
     verified: true,
+    run_status: 'completed',
     branch,
     base_branch: expectedBase,
     fixture_commit: fixtureCommit,
     final_sha: finalSha,
     remote_sha: remoteSha,
     pull_request: pullRequest,
-    final_validator: finalWorkflowStepEntry(workflowHistory, 'run-validator'),
-    workflow_history: workflowHistory,
+    publication_boundary: { verified: true, ...PUBLICATION_BOUNDARY_SCOPE },
     acceptance_artifacts: acceptance.artifacts,
     acceptance_findings: acceptance.findings,
     acceptance_missing_roles: acceptance.missing_roles,

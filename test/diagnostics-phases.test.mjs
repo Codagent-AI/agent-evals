@@ -12,9 +12,10 @@ import { runEvaluation } from '../evals/agent-runner/and-scene/controller.mjs'
 import { findingId } from '../evals/agent-runner/and-scene/lib/ambiguity.mjs'
 import { hashString, readJson, writeJsonAtomic } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
 import { MODELS_DEV_URL } from '../evals/agent-runner/and-scene/lib/pricing.mjs'
-import { WORKFLOW_RELATIVE_PATH } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
 
-const workflowYaml = `name: implement-change
+const WORKFLOW_RELATIVE_PATH = 'workflows/core/plan-and-implement-change-v1.0.yaml'
+
+const workflowYaml = `name: plan-and-implement-change
 params:
   - name: change_name
     required: true
@@ -109,7 +110,7 @@ function runMetrics(overrides = {}) {
   return {
     schema_version: 1,
     run_id: 'run-7',
-    workflow: 'implement-change',
+    workflow: 'plan-and-implement-change',
     history_complete: true,
     sessions: [{ duration_ms: 120_000, status: 'closed' }],
     steps: [attempt()],
@@ -258,7 +259,7 @@ async function evaluate(context, overrides = {}) {
     readRunnerState: () => ({
       run_id: 'run-7',
       session_dir: context.sessionDir,
-      workflow_name: 'implement-change',
+      workflow_name: 'plan-and-implement-change',
       workflow_completed: true,
       audit: { links: [{ auditRunId: 'audit-fixture', state: 'completed' }] },
     }),
@@ -280,8 +281,7 @@ async function evaluate(context, overrides = {}) {
         head_branch: 'eval/and-scene/run-1',
         head_sha: 'a'.repeat(40),
       },
-      final_validator: { step: 'run-validator', outcome: 'success' },
-      workflow_history: [],
+      run_status: 'completed',
       acceptance_artifacts: [],
     }),
     verifyResumeDelivery: async () => ({ verified: true }),

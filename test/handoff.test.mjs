@@ -8,9 +8,10 @@ import { test } from 'node:test'
 import { runEvaluation } from '../evals/agent-runner/and-scene/controller.mjs'
 import { loadCheckpoint } from '../evals/agent-runner/and-scene/lib/checkpoint.mjs'
 import { readJson } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
-import { WORKFLOW_RELATIVE_PATH } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
 
-const workflowYaml = `name: implement-change
+const WORKFLOW_RELATIVE_PATH = 'workflows/core/plan-and-implement-change-v1.0.yaml'
+
+const workflowYaml = `name: plan-and-implement-change
 params:
   - name: change_name
     required: true
@@ -194,7 +195,7 @@ async function evaluate(context, extra = {}) {
     readRunnerState: () => ({
       run_id: 'run-7',
       session_dir: '/sessions/run-7',
-      workflow_name: 'implement-change',
+      workflow_name: 'plan-and-implement-change',
       workflow_completed: true,
       audit: { links: [{ auditRunId: 'audit-fixture', state: 'completed' }] },
     }),
@@ -216,8 +217,7 @@ async function evaluate(context, extra = {}) {
         head_branch: 'eval/and-scene/run-1',
         head_sha: 'a'.repeat(40),
       },
-      final_validator: { step: 'run-validator', outcome: 'success' },
-      workflow_history: [],
+      run_status: 'completed',
       acceptance_artifacts: [],
     }),
     isProcessAlive: () => false,

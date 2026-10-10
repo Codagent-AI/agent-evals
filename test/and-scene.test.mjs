@@ -29,9 +29,9 @@ function git(cwd, ...args) {
   assert.equal(result.status, 0, result.stderr)
 }
 
-// The scored path now requires a clean Agent Runner worktree containing
-// core implement-change-v1.0, so the fixture runner directory is a real Git checkout.
-async function setup({ workflow = 'name: implement-change\n', dirty = false } = {}) {
+// The scored path requires a clean Agent Runner worktree containing the
+// selected workflow, so the fixture runner directory is a real Git checkout.
+async function setup({ workflow = 'name: plan-and-implement-change\n', dirty = false, extraWorkflows = {} } = {}) {
   const dir = await makeTempDir(join(tmpdir(), 'agent-evals-'))
   const runner = join(dir, 'agent-runner')
   const agentSkills = join(dir, 'agent-skills')
@@ -48,7 +48,11 @@ async function setup({ workflow = 'name: implement-change\n', dirty = false } = 
   await chmod(sandbox, 0o755)
   if (workflow !== null) {
     await mkdir(join(runner, 'workflows/core'), { recursive: true })
-    await writeFile(join(runner, 'workflows/core/implement-change-v1.0.yaml'), workflow)
+    await writeFile(join(runner, 'workflows/core/plan-and-implement-change-v1.0.yaml'), workflow)
+  }
+  for (const [file, text] of Object.entries(extraWorkflows)) {
+    await mkdir(dirname(join(runner, file)), { recursive: true })
+    await writeFile(join(runner, file), text)
   }
   git(runner, 'init', '-q')
   git(runner, 'add', '-A')
@@ -238,16 +242,40 @@ test('scored mode validates provenance from the mounted Agent Runner checkout', 
   )
 })
 
-test('scored mode hard-codes core implement-change-v1.0 and no longer accepts workflow overrides', async () => {
+test('scored mode evaluates core:plan-and-implement-change by default', async () => {
   const context = await setup()
 
   const result = await scored(context, ['--skip-validator', ...profileArgs])
-  const overridden = await scored(context, ['--workflow', '/tmp/custom.yaml', ...profileArgs])
 
-  assert.ok(result.output.includes('implement-change-v1.0'), result.output)
-  assert.ok(!result.output.includes('implement-change.yaml'), result.output)
-  assert.notEqual(overridden.status, 0)
-  assert.match(overridden.output, /Unknown option: --workflow/)
+  assert.equal(result.status, 0, result.output)
+  assert.match(result.output, /--workflow core:plan-and-implement-change/)
+  assert.match(result.output, /IMPLEMENTATION_WORKFLOW=core:plan-and-implement-change/)
+  assert.match(result.output, /IMPLEMENTATION_WORKFLOW_PATH=workflows\/core\/plan-and-implement-change-v1\.0\.yaml/)
+})
+
+test('scored mode passes a selected logical workflow to the controller and skills bootstrap', async () => {
+  const context = await setup({
+    extraWorkflows: {
+      'workflows/core/orchestrated-implement-change-v1.0.yaml': 'name: old\n',
+      'workflows/core/orchestrated-implement-change-v1.2.yaml': 'name: orchestrated-implement-change\n',
+    },
+  })
+
+  const result = await scored(context, ['--workflow', 'core:orchestrated-implement-change', ...profileArgs])
+
+  assert.equal(result.status, 0, result.output)
+  assert.match(result.output, /--workflow core:orchestrated-implement-change/)
+  assert.match(result.output, /IMPLEMENTATION_WORKFLOW_PATH=workflows\/core\/orchestrated-implement-change-v1\.2\.yaml/)
+})
+
+test('scored mode rejects a workflow file path or malformed reference', async () => {
+  const context = await setup()
+
+  const result = await scored(context, ['--workflow', '/tmp/custom.yaml', ...profileArgs])
+
+  assert.notEqual(result.status, 0)
+  assert.match(result.output, /logical workflow reference/)
+  assert.ok(!result.output.includes('/eval-input/controller.mjs'), result.output)
 })
 
 test('scored mode no longer carries the legacy reward and tier scoring lifecycle', async () => {
@@ -438,6 +466,7 @@ test('an evaluator-only rescore mounts a completed run read-only and invokes no 
   assert.ok(!result.output.includes('bootstrap-agent-skills.sh'), result.output)
   assert.ok(!result.output.includes('--lead-cli'), result.output)
   assert.ok(!result.output.includes('--change-name'), result.output)
+  assert.ok(!result.output.includes('--workflow'), result.output)
   assert.ok(result.output.includes('--mount-claude-auth'), result.output)
   assert.ok(result.output.includes('--mount-codex-auth'), result.output)
 })
@@ -465,6 +494,7 @@ test('an evaluator-only rescore rejects modes that could mutate or replace its r
     ['--resume'],
     ['--reference-baseline'],
     ['--candidate-ref', referenceSha],
+    ['--workflow', 'core:plan-and-implement-change'],
   ]) {
     const result = await scored(context, ['--rescore-from', source, ...conflicting])
     assert.notEqual(result.status, 0)
@@ -482,13 +512,14 @@ test('a dirty Agent Runner checkout is rejected on the host before the sandbox r
   assert.ok(!result.output.includes('/eval-input/controller.mjs'), result.output)
 })
 
-test('an Agent Runner checkout without core implement-change-v1.0 is rejected on the host', async () => {
+test('an Agent Runner checkout without the selected workflow is rejected on the host', async () => {
   const context = await setup({ workflow: null })
 
   const result = await scored(context, ['--skip-validator', ...profileArgs])
 
   assert.notEqual(result.status, 0)
-  assert.match(result.output, /implement-change-v1\.0\.yaml/)
+  assert.match(result.output, /core:plan-and-implement-change/)
+  assert.ok(!result.output.includes('/eval-input/controller.mjs'), result.output)
 })
 
 test('the run receives a stable container identity that resume reuses', async () => {
@@ -648,7 +679,10 @@ test('help documents the exact fixture pin, role profiles, and validator option'
   assert.ok(result.stdout.includes(referenceSha))
   assert.ok(result.stdout.includes('--agent-runner-dir PATH'))
   assert.ok(result.stdout.includes('--skip-validator'))
-  assert.match(result.stdout, /skip all Agent Validator\s+execution/i)
+  assert.match(result.stdout, /which owns its meaning/)
+  assert.match(result.stdout, /requested Validator mode/)
+  assert.ok(result.stdout.includes('--workflow REF'))
+  assert.ok(result.stdout.includes('Default: core:plan-and-implement-change'))
   assert.ok(result.stdout.includes('--lead-cli'))
   assert.ok(result.stdout.includes('--crosscheck-cli'))
   assert.ok(result.stdout.includes('--crosscheck-model'))

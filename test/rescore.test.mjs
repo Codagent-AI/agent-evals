@@ -193,7 +193,7 @@ test('candidate rescore rejects a source that did not complete the full workflow
   )
 })
 
-test('candidate rescore rejects validation history that contradicts skip-validator mode', async () => {
+test('candidate rescore trusts the recorded Validator mode rather than verifying it from step outcomes', async () => {
   const context = await sourceRun()
   const deliveryPath = join(context.sourceDir, 'phases/delivery-verification.json')
   const resultPath = join(context.sourceDir, 'result.json')
@@ -212,10 +212,26 @@ test('candidate rescore rejects validation history that contradicts skip-validat
   await writeFile(runStatePath, `${JSON.stringify(context.state)}\n`)
   await writeFile(resultPath, `${JSON.stringify(result)}\n`)
 
-  await assert.rejects(
-    () => loadCandidateRescoreSource({ sourceDir: context.sourceDir }),
-    /full implementation workflow|validator/i,
-  )
+  const imported = await loadCandidateRescoreSource({ sourceDir: context.sourceDir })
+  assert.equal(imported.source_run_id, context.state.run_id)
+})
+
+test('candidate rescore reads the retained Runner completion status when the source recorded one', async () => {
+  for (const [completed, accepted] of [[true, true], [false, false]]) {
+    const context = await sourceRun({ historyComplete: false })
+    const resultPath = join(context.sourceDir, 'result.json')
+    const result = JSON.parse(await readFile(resultPath, 'utf8'))
+    result.workflow.run_completed = completed
+    await writeFile(resultPath, `${JSON.stringify(result)}\n`)
+    if (accepted) {
+      await loadCandidateRescoreSource({ sourceDir: context.sourceDir })
+    } else {
+      await assert.rejects(
+        () => loadCandidateRescoreSource({ sourceDir: context.sourceDir }),
+        /full implementation workflow/i,
+      )
+    }
+  }
 })
 
 test('candidate rescore rejects a missing or malformed workflow change name', async () => {
