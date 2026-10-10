@@ -1086,7 +1086,7 @@ test('a fresh Runner execution waits for its linked audit before delivery verifi
   assert.deepEqual(report.workflow.linked_audits, execution.linked_audits)
 })
 
-test('a completed core implement-change run without a linked audit starts replay and waits', async () => {
+test('a completed evaluated-workflow run without a linked audit starts replay and waits', async () => {
   const context = await environment()
   const waited = []
   // The sandbox has no reporting connection, so the replayed audit's report
