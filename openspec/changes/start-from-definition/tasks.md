@@ -1,0 +1,8 @@
+- [ ] Implement the change described by these files:
+  - [proposal.md](proposal.md)
+  - [specs/runner-workflow-execution/spec.md](specs/runner-workflow-execution/spec.md)
+  - [specs/agent-role-configuration/spec.md](specs/agent-role-configuration/spec.md)
+  - [specs/product-quality-scoring/spec.md](specs/product-quality-scoring/spec.md)
+  - [specs/evaluation-outcomes/spec.md](specs/evaluation-outcomes/spec.md)
+  - [specs/evaluation-metrics-reporting/spec.md](specs/evaluation-metrics-reporting/spec.md)
+  - [design.md](design.md)
