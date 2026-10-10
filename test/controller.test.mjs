@@ -1,13 +1,14 @@
 import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { lstat, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 
 import { runEvaluation } from '../evals/agent-runner/and-scene/controller.mjs'
 import { loadCheckpoint } from '../evals/agent-runner/and-scene/lib/checkpoint.mjs'
-import { hashString, readJson } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
+import { hashJson, hashString, readJson } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
+import { verifyCandidateDelivery } from '../evals/agent-runner/and-scene/lib/candidate.mjs'
 import { DEMO_CONTRACT } from '../evals/agent-runner/and-scene/lib/demo-contract.mjs'
 
 const WORKFLOW_RELATIVE_PATH = 'workflows/core/plan-and-implement-change-v1.0.yaml'
@@ -281,6 +282,7 @@ function importedRescore(context, { changeName = 'create-and-scene' } = {}) {
     },
     delivery: importedDelivery,
     runner: { run_id: 'runner-complete', session_dir: context.root },
+    run_completed: true,
     role_profiles: {
       lead: { cli: 'claude', model: 'opus', effort: 'high', agent: 'lead' },
       implementor: { cli: 'claude', model: 'sonnet', effort: 'medium', agent: 'implementor' },
@@ -1571,12 +1573,14 @@ test('an evaluator-only rescore imports a completed candidate and never starts A
 
   const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
     controllerChangeName: null,
-    verifyDelivery: async () => {
-      throw new Error('rescore must not rediscover historical artifact paths')
-    },
-    verifyResumeDelivery: async ({ recorded }) => {
-      identityReverified = recorded.final_sha === context.commit
-      return { verified: true }
+    // Delivery goes through the outcome checks; whatever artifact paths they
+    // rediscover, the hash-verified recorded evidence is what is kept.
+    verifyDelivery: async ({ runCompleted, sessionDir }) => {
+      identityReverified = runCompleted === true && sessionDir === context.root
+      return {
+        ...delivery(context),
+        acceptance_artifacts: [{ role: 'acceptance-handoff', path: '/rediscovered/handoff.md', sha256: 'c'.repeat(64) }],
+      }
     },
     loadRescoreSource: async () => importedRescore(context, {
       changeName: 'custom-scene-change',
@@ -1598,6 +1602,8 @@ test('an evaluator-only rescore imports a completed candidate and never starts A
   assert.equal(written.mode, 'agent-runner')
   assert.equal(written.score_denominator, 100)
   assert.equal(written.delivery.final_sha, context.commit)
+  const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
+  assert.deepEqual(state.delivery.acceptance.artifacts, delivery(context).acceptance_artifacts)
   assert.equal(written.workflow.run_id, 'runner-complete')
   assert.equal(written.workflow.events[0].event, 'imported-completed-run')
 })
@@ -1613,9 +1619,6 @@ test('a rescore pins judged requirements to the imported run\'s recorded fixture
   let pinned = null
 
   const result = await evaluate({ ...context, exec }, ['--rescore-from', '/rescore-source'], {
-    verifyDelivery: async () => {
-      throw new Error('rescore must not rediscover historical artifact paths')
-    },
     loadRescoreSource: async () => {
       const imported = importedRescore(context)
       return { ...imported, candidate_source: { ...imported.candidate_source, fixture_commit: olderFixture } }
@@ -1635,9 +1638,6 @@ test('a rescore restores a missing Runner session under the run directory and re
   let staging = null
   const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
     controllerChangeName: null,
-    verifyDelivery: async () => {
-      throw new Error('rescore must not rediscover historical artifact paths')
-    },
     loadRescoreSource: async ({ stagingDir }) => {
       staging = stagingDir
       return { ...importedRescore(context), session_reconstruction: { source: 'evidence/candidate/artifacts', files: 3 } }
@@ -1660,9 +1660,6 @@ test('a rescore of an older run scores the engineering-quality component afresh'
   let servedIdentity = null
   const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
     controllerChangeName: null,
-    verifyDelivery: async () => {
-      throw new Error('rescore must not rediscover historical artifact paths')
-    },
     loadRescoreSource: async () => importedRescore(context),
     browserDriver: browserDemo(),
     isProcessAlive: () => true,
@@ -1701,9 +1698,6 @@ test('a host rescore leaves an existing Agent Runner projects store in the home 
   await mkdir(join(context.home, '.agent-runner/projects/someone-else'), { recursive: true })
   const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
     controllerChangeName: null,
-    verifyDelivery: async () => {
-      throw new Error('rescore must not rediscover historical artifact paths')
-    },
     loadRescoreSource: async () => importedRescore(context),
   })
 
@@ -1745,9 +1739,6 @@ test('a rescore of a source without recorded metrics reads them from the Runner 
   const context = await environment()
   const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
     controllerChangeName: null,
-    verifyDelivery: async () => {
-      throw new Error('rescore must not rediscover historical artifact paths')
-    },
     loadRescoreSource: async () => ({ ...importedRescore(context), implementation_metrics: null, cost: null, pricing: null }),
   })
 
@@ -1863,6 +1854,226 @@ test('rescore starts the candidate server and confirms a browser overturn by rep
   assert.ok(lifecycle.lastIndexOf('release') > lifecycle.lastIndexOf('replay'), lifecycle.join(' '))
 })
 
+// A source recorded by the implement-only workflow: `core:implement-change`
+// against the hand-written-tasks fixture f0695b9, with lead, implementor, and
+// tester profiles only and the history-verdict completion record of its time.
+const LEGACY_FIXTURE = 'f0695b96c0c23b2d17ecc6cfbaf8be1fcdedd6f8'
+const LEGACY_SESSION = '.runtime/agent-runner-projects/-artifacts--runtime-candidate-worktree/runs/implement-change-2026-08-28T20-15-27Z'
+const LEGACY_PROFILES = {
+  lead: { cli: 'codex', model: 'gpt-5', effort: 'high', agent: 'lead' },
+  implementor: { cli: 'claude', model: 'sonnet', effort: 'medium', agent: 'implementor' },
+  tester: { cli: 'claude', model: 'opus', effort: 'high', agent: 'tester' },
+}
+
+async function legacyImplementOnlySource(context, { retainSession = true } = {}) {
+  const sourceDir = await makeTempDir(join(tmpdir(), 'and-scene-legacy-source-'))
+  const sessionDir = join(sourceDir, LEGACY_SESSION)
+  const evidence = [
+    ['final-handoff', 'acceptance-handoff.md', `Ready SHA: ${context.commit}\n`],
+    ['findings-history', 'acceptance-findings.md', 'No remaining findings.\n'],
+  ]
+  const artifacts = []
+  for (const [role, relativePath, bytes] of evidence) {
+    await mkdir(join(sessionDir, 'output'), { recursive: true })
+    await writeFile(join(sessionDir, 'output', relativePath), bytes)
+    artifacts.push({ role, path: `/artifacts/${LEGACY_SESSION}/output/${relativePath}`, sha256: hashString(bytes) })
+  }
+  const recordedDelivery = {
+    ...delivery(context),
+    base_branch: 'main',
+    fixture_commit: LEGACY_FIXTURE,
+    acceptance_artifacts: artifacts,
+  }
+  const arguments_ = [
+    'change_name=create-and-scene',
+    'change_dir=openspec/changes/create-and-scene',
+    'skip_validator=false',
+  ]
+  const candidateSource = {
+    repository: 'github.com/Codagent-AI/and-scene',
+    fixture_commit: LEGACY_FIXTURE,
+    branch: recordedDelivery.branch,
+    base_branch: 'main',
+  }
+  const state = {
+    schema_version: 2,
+    state_kind: 'and-scene-run-state',
+    run_id: 'legacy-implement-only',
+    run_kind: 'candidate',
+    identity: { candidate_repository: candidateSource.repository },
+    candidate_source: candidateSource,
+    delivery: {
+      applicable: true,
+      ...candidateSource,
+      origin: candidateSource.repository,
+      pull_request: recordedDelivery.pull_request,
+      final_sha: recordedDelivery.final_sha,
+      acceptance: { artifacts },
+    },
+    agent_runner: { run_id: 'implement-change-2026-08-28', session_dir: `/artifacts/${LEGACY_SESSION}` },
+    role_profiles: LEGACY_PROFILES,
+    agent_runner_provenance: { commit: '3'.repeat(40), workflow_sha256: '4'.repeat(64), complete: true },
+    agent_skills_provenance: { commit: '5'.repeat(40), manifest_sha256: '6'.repeat(64), complete: true },
+  }
+  const result = {
+    schema_version: 4,
+    run_id: state.run_id,
+    run_kind: 'candidate',
+    mode: 'agent-runner',
+    candidate_source: candidateSource,
+    workflow: {
+      workflow: 'implement-change',
+      workflow_path: 'workflows/core/implement-change-v1.0.yaml',
+      arguments: arguments_,
+      full_workflow: true,
+      history_complete: true,
+      missing_steps: [],
+      prohibited_effects: [],
+    },
+    role_configuration: {
+      applicable: true,
+      roles: {
+        lead: { configured: LEGACY_PROFILES.lead, attempts: [] },
+        implementor: { configured: LEGACY_PROFILES.implementor, attempts: [] },
+        reviewer: { configured: LEGACY_PROFILES.tester, attempts: [] },
+      },
+    },
+  }
+  if (!retainSession) {
+    // A factory run keeps hash-verified copies but drops its Runner session.
+    const retained = []
+    for (const [index, [role, relativePath, bytes]] of evidence.entries()) {
+      const path = `evidence/candidate/artifacts/candidate-${index}-${relativePath}`
+      await mkdir(join(sourceDir, 'evidence/candidate/artifacts'), { recursive: true })
+      await writeFile(join(sourceDir, path), bytes)
+      retained.push({ id: `candidate-${index}`, role,
+        origin: { namespace: 'runner-session', relative_path: `output/${relativePath}` },
+        path, sha256: hashString(bytes) })
+    }
+    const manifest = { schema_version: 1, ownership: 'candidate-produced', artifacts: retained }
+    manifest.manifest_sha256 = hashJson(manifest)
+    await writeFile(join(sourceDir, 'evidence/candidate/manifest.json'), `${JSON.stringify(manifest)}\n`)
+    state.delivery.acceptance.manifest_sha256 = manifest.manifest_sha256
+    // Its run state predates recorded role profiles; its result names them.
+    delete state.role_profiles
+    await rm(join(sourceDir, '.runtime'), { recursive: true, force: true })
+  }
+  await mkdir(join(sourceDir, 'phases'), { recursive: true })
+  await writeFile(join(sourceDir, 'run-state.json'), `${JSON.stringify(state)}\n`)
+  await writeFile(join(sourceDir, 'result.json'), `${JSON.stringify(result)}\n`)
+  await writeFile(join(sourceDir, 'phases/delivery-verification.json'), `${JSON.stringify(recordedDelivery)}\n`)
+  return { sourceDir, sessionDir, artifacts }
+}
+
+// The outcome-based checks a new run's delivery goes through, observing a
+// remote branch and draft pull request that still match the recorded delivery.
+function observedLegacyDelivery(context, calls) {
+  const exec = (command, args, options) => (
+    command === 'git' && args.includes('ls-remote') && args.includes('--heads')
+      ? { status: 0, stdout: `${context.commit}\trefs/heads/eval/and-scene/run-1\n` }
+      : context.exec(command, args, options)
+  )
+  return async (options) => {
+    const handoff = await readFile(join(options.sessionDir, 'output/acceptance-handoff.md'), 'utf8')
+    calls.push({ ...options, handoff })
+    return verifyCandidateDelivery({
+      ...options,
+      exec,
+      inspectPullRequest: async () => delivery(context).pull_request,
+    })
+  }
+}
+
+async function rescoreLegacySource({ retainSession }) {
+  const context = await environment({ commit: LEGACY_FIXTURE, planningReady: false })
+  await mkdir(join(context.runDir, '.runtime/candidate-worktree/openspec/changes/create-and-scene'), { recursive: true })
+  const source = await legacyImplementOnlySource(context, { retainSession })
+  const calls = []
+  const result = await evaluate(context, ['--rescore-from', source.sourceDir], {
+    controllerChangeName: null,
+    verifyDelivery: observedLegacyDelivery(context, calls),
+    verifyResumeDelivery: async () => {
+      throw new Error('a rescore verifies delivery through the outcome checks, not the step-era identity check')
+    },
+  })
+  return { context, source, calls, result }
+}
+
+function assertLegacyRescore({ context, calls, result }) {
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  // Agent Runner is never invoked in any form, and no planning preflight reads
+  // the fixture's definition files.
+  assert.deepEqual(context.invocations.filter(({ command }) => command === 'agent-runner'), [])
+  assert.deepEqual(context.invocations.filter(({ command, args }) => (
+    command === 'git' && args.includes('show') && args.some((arg) => /\/(?:test-plan|tasks)\.md$/.test(arg))
+  )), [])
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].runCompleted, true)
+  assert.equal(calls[0].fixtureCommit, LEGACY_FIXTURE)
+  assert.equal(calls[0].handoff, `Ready SHA: ${context.commit}\n`)
+}
+
+async function assertLegacyRecord(context, source) {
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(written.workflow.workflow, 'implement-change')
+  assert.equal(written.workflow.runner_workflow_name, 'implement-change')
+  assert.equal(written.workflow.workflow_path, 'workflows/core/implement-change-v1.0.yaml')
+  assert.deepEqual(written.workflow.arguments, [
+    'change_name=create-and-scene',
+    'change_dir=openspec/changes/create-and-scene',
+    'skip_validator=false',
+  ])
+  assert.equal(written.candidate_source.fixture_commit, LEGACY_FIXTURE)
+  assert.deepEqual(Object.keys(written.role_configuration.roles).sort(), ['implementor', 'lead', 'tester'])
+  assert.equal(written.delivery.publication_boundary.verified, true)
+  const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
+  assert.deepEqual(state.role_profiles, LEGACY_PROFILES)
+  assert.deepEqual(
+    state.delivery.acceptance.artifacts.map(({ role, sha256 }) => ({ role, sha256 })),
+    source.artifacts.map(({ role, sha256 }) => ({ role, sha256 })),
+  )
+}
+
+test('a three-role implement-only source with a retained Runner session is rescored from its completion record', async () => {
+  const run = await rescoreLegacySource({ retainSession: true })
+
+  assertLegacyRescore(run)
+  assert.equal(run.calls[0].sessionDir, await realpath(run.source.sessionDir))
+  await assertLegacyRecord(run.context, run.source)
+})
+
+test('a three-role implement-only source with reconstructed evidence is rescored without live Runner state', async () => {
+  const run = await rescoreLegacySource({ retainSession: false })
+
+  assertLegacyRescore(run)
+  assert.equal(run.calls[0].sessionDir, join(run.context.runDir, '.runtime/rescore-session'))
+  await assertLegacyRecord(run.context, run.source)
+  const written = await readJson(join(run.context.runDir, 'result.json'))
+  assert.equal(written.workflow.events[0].session_reconstruction.source, 'evidence/candidate/artifacts')
+})
+
+test('a rescore whose source recorded no role profiles is refused rather than validated as a new run', async () => {
+  const context = await environment()
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source', ...profiles], {
+    loadRescoreSource: async () => ({ ...importedRescore(context), role_profiles: null }),
+  })
+
+  assert.equal(result.exitCode, 2)
+  assert.ok(result.errors.some(({ code }) => code === 'invalid-rescore-source'), JSON.stringify(result.errors))
+})
+
+test('a rescore refuses a source whose observed delivery no longer matches its recorded pull request', async () => {
+  const context = await environment()
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    loadRescoreSource: async () => importedRescore(context),
+    verifyDelivery: async () => ({ ...delivery(context), pull_request: { ...delivery(context).pull_request, number: 54 } }),
+  })
+
+  assert.notEqual(result.exitCode, 0)
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(written.failed_phase, 'delivery-verification')
+})
+
 test('an evaluator-only rescore accepts a historical reviewer profile as tester', async () => {
   const context = await environment()
 
@@ -1873,12 +2084,6 @@ test('an evaluator-only rescore accepts a historical reviewer profile as tester'
     '--tester-effort', 'high',
   ], {
     controllerChangeName: null,
-    verifyDelivery: async () => {
-      throw new Error('rescore must not rediscover historical artifact paths')
-    },
-    verifyResumeDelivery: async ({ recorded }) => ({
-      verified: recorded.final_sha === context.commit,
-    }),
     loadRescoreSource: async () => {
       const imported = importedRescore(context, { changeName: 'custom-scene-change' })
       const { tester: _tester, ...profiles } = imported.role_profiles

@@ -36,7 +36,7 @@ import {
   verifyCandidateDelivery,
   verifyRecordedDeliveryIdentity,
 } from './lib/candidate.mjs'
-import { loadCandidateRescoreSource } from './lib/rescore.mjs'
+import { loadCandidateRescoreSource, verifyRescoreDelivery } from './lib/rescore.mjs'
 import { runCandidateVerification } from './lib/candidate-verification.mjs'
 import { createHostCandidateServer } from './lib/candidate-server-host.mjs'
 import { aggregateImplementationCost, summarizeEvalOwnedUsage } from './lib/cost.mjs'
@@ -404,6 +404,10 @@ export async function runEvaluation({
   const importedProfiles = normalizeRoleProfiles(importedRun?.role_profiles)
   // A rescore keeps the roles its source recorded: a run from before the
   // crosscheck role validates its three profiles without an invented fourth.
+  // A source that recorded none is not validated as a new run would be.
+  if (rescore && (!importedProfiles || Object.keys(importedProfiles).length === 0)) {
+    return failure([{ code: 'invalid-rescore-source', message: 'rescore source records no role profiles' }])
+  }
   const validation = validateRoleProfiles({
     lead: importedProfiles?.lead ?? roleProfileFrom(options, 'lead'),
     crosscheck: importedProfiles?.crosscheck ?? roleProfileFrom(options, 'crosscheck'),
@@ -411,7 +415,7 @@ export async function runEvaluation({
     tester: importedProfiles?.tester ?? roleProfileFrom(options, 'tester'),
     capabilities,
     mode,
-    importedRoles: importedProfiles ? Object.keys(importedProfiles) : null,
+    importedRoles: rescore ? Object.keys(importedProfiles) : null,
   })
   if (!validation.ok) {
     return failure(validation.errors.map((error) => ({ code: 'invalid-role-profile', ...error })))
@@ -1177,13 +1181,14 @@ export async function runEvaluation({
       if (mode === 'reference-baseline') return
       try {
         if (rescore) {
-          const revalidate = verifyResumeDelivery ?? verifyRecordedDeliveryIdentity
-          await revalidate({
+          // The same outcome checks as a new run, with the source's retained
+          // completion record in place of live Runner status.
+          record.delivery = await verifyRescoreDelivery({
+            imported: importedRun,
             worktree: candidateWorktree,
-            recorded: importedRun.delivery,
             exec,
+            verify: verifyDelivery ?? verifyCandidateDelivery,
           })
-          record.delivery = importedRun.delivery
         } else {
           const verifier = verifyDelivery ?? verifyCandidateDelivery
           record.delivery = await verifier({
@@ -1843,7 +1848,7 @@ export async function runEvaluation({
           full_workflow: true,
           // Agent Runner's own completion status for the evaluated run.
           run_completed: rescore
-            ? (importedRun.workflow.run_completed ?? importedRun.workflow.history_complete ?? null)
+            ? (importedRun.run_completed ?? null)
             : (mode === 'reference-baseline' ? null : record.runCompleted),
           ...summarizeObservedSteps(record.observed_steps),
           publication_boundary: record.delivery?.publication_boundary

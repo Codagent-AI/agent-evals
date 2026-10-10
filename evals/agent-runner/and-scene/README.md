@@ -317,6 +317,14 @@ branch, draft PR, and final SHA, then runs only evaluator-owned phases. It does
 not invoke Agent Runner, repeat acceptance, create or push a branch, or modify
 the candidate.
 
+The rescore keeps the source's recorded workflow, arguments, fixture commit,
+and role profiles. A source recorded before the crosscheck role, such as a
+`core:implement-change` run at `f0695b9`, needs no crosscheck profile, and the
+definition-only fixture preflight does not apply. Delivery goes through the
+same outcome checks as a new run, with the source's retained completion status
+in place of live Runner state, and must still match the recorded draft PR and
+final SHA.
+
 A factory artifact may no longer hold `.runtime/agent-runner-projects`, where
 the recorded Runner session lived. The rescore then restores the session's
 acceptance evidence from `evidence/candidate/artifacts` into

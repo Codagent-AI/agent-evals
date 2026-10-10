@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { hashJson, hashString } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
-import { loadCandidateRescoreSource } from '../evals/agent-runner/and-scene/lib/rescore.mjs'
+import { loadCandidateRescoreSource, verifyRescoreDelivery } from '../evals/agent-runner/and-scene/lib/rescore.mjs'
 
 const fixtureSha = '1'.repeat(40)
 const finalSha = '2'.repeat(40)
@@ -367,5 +367,119 @@ test('a referenced worktree file whose retained copy differs is refused', async 
   await assert.rejects(
     () => loadCandidateRescoreSource({ sourceDir: context.sourceDir, stagingDir }),
     /missing and not retained/,
+  )
+})
+
+// A source recorded before the crosscheck role, or before run-state kept its
+// role profiles, still names the roles it ran with in its result.
+test('a source without recorded run-state profiles imports the roles its result configured', async () => {
+  const context = await sourceRun()
+  const { role_profiles: profiles, ...state } = context.state
+  await writeFile(join(context.sourceDir, 'run-state.json'), `${JSON.stringify(state)}\n`)
+  const resultPath = join(context.sourceDir, 'result.json')
+  const result = JSON.parse(await readFile(resultPath, 'utf8'))
+  result.role_configuration = {
+    applicable: true,
+    roles: {
+      lead: { configured: profiles.lead, attempts: [] },
+      implementor: { configured: profiles.implementor, attempts: [] },
+      reviewer: { configured: profiles.tester, attempts: [] },
+    },
+  }
+  await writeFile(resultPath, `${JSON.stringify(result)}\n`)
+
+  const imported = await loadCandidateRescoreSource({ sourceDir: context.sourceDir })
+
+  assert.deepEqual(imported.role_profiles, profiles)
+})
+
+test('a source that recorded no role profiles anywhere is refused rather than given invented ones', async () => {
+  const context = await sourceRun()
+  const { role_profiles: _profiles, ...state } = context.state
+  await writeFile(join(context.sourceDir, 'run-state.json'), `${JSON.stringify(state)}\n`)
+
+  await assert.rejects(
+    () => loadCandidateRescoreSource({ sourceDir: context.sourceDir }),
+    /records no role profiles/i,
+  )
+})
+
+test('an imported source carries its retained completion status, whichever form it was recorded in', async () => {
+  const legacy = await sourceRun()
+  assert.equal((await loadCandidateRescoreSource({ sourceDir: legacy.sourceDir })).run_completed, true)
+
+  const recorded = await sourceRun({ historyComplete: false })
+  const resultPath = join(recorded.sourceDir, 'result.json')
+  const result = JSON.parse(await readFile(resultPath, 'utf8'))
+  result.workflow.run_completed = true
+  await writeFile(resultPath, `${JSON.stringify(result)}\n`)
+  assert.equal((await loadCandidateRescoreSource({ sourceDir: recorded.sourceDir })).run_completed, true)
+})
+
+function observedDelivery(imported, overrides = {}) {
+  return {
+    verified: true,
+    run_status: 'completed',
+    branch: imported.delivery.branch,
+    base_branch: imported.delivery.base_branch,
+    fixture_commit: imported.candidate_source.fixture_commit,
+    final_sha: imported.delivery.final_sha,
+    remote_sha: imported.delivery.final_sha,
+    pull_request: { ...imported.delivery.pull_request },
+    publication_boundary: { verified: true, scope: 'final-state-only' },
+    acceptance_artifacts: [{ role: 'final-handoff', path: '/rediscovered/acceptance-handoff.md', sha256: 'c'.repeat(64) }],
+    ...overrides,
+  }
+}
+
+test('rescore delivery runs the outcome checks against the retained completion status and session', async () => {
+  const context = await sourceRun()
+  const imported = await loadCandidateRescoreSource({ sourceDir: context.sourceDir })
+  let received = null
+
+  const delivery = await verifyRescoreDelivery({
+    imported,
+    worktree: '/candidate',
+    exec: () => ({ status: 0 }),
+    verify: async (options) => {
+      received = options
+      return observedDelivery(imported)
+    },
+  })
+
+  assert.equal(received.runCompleted, true)
+  assert.equal(received.sessionDir, imported.runner.session_dir)
+  assert.equal(received.fixtureCommit, fixtureSha)
+  assert.equal(received.branch, imported.delivery.branch)
+  assert.equal(received.expectedBase, 'main')
+  assert.equal(received.changeName, 'create-and-scene')
+  assert.equal(received.worktree, '/candidate')
+  // The hash-verified recorded evidence is kept, never the rediscovered paths.
+  assert.deepEqual(delivery.acceptance_artifacts, imported.delivery.acceptance_artifacts)
+  assert.equal(delivery.run_status, 'completed')
+  assert.deepEqual(delivery.publication_boundary, { verified: true, scope: 'final-state-only' })
+})
+
+test('rescore delivery refuses an outcome that no longer matches the recorded delivery identity', async () => {
+  const context = await sourceRun()
+  const imported = await loadCandidateRescoreSource({ sourceDir: context.sourceDir })
+
+  await assert.rejects(
+    () => verifyRescoreDelivery({
+      imported,
+      worktree: '/candidate',
+      verify: async () => observedDelivery(imported, {
+        pull_request: { ...imported.delivery.pull_request, number: 10 },
+      }),
+    }),
+    /pull request number/,
+  )
+  await assert.rejects(
+    () => verifyRescoreDelivery({
+      imported,
+      worktree: '/candidate',
+      verify: async () => observedDelivery(imported, { final_sha: '3'.repeat(40) }),
+    }),
+    /final_sha/,
   )
 })
