@@ -126,6 +126,11 @@ export function resolveBoundary({
     workflow_sha256: definitionSha256,
     // Baseline identity compares `workflow_path`; the resolved-definition hash
     // distinguishes workflow versions without depending on a file layout.
+    // Despite its name this is not a path: earlier results stored a relative
+    // file path here, and keeping the field name lets the baseline refuse to
+    // pair those results with these. The file path lives in
+    // `provenance.workflow_path` (see lib/provenance.mjs), which is never
+    // compared.
     workflow_path: definitionSha256,
     skip_validator: skip,
     // The evaluated workflow owns the meaning of skip_validator. The harness

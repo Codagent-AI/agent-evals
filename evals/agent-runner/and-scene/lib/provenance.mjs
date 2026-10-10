@@ -90,6 +90,9 @@ export async function readWorkflowProvenance({ agentRunnerDir, workflow = DEFAUL
     commit,
     clean: true,
     workflow,
+    // The absolute file path read in the checkout, kept for diagnosis. Not the
+    // baseline-identity `workflow.workflow_path`, which holds the definition
+    // hash (see lib/workflow.mjs).
     workflow_path: workflowPath,
     workflow_relative_path: relativePath,
     workflow_sha256: hashString(workflowText),

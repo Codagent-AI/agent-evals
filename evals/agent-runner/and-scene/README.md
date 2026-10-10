@@ -559,6 +559,16 @@ suite records whichever commit, workflow hash, and CLI version it used. The
 Agent Skills checkout must also be clean; the suite records its commit and
 plugin manifest hash.
 
+`result.json` holds two fields named `workflow_path` with different meanings.
+`workflow.workflow_path` is baseline identity, which the experiment baseline
+compares. From this starting line it holds the resolved-definition hash, the
+same value as `workflow.workflow_sha256`, so workflow versions differ without
+depending on a file layout; earlier results hold the workflow file path
+relative to the Agent Runner checkout, so the two series never match on it.
+`workflow.provenance.workflow_path` is the absolute path of the workflow file
+the suite read in the Agent Runner checkout. It is diagnostic only and is never
+compared.
+
 Delivery is verified from outcomes alone, whatever steps the workflow ran:
 Agent Runner's completion status, the candidate branch and remote head, the open
 draft pull request, the unarchived change, and the acceptance artifacts under
