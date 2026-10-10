@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { runPanelJob, verifyCachedPanelJob, judgeFailure } from '../evals/lib/panel-judging/panel.mjs'
-import {
+import { validateLineCitations,
   MAX_AUDIT_PACKET_CHARS, PacketOverflowError, SOURCE_JUDGE_RESULT_SCHEMA,
   batchClaims, buildContradictionCheckRequest, buildSourceAuditRequest, buildSpanAuditRequest,
   buildTiebreakRequest, inventoryListing, lineCitationInventory, runJudgeJob,
@@ -114,6 +114,29 @@ test('an evidence decider inlines each file as one string of numbered lines', as
   const decider = seen.find(next => next.judge_stage === 'tiebreak')
   const evidence = section(decider.prompt, 'LINE-NUMBERED UNTRUSTED EVIDENCE')
   assert.deepEqual(JSON.parse(evidence), ['packet.txt\n1|first line\n2|second line'])
+})
+
+test('an evidence decider ruling against a backed vote is checked with the ruling\'s quoted lines', async () => {
+  const root = await makeTempDir(join(tmpdir(), 'panel-packets-view-'))
+  await writeFile(join(root, 'packet.txt'), 'first line\nsecond line\nthird line')
+  const seen = []
+  const request = { job: 'job', criteria: ['x'], prompt: 'context', prompt_body: 'context', schema: {},
+    line_citations: 'evidence-view', panel_line_citations: true, input_roots: { evidence: root } }
+  const outcome = await runPanelJob({ job: 'job', criteria: ['x'], verdicts: ['pass', 'fail'], order: ['pass', 'fail'], schema: {},
+    buildPrompt: () => request, validateCitations: validateLineCitations,
+    panel: panel(['fail', 'pass', 'pass']).map(member => ({ ...member, invoke: async () => JSON.stringify({ results: [vote('x', member.verdict,
+      { citations: [{ path: 'packet.txt', start_line: member.verdict === 'fail' ? 3 : 1, end_line: member.verdict === 'fail' ? 3 : 1 }] })] }) })),
+    decider: { model: 'opus', effort: 'medium', invoke: async next => {
+      seen.push(next)
+      if (next.audit_stage) return audited(next.criteria, next.audit_stage === 'ruling-dissent-check' ? 'contradicted' : 'confirmed')
+      return JSON.stringify({ results: [vote('x', 'pass', { citations: [{ path: 'packet.txt', start_line: 2, end_line: 2 }] })] })
+    } } })
+  assert.equal(outcome.ok, true, outcome.record.error)
+  const [check] = seen.filter(next => next.audit_stage === 'ruling-dissent-check')
+  assert.ok(check)
+  assert.match(check.prompt, /second line/)
+  assert.match(check.prompt, /third line/)
+  assert.equal(outcome.results[0].basis, 'decider-pass')
 })
 
 test('a seat source audit too large in total runs in batches of whole criteria and the job is not failed', async () => {

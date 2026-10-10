@@ -190,7 +190,10 @@ async function checkRejectedVotes({ request, scopeRule, record, order, validateC
     const { id } = ruling
     const overrule = record.checks.find(c => c.stage === 'overrule-check' && c.id === id)
     if (overrule && overrule.classification !== 'confirmed') continue
-    const decided = rulingResult(ruling)
+    // A line-cited ruling's settled result names only its cited paths; an
+    // evidence check quotes the line spans the decider cited.
+    const spans = record.decider?.results?.find(r => r.id === id)?.citations
+    const decided = { ...rulingResult(ruling), ...(request.input_roots?.evidence && spans ? { citations: spans } : {}) }
     const own = record.votes.filter(v => v.id === id)
     const keptVerdict = own.filter(v => effective(v, record.checks, order, fallbackIds).verdict === decided.verdict)
     for (const original of rejectedVotes(own, record.checks, order, fallbackIds, decided.verdict)) {
