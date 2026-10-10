@@ -1,12 +1,13 @@
-// Independent lead-agent, task-implementor, and tester profiles.
+// Independent lead-agent, crosscheck, task-implementor, and tester profiles.
 //
-// Each role independently selects a CLI adapter, model, and effort. The two
-// implementation roles and the independent acceptance role map onto the
-// `lead`, `implementor`, and `tester` agents of a single end-to-end core
-// `implement-change` run; they are never scored separately.
+// Each role independently selects a CLI adapter, model, and effort, and maps
+// onto the Agent Runner agent of the same name within a single end-to-end run
+// of the evaluated workflow. The harness does not depend on which steps use
+// which agent, and the roles are never scored separately.
 
 export const ROLE_AGENTS = {
   lead: 'lead',
+  crosscheck: 'crosscheck',
   implementor: 'implementor',
   tester: 'tester',
 }
@@ -18,7 +19,12 @@ export const PROFILE_FIELDS = ['cli', 'model', 'effort']
 const NOT_APPLICABLE = 'not-applicable'
 const MODEL_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$/
 
-function validateOne(role, profile, capabilities) {
+// The planning lead calls the crosscheck agent through `call_agent`. Nothing
+// has yet shown a Cursor lead can make that call inside the evaluation
+// sandbox, so a new run rejects it before any model executes.
+const UNVERIFIED_LEAD_CLIS = new Set(['cursor'])
+
+function validateOne(role, profile, capabilities, { newRun }) {
   const agent = ROLE_AGENTS[role]
   if (!profile) {
     return { errors: [{ role, field: 'profile', value: null, message: `${role} profile is required` }] }
@@ -32,6 +38,14 @@ function validateOne(role, profile, capabilities) {
   }
   // A CLI that cannot drive this workflow role autonomously fails validation
   // before any implementation workflow is launched.
+  if (newRun && role === 'lead' && UNVERIFIED_LEAD_CLIS.has(profile.cli)) {
+    errors.push({
+      role,
+      field: 'cli',
+      value: profile.cli,
+      message: `${profile.cli} is not supported for the lead role: Cursor agent calls are not yet verified in the evaluation sandbox`,
+    })
+  }
   if (!adapter.roles.includes(agent)) {
     errors.push({
       role,
@@ -67,12 +81,17 @@ function validateOne(role, profile, capabilities) {
   }
 }
 
+// `importedRoles` names the roles an imported (rescored) run recorded. Only
+// those are validated, against capabilities alone, so a source recorded before
+// a role existed is not given an invented profile.
 export function validateRoleProfiles({
   lead,
+  crosscheck,
   implementor,
   tester,
   capabilities,
   mode = 'agent-runner',
+  importedRoles = null,
 }) {
   // A reference baseline evaluates an existing candidate without invoking
   // Agent Runner, so neither role applies.
@@ -85,18 +104,20 @@ export function validateRoleProfiles({
     }
   }
 
-  const supplied = { lead, implementor, tester }
+  const supplied = { lead, crosscheck, implementor, tester }
+  const roles = importedRoles ? ROLES.filter((role) => importedRoles.includes(role)) : ROLES
+  const newRun = !importedRoles
   const results = Object.fromEntries(
-    ROLES.map((role) => [role, validateOne(role, supplied[role], capabilities)]),
+    roles.map((role) => [role, validateOne(role, supplied[role], capabilities, { newRun })]),
   )
-  const errors = ROLES.flatMap((role) => results[role].errors)
+  const errors = roles.flatMap((role) => results[role].errors)
 
   return {
     ok: errors.length === 0,
     applicable: true,
     errors,
     profiles: Object.fromEntries(
-      ROLES.map((role) => [role, results[role].profile ?? null]),
+      roles.map((role) => [role, results[role].profile ?? null]),
     ),
   }
 }
@@ -151,6 +172,7 @@ export function compareRoleSelections(recorded, requested) {
 const AGENT_ROLES = Object.fromEntries(Object.entries(ROLE_AGENTS).map(([role, agent]) => [agent, role]))
 const REPORTED_ROLES = {
   lead: 'lead',
+  crosscheck: 'crosscheck',
   implementor: 'implementor',
   tester: 'tester',
   'lead-agent': 'lead',
@@ -161,17 +183,20 @@ const REPORTED_ROLES = {
 
 // Configured settings are never presented as observed ones. An attempt without
 // complete evidence is marked incomplete instead.
+// A role absent from the profiles (a legacy run recorded before it existed) is
+// not reported. A configured role with no attempts is reported not invoked.
 export function reconcileRoleAttempts(profiles, attempts = []) {
-  const applicable = ROLES.every((role) => profiles[role] !== NOT_APPLICABLE)
+  const configuredRoles = ROLES.filter((role) => Object.hasOwn(profiles, role))
+  const applicable = configuredRoles.every((role) => profiles[role] !== NOT_APPLICABLE)
   const roles = Object.fromEntries(
-    ROLES.map((role) => [role, { configured: profiles[role], attempts: [] }]),
+    configuredRoles.map((role) => [role, { configured: profiles[role], invocation: null, attempts: [] }]),
   )
   const mismatches = []
   let incomplete = false
 
   for (const attempt of attempts) {
     const role = AGENT_ROLES[attempt.agent] ?? REPORTED_ROLES[attempt.agent_role]
-    if (!role) continue
+    if (!role || !roles[role]) continue
     const observed = {
       role,
       agent: attempt.agent ?? attempt.agent_role,
@@ -211,6 +236,11 @@ export function reconcileRoleAttempts(profiles, attempts = []) {
       matches_configuration: complete ? attemptMismatches.length === 0 : null,
       mismatches: attemptMismatches,
     })
+  }
+
+  for (const entry of Object.values(roles)) {
+    if (entry.configured === NOT_APPLICABLE) entry.invocation = NOT_APPLICABLE
+    else entry.invocation = entry.attempts.length > 0 ? 'invoked' : 'not-invoked'
   }
 
   return { applicable, roles, mismatches, incomplete }

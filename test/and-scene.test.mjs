@@ -17,6 +17,7 @@ const referenceSha = '171c7def1e12aca2a5f605a5e5feafb20d4e4d19'
 
 const profileArgs = [
   '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+  '--crosscheck-cli', 'codex', '--crosscheck-model', 'gpt-5', '--crosscheck-effort', 'medium',
   '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
   '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
 ]
@@ -121,10 +122,15 @@ test('scored mode delegates the lifecycle to the suite controller', async () => 
     'AGENT_RUNNER_NO_TUI=1', '--repo',
     '--skip-validator', '--change-name', 'create-and-scene',
     '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+    '--crosscheck-cli', 'codex', '--crosscheck-model', 'gpt-5', '--crosscheck-effort', 'medium',
     '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
     '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
     'bootstrap-agent-skills.sh', '/agent-skills-source',
   ]) assert.ok(result.output.includes(expected), `missing ${expected}\n${result.output}`)
+  const order = ['--lead-cli', '--crosscheck-cli', '--implementor-cli', '--tester-cli']
+    .map((flag) => result.output.indexOf(flag))
+  assert.deepEqual([...order].sort((a, b) => a - b), order, result.output)
+  assert.match(result.output, /claude codex claude claude/)
 })
 
 test('scored mode prepares private per-evaluation agent session state before the controller starts', async () => {
@@ -182,7 +188,7 @@ test('scored mode mounts one clean pinned Agent Skills checkout for every select
   assert.equal(result.status, 0, result.output)
   assert.ok(result.output.includes('agent-skills\\,target=/agent-skills-source\\,readonly'), result.output)
   assert.match(result.output, /bootstrap-agent-skills\.sh/)
-  assert.match(result.output, /claude claude claude/)
+  assert.match(result.output, /claude codex claude claude/)
 })
 
 test('scored mode exposes linked-worktree Git metadata read-only to the sandbox', async () => {
@@ -260,18 +266,28 @@ test('all role profiles are required before the sandbox is invoked', async () =>
     '--skip-validator',
     '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
   ])
+  const noCrosscheck = await scored(context, [
+    '--skip-validator', '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+    '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
+    '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
+  ])
   const noImplementor = await scored(context, [
     '--skip-validator', '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+    '--crosscheck-cli', 'codex', '--crosscheck-model', 'gpt-5', '--crosscheck-effort', 'medium',
     '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
   ])
   const noTester = await scored(context, [
     '--skip-validator',
     '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+    '--crosscheck-cli', 'codex', '--crosscheck-model', 'gpt-5', '--crosscheck-effort', 'medium',
     '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
   ])
 
   assert.notEqual(noLead.status, 0)
   assert.match(noLead.output, /lead-agent profile/)
+  assert.notEqual(noCrosscheck.status, 0)
+  assert.match(noCrosscheck.output, /crosscheck profile/)
+  assert.ok(!noCrosscheck.output.includes('controller.mjs'), noCrosscheck.output)
   assert.notEqual(noImplementor.status, 0)
   assert.match(noImplementor.output, /task-implementor profile/)
   assert.notEqual(noTester.status, 0)
@@ -288,6 +304,7 @@ test('the pinned capabilities do not enumerate volatile model names', async () =
   assert.equal(Object.hasOwn(capabilities.clis.cursor, 'models'), false)
   const result = validateRoleProfiles({
     lead: { cli: 'codex', model: 'gpt-6-astra', effort: 'high' },
+    crosscheck: { cli: 'cursor', model: 'composer', effort: 'medium' },
     implementor: { cli: 'codex', model: 'future-codex-model', effort: 'high' },
     tester: { cli: 'claude', model: 'sonnet', effort: 'high' },
     capabilities,
@@ -296,10 +313,11 @@ test('the pinned capabilities do not enumerate volatile model names', async () =
   assert.equal(result.ok, true, JSON.stringify(result.errors))
 })
 
-test('Cursor is a first-class role CLI and forwards family model names', async () => {
+test('Cursor is a first-class non-lead role CLI and forwards family model names', async () => {
   const context = await setup()
   const cursorArgs = [
-    '--lead-cli', 'cursor', '--lead-model', 'grok', '--lead-effort', 'high',
+    '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+    '--crosscheck-cli', 'cursor', '--crosscheck-model', 'grok', '--crosscheck-effort', 'high',
     '--implementor-cli', 'cursor', '--implementor-model', 'grok-4.6', '--implementor-effort', 'medium',
     '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
   ]
@@ -309,11 +327,42 @@ test('Cursor is a first-class role CLI and forwards family model names', async (
   assert.equal(result.status, 0, result.output)
   assert.ok(result.output.includes('--mount-cursor-auth'), result.output)
   assert.ok(result.output.includes('--mount-claude-auth'), result.output)
-  assert.ok(result.output.includes('--lead-cli cursor'), result.output)
-  assert.ok(result.output.includes('--lead-model grok'), result.output)
+  assert.ok(result.output.includes('--crosscheck-cli cursor'), result.output)
+  assert.ok(result.output.includes('--crosscheck-model grok'), result.output)
   assert.ok(result.output.includes('--implementor-cli cursor'), result.output)
   assert.ok(result.output.includes('--implementor-model grok-4.6'), result.output)
-  assert.match(result.output, /cursor cursor claude/)
+  assert.match(result.output, /claude cursor cursor claude/)
+})
+
+test('a Cursor lead is rejected before the sandbox is invoked', async () => {
+  const context = await setup()
+  const cursorLead = profileArgs.map((value, index) => (
+    profileArgs[index - 1] === '--lead-cli' ? 'cursor' : value
+  ))
+
+  const result = await scored(context, ['--skip-validator', ...cursorLead])
+
+  assert.equal(result.status, 2, result.output)
+  assert.match(result.output, /lead/)
+  assert.match(result.output, /Cursor agent calls are not yet verified/)
+  assert.ok(!result.output.includes('controller.mjs'), result.output)
+})
+
+test('role auth is mounted in lead, crosscheck, implementor, tester order', async () => {
+  const context = await setup()
+  const mixed = [
+    '--lead-cli', 'codex', '--lead-model', 'gpt-5', '--lead-effort', 'high',
+    '--crosscheck-cli', 'cursor', '--crosscheck-model', 'composer', '--crosscheck-effort', 'medium',
+    '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
+    '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
+  ]
+
+  const result = await scored(context, ['--skip-validator', ...mixed])
+
+  assert.equal(result.status, 0, result.output)
+  const mounts = [...result.output.matchAll(/--mount-(codex|cursor|claude)-auth/g)].map((match) => match[1])
+  assert.deepEqual(mounts.slice(0, 3), ['codex', 'cursor', 'claude'], result.output)
+  assert.match(result.output, /codex cursor claude claude/)
 })
 
 test('a partially specified role profile is rejected', async () => {
@@ -601,6 +650,9 @@ test('help documents the exact fixture pin, role profiles, and validator option'
   assert.ok(result.stdout.includes('--skip-validator'))
   assert.match(result.stdout, /skip all Agent Validator\s+execution/i)
   assert.ok(result.stdout.includes('--lead-cli'))
+  assert.ok(result.stdout.includes('--crosscheck-cli'))
+  assert.ok(result.stdout.includes('--crosscheck-model'))
+  assert.ok(result.stdout.includes('--crosscheck-effort'))
   assert.ok(result.stdout.includes('--implementor-cli'))
   assert.ok(result.stdout.includes('--calibrate'))
   assert.ok(result.stdout.includes('--mount-cursor-auth'))

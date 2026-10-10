@@ -148,6 +148,9 @@ const VALUES = new Map([
   ['--lead-cli', 'leadCli'],
   ['--lead-model', 'leadModel'],
   ['--lead-effort', 'leadEffort'],
+  ['--crosscheck-cli', 'crosscheckCli'],
+  ['--crosscheck-model', 'crosscheckModel'],
+  ['--crosscheck-effort', 'crosscheckEffort'],
   ['--implementor-cli', 'implementorCli'],
   ['--implementor-model', 'implementorModel'],
   ['--implementor-effort', 'implementorEffort'],
@@ -391,12 +394,16 @@ export async function runEvaluation({
   }
 
   const importedProfiles = normalizeRoleProfiles(importedRun?.role_profiles)
+  // A rescore keeps the roles its source recorded: a run from before the
+  // crosscheck role validates its three profiles without an invented fourth.
   const validation = validateRoleProfiles({
     lead: importedProfiles?.lead ?? roleProfileFrom(options, 'lead'),
+    crosscheck: importedProfiles?.crosscheck ?? roleProfileFrom(options, 'crosscheck'),
     implementor: importedProfiles?.implementor ?? roleProfileFrom(options, 'implementor'),
     tester: importedProfiles?.tester ?? roleProfileFrom(options, 'tester'),
     capabilities,
     mode,
+    importedRoles: importedProfiles ? Object.keys(importedProfiles) : null,
   })
   if (!validation.ok) {
     return failure(validation.errors.map((error) => ({ code: 'invalid-role-profile', ...error })))
@@ -921,6 +928,7 @@ export async function runEvaluation({
           run: record.run,
           workflow: boundary,
           provenance,
+          role_profiles: validation.profiles,
           events: record.events,
           history: record.observed_steps,
           history_verification: record.workflowHistory,
@@ -1141,6 +1149,7 @@ export async function runEvaluation({
         run: record.run,
         workflow: boundary,
         provenance,
+        role_profiles: validation.profiles,
         events: record.events,
         linked_audits: record.linkedAudits,
         history: record.observed_steps,

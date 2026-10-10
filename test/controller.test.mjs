@@ -99,6 +99,7 @@ AT-001
 
 const profiles = [
   '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+  '--crosscheck-cli', 'codex', '--crosscheck-model', 'gpt-5', '--crosscheck-effort', 'medium',
   '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
   '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
 ]
@@ -774,6 +775,81 @@ test('the candidate branch identity exists in run-state before Runner starts', a
   assert.match(state.agent_skills_provenance.manifest_sha256, /^[a-f0-9]{64}$/)
   assert.match(state.identity.agent_skills_provenance, /^[a-f0-9]{64}$/)
   assert.equal(state.role_profiles.tester.agent, 'tester')
+})
+
+test('the crosscheck profile is configured and recorded wherever role profiles are', async () => {
+  const context = await environment()
+
+  const result = await evaluate(context, profiles)
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const crosscheck = { cli: 'codex', model: 'gpt-5', effort: 'medium', agent: 'crosscheck' }
+  const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
+  assert.deepEqual(state.role_profiles.crosscheck, crosscheck)
+  assert.deepEqual(Object.keys(state.role_profiles), ['lead', 'crosscheck', 'implementor', 'tester'])
+  const preflight = await readJson(join(context.runDir, 'phases/preflight.json'))
+  assert.deepEqual(preflight.role_profiles.crosscheck, crosscheck)
+  const execution = await readJson(join(context.runDir, 'phases/workflow-execution.json'))
+  assert.deepEqual(execution.role_profiles.crosscheck, crosscheck)
+  const config = await readFile(
+    join(context.runDir, '.runtime/candidate-worktree/.agent-runner/config.yaml'),
+    'utf8',
+  )
+  assert.match(config, /crosscheck:\n {8}default_mode: autonomous\n {8}cli: codex\n {8}model: gpt-5\n {8}effort: medium/)
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.deepEqual(written.role_configuration.roles.crosscheck.configured, crosscheck)
+  assert.equal(written.role_configuration.roles.crosscheck.invocation, 'not-invoked')
+  const report = await readFile(join(context.runDir, 'report.html'), 'utf8')
+  assert.match(report, /crosscheck/)
+})
+
+test('a new run without a crosscheck profile is rejected before Runner starts', async () => {
+  const context = await environment()
+  const withoutCrosscheck = profiles.filter((value, index) => (
+    !profiles[index - (index % 2)].startsWith('--crosscheck-')
+  ))
+
+  const result = await evaluate(context, withoutCrosscheck)
+
+  assert.equal(result.exitCode, 2)
+  assert.deepEqual(
+    result.errors.map(({ code, role, field }) => [code, role, field]),
+    [['invalid-role-profile', 'crosscheck', 'profile']],
+  )
+  assert.deepEqual(runnerInvocations(context), [])
+})
+
+test('a Cursor lead is rejected before any model execution', async () => {
+  const context = await environment()
+  const cursorLead = profiles.map((value, index) => (
+    profiles[index - 1] === '--lead-cli' ? 'cursor' : value
+  ))
+
+  const result = await evaluate(context, cursorLead)
+
+  assert.equal(result.exitCode, 2)
+  assert.equal(result.errors.length, 1)
+  assert.equal(result.errors[0].role, 'lead')
+  assert.match(result.errors[0].message, /Cursor agent calls are not yet verified/)
+  assert.deepEqual(runnerInvocations(context), [])
+})
+
+test('a resume that changes only the crosscheck profile is rejected', async () => {
+  const context = await environment()
+  await evaluate(context, profiles)
+  const before = runnerInvocations(context).length
+  const changed = profiles.map((value, index) => (
+    profiles[index - 1] === '--crosscheck-model' ? 'gpt-6' : value
+  ))
+
+  const result = await evaluate(context, ['--resume', ...changed])
+
+  assert.equal(result.exitCode, 2)
+  assert.deepEqual(
+    result.errors.map(({ code, role, field, recorded, requested }) => [code, role, field, recorded, requested]),
+    [['role-profile-mismatch', 'crosscheck', 'model', 'gpt-5', 'gpt-6']],
+  )
+  assert.equal(runnerInvocations(context).length, before)
 })
 
 test('an explicit host run identity survives the fixed container artifact mount', async () => {

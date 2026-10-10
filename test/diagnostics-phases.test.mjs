@@ -41,6 +41,7 @@ steps:
 
 const profileArgs = [
   '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+  '--crosscheck-cli', 'codex', '--crosscheck-model', 'gpt-5', '--crosscheck-effort', 'medium',
   '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
   '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
 ]

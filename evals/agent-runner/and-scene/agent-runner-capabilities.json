@@ -1,18 +1,18 @@
 {
   "schema_version": 1,
-  "description": "Stable role capabilities the and-scene suite validates for lead-agent, task-implementor, and tester profiles. Model availability is resolved by Agent Runner and the selected CLI at execution time, not enumerated here.",
+  "description": "Stable role capabilities the and-scene suite validates for lead-agent, crosscheck, task-implementor, and tester profiles. Model availability is resolved by Agent Runner and the selected CLI at execution time, not enumerated here. A cursor lead is additionally rejected for new runs until Cursor agent calls are verified.",
   "clis": {
     "claude": {
       "efforts": ["low", "medium", "high"],
-      "roles": ["lead", "implementor", "tester"]
+      "roles": ["lead", "crosscheck", "implementor", "tester"]
     },
     "codex": {
       "efforts": ["low", "medium", "high"],
-      "roles": ["lead", "implementor", "tester"]
+      "roles": ["lead", "crosscheck", "implementor", "tester"]
     },
     "cursor": {
       "efforts": ["low", "medium", "high"],
-      "roles": ["lead", "implementor", "tester"]
+      "roles": ["lead", "crosscheck", "implementor", "tester"]
     }
   }
 }

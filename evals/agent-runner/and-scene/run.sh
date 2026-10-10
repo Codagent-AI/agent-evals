@@ -34,6 +34,7 @@ CANDIDATE_REF="${CANDIDATE_REF:-}"
 RESCORE_FROM="${RESCORE_FROM:-}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-}"
 LEAD_CLI="" LEAD_MODEL="" LEAD_EFFORT=""
+CROSSCHECK_CLI="" CROSSCHECK_MODEL="" CROSSCHECK_EFFORT=""
 IMPLEMENTOR_CLI="" IMPLEMENTOR_MODEL="" IMPLEMENTOR_EFFORT=""
 TESTER_CLI="" TESTER_MODEL="" TESTER_EFFORT=""
 SKIP_VALIDATOR=0
@@ -119,7 +120,13 @@ Options:
                           Claude quota resets up to six hours are waited out.
   --lead-cli CLI         Lead-agent CLI adapter (core implement-change lead).
   --lead-model MODEL     Lead-agent model.
-  --lead-effort EFFORT   Lead-agent effort.
+  --lead-effort EFFORT   Lead-agent effort. A cursor lead is rejected until
+                          Cursor agent calls are verified in the sandbox.
+  --crosscheck-cli CLI   Crosscheck CLI adapter (the agent task review calls).
+  --crosscheck-model MODEL
+                          Crosscheck model.
+  --crosscheck-effort EFFORT
+                          Crosscheck effort.
   --implementor-cli CLI  Task-implementor CLI adapter.
   --implementor-model MODEL
                           Task-implementor model.
@@ -233,6 +240,18 @@ while (($#)); do
       ;;
     --lead-effort)
       LEAD_EFFORT="${2:?missing value for --lead-effort}"
+      shift 2
+      ;;
+    --crosscheck-cli)
+      CROSSCHECK_CLI="${2:?missing value for --crosscheck-cli}"
+      shift 2
+      ;;
+    --crosscheck-model)
+      CROSSCHECK_MODEL="${2:?missing value for --crosscheck-model}"
+      shift 2
+      ;;
+    --crosscheck-effort)
+      CROSSCHECK_EFFORT="${2:?missing value for --crosscheck-effort}"
       shift 2
       ;;
     --implementor-cli)
@@ -408,11 +427,19 @@ if [[ "$RUN_AGENT" == 1 ]]; then
     AGENT_SKILLS_DIR="$(cd -- "$AGENT_SKILLS_DIR" && pwd)"
 
     require_role_profile "lead-agent" "$LEAD_CLI" "$LEAD_MODEL" "$LEAD_EFFORT"
+    require_role_profile "crosscheck" "$CROSSCHECK_CLI" "$CROSSCHECK_MODEL" "$CROSSCHECK_EFFORT"
     require_role_profile "task-implementor" "$IMPLEMENTOR_CLI" "$IMPLEMENTOR_MODEL" "$IMPLEMENTOR_EFFORT"
     require_role_profile "tester" "$TESTER_CLI" "$TESTER_MODEL" "$TESTER_EFFORT"
+    # The lead calls the crosscheck agent; that call is unproven from Cursor in
+    # the sandbox. The controller enforces the same rule before any model runs.
+    if [[ "$LEAD_CLI" == cursor ]]; then
+      echo "The lead-agent profile cannot use cursor: Cursor agent calls are not yet verified in the evaluation sandbox." >&2
+      exit 2
+    fi
 
-    # Forward only the auth the selected role profiles and the judge need.
-    for cli in "$LEAD_CLI" "$IMPLEMENTOR_CLI" "$TESTER_CLI"; do
+    # Forward only the auth the selected role profiles and the judge need, in
+    # role order: lead, crosscheck, implementor, tester.
+    for cli in "$LEAD_CLI" "$CROSSCHECK_CLI" "$IMPLEMENTOR_CLI" "$TESTER_CLI"; do
       case "$cli" in
         claude)
           if [[ "$MOUNT_CLAUDE_AUTH" != 1 ]]; then
@@ -569,7 +596,7 @@ CHANGE_NAME_Q="$(shell_quote "$CHANGE_NAME")"
 JUDGE_MODEL_Q="$(shell_quote "$JUDGE_MODEL")"
 CONTAINER_AGENT_RUNNER_DIR_Q="$(shell_quote "$CONTAINER_AGENT_RUNNER_DIR")"
 CONTAINER_AGENT_SKILLS_DIR_Q="$(shell_quote "$CONTAINER_AGENT_SKILLS_DIR")"
-SELECTED_ADAPTERS_Q="$(shell_quote "$LEAD_CLI") $(shell_quote "$IMPLEMENTOR_CLI") $(shell_quote "$TESTER_CLI")"
+SELECTED_ADAPTERS_Q="$(shell_quote "$LEAD_CLI") $(shell_quote "$CROSSCHECK_CLI") $(shell_quote "$IMPLEMENTOR_CLI") $(shell_quote "$TESTER_CLI")"
 
 # Assemble the controller argument list on the host so the container script
 # stays a fixed, quoted invocation rather than string-built shell.
@@ -597,6 +624,8 @@ elif [[ -n "$RESCORE_FROM" ]]; then
   CONTROLLER_ARGS+=(--rescore-from /rescore-source)
 else
   CONTROLLER_ARGS+=(--lead-cli "$LEAD_CLI" --lead-model "$LEAD_MODEL" --lead-effort "$LEAD_EFFORT")
+  CONTROLLER_ARGS+=(--crosscheck-cli "$CROSSCHECK_CLI" --crosscheck-model "$CROSSCHECK_MODEL")
+  CONTROLLER_ARGS+=(--crosscheck-effort "$CROSSCHECK_EFFORT")
   CONTROLLER_ARGS+=(--implementor-cli "$IMPLEMENTOR_CLI" --implementor-model "$IMPLEMENTOR_MODEL")
   CONTROLLER_ARGS+=(--implementor-effort "$IMPLEMENTOR_EFFORT")
   CONTROLLER_ARGS+=(--tester-cli "$TESTER_CLI" --tester-model "$TESTER_MODEL")
