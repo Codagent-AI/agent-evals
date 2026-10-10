@@ -11,7 +11,10 @@ test('INT-009: recorded robust jobs reproduce identical results, consensus, hash
   assert.equal(baseline.protocol, 'dual-sample-majority-v4')
   for (const record of baseline.records) {
     const request = buildJudgeRequest({ ...inputs, job: record.id })
-    const reproduced = verifyCachedRobustJob(record, request)
+    // A legacy record reproduces over the criteria it judged; one added later,
+    // such as rubric 15.0.0's entity-ungrouped-transition-morph, was never in it.
+    const judged = new Set(record.results.map(({ id }) => id))
+    const reproduced = verifyCachedRobustJob(record, { ...request, criteria: request.criteria.filter((id) => judged.has(id)) })
     assert.equal(bytes(reproduced.results), bytes(record.results), record.id)
     assert.equal(bytes(reproduced.consensus), bytes(record.consensus), record.id)
   }
@@ -40,7 +43,7 @@ test('panel switch preserves former exports and deterministically replays curren
     for (const key of names) assert.ok(key in modules[name], `${name}.${key}`)
   }
   const repeated = await capture()
-  assert.equal(recorded.protocol, 'cross-family-panel-v1')
+  assert.equal(recorded.protocol, 'cross-family-panel-v2')
   assert.equal(bytes(recorded), bytes(repeated))
   assert.deepEqual(recorded.replay.reused_jobs, recorded.outcome.expected_jobs)
 })

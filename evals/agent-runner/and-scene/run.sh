@@ -29,9 +29,11 @@ WORKFLOW_RELATIVE_PATH="workflows/core/implement-change-v1.0.yaml"
 # satisfy the controller's clean-worktree provenance check.
 CONTAINER_AGENT_RUNNER_DIR="${CONTAINER_AGENT_RUNNER_DIR:-/agent-runner-source}"
 CONTAINER_AGENT_SKILLS_DIR="${CONTAINER_AGENT_SKILLS_DIR:-/agent-skills-source}"
-JUDGE_MODEL="${JUDGE_MODEL:-gpt-6-sol}"
+JUDGE_MODEL="${JUDGE_MODEL:-gpt-6.1-sol}"
 CANDIDATE_REF="${CANDIDATE_REF:-}"
 RESCORE_FROM="${RESCORE_FROM:-}"
+JUDGE_JOBS=""
+EXPECTED=""
 ARTIFACT_DIR="${ARTIFACT_DIR:-}"
 LEAD_CLI="" LEAD_MODEL="" LEAD_EFFORT=""
 IMPLEMENTOR_CLI="" IMPLEMENTOR_MODEL="" IMPLEMENTOR_EFFORT=""
@@ -100,6 +102,20 @@ Options:
   --rescore-from PATH    Re-run evaluator-owned phases against a completed,
                           immutable candidate run. Never invokes Agent Runner,
                           creates a branch, or changes candidate contents.
+  --judge-jobs JOB[,JOB] With --host and --rescore-from: run the job-filtered
+                          judging diagnostic. Judges only the named scored jobs
+                          (for example scene-kit,verification-tooling) after the
+                          rescore's input verification, build, and browser
+                          evaluation; skips second opinions, scoring, human
+                          review, and publication; writes diagnostic.json and
+                          diagnostic-result.json, never result.json. Resume an
+                          interrupted diagnostic with --resume and the same
+                          --judge-jobs and --expected. Compare repeats with
+                          node evals/agent-runner/and-scene/judge-diagnostic.mjs
+                          --expected PATH RUN_DIR...
+  --expected PATH        With --judge-jobs: the expected-verdict JSON file,
+                          {"<source-run-id>": {"<criterion>": "pass"|"fail"}}.
+                          Its SHA-256 is recorded before judging.
   --host                 With --rescore-from only: run the evaluator on this
                           host instead of the Docker sandbox. Needs node, npm,
                           codex (or AND_SCENE_CODEX_COMMAND), claude (or
@@ -128,7 +144,7 @@ Options:
   --tester-cli CLI       Tester CLI adapter.
   --tester-model MODEL   Tester model.
   --tester-effort EFFORT Tester effort.
-  --judge-model MODEL    Eval-owned judge model. Default: gpt-6-sol.
+  --judge-model MODEL    Eval-owned judge model. Default: gpt-6.1-sol.
   --env NAME             Pass through one named environment variable.
                           Repeatable.
   --env-file PATH        Read simple NAME=value or export NAME=value entries
@@ -200,6 +216,14 @@ while (($#)); do
       ;;
     --rescore-from)
       RESCORE_FROM="${2:?missing value for --rescore-from}"
+      shift 2
+      ;;
+    --judge-jobs)
+      JUDGE_JOBS="${2:?missing value for --judge-jobs}"
+      shift 2
+      ;;
+    --expected)
+      EXPECTED="${2:?missing value for --expected}"
       shift 2
       ;;
     --reference-baseline)
@@ -304,13 +328,43 @@ if ((PROOF_BROWSER + RUN_AGENT + CALIBRATE != 1)); then
   exit 2
 fi
 
+# The job-filtered judging diagnostic is an evaluator-only rescore that judges
+# only the named jobs and, unlike an ordinary rescore, resumes in place: the
+# controller restores its source from the directory's diagnostic.json.
+DIAGNOSTIC=0
+if [[ -n "$JUDGE_JOBS" || -n "$EXPECTED" ]]; then
+  DIAGNOSTIC=1
+  if [[ -z "$JUDGE_JOBS" || -z "$EXPECTED" ]]; then
+    echo "--judge-jobs and --expected must be given together." >&2
+    exit 2
+  fi
+  if [[ "$REFERENCE_BASELINE" == 1 || -n "$CANDIDATE_REF" ]]; then
+    echo "--judge-jobs cannot be combined with --reference-baseline or --candidate-ref." >&2
+    exit 2
+  fi
+  if [[ -z "$RESCORE_FROM" && "$RESUME" != 1 ]]; then
+    echo "--judge-jobs requires --rescore-from or --resume." >&2
+    exit 2
+  fi
+  if [[ "$RUN_AGENT" != 1 || "$HOST" != 1 ]]; then
+    echo "The judge diagnostic runs only on the host: use --run-agent --host." >&2
+    exit 2
+  fi
+  if [[ "$EXPECTED" != /* ]]; then
+    EXPECTED="$PWD/$EXPECTED"
+  fi
+  if [[ ! -f "$EXPECTED" ]]; then
+    echo "Expected-verdict file does not exist: $EXPECTED" >&2
+    exit 2
+  fi
+fi
 if [[ -n "$RESCORE_FROM" && (
-  "$RESUME" == 1 || "$REFERENCE_BASELINE" == 1 || -n "$CANDIDATE_REF"
+  ( "$RESUME" == 1 && "$DIAGNOSTIC" != 1 ) || "$REFERENCE_BASELINE" == 1 || -n "$CANDIDATE_REF"
 ) ]]; then
   echo "--rescore-from cannot be combined with --resume, --reference-baseline, or --candidate-ref." >&2
   exit 2
 fi
-if [[ "$HOST" == 1 && ( "$RUN_AGENT" != 1 || -z "$RESCORE_FROM" ) ]]; then
+if [[ "$HOST" == 1 && ( "$RUN_AGENT" != 1 || ( -z "$RESCORE_FROM" && "$DIAGNOSTIC" != 1 ) ) ]]; then
   echo "--host is supported only with --run-agent --rescore-from." >&2
   exit 2
 fi
@@ -373,7 +427,7 @@ if [[ "$RUN_AGENT" == 1 ]]; then
   # A reference baseline evaluates an existing candidate without invoking Agent
   # Runner, so its workflow contract and worktree cleanliness do not apply. Only
   # the sandbox adapter, checked above, is required to launch it.
-  if [[ "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" ]]; then
+  if [[ "$REFERENCE_BASELINE" != 1 && -z "$RESCORE_FROM" && "$DIAGNOSTIC" != 1 ]]; then
     # The suite requires a clean recorded Agent Runner revision before any
     # workflow starts or resumes; a dirty checkout stops the run here on the
     # host.
@@ -471,6 +525,8 @@ fi
 if [[ -z "$ARTIFACT_DIR" ]]; then
   if [[ "$PROOF_BROWSER" == 1 ]]; then
     ARTIFACT_DIR="$EVALS_ROOT/artifacts/evals/and-scene-proof/$(timestamp)"
+  elif [[ "$DIAGNOSTIC" == 1 ]]; then
+    ARTIFACT_DIR="$EVALS_ROOT/artifacts/evals/and-scene-diagnostic/$(timestamp)"
   else
     ARTIFACT_DIR="$EVALS_ROOT/artifacts/evals/and-scene/$(timestamp)"
   fi
@@ -509,7 +565,16 @@ if [[ "$HOST" == 1 ]]; then
   host_claude="${AND_SCENE_CLAUDE_COMMAND:-$(command -v claude || true)}"
   host_command=(node "$SUITE_DIR/controller.mjs" --run-dir "$ARTIFACT_DIR" --run-id "$AND_SCENE_RUN_ID"
     --agent-runner-dir "$AGENT_RUNNER_DIR" --repo "$REPO" --fixture-ref "$FIXTURE_REF"
-    --judge-model "$JUDGE_MODEL" --rescore-from "$RESCORE_FROM")
+    --judge-model "$JUDGE_MODEL")
+  if [[ -n "$RESCORE_FROM" ]]; then
+    host_command+=(--rescore-from "$RESCORE_FROM")
+  fi
+  if [[ "$RESUME" == 1 ]]; then
+    host_command+=(--resume)
+  fi
+  if [[ "$DIAGNOSTIC" == 1 ]]; then
+    host_command+=(--judge-jobs "$JUDGE_JOBS" --expected "$EXPECTED")
+  fi
   if [[ "$CHANGE_NAME_PROVIDED" == 1 ]]; then
     host_command+=(--change-name "$CHANGE_NAME")
   fi

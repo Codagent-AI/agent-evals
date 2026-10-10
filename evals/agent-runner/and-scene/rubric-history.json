@@ -43,10 +43,14 @@
     ],
     "14.0.0": [
       "f058cdee671480dd247f6782069c8b3d4a6c1ec466ded56fee092e73d2dbc8d7"
+    ],
+    "15.0.0": [
+      "41dceabbf43772bc158b6c8a95aa0ac7de89f48bb7711fb761bb79db21b0c641"
     ]
   },
   "changes": {
     "13.0.0": "Judging protocol changed to cross-family-panel-v1, with the shared requirement-question rule in every judge, decider, audit, check, and second-opinion prompt, and a dissent check that confirms only when the cited fact decides the quoted requirement the way the dissent claims. It also carries the 12.4.0 attribution guidance. No criterion changed. Results before 13.0.0 form a different scoring series.",
-    "14.0.0": "Adds the 8-point engineering quality beyond the spec component: fourteen criteria judged by a new engineering-quality panel job and two input-hygiene browser probes (input-modifier-keys-pass-through, input-swipe-from-control-ignored), each falling back to demo-integration. Demo technical quality and scene kit correctness drop from 24 to 20 points with floors from 15 to 12.5. The reference is scored on the new component too, so five shared components are adjudicated. Class A review guidance is added to existing criteria. Built on 13.0.0's cross-family-panel-v1 judging; results before 14.0.0 have no engineering-quality score and form a different scoring series."
+    "14.0.0": "Adds the 8-point engineering quality beyond the spec component: fourteen criteria judged by a new engineering-quality panel job and two input-hygiene browser probes (input-modifier-keys-pass-through, input-swipe-from-control-ignored), each falling back to demo-integration. Demo technical quality and scene kit correctness drop from 24 to 20 points with floors from 15 to 12.5. The reference is scored on the new component too, so five shared components are adjudicated. Class A review guidance is added to existing criteria. Built on 13.0.0's cross-family-panel-v1 judging; results before 14.0.0 have no engineering-quality score and form a different scoring series.",
+    "15.0.0": "Points follow importance: every scored criterion carries a critical, major, or minor tier, and earns its component's weight for that tier (demo 2/1/0.5, scene kit 1.5625/0.75/0.25, skill 0.75/0.375/0.125, verification 1.25/0.625/0.375, engineering quality 1.375/0.625/0.375, testing evidence and assumption handling 1), replacing equal division within subcomponents. demo-route-and-registration and demo-nine-step-content-and-order become zero-point gate inputs that still feed verification-sample-outline. Adds the major scene-kit criterion entity-ungrouped-transition-morph, and fixes the departing-exit, newcomer, style-hook, overlap-warning, active-state-warning, and testing-evidence guidance; usable proof and the honest record are judged against the approved specs' scenarios, and only traceable coverage scores an omitted behavior. Component totals, floors, and thresholds are unchanged. Results before 15.0.0 form a different scoring series."
   }
 }

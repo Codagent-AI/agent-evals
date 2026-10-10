@@ -8,6 +8,10 @@ import { makeJobs, runDefinitionPanel, runDiscovery, excludedGradedContradiction
 import { createDefinitionJudges } from './judge-invoker.mjs'
 import { runGates } from './gates.mjs'
 import { scoreDefinition, discoveryLedger } from './scoring.mjs'
+import { runJobPool } from '../../../lib/panel-judging/job-pool.mjs'
+// Each job's panel already runs its seats together, so three jobs keep about
+// nine judge CLIs in flight.
+export const DEFINITION_JUDGE_CONCURRENCY = 3
 export async function loadJudgingInputs({ runDir, suiteRoot = SUITE_ROOT }) {
   const artifacts = {}
   const manifest = await readJson(join(runDir, 'phases/collection.json'))
@@ -33,24 +37,27 @@ export function disclosureReport(record) {
   const panel_flags = record.votes.filter(x => x.verdict === 'met').map(x => ({ criterion: x.id, type: x.id.startsWith('leak:') ? 'over-disclosure' : x.id.slice(0, x.id.indexOf(':')), inventory_items: x.id.startsWith('leak:') ? [x.id.slice(5)] : [], panel_index: x.panel_index, citations: x.citations, rationale: x.rationale }))
   return { status: flags.length || panel_flags.length ? 'flagged' : 'clean', flags, panel_flags, leaked_items, panel: record }
 }
-export function createJudgingPhases({ runDir, suiteRoot = SUITE_ROOT, getCheckpoint, setCheckpoint, persist, judges, gateCommand, loadInputs = loadJudgingInputs }) {
+// `concurrency` bounds the coverage, quality and fidelity jobs judged at once.
+// Checkpoint updates go through the pool's serial queue, since every unit
+// rewrites the one run-state checkpoint.
+export function createJudgingPhases({ runDir, suiteRoot = SUITE_ROOT, getCheckpoint, setCheckpoint, persist, judges, gateCommand, loadInputs = loadJudgingInputs, concurrency = DEFINITION_JUDGE_CONCURRENCY }) {
   let loaded; let authority
   const inputs = async () => loaded ??= await loadInputs({ runDir, suiteRoot })
   const members = () => authority ??= judges ?? createDefinitionJudges({ runDir })
-  async function unit({ phase, job, target, execute }) {
+  async function unit({ phase, job, target, execute, checkpoint = update => update() }) {
     const provenance = { job, judge_profile: JUDGE_PROFILE, panel_protocol: PANEL_PROTOCOL }
     const deps = { series_identity: getCheckpoint().identity.series_identity }
     if ((await verifyUnit(getCheckpoint(), { phase, unit: job.name, inputs: provenance, dependencies: deps })).reusable) return readJson(target)
-    setCheckpoint(beginUnit(getCheckpoint(), { phase, unit: job.name, inputs: provenance, dependencies: deps })); await persist()
+    await checkpoint(async () => { setCheckpoint(beginUnit(getCheckpoint(), { phase, unit: job.name, inputs: provenance, dependencies: deps })); await persist() })
     await mkdir(join(target, '..'), { recursive: true })
     try {
       const record = await execute()
       await writeJsonAtomic(target, record)
       if (record.ok === false) throw Object.assign(new Error(record.failure?.message ?? record.error ?? 'judge job failed'), { ...record.failure, resumable: record.failure?.resumable ?? true })
-      setCheckpoint(await completeUnit(getCheckpoint(), { phase, unit: job.name, inputs: provenance, dependencies: deps, outputs: [target] })); await persist()
+      await checkpoint(async () => { setCheckpoint(await completeUnit(getCheckpoint(), { phase, unit: job.name, inputs: provenance, dependencies: deps, outputs: [target] })); await persist() })
       return record
     } catch (error) {
-      setCheckpoint(failUnit(getCheckpoint(), { phase, unit: job.name, error: error.message })); await persist()
+      await checkpoint(async () => { setCheckpoint(failUnit(getCheckpoint(), { phase, unit: job.name, error: error.message })); await persist() })
       if (error.attempts) await writeJsonAtomic(target, { ok: false, attempts: error.attempts, error: error.message })
       if (error.retryable !== false && error.resumable === undefined) error.resumable = true
       throw error
@@ -58,9 +65,9 @@ export function createJudgingPhases({ runDir, suiteRoot = SUITE_ROOT, getCheckpo
   }
   const jobs = async gates => makeJobs({ ...await inputs(), gates })
   const filename = job => job.name.replace(/[^a-zA-Z0-9_-]/g, '-') + '.json'
-  async function panelJob(phase, job, directory = 'judges') {
+  async function panelJob(phase, job, directory = 'judges', checkpoint = undefined) {
     const target = join(runDir, directory, filename(job))
-    const record = await unit({ phase, job, target, execute: async () => (await runDefinitionPanel({ job, ...members() })).record })
+    const record = await unit({ phase, job, target, checkpoint, execute: async () => (await runDefinitionPanel({ job, ...members() })).record })
     return { record, target }
   }
   return {
@@ -72,14 +79,15 @@ export function createJudgingPhases({ runDir, suiteRoot = SUITE_ROOT, getCheckpo
     },
     'gates-and-judging': async () => {
       const data = await inputs()
+      // The disclosure audit comes first: its leaked items change coverage, so
+      // no job starts without its recorded result.
+      const audit = await readJson(join(runDir, 'audits/disclosure.json'))
       const gatePath = join(runDir, 'judges/gates.json')
       const gateRecord = await unit({ phase: 'gates-and-judging', job: { name: 'gates', artifacts: data.artifacts }, target: gatePath, execute: async () => ({ gates: await runGates({ runDir, artifacts: data.artifacts, command: gateCommand }) }) })
-      const records = []; const outputs = [gatePath]
-      for (const job of (await jobs(gateRecord.gates)).filter(x => ['coverage', 'quality', 'fidelity'].includes(x.kind))) {
-        const { record, target } = await panelJob('gates-and-judging', job)
-        records.push({ kind: job.kind, record }); outputs.push(target)
-      }
-      const audit = await readJson(join(runDir, 'audits/disclosure.json'))
+      const judged = await runJobPool({ jobs: (await jobs(gateRecord.gates)).filter(x => ['coverage', 'quality', 'fidelity'].includes(x.kind)), concurrency,
+        run: async (job, index, { checkpoint }) => ({ kind: job.kind, ...await panelJob('gates-and-judging', job, 'judges', checkpoint) }) })
+      const records = judged.map(({ kind, record }) => ({ kind, record }))
+      const outputs = [gatePath, ...judged.map(({ target }) => target)]
       const coverage = records.filter(x => x.kind === 'coverage').flatMap(x => x.record.results)
       const quality = records.find(x => x.kind === 'quality').record.results
       const fidelity = records.find(x => x.kind === 'fidelity')?.record.results ?? []

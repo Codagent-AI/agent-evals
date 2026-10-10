@@ -45,23 +45,30 @@ and source-judged fallbacks, cannot be replayed and use the span and log audit.
 ## Robust judging
 
 Every scored job runs three independent panel judges concurrently on identical
-inputs: `claude-sonnet-5-5` and two `gpt-6-sol` samples, all at pinned medium
-effort. `claude-opus-5-5`, medium, decides Codex-only majorities, three-way
-splits, and unresolved disputes. A unanimous verdict stands. A two-to-one
-majority stands when it includes Claude, except that a higher-credit dissent
+inputs: two `claude-sonnet-5-5` samples and one `gpt-6.1-sol`, all at pinned high
+effort. `claude-opus-5-5`, high, decides a majority of the two Sonnet samples
+against Sol, three-way splits, and unresolved disputes. A unanimous verdict
+stands. A two-to-one majority stands when it spans both families (one Sonnet
+sample and Sol), except that a higher-credit dissent
 with at least one validated citation gets an Opus check of its stated reason.
 Each dissent citation is validated alone; invalid ones are dropped and recorded
 as `dropped_citations` rather than discarding the dissent. The check confirms
 only when the cited material shows what the dissent says and that fact decides
 the quoted requirement the way the dissent claims; an accurate fact the
-requirement does not depend on is contradicted. A confirmed dissent stands;
+requirement does not depend on is contradicted. The check also receives the two
+majority votes' reasons and cited files, and confirms a higher dissent only when
+the material refutes each clause the majority states is unmet. A confirmed dissent stands;
 otherwise the majority stands.
 
 Each source judge keeps its closed-world source audit and one focused re-cite.
 An audit contradiction marks the vote disputed. Opus checks that same stated
-contradiction; only confirmation turns the vote. An insufficient audit after
-one re-cite leaves the vote standing, except an unconfirmed browser fallback
-pass fails. Judges, audits, checks, the decider, and browser second opinions
+contradiction, with the vote's citations and the files the audit cited; only
+confirmation turns the vote. A check that refutes or cannot decide leaves the
+vote standing, except a browser-fallback pass the check cannot decide, which
+stays disputed. A turned vote in a split goes to the decider even when the
+remaining votes form a Claude-backed majority. An insufficient audit after one
+re-cite leaves the vote standing, except an unconfirmed browser fallback pass
+fails. Judges, audits, checks, the decider, and browser second opinions
 retain the shared scope rule, the shared requirement-question rule (every
 verdict answers whether the quoted requirement is met; an accurate observation
 decides nothing by itself, and a fail must name the unmet part of the
@@ -69,28 +76,67 @@ requirement), and the full fixture requirement or eval-owned reason beside each
 criterion.
 
 The decider sees unchanged job context and all three votes, labelled A/B/C in
-seeded order without model identities. It must choose a panel verdict. A pass
+seeded order without model identities. It must choose a panel verdict, and its
+rationale must answer, by label, the stated reason of each vote it rules
+against. A pass
 requires 1–12 valid line spans, each under 200 lines, in the verified neutral
-source inventory or materialized evidence view, resolving without symlinks.
-A closed-world span audit checks every requirement clause, with one re-cite on
-insufficient evidence; the re-cite tells the decider to change a verdict whose
-proving lines do not exist rather than cite weaker lines. A contradiction withdraws the pass only when Opus
-confirms that same contradiction. A still-insufficient audit leaves the pass
-standing with that recorded, except an unconfirmed browser fallback pass fails.
-Invalid output is retried; exhausted calls leave the job unobserved.
+source inventory or materialized evidence view, resolving without symlinks. A
+fail cites a counterexample's spans, or for an absence its search scope and
+missing obligation; a fail citing neither is invalid. A closed-world span
+audit checks every ruling, pass or fail. An insufficient pass or
+counterexample fail gets one re-cite, which may replace citations but never
+the verdict or turn a counterexample fail into an absence fail. A re-cite whose
+every attempt is invalid output leaves the first ruling on its undecided audit
+(recorded as `recite_exhausted`) rather than failing the job, unless an attempt
+re-cited the fail as an absence fail: that absence scope was never audited, so
+the job fails as exhausted judge output. An inadequate absence scope gets one repair round with the
+inventory files the audit names. A contradiction reverses the ruling only when
+Opus confirms that same contradiction (for a fail, every clause met). A
+still-insufficient audit leaves the ruling standing with that recorded, except
+an unconfirmed browser fallback pass fails. Audits and checks that need
+material the harness withheld or could not read (`missing-material`), or an
+absence scope still inadequate after its repair (`scope-inadequate`), fail the
+job as non-resumable harness failures naming the criteria. Invalid output is
+retried, and each such retry appends the reason the previous reply was rejected
+(other failures retry the request unchanged); exhausted calls leave the job
+unobserved.
+
+Once a ruling settles, each vote it rejected whose citations validate, other
+than a vote a confirmed contradiction turned, gets a `ruling-dissent-check`: the
+dissent check, given that vote's reason beside the agreeing votes' reasons and
+the ruling's own. A confirmed check lets the rejected vote's verdict stand
+(`checked-dissent-pass/fail`), so a lone Codex fail that two Claude passes and
+the decider never answered can still decide the criterion.
 
 Criterion records and reports show the basis (`consensus-pass/fail`,
-`majority-pass/fail`, `checked-dissent-pass`, or `decider-pass/fail`) and all
+`majority-pass/fail`, `checked-dissent-pass/fail`, or `decider-pass/fail`) and all
 family-labelled votes, targeted checks, and rulings. Cache reuse requires
-`cross-family-panel-v1` and reproduction from the recorded votes, checks, and
-rulings. Rubric **13.0.0** starts a new scoring series; no criterion changed,
+`cross-family-panel-v2` and reproduction from the recorded votes, checks, and
+rulings, each ruling from its settled audit cycle alone. Rubric **13.0.0** starts a new scoring series; no criterion changed,
 and earlier results stay published. Acceptance `E2E-004` pairs baseline
 rescores under this panel.
 
 Claude source judges use only Read/Grep/Glob inside the evaluation sandbox.
 Evidence and closed-world packets are inlined with no tools. Evidence panel
 votes may back a dissent with validated spans in the materialized `packet.txt`,
-which contains the exact inlined packet. Every judging
+which contains the exact inlined packet. Each evidence packet holds its job's
+primary records whole: the acceptance flow record, exploration log, final
+handoff and findings history for testing evidence, and the assumptions ledger,
+final handoff, findings history and exploration log, with the complete approved
+requirements, for assumption handling. When they cannot fit the 220,000-character
+packet, or collection skipped one for its size, or a requirement document
+exceeds 40,000 characters, that job fails with `packet-overflow`. Other
+artifacts may be cut or dropped; each is marked in place
+(`[truncated: …]` or `[omitted: …]`) and listed in the cut index at the top of
+the packet, beside a layout that labels every quoted span with its artifact.
+Evidence panel judges and deciders report in `missing_material` the marker a
+verdict depends on, which fails the criterion as missing material. The
+testing-evidence decider also returns a bounded claim map for usable proof and
+complete and honest record, audited in whole-row batches plus one completeness
+audit over the full claim-bearing records. Evidence audits and checks cite the
+packet as `packet.txt:<start>-<end>`; a bare `packet.txt` citation is invalid
+output and retried, since it would pull the whole packet into the next check.
+Every judging
 run and rescore in the sandbox implies `--mount-claude-auth` and requires
 `~/.claude/.credentials.json` or, for a login kept in the macOS Keychain, a
 `claude setup-token` token as `CLAUDE_CODE_OAUTH_TOKEN` in the environment or
@@ -103,9 +149,9 @@ panel settlement with canned invokers; an injected live invoker uses the
 profile too.
 
 `phases/eval-owned-usage.jsonl` records provider, model and stage:
-`panel-claude`, `panel-codex-1`, `panel-codex-2`, `source-audit`,
-`contradiction-check`, `dissent-check`, `decider`, `span-audit`, and
-`decider-recite`. This usage is not priced or included in implementation cost.
+`panel-claude-1`, `panel-claude-2`, `panel-codex`, `source-audit`,
+`contradiction-check`, `dissent-check`, `decider`, `span-audit`,
+`decider-recite`, and `ruling-dissent-check`. This usage is not priced or included in implementation cost.
 Capacity rejections before model output record zero tokens and back off without
 spending a judge attempt. Schema rejection fails fast. Identified Claude
 subscription limits with an explicit UTC reset within six hours wait and
@@ -115,6 +161,71 @@ phase outcomes.
 
 `rubric-history.json` records the content hash of every automated rubric
 version; a test fails when the rubric changes without a new version.
+
+### Settlement replay
+
+`scripts/replay-settlement.mjs` feeds recorded `cross-family-panel-v1` judging
+through the v2 settlement rules with no model call:
+
+```bash
+node evals/agent-runner/and-scene/scripts/replay-settlement.mjs \
+  e78-rep2-judging-records.tar.gz e78-rep2-judge-raw-logs.tar.gz [--json]
+```
+
+Each archive is extracted into its own temporary directory. The records
+archive holds run directories with `phases/judges/<job>.json`; the raw-log
+archive holds the same run directories with
+`.runtime/judge-claude/<NN>-<job>.events.jsonl`. A v1 record keeps only the
+decider's re-cited verdicts, so the replay reads the decider's first verdicts
+and spans from those logs, then applies the v2 `effective()` route and the
+immutable re-cite rule through the pure settlement functions (`resolvePanel`,
+`auditState`, `tiebreakDecisions`). It prints old and new verdicts, bases, and
+points (current automated rubric weights from `rubricCriteria()`) per criterion
+and per run in total.
+
+The output is headed **partial settlement counterfactual**: it excludes
+confirmed-contradiction routing the recorded run never sent to the decider
+(such a criterion keeps its recorded verdict, basis `not-modelled`), fail
+audits, auditor citations, the re-cite cycle's own audit, and any new model
+response. The header says `replay` when the raw logs supplied every first vote,
+and `reconstruction` when the raw-log archive is absent or a job has no log, in
+which case the first votes are inferred (v1 audited and re-cited only passes).
+A malformed log, or one whose criteria, decider model, attempt count, or
+never-re-cited ruling does not match the record, fails the replay (exit 2) and
+never falls back. `lib/settlement-replay.mjs` documents the log contract.
+
+### Rescore flip attribution
+
+`scripts/compare-rescores.mjs` compares rescores of the same code under one
+automated rubric and attributes every verdict flip:
+
+```bash
+node evals/agent-runner/and-scene/scripts/compare-rescores.mjs \
+  --rep e78-rep-2 <rescore-dir> <rescore-dir> <rescore-dir> \
+  --rep baseline-1 <rescore-dir> <rescore-dir> <rescore-dir> \
+  --blocker-rep e78-rep-2 [--json]
+```
+
+Every pair within a rep is compared. For each criterion whose verdict differs,
+it records separately whether the original seat verdicts, the audits and
+checks, the effective votes, and the decider ruling differ; a check or ruling
+present in only one rescore is a difference, and free text is ignored. A flip
+is `settlement` when the seat verdicts are identical but a check, effective
+vote or ruling differs, `seat-noise` when the seat verdicts differ and every
+check and ruling is the same, and `mixed` when both differ (`deterministic`
+for a flip of a criterion no judge decided). The labels say where the recorded
+outputs differ, not which difference caused the flip.
+
+Per pair it reports total flipped points (the sum of every changed verdict's
+points, so opposing flips never cancel) against the 1.0-point target, with
+engineering quality excluded and reported separately; points by class; and
+gate, floor and eligibility changes. Per rep it reports per-criterion
+disagreement counts with their denominators, always including every
+engineering-quality criterion. `--blocker-rep` names the rep that decides
+merge (#78 rep 2 for the `followups` change): when any of its pairs has more
+than 1.0 settlement and mixed points outside engineering quality, the command
+prints `MERGE BLOCKED` and exits 1. Seat-noise points and misses on other reps
+are reported but never block.
 
 ## Fixture traceability
 
@@ -357,6 +468,70 @@ earlier `controller.mjs`, `serve-candidate.mjs`, or host Chrome is still
 running. Panel judges use their restricted invokers against the run's
 neutral inputs. A rescore never starts or reads Agent Runner, so it leaves the
 home's `~/.agent-runner/projects` untouched.
+
+### Job-filtered judging diagnostic
+
+To calibrate a criterion or check known answers on retained runs, judge only
+the named scored jobs under the current rubric and judging protocol:
+
+```bash
+evals/agent-runner/and-scene/run.sh \
+  --run-agent --host \
+  --rescore-from artifacts/evals/and-scene/<completed-run-id> \
+  --artifact-dir artifacts/evals/and-scene-diagnostic/<diagnostic-id> \
+  --judge-jobs scene-kit,verification-tooling \
+  --expected expected-verdicts.json
+```
+
+The expected-verdict file is JSON keyed by source run id:
+`{ "<source-run-id>": { "<criterion>": "pass" | "fail" } }`. Fix and freeze it
+before judging: its SHA-256 is recorded, and changing an expectation
+invalidates every diagnostic that used it. The diagnostic refuses a file with
+no verdicts for its source, or one naming a criterion the selected jobs do not
+judge.
+
+The diagnostic runs on the host only. Before judging it writes
+`diagnostic.json`, holding `mode: judge-diagnostic`, the normalized job list
+(sorted, unique, each a known scored job), the source run's path and verified
+provenance hash, the evaluator commit, an evaluator content hash (a sorted
+manifest of path and SHA-256 for every file under `evals/lib/` and this suite,
+excluding `results/`, committed or not), the judge profiles, the rubric hash,
+and the expected file's SHA-256. It then runs the rescore pipeline: input
+verification, the candidate build and browser evaluation (so judges receive
+current-harness browser facts), and only the named judge jobs. It skips second
+opinions, ambiguity diagnostics, pricing, scoring, human-review setup, and
+publication. It writes the judge outputs (`phases/judges/<job>.json`,
+`phases/product-judging.json`) and `diagnostic-result.json`, never
+`result.json`, a score, or a publication record. A failure or early exit also
+writes `diagnostic-result.json`: `unloadable` when the retained run fails input
+verification or no longer builds or serves, `failed` when a judge job fails.
+Its results are calibration diagnostics, never a prerequisite or runtime gate
+for a candidate evaluation.
+
+Resume an interrupted diagnostic in its own directory with `--resume` and the
+same `--judge-jobs` and `--expected`; `--rescore-from` may be omitted, since the
+source is restored from `diagnostic.json`. Before any checkpoint is reused, the
+controller recomputes the identity and refuses the resume, naming the field,
+when the jobs, source, expected-file hash, evaluator commit, evaluator content
+hash, rubric hash, or judge profiles differ, or when the diagnostic flags are
+missing. A refused resume changes nothing in the directory. Completed
+`product-judging/<job>` checkpoints are reused. An ordinary `--rescore-from`
+still cannot be resumed.
+
+Each repeat is a separate run directory. Compare the repeats with the expected
+verdicts:
+
+```bash
+node evals/agent-runner/and-scene/judge-diagnostic.mjs \
+  --expected expected-verdicts.json \
+  artifacts/evals/and-scene-diagnostic/<diagnostic-id>...
+```
+
+It first checks every directory's recorded expected-file hash against the
+file and refuses to report anything on a mismatch (exit 2). It then prints, for
+every judged criterion in every repeat, the verdict, its judging basis, the
+expected verdict, and whether it matches. It exits 0 only when every expected
+verdict was judged and matched.
 
 Evaluate an existing candidate as a reference baseline without invoking Agent
 Runner. Role profiles are neither required nor applicable:
@@ -642,6 +817,31 @@ is judged against those user-visible behaviors, whatever testing approach the
 candidate took, never against a fixed test-plan case list. Each testing-evidence
 criterion's definition comes from `criterion_definitions` in the automated
 rubric and is shown to the judge beside its identifier.
+
+Automated rubric 15.0.0 makes points follow importance. Each criterion's tier
+sets its points within its component: demo technical quality 2/1/0.5 for
+critical/major/minor, scene kit 1.5625/0.75/0.25, presentation skill
+0.75/0.375/0.125, verification tooling 1.25/0.625/0.375, engineering quality
+1.375/0.625/0.375, and 1 for every testing-evidence and assumption-handling
+criterion. This replaces equal division within subcomponents, under which one
+verdict was worth anywhere from 0.33 to 4 points. The two outline inputs become
+zero-point gate inputs, `demo-step-and-transition-reliability` stays scored at
+the minor tier because it also checks step-index progression, and the major
+scene-kit criterion `entity-ungrouped-transition-morph` fails when an entity
+persisting across ungrouped steps vanishes and reappears: either the step
+transition removes the outgoing step before mounting the incoming one (for
+example `AnimatePresence` with `mode="wait"`), or both steps stay mounted but the
+kit's entity primitives hide the incoming copy until the outgoing one has faded.
+The transition mode alone does not establish a pass. The guidance for `entity-departing-exit`
+credits an opt-in exit wrapper the sample uses, `visual-helper-overlap-warning`
+fails a comparison that drops textless chrome only when the presentation renders
+some, and `visual-helper-active-state-warning` fails a comparison against the
+Previous or Next control. Usable proof and the complete and honest record are
+judged against the scenarios of the approved specs, and only traceable coverage
+scores an omitted behavior. Component totals, the 12.5 floors, the 70 automated
+points, the 100-point total, and the 40/70 threshold are unchanged. 15.0.0
+results start a new series and compare with earlier ones only after
+`--rescore-from`.
 
 Automated rubric 14.0.0 adds an 8-point "Engineering quality beyond the spec"
 component (`engineering-quality`, issue #77). The implementation validator
@@ -1044,8 +1244,20 @@ hard-gate reasons. Consumers must not recalculate the 40-point policy.
 `automated-rubric.json` and `human-rubric.json` own criterion identifiers,
 evaluator assignment, points, gates, and thresholds. Neither the judge nor the
 human-review interface may change them, and every result records both rubrics'
-version and SHA-256 hash. Each row's points divide equally among its criteria,
-and intermediate values are never rounded.
+version and SHA-256 hash. Since rubric 15.0.0 every scored criterion carries
+an importance tier (critical, major, or minor) and earns its component's
+`tier_weights` entry for that tier, whatever subcomponent it sits in; a
+subcomponent is a reporting group whose points are the sum of its criteria's
+weights. Rubric validation rejects a criterion without a tier, tier weights that
+do not decrease strictly from critical to minor, a weight above 2 or not a
+multiple of 1/16, and subcomponent or component points that are not those sums.
+The two outline inputs, `demo-route-and-registration` and
+`demo-nine-step-content-and-order`, are tiered `gate-input`: they earn no points
+and never hold their component incomplete, but they are still observed,
+fallback-judged, given second opinions, and reported, and they decide
+`verification-sample-outline`. An unresolved gate input leaves that gate
+unobserved and automated eligibility unavailable. Intermediate values are never
+rounded.
 
 Deterministic browser checks exercise the built, running demo: routing, the
 canonical nine steps, evolving-scene structure, present/browse modes,

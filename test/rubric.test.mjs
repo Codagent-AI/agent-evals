@@ -1,13 +1,17 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
+import { makeTempDir } from './temp-dir.mjs'
 
 import {
   AUTOMATED_RUBRIC_PATH,
   HUMAN_RUBRIC_PATH,
   LEGACY_CRITERION_IDS,
+  OUTLINE_GATE_INPUTS,
+  WORKFLOW_QUALITY_CRITERION_IDS,
   loadRubrics,
   rubricCriteria,
   validateAutomatedRubric,
@@ -41,30 +45,30 @@ test('the automated rubric allocates the approved 20/20/7/7/8/4/4 automated comp
       subcomponents.map(({ id, points }) => [id, points])
     )),
     [
-      ['demo-canonical-content', 4],
-      ['demo-navigation-and-modes', 4],
-      ['demo-runtime-reliability', 3],
-      ['demo-scene-kit-integration', 4],
-      ['demo-identity-and-grouping', 3],
-      ['demo-code-boundaries', 2],
-      ['scene-step-model', 3],
-      ['scene-entity-transitions', 6],
-      ['scene-modes-and-navigation', 5],
-      ['scene-fixed-canvas-uniform-fit', 1],
-      ['scene-fixed-canvas', 1],
-      ['scene-style-and-attribution', 4],
-      ['skill-requirement-gathering', 1],
-      ['skill-scaffolding', 3],
+      ['demo-canonical-content', 5],
+      ['demo-navigation-and-modes', 6],
+      ['demo-runtime-reliability', 3.5],
+      ['demo-scene-kit-integration', 2],
+      ['demo-identity-and-grouping', 2],
+      ['demo-code-boundaries', 1.5],
+      ['scene-step-model', 2.5625],
+      ['scene-entity-transitions', 6.375],
+      ['scene-modes-and-navigation', 7.3125],
+      ['scene-fixed-canvas-uniform-fit', 0.75],
+      ['scene-fixed-canvas', 0.25],
+      ['scene-style-and-attribution', 2.75],
+      ['skill-requirement-gathering', 1.25],
+      ['skill-scaffolding', 2.625],
       ['skill-presentation-lifecycle', 2],
-      ['skill-self-verification', 1],
-      ['verification-missing-sample', 1],
-      ['verification-addressing-and-errors', 2],
-      ['verification-capture', 2],
-      ['verification-warnings', 2],
-      ['engineering-input-hygiene', 2],
+      ['skill-self-verification', 1.125],
+      ['verification-missing-sample', 0.375],
+      ['verification-addressing-and-errors', 3.25],
+      ['verification-capture', 1.875],
+      ['verification-warnings', 1.5],
+      ['engineering-input-hygiene', 0.75],
       ['engineering-verification-tooling-robustness', 3],
-      ['engineering-skill-instructions-and-templates', 1.5],
-      ['engineering-presentation-code-and-tests', 1.5],
+      ['engineering-skill-instructions-and-templates', 2.5],
+      ['engineering-presentation-code-and-tests', 1.75],
       ['testing-evidence-quality-criteria', 4],
       ['assumption-handling-quality-criteria', 4],
     ],
@@ -83,8 +87,8 @@ test('deterministic browser and LLM source review own disjoint demo subcomponent
     .filter((subcomponent) => subcomponent.evaluator === evaluator)
     .reduce((sum, { points }) => sum + points, 0)
 
-  assert.equal(byEvaluator('deterministic-browser'), 11)
-  assert.equal(byEvaluator('llm-source-review'), 9)
+  assert.equal(byEvaluator('deterministic-browser'), 14.5)
+  assert.equal(byEvaluator('llm-source-review'), 5.5)
   assert.ok(
     demo.subcomponents
       .filter(({ evaluator }) => evaluator === 'llm-source-review')
@@ -133,7 +137,7 @@ test('source-reviewed robustness-sensitive rows carry explicit review guidance',
 
 test('rubric 12.3 defines pre-human automated eligibility and distinguishes proof requirements', async () => {
   const rubric = await automatedRubric()
-  assert.equal(rubric.version, '14.0.0')
+  assert.equal(rubric.version, '15.0.0')
   assert.equal(rubric.automated_pass_threshold, 40)
 
   const rows = new Map(
@@ -204,13 +208,13 @@ test('both fixed-canvas criteria are source-reviewed rather than measured at an 
       evaluator: 'llm-source-review',
       job: 'scene-kit',
       criteria: ['canvas-uniform-scaling'],
-      points: 1,
+      points: 0.75,
     },
     {
       evaluator: 'llm-source-review',
       job: 'scene-kit',
       criteria: ['canvas-default-dimensions'],
-      points: 1,
+      points: 0.25,
     },
   ])
 })
@@ -453,7 +457,7 @@ test('every testing-evidence criterion carries the definition its judge applies'
   assert.match(definition('testing-evidence-final-revision-applicability'), /tested_revision/)
   assert.match(definition('testing-evidence-final-revision-applicability'), /full re-run of earlier passes and bounded-impact lineage are not required/)
   assert.match(definition('testing-evidence-final-revision-applicability'), /Fail when any listed product file is unexplored/)
-  assert.match(definition('testing-evidence-complete-honest-record'), /no completion or coverage claim exceeds/)
+  assert.match(definition('testing-evidence-complete-honest-record'), /no completion, coverage, or outcome claim exceeds/)
 })
 
 test('rubric validation rejects incomplete, unknown, and missing criterion definitions', async () => {
@@ -552,7 +556,9 @@ test('rubric 9.0 guidance settles the criteria round 1 judged inconsistently', a
   assert.match(guidance('assumption-handling-quality-criteria'), /count of open decisions with only a pointer/)
   assert.match(definition('testing-evidence-traceable-coverage'), /could not exercise[\s\S]*does not count against coverage/)
   assert.match(definition('testing-evidence-final-revision-applicability'), /A changed command counts as explored when the pass ran it/)
-  assert.match(definition('testing-evidence-complete-honest-record'), /exploration plan commits to exercising/)
+  // Rubric 15.0.0 moved the plan-versus-log comparison out of the honest record:
+  // traceable coverage alone scores an omitted behavior.
+  assert.match(definition('testing-evidence-traceable-coverage'), /exploration plan committed to/)
 })
 
 // Round-2 audit: criteria judges split on because the guidance left a term open.
@@ -571,7 +577,7 @@ test('rubric 10.0 defines the terms round 2 judged inconsistently', async () => 
   assert.match(guidance('assumption-handling-quality-criteria'), /reproduced only when the record shows the workflow observed/)
   assert.match(guidance('assumption-handling-quality-criteria'), /check for unsurfaced requirement deviations/)
   assert.match(guidance('assumption-handling-quality-criteria'), /omits it entirely, also fail assumption-repository-facts-distinguished/)
-  assert.match(definition('testing-evidence-complete-honest-record'), /Only a material omission counts/)
+  assert.match(definition('testing-evidence-traceable-coverage'), /weaker property than the scenario states[^.]*does not cover it/)
   assert.match(definition('testing-evidence-final-revision-applicability'), /mirror group/)
   assert.match(definition('testing-evidence-final-revision-applicability'), /acceptance workflow forbids running it/)
   assert.match(definition('testing-evidence-final-revision-applicability'), /retest_scope fact[^.]*never decides exploration/)
@@ -611,7 +617,8 @@ test('rubric 12.0 defines a missing sample and what proves a compile-time claim'
   assert.match(definition('testing-evidence-usable-proof'), /proven by a recorded successful type-checked build/)
   // Sanity rescore at 12.0.0: samples failed honest-record because uniform
   // scaling was observed only as the scene fitting the viewport.
-  assert.match(definition('testing-evidence-complete-honest-record'), /internal properties a viewer cannot see[^.]*need no separate observation/)
+  // Rubric 15.0.0: which observations cover a behavior is a coverage question.
+  assert.match(definition('testing-evidence-traceable-coverage'), /internal properties a viewer cannot see[^.]*need no separate observation/)
 })
 
 // Round-5 audit: rep-2-a failed skill-failures-fixed-before-success on a
@@ -697,7 +704,7 @@ test('rubric 14.0 fails a scaffold that never installs or checks for the Chromiu
 // Issue #77: engineering quality a good implementation has even though the
 // fixture's planning documents do not require it.
 const ENGINEERING_ROWS = [
-  ['engineering-input-hygiene', 2, 'deterministic-browser', null, [
+  ['engineering-input-hygiene', 0.75, 'deterministic-browser', null, [
     'input-modifier-keys-pass-through',
     'input-swipe-from-control-ignored',
   ]],
@@ -709,13 +716,13 @@ const ENGINEERING_ROWS = [
     'engineering-checks-read-rendered-page',
     'engineering-diagnostics-cover-presentation',
   ]],
-  ['engineering-skill-instructions-and-templates', 1.5, 'llm-source-review', 'engineering-quality', [
+  ['engineering-skill-instructions-and-templates', 2.5, 'llm-source-review', 'engineering-quality', [
     'engineering-templates-build-at-destination',
     'engineering-skill-description-triggers',
     'engineering-skill-out-of-scope-redirects',
     'engineering-skill-completion-report',
   ]],
-  ['engineering-presentation-code-and-tests', 1.5, 'llm-source-review', 'engineering-quality', [
+  ['engineering-presentation-code-and-tests', 1.75, 'llm-source-review', 'engineering-quality', [
     'engineering-presentation-css-scoped',
     'engineering-typed-kit-primitives',
     'engineering-tests-wait-on-state',
@@ -874,16 +881,18 @@ test('rubric validation rejects an engineering criterion moved across a subcompo
   const id = 'engineering-templates-build-at-destination'
 
   // Moving the first criterion of one subcomponent to the end of the previous
-  // one keeps the flattened criterion order but changes its point share.
+  // one keeps the flattened criterion order, and even with its tier moved too,
+  // breaks the subcomponents the engineering-quality spec groups it in.
   const moved = structuredClone(rubric)
   const from = subcomponent(moved, 'engineering-skill-instructions-and-templates')
   const to = subcomponent(moved, 'engineering-verification-tooling-robustness')
   assert.equal(from.criteria.shift(), id)
   to.criteria.push(id)
+  to.tiers[id] = from.tiers[id]
+  delete from.tiers[id]
+  from.points -= 1.375
+  to.points += 1.375
 
-  const before = rubricCriteria(rubric).find((row) => row.id === id)
-  const after = rubricCriteria(moved).find((row) => row.id === id)
-  assert.notEqual(after.criterion_points, before.criterion_points)
   assert.match(
     validateAutomatedRubric(moved).join('\n'),
     /subcomponent engineering-verification-tooling-robustness must own exactly its approved engineering-quality criteria/,
@@ -897,12 +906,359 @@ test('rubric validation rejects an engineering criterion moved across a subcompo
 test('rubric validation rejects engineering points moved between subcomponents', async () => {
   const moved = structuredClone(await automatedRubric())
   const subcomponent = (id) => engineeringComponent(moved).subcomponents.find((row) => row.id === id)
-  // The component total and criterion membership stay the same, but each
-  // criterion's share of the points changes.
+  // The component total and criterion membership stay the same, but neither
+  // subcomponent's declared points are the sum of its criteria's tier weights.
   subcomponent('engineering-verification-tooling-robustness').points -= 0.5
   subcomponent('engineering-presentation-code-and-tests').points += 0.5
-  assert.match(
-    validateAutomatedRubric(moved).join('\n'),
-    /subcomponent engineering-verification-tooling-robustness must award its approved 3 points/,
+  const errors = validateAutomatedRubric(moved).join('\n')
+  assert.match(errors, /subcomponent engineering-verification-tooling-robustness points 2\.5 are not the sum of its criterion weights 3/)
+  assert.match(errors, /subcomponent engineering-presentation-code-and-tests points 2\.25 are not the sum of its criterion weights 1\.75/)
+})
+
+// Rubric 15.0.0 (openspec change followups): every scored criterion carries a
+// tier, and its points are its component's weight for that tier. These are the
+// product-quality and engineering-quality spec tier tables.
+const TIER_TABLES = {
+  'demo-technical-quality': {
+    weights: { critical: 2, major: 1, minor: 0.5 },
+    subcomponents: {
+      'demo-canonical-content': [5, {
+        critical: ['demo-required-scene-content', 'demo-evolving-scene-structure'],
+        major: ['quality-captions-and-navigation'],
+        'gate-input': ['demo-route-and-registration', 'demo-nine-step-content-and-order'],
+      }],
+      'demo-navigation-and-modes': [6, {
+        critical: ['demo-supported-navigation'],
+        major: ['demo-present-mode-behavior', 'demo-browse-mode-behavior', 'demo-mode-position-preservation',
+          'demo-navigation-boundaries-and-control-keys'],
+      }],
+      'demo-runtime-reliability': [3.5, {
+        major: ['demo-mode-interaction-reliability', 'demo-control-semantics', 'demo-focus-and-keyboard-accessibility'],
+        minor: ['demo-step-and-transition-reliability'],
+      }],
+      'demo-scene-kit-integration': [2, { critical: ['demo-scene-kit-api-use'] }],
+      'demo-identity-and-grouping': [2, { critical: ['demo-stable-identity-and-grouping'] }],
+      'demo-code-boundaries': [1.5, {
+        minor: ['demo-clear-code-boundaries', 'quality-active-chrome-and-attribution-local', 'demo-scope-discipline'],
+      }],
+    },
+  },
+  'scene-kit-correctness': {
+    weights: { critical: 1.5625, major: 0.75, minor: 0.25 },
+    subcomponents: {
+      'scene-step-model': [2.5625, {
+        critical: ['scene-step-narration-and-identity'], major: ['scene-order-derived-numbering'],
+        minor: ['scene-typed-payload-boundary'],
+      }],
+      'scene-entity-transitions': [6.375, {
+        critical: ['entity-persisting-morph', 'grouped-scene-updates-in-place'],
+        major: ['entity-ungrouped-transition-morph', 'entity-newcomer-after-settle', 'entity-departing-exit',
+          'grouped-continuing-entities-not-newcomers'],
+        minor: ['grouped-intentional-composition'],
+      }],
+      'scene-modes-and-navigation': [7.3125, {
+        critical: ['navigation-keyboard'],
+        major: ['mode-present-title-focused', 'mode-browse-reading-focused', 'mode-toggle-preserves-position',
+          'navigation-touch-swipe', 'navigation-direct-jump', 'navigation-active-state', 'navigation-controls-keep-keys'],
+        minor: ['navigation-clamp-start', 'navigation-clamp-end'],
+      }],
+      // The spec's one "Fixed-canvas behavior" row is two rubric subcomponents, as on main.
+      'scene-fixed-canvas-uniform-fit': [0.75, { major: ['canvas-uniform-scaling'] }],
+      'scene-fixed-canvas': [0.25, { minor: ['canvas-default-dimensions'] }],
+      'scene-style-and-attribution': [2.75, {
+        major: ['style-kit-hooks', 'style-unstyled-kit-output'],
+        minor: ['style-framework-optional', 'style-coordinate-heavy-diagrams', 'attribution-default-link',
+          'attribution-styling-hook', 'attribution-top-left-opt-in'],
+      }],
+    },
+  },
+  'presentation-skill-correctness': {
+    weights: { critical: 0.75, major: 0.375, minor: 0.125 },
+    subcomponents: {
+      'skill-requirement-gathering': [1.25, {
+        critical: ['skill-missing-details-one-at-a-time'], major: ['skill-partial-detail-proceeds'],
+        minor: ['skill-complete-prompt-proceeds'],
+      }],
+      'skill-scaffolding': [2.625, {
+        critical: ['skill-empty-directory-scaffold'],
+        major: ['skill-already-scaffolded', 'skill-partial-scaffold', 'skill-template-path-resolution', 'skill-monorepo-target'],
+        minor: ['skill-scaffold-style-neutral', 'skill-standalone-target', 'skill-nonempty-confirmation'],
+      }],
+      'skill-presentation-lifecycle': [2, {
+        critical: ['skill-new-presentation-routed'],
+        major: ['skill-presentation-owns-style', 'skill-existing-presentations-preserved', 'skill-scoped-modification'],
+        minor: ['skill-modify-ambiguous-target'],
+      }],
+      'skill-self-verification': [1.125, {
+        critical: ['skill-checks-run-before-done'], major: ['skill-failures-fixed-before-success'],
+      }],
+    },
+  },
+  'verification-tool-correctness': {
+    weights: { critical: 1.25, major: 0.625, minor: 0.375 },
+    subcomponents: {
+      'verification-missing-sample': [0.375, { minor: ['verification-missing-sample-fails'] }],
+      'verification-addressing-and-errors': [3.25, {
+        critical: ['verification-console-page-error-fails', 'verification-step-error-fails'],
+        minor: ['verification-ipv4-loopback', 'verification-preview-process-ownership'],
+      }],
+      'verification-capture': [1.875, {
+        major: ['quality-project-local-screenshot-helper', 'visual-helper-captures-steps', 'visual-helper-settled-screenshots'],
+      }],
+      'verification-warnings': [1.5, {
+        minor: ['visual-helper-overlap-warning', 'visual-helper-allow-overlap', 'visual-helper-active-state-warning',
+          'visual-helper-attribution-warning'],
+      }],
+    },
+  },
+  'engineering-quality': {
+    weights: { critical: 1.375, major: 0.625, minor: 0.375 },
+    subcomponents: {
+      'engineering-input-hygiene': [0.75, { minor: ['input-modifier-keys-pass-through', 'input-swipe-from-control-ignored'] }],
+      'engineering-verification-tooling-robustness': [3, {
+        major: ['engineering-preview-terminated-on-every-exit', 'engineering-preview-readiness-bounded',
+          'engineering-bootstrap-scripts-generic'],
+        minor: ['engineering-inspect-fails-loudly', 'engineering-checks-read-rendered-page',
+          'engineering-diagnostics-cover-presentation'],
+      }],
+      'engineering-skill-instructions-and-templates': [2.5, {
+        critical: ['engineering-templates-build-at-destination'],
+        minor: ['engineering-skill-description-triggers', 'engineering-skill-out-of-scope-redirects',
+          'engineering-skill-completion-report'],
+      }],
+      'engineering-presentation-code-and-tests': [1.75, {
+        major: ['engineering-presentation-css-scoped'],
+        minor: ['engineering-typed-kit-primitives', 'engineering-tests-wait-on-state', 'engineering-tests-isolate-resources'],
+      }],
+    },
+  },
+  'testing-evidence-quality': {
+    weights: { major: 1 },
+    subcomponents: { 'testing-evidence-quality-criteria': [4, { major: WORKFLOW_QUALITY_CRITERION_IDS['testing-evidence'] }] },
+  },
+  'assumption-handling-quality': {
+    weights: { major: 1 },
+    subcomponents: { 'assumption-handling-quality-criteria': [4, { major: WORKFLOW_QUALITY_CRITERION_IDS['assumption-handling'] }] },
+  },
+}
+
+const TIER_ORDER = ['critical', 'major', 'minor']
+
+test('rubric 15.0.0 tiers every criterion and weights it as the spec tier tables state', async () => {
+  const rubric = await automatedRubric()
+  assert.equal(rubric.version, '15.0.0')
+  assert.deepEqual(rubric.components.map(({ id }) => id), Object.keys(TIER_TABLES))
+  const rows = rubricCriteria(rubric)
+  for (const component of rubric.components) {
+    const table = TIER_TABLES[component.id]
+    assert.deepEqual(component.tier_weights, table.weights, component.id)
+    assert.deepEqual(component.subcomponents.map(({ id }) => id), Object.keys(table.subcomponents), component.id)
+    for (const subcomponent of component.subcomponents) {
+      const [points, tiers] = table.subcomponents[subcomponent.id]
+      assert.equal(subcomponent.points, points, subcomponent.id)
+      const expected = Object.fromEntries(Object.entries(tiers).flatMap(([tier, ids]) => ids.map((id) => [id, tier])))
+      assert.deepEqual(Object.keys(subcomponent.tiers).sort(), [...subcomponent.criteria].sort(), subcomponent.id)
+      assert.deepEqual(Object.keys(expected).sort(), [...subcomponent.criteria].sort(), subcomponent.id)
+      assert.deepEqual(subcomponent.tiers, Object.fromEntries(subcomponent.criteria.map((id) => [id, expected[id]])),
+        subcomponent.id)
+      for (const id of subcomponent.criteria) {
+        const row = rows.find((entry) => entry.id === id)
+        assert.equal(row.tier, expected[id], id)
+        assert.equal(row.criterion_points, expected[id] === 'gate-input' ? 0 : table.weights[expected[id]], id)
+      }
+    }
+  }
+})
+
+test('tier weights decrease strictly, stay at most 2, are sixteenths, and sum to each component', async () => {
+  const rubric = await automatedRubric()
+  const rows = rubricCriteria(rubric)
+  for (const component of rubric.components) {
+    const weights = TIER_ORDER.filter((tier) => tier in component.tier_weights).map((tier) => component.tier_weights[tier])
+    assert.ok(weights.length > 0, component.id)
+    for (const [index, weight] of weights.entries()) {
+      assert.ok(weight > 0 && weight <= 2, `${component.id} ${weight}`)
+      assert.ok(Number.isInteger(weight * 16), `${component.id} ${weight} is not a sixteenth`)
+      if (index > 0) assert.ok(weight < weights[index - 1], `${component.id} weights must decrease strictly`)
+    }
+    const own = rows.filter((row) => row.component === component.id)
+    assert.equal(own.reduce((sum, { criterion_points: points }) => sum + points, 0), component.points, component.id)
+    for (const subcomponent of component.subcomponents) {
+      assert.equal(
+        own.filter((row) => row.subcomponent === subcomponent.id).reduce((sum, { criterion_points: points }) => sum + points, 0),
+        subcomponent.points, subcomponent.id,
+      )
+    }
+  }
+  // Scene kit uses sixteenths to fit the morph criterion; the rest stay in eighths.
+  for (const component of rubric.components.filter(({ id }) => id !== 'scene-kit-correctness')) {
+    assert.ok(Object.values(component.tier_weights).every((weight) => Number.isInteger(weight * 8)), component.id)
+  }
+  assert.equal(rubric.automated_points, 70)
+  assert.equal(rubric.total_points, 100)
+  assert.equal(rubric.automated_pass_threshold, 40)
+})
+
+test('only the two outline inputs are zero-point gate inputs, and they stay listed with their fallbacks', async () => {
+  const rubric = await automatedRubric()
+  const gateInputs = rubricCriteria(rubric).filter(({ tier }) => tier === 'gate-input')
+  assert.deepEqual(gateInputs.map(({ id, subcomponent, evaluator, criterion_points: points }) => [id, subcomponent, evaluator, points]), [
+    ['demo-route-and-registration', 'demo-canonical-content', 'deterministic-browser', 0],
+    ['demo-nine-step-content-and-order', 'demo-canonical-content', 'deterministic-browser', 0],
+  ])
+  assert.deepEqual(OUTLINE_GATE_INPUTS, gateInputs.map(({ id }) => id))
+  for (const { id } of gateInputs) {
+    assert.equal(rubric.fallbacks[id].job, 'demo-integration', id)
+    assert.match(rubric.fallbacks[id].guidance.join('\n'), /no points[\s\S]*verification-sample-outline/, id)
+    assert.equal(rubric.removed.some((entry) => entry.id === id), false, id)
+  }
+  // A gate input is still a listed criterion, so the legacy count and the
+  // fallback declarations stay valid.
+  assert.deepEqual(validateAutomatedRubric(rubric), [])
+  assert.match(rubric.fallbacks['demo-step-and-transition-reliability'].requirement, /step index/)
+})
+
+test('rubric validation rejects a rubric that breaks the tier rules', async () => {
+  const rubric = await automatedRubric()
+  const errorsFor = (mutate) => {
+    const copy = structuredClone(rubric)
+    mutate(copy)
+    return validateAutomatedRubric(copy).join('\n')
+  }
+  const component = (copy, id) => copy.components.find((entry) => entry.id === id)
+  const subcomponent = (copy, id) => copy.components.flatMap(({ subcomponents }) => subcomponents).find((entry) => entry.id === id)
+
+  assert.match(errorsFor((copy) => { delete subcomponent(copy, 'demo-code-boundaries').tiers['demo-scope-discipline'] }),
+    /criterion demo-scope-discipline has no tier/)
+  assert.match(errorsFor((copy) => { subcomponent(copy, 'demo-code-boundaries').tiers['demo-scope-discipline'] = 'trivial' }),
+    /criterion demo-scope-discipline has unknown tier trivial/)
+  assert.match(errorsFor((copy) => { subcomponent(copy, 'demo-code-boundaries').tiers['scene-kit-anything'] = 'minor' }),
+    /subcomponent demo-code-boundaries tiers unknown criterion scene-kit-anything/)
+  assert.match(errorsFor((copy) => { delete subcomponent(copy, 'demo-code-boundaries').tiers }),
+    /subcomponent demo-code-boundaries requires tiers/)
+  // gate-input is reserved for the outline gate's two inputs.
+  assert.match(errorsFor((copy) => {
+    subcomponent(copy, 'demo-code-boundaries').tiers['demo-scope-discipline'] = 'gate-input'
+    subcomponent(copy, 'demo-code-boundaries').points = 1
+  }), /criterion demo-scope-discipline cannot be a gate-input/)
+  assert.match(errorsFor((copy) => {
+    subcomponent(copy, 'demo-canonical-content').tiers['demo-route-and-registration'] = 'major'
+    subcomponent(copy, 'demo-canonical-content').points = 6
+  }), /outline input demo-route-and-registration must be a gate-input/)
+  // A tier the component does not weight.
+  assert.match(errorsFor((copy) => { subcomponent(copy, 'testing-evidence-quality-criteria').tiers['testing-evidence-usable-proof'] = 'minor' }),
+    /criterion testing-evidence-usable-proof tier minor has no weight in component testing-evidence-quality/)
+  // The weight ladder.
+  assert.match(errorsFor((copy) => { component(copy, 'demo-technical-quality').tier_weights.critical = 2.5 }),
+    /component demo-technical-quality tier weight critical 2\.5 exceeds 2/)
+  assert.match(errorsFor((copy) => { component(copy, 'demo-technical-quality').tier_weights.minor = 1 }),
+    /component demo-technical-quality tier weights must decrease strictly from critical to minor/)
+  assert.match(errorsFor((copy) => { component(copy, 'demo-technical-quality').tier_weights.minor = 0.55 }),
+    /component demo-technical-quality tier weight minor 0\.55 is not a multiple of 1\/16/)
+  assert.match(errorsFor((copy) => { component(copy, 'demo-technical-quality').tier_weights.minor = 0 }),
+    /component demo-technical-quality tier weight minor 0 must be a positive number/)
+  assert.match(errorsFor((copy) => { delete component(copy, 'demo-technical-quality').tier_weights }),
+    /component demo-technical-quality requires tier_weights/)
+  assert.match(errorsFor((copy) => { component(copy, 'demo-technical-quality').tier_weights.trivial = 0.25 }),
+    /component demo-technical-quality has unknown tier weight trivial/)
+  // Subcomponent and component sums.
+  assert.match(errorsFor((copy) => { component(copy, 'scene-kit-correctness').tier_weights.minor = 0.125 }),
+    /subcomponent scene-step-model points 2\.5625 are not the sum of its criterion weights 2\.4375/)
+  assert.match(errorsFor((copy) => {
+    const kit = component(copy, 'scene-kit-correctness')
+    kit.tier_weights.minor = 0.125
+    for (const row of kit.subcomponents) {
+      row.points = row.criteria.reduce((sum, id) => sum + kit.tier_weights[row.tiers[id]], 0)
+    }
+  }), /component scene-kit-correctness subcomponent points sum to 18\.75, expected 20/)
+})
+
+test('a rubric file that breaks the tier rules cannot be loaded, so nothing is scored with it', async () => {
+  const directory = await makeTempDir(join(tmpdir(), 'rubric-tiers-'))
+  const broken = await automatedRubric()
+  broken.components.find(({ id }) => id === 'demo-technical-quality').tier_weights.critical = 2.5
+  const automatedPath = join(directory, 'automated-rubric.json')
+  await writeFile(automatedPath, JSON.stringify(broken))
+  await assert.rejects(loadRubrics({ automatedPath }), /automated-rubric\.json is invalid: .*tier weight critical 2\.5 exceeds 2/)
+})
+
+test('the ungrouped-transition morph criterion is a major scene-kit criterion traced to persisting morphs', async () => {
+  const rubric = await automatedRubric()
+  const rows = rubricCriteria(rubric)
+  const row = rows.find(({ id }) => id === 'entity-ungrouped-transition-morph')
+  assert.deepEqual(
+    { component: row.component, subcomponent: row.subcomponent, job: row.job, tier: row.tier, points: row.criterion_points },
+    { component: 'scene-kit-correctness', subcomponent: 'scene-entity-transitions', job: 'scene-kit', tier: 'major', points: 0.75 },
   )
+  assert.equal(rows.filter(({ id }) => id === 'entity-ungrouped-transition-morph').length, 1)
+  assert.equal(LEGACY_CRITERION_IDS.includes('entity-ungrouped-transition-morph'), false)
+  assert.equal(rows.filter(({ job }) => job === 'scene-kit').length, 29)
+  assert.deepEqual(rubric.criterion_sources['entity-ungrouped-transition-morph'], {
+    owner: 'fixture',
+    document: 'openspec/changes/create-and-scene/specs/evolving-scene-presentations/spec.md',
+    heading: 'Scenario: Persisting entity morphs',
+    quote: 'navigating between them animates that entity from its old state (position, size, label, emphasis) to its new state in place',
+  })
+  const guidance = rubric.components.flatMap(({ subcomponents }) => subcomponents)
+    .find(({ id }) => id === 'scene-entity-transitions').review_guidance.join('\n')
+  assert.match(guidance, /For entity-ungrouped-transition-morph[^\n]*do not share a scene group[^\n]*vanishes and reappears/)
+  assert.match(guidance, /AnimatePresence with mode="wait"/)
+  assert.match(guidance, /mode="popLayout"[^\n]*mode="sync" when the outgoing step is taken out of layout flow/)
+  assert.match(guidance, /keeps both steps mounted while the entity primitives hide the incoming copy until the outgoing copy has faded out/)
+  assert.match(guidance, /the persisting entity stays visible while it animates[^\n]*The mode alone does not establish a pass\./)
+  assert.match(guidance, /Do not deduct entity-persisting-morph for a step transition that hides the morph across ungrouped steps[^\n]*only under entity-ungrouped-transition-morph/)
+  const owned = new Map(rubric.eval_owned_values.map(({ value, reason }) => [value, reason]))
+  for (const value of ['AnimatePresence', 'mode="wait"', 'popLayout', 'sync']) {
+    assert.match(owned.get(value) ?? '', /entity-ungrouped-transition-morph/, value)
+  }
+})
+
+test('rubric 15.0.0 fixes the departing-exit, overlap, and active-state guidance', async () => {
+  const rubric = await automatedRubric()
+  const guidance = (id) => rubric.components.flatMap(({ subcomponents }) => subcomponents)
+    .find((row) => row.id === id).review_guidance.join('\n')
+  const transitions = guidance('scene-entity-transitions')
+  assert.match(transitions, /For entity-departing-exit, pass when the kit provides an exit mechanism that keeps a departing entity rendered while it animates out/)
+  assert.match(transitions, /An opt-in exit wrapper the sample uses satisfies it/)
+  assert.match(transitions, /do not additionally require the scene-kit boundary to preserve entities removed by plain conditional rendering, or a focused integration test/)
+  assert.doesNotMatch(transitions, /an opt-in wrapper alone is insufficient/)
+  // Every identified sample newcomer is judged, including one rendered outside the kit's animated primitives.
+  assert.match(transitions, /when any entity the delivered sample introduces has no entry motion at all/)
+  assert.match(transitions, /Judge every entity the delivered sample introduces on a step, meaning each element the sample gives a stable identity/)
+  assert.match(transitions, /a delayed kit path that most newcomers use does not excuse one that appears with no entry motion/)
+  assert.match(transitions, /A structural wrapper the sample gives no identity is not an entity for this criterion\./)
+  // Fixed chrome padding and gaps are placement geometry, not a spacing scale.
+  const style = guidance('scene-style-and-attribution')
+  assert.match(style, /For style-kit-hooks, a spacing scale is a spacing system the kit makes presentations adopt/)
+  assert.match(style, /chrome-placement geometry the requirement calls layout behavior[^\n]*they do not fail this criterion\./)
+  const warnings = guidance('verification-warnings')
+  assert.doesNotMatch(warnings, /Fail when the comparison drops chrome that has no text content\./)
+  assert.match(warnings, /drops chrome without text content fails only when the candidate's presentation renders textless chrome/)
+  assert.match(warnings, /every chrome element the candidate renders contains text, that omission does not fail/)
+  assert.match(warnings, /Fail visual-helper-active-state-warning when the helper compares the active indicator with a control that is not a step indicator, such as the Previous or Next control/)
+})
+
+test('rubric 15.0.0 judges usable proof and the honest record against the finite scenario basis', async () => {
+  const rubric = await automatedRubric()
+  const row = rubric.components.flatMap(({ subcomponents }) => subcomponents).find(({ job }) => job === 'testing-evidence')
+  const definition = (id) => row.criterion_definitions[id]
+  const proof = definition('testing-evidence-usable-proof')
+  assert.match(proof, /scenarios of the approved specs/)
+  assert.match(proof, /material when it asserts that a basis scenario was exercised or observed/)
+  assert.match(proof, /claim that maps to no basis scenario does not fail this criterion/)
+  assert.match(proof, /Fail only on a named material claim[^.]*basis scenario, the claim, and the evidence that is missing or defective/)
+  assert.doesNotMatch(proof, /each behavior the candidate claims/)
+  const honest = definition('testing-evidence-complete-honest-record')
+  assert.match(honest, /Do not compare the exploration plan with the exploration log/)
+  assert.match(honest, /testing-evidence-traceable-coverage alone scores/)
+  assert.match(honest, /whether or not (?:the claim|it) maps to a basis scenario/)
+  assert.doesNotMatch(honest, /Compare every behavior the exploration plan commits to/)
+  assert.doesNotMatch(honest, /Only a material omission counts/)
+  const coverage = definition('testing-evidence-traceable-coverage')
+  assert.match(coverage, /only criterion that scores an omitted behavior/)
+  // The assumption judge's plan-omission pointer follows the omission.
+  const assumption = rubric.components.find(({ id }) => id === 'assumption-handling-quality')
+    .subcomponents[0].review_guidance.join('\n')
+  assert.match(assumption, /Do not fail it for a plan commitment[^.]*scored once, under testing-evidence-traceable-coverage/)
+  assert.doesNotMatch(assumption, /plan commitment[^.]*testing-evidence-complete-honest-record/)
 })

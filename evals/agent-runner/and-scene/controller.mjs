@@ -60,7 +60,21 @@ import {
 } from './lib/result.mjs'
 import { JUDGE_REASONING_EFFORT, createSuiteJudgeInvoker } from './lib/judge-invoker.mjs'
 import { hideValidatorFromAgents } from './lib/validator-availability.mjs'
-import { runProductJudging } from './lib/judge-jobs.mjs'
+import { PRODUCT_JUDGE_PROFILE, productJudgeJobs, runProductJudging } from './lib/judge-jobs.mjs'
+import {
+  DIAGNOSTIC_FILE,
+  DIAGNOSTIC_MODE,
+  compareDiagnosticIdentity,
+  diagnosticStatus,
+  diagnosticVerdicts,
+  evaluatorContentManifest,
+  expectedForSource,
+  normalizeJudgeJobs,
+  parseExpectedFile,
+  readExpectedFile,
+  writeDiagnostic,
+  writeDiagnosticResult,
+} from './lib/judge-diagnostic.mjs'
 import {
   buildCandidateEvidenceManifest,
   buildEvaluatorEvidenceManifest,
@@ -72,7 +86,7 @@ import {
 import { materializeNeutralInputs } from './lib/neutral-source.mjs'
 import { applyOutcomeEvent, createOutcome } from './lib/outcomes.mjs'
 import { applyRunStateEvent } from './lib/state-machine.mjs'
-import { loadRubrics, rubricProvenance } from './lib/rubric.mjs'
+import { criteriaForJob, loadRubrics, rubricProvenance } from './lib/rubric.mjs'
 import { scoreProduct } from './lib/scorer.mjs'
 import { resolveDeterministic } from './lib/scorer.mjs'
 import {
@@ -119,7 +133,21 @@ import {
 } from './lib/workflow.mjs'
 
 const SUITE_DIR = dirname(fileURLToPath(import.meta.url))
+const EVALS_ROOT = resolve(SUITE_DIR, '../../..')
 const DEFAULT_CAPABILITIES = join(SUITE_DIR, 'agent-runner-capabilities.json')
+// What the judge diagnostic's evaluator content hash covers, by repository path.
+const EVALUATOR_ROOTS = {
+  'evals/lib': join(EVALS_ROOT, 'evals/lib'),
+  'evals/agent-runner/and-scene': SUITE_DIR,
+}
+
+// run.sh exports the evaluator revision it launched from; a direct invocation
+// asks Git for it.
+function currentEvaluatorCommit() {
+  if (process.env.AGENT_EVALS_SOURCE_COMMIT) return process.env.AGENT_EVALS_SOURCE_COMMIT
+  const head = spawnSync('git', ['-C', EVALS_ROOT, 'rev-parse', 'HEAD'], { encoding: 'utf8' })
+  return head.status === 0 ? head.stdout.trim() || null : null
+}
 const BROWSER_EVALUATOR_FILES = [
   'lib/browser-eval.mjs',
   'lib/axi-browser-driver.mjs',
@@ -143,6 +171,8 @@ const VALUES = new Map([
   ['--fixture-ref', 'fixtureRef'],
   ['--candidate-ref', 'candidateRef'],
   ['--rescore-from', 'rescoreFrom'],
+  ['--judge-jobs', 'judgeJobs'],
+  ['--expected', 'expectedPath'],
   ['--judge-model', 'judgeModel'],
   ['--capabilities', 'capabilitiesPath'],
   ['--lead-cli', 'leadCli'],
@@ -163,7 +193,7 @@ export function parseArgs(argv) {
     referenceBaseline: false,
     changeName: 'create-and-scene',
     changeNameProvided: false,
-    judgeModel: 'gpt-6-sol',
+    judgeModel: 'gpt-6.1-sol',
     repo: 'https://github.com/Codagent-AI/and-scene.git',
     fixtureRef: 'f0695b96c0c23b2d17ecc6cfbaf8be1fcdedd6f8',
     capabilitiesPath: DEFAULT_CAPABILITIES,
@@ -183,7 +213,21 @@ export function parseArgs(argv) {
     index += 1
   }
   if (!options.runDir) throw new Error('--run-dir is required')
-  if (options.rescoreFrom && (options.resume || options.referenceBaseline || options.candidateRef)) {
+  // The job-filtered judging diagnostic: a rescore that judges only the named
+  // jobs and, unlike an ordinary rescore, may be resumed in its own directory.
+  options.diagnostic = options.judgeJobs !== undefined || options.expectedPath !== undefined
+  if (options.diagnostic) {
+    if (options.judgeJobs === undefined || options.expectedPath === undefined) {
+      throw new Error('--judge-jobs and --expected must be given together')
+    }
+    if (options.referenceBaseline || options.candidateRef) {
+      throw new Error('--judge-jobs cannot be combined with --reference-baseline or --candidate-ref')
+    }
+    if (!options.rescoreFrom && !options.resume) throw new Error('--judge-jobs requires --rescore-from')
+  }
+  if (options.rescoreFrom && (
+    (options.resume && !options.diagnostic) || options.referenceBaseline || options.candidateRef
+  )) {
     throw new Error(
       '--rescore-from cannot be combined with --resume, --reference-baseline, or --candidate-ref',
     )
@@ -223,6 +267,29 @@ function importedRunReference(run) {
 
 function failure(errors) {
   return { exitCode: 2, errors, outcome: null }
+}
+
+// The harness failure for exhausted judge output.
+function judgeOutputError(judging, pendingSecondOpinions) {
+  const error = new Error(
+    `required judge output exhausted: ${[
+      ...(judging?.failed_jobs ?? []),
+      ...pendingSecondOpinions.map(({ id }) => `second-opinion:${id}`),
+    ].join(', ')}`,
+  )
+  error.code = 'judge-output'
+  const failures = Object.values(judging?.failures ?? {})
+  // A non-resumable harness failure outranks a resumable one: resuming
+  // would only rebuild the same packet or meet the same missing material.
+  const failure = failures.find(failure => failure.code === 'judge-schema-invalid')
+    ?? failures.find(failure => ['packet-overflow', 'missing-material', 'scope-inadequate'].includes(failure.code))
+    ?? failures.find(failure => failure.code === 'claude-quota')
+  if (failure) {
+    const { message, ...metadata } = failure
+    Object.assign(error, metadata)
+    error.message += `: ${message}`
+  }
+  return error
 }
 
 function runnerFailure(timing) {
@@ -299,7 +366,43 @@ function repositoryPermissionLevel(repository, worktree, exec) {
   return String(permission.stdout ?? '').trim().toUpperCase()
 }
 
-export async function runEvaluation({
+// A judge diagnostic that exits early still leaves diagnostic-result.json
+// naming the failure, once the directory is known to be its own: a fresh
+// diagnostic in an unused directory, or a resume whose identity was verified.
+// A refused resume changes nothing in the directory.
+export async function runEvaluation(args) {
+  const diagnostic = { writable: false, runDir: null, runId: null, judgeJobs: null, sourceRunId: null, expectedSha256: null }
+  const record = (errors) => writeDiagnosticResult(diagnostic.runDir, {
+    run_id: diagnostic.runId,
+    status: diagnosticStatus({ errors }),
+    source_run_id: diagnostic.sourceRunId,
+    judge_jobs: diagnostic.judgeJobs,
+    expected_sha256: diagnostic.expectedSha256,
+    errors,
+    verdicts: {},
+  })
+  let result
+  try {
+    result = await evaluateRun(args, diagnostic)
+  } catch (error) {
+    // An unexpected throw still leaves the failure record a diagnostic
+    // promises; the original error is rethrown either way.
+    if (diagnostic.writable) {
+      await record([{ code: 'diagnostic-error', message: error?.message ?? String(error) }]).catch(() => {})
+    }
+    throw error
+  }
+  if (diagnostic.writable && result.exitCode === 2 && result.errors?.length > 0) {
+    try {
+      await record(result.errors)
+    } catch (error) {
+      result.errors.push({ code: 'diagnostic-result', message: `cannot write diagnostic-result.json: ${error.message}` })
+    }
+  }
+  return result
+}
+
+async function evaluateRun({
   argv,
   exec,
   isProcessAlive = (pid) => { try { process.kill(pid, 0); return true } catch { return false } },
@@ -339,8 +442,12 @@ export async function runEvaluation({
   // Linking a run store into a home is also a real side effect, so library
   // callers name the home they mean instead of inheriting the ambient one.
   home = null,
+  // The judge diagnostic's evaluator identity: its revision and the
+  // directories its content hash covers. Injected so a test can edit a copy.
+  readEvaluatorCommit = currentEvaluatorCommit,
+  evaluatorRoots = EVALUATOR_ROOTS,
   log = () => {},
-}) {
+}, diagnosticExit = {}) {
   exec ??= (command, args, options = {}) => spawnSync(command, args, { encoding: 'utf8', ...options })
   let options
   try {
@@ -353,6 +460,34 @@ export async function runEvaluation({
   const runId = options.runId
   const mode = options.referenceBaseline ? 'reference-baseline' : 'agent-runner'
   const runKind = options.referenceBaseline ? 'reference' : 'candidate'
+
+  // A diagnostic directory is resumed only as a diagnostic, which restores its
+  // source from diagnostic.json; an ordinary directory never becomes one.
+  const recordedDiagnostic = options.resume
+    ? await readJson(join(runDir, DIAGNOSTIC_FILE), null).catch(() => ({ mode: 'unreadable' }))
+    : null
+  let diagnostic = null
+  if (options.diagnostic) {
+    if (options.resume && !recordedDiagnostic) {
+      return failure([{
+        code: 'diagnostic-state-missing',
+        message: `cannot resume ${runId} as a judge diagnostic: ${DIAGNOSTIC_FILE} does not exist`,
+      }])
+    }
+    if (recordedDiagnostic && recordedDiagnostic.mode !== DIAGNOSTIC_MODE) {
+      return failure([{ code: 'diagnostic-state', message: `${DIAGNOSTIC_FILE} in ${runId} is not a judge diagnostic record` }])
+    }
+    options.rescoreFrom ??= recordedDiagnostic?.source?.path
+    diagnostic = { recorded: recordedDiagnostic, identity: null, expected: null }
+    Object.assign(diagnosticExit, { runDir, runId })
+    // A fresh diagnostic owns only a directory no evaluation has used.
+    diagnosticExit.writable = !options.resume && await hashFile(join(runDir, 'run-state.json')) === null
+  } else if (recordedDiagnostic) {
+    return failure([{
+      code: 'diagnostic-flags-missing',
+      message: `${runId} is a judge diagnostic; resume it with the same --judge-jobs and --expected`,
+    }])
+  }
   const rescore = Boolean(options.rescoreFrom)
 
   let importedRun = null
@@ -420,6 +555,61 @@ export async function runEvaluation({
   }
   const provenanceOfRubrics = rubricProvenance(rubrics)
   const browserEvaluatorFingerprint = await fingerprintFiles(BROWSER_EVALUATOR_FILES)
+
+  if (diagnostic) {
+    // The identity is recomputed in full before any checkpoint is consulted,
+    // so a resume against anything else is refused with nothing reused.
+    try {
+      const judgeJobs = normalizeJudgeJobs(options.judgeJobs, productJudgeJobs(rubrics, { mode }).map(({ id }) => id))
+      const expected = await readExpectedFile(resolve(options.expectedPath))
+      const content = await evaluatorContentManifest(evaluatorRoots)
+      diagnostic.expected = expected
+      diagnostic.identity = {
+        judge_jobs: judgeJobs,
+        source: {
+          path: importedRun.source_dir,
+          run_id: importedRun.source_run_id,
+          provenance_sha256: importedRun.provenance_sha256,
+          manifest_hashes: importedRun.manifest_hashes ?? null,
+          final_sha: importedRun.delivery?.final_sha ?? null,
+        },
+        evaluator_commit: readEvaluatorCommit(),
+        evaluator_content_sha256: content.sha256,
+        evaluator_content_manifest: content.files,
+        judge_profiles: { panel: PRODUCT_JUDGE_PROFILE, judge_model: options.judgeModel, reasoning_effort: JUDGE_REASONING_EFFORT },
+        rubric: provenanceOfRubrics.automated,
+        rubric_sha256: provenanceOfRubrics.automated.sha256,
+        expected: { path: expected.path, sha256: expected.sha256 },
+      }
+    } catch (error) {
+      return failure([{ code: error.code ?? 'invalid-diagnostic', message: error.message }])
+    }
+    if (diagnostic.recorded) {
+      const mismatches = compareDiagnosticIdentity(diagnostic.recorded, diagnostic.identity)
+      if (mismatches.length > 0) {
+        return failure(mismatches.map((mismatch) => ({ code: 'diagnostic-identity-mismatch', ...mismatch })))
+      }
+      diagnosticExit.writable = true
+    }
+    Object.assign(diagnosticExit, {
+      judgeJobs: diagnostic.identity.judge_jobs,
+      sourceRunId: importedRun.source_run_id,
+      expectedSha256: diagnostic.expected.sha256,
+    })
+    if (!diagnostic.identity.evaluator_commit) {
+      return failure([{ code: 'evaluator-commit', message: 'cannot determine the evaluator revision for the judge diagnostic' }])
+    }
+    try {
+      const judged = [
+        ...diagnostic.identity.judge_jobs.flatMap((job) => criteriaForJob(rubrics.automated.rubric, job)),
+        ...Object.entries(rubrics.automated.rubric.fallbacks ?? {})
+          .filter(([, fallback]) => diagnostic.identity.judge_jobs.includes(fallback.job)).map(([id]) => id),
+      ]
+      expectedForSource(parseExpectedFile(diagnostic.expected), importedRun.source_run_id, judged)
+    } catch (error) {
+      return failure([{ code: error.code ?? 'invalid-expected', message: error.message }])
+    }
+  }
 
   // A reference baseline evaluates an existing candidate without invoking Agent
   // Runner, so it needs no clean checkout or workflow contract.
@@ -498,6 +688,7 @@ export async function runEvaluation({
       message: `cannot resume ${runId}: run-state.json does not exist`,
     }])
   }
+  if (diagnostic && !diagnostic.recorded) await writeDiagnostic(runDir, diagnostic.identity)
 
   const candidateWorktree = join(runDir, '.runtime/candidate-worktree')
   const freezeCurrentCandidate = () => freezeCandidate({
@@ -834,6 +1025,9 @@ export async function runEvaluation({
   async function runTerminalSecondOpinion({ gate, stage, reason, verified = null, phase }) {
     if (mode === 'reference-baseline') return null
     record.terminalFailure = { gate, stage, reason }
+    // A diagnostic takes no second opinion: a rep that no longer builds or
+    // serves under the current harness is simply unloadable.
+    if (diagnostic) return null
     if (!judgeInvoke) {
       throw Object.assign(new Error('terminal failure has no second-opinion invoker'), {
         owner: 'evaluation-harness', code: 'judge-output', resumable: true,
@@ -1553,8 +1747,16 @@ export async function runEvaluation({
             await saveCheckpoint(checkpointPath, checkpoint)
           },
           invoke: judgeInvoke,
+          ...(diagnostic ? { jobs: diagnostic.identity.judge_jobs } : {}),
         })
         await writeJsonAtomic(join(runDir, 'phases/product-judging.json'), record.judging)
+      }
+
+      // The diagnostic stops at its judge outputs: no second opinion, score,
+      // or outcome event can follow from a calibration judging.
+      if (diagnostic) {
+        if (record.judging.failed_jobs.length > 0) throw judgeOutputError(record.judging, [])
+        return []
       }
 
       const secondOpinions = {}
@@ -1640,22 +1842,7 @@ export async function runEvaluation({
       })
       await writeJsonAtomic(join(runDir, 'phases/score.json'), record.score)
       if ((record.judging?.failed_jobs ?? []).length > 0 || pendingSecondOpinions.length > 0) {
-        const error = new Error(
-          `required judge output exhausted: ${[
-            ...(record.judging?.failed_jobs ?? []),
-            ...pendingSecondOpinions.map(({ id }) => `second-opinion:${id}`),
-          ].join(', ')}`,
-        )
-        error.code = 'judge-output'
-        const failures = Object.values(record.judging?.failures ?? {})
-        const failure = failures.find(failure => failure.code === 'judge-schema-invalid')
-          ?? failures.find(failure => failure.code === 'claude-quota')
-        if (failure) {
-          const { message, ...metadata } = failure
-          Object.assign(error, metadata)
-          error.message += `: ${message}`
-        }
-        throw error
+        throw judgeOutputError(record.judging, pendingSecondOpinions)
       }
       return [{
         type: 'automated-scoring-complete',
@@ -1772,6 +1959,15 @@ export async function runEvaluation({
 
     ...handlerOverrides,
   }
+  // A diagnostic runs no other judge job and writes no official result: its
+  // result phases record only diagnostic-result.json.
+  if (diagnostic) {
+    const skipped = (phase) => async () => { record.events.push({ event: 'skipped', phase, reason: DIAGNOSTIC_MODE }) }
+    handlers['ambiguity-diagnostics'] = skipped('ambiguity-diagnostics')
+    handlers['metrics-pricing'] = skipped('metrics-pricing')
+    handlers['pending-result'] = async (context) => { await writeDiagnosticOutcome(context.outcome) }
+    handlers['cleanup-result'] = async (context) => { await writeDiagnosticOutcome(context.outcome) }
+  }
   // The browser is needed only while the live demo is evaluated; holding it
   // through source judging costs a small host gigabytes for nothing.
   const evaluateInBrowser = handlers['browser-evaluation']
@@ -1870,6 +2066,33 @@ export async function runEvaluation({
         candidateServer: record.candidateServer,
       })
     await writeResultArtifacts({ runDir, result })
+  }
+
+  async function writeDiagnosticOutcome(outcome) {
+    const judging = record.judging
+    await writeDiagnosticResult(runDir, {
+      run_id: runId,
+      status: diagnosticStatus({ outcome }),
+      source_run_id: importedRun.source_run_id,
+      judge_jobs: diagnostic.identity.judge_jobs,
+      expected_sha256: diagnostic.expected.sha256,
+      outcome: {
+        failed_phase: outcome.failed_phase,
+        failure: outcome.failure,
+        resumable: outcome.resumable,
+        product_failure: outcome.product_failure ?? (record.terminalFailure ? { ...record.terminalFailure } : null),
+      },
+      judging: judging ? {
+        judging_protocol: judging.judging_protocol,
+        expected_jobs: judging.expected_jobs,
+        failed_jobs: judging.failed_jobs,
+        failures: judging.failures,
+        reused_jobs: judging.reused_jobs,
+        judges: Object.fromEntries(judging.expected_jobs.map((job) => [job, `phases/judges/${job}.json`])),
+      } : null,
+      browser_evaluated: Boolean(record.browser),
+      verdicts: diagnosticVerdicts(judging),
+    })
   }
 
   const completedPhases = new Set()

@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { criteriaForJob, deterministicCriteria, loadRubrics } from '../evals/agent-runner/and-scene/lib/rubric.mjs'
+import { renderReport } from '../evals/agent-runner/and-scene/lib/report.mjs'
+import {
+  criteriaForJob, deterministicCriteria, loadRubrics, validateAutomatedRubric,
+} from '../evals/agent-runner/and-scene/lib/rubric.mjs'
 import { scoreProduct } from '../evals/agent-runner/and-scene/lib/scorer.mjs'
 
 const rubrics = await loadRubrics()
@@ -97,7 +100,9 @@ test('a not-observed scene criterion is resolved by its declared fallback judge'
   assert.equal(criterion.verdict_source, 'fallback')
   assert.equal(criterion.fallback_job, 'demo-integration')
   assert.equal(result.fallback.criteria, 1)
-  assert.equal(result.fallback.points, 0.8)
+  // A critical demo criterion earns 2 points whoever decides it.
+  assert.equal(criterion.tier, 'critical')
+  assert.equal(result.fallback.points, 2)
 })
 
 test('a pending human review reports the subtotal but no official total or verdict', () => {
@@ -142,7 +147,8 @@ test('a complete automated subtotal below 40 fails before human review', () => {
     ...criteriaForJob(automated, 'testing-evidence'),
     ...criteriaForJob(automated, 'assumption-handling'),
     ...engineeringCriteria(),
-    subcomponentCriteria('scene-kit-correctness', 'scene-step-model')[0],
+    // A major demo criterion is worth exactly 1 point.
+    'demo-present-mode-behavior',
   ]
 
   const result = scoreProduct(inputs({ failures }))
@@ -186,21 +192,26 @@ test('a completed human review produces the official 100-point score and pass ve
   assert.deepEqual(result.incomplete, [])
 })
 
-test('a subcomponent divides its points equally among its criteria without rounding', () => {
-  const result = scoreProduct(inputs({ failures: ['attribution-top-left-opt-in'] }))
-  const style = component(result, 'scene-kit-correctness')
-    .subcomponents.find(({ id }) => id === 'scene-style-and-attribution')
+test('each criterion earns its tier weight without rounding', () => {
+  const result = scoreProduct(inputs({ failures: ['attribution-top-left-opt-in', 'navigation-keyboard'] }))
+  const kit = component(result, 'scene-kit-correctness')
+  const style = kit.subcomponents.find(({ id }) => id === 'scene-style-and-attribution')
+  const navigation = kit.subcomponents.find(({ id }) => id === 'scene-modes-and-navigation')
 
-  assert.equal(style.points_possible, 4)
-  // Six of seven criteria pass, so the row is worth exactly 24/7 — not a
-  // rounded 3.43, and not a float built by adding six separate 4/7 shares.
-  assert.equal(style.points_awarded, 24 / 7)
-  assert.equal(style.criteria.find(({ id }) => id === 'attribution-top-left-opt-in').points_awarded, 0)
-  assert.equal(component(result, 'scene-kit-correctness').points_awarded, 136 / 7)
-  assert.equal(result.automated_subtotal.points, 486 / 7)
+  // The subcomponent reports the sum of its criteria's weights: two majors at
+  // 0.75 and five minors at 0.25.
+  assert.equal(style.points_possible, 2.75)
+  assert.equal(style.points_awarded, 2.5)
+  const failed = style.criteria.find(({ id }) => id === 'attribution-top-left-opt-in')
+  assert.deepEqual([failed.tier, failed.points_possible, failed.points_awarded], ['minor', 0.25, 0])
+  // A critical scene-kit criterion is worth 1.5625, a sixteenth-exact weight.
+  assert.equal(navigation.points_possible, 7.3125)
+  assert.equal(navigation.points_awarded, 5.75)
+  assert.equal(kit.points_awarded, 18.1875)
+  assert.equal(result.automated_subtotal.points, 68.1875)
 })
 
-test('engineering quality splits fractional subcomponent points equally across its criteria', () => {
+test('engineering quality awards each criterion its tier weight', () => {
   const result = scoreProduct(inputs({ failures: [
     'engineering-skill-out-of-scope-redirects', 'engineering-tests-wait-on-state',
     'input-swipe-from-control-ignored', 'engineering-inspect-fails-loudly',
@@ -210,25 +221,28 @@ test('engineering quality splits fractional subcomponent points equally across i
 
   assert.equal(engineering.points_possible, 8)
   assert.equal(engineering.floor, null)
-  assert.equal(row('engineering-input-hygiene').points_awarded, 1)
-  assert.equal(row('engineering-verification-tooling-robustness').points_awarded, 2.5)
-  assert.equal(row('engineering-skill-instructions-and-templates').points_awarded, 1.125)
-  assert.equal(row('engineering-presentation-code-and-tests').points_awarded, 1.125)
-  assert.equal(engineering.points_awarded, 5.75)
-  assert.equal(result.automated_subtotal.points, 67.75)
+  // Each failure is a minor criterion worth 0.375.
+  assert.equal(row('engineering-input-hygiene').points_awarded, 0.375)
+  assert.equal(row('engineering-verification-tooling-robustness').points_awarded, 2.625)
+  assert.equal(row('engineering-skill-instructions-and-templates').points_awarded, 2.125)
+  assert.equal(row('engineering-presentation-code-and-tests').points_awarded, 1.375)
+  assert.equal(engineering.points_awarded, 6.5)
+  assert.equal(result.automated_subtotal.points, 68.5)
   assert.equal(result.automated_subtotal.possible, 70)
 })
 
 test('both automated floors hold at exactly 12.5 of 20 and fail just below it', () => {
+  // 7.5 of 20 demo points: two majors, two criticals, and three minors.
   const demoAtFloor = [
-    ...subcomponentCriteria('demo-technical-quality', 'demo-runtime-reliability').slice(0, 2),
+    'demo-mode-interaction-reliability', 'demo-control-semantics',
     ...subcomponentCriteria('demo-technical-quality', 'demo-scene-kit-integration'),
+    ...subcomponentCriteria('demo-technical-quality', 'demo-identity-and-grouping'),
     ...subcomponentCriteria('demo-technical-quality', 'demo-code-boundaries'),
   ]
+  // 7.5 of 20 scene-kit points: four criticals, a major, and two minors.
   const kitAtFloor = [
     ...subcomponentCriteria('scene-kit-correctness', 'scene-step-model'),
-    ...subcomponentCriteria('scene-kit-correctness', 'scene-entity-transitions').slice(0, 4),
-    subcomponentCriteria('scene-kit-correctness', 'scene-modes-and-navigation')[0],
+    'entity-persisting-morph', 'grouped-scene-updates-in-place', 'navigation-keyboard', 'navigation-clamp-start',
   ]
   const atFloor = scoreProduct(inputs({ failures: [...demoAtFloor, ...kitAtFloor], humanReview: fullHumanReview }))
   assert.equal(component(atFloor, 'demo-technical-quality').points_awarded, 12.5)
@@ -243,8 +257,7 @@ test('both automated floors hold at exactly 12.5 of 20 and fail just below it', 
   const belowFloor = scoreProduct(inputs({
     failures: [
       ...demoAtFloor, ...kitAtFloor,
-      subcomponentCriteria('demo-technical-quality', 'demo-runtime-reliability')[2],
-      subcomponentCriteria('scene-kit-correctness', 'scene-modes-and-navigation')[1],
+      'demo-step-and-transition-reliability', 'navigation-clamp-end',
     ],
   }))
   assert.equal(belowFloor.automated_pass, false)
@@ -258,7 +271,8 @@ test('every criterion result records its identifier, verdict, rationale, and cit
   const result = scoreProduct(inputs())
   const criteria = result.components.flatMap((entry) => entry.subcomponents.flatMap(({ criteria: rows }) => rows))
 
-  assert.equal(criteria.length, 101)
+  // Every listed criterion, including the two zero-point gate inputs.
+  assert.equal(criteria.length, 102)
   assert.ok(criteria.every(({ id, verdict, rationale, evidence }) => (
     typeof id === 'string' && ['pass', 'fail'].includes(verdict)
       && rationale.length > 0 && Array.isArray(evidence)
@@ -412,10 +426,10 @@ test('a partially observed component keeps its deterministic score and marks jud
 
   assert.equal(demo.complete, false)
   assert.equal(demo.points_awarded, null)
-  assert.equal(demo.points_observed, 11)
+  assert.equal(demo.points_observed, 14.5)
   assert.equal(
     demo.subcomponents.find(({ id }) => id === 'demo-canonical-content').points_awarded,
-    4,
+    5,
   )
   assert.equal(demo.subcomponents.find(({ id }) => id === 'demo-code-boundaries').points_awarded, null)
 })
@@ -579,4 +593,211 @@ test('a malformed gate result still fails validation', () => {
     () => scoreProduct({ ...base, gates: base.gates.slice(1) }),
     /missing criterion results for hard-gates/,
   )
+})
+
+// INT-004: the real rubric 15.0.0 file through validation, scoring, floors,
+// gates, eligibility, and the report.
+function criterionRow(result, id) {
+  return result.components.flatMap(({ subcomponents }) => subcomponents.flatMap(({ criteria }) => criteria))
+    .find((criterion) => criterion.id === id)
+}
+
+function outlineGate(result) {
+  return result.gates.find(({ id }) => id === 'verification-sample-outline')
+}
+
+test('rubric 15.0.0 validates and scores every verdict set by tier weight', () => {
+  assert.deepEqual(validateAutomatedRubric(automated), [])
+  assert.equal(rubrics.automated.version, '15.0.0')
+
+  const allPass = scoreProduct(inputs({ humanReview: fullHumanReview }))
+  assert.equal(allPass.automated_subtotal.points, 70)
+  assert.equal(allPass.official_score, 100)
+  assert.equal(allPass.official_pass, true)
+
+  // One critical failure costs the critical weight, wherever it sits.
+  const critical = scoreProduct(inputs({ failures: ['demo-required-scene-content'] }))
+  assert.equal(component(critical, 'demo-technical-quality').points_awarded, 18)
+  assert.equal(criterionRow(critical, 'demo-required-scene-content').tier, 'critical')
+  assert.equal(critical.automated_subtotal.points, 68)
+  assert.equal(critical.automated_pass, true)
+
+  // One minor failure costs the minor weight.
+  const minor = scoreProduct(inputs({ failures: ['demo-scope-discipline'] }))
+  assert.equal(component(minor, 'demo-technical-quality').points_awarded, 19.5)
+  assert.equal(minor.automated_subtotal.points, 69.5)
+
+  // The spec scenario: passing a critical and failing a minor moves the demo
+  // component by 2 and 0.5, whatever their subcomponents hold.
+  const mixed = scoreProduct(inputs({ failures: ['demo-scope-discipline', 'demo-required-scene-content'] }))
+  assert.equal(component(minor, 'demo-technical-quality').points_awarded
+    - component(mixed, 'demo-technical-quality').points_awarded, 2)
+  assert.equal(component(allPass, 'demo-technical-quality').points_awarded
+    - component(minor, 'demo-technical-quality').points_awarded, 0.5)
+  for (const result of [allPass, critical, minor, mixed]) assert.equal(outlineGate(result).verdict, 'pass')
+})
+
+// Skill and verification contracts: every judged criterion, failed alone,
+// costs exactly its tier weight from the spec tables.
+for (const [job, componentId, weights] of [
+  ['presentation-skill', 'presentation-skill-correctness', { critical: 0.75, major: 0.375, minor: 0.125 }],
+  ['verification-tooling', 'verification-tool-correctness', { critical: 1.25, major: 0.625, minor: 0.375 }],
+]) {
+  test(`each ${job} criterion failed alone costs its tier weight`, () => {
+    const ids = criteriaForJob(automated, job)
+    assert.ok(ids.length > 0)
+    const full = component(scoreProduct(inputs()), componentId).points_awarded
+    for (const id of ids) {
+      const result = scoreProduct(inputs({ failures: [id] }))
+      const row = criterionRow(result, id)
+      assert.equal(row.verdict, 'fail', id)
+      assert.equal(row.points_possible, weights[row.tier], id)
+      assert.equal(full - component(result, componentId).points_awarded, weights[row.tier], id)
+    }
+  })
+}
+
+test('a critical engineering failure leaves 6.625 of 8 engineering points', () => {
+  const result = scoreProduct(inputs({ failures: ['engineering-templates-build-at-destination'] }))
+  const engineering = component(result, 'engineering-quality')
+  assert.equal(engineering.points_awarded, 6.625)
+  assert.equal(engineering.points_possible, 8)
+  assert.equal(criterionRow(result, 'engineering-templates-build-at-destination').points_possible, 1.375)
+  assert.equal(result.automated_subtotal.points, 68.625)
+})
+
+test('a failed zero-point gate input changes no points but fails the outline gate and eligibility', () => {
+  for (const id of ['demo-route-and-registration', 'demo-nine-step-content-and-order']) {
+    const result = scoreProduct(inputs({ failures: [id], humanReview: fullHumanReview }))
+    const row = criterionRow(result, id)
+    assert.deepEqual([row.tier, row.verdict, row.points_possible, row.points_awarded], ['gate-input', 'fail', 0, 0], id)
+    assert.equal(component(result, 'demo-technical-quality').points_awarded, 20, id)
+    assert.equal(component(result, 'demo-technical-quality').subcomponents
+      .find(({ id: sub }) => sub === 'demo-canonical-content').points_awarded, 5, id)
+    assert.equal(result.automated_subtotal.points, 70, id)
+    assert.equal(outlineGate(result).verdict, 'fail', id)
+    assert.equal(result.automated_pass, false, id)
+    assert.deepEqual(result.automated_failures, [{
+      rule: 'hard-gate', id: 'verification-sample-outline', value: 'fail', required: 'pass',
+    }], id)
+    assert.equal(result.official_pass, false, id)
+  }
+})
+
+test('a not-observed gate input is fallback-judged for the outline gate and carries no points', () => {
+  const id = 'demo-nine-step-content-and-order'
+  const data = inputs()
+  data.deterministic = data.deterministic.map((row) => row.id === id
+    ? { ...row, verdict: null, outcome: 'not-observed', looked_for: ['data-presentation-title'], observed: false }
+    : row)
+  data.judges['demo-integration'] = [...data.judges['demo-integration'],
+    { id, verdict: 'fail', rationale: 'the sample has eight steps', evidence: ['src/demo.tsx:1'], citations: ['src/demo.tsx'] }]
+
+  const result = scoreProduct(data)
+  const row = criterionRow(result, id)
+  assert.equal(row.verdict_source, 'fallback')
+  assert.equal(row.points_possible, 0)
+  assert.equal(result.fallback.criteria, 1)
+  assert.equal(result.fallback.points, 0)
+  assert.equal(component(result, 'demo-technical-quality').points_awarded, 20)
+  assert.equal(outlineGate(result).verdict, 'fail')
+})
+
+test('an unresolved gate input leaves the outline gate unobserved while the demo component stays complete', () => {
+  // The nine-step input is not observed and its fallback verdict is unresolved
+  // because its second opinion never settled.
+  const id = 'demo-nine-step-content-and-order'
+  const pendingData = inputs({ humanReview: fullHumanReview })
+  pendingData.deterministic = pendingData.deterministic.map((row) => row.id === id
+    ? { ...row, verdict: null, outcome: 'not-observed', looked_for: ['data-presentation-title'], observed: false }
+    : row)
+  pendingData.judges['demo-integration'] = [...pendingData.judges['demo-integration'],
+    { id, verdict: 'fail', rationale: 'the sample has eight steps', evidence: ['src/demo.tsx:1'], citations: ['src/demo.tsx'] }]
+  const pending = scoreProduct({ ...pendingData, pendingSecondOpinions: [{ kind: 'criterion', id }] })
+  const demo = component(pending, 'demo-technical-quality')
+  assert.equal(demo.complete, true)
+  assert.equal(demo.points_awarded, 20)
+  assert.equal(outlineGate(pending).verdict, null)
+  assert.equal(outlineGate(pending).observed, false)
+  assert.equal(pending.gates_passed, null)
+  assert.equal(pending.automated_pass, null)
+  // The unresolved input is reported: its row keeps the browser evidence and
+  // no verdict, and the unobserved gate set is listed as incomplete.
+  const pendingRow = criterionRow(pending, id)
+  assert.deepEqual([pendingRow.verdict, pendingRow.observed, pendingRow.verdict_source, pendingRow.fallback_job],
+    [null, false, 'fallback', 'demo-integration'])
+  assert.deepEqual(pendingRow.not_observed.looked_for, ['data-presentation-title'])
+  assert.deepEqual(pending.incomplete, ['hard-gates'])
+  assert.equal(pending.official_score, null)
+  assert.equal(pending.official_pass, null)
+  // An unresolved input is neither a gate pass nor a product failure.
+  assert.deepEqual(pending.automated_failures, [])
+  assert.deepEqual(pending.pass_failures, [])
+
+  // Not observed with no fallback verdict: the canonical-content row still
+  // reports its scored criteria while the gate it feeds stays unobserved.
+  const data = inputs({ omit: ['demo-integration'] })
+  data.deterministic = data.deterministic.map((row) => row.id === 'demo-nine-step-content-and-order'
+    ? { ...row, verdict: null, outcome: 'not-observed', observed: false }
+    : row)
+  const unjudged = scoreProduct(data)
+  const canonical = component(unjudged, 'demo-technical-quality').subcomponents
+    .find(({ id }) => id === 'demo-canonical-content')
+  assert.equal(canonical.complete, true)
+  assert.equal(canonical.points_awarded, 5)
+  const row = criterionRow(unjudged, 'demo-nine-step-content-and-order')
+  assert.equal(row.verdict_source, 'unresolved')
+  assert.equal(row.not_observed.outcome, 'not-observed')
+  assert.equal(outlineGate(unjudged).verdict, null)
+  assert.equal(unjudged.gates_passed, null)
+})
+
+test('a browser-failed gate input awaiting its second opinion leaves the outline gate unobserved', () => {
+  // The nine-step input's second opinion never settled, so its verdict is unresolved.
+  const pending = scoreProduct({
+    ...inputs({ failures: ['demo-nine-step-content-and-order'], humanReview: fullHumanReview }),
+    pendingSecondOpinions: [{ kind: 'criterion', id: 'demo-nine-step-content-and-order' }],
+  })
+  const demo = component(pending, 'demo-technical-quality')
+  assert.equal(demo.complete, true)
+  assert.equal(demo.points_awarded, 20)
+  assert.equal(pending.automated_subtotal.points, 70)
+  assert.equal(criterionRow(pending, 'demo-nine-step-content-and-order').verdict, null)
+  assert.equal(outlineGate(pending).verdict, null)
+  assert.equal(outlineGate(pending).observed, false)
+  assert.equal(pending.gates_passed, null)
+  assert.equal(pending.automated_pass, null)
+  assert.deepEqual(pending.incomplete, ['hard-gates'])
+  assert.equal(pending.official_score, null)
+  assert.equal(pending.official_pass, null)
+  // An unresolved input is neither a gate pass nor a product failure.
+  assert.deepEqual(pending.automated_failures, [])
+  assert.deepEqual(pending.pass_failures, [])
+})
+
+test('an overturned outline input passes the derived gate without changing any points', () => {
+  const id = 'demo-nine-step-content-and-order'
+  const data = inputs({ failures: [id], humanReview: fullHumanReview })
+  const before = scoreProduct(data)
+  const after = scoreProduct({ ...data, secondOpinions: {
+    [id]: { raw_verdict: 'fail', verdict: 'pass', decision: 'overturn', rationale: 'title probe misread' },
+  } })
+  assert.equal(outlineGate(before).verdict, 'fail')
+  assert.equal(outlineGate(after).verdict, 'pass')
+  assert.equal(criterionRow(after, id).verdict, 'pass')
+  assert.equal(component(after, 'demo-technical-quality').points_awarded,
+    component(before, 'demo-technical-quality').points_awarded)
+  assert.equal(after.automated_subtotal.points, before.automated_subtotal.points)
+  assert.equal(after.second_opinions.overturned, 1)
+  assert.equal(after.second_opinions.overturned_points, 0)
+  assert.equal(after.official_pass, true)
+})
+
+test('the report shows each criterion with its tier and points, gate inputs at zero', () => {
+  const score = scoreProduct(inputs({ failures: ['demo-route-and-registration', 'navigation-keyboard'] }))
+  const html = renderReport({ label: 'NOT ELIGIBLE', score })
+  assert.match(html, /<td>navigation-keyboard<\/td><td>scene-modes-and-navigation<\/td><td>0 of 1\.5625 \(critical\)<\/td>/)
+  assert.match(html, /<td>demo-route-and-registration<\/td><td>demo-canonical-content<\/td><td>0 of 0 \(gate input\)<\/td>/)
+  assert.match(html, /<td>entity-ungrouped-transition-morph<\/td><td>scene-entity-transitions<\/td><td>0\.75 of 0\.75 \(major\)<\/td>/)
+  assert.match(html, /<td>demo-canonical-content<\/td>[\s\S]*?<td>5<\/td>/)
 })

@@ -597,6 +597,11 @@ test('an oversized candidate artifact is omitted without stopping judging', asyn
   assert.equal(manifest.readiness, 'incomplete')
   assert.ok(manifest.missing_roles.includes('acceptance-flow-record'))
   assert.ok(manifest.findings.some(({ code }) => code === 'artifact-bounds-exceeded'))
+  // INT-005: the skipped record keeps its role, so a job whose primary record
+  // it was fails with packet-overflow instead of judging without it.
+  const skipped = manifest.findings.find(({ code }) => code === 'artifact-bounds-exceeded')
+  assert.equal(skipped.role, 'acceptance-flow-record')
+  assert.equal(skipped.path, 'output/acceptance-test-results.md')
 })
 
 test('evidence discovery preserves non-ENOENT directory failures as harness errors', async () => {

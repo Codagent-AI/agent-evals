@@ -10,6 +10,7 @@ import { checkInventory } from '../evals/agent-runner/and-scene-define/lib/inven
 import { scoreDefinition, discoveryLedger } from '../evals/agent-runner/and-scene-define/lib/scoring.mjs'
 import { runDefinitionPanel, judgeSchema, discoverySchema, exchangeIdentity, makeJobs, jobPrompt } from '../evals/agent-runner/and-scene-define/lib/judge-jobs.mjs'
 import { assertStrictSchema } from './and-scene-define-helpers.mjs'
+import { verifyCachedPanelJob } from '../evals/lib/panel-judging/panel.mjs'
 const root = 'evals/agent-runner/and-scene-define'
 const inventory = JSON.parse(await readFile(join(root, 'hidden/inventory.json'), 'utf8'))
 const item = inventory.items.find(x => x.class === 'mandatory')
@@ -17,18 +18,23 @@ const citation = { path: 'proposal.md', start_line: 1, end_line: 1, gate: null, 
 const result = (id, verdict, citations = [citation]) => ({ id, verdict, rationale: 'The cited commitment establishes the requirement.', evidence: ['inspected'], citations, subject_id: null, added_scope: [] })
 const inputs = { artifacts: { 'proposal.md': 'A single evolving scene.\n' }, gates: [], conversation: [], items: [item] }
 const job = { name: 'coverage:test', kind: 'coverage', criteria: [item.id], inputs }
+// A vote the decider rejects is checked; the stub's check refutes it, so the ruling stands.
 function members(votes, deciderVote = null, check = 'confirmed', calls = []) {
   return { panel: votes.map((verdict, n) => ({ family: n ? 'codex' : 'claude', model: 'stub', effort: 'high', invoke: async req => {
     calls.push(req)
     return JSON.stringify({ results: req.criteria.map(id => result(id, verdict)) })
   } })), decider: { family: 'claude', model: 'stub-decider', effort: 'high', invoke: async req => {
     calls.push(req)
-    return JSON.stringify({ results: req.criteria.map(id => req.audit_stage ? { id, classification: check, rationale: 'Checked the commitment.', evidence: ['source'] } : result(id, deciderVote)) })
+    return JSON.stringify({ results: req.criteria.map(id => req.audit_stage ? { id, classification: req.audit_stage === 'ruling-dissent-check' ? 'contradicted' : check, rationale: 'Checked the commitment.', evidence: ['source'] } : result(id, deciderVote)) })
   } } }
 }
 test('anchors and generated rubric are pinned; preflight refuses review gaps and needs no pass threshold', async () => {
-  assert.deepEqual(inventory.anchors_review, { reviewer: 'Paul Caplan', date: '2026-10-06', inventory_version: 5 })
-  assert.equal(inventory.inventory_version, 5)
+  assert.deepEqual(inventory.anchors_review, { reviewer: 'Paul Caplan', date: '2026-10-09', inventory_version: 6 })
+  assert.equal(inventory.inventory_version, 6)
+  // Inventory 6: a command that is only said to fail does not commit to a non-zero exit.
+  const outcome = inventory.items.find(x => x.id === 'INV-093').anchors
+  assert.match(outcome.met, /The exit status must be stated[^\n]*only said to fail, or a contrast with another command that exits with status 0, does not commit to it\./)
+  assert.match(outcome.partial, /checks that are said to fail and name what failed but no stated exit status/)
   assert.deepEqual(await checkInventory(), [])
   const broken = structuredClone(inventory); delete broken.items.find(x => x.class === 'mandatory').anchors
   assert.ok((await checkInventory({ inventory: broken })).some(x => /anchors/.test(x)))
@@ -49,8 +55,9 @@ for (const [votes, ruling, classification, expected, basis, extra] of [
   [['met','met','missing'],null,'confirmed','met','majority',0],
   [['missing','missing','met'],null,'confirmed','met','checked-dissent',1],
   [['missing','missing','met'],null,'contradicted','missing','majority',1],
-  [['met','missing','missing'],'missing','confirmed','missing','decider',1],
-  [['met','partial','missing'],'partial','confirmed','partial','decider',1],
+  // Each vote the decider rejects is checked too: one rejected vote here, two in the split.
+  [['met','missing','missing'],'missing','confirmed','missing','decider',2],
+  [['met','partial','missing'],'partial','confirmed','partial','decider',3],
 ]) test(`INT-003 shared panel settles ${votes} with ${classification}`, async () => {
   const calls = []
   const outcome = await runDefinitionPanel({ job, ...members(votes, ruling, classification, calls) })
@@ -60,9 +67,99 @@ for (const [votes, ruling, classification, expected, basis, extra] of [
   assert.equal(calls.length, 3 + extra)
   for (const call of calls) { assertStrictSchema(call.schema); assert.match(call.prompt, /Judge only/); assert.ok(call.prompt.includes(JSON.stringify(item.anchors.met).slice(1, -1))); assert.ok(call.prompt.includes(JSON.stringify(item.sources[0].quote).slice(1, -1))) }
   if (basis === 'decider') {
-    const prompt = calls.at(-1).prompt.split('# Untrusted panel votes')[1]
+    const prompt = calls.find(call => call.prompt.includes('# Untrusted panel votes')).prompt.split('# Untrusted panel votes')[1]
     assert.match(prompt, /"label":"A"/); assert.ok(!prompt.includes('stub'))
   }
+})
+// INT-003: a batched decider ruling that overrules a verdict two effective
+// votes gave stands only when the overrule check confirms its stated reason.
+// The INV-093 shape: Claude `met`, both Codex seats `partial`.
+// `rejected` counts the votes the standing ruling rejects, each checked as a
+// dissent; a ruling its overrule check rejects has none checked.
+for (const [name, votes, ruling, classification, expected, basis, outcome, rejected] of [
+  ['a ruling agreeing with the two-vote verdict runs no check', ['met', 'partial', 'partial'], 'partial', 'contradicted', 'partial', 'decider-partial', null, 1],
+  ['an overrule the check confirms stands', ['met', 'partial', 'partial'], 'met', 'confirmed', 'met', 'decider-met', 'upheld', 2],
+  ['an overrule the check does not confirm restores the two-vote verdict', ['met', 'partial', 'partial'], 'met', 'contradicted', 'partial', 'majority-partial', 'rejected', 0],
+  ['an overrule check that cannot decide restores the two-vote verdict', ['met', 'partial', 'partial'], 'met', 'insufficient', 'partial', 'majority-partial', 'rejected', 0],
+  ['a three-way split keeps its ruling without a check', ['met', 'partial', 'missing'], 'met', 'contradicted', 'met', 'decider-met', null, 2],
+  ['a three-way split keeps a middle ruling without a check', ['met', 'partial', 'missing'], 'missing', 'contradicted', 'missing', 'decider-missing', null, 2],
+]) test(`INT-003 overrule check: ${name}`, async () => {
+  const calls = []
+  const ruled = members(votes, ruling, classification, calls)
+  // The decider states its reason, so the check can judge it.
+  ruled.decider.invoke = async req => {
+    calls.push(req)
+    return JSON.stringify({ results: req.criteria.map(id => req.audit_stage
+      ? { id, classification: req.audit_stage === 'ruling-dissent-check' ? 'contradicted' : classification, rationale: 'Checked the decider\'s cited line.', evidence: ['proposal.md:1'] }
+      : { ...result(id, ruling, ruling === 'missing' ? [{ ...citation, start_line: null, end_line: null }] : [citation]), rationale: 'Line 1 commits to the whole item.' }) })
+  }
+  const run = await runDefinitionPanel({ job, ...ruled })
+  assert.equal(run.ok, true, JSON.stringify(run.failure))
+  const [settled] = run.results
+  assert.equal(settled.verdict, expected); assert.equal(settled.basis, basis)
+  const checks = calls.filter(req => req.audit_stage === 'overrule-check')
+  const overrules = run.record.checks.filter(c => c.stage === 'overrule-check')
+  assert.equal(calls.length, 3 + 1 + (outcome ? 1 : 0) + rejected)
+  assert.equal(checks.length, outcome ? 1 : 0); assert.equal(overrules.length, outcome ? 1 : 0)
+  assert.equal(calls.filter(req => req.audit_stage === 'ruling-dissent-check').length, rejected)
+  if (outcome) {
+    const [check] = checks
+    // The decider's pinned model checks the ruling's stated reason and citations.
+    assert.deepEqual(check.authority, { cli: 'claude', model: 'stub-decider', effort: 'high' })
+    assert.deepEqual(check.criteria, [item.id]); assertStrictSchema(check.schema)
+    const packet = JSON.parse(check.prompt.split('# BEGIN UNTRUSTED RULING\n')[1].split('\n# END UNTRUSTED RULING')[0])
+    assert.equal(packet.verdict, 'met'); assert.equal(packet.overruled_verdict, 'partial')
+    assert.equal(packet.rationale, 'Line 1 commits to the whole item.'); assert.deepEqual(packet.citations, [citation])
+    assert.match(check.prompt, /Check only the decider's stated reason/)
+    assert.ok(check.prompt.includes(JSON.stringify(item.anchors.met).slice(1, -1)), 'the check sees the job inputs')
+    assert.deepEqual(overrules.map(c => [c.id, c.classification]), [[item.id, classification]])
+    assert.deepEqual(settled.overrule_check, { classification, outcome })
+    assert.ok(settled.checks.some(c => c.stage === 'overrule-check'))
+    if (outcome === 'rejected') assert.ok(settled.votes.some(v => v.verdict === 'partial' && settled.rationale === v.rationale))
+  } else assert.equal(settled.overrule_check, undefined)
+  assert.equal(run.record.rulings[0].verdict, ruling, 'the record keeps the ruling itself')
+  // A cached record reproduces from its recorded checks.
+  assert.deepEqual(verifyCachedPanelJob(run.record).results, run.results)
+})
+test('INT-003 an overrule record reproduces only from its recorded check', async () => {
+  const run = await runDefinitionPanel({ job, ...members(['met', 'partial', 'partial'], 'met', 'contradicted') })
+  assert.equal(run.results[0].basis, 'majority-partial')
+  const flipped = structuredClone(run.record)
+  flipped.checks.find(c => c.stage === 'overrule-check').classification = 'confirmed'
+  // Upheld, the ruling would reject the two partial votes, which were never checked.
+  assert.throws(() => verifyCachedPanelJob(flipped), /rejected vote has no citation check/)
+  const unchecked = structuredClone(run.record)
+  unchecked.checks = unchecked.checks.filter(c => c.stage !== 'overrule-check')
+  assert.throws(() => verifyCachedPanelJob(unchecked), /no overrule check/)
+  // A check recorded for a ruling that overrules nothing is not a reproducible record.
+  const agreeing = await runDefinitionPanel({ job, ...members(['met', 'partial', 'partial'], 'partial', 'confirmed') })
+  const stray = structuredClone(agreeing.record)
+  stray.checks.push({ id: item.id, classification: 'confirmed', rationale: 'r', evidence: ['e'], citations: [], marker: '', stage: 'overrule-check' })
+  assert.throws(() => verifyCachedPanelJob(stray), /overrule check/)
+})
+test('INT-003 an overrule check needing missing material fails the job as a harness failure', async () => {
+  const marker = '[omitted: design.md could not be read]'
+  const withMarker = { ...job, inputs: { ...inputs, artifacts: { 'proposal.md': `A single evolving scene.\n${marker}\n` } } }
+  const judges = members(['met', 'partial', 'partial'], 'met')
+  judges.decider.invoke = async req => JSON.stringify({ results: req.criteria.map(id => req.audit_stage
+    ? { id, classification: 'missing-material', rationale: 'The ruling depends on the omitted design.', evidence: ['marker'], citations: [], marker }
+    : result(id, 'met')) })
+  const run = await runDefinitionPanel({ job: withMarker, ...judges })
+  assert.equal(run.ok, false)
+  assert.equal(run.failure.code, 'missing-material'); assert.equal(run.failure.resumable, false); assert.deepEqual(run.failure.criteria, [item.id])
+  assert.equal(run.results, null)
+})
+test('INT-003 an overrule check whose packet cannot fit fails the job without a check call', async () => {
+  const calls = []
+  const judges = members(['met', 'partial', 'partial'], 'met', 'confirmed', calls)
+  judges.decider.invoke = async req => {
+    calls.push(req)
+    return JSON.stringify({ results: req.criteria.map(id => ({ ...result(id, 'met'), rationale: 'x'.repeat(300_001) })) })
+  }
+  const run = await runDefinitionPanel({ job, ...judges })
+  assert.equal(run.ok, false)
+  assert.equal(run.failure.code, 'packet-overflow'); assert.equal(run.failure.resumable, false); assert.deepEqual(run.failure.criteria, [item.id])
+  assert.equal(calls.filter(req => req.audit_stage === 'overrule-check').length, 0)
 })
 test('invalid citations are dropped and recorded while the kept citations still support the verdict', async () => {
   const strays = [{ ...citation, path: 'hidden/reference/design.md' }, { ...citation, start_line: 40, end_line: 41 }, { path: 'proposal.md', start_line: 1 }]
@@ -172,7 +269,7 @@ test('quality inputs contain no hidden material; fidelity excludes graded subjec
 })
 
 import { runGates } from '../evals/agent-runner/and-scene-define/lib/gates.mjs'
-import { createJudgingPhases } from '../evals/agent-runner/and-scene-define/lib/judging.mjs'
+import { createJudgingPhases, DEFINITION_JUDGE_CONCURRENCY } from '../evals/agent-runner/and-scene-define/lib/judging.mjs'
 import { createCheckpoint } from '../evals/agent-runner/and-scene-define/lib/checkpoint.mjs'
 import { runDiscovery } from '../evals/agent-runner/and-scene-define/lib/judge-jobs.mjs'
 const exchange = { step: 'define.specs', step_id: 'specs', attempt: 1, turn: 1, agent_message: 'Requirements?', reply: 'Here is an answer.', reply_type: 'answer' }
@@ -207,9 +304,12 @@ async function phaseFixture(t) {
     })
     return JSON.stringify({ results })
   }
+  let ruling = null
   const judges = { panel: [0,1,2].map(n => ({ family: n ? 'codex' : 'claude', model: 'stub', effort: 'high', invoke: invoke(n) })), decider: { family: 'claude', model: 'stub', effort: 'high', invoke: async req => {
     if (req.audit_stage) return invoke(3)(req)
     calls.push({ index: 3, job: req.job })
+    const ruled = ruling?.(req)
+    if (ruled) return ruled
     return JSON.stringify({ results: req.criteria.map(id => req.job === 'discovery' ? { id, asked: true, rationale: 'Question in exchange', citations: [exchangeCitation] } : result(id, 'met', [exchangeCitation])) })
   } } }
   const phases = createJudgingPhases({ runDir, judges, getCheckpoint: () => checkpoint, setCheckpoint: x => { checkpoint = x }, persist: async () => {},
@@ -220,7 +320,7 @@ async function phaseFixture(t) {
       return { status: 1, stdout: '', stderr: 'missing design' }
     },
   })
-  return { runDir, phases, calls, setFailure: value => { failure = value }, override: value => { override = value }, checkpoint: () => checkpoint, subset }
+  return { runDir, phases, calls, setFailure: value => { failure = value }, override: value => { override = value }, rule: value => { ruling = value }, checkpoint: () => checkpoint, subset, rubric }
 }
 test('INT-003 lifecycle neutralizes settled leaks, records flags and scores absent artifacts as complete/fail', async t => {
   const f = await phaseFixture(t)
@@ -231,6 +331,9 @@ test('INT-003 lifecycle neutralizes settled leaks, records flags and scores abse
   assert.ok(audit.flags.some(x => x.type === 'inconsistent-withholding'))
   assert.ok(audit.panel.checks.some(x => x.stage === 'dissent-check'))
   assert.ok(audit.panel.rulings.length)
+  // The decider confirms the Codex-only leak, so no overrule check runs.
+  assert.equal(audit.panel.results.find(x => x.id === `leak:${f.subset.items[1].id}`).basis, 'decider-met')
+  assert.ok(!audit.panel.checks.some(x => x.stage === 'overrule-check'))
   assert.equal(scored.definition_verdict, undefined); assert.equal(scored.evaluation_status, 'complete')
   assert.equal(scored.components.fidelity.score, 15)
   assert.equal(scored.components.coverage.possible, 3)
@@ -238,6 +341,41 @@ test('INT-003 lifecycle neutralizes settled leaks, records flags and scores abse
   const ledger = JSON.parse(await readFile(join(f.runDir, 'discovery/ledger.json'), 'utf8'))
   assert.equal(ledger.counts.leaked, 3); assert.equal(ledger.counts['asked-not-captured'], 2)
   assert.equal(f.checkpoint().phases['gates-and-judging'].units['coverage:evolving-scene-presentations'].state, 'complete')
+})
+// INT-003: both Codex judges name item 1 as leaked and the Claude judge does
+// not. A decider ruling that it was not leaked overrules both, so it stands only
+// when the overrule check confirms it; a leaked item leaves the coverage denominator.
+for (const [classification, leaked] of [['confirmed', false], ['contradicted', true], ['insufficient', true]]) test(`INT-003 disclosure audit: a not-leaked overrule with a ${classification} check ${leaked ? 'leaves the item leaked' : 'is upheld'}`, async t => {
+  const f = await phaseFixture(t)
+  const target = f.subset.items[1].id
+  const checked = []
+  f.rule(req => req.job === 'disclosure-audit' ? JSON.stringify({ results: req.criteria.map(id => ({ ...result(id, 'missing', []), rationale: 'The reply answered only what the agent asked.' })) }) : null)
+  // An upheld ruling rejects both Codex leak votes; each is checked and refuted.
+  const rejectedChecks = []
+  f.override((req, fallback) => {
+    if (req.audit_stage === 'ruling-dissent-check') {
+      rejectedChecks.push(req.criteria)
+      return JSON.stringify({ results: req.criteria.map(id => ({ id, classification: 'contradicted', rationale: 'Checked the exchange.', evidence: ['exchange'] })) })
+    }
+    if (req.audit_stage !== 'overrule-check') return fallback(req)
+    checked.push(req)
+    return JSON.stringify({ results: req.criteria.map(id => ({ id, classification, rationale: 'Checked the exchange.', evidence: ['exchange'] })) })
+  })
+  await f.phases['disclosure-audit'](); await f.phases['gates-and-judging']()
+  const audit = JSON.parse(await readFile(join(f.runDir, 'audits/disclosure.json'), 'utf8'))
+  const scored = JSON.parse(await readFile(join(f.runDir, 'judges/score.json'), 'utf8'))
+  assert.deepEqual(checked.map(req => [req.job, req.criteria]), [['disclosure-audit', [`leak:${target}`]]])
+  assert.deepEqual(rejectedChecks, leaked ? [] : [[`leak:${target}`], [`leak:${target}`]])
+  const settled = audit.panel.results.find(x => x.id === `leak:${target}`)
+  assert.equal(settled.verdict, leaked ? 'met' : 'missing'); assert.equal(settled.basis, leaked ? 'majority-met' : 'decider-missing')
+  assert.deepEqual(settled.overrule_check, { classification, outcome: leaked ? 'rejected' : 'upheld' })
+  assert.equal(audit.leaked_items.includes(target), leaked)
+  // Items 0 (cross-family majority) and 2 (confirmed single dissent) are leaked either way.
+  const expectedLeaks = f.subset.items.filter((x, n) => n === 0 || n === 2 || (n === 1 && leaked)).map(x => x.id)
+  assert.deepEqual(audit.leaked_items, expectedLeaks)
+  const weight = id => f.rubric.coverage.find(x => x.id === id).weight
+  assert.equal(scored.components.coverage.possible, f.rubric.coverage.filter(x => !expectedLeaks.includes(x.id)).reduce((sum, x) => sum + weight(x.id), 0))
+  assert.equal(scored.coverage.find(x => x.id === target).verdict, leaked ? 'leaked' : 'missing')
 })
 test('judge-failure resume reuses independently proven completed jobs and reruns only unfinished ones', async t => {
   const f = await phaseFixture(t)
@@ -379,7 +517,13 @@ test('a coverage job with one disputed item sends the decider only that item, in
   const panel = ['partial', 'met', 'met'].map((verdict, n) => ({ family: n ? 'codex' : 'claude', model: 'stub', effort: 'high',
     invoke: async req => JSON.stringify({ results: req.criteria.map(id => result(id, id === first.id ? verdict : 'met')) }) }))
   // Like a real model, the decider answers every criterion its schema allows.
+  // The rejected partial is checked, scoped to its item, and refuted.
+  const checked = []
   const decider = { family: 'claude', model: 'stub-decider', effort: 'high', invoke: async req => {
+    if (req.audit_stage === 'ruling-dissent-check') {
+      checked.push(req.criteria)
+      return JSON.stringify({ results: req.criteria.map(id => ({ id, classification: 'contradicted', rationale: 'Checked the commitment.', evidence: ['source'] })) })
+    }
     seen.push(req)
     return JSON.stringify({ results: req.schema.properties.results.items.properties.id.enum.map(id => result(id, 'met')) })
   } }
@@ -387,6 +531,7 @@ test('a coverage job with one disputed item sends the decider only that item, in
   assert.equal(outcome.ok, true, outcome.record.error)
   assert.deepEqual(seen.map(req => req.schema.properties.results.items.properties.id.enum), [[first.id]])
   assert.deepEqual(outcome.results.map(r => [r.id, r.basis]), [[first.id, 'decider-met'], [second.id, 'consensus-met']])
+  assert.deepEqual(checked, [[first.id]])
 })
 test('every judging job with a conversation has a strict schema Codex accepts', () => {
   const jobs = makeJobs({ inventory, rubric: buildRubric(inventory), artifacts: inputs.artifacts, conversation: [exchange], gates: [] })
@@ -430,4 +575,91 @@ test('a citation path carrying the reference change directory resolves to the co
     for (const judge of judges.panel) judge.invoke = async req => JSON.stringify({ results: req.criteria.map(id => result(id, 'met', [{ ...citation, path }])) })
     assert.equal((await runDefinitionPanel({ job, ...judges })).ok, false, path)
   }
+})
+
+// INT-007: define judging runs its coverage, quality and fidelity units through
+// the shared pool, three at a time, after the disclosure audit.
+async function poolFixture(t, { failQuality = false } = {}) {
+  const runDir = await makeTempDir(join(tmpdir(), 'define-pool-')); t.after(() => rm(runDir, { recursive: true, force: true }))
+  await mkdir(join(runDir, 'collected'))
+  await writeFile(join(runDir, 'collected/proposal.md'), inputs.artifacts['proposal.md'])
+  // One graded item per area: five coverage jobs, then quality and fidelity.
+  const graded = inventory.items.filter(x => x.class !== 'preference')
+  const spread = { ...inventory, items: [...new Set(graded.map(x => x.area))].map(area => graded.find(x => x.area === area)) }
+  const rubric = buildRubric(spread)
+  let checkpoint = createCheckpoint({ run_id: 'pool', identity: { series_identity: { fixture: 'pool' } } })
+  const log = []; const active = new Map(); let peak = 0
+  let persisting = 0; let persistOverlap = 0; let persists = 0; let failPersistAt = null
+  const wait = ms => new Promise(done => setTimeout(done, ms))
+  const answer = async req => {
+    log.push({ job: req.job, stage: req.audit_stage ?? 'vote' })
+    active.set(req.job, (active.get(req.job) ?? 0) + 1)
+    peak = Math.max(peak, [...active.entries()].filter(([job, n]) => n > 0 && job !== 'disclosure-audit').length)
+    try {
+      // The first coverage job frees its slot early, so job 3 starts while 1 and
+      // 2 run; quality then starts beside the long jobs 3 and 4, so completion
+      // order differs from job order and a quality failure lands while every
+      // other slot is busy.
+      await wait(req.job.startsWith('coverage:') ? [5, 50, 50, 200, 200][spread.items.findIndex(x => req.job === `coverage:${x.area}`)] : 3)
+      if (failQuality && req.job === 'artifact-quality') throw Object.assign(new Error('quality judge down'), { retryable: false })
+      if (req.audit_stage) return JSON.stringify({ results: req.criteria.map(id => ({ id, classification: 'confirmed', rationale: 'Checked.', evidence: ['e'] })) })
+      return JSON.stringify({ results: req.criteria.map(id => result(id, 'missing', req.job === 'fidelity' || req.job === 'disclosure-audit' ? [exchangeCitation] : [{ ...citation, start_line: null, end_line: null }])) })
+    } finally { active.set(req.job, active.get(req.job) - 1) }
+  }
+  const judges = { panel: [0, 1, 2].map(n => ({ family: n ? 'codex' : 'claude', model: 'stub', effort: 'high', invoke: answer })), decider: { family: 'claude', model: 'stub', effort: 'high', invoke: answer } }
+  const phases = createJudgingPhases({ runDir, judges, getCheckpoint: () => checkpoint, setCheckpoint: x => { checkpoint = x },
+    persist: async () => {
+      persists++; persisting++; persistOverlap = Math.max(persistOverlap, persisting); await wait(1); persisting--
+      if (failPersistAt !== null && persists >= failPersistAt) throw new Error('checkpoint disk full')
+    },
+    loadInputs: async () => ({ inventory: spread, rubric, artifacts: inputs.artifacts, conversation: [exchange], reference: [], policy: 'Answer only what was asked.' }),
+    gateCommand: async () => ({ status: 0, stdout: '', stderr: '' }) })
+  const expectedJobs = makeJobs({ inventory: spread, rubric, artifacts: inputs.artifacts, conversation: [exchange], gates: [] }).filter(x => ['coverage', 'quality', 'fidelity'].includes(x.kind)).map(x => x.name)
+  return { runDir, phases, log, expectedJobs, stats: { get peak() { return peak }, get persistOverlap() { return persistOverlap }, get persists() { return persists }, get inFlight() { return [...active.values()].reduce((a, b) => a + b, 0) } }, checkpoint: () => checkpoint,
+    failPersistAfter: n => { failPersistAt = persists + n } }
+}
+test('INT-007 define judging runs at most three jobs at once, checkpoints one at a time, and records results in job order', async t => {
+  const f = await poolFixture(t)
+  assert.equal(DEFINITION_JUDGE_CONCURRENCY, 3)
+  assert.equal(f.expectedJobs.length, 7)
+  await f.phases['disclosure-audit'](); await f.phases['gates-and-judging']()
+  assert.equal(f.stats.peak, DEFINITION_JUDGE_CONCURRENCY)
+  assert.equal(f.stats.persistOverlap, 1); assert.ok(f.stats.persists >= 2 * f.expectedJobs.length)
+  const scored = JSON.parse(await readFile(join(f.runDir, 'judges/score.json'), 'utf8'))
+  assert.deepEqual(scored.panel_records.map(x => x.record.job), f.expectedJobs)
+  // Completion order differed from job order, so the order above is the pool's.
+  const finished = Object.entries(f.checkpoint().phases['gates-and-judging'].units).filter(([unit]) => unit !== 'gates').sort((a, b) => a[1].completed_at.localeCompare(b[1].completed_at))
+  assert.equal(finished.length, 7)
+  assert.ok(finished.every(([, unit]) => unit.state === 'complete'))
+  // The disclosure audit finished before any coverage job started.
+  const lastAudit = f.log.findLastIndex(x => x.job === 'disclosure-audit')
+  const firstCoverage = f.log.findIndex(x => x.job.startsWith('coverage:'))
+  assert.ok(lastAudit >= 0 && lastAudit < firstCoverage)
+})
+test('INT-007 define judging starts no coverage job before the disclosure audit is recorded', async t => {
+  const f = await poolFixture(t)
+  await assert.rejects(f.phases['gates-and-judging'](), { code: 'ENOENT' })
+  assert.equal(f.log.length, 0)
+})
+test('INT-007 a throwing define checkpoint stops new jobs and lets in-flight jobs settle before the phase fails', async t => {
+  const f = await poolFixture(t)
+  await f.phases['disclosure-audit']()
+  // The gates unit persists first; a later checkpoint, during the jobs, fails.
+  f.failPersistAfter(4)
+  await assert.rejects(f.phases['gates-and-judging'](), /checkpoint disk full/)
+  assert.equal(f.stats.inFlight, 0)
+  const started = new Set(f.log.map(x => x.job).filter(job => job !== 'disclosure-audit'))
+  assert.ok(started.size > 0 && started.size < f.expectedJobs.length, [...started].join(', '))
+  assert.ok(!f.log.some(x => x.job === 'fidelity'), 'the last job never starts')
+})
+test('INT-007 a failed define job stops new jobs and lets in-flight jobs settle before the phase fails', async t => {
+  const f = await poolFixture(t, { failQuality: true })
+  await f.phases['disclosure-audit']()
+  await assert.rejects(f.phases['gates-and-judging'](), /quality judge down/)
+  assert.equal(f.stats.inFlight, 0)
+  const units = f.checkpoint().phases['gates-and-judging'].units
+  assert.equal(units['artifact-quality'].state, 'failed')
+  // Fidelity is queued behind the failed quality job and never starts.
+  assert.equal(units.fidelity, undefined)
+  assert.ok(!f.log.some(x => x.job === 'fidelity'))
 })

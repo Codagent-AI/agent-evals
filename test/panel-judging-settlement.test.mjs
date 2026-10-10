@@ -1,7 +1,7 @@
 import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { runPanelJob, rerunDecider, resolvePanel, verifyCachedPanelJob, PANEL_PROTOCOL } from '../evals/lib/panel-judging/panel.mjs'
+import { runPanelJob, rerunDecider, resolvePanel, verifyCachedPanelJob, PANEL_PROTOCOL, DECIDER_REASONS_RULE } from '../evals/lib/panel-judging/panel.mjs'
 import { REQUIREMENT_QUESTION_RULE, JUDGE_SCOPE_RULE, buildReciteRequest } from '../evals/lib/panel-judging/protocol.mjs'
 
 const result = (verdict, extra = {}) => ({ id: 'x', verdict, rationale: 'reason', citations: ['a'], evidence: ['a'], ...extra })
@@ -36,6 +36,11 @@ for (const classification of ['confirmed', 'contradicted', 'insufficient']) test
       assert.match(request.prompt, /Confirm only when both hold/)
       assert.match(request.prompt, /the fact is accurate but the requirement does not depend on it/)
       assert.match(request.prompt, /For a lower verdict, it must show a clause of the requirement unmet; for a higher verdict, every clause the verdict credits met/)
+      // A higher dissent must also answer the reasons the two majority votes gave.
+      assert.match(request.prompt, /Confirm a higher verdict only when the material also refutes each clause a majority vote states is unmet/)
+      const dissent = JSON.parse(request.prompt.split('# BEGIN UNTRUSTED DISSENT\n')[1].split('\n# END UNTRUSTED DISSENT')[0])
+      assert.deepEqual(dissent.majority.map(({ verdict }) => verdict), ['fail', 'fail'])
+      assert.ok(dissent.majority.every(({ rationale }) => typeof rationale === 'string'))
       return JSON.stringify({ results: [{ id: 'x', classification, rationale: 'checked reason', evidence: ['a'] }] })
     } },
   }))
@@ -45,8 +50,13 @@ for (const classification of ['confirmed', 'contradicted', 'insufficient']) test
 })
 test('Codex-only majority goes to blind decider and invalid rulings retry', async () => {
   let calls = 0
+  const checks = []
   const outcome = await runPanelJob(setup(['fail', 'pass', 'pass'], {
     decider: { model: 'opus', effort: 'medium', invoke: async request => {
+      if (request.usage_phase === 'ruling-dissent-check') {
+        checks.push(request.criteria)
+        return JSON.stringify({ results: [{ id: 'x', classification: 'contradicted', rationale: 'checked reason', evidence: ['a'] }] })
+      }
       calls++
       assert.match(request.prompt, /unchanged context/)
       assert.match(request.prompt, /"label":"A"/)
@@ -55,11 +65,128 @@ test('Codex-only majority goes to blind decider and invalid rulings retry', asyn
     } },
   }))
   assert.equal(calls, 2)
+  // The rejected Claude fail is checked; its contradicted check leaves the ruling standing.
+  assert.equal(checks.length, 1)
   assert.equal(outcome.results[0].basis, 'decider-pass')
+})
+// The and-scene mix: two Claude seats and one Codex seat.
+const twoClaude = (votes, extra = {}) => {
+  const options = setup(votes, extra)
+  options.panel = options.panel.map((member, i) => ({ ...member, family: i < 2 ? 'claude' : 'codex' }))
+  return options
+}
+test('a majority of one family goes to the decider, so two Claude seats never outvote the Codex seat alone', async () => {
+  const stages = []
+  const outcome = await runPanelJob(twoClaude(['pass', 'pass', 'fail'], {
+    decider: { model: 'opus', effort: 'high', invoke: async request => {
+      stages.push(request.usage_phase)
+      // The ruling overrules the two Claude seats, so its overrule check runs,
+      // and each rejected Claude pass is then checked as a dissent.
+      return JSON.stringify({ results: [request.usage_phase === 'decider' ? result('fail')
+        : { id: 'x', classification: request.usage_phase === 'overrule-check' ? 'confirmed' : 'contradicted', rationale: 'checked reason', evidence: ['a'] }] })
+    } },
+  }))
+  assert.equal(outcome.ok, true, outcome.record.error)
+  assert.deepEqual(stages, ['decider', 'overrule-check', 'ruling-dissent-check', 'ruling-dissent-check'])
+  assert.equal(outcome.results[0].basis, 'decider-fail')
+  assert.equal(outcome.results[0].overrule_check.outcome, 'upheld')
+  assert.deepEqual(outcome.results[0].votes.map(v => v.family), ['claude', 'claude', 'codex'])
+  assert.deepEqual(verifyCachedPanelJob(outcome.record).results, outcome.results)
+})
+// The decider answers every judge it rules against, and each rejected vote
+// whose citations validate is checked as a dissent after the ruling.
+const checkAnswer = (classification) => JSON.stringify({ results: [{ id: 'x', classification, rationale: 'checked reason', evidence: ['a'] }] })
+const rulingDecider = (verdict, { rulingCheck = 'contradicted', overrule = 'confirmed', seen = [] } = {}) => ({ model: 'opus', effort: 'high', invoke: async request => {
+  seen.push(request)
+  if (request.usage_phase === 'ruling-dissent-check') return checkAnswer(rulingCheck)
+  if (request.usage_phase === 'overrule-check') return checkAnswer(overrule)
+  return JSON.stringify({ results: [result(verdict, { rationale: `ruling ${verdict}` })] })
+} })
+test('the decider is told to answer every judge whose verdict it does not rule', async () => {
+  const seen = []
+  await runPanelJob(twoClaude(['pass', 'pass', 'fail'], { decider: rulingDecider('pass', { seen }) }))
+  const decider = seen.find(request => request.usage_phase === 'decider')
+  assert.ok(decider.prompt.includes(DECIDER_REASONS_RULE))
+  assert.match(DECIDER_REASONS_RULE, /name each such judge by its label/)
+  assert.match(DECIDER_REASONS_RULE, /rule that judge's verdict/)
+})
+for (const [classification, verdict, basis] of [['confirmed', 'fail', 'checked-dissent-fail'], ['contradicted', 'pass', 'decider-pass'], ['insufficient', 'pass', 'decider-pass']]) test(`a backed Codex fail the decider rejects is checked, and its ${classification} check settles ${basis}`, async () => {
+  const seen = []
+  const outcome = await runPanelJob(twoClaude(['pass', 'pass', 'fail'], { decider: rulingDecider('pass', { rulingCheck: classification, seen }) }))
+  assert.equal(outcome.ok, true, outcome.record.error)
+  assert.deepEqual(seen.map(request => request.usage_phase), ['decider', 'ruling-dissent-check'])
+  const check = seen[1]
+  assert.equal(check.audit_stage, 'ruling-dissent-check')
+  assert.match(check.prompt, /The decider ruled against this vote/)
+  const dissent = JSON.parse(check.prompt.split('# BEGIN UNTRUSTED DISSENT\n')[1].split('\n# END UNTRUSTED DISSENT')[0])
+  assert.equal(dissent.rationale, 'reason')
+  assert.deepEqual(dissent.majority.map(({ verdict, decider_ruling }) => [verdict, decider_ruling ?? false]), [['pass', false], ['pass', false], ['pass', true]])
+  assert.equal(dissent.majority[2].rationale, 'ruling pass')
+  assert.equal(outcome.results[0].verdict, verdict)
+  assert.equal(outcome.results[0].basis, basis)
+  assert.deepEqual(outcome.record.checks.map(c => [c.stage, c.panel_index, c.classification]), [['ruling-dissent-check', 2, classification]])
+  assert.deepEqual(verifyCachedPanelJob(outcome.record).results, outcome.results)
+})
+test('a rejected vote whose citations do not validate gets no check, and the ruling stands', async () => {
+  const seen = []
+  const outcome = await runPanelJob(twoClaude(['pass', 'pass', 'fail'], { decider: rulingDecider('pass', { seen }), validateCitation: async () => false }))
+  assert.equal(outcome.ok, true, outcome.record.error)
+  assert.deepEqual(seen.map(request => request.usage_phase), ['decider'])
+  assert.equal(outcome.results[0].basis, 'decider-pass')
+  assert.equal(outcome.record.votes.find(v => v.panel_index === 2).citations_valid, false)
+  assert.deepEqual(verifyCachedPanelJob(outcome.record).results, outcome.results)
+})
+test('an overrule check that rejects the ruling restores the two votes without checking them', async () => {
+  const seen = []
+  const outcome = await runPanelJob(twoClaude(['pass', 'pass', 'fail'], { decider: rulingDecider('fail', { overrule: 'contradicted', seen }) }))
+  assert.equal(outcome.ok, true, outcome.record.error)
+  assert.deepEqual(seen.map(request => request.usage_phase), ['decider', 'overrule-check'])
+  assert.equal(outcome.results[0].basis, 'majority-pass')
+  assert.equal(outcome.results[0].overrule_check.outcome, 'rejected')
+  assert.deepEqual(verifyCachedPanelJob(outcome.record).results, outcome.results)
+})
+test('a record missing the check of a backed rejected vote, or made before those checks, is not reused', async () => {
+  const outcome = await runPanelJob(twoClaude(['pass', 'pass', 'fail'], { decider: rulingDecider('pass') }))
+  const unchecked = structuredClone(outcome.record)
+  unchecked.checks = unchecked.checks.filter(c => c.stage !== 'ruling-dissent-check')
+  assert.throws(() => verifyCachedPanelJob(unchecked), /backed rejected vote has no ruling dissent check/)
+  const older = structuredClone(outcome.record)
+  delete older.ruling_checks
+  assert.throws(() => verifyCachedPanelJob(older), /predates the rejected-vote checks/)
+  // A check for a vote with no recorded citation check is stray; without the
+  // check, the rejected vote is still missing its citation check.
+  const unbacked = structuredClone(outcome.record)
+  delete unbacked.votes.find(v => v.panel_index === 2).citations_valid
+  assert.throws(() => resolvePanel(unbacked), /ruling dissent check recorded for a vote the ruling did not reject/)
+  unbacked.checks = []
+  assert.throws(() => resolvePanel(unbacked), /rejected vote has no citation check/)
+})
+test('a majority across both families stands, and a higher Claude dissent gets the targeted check', async () => {
+  const stages = []
+  const outcome = await runPanelJob(twoClaude(['pass', 'fail', 'fail'], {
+    decider: { model: 'opus', effort: 'high', invoke: async request => {
+      stages.push(request.usage_phase)
+      return JSON.stringify({ results: [{ id: 'x', classification: 'contradicted', rationale: 'checked reason', evidence: ['a'] }] })
+    } },
+  }))
+  assert.equal(outcome.ok, true, outcome.record.error)
+  assert.deepEqual(stages, ['dissent-check'])
+  assert.equal(outcome.results[0].basis, 'majority-fail')
+})
+test('each seat is staged by family, numbered only when its family has several', async () => {
+  const stagesOf = async (options) => Object.keys((await runPanelJob(options)).usage_by_stage).sort()
+  assert.deepEqual(await stagesOf(setup(['pass', 'pass', 'pass'])), ['panel-claude', 'panel-codex-1', 'panel-codex-2'])
+  assert.deepEqual(await stagesOf(twoClaude(['pass', 'pass', 'pass'])), ['panel-claude-1', 'panel-claude-2', 'panel-codex'])
+})
+test('a panel without both families is refused', async () => {
+  const options = setup(['pass', 'pass', 'pass'])
+  options.panel = options.panel.map(member => ({ ...member, family: 'claude' }))
+  await assert.rejects(runPanelJob(options), /spanning both families/)
 })
 test('three-way split decider must pick a panel verdict', async () => {
   const outcome = await runPanelJob({ ...setup(['met', 'partial', 'missing']), verdicts: ['met', 'partial', 'missing'], order: ['met', 'partial', 'missing'],
-    decider: { model: 'opus', effort: 'high', invoke: async () => JSON.stringify({ results: [result('partial')] }) } })
+    decider: { model: 'opus', effort: 'high', invoke: async request => JSON.stringify({ results: [request.usage_phase === 'ruling-dissent-check'
+      ? { id: 'x', classification: 'contradicted', rationale: 'checked reason', evidence: ['a'] } : result('partial')] }) } })
   assert.equal(outcome.results[0].basis, 'decider-partial')
 })
 test('panel starts concurrently with identical prompts', async () => {
@@ -122,6 +249,7 @@ async function sourceSetup(t, votes, behavior = {}) {
       if (next.audit_stage === 'contradiction-check') return auditResult(behavior.check ?? 'contradicted')
       if (next.audit_stage === 'tiebreak-span-audit') return auditResult(behavior.spanAudit ?? 'confirmed')
       if (next.audit_stage === 'dissent-check') return auditResult(behavior.dissent ?? 'contradicted')
+      if (next.audit_stage === 'ruling-dissent-check') return auditResult(behavior.rulingDissent ?? 'contradicted')
       return JSON.stringify({ results: [result(behavior.deciderVerdict ?? 'pass', { citations: [{ path: 'a', start_line: 1, end_line: behavior.invalidSpan && seen.filter(r => r.judge_stage === 'tiebreak').length === 1 ? 99 : 2 }] })] })
     } } })
   options.panel = options.panel.map((member, i) => ({ ...member, invoke: async next => next.audit_stage
@@ -133,7 +261,9 @@ for (const check of ['confirmed', 'contradicted', 'insufficient']) test(`source 
   const { options, seen } = await sourceSetup(t, ['pass', 'pass', 'pass'], { sourceAudit: 'contradicted', check })
   const outcome = await runPanelJob(options)
   assert.equal(outcome.ok, true)
-  assert.equal(outcome.results[0].basis, check === 'contradicted' ? 'consensus-pass' : 'decider-pass')
+  // v2: a check that refutes or cannot decide leaves the vote standing; only a
+  // confirmed one turns it and sends the split to the decider.
+  assert.equal(outcome.results[0].basis, check === 'confirmed' ? 'decider-pass' : 'consensus-pass')
   assert.ok(seen.some(r => r.usage_phase === 'contradiction-check'))
   assert.equal(outcome.results[0].checks[0].classification, check)
 })
@@ -144,6 +274,16 @@ for (const [spanAudit, check, verdict] of [['confirmed', 'confirmed', 'pass'], [
   assert.equal(outcome.results[0].basis, `decider-${verdict}`)
   assert.ok(seen.some(r => r.usage_phase === 'span-audit'))
   assert.equal(seen.filter(r => r.usage_phase === 'decider-recite').length, spanAudit === 'insufficient' ? 1 : 0)
+  assert.deepEqual(verifyCachedPanelJob(outcome.record).results, outcome.results)
+})
+for (const [rulingDissent, basis] of [['confirmed', 'checked-dissent-fail'], ['contradicted', 'decider-pass']]) test(`a line-cited decider's rejected vote is checked: ${rulingDissent} settles ${basis}`, async t => {
+  const { options, seen } = await sourceSetup(t, ['fail', 'pass', 'pass'], { rulingDissent })
+  const outcome = await runPanelJob(options)
+  assert.equal(outcome.ok, true, outcome.record.error)
+  const checks = seen.filter(r => r.audit_stage === 'ruling-dissent-check')
+  assert.equal(checks.length, 1)
+  assert.match(checks[0].prompt, /The decider ruled against this vote/)
+  assert.equal(outcome.results[0].basis, basis)
   assert.deepEqual(verifyCachedPanelJob(outcome.record).results, outcome.results)
 })
 test('unconfirmed browser fallback decider pass fails', async t => {
@@ -184,7 +324,7 @@ test('evidence decider receives line-numbered files inlined without a tools inst
   assert.equal(outcome.ok, true)
   const request = seen.find(r => r.usage_phase === 'decider')
   assert.match(request.prompt, /LINE-NUMBERED UNTRUSTED EVIDENCE/)
-  assert.match(request.prompt, /"line":1,"text":"mechanism"/)
+  assert.match(request.prompt, /"a\\n1\|mechanism\\n2\|focused test/)
   assert.match(request.prompt, /do not use tools/)
   assert.doesNotMatch(request.prompt, /You may read/)
 })
@@ -208,7 +348,7 @@ test('an evidence decider inlines only the packet the panel saw, not other view 
   const outcome = await runPanelJob(options)
   assert.equal(outcome.ok, true, outcome.record.error)
   const request = seen.find(r => r.judge_stage === 'tiebreak')
-  assert.match(request.prompt, /"path":"packet.txt"/)
+  assert.match(request.prompt, /"packet\.txt\\n1\|mechanism/)
   assert.doesNotMatch(request.prompt, /step-01\.png|not in the packet/)
 })
 
@@ -327,9 +467,13 @@ test('a confirmed contradiction turns a vote to the opposite end of the job scal
     /contradiction of the middle verdict partial names no corrected verdict/)
 })
 
-test('re-cite asks the decider to change a verdict its lines cannot prove', () => {
-  const recite = buildReciteRequest({ tiebreakRequest: { job: 'job', prompt_body: 'context' }, claims: [{ id: 'x', audit: { rationale: 'missing clause' } }] })
-  assert.match(recite.prompt, /If the lines that would prove your verdict do not exist, change your verdict rather than citing weaker lines\./)
+// v2: a re-cite may replace citations only, and its prompt never invites a verdict change.
+test('re-cite asks for the same verdict with better citations', () => {
+  const recite = buildReciteRequest({ tiebreakRequest: { job: 'job', prompt_body: 'context' }, claims: [{ id: 'x', verdict: 'pass', audit: { rationale: 'missing clause' } }] })
+  assert.match(recite.prompt, /return the same verdict you\ngave/)
+  assert.match(recite.prompt, /Only the citations may change/)
+  assert.match(recite.prompt, /- x \(your verdict: pass\): missing clause/)
+  assert.doesNotMatch(recite.prompt, /change your verdict/)
 })
 
 test('definition judging uses a definition scope rule and requirement question, not the implementation scope rule', async () => {
@@ -360,7 +504,12 @@ test('definition judging uses a definition scope rule and requirement question, 
 // A real decider answers every criterion its schema and prompt ask for, so the
 // batched decider must be scoped to the disputed criteria, not the whole job.
 const scopedSchema = { type: 'object', properties: { results: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, verdict: { type: 'string' } } } } } }
+// Checks of rejected votes are kept apart in `seen.checks` and refute the vote.
 const schemaFollowingDecider = seen => ({ model: 'opus', effort: 'medium', invoke: async request => {
+  if (request.audit_stage === 'ruling-dissent-check') {
+    (seen.checks ??= []).push(request)
+    return JSON.stringify({ results: request.criteria.map(id => ({ id, classification: 'contradicted', rationale: 'checked reason', evidence: ['a'] })) })
+  }
   seen.push(request)
   const ids = request.schema.properties.results.items.properties.id.enum ?? ['x', 'y']
   return JSON.stringify({ results: ids.map(id => result('pass', { id })) })
@@ -378,9 +527,34 @@ test('a batched decider rules only on the disputed criteria of a partly disputed
   assert.deepEqual(seen[0].schema.properties.results.items.properties.id.enum, ['x'])
   assert.match(seen[0].prompt, /Return results for exactly these criterion IDs and no others: x$/m)
   assert.deepEqual(outcome.results.map(r => [r.id, r.basis]), [['x', 'decider-pass'], ['y', 'consensus-pass']])
+  // The rejected fail on x is checked, scoped to x alone.
+  assert.deepEqual(seen.checks.map(c => c.criteria), [['x']])
   const reseen = []
   const rerun = await rerunDecider({ record: outcome.record, decider: schemaFollowingDecider(reseen), buildPrompt: partlyDisputed().buildPrompt, schema: scopedSchema, validateCitations: async () => true })
-  assert.deepEqual(rerun.rulings, [{ id: 'x', recorded: 'pass', rerun: 'pass', flipped: false }])
+  assert.deepEqual(rerun.rulings, [{ id: 'x', recorded: 'pass', rerun: 'pass', flipped: false, recorded_ruling: 'pass', rerun_ruling: 'pass', overrule_check: null }])
   assert.equal(reseen[0].prompt, seen[0].prompt)
   assert.deepEqual(reseen[0].schema, seen[0].schema)
+})
+
+
+test('a decider dissent rerun needing missing material fails instead of reporting a flip', async () => {
+  const marker = '[omitted: design.md could not be read]'
+  const options = setup(['fail', 'fail', 'pass'], {
+    buildPrompt: () => ({ prompt: `unchanged context\n${marker}` }),
+    decider: dissentCheck('confirmed'),
+  })
+  const outcome = await runPanelJob(options)
+  assert.equal(outcome.ok, true)
+  let calls = 0
+  await assert.rejects(rerunDecider({ record: outcome.record, buildPrompt: options.buildPrompt,
+    schema: options.schema, validateCitations: options.validateCitations,
+    decider: { model: 'opus', effort: 'medium', invoke: async request => {
+      calls++
+      assert.equal(request.usage_phase, 'dissent-check-rerun')
+      return JSON.stringify({ results: [{ id: 'x', classification: 'missing-material',
+        rationale: 'The dissent needs the omitted design.', evidence: ['marker'], citations: [], marker }] })
+    } },
+  }), error => error.code === 'missing-material' && error.resumable === false
+    && error.retryable === false && error.criteria.join(',') === 'x')
+  assert.equal(calls, 1)
 })
