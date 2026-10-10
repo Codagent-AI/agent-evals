@@ -28,8 +28,12 @@ function members(votes, deciderVote = null, check = 'confirmed', calls = []) {
   } } }
 }
 test('anchors and generated rubric are pinned; preflight refuses review gaps and needs no pass threshold', async () => {
-  assert.deepEqual(inventory.anchors_review, { reviewer: 'Paul Caplan', date: '2026-10-06', inventory_version: 5 })
-  assert.equal(inventory.inventory_version, 5)
+  assert.deepEqual(inventory.anchors_review, { reviewer: 'Paul Caplan', date: '2026-10-09', inventory_version: 6 })
+  assert.equal(inventory.inventory_version, 6)
+  // Inventory 6: a command that is only said to fail does not commit to a non-zero exit.
+  const outcome = inventory.items.find(x => x.id === 'INV-093').anchors
+  assert.match(outcome.met, /The exit status must be stated[^\n]*only said to fail, or a contrast with another command that exits with status 0, does not commit to it\./)
+  assert.match(outcome.partial, /checks that are said to fail and name what failed but no stated exit status/)
   assert.deepEqual(await checkInventory(), [])
   const broken = structuredClone(inventory); delete broken.items.find(x => x.class === 'mandatory').anchors
   assert.ok((await checkInventory({ inventory: broken })).some(x => /anchors/.test(x)))

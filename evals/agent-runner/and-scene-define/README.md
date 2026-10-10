@@ -243,6 +243,10 @@ inventory version 5 records that review as `anchors_review: { reviewer, date,
 inventory_version }`; the anchors themselves are unchanged. Any later change to
 the anchors needs a new inventory version and a new review, recorded the same
 way under the versioning rules above, before calibration or a candidate run.
+Inventory version 6 (rubric version 10) tightens the INV-093 anchors: the
+non-zero exit must be stated, and a command or check that is only said to fail
+leaves the item `partial`. Calibration showed a decider, and the overrule check
+behind it, reading "fails" as a non-zero exit.
 Preference items have no coverage anchors.
 
 `rubric.json` is generated from the inventory. Its coverage criteria and
