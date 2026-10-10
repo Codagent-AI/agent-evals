@@ -13,6 +13,7 @@ import {
   refreshBillingTokens,
 } from '../evals/agent-runner/and-scene/lib/runner-metrics.mjs'
 import { loadFallbackRates, resolveAttemptCost } from '../evals/agent-runner/and-scene/lib/pricing.mjs'
+import { reconcileRoleAttempts, validateRoleProfiles } from '../evals/agent-runner/and-scene/lib/profiles.mjs'
 
 const RUN_ID = 'run-7f3a'
 const WORKFLOW = 'plan-and-implement-change'
@@ -959,6 +960,58 @@ test('an agent call is attributed by the agent Runner records as its target', ()
   const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
 
   assert.equal(ingested.attempts[0].agent_role, 'crosscheck')
+})
+
+test('agent calls Runner records for tester and crosscheck reach their roles in the reported role configuration', () => {
+  // Runner's agent-call records carry kind 'agent-call', the call's target as
+  // target_kind/target_name, and the targeted profile as role.
+  const call = (overrides) => step({
+    kind: 'agent-call',
+    type: 'agent',
+    tool: 'agent-runner',
+    target_kind: 'profile',
+    ...overrides,
+  })
+  const text = JSON.stringify(metrics({
+    schema_version: 2,
+    steps: [
+      step({ record_id: 'lead#1', id: 'prepare-acceptance', prefix: 'prepare-acceptance', role: 'lead' }),
+      call({
+        record_id: 'prepare-acceptance/call-1#1',
+        id: 'call-1',
+        prefix: 'prepare-acceptance/call-agent',
+        target_name: 'tester',
+        role: 'tester',
+        session_id: 'tester-session',
+      }),
+      call({
+        record_id: 'review-tasks/call-2#1',
+        id: 'call-2',
+        prefix: 'review-tasks/call-agent',
+        target_name: 'crosscheck',
+        role: 'crosscheck',
+        session_id: 'crosscheck-session',
+      }),
+    ],
+  }))
+  const profile = { cli: 'codex', model: 'gpt-5-codex', effort: 'high' }
+  const capabilities = {
+    clis: { codex: { efforts: ['high'], roles: ['lead', 'crosscheck', 'implementor', 'tester'] } },
+  }
+  const { profiles } = validateRoleProfiles({
+    lead: profile, crosscheck: profile, implementor: profile, tester: profile, capabilities,
+  })
+
+  const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
+  const report = reconcileRoleAttempts(profiles, ingested.attempts)
+
+  assert.deepEqual(ingested.attempts.map((attempt) => attempt.agent_role), ['lead', 'tester', 'crosscheck'])
+  assert.deepEqual(report.roles.tester.attempts.map((attempt) => attempt.observed.session), ['tester-session'])
+  assert.equal(report.roles.tester.invocation, 'invoked')
+  assert.deepEqual(report.roles.crosscheck.attempts.map((attempt) => attempt.observed.session), ['crosscheck-session'])
+  assert.deepEqual(report.roles.lead.attempts.map((attempt) => attempt.observed.session), ['session-1'])
+  assert.equal(report.roles.implementor.invocation, 'not-invoked')
+  assert.deepEqual(report.unattributed, [])
 })
 
 test('the same step in two role contexts is attributed from the recorded agents alone', () => {
