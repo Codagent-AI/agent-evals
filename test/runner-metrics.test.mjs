@@ -964,12 +964,13 @@ test('an agent call is attributed by the agent Runner records as its target', ()
 
 test('agent calls Runner records for tester and crosscheck reach their roles in the reported role configuration', () => {
   // Runner's agent-call records carry kind 'agent-call', the call's target as
-  // target_kind/target_name, and the targeted profile as role.
+  // target_kind ('agent' or 'session') and target_name, and the agent profile
+  // that ran the call as role. A call to a named session records that
+  // session's agent, not the session name.
   const call = (overrides) => step({
     kind: 'agent-call',
     type: 'agent',
     tool: 'agent-runner',
-    target_kind: 'profile',
     ...overrides,
   })
   const text = JSON.stringify(metrics({
@@ -980,7 +981,8 @@ test('agent calls Runner records for tester and crosscheck reach their roles in 
         record_id: 'prepare-acceptance/call-1#1',
         id: 'call-1',
         prefix: 'prepare-acceptance/call-agent',
-        target_name: 'tester',
+        target_kind: 'session',
+        target_name: 'acceptance',
         role: 'tester',
         session_id: 'tester-session',
       }),
@@ -988,6 +990,7 @@ test('agent calls Runner records for tester and crosscheck reach their roles in 
         record_id: 'review-tasks/call-2#1',
         id: 'call-2',
         prefix: 'review-tasks/call-agent',
+        target_kind: 'agent',
         target_name: 'crosscheck',
         role: 'crosscheck',
         session_id: 'crosscheck-session',
