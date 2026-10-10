@@ -1,16 +1,19 @@
 // Identity-neutral, immutable judge inputs.
 //
 // Product judges never receive the live candidate checkout. This module reads
-// blobs from the verified final commit, filters known evaluation/workflow
+// product blobs from the verified final commit, filters known evaluation/workflow
 // material, neutralizes identity-bearing path metadata, and records every
-// transformation without modifying the delivered candidate.
+// transformation without modifying the delivered candidate. Approved
+// requirements are read from the run's recorded fixture commit instead, so a
+// candidate that edits the definition on its branch cannot change what it is
+// judged against.
 import { spawnSync } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 
 import { hashJson, hashString, writeJsonAtomic } from './persistence.mjs'
 
-export const NEUTRAL_INPUT_SCHEMA_VERSION = 2
+export const NEUTRAL_INPUT_SCHEMA_VERSION = 3
 
 const PLACEHOLDERS = {
   run: '<RUN_ID>',
@@ -114,10 +117,10 @@ function gitBuffer(worktree, args, label) {
   return result.stdout
 }
 
-function trackedEntries(worktree, finalSha) {
+function trackedEntries(worktree, revision) {
   const raw = gitBuffer(
     worktree,
-    ['ls-tree', '-rz', '--full-tree', '-r', finalSha],
+    ['ls-tree', '-rz', '--full-tree', '-r', revision],
     'neutral source tree lookup',
   )
   return raw.toString('utf8').split('\0').filter(Boolean).map((row) => {
@@ -231,11 +234,28 @@ export async function materializeNeutralInputs({
   worktree,
   runDir,
   finalSha,
+  fixtureCommit,
   changeName,
   identities = {},
 }) {
   if (!finalSha) throw new Error('neutral inputs require the verified final SHA')
+  if (!fixtureCommit) throw new Error('neutral inputs require the recorded fixture commit')
   if (!changeName) throw new Error('neutral inputs require the approved change name')
+  // The candidate clone already resolved and ancestry-checked the fixture
+  // commit before the run, so it is never fetched here: its absence means the
+  // clone is not the one the run recorded.
+  let requirementsRevision
+  try {
+    requirementsRevision = gitBuffer(
+      worktree,
+      ['rev-parse', '--verify', '--end-of-options', `${fixtureCommit}^{commit}`],
+      'fixture commit lookup',
+    ).toString('utf8').trim()
+  } catch (error) {
+    throw new Error(
+      `the recorded fixture commit ${fixtureCommit} is not available in the candidate clone: ${error.message}`,
+    )
+  }
   const runRoot = resolve(runDir)
   const neutralRoot = join(runRoot, 'neutral')
   const judgeRoot = join(neutralRoot, 'judge')
@@ -251,16 +271,12 @@ export async function materializeNeutralInputs({
 
   for (const entry of entries) {
     if (entry.type !== 'blob' || !/^100[0-7]{3}$/.test(entry.mode)) continue
+    if (excludedSource(entry.path, changeName)) continue
     const original = gitBuffer(
       worktree,
       ['cat-file', 'blob', `${finalSha}:${entry.path}`],
       `neutral source blob ${entry.path}`,
     )
-    if (requirementSource(entry.path, changeName)) {
-      requirements.push({ entry, original })
-      continue
-    }
-    if (excludedSource(entry.path, changeName)) continue
     const neutralPath = redactPath(entry.path, identities)
     if (includedPaths.has(neutralPath.path)) {
       throw new Error(`identity redaction creates a neutral source path collision: ${neutralPath.path}`)
@@ -278,6 +294,26 @@ export async function materializeNeutralInputs({
     })
   }
 
+  // The candidate's own copy of the change directory is never read: deleting,
+  // weakening, or adding a requirement on its branch changes nothing here.
+  for (const entry of trackedEntries(worktree, requirementsRevision)) {
+    if (entry.type !== 'blob' || !/^100[0-7]{3}$/.test(entry.mode)) continue
+    if (!requirementSource(entry.path, changeName)) continue
+    requirements.push({
+      entry,
+      original: gitBuffer(
+        worktree,
+        ['cat-file', 'blob', `${requirementsRevision}:${entry.path}`],
+        `approved requirement blob ${entry.path}`,
+      ),
+    })
+  }
+  if (requirements.length === 0) {
+    throw new Error(
+      `the recorded fixture commit ${requirementsRevision} has no approved requirements for the evaluated change`,
+    )
+  }
+
   let requirementIndex = 0
   for (const { entry, original } of requirements.sort((left, right) => (
     left.entry.path.localeCompare(right.entry.path)
@@ -292,7 +328,7 @@ export async function materializeNeutralInputs({
     manifestEntries.push({
       namespace: 'neutral-requirements',
       path: `requirements/${path}`,
-      origin: { revision: finalSha, path: entry.path, object: entry.object },
+      origin: { revision: requirementsRevision, path: entry.path, object: entry.object },
       original_sha256: hashString(original),
       sha256: hashString(neutralContent.bytes),
       transformations: [
@@ -313,6 +349,7 @@ export async function materializeNeutralInputs({
     },
     requirements: {
       root: 'neutral/judge/requirements',
+      source_revision: requirementsRevision,
       content_sha256: hashJson(manifestEntries.filter(({ namespace }) => namespace === 'neutral-requirements')),
     },
     entries: manifestEntries,

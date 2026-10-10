@@ -1289,6 +1289,10 @@ export async function runEvaluation({
           worktree: candidateWorktree,
           runDir,
           finalSha,
+          // Approved requirements come from the fixture commit this run
+          // recorded (an imported run's own, on a rescore), never from the
+          // candidate's branch.
+          fixtureCommit: record.candidate.fixture_commit,
           changeName,
           identities: {
             run: [runId, record.run?.run_id].filter(Boolean),

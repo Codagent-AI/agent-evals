@@ -940,8 +940,9 @@ test('candidate evidence is frozen after delivery and neutral inputs exist befor
         findings: [],
       }
     },
-    materializeNeutral: async ({ finalSha }) => {
+    materializeNeutral: async ({ finalSha, fixtureCommit }) => {
       order.push(`neutral:${finalSha}`)
+      order.push(`requirements:${fixtureCommit}`)
       return {
         source: { root: 'neutral/source' },
         requirements: { root: 'neutral/requirements' },
@@ -957,6 +958,7 @@ test('candidate evidence is frozen after delivery and neutral inputs exist befor
   assert.deepEqual(order, [
     `evidence:${context.commit}`,
     `neutral:${context.commit}`,
+    `requirements:${context.commit}`,
     'judging',
   ])
   const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
@@ -1598,6 +1600,34 @@ test('an evaluator-only rescore imports a completed candidate and never starts A
   assert.equal(written.delivery.final_sha, context.commit)
   assert.equal(written.workflow.run_id, 'runner-complete')
   assert.equal(written.workflow.events[0].event, 'imported-completed-run')
+})
+
+test('a rescore pins judged requirements to the imported run\'s recorded fixture commit', async () => {
+  const context = await environment()
+  const olderFixture = 'e'.repeat(40)
+  const exec = (command, args, options) => (
+    command === 'git' && args.includes(`${olderFixture}^{commit}`)
+      ? { status: 0, stdout: `${olderFixture}\n` }
+      : context.exec(command, args, options)
+  )
+  let pinned = null
+
+  const result = await evaluate({ ...context, exec }, ['--rescore-from', '/rescore-source'], {
+    verifyDelivery: async () => {
+      throw new Error('rescore must not rediscover historical artifact paths')
+    },
+    loadRescoreSource: async () => {
+      const imported = importedRescore(context)
+      return { ...imported, candidate_source: { ...imported.candidate_source, fixture_commit: olderFixture } }
+    },
+    materializeNeutral: async ({ finalSha, fixtureCommit }) => {
+      pinned = { finalSha, fixtureCommit }
+      return null
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.deepEqual(pinned, { finalSha: context.commit, fixtureCommit: olderFixture })
 })
 
 test('a rescore restores a missing Runner session under the run directory and records it', async () => {

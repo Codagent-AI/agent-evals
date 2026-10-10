@@ -534,7 +534,7 @@ focused modules under `lib/`:
 | `lib/profiles.mjs` | Role profile validation, eval-scoped config, effective-profile reconciliation |
 | `lib/workflow.mjs` | Full-workflow contract, prohibited-side-effect checks, Runner run classification |
 | `lib/evidence.mjs` | Role-based candidate intake, byte integrity, lineage, evaluator evidence, contradictions, and bounded judge views |
-| `lib/neutral-source.mjs` | Byte-exact final-commit source under neutralized paths plus approved identity-free requirement bundles |
+| `lib/neutral-source.mjs` | Byte-exact final-commit source under neutralized paths plus identity-free approved requirements pinned to the recorded fixture commit |
 | `lib/runner-state.mjs` | Reading Agent Runner run state by identifier or newest timestamp |
 | `lib/outcomes.mjs` | Evaluation status and product verdict model |
 | `lib/phases.mjs` | The ordered lifecycle and its failure ownership |
@@ -631,7 +631,12 @@ judgeable and is recorded as an evidence defect.
 
 Product-source judges run from `neutral/judge/`, which contains only a
 byte-exact final-commit source snapshot under neutralized paths and
-identity-free approved requirements. The source snapshot excludes only exact
+identity-free approved requirements. The requirements are read from the
+evaluated change at the fixture commit the run recorded (an imported run's own
+on a rescore), never from the candidate's branch, so deleting, weakening, or
+adding a requirement there changes nothing that is judged; every judge and
+evidence view that consults requirements uses that one pinned bundle. The
+source snapshot excludes only exact
 harness-owned paths (`.agent-runner/` and the original OpenSpec change
 directory), so product modules with generic names such as `evidence` or
 `acceptance` remain reviewable. The provenance manifest is stored outside that
