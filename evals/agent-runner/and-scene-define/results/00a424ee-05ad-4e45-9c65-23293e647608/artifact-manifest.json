@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "run_id": "00a424ee-05ad-4e45-9c65-23293e647608",
+  "files": [
+    {
+      "path": "result.json",
+      "sha256": "0f4924a61cd0b09a76e6e7064c7d7b1fd6dfe2b337aa8e64a12b2a214419f231"
+    },
+    {
+      "path": "report.html",
+      "sha256": "bd187a8ce531705cad525ce7210976184fab6f82a33c9fc434e81801d96e256f"
+    },
+    {
+      "path": "conversation.jsonl",
+      "sha256": "4b9bda7a07da064d85b0a1471c5450a08189ca728312ad3ccc58589297dd3c58"
+    },
+    {
+      "path": "discovery/ledger.json",
+      "sha256": "501f4b504228d98672163eff396c87d50e4bb08a2e5376c6701cc83e29e2f5c9"
+    },
+    {
+      "path": "collected/.openspec.yaml",
+      "sha256": "ec3a1b167d0ccdb9f7a3f8f370ba8038feb637051c90a0b3fbcc5e9cef45d7a5"
+    },
+    {
+      "path": "collected/design.md",
+      "sha256": "7d5bca94a36f5d8399cabc6a10e8add141f7a66e06aec3cfb78a817cdf4bfd68"
+    },
+    {
+      "path": "collected/proposal.md",
+      "sha256": "3a69bc1374fca9090a1873ae1a6d2986f733cb45e8a65f25e3dbbb443343d5fb"
+    },
+    {
+      "path": "collected/specs/presentation-skill/spec.md",
+      "sha256": "99bd815837adb44186b0d852af3ea21867091fbab0a4a6f5a4635fd8bfdfc27a"
+    },
+    {
+      "path": "collected/specs/presentation-verification/spec.md",
+      "sha256": "1dd1bf85ce50f84235504d48eeb96c27ff34e06f2e48bb4199cea6516113f273"
+    },
+    {
+      "path": "collected/specs/presentation-viewer/spec.md",
+      "sha256": "48ce1ae81b7dc2f2a5eff892a371e7bf0b5cbea03c0cb410a83ef0b875287826"
+    },
+    {
+      "path": "collected/specs/scene-presentation/spec.md",
+      "sha256": "dd25e4cc5a63a3570d6ccb996c9c778d11332a77b3bd1e1c6afcc12e95732ba8"
+    },
+    {
+      "path": "collected/test-plan.md",
+      "sha256": "9b4d84e4c97d4030a3e0f217d68c4c5a5b0358ec6df92325795b70eab27eeb13"
+    }
+  ]
+}

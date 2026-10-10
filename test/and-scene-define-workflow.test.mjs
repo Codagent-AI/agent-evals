@@ -14,7 +14,14 @@ test('profiles require every field and reject Cursor leads before dispatch', () 
   assert.deepEqual(validateProfiles(profiles), profiles)
   assert.throws(() => validateProfiles({ ...profiles, lead: { cli: 'codex' } }), /lead.model/)
   assert.throws(() => validateProfiles({ ...profiles, lead: { ...profiles.lead, cli: 'cursor' } }), /claude or codex/)
-  assert.match(runnerConfig(profiles), /active_profile: eval/)
+})
+test('the Runner config is a global default profile with no active_profile', () => {
+  const config = runnerConfig(profiles)
+  // Runner refuses active_profile in a global config and selects the default profile set.
+  assert.doesNotMatch(config, /active_profile/)
+  assert.match(config, /^profiles:\n {2}default:\n {4}agents:\n/)
+  assert.match(config, /lead:\n {8}default_mode: interactive\n {8}cli: "codex"\n {8}model: "gpt-6"\n {8}effort: "high"/)
+  assert.match(config, /crosscheck:\n {8}default_mode: autonomous\n {8}cli: "cursor"\n {8}model: "opus"\n {8}effort: "high"/)
 })
 test('preflight names missing Runner flags and workflow steps', () => {
   assert.throws(() => verifyCapabilities('help', '--auth-only --hide-source'), /--external-user/)
@@ -58,7 +65,7 @@ test('collection freezes files and records SHA-256 and HEAD', async t => {
   assert.equal(await readFile(join(root, 'collected/proposal.md'), 'utf8'), 'proposal')
 })
 test('define metrics attribute children to crosscheck and retain incomplete costs and usage', () => {
-  const text = JSON.stringify({ schema_version: 3, run_id: 'r', workflow: 'openspec:change', history_complete: false, steps: [
+  const text = JSON.stringify({ schema_version: 3, run_id: 'r', workflow: 'change', history_complete: false, steps: [
     { id: 'proposal', prefix: 'define/proposal', agent_invoked: true, cli: 'codex', session_id: 'lead', duration_ms: 10, usage: { status: 'unavailable', reason: 'partial' } },
     { id: 'crosscheck', prefix: 'define/proposal/call-agent', kind: 'agent-call', target_name: 'crosscheck', agent_invoked: true, cli: 'cursor', session_id: 'child', duration_ms: 5, estimated_api_cost_usd: 1, usage: { status: 'collected', tokens: { input: 2 }, completeness: { history: 'partial' } } },
   ] })

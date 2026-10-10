@@ -167,3 +167,11 @@ for (const packed of [false, true]) {
     assert(matches.some(match => match.file.includes(oid) && match.pattern === 'fixture-repository'))
   })
 }
+test('the starting tree carries a Validator config that agent-validator accepts', async () => {
+  // agent-validator detect (run by the create step) requires a cli object and at least one entry point.
+  const config = await readFile(resolve('evals/agent-runner/and-scene-define/starting-repo/tree/.validator/config.yml'), 'utf8')
+  assert.match(config, /^base_branch: main$/m)
+  assert.match(config, /^cli:\n {2}default_preference:\n {4}- claude$/m)
+  assert.match(config, /^entry_points:\n {2}- path: \.$/m)
+  assert.doesNotMatch(config, /entry_points: \[\]/)
+})

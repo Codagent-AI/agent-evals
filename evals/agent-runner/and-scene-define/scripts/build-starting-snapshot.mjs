@@ -17,7 +17,9 @@ const neutral = {
   'AGENTS.md': '# Project\n\nThis repository contains a Vite, React, and TypeScript scaffold.\n\nUse test-driven development for behavior changes. Run the applicable tests, lint, and build before reporting completion. Use chrome-devtools-axi for browser inspection. Keep changes within the repository and do not commit generated output or dependencies.\n\nUse commit messages of the form `type: lowercase description`.\n',
   'CLAUDE.md': 'See AGENTS.md for repository guidance.\n',
   'README.md': '# Project\n\nA minimal Vite, React, and TypeScript application scaffold.\n\nRun `npm ci`, then `npm run dev` for development. Use `npm run lint` and `npm run build` to check changes.\n',
-  '.validator/config.yml': 'base_branch: main\nentry_points: []\n',
+  // agent-validator detect requires a cli object and at least one entry point. Product-specific
+  // reviews and networked checks are omitted.
+  '.validator/config.yml': 'base_branch: main\ncli:\n  default_preference:\n    - claude\n  adapters:\n    claude:\n      allow_tool_use: false\n      thinking_budget: low\n      model: claude-sonnet-5-5\nentry_points:\n  - path: .\n    checks:\n      - build:\n          command: npm run build\n      - lint:\n          command: npm run lint\n      - typecheck:\n          command: npx tsc -b --noEmit\n    reviews:\n      - all-reviewers:\n          builtin: all-reviewers\n',
   'src/App.tsx': "import './App.css'\n\nexport default function App() {\n  return <main><h1>Project</h1><p>Application scaffold.</p></main>\n}\n",
   'src/App.css': 'main { max-width: 60rem; margin: 0 auto; padding: 2rem; }\n',
   'src/index.css': 'body { margin: 0; font-family: system-ui, sans-serif; }\n',

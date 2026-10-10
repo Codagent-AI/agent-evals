@@ -50,7 +50,7 @@ import {
 } from './lib/timing.mjs'
 import { collectSourceEvidence } from './deterministic-checks.mjs'
 import { runBrowserEvaluation } from './lib/browser-eval.mjs'
-import { createHostBrowser } from './lib/host-browser.mjs'
+import { createHostBrowser, withHostBrowser } from './lib/host-browser.mjs'
 import { createAxiBrowserDriver } from './lib/axi-browser-driver.mjs'
 import { ensureCandidateServer, stopCandidateServer } from './lib/candidate-server.mjs'
 import {
@@ -2274,7 +2274,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         port: Number(process.env.AND_SCENE_HOST_DEVTOOLS_PORT || 9333),
       })
     : null
-  const result = await runEvaluation({
+  const result = await withHostBrowser(hostBrowser, () => runEvaluation({
     argv,
     home: process.env.HOME ?? null,
     verifyCandidate: productionRunDir
@@ -2306,8 +2306,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         })
       : null,
     log: (line) => console.error(line),
-  })
-  await hostBrowser?.release()
+  }))
   for (const error of result.errors ?? []) console.error(JSON.stringify(error))
   process.exit(result.exitCode)
 }
