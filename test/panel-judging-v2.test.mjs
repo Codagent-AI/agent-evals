@@ -12,7 +12,7 @@ import { PANEL_PROTOCOL, resolvePanel, runPanelJob, verifyCachedPanelJob } from 
 import {
   HarnessMaterialError, LINE_CITED_RESULT_SCHEMA, PANEL_AUDIT_RESULT_SCHEMA, PANEL_CHECK_RESULT_SCHEMA,
   SOURCE_AUDIT_RESULT_SCHEMA, SOURCE_JUDGE_RESULT_SCHEMA, auditState, buildSpanAuditRequest, judgeResultSchemaFor,
-  parseLineCitedOutput, resolveLineCitedRecord, runJudgeJob, runTiebreak,
+  JudgeOutputError, parseLineCitedOutput, resolveLineCitedRecord, runJudgeJob, runTiebreak, withRejection,
 } from '../evals/lib/panel-judging/protocol.mjs'
 import { PRODUCT_JUDGE_PROFILE } from '../evals/agent-runner/and-scene/lib/judge-profile.mjs'
 import { buildSpanAuditRequest as buildOpinionAuditRequest } from '../evals/agent-runner/and-scene/lib/second-opinion.mjs'
@@ -345,6 +345,10 @@ test('a re-cite that tries to change its verdict is retried; the record keeps fi
   assert.equal(recites.length, 2)
   assert.doesNotMatch(recites[0].prompt, /change your verdict/)
   assert.match(recites[0].prompt, /- x \(your verdict: pass\): the consumer is not quoted/)
+  // The retry names the rejection; the first request carries none.
+  assert.doesNotMatch(recites[0].prompt, /# Previous reply rejected/)
+  assert.match(recites[1].prompt, /# Previous reply rejected\nThe harness rejected your previous reply to this request: [^\n]*re-cite changed the verdict of x from pass to fail/)
+  assert.ok(recites[1].prompt.startsWith(recites[0].prompt))
   const decider = outcome.record.decider
   assert.match(decider.attempts.find(({ stage, ok }) => stage === 'tiebreak-recite' && !ok).error, /re-cite changed the verdict of x from pass to fail/)
   assert.deepEqual(decider.first_results[0].citations, [span('src/impl.ts', 1)])
@@ -677,4 +681,13 @@ test('INT-002: the panel audit request uses PANEL_AUDIT_RESULT_SCHEMA while seco
   const ruled = LINE_CITED_RESULT_SCHEMA.properties.results.items
   assert.ok(ruled.required.includes('search_scope') && ruled.required.includes('missing_obligation'))
   assert.equal(ruled.properties.search_scope.maxItems, 12)
+})
+
+test('a retry names an invalid reply\'s rejection, but retries any other failure unchanged', () => {
+  const request = { job: 'job', prompt: 'judge this' }
+  const retried = withRejection(request, new JudgeOutputError('source citation cannot be inspected: source/a.mjs: ENOENT'))
+  assert.equal(retried.prompt, 'judge this\n\n# Previous reply rejected\nThe harness rejected your previous reply to this request: source citation cannot be inspected: source/a.mjs: ENOENT\nReply again under every rule above, correcting that problem.')
+  assert.equal(request.prompt, 'judge this')
+  const limit = Object.assign(new Error('Claude judge limit requires resume'), { retryable: false })
+  assert.equal(withRejection(request, limit), request)
 })

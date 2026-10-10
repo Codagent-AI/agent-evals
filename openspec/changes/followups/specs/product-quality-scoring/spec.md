@@ -663,7 +663,7 @@ An audit that runs in several parts, such as the claim mapping's row audits and 
 
 A re-cite SHALL re-run every part as a new cycle. A record SHALL persist each cycle's required parts and the cycle it settled on. It SHALL reproduce its outcome from that cycle's parts alone, under the same rules live settlement applies, including the confirmed-contradiction exception, and each retained check SHALL be verified against the part and cycle it checked. A record whose settled cycle lacks a required part, or that combines parts of different cycles in one settlement, SHALL NOT verify.
 
-A browser-fallback decider pass that its span audit does not confirm SHALL fail. Invalid decider output, including an invalid span or a fail that cites neither a counterexample nor a search scope, SHALL be retried and, once exhausted, SHALL leave the job unobserved as a harness failure, as SHALL an exhausted panel judge. Contradiction checks and targeted dissent checks SHALL run on the decider's pinned model.
+A browser-fallback decider pass that its span audit does not confirm SHALL fail. Invalid decider output, including an invalid span or a fail that cites neither a counterexample nor a search scope, SHALL be retried and, once exhausted, SHALL leave the job unobserved as a harness failure, as SHALL an exhausted panel judge; an exhausted re-cite instead leaves the first ruling standing, as above. Each retry after invalid output from a panel judge, audit, check, or decider SHALL state, after the unchanged request, the reason the previous reply was rejected; a retry after any other failure SHALL repeat the request unchanged. Contradiction checks and targeted dissent checks SHALL run on the decider's pinned model.
 
 Audit, contradiction-check, and decider request packets SHALL be serialized compactly. When the combined packet of an audit, a check, or a decider request would exceed the packet limit, the harness SHALL split its per-claim or per-criterion material into batches that each hold whole claims or whole criteria, repeating the material all of them share. When a single claim or criterion cannot fit within the limit on its own, the harness SHALL leave that criterion unresolved and record an evaluation-harness failure that names it. When the shared material alone, such as a decider's evidence view, cannot fit, the harness SHALL record an evaluation-harness failure naming every criterion pending for that request. It SHALL NOT settle any criterion on material it silently omitted.
 
@@ -867,6 +867,11 @@ Every response schema the harness sends SHALL satisfy strict structured-output r
 - **WHEN** the span audit of a decider fail that cites a counterexample returns `insufficient`, and the decider's re-cite cites only a search scope
 - **THEN** the re-cite is invalid decider output and is retried
 - **AND** the fail never receives a scope repair round
+
+#### Scenario: A retry names the rejected reply's defect
+- **WHEN** a panel judge cites a source path that does not exist, or a decider returns an invalid claim map
+- **THEN** its retry repeats the request followed by the reason the previous reply was rejected
+- **AND** a retry after a usage limit or transport failure repeats the request unchanged
 
 #### Scenario: A re-cite that stays invalid leaves the first ruling standing
 - **WHEN** every re-cite attempt of an undecided counterexample fail cites only a search scope

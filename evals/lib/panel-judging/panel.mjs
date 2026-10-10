@@ -3,7 +3,7 @@ import { hashJson } from './hash.mjs'
 import { JUDGE_ATTEMPTS, JudgeOutputError, PANEL_CHECK_RESULT_SCHEMA, CHECK_OUTCOMES, judgeResultSchemaFor, judgeFailure,
   parseSourceAuditOutput, buildContradictionCheckRequest, sourceMaterial, runTiebreak, resolveLineCitedRecord, JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE, MISSING_MATERIAL_RULE,
   MAX_AUDIT_PACKET_CHARS, PacketOverflowError, HarnessMaterialError, compactMaterial, lineCitationInventory, evidenceLineCounts,
-  EVIDENCE_CITATION_RULE } from './protocol.mjs'
+  EVIDENCE_CITATION_RULE, withRejection } from './protocol.mjs'
 export { judgeFailure, HarnessMaterialError } from './protocol.mjs'
 
 export const PANEL_PROTOCOL = 'cross-family-panel-v2'
@@ -334,13 +334,15 @@ export async function runPanelJob({ job, criteria, verdicts, order, panel, decid
   }
   const call = async (next, member, stage, parser) => {
     let lastError
+    let current = next
     for (let attempt = 1; attempt <= JUDGE_ATTEMPTS; attempt++) {
       try {
-        const value = await parser(await wrap(member, stage)(next))
+        const value = await parser(await wrap(member, stage)(current))
         record.attempts.push({ stage, attempt, ok: true })
         return value
       } catch (error) {
         lastError = error
+        current = withRejection(next, error)
         record.attempts.push({ stage, attempt, ok: false, error: error.message, failure: judgeFailure(error) })
         if (error.retryable === false) break
       }
@@ -500,12 +502,14 @@ export async function rerunDecider({ record, decider, buildPrompt, schema, valid
 function deciderCall(decider, usage) {
   return async (next, stage, parser) => {
     let lastError
+    let current = next
     for (let attempt = 1; attempt <= JUDGE_ATTEMPTS; attempt++) {
       usage[stage] = (usage[stage] ?? 0) + 1
       try {
-        return await parser(await decider.invoke({ ...next, authority: deciderAuthority(decider), usage_phase: stage }))
+        return await parser(await decider.invoke({ ...current, authority: deciderAuthority(decider), usage_phase: stage }))
       } catch (error) {
         lastError = error
+        current = withRejection(next, error)
         if (error.retryable === false) break
       }
     }

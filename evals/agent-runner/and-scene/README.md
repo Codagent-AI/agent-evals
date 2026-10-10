@@ -90,7 +90,9 @@ an unconfirmed browser fallback pass fails. Audits and checks that need
 material the harness withheld or could not read (`missing-material`), or an
 absence scope still inadequate after its repair (`scope-inadequate`), fail the
 job as non-resumable harness failures naming the criteria. Invalid output is
-retried; exhausted calls leave the job unobserved.
+retried, and each such retry appends the reason the previous reply was rejected
+(other failures retry the request unchanged); exhausted calls leave the job
+unobserved.
 
 Criterion records and reports show the basis (`consensus-pass/fail`,
 `majority-pass/fail`, `checked-dissent-pass`, or `decider-pass/fail`) and all

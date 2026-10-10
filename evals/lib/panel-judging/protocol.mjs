@@ -755,6 +755,16 @@ function buildMissingCriteriaRequest(request, missing) {
   }
 }
 
+// A retry after invalid output names the rejection, so the same prompt does
+// not draw the same mistake again. Only invalid output is described; any other
+// failure retries the request unchanged.
+export function withRejection(request, error) {
+  if (!(error instanceof JudgeOutputError)) return request
+  return { ...request, prompt: [request.prompt, '', '# Previous reply rejected',
+    `The harness rejected your previous reply to this request: ${bounded(error.message, 600)}`,
+    'Reply again under every rule above, correcting that problem.'].join('\n') }
+}
+
 function mergeSourceAudit(primaryResults, auditResults) {
   const audited = new Map(auditResults.map((result) => [result.id, result]))
   return primaryResults.map((primary) => {
@@ -850,7 +860,7 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
         } else {
           history.push({ cycle, attempt, ok: false, error: error.message })
           partialResults.clear()
-          attemptRequest = activeRequest
+          attemptRequest = withRejection(activeRequest, error)
           if (error?.retryable === false) {
             failure = judgeFailure(error)
             break
@@ -875,16 +885,18 @@ export async function runJudgeJob({ request, invoke, attempts = JUDGE_ATTEMPTS }
     const audited = new Map()
     for (const batch of auditBatches) {
       let parsed = null
+      let auditRequest = batch.request
       for (let attempt = 1; attempt <= attempts; attempt += 1) {
         const where = { cycle, attempt, ...(batched ? { batch: batch.index } : {}) }
         try {
-          const output = await invoke(batch.request)
+          const output = await invoke(auditRequest)
           parsed = parseSourceAuditOutput(output, batch.criteria, request.job, { outcomes: CHECK_OUTCOMES,
             inventory: request.verified_source_paths ?? [], packet: batch.request.prompt })
           auditHistory.push({ ...where, ok: true, error: null })
           break
         } catch (error) {
           auditHistory.push({ ...where, ok: false, error: error.message })
+          auditRequest = withRejection(batch.request, error)
           if (error?.retryable === false) {
             failure = judgeFailure(error)
             break
@@ -2087,14 +2099,16 @@ async function settleTiebreak({ request, criteria, invoke, attempts, validateVer
   // A batched call's attempts name its batch, and an audit's its cycle.
   let lastFailure = null
   const run = async (next, log, parse, batch = null, extra = {}) => {
+    let current = next
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       const where = { stage: next.judge_stage ?? next.audit_stage, ...extra, attempt, ...(batch === null ? {} : { batch }) }
       try {
-        const value = await parse(await invoke(next))
+        const value = await parse(await invoke(current))
         log.push({ ...where, ok: true, error: null })
         return value
       } catch (error) {
         lastFailure = error
+        current = withRejection(next, error)
         log.push({ ...where, ok: false, error: error instanceof Error ? error.message : String(error) })
         if (error?.retryable === false) break
       }
