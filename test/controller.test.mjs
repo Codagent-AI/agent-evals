@@ -86,6 +86,9 @@ async function environment({
   ghAuthenticated = true,
   ghPermission = 'WRITE',
   planningReady = true,
+  // The pinned fixture starts from definition artifacts only; true plants a
+  // task index and task file the starting-line preflight must reject.
+  fixtureHasTasks = false,
   runnerResult = { status: 0, stdout: '' },
   runnerResults = null,
 } = {}) {
@@ -121,17 +124,11 @@ async function environment({
           ? { status: 0, stdout: planningTestPlan }
           : { status: 1, stderr: 'missing test plan' }
       }
-      if (joined.includes('show') && joined.includes('/tasks.md')) {
-        return { status: 0, stdout: '- [Demo task](tasks/01-demo.md)\n' }
-      }
-      if (joined.includes('show') && /\/(?:proposal|design|tasks)\.md/.test(joined)) {
+      if (joined.includes('show') && /\/(?:proposal|design)\.md/.test(joined)) {
         return { status: 0, stdout: '# Planning artifact\n' }
       }
       if (joined.includes('show') && /\/specs\/[^/]+\/spec\.md/.test(joined)) {
         return { status: 0, stdout: '# Specification\n' }
-      }
-      if (joined.includes('show') && /\/tasks\/[^/]+\.md/.test(joined)) {
-        return { status: 0, stdout: '# Task\n' }
       }
       if (joined.includes('show-ref --verify --quiet')) return { status: 1, stdout: '' }
       if (joined.includes('--is-inside-work-tree')) return { status: 0, stdout: 'true\n' }
@@ -152,8 +149,11 @@ async function environment({
         if (planningPath.endsWith('/specs')) {
           return { status: 0, stdout: `${planningPath}/demo/spec.md\n` }
         }
-        if (planningPath.endsWith('/tasks')) {
+        if (fixtureHasTasks && planningPath.endsWith('/tasks')) {
           return { status: 0, stdout: `${planningPath}/01-demo.md\n` }
+        }
+        if (fixtureHasTasks && planningPath.endsWith('/tasks.md')) {
+          return { status: 0, stdout: `${planningPath}\n` }
         }
         return { status: 0, stdout: '' }
       }
@@ -606,6 +606,18 @@ test('an incompatible fixture is a typed harness preflight failure and launches 
   assert.equal(result.exitCode, 2)
   assert.equal(result.errors[0].code, 'fixture-planning-contract')
   assert.match(result.errors[0].message, /test-plan\.md/)
+  assert.equal(runnerInvocations(context).length, 0)
+})
+
+test('a fixture that still carries tasks is a starting-line preflight failure and launches no Runner', async () => {
+  const context = await environment({ fixtureHasTasks: true })
+
+  const result = await evaluate(context, ['--skip-validator', ...profiles])
+
+  assert.equal(result.exitCode, 2)
+  assert.equal(result.errors[0].code, 'fixture-planning-contract')
+  assert.match(result.errors[0].message, /openspec\/changes\/create-and-scene\/tasks\.md/)
+  assert.match(result.errors[0].message, /openspec\/changes\/create-and-scene\/tasks\/01-demo\.md/)
   assert.equal(runnerInvocations(context).length, 0)
 })
 

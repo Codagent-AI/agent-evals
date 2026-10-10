@@ -140,6 +140,9 @@ test('snapshot refresh copies fixture files with their git blob ids only at the 
       await writeFile(join(checkout, `openspec/changes/create-and-scene/specs/${name}/spec.md`), 'spec\n')
     })
   }
+  // A task index left at the pin is not part of the definition-only corpus.
+  await writeFile(join(checkout, 'openspec/changes/create-and-scene/tasks.md'), '- [Task](tasks/01.md)\n')
+  await writeFile(join(checkout, 'openspec/changes/create-and-scene/test-plan.md'), '# Test plan\n')
   execFileSync('git', ['-C', checkout, 'init', '-q'])
   execFileSync('git', ['-C', checkout, 'add', '.'])
   execFileSync('git', ['-C', checkout, '-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'fixture'])
@@ -152,6 +155,9 @@ test('snapshot refresh copies fixture files with their git blob ids only at the 
   assert.equal(written.files.find(({ path }) => path === 'fixture-root-README.md').blob,
     execFileSync('git', ['-C', checkout, 'ls-tree', 'HEAD', '--', 'README.md'], { encoding: 'utf8' }).trim().split(/\s+/)[2])
   assert.equal(await readFile(join(snapshot, 'fixture-root-README.md'), 'utf8'), 'fixture root\n')
+  const sourcePaths = written.files.map(({ source_path: path }) => path)
+  assert.ok(sourcePaths.includes('openspec/changes/create-and-scene/test-plan.md'))
+  assert.equal(sourcePaths.some((path) => /\/tasks(?:\.md|\/)/.test(path)), false)
 })
 
 test('criterion definitions are held to the same concrete-value check as review guidance', () => {

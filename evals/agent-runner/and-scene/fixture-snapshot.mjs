@@ -16,7 +16,6 @@ const DOCUMENTS = [
   'openspec/changes/create-and-scene/specs/presentation-verification/spec.md',
   'openspec/changes/create-and-scene/proposal.md',
   'openspec/changes/create-and-scene/design.md',
-  'openspec/changes/create-and-scene/tasks.md',
   'openspec/changes/create-and-scene/test-plan.md',
 ]
 

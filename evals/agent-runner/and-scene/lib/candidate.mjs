@@ -5,7 +5,7 @@
 // while cleanliness still covers tracked changes and every untracked file
 // except screenshot evidence in the suite's bounded inspection directory.
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
-import { dirname, join, posix, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -176,6 +176,10 @@ function planningContractError(message) {
   return error
 }
 
+// The evaluated change starts from definition artifacts only: the evaluated
+// workflow writes its own tasks, so a fixture that still carries a task index
+// or task files is the wrong starting line. Nothing here deletes or rewrites
+// fixture files to satisfy the contract.
 function assertPlanningReadyFixture(exec, worktree, fixtureCommit, changeName) {
   const changeDir = `openspec/changes/${changeName}`
   const testPlanPath = `${changeDir}/test-plan.md`
@@ -183,7 +187,6 @@ function assertPlanningReadyFixture(exec, worktree, fixtureCommit, changeName) {
     `${changeDir}/proposal.md`,
     `${changeDir}/design.md`,
     testPlanPath,
-    `${changeDir}/tasks.md`,
   ]
   const failures = requiredFiles
     .filter((path) => !fixtureFile(exec, worktree, fixtureCommit, path)?.trim())
@@ -202,33 +205,15 @@ function assertPlanningReadyFixture(exec, worktree, fixtureCommit, changeName) {
     failures.push(`no non-empty specification under ${changeDir}/specs/`)
   }
 
-  const taskFiles = fixtureFiles(
-    exec,
-    worktree,
-    fixtureCommit,
-    `${changeDir}/tasks`,
-  ).filter((path) => /^openspec\/changes\/[^/]+\/tasks\/[^/]+\.md$/.test(path))
-  const tasks = taskFiles.filter(
-    (path) => fixtureFile(exec, worktree, fixtureCommit, path)?.trim(),
-  )
-  if (tasks.length === 0) {
-    failures.push(`no non-empty task file under ${changeDir}/tasks/`)
-  }
-
-  const taskIndex = fixtureFile(exec, worktree, fixtureCommit, `${changeDir}/tasks.md`) ?? ''
-  const linkedTasks = new Set([...taskIndex.matchAll(/(?<!!)\[[^\]]+\]\(([^)]+)\)/g)].map((match) => {
-    const raw = match[1].trim().replace(/^<|>$/g, '').split(/[?#]/, 1)[0]
-    try {
-      return posix.normalize(decodeURIComponent(raw))
-    } catch {
-      return posix.normalize(raw)
-    }
-  }))
-  for (const task of tasks) {
-    const relative = task.slice(changeDir.length + 1)
-    if (!linkedTasks.has(relative)) {
-      failures.push(`${changeDir}/tasks.md does not link to ${relative}`)
-    }
+  const taskIndexPath = `${changeDir}/tasks.md`
+  const taskArtifacts = [
+    ...fixtureFiles(exec, worktree, fixtureCommit, taskIndexPath)
+      .filter((path) => path === taskIndexPath),
+    ...fixtureFiles(exec, worktree, fixtureCommit, `${changeDir}/tasks`)
+      .filter((path) => path.startsWith(`${changeDir}/tasks/`)),
+  ]
+  for (const path of taskArtifacts) {
+    failures.push(`task artifact ${path} is present; the fixture must start from definition artifacts only`)
   }
 
   if (failures.length > 0) {

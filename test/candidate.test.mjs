@@ -2,7 +2,7 @@ import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { test } from 'node:test'
 
@@ -64,23 +64,25 @@ None.
 | Demo behavior | AT-001 |
 `
 
+// The fixture starts from definition artifacts only. `taskArtifacts` maps a
+// task path under the change to its content, to plant a task artifact that the
+// starting-line preflight must reject.
 async function writePlanningArtifacts(source, {
   omit = [],
-  taskIndex = '- [Demo task](tasks/01-demo.md)\n',
+  taskArtifacts = {},
   testPlan = null,
 } = {}) {
   const changeDir = join(source, 'openspec/changes/create-and-scene')
   const omitted = new Set(omit)
   await mkdir(join(changeDir, 'specs/demo'), { recursive: true })
-  await mkdir(join(changeDir, 'tasks'), { recursive: true })
   if (!omitted.has('proposal.md')) await writeFile(join(changeDir, 'proposal.md'), '# Proposal\n')
   if (!omitted.has('design.md')) await writeFile(join(changeDir, 'design.md'), '# Design\n')
   if (!omitted.has('specs/demo/spec.md')) {
     await writeFile(join(changeDir, 'specs/demo/spec.md'), '# Demo specification\n')
   }
-  if (!omitted.has('tasks.md')) await writeFile(join(changeDir, 'tasks.md'), taskIndex)
-  if (!omitted.has('tasks/01-demo.md')) {
-    await writeFile(join(changeDir, 'tasks/01-demo.md'), '# Demo task\n')
+  for (const [path, content] of Object.entries(taskArtifacts)) {
+    await mkdir(dirname(join(changeDir, path)), { recursive: true })
+    await writeFile(join(changeDir, path), content)
   }
   if (!omitted.has('test-plan.md')) {
     await writeFile(join(changeDir, 'test-plan.md'), testPlan ?? validPlanningTestPlan)
@@ -91,7 +93,7 @@ async function repository({
   validatorConfig = true,
   planningArtifacts = true,
   omitPlanning = [],
-  taskIndex = '- [Demo task](tasks/01-demo.md)\n',
+  taskArtifacts = {},
   testPlan = null,
 } = {}) {
   const root = await makeTempDir(join(tmpdir(), 'and-scene-candidate-'))
@@ -105,7 +107,7 @@ async function repository({
   }
   if (planningArtifacts) await writePlanningArtifacts(source, {
     omit: omitPlanning,
-    taskIndex,
+    taskArtifacts,
     testPlan,
   })
   git(source, 'add', '.')
@@ -398,8 +400,6 @@ for (const [requiredArtifact, expected] of [
   ['proposal.md', /planning contract.*proposal\.md/i],
   ['design.md', /planning contract.*design\.md/i],
   ['specs/demo/spec.md', /planning contract.*specs\//i],
-  ['tasks.md', /planning contract.*tasks\.md/i],
-  ['tasks/01-demo.md', /planning contract.*tasks\//i],
 ]) {
   test(`a scored candidate rejects a planning contract without ${requiredArtifact}`, async () => {
     const repo = await repository({ omitPlanning: [requiredArtifact] })
@@ -414,27 +414,62 @@ for (const [requiredArtifact, expected] of [
         kind: 'candidate',
         exec,
       }),
-      expected,
+      (error) => {
+        assert.equal(error.code, 'fixture-planning-contract')
+        assert.match(error.message, expected)
+        return true
+      },
     )
   })
 }
 
-test('a scored candidate rejects a task index that does not inventory every task file', async () => {
-  const repo = await repository({ taskIndex: '# Tasks\n\nNo linked task files.\n' })
+test('a definition-only fixture passes the starting-line preflight', async () => {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
 
-  await assert.rejects(
-    prepareCandidateWorktree({
-      repo: repo.source,
-      worktree: join(repo.root, 'candidate'),
-      ref: repo.fixture,
-      resume: false,
-      runId: 'run-with-unlinked-task',
-      kind: 'candidate',
-      exec,
-    }),
-    /tasks\.md.*tasks\/01-demo\.md|tasks\/01-demo\.md.*tasks\.md/i,
-  )
+  const prepared = await prepareCandidateWorktree({
+    repo: repo.source,
+    worktree,
+    ref: repo.fixture,
+    resume: false,
+    runId: 'run-from-definition-only',
+    kind: 'candidate',
+    exec,
+  })
+
+  assert.equal(prepared.fixture_commit, repo.fixture)
+  assert.equal(git(worktree, 'branch', '--show-current'), 'eval/and-scene/run-from-definition-only')
 })
+
+for (const [label, taskArtifacts, named] of [
+  ['a task index', { 'tasks.md': '- [Demo task](tasks/01-demo.md)\n' }, /openspec\/changes\/create-and-scene\/tasks\.md/],
+  ['an empty task index', { 'tasks.md': '' }, /openspec\/changes\/create-and-scene\/tasks\.md/],
+  ['a task file', { 'tasks/01-demo.md': '# Demo task\n' }, /openspec\/changes\/create-and-scene\/tasks\/01-demo\.md/],
+  ['a non-Markdown file under tasks/', { 'tasks/notes/plan.txt': 'later\n' }, /openspec\/changes\/create-and-scene\/tasks\/notes\/plan\.txt/],
+]) {
+  test(`a scored candidate rejects a fixture that still contains ${label} before creating its branch`, async () => {
+    const repo = await repository({ taskArtifacts })
+    const worktree = join(repo.root, 'candidate')
+
+    await assert.rejects(
+      prepareCandidateWorktree({
+        repo: repo.source,
+        worktree,
+        ref: repo.fixture,
+        resume: false,
+        runId: 'run-with-task-artifact',
+        kind: 'candidate',
+        exec,
+      }),
+      (error) => {
+        assert.equal(error.code, 'fixture-planning-contract')
+        assert.match(error.message, named)
+        return true
+      },
+    )
+    assert.equal(git(worktree, 'branch', '--show-current'), git(repo.source, 'branch', '--show-current'))
+  })
+}
 
 test('a scored candidate rejects a fixture without final Validator configuration before creating its branch', async () => {
   const repo = await repository({ validatorConfig: false })

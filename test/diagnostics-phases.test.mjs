@@ -157,26 +157,18 @@ async function environment({ metrics = runMetrics(), sessionFiles = {} } = {}) {
       if (verb.includes('show') && verb.includes('/test-plan.md')) {
         return { status: 0, stdout: planningTestPlan }
       }
-      if (verb.includes('show') && verb.includes('/tasks.md')) {
-        return { status: 0, stdout: '- [Demo task](tasks/01-demo.md)\n' }
-      }
       if (verb.includes('show') && /\/(?:proposal|design)\.md/.test(verb)) {
         return { status: 0, stdout: '# Planning artifact\n' }
       }
       if (verb.includes('show') && /\/specs\/[^/]+\/spec\.md/.test(verb)) {
         return { status: 0, stdout: '# Specification\n' }
       }
-      if (verb.includes('show') && /\/tasks\/[^/]+\.md/.test(verb)) {
-        return { status: 0, stdout: '# Task\n' }
-      }
       if (verb.includes('ls-tree')) {
         const planningPath = args.at(-1)
         if (planningPath.endsWith('/specs')) {
           return { status: 0, stdout: `${planningPath}/demo/spec.md\n` }
         }
-        if (planningPath.endsWith('/tasks')) {
-          return { status: 0, stdout: `${planningPath}/01-demo.md\n` }
-        }
+        // The fixture is definition-only: no tasks.md and no tasks/.
         return { status: 0, stdout: '' }
       }
       if (verb.includes('show-ref --verify --quiet')) return { status: 1, stdout: '' }
