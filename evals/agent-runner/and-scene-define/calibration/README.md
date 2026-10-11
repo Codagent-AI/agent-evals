@@ -75,3 +75,21 @@ evidence.
   values (titles, captions, 880 × 380, `127.0.0.1`). Apart from those, the
   restructured text shares no sentence of more than eight words with the
   reference.
+
+## Calibration runs
+
+`rubric.json`'s `calibration_evidence` records the run that approved the
+settings (r7, rubric 8). Later runs are recorded here, so recording one does not
+change the rubric's content or force a version bump. Run directories are under
+`artifacts/evals/and-scene-define-calibration/`, which is not committed.
+
+| Run | Evaluator | Rubric | Inventory | Repeats | Max spread | Agreement | Decider re-run flips | Outcome |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `2026-10-07-e2e-003-r7` | — | 8 | 3 | 3 | 1.4583 | 98.1% | 0 of 30 | INV-093 judged `met` in 1 of 3 repeats |
+| `2026-10-10-followups-e2e-006-r5` | `6fe4fe7` | 10 | 6 | 3 | 0.7292 | 98.2% (1884 verdicts) | 4 of 84 | no failures; INV-093 `partial` in every repeat |
+
+The r5 flips are INV-064 on `reference-degraded-mandatory` (recorded partial,
+one re-run met) and the INV-045 dissent check on
+`reference-degraded-contradictions` (recorded contradicted, three re-runs
+confirmed). The run predates the fix that shows a re-run dissent check the
+ruling the recorded check saw, which likely explains the INV-045 flips.
