@@ -239,7 +239,8 @@ const MISSING_MATERIAL_REPORT = [
 const EVIDENCE_PACKET_RULES = {
   'testing-evidence': [
     'The claim-bearing records (acceptance flow record, exploration log, final handoff, findings history) are in the',
-    'packet in full, never truncated: weigh every claim they make, wherever it appears.',
+    'packet in full, never truncated: weigh every claim they make, wherever it appears. Testing claims in the other',
+    'candidate records in the packet, including the assumptions ledger, are judged too.',
     ...MISSING_MATERIAL_REPORT,
   ],
   'assumption-handling': [

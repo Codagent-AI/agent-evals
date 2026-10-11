@@ -693,6 +693,10 @@ test('rubric 14.0 fails a scaffold that never installs or checks for the Chromiu
   assert.match(b7, /Credit SKILL\.md, the bootstrap scripts, or the verify step when they install Chromium or check that it is available before the render check/)
   assert.match(b7, /Fail when none of them installs it or checks for it/)
   assert.match(b7, /A sentence saying Chromium is required, and a browser launch that simply fails when it is missing, are neither an install nor an availability check/)
+  const testing = rubric.components.find(({ subcomponents }) => subcomponents?.some(({ criterion_definitions: d }) => d?.['testing-evidence-usable-proof']))
+    .subcomponents.find(({ criterion_definitions: d }) => d?.['testing-evidence-usable-proof']).criterion_definitions
+  assert.match(testing['testing-evidence-usable-proof'], /including the assumptions ledger, regardless of author\. Attributing a result to the implementation run does not prove it/)
+  assert.match(testing['testing-evidence-complete-honest-record'], /missing supporting evidence alone is scored only by testing-evidence-usable-proof, while this criterion fails when the available evidence demonstrates that a claim is false or overstated/)
 
   const citations = rubric.criterion_sources['skill-empty-directory-scaffold'].sources
   assert.ok(citations?.some(({ document, quote }) => (
