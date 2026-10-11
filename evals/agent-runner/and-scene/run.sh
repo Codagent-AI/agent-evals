@@ -594,9 +594,11 @@ if [[ "$RUN_AGENT" == 1 ]]; then
       MOUNT_CLAUDE_AUTH=1
     fi
     # Without the file (a macOS Keychain login), sandbox-run.sh forwards a
-    # `claude setup-token` token from the environment or its secrets file.
+    # `claude setup-token` token from the environment or its secrets file. A
+    # factory Fly launch streams the service's Keychain login to the machine
+    # itself and checks it in doctor, so there is nothing to find here.
     claude_secrets="${SANDBOX_SECRETS_FILE:-$AGENT_RUNNER_DIR/.sandbox-secrets.env}"
-    if [[ ! -r "$HOME/.claude/.credentials.json" && -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]] &&
+    if [[ -z "${AGENT_FACTORY_FLY_MANIFEST:-}" && ! -r "$HOME/.claude/.credentials.json" && -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]] &&
       ! { [[ -r "$claude_secrets" ]] && grep -Eq '^[[:space:]]*(export[[:space:]]+)?CLAUDE_CODE_OAUTH_TOKEN=.' "$claude_secrets"; }; then
       echo "Cross-family judging requires Claude auth: $HOME/.claude/.credentials.json, or CLAUDE_CODE_OAUTH_TOKEN (from claude setup-token) in the environment or $claude_secrets; it is forwarded with --mount-claude-auth (implied for judging)." >&2
       exit 2
