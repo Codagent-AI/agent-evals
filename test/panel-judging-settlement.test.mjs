@@ -537,6 +537,15 @@ test('a batched decider rules only on the disputed criteria of a partly disputed
 })
 
 
+test('a ruling dissent rerun on a record without that ruling fails before any call', async () => {
+  const outcome = await runPanelJob(partlyDisputed({ decider: schemaFollowingDecider([]) }))
+  assert.equal(outcome.ok, true, outcome.record.error)
+  assert.ok(outcome.record.checks.some(c => c.stage === 'ruling-dissent-check' && c.id === 'x'))
+  const record = { ...outcome.record, rulings: [] }
+  await assert.rejects(rerunDecider({ record, decider: schemaFollowingDecider([]), buildPrompt: partlyDisputed().buildPrompt,
+    schema: scopedSchema, validateCitations: async () => true }), /missing or invalid decider ruling/)
+})
+
 test('a decider dissent rerun needing missing material fails instead of reporting a flip', async () => {
   const marker = '[omitted: design.md could not be read]'
   const options = setup(['fail', 'fail', 'pass'], {

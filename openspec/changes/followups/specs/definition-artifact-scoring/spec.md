@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Eval-owned judges
-Judging SHALL be performed by eval-owned judges under a pinned judge profile, split into focused jobs for coverage by inventory area, fidelity, and artifact quality. Each scoring job SHALL be judged independently by a cross-family panel of three judges with identical inputs: one Claude-family judge and two independent Codex-family samples, each with a pinned CLI, model, and effort. A verdict SHALL be settled as follows:
+Judging SHALL be performed by eval-owned judges under a pinned judge profile, split into focused jobs for coverage by inventory area, fidelity, and artifact quality. Each scoring job SHALL be judged independently by a cross-family panel of three judges with identical inputs: one Claude-family judge and two independent Codex-family samples, each with a pinned CLI, model, and effort. This composition is the define suite's own: it does not follow the and-scene scoring panels, which use two Claude-family samples and one Codex-family judge. A verdict SHALL be settled as follows:
 - a verdict all three judges give SHALL stand;
 - a verdict two judges give SHALL stand when the two include the Claude-family judge, unless the dissent is backed. A backed dissent is a higher verdict than the majority's, supported by artifact citations that pass validation. A backed dissent SHALL go to a targeted check by the pinned Claude-family decider of the dissent's stated reason. The dissent's verdict SHALL stand when the check confirms that reason, and the majority's otherwise;
 - a verdict the two Codex-family judges give against the Claude-family judge, and a three-way split, SHALL be decided by the decider.

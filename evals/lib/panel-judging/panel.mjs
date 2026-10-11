@@ -190,10 +190,7 @@ async function checkRejectedVotes({ request, scopeRule, record, order, validateC
     const { id } = ruling
     const overrule = record.checks.find(c => c.stage === 'overrule-check' && c.id === id)
     if (overrule && overrule.classification !== 'confirmed') continue
-    // A line-cited ruling's settled result names only its cited paths; an
-    // evidence check quotes the line spans the decider cited.
-    const spans = record.decider?.results?.find(r => r.id === id)?.citations
-    const decided = { ...rulingResult(ruling), ...(request.input_roots?.evidence && spans ? { citations: spans } : {}) }
+    const decided = checkedRuling(record, request, id)
     const own = record.votes.filter(v => v.id === id)
     const keptVerdict = own.filter(v => effective(v, record.checks, order, fallbackIds).verdict === decided.verdict)
     for (const original of rejectedVotes(own, record.checks, order, fallbackIds, decided.verdict)) {
@@ -266,6 +263,16 @@ function rejectedVotes(votes, checks, order, fallbackIds, verdict) {
   })
 }
 const rulingResult = ruling => ruling.result ?? ruling
+
+// The ruling a ruling-dissent check is shown. A line-cited ruling's settled
+// result names only its cited paths; an evidence check quotes the line spans
+// the decider cited.
+function checkedRuling(record, request, id) {
+  const ruling = record.rulings?.find(r => r.id === id)
+  if (!ruling) throw new JudgeOutputError(`ruling dissent check ${id} has no recorded ruling`)
+  const spans = record.decider?.results?.find(r => r.id === id)?.citations
+  return { ...rulingResult(ruling), ...(request.input_roots?.evidence && spans ? { citations: spans } : {}) }
+}
 const majorityVotes = (votes, id, original) => votes.filter(v => v.id === id && v.panel_index !== original.panel_index)
 
 // The verdict exactly two effective votes gave, or null for a consensus or a
@@ -616,7 +623,7 @@ export async function rerunDecider({ record, decider, buildPrompt, schema, valid
     if (check.stage === 'dissent-check') {
       next = await dissentCheckRequest({ request, scopeRule, id: check.id, original, majority: majorityVotes(record.votes, check.id, original) })
     } else {
-      const decided = rulingResult(record.rulings.find(r => r.id === check.id))
+      const decided = checkedRuling(record, request, check.id)
       const kept = record.votes.filter(v => v.id === check.id && effective(v, record.checks, order, record.fallback_ids ?? []).verdict === decided.verdict)
       next = await dissentCheckRequest({ request, scopeRule, id: check.id, original, majority: kept, ruling: decided })
     }
