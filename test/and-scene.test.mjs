@@ -715,3 +715,57 @@ test('sandbox judging mounts the shared panel modules read-only at their resolve
   assert.equal(result.status, 0, result.output)
   assert.match(result.output, /source=.*evals\/lib\/panel-judging\\,target=\/lib\/panel-judging\\,readonly/)
 })
+
+// INT-006: the job-filtered judging diagnostic's host launcher.
+test('help documents the job-filtered judging diagnostic flags', async () => {
+  const result = spawnSync('bash', [runScript, '--help'], { cwd: root, encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(result.stdout, /--judge-jobs JOB\[,JOB\]/)
+  assert.match(result.stdout, /--expected PATH/)
+  assert.match(result.stdout, /judge-diagnostic\.mjs/)
+})
+
+test('a diagnostic runs the host controller with its jobs and expected file, and resumes in place', async () => {
+  const context = await setup({ dirty: true })
+  const source = join(context.dir, 'completed-candidate')
+  await mkdir(source)
+  const expected = join(context.dir, 'expected.json')
+  await writeFile(expected, '{}\n')
+
+  const fresh = await scored(context, ['--host', '--rescore-from', source, '--judge-jobs', 'scene-kit', '--expected', expected])
+  assert.equal(fresh.status, 0, fresh.output)
+  assert.match(fresh.output, /controller\.mjs --run-dir .*\/run --run-id run /)
+  assert.match(fresh.output, /--rescore-from .*completed-candidate/)
+  assert.match(fresh.output, /--judge-jobs scene-kit --expected .*\/expected\.json/)
+  assert.doesNotMatch(fresh.output, /--resume/)
+
+  const resumed = await scored(context, ['--host', '--resume', '--judge-jobs', 'scene-kit', '--expected', expected])
+  assert.equal(resumed.status, 0, resumed.output)
+  assert.match(resumed.output, /--resume/)
+  assert.match(resumed.output, /--judge-jobs scene-kit --expected .*\/expected\.json/)
+  assert.doesNotMatch(resumed.output, /--rescore-from/)
+})
+
+test('a diagnostic is refused without its pair of flags, a source, the host, or with a candidate mode', async () => {
+  const context = await setup({ dirty: true })
+  const source = join(context.dir, 'completed-candidate')
+  await mkdir(source)
+  const expected = join(context.dir, 'expected.json')
+  await writeFile(expected, '{}\n')
+  for (const [args, message] of [
+    [['--host', '--rescore-from', source, '--judge-jobs', 'scene-kit'], /--judge-jobs and --expected must be given together/],
+    [['--host', '--judge-jobs', 'scene-kit', '--expected', expected], /--judge-jobs requires --rescore-from or --resume/],
+    [['--rescore-from', source, '--judge-jobs', 'scene-kit', '--expected', expected], /judge diagnostic runs only on the host/],
+    [['--host', '--rescore-from', source, '--judge-jobs', 'scene-kit', '--expected', join(context.dir, 'missing.json')],
+      /Expected-verdict file does not exist/],
+    [['--host', '--reference-baseline', '--judge-jobs', 'scene-kit', '--expected', expected], /cannot be combined/],
+  ]) {
+    const result = await scored(context, args)
+    assert.notEqual(result.status, 0, args.join(' '))
+    assert.match(result.output, message)
+  }
+  // An ordinary rescore still cannot be resumed.
+  const ordinary = await scored(context, ['--host', '--rescore-from', source, '--resume'])
+  assert.notEqual(ordinary.status, 0)
+  assert.match(ordinary.output, /--rescore-from cannot be combined/)
+})

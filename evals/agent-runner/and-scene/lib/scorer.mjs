@@ -1,9 +1,9 @@
 // The suite-owned product scorer.
 //
 // Evaluators return verdicts; this module owns everything else. It validates
-// criterion coverage, divides each subcomponent's points equally among its
-// criteria, applies the hard gates and pass contract, and decides when a result
-// is complete enough to carry an official score at all.
+// criterion coverage, awards each criterion its tier's weight, applies the hard
+// gates and pass contract, and decides when a result is complete enough to
+// carry an official score at all.
 //
 // Two distinctions run through the whole module:
 //
@@ -15,7 +15,7 @@
 //
 // Harness activity — retries, evidence repair, workflow failures — is carried
 // through diagnostically and never touches a point.
-import { componentApplicable, rubricCriteria } from './rubric.mjs'
+import { OUTLINE_GATE_INPUTS, componentApplicable, criterionWeight, rubricCriteria } from './rubric.mjs'
 
 export const SCORE_SCHEMA_VERSION = 5
 
@@ -131,7 +131,8 @@ function greatestCommonDivisor(a, b) {
 // so an all-pass component would land near — but not on — its integer point
 // value, and a partial component would not equal the fraction the rubric says
 // it is. Reducing once at the end keeps the exact rubric arithmetic without
-// rounding any intermediate value.
+// rounding any intermediate value. Each criterion is one share of its tier
+// weight, passed or not, over a count of one.
 function sumShares(shares) {
   if (shares.length === 0) return 0
   const denominator = shares.reduce(
@@ -148,7 +149,7 @@ function sumShares(shares) {
 function scoreSubcomponent(component, subcomponent, resultsBySource, resolutions) {
   const source = sourceOf(subcomponent)
   const indexed = resultsBySource.get(source)
-  const criterionPoints = subcomponent.points / subcomponent.criteria.length
+  const weightOf = (id) => criterionWeight(component, subcomponent, id)
   // Only a browser-owned criterion can have been resolved by a fallback judge.
   const resolutionOf = (id) => (
     subcomponent.evaluator === 'deterministic-browser' ? resolutions?.get(id) ?? null : null
@@ -157,10 +158,12 @@ function scoreSubcomponent(component, subcomponent, resultsBySource, resolutions
   const criteria = subcomponent.criteria.map((id) => {
     const resolution = resolutionOf(id)
     const result = resolution ? resolution.result : (indexed?.get(id) ?? null)
+    const weight = weightOf(id)
     return {
       id,
-      points_possible: criterionPoints,
-      points_awarded: result ? (result.verdict === 'pass' ? criterionPoints : 0) : null,
+      tier: subcomponent.tiers?.[id] ?? null,
+      points_possible: weight,
+      points_awarded: result ? (result.verdict === 'pass' ? weight : 0) : null,
       verdict: result?.verdict ?? null,
       rationale: result?.rationale ?? null,
       evidence: result?.evidence ?? [],
@@ -172,21 +175,25 @@ function scoreSubcomponent(component, subcomponent, resultsBySource, resolutions
       ...(resolution?.second_opinion ? { second_opinion: resolution.second_opinion } : {}),
     }
   })
-  const passed = criteria.filter(({ verdict }) => verdict === 'pass').length
-  const share = { points: subcomponent.points, passed, count: subcomponent.criteria.length }
+  // A zero-point gate input earns nothing, so it neither adds a share nor
+  // holds the subcomponent incomplete; it still feeds its gate.
+  const weighted = criteria.filter(({ points_possible: weight }) => weight > 0)
+  const shares = weighted.map(({ points_possible: weight, verdict }) => (
+    { points: weight, passed: verdict === 'pass' ? 1 : 0, count: 1 }
+  ))
   // An unresolved criterion leaves only this subcomponent incomplete.
-  const complete = subcomponent.criteria.every((id) => {
+  const complete = weighted.every(({ id }) => {
     const resolution = resolutionOf(id)
     return resolution ? decided(resolution.result) : Boolean(indexed)
   })
   const scored = Boolean(indexed) && complete
   return {
-    share: scored ? share : null,
+    shares: scored ? shares : [],
     record: {
       id: subcomponent.id,
       title: subcomponent.title,
       points_possible: subcomponent.points,
-      points_awarded: scored ? sumShares([share]) : null,
+      points_awarded: scored ? sumShares(shares) : null,
       complete,
       evaluator: subcomponent.evaluator,
       job: subcomponent.job ?? null,
@@ -215,7 +222,7 @@ function scoreComponent(component, resultsBySource, applicable, resolutions) {
   const scored = component.subcomponents.map(
     (subcomponent) => scoreSubcomponent(component, subcomponent, resultsBySource, resolutions),
   )
-  const observedShares = scored.map(({ share }) => share).filter(Boolean)
+  const observedShares = scored.flatMap(({ shares }) => shares)
   const subcomponents = scored.map(({ record }) => record)
   const complete = subcomponents.every(({ complete: done }) => done)
   const observedPoints = sumShares(observedShares)
@@ -246,8 +253,8 @@ function scoreGates(gates, results, resolutions = new Map(), secondOpinions = {}
     const result = indexed.get(id)
     const opinion = secondOpinions[id]
     const rawBrowserGate = id === 'verification-sample-outline' ? result : null
-    const outlineInputs = ['demo-route-and-registration', 'demo-nine-step-content-and-order']
-      .map((key) => resolutions.get(key)?.result?.verdict ?? null)
+    // Zero-point gate inputs: an unresolved one leaves this gate unobserved.
+    const outlineInputs = OUTLINE_GATE_INPUTS.map((key) => resolutions.get(key)?.result?.verdict ?? null)
     const verdict = pending.has(id) ? null : id === 'verification-sample-outline'
       ? (outlineInputs.includes(null) ? null : (outlineInputs.every((value) => value === 'pass') ? 'pass' : 'fail'))
       : (opinion?.verdict ?? result.verdict ?? null)

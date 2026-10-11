@@ -88,6 +88,11 @@ test('every approved degradation degrades exactly its intended component or gate
     assert.deepEqual(observed.unintended_regressions, [], approvedCase.id)
     assert.equal(observed.official_pass, approvedCase.expected_official_pass, approvedCase.id)
   }
+  // Rubric 15.0.0: the outline gate fails through a zero-point gate input, so
+  // the gate regression costs no points at all.
+  const outline = ledger.cases.find(({ id }) => id === 'verification-sample-outline-gate-regression')
+  assert.deepEqual(approved.find(({ id }) => id === outline.id).fail_criteria, ['demo-route-and-registration'])
+  assert.equal(outline.automated_subtotal, 70)
 
   // Each component and each hard gate is somebody's target.
   const targeted = new Set(approved.map(({ target }) => target.id))
@@ -246,8 +251,9 @@ test('engineering quality is calibrated as a floorless component, including a br
     cases.find(({ id }) => id === 'reference'), component, probe, leak,
   ] })
   assert.equal(ledger.passed, true, JSON.stringify(ledger.failures, null, 2))
-  // A failed input-hygiene probe costs engineering quality only, never the demo component.
+  // A failed input-hygiene probe costs engineering quality only, never the demo
+  // component: one minor engineering criterion, 0.375 points.
   const observed = ledger.cases.find(({ id }) => id === 'input-hygiene-probe-regression')
-  assert.equal(observed.automated_subtotal, 69)
+  assert.equal(observed.automated_subtotal, 69.625)
   assert.deepEqual(observed.unintended_regressions, [])
 })

@@ -240,15 +240,18 @@ export async function loadCandidateRescoreSource({ sourceDir, stagingDir = null 
     result: await hashFile(resultPath),
     delivery: await hashFile(deliveryPath),
   }
+  // The verified hashes the source is identified by.
+  const manifestHashes = {
+    core: coreHashes,
+    acceptance: artifacts.map(({ role, sha256 }) => ({ role, sha256 })),
+    final_sha: delivery.final_sha,
+  }
   return {
     source_dir: root,
     source_run_id: state.run_id,
     change_name: changeName,
-    provenance_sha256: hashJson({
-      core: coreHashes,
-      acceptance: artifacts.map(({ role, sha256 }) => ({ role, sha256 })),
-      final_sha: delivery.final_sha,
-    }),
+    provenance_sha256: hashJson(manifestHashes),
+    manifest_hashes: manifestHashes,
     candidate_source: { ...candidateSource },
     delivery: {
       ...delivery,

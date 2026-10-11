@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { REQUIREMENT_QUESTION_RULE } from '../evals/lib/panel-judging/protocol.mjs'
 
-import { loadRubrics } from '../evals/agent-runner/and-scene/lib/rubric.mjs'
+import { loadRubrics, rubricCriteria } from '../evals/agent-runner/and-scene/lib/rubric.mjs'
 import {
   SECOND_OPINION_SCHEMA, buildSecondOpinionRequest, outlineFollowUpTargets, runSecondOpinion, secondOpinionTargets,
   describeReplayPolicy, replayPolicy, validReplay,
@@ -1010,4 +1010,90 @@ test('a verifier is told a prevented-default failure cannot be overturned', asyn
   const prompt = build(moved).prompt
   assert.doesNotMatch(prompt, /rejects any overturn/)
   assert.match(prompt, /ArrowRight holding Alt/)
+})
+
+// INT-002: the second-opinion source-pass audit keeps the base commit's
+// contract. The schema is snapshotted here, not imported, so a change to the
+// shared panel audit schema cannot silently change what the verifier's
+// auditor is asked for or how its answer is read.
+const BASE_SOURCE_AUDIT_RESULT_SCHEMA = {
+  type: 'object',
+  required: ['results'],
+  additionalProperties: false,
+  properties: {
+    results: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['id', 'classification', 'rationale', 'evidence'],
+        additionalProperties: false,
+        properties: {
+          id: { type: 'string' },
+          classification: { enum: ['confirmed', 'contradicted', 'insufficient'] },
+          rationale: { type: 'string', minLength: 1 },
+          evidence: { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } },
+        },
+      },
+    },
+  },
+}
+
+test('a zero-point gate input still gets its second opinion under the unchanged audit contract', async () => {
+  const rubrics = await loadRubrics()
+  const route = 'demo-route-and-registration'
+  const outline = 'demo-nine-step-content-and-order'
+  assert.equal(rubricCriteria(rubrics.automated.rubric).find(({ id }) => id === route).criterion_points, 0)
+
+  // A browser fail of a gate input is targeted exactly once, like any
+  // deterministic criterion; a fallback-judged fail is checked for the gate.
+  assert.deepEqual(secondOpinionTargets({ deterministic: [{ id: route, verdict: 'fail' }],
+    gates: [{ id: 'verification-sample-outline', verdict: 'fail' }] }), [{ kind: 'criterion', id: route }])
+  assert.deepEqual(outlineFollowUpTargets({ resolutions: new Map([[route, { result: { verdict: 'fail' } }],
+    [outline, { result: { verdict: 'fail' } }]]), checked: [{ kind: 'criterion', id: route }] }),
+  [{ kind: 'criterion', id: outline, on_behalf_of: 'verification-sample-outline' }])
+  const browserRequest = buildSecondOpinionRequest({ target: { kind: 'criterion', id: route }, rubrics,
+    browser: { criteria: [{ id: route, verdict: 'fail' }], probes: [{ id: route,
+      result: { verdict: 'fail', rationale: 'the demo route is not registered' }, failures: [] }] },
+    neutral: { sources: ['src/demo.js'] } })
+  assert.equal(browserRequest.browser_derived, true)
+  assert.equal(browserRequest.requirement, rubrics.automated.rubric.fallbacks[route].requirement)
+
+  const root = await makeTempDir(join(tmpdir(), 'second-opinion-gate-input-'))
+  await mkdir(join(root, 'src'))
+  await writeFile(join(root, 'src/demo.js'), 'export const steps = nineRequiredSteps\n')
+  const request = buildSecondOpinionRequest({ target: { kind: 'criterion', id: outline,
+    on_behalf_of: 'verification-sample-outline' }, rubrics,
+  browser: { criteria: [{ id: outline, verdict: null }],
+    probes: [{ id: outline, result: { verdict: null, outcome: 'not-observed' } }] },
+  judging: { judges: { 'demo-integration': [{ id: outline, verdict: 'fail', rationale: 'eight steps',
+    citations: ['src/demo.js'] }] } },
+  neutral: { root, source_root: root, audit_root: root, sources: ['src/demo.js'] }, authority: { model: 'test' } })
+  assert.equal(request.browser_derived, false)
+  assert.match(request.prompt, /on behalf of verification-sample-outline/)
+  const answer = { ...uphold, decision: 'overturn', mismeasured_step: 'title read',
+    measurement_fault: 'the fallback judge counted the step array before the ninth step was appended',
+    citations: [{ path: 'src/demo.js', start_line: 1, end_line: 1 }] }
+  // Today's recorded audit response shape: no citations.
+  const recorded = (classification) => JSON.stringify({ results: [{ id: outline, classification,
+    rationale: 'the source registers all nine steps', evidence: ['src/demo.js:1'] }] })
+  const audits = []
+  const run = (classification) => runSecondOpinion({ request, invoke: async (call) => {
+    if (!call.audit_stage) return JSON.stringify(answer)
+    audits.push(call)
+    return recorded(classification)
+  } })
+
+  const confirmed = await run('confirmed')
+  assert.equal(audits.length, 1)
+  assert.equal(audits[0].audit_stage, 'source-pass-audit')
+  assert.deepEqual(audits[0].schema, BASE_SOURCE_AUDIT_RESULT_SCHEMA)
+  assert.equal(JSON.stringify(audits[0].schema).includes('citations'), false)
+  assert.deepEqual([confirmed.decision, confirmed.verdict, confirmed.on_behalf_of],
+    ['overturn', 'pass', 'verification-sample-outline'])
+  assert.deepEqual(confirmed.audit, JSON.parse(recorded('confirmed')).results[0])
+
+  const contradicted = await run('contradicted')
+  assert.deepEqual([contradicted.decision, contradicted.verdict, contradicted.rejection_reason],
+    ['overturn-rejected', 'fail', 'the source registers all nine steps'])
+  assert.deepEqual(audits.at(-1).schema, BASE_SOURCE_AUDIT_RESULT_SCHEMA)
 })

@@ -1,6 +1,6 @@
 {
-  "rubric_version": 9,
-  "inventory_version": 5,
+  "rubric_version": 10,
+  "inventory_version": 6,
   "provisional": false,
   "components": {
     "coverage": 70,
@@ -629,8 +629,8 @@
       "class": "mandatory",
       "weight": 2,
       "anchors": {
-        "met": "The artifacts commit verification to an unambiguous outcome usable by automation: a clear pass or fail result, a non-zero exit status on failure, and identification of which check (for example build, sample presence, or render) failed. A specification scenario, design section, or concrete test-plan assertion counts; a particular output format is not required.",
-        "partial": "Two of the three elements are present, for example a non-zero exit on failure without naming the failed check, or a readable report naming the failure with no exit-status commitment.",
+        "met": "The artifacts commit verification to an unambiguous outcome usable by automation: a clear pass or fail result, a non-zero exit status on failure, and identification of which check (for example build, sample presence, or render) failed. A specification scenario, design section, or concrete test-plan assertion counts; a particular output format is not required. The exit status must be stated, for example that the command exits non-zero when a check fails; a command or check that is only said to fail, or a contrast with another command that exits with status 0, does not commit to it.",
+        "partial": "Two of the three elements are present, for example a non-zero exit on failure without naming the failed check, or a readable report naming the failure with no exit-status commitment, such as checks that are said to fail and name what failed but no stated exit status.",
         "missing": "The outcome of verification is not defined, or it is mentioned only in passing. Contradiction example: verification produces a report for a human to read and always exits zero."
       }
     },

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { DEMO_CONTRACT } from './demo-contract.mjs'
 import { JUDGE_ATTEMPTS, MAX_AUDIT_PACKET_CHARS, SOURCE_AUDIT_RESULT_SCHEMA, citationTarget, inventoryPath, JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE } from './judge-jobs.mjs'
 import { JUDGE_INPUT_POLICIES } from './neutral-source.mjs'
-import { rubricCriteria } from './rubric.mjs'
+import { OUTLINE_GATE_INPUTS, rubricCriteria } from './rubric.mjs'
 
 // OpenAI strict structured output (agent-evals #79) rejects open objects: each
 // replay action and expectation is a closed variant that lists every field.
@@ -73,9 +73,11 @@ export function secondOpinionTargets({ deterministic = [], gates = [], mode = 'a
   ]
 }
 
+// The outline gate's inputs are the rubric's zero-point gate inputs. They earn
+// no points, but a failed one still gets a second opinion on the gate's behalf.
 export function outlineFollowUpTargets({ resolutions, checked = [] }) {
   const checkedIds = new Set(checked.map((entry) => typeof entry === 'string' ? entry : entry.id))
-  return ['demo-route-and-registration', 'demo-nine-step-content-and-order']
+  return OUTLINE_GATE_INPUTS
     .filter((id) => resolutions.get(id)?.result?.verdict === 'fail' && !checkedIds.has(id))
     .map((id) => ({ kind: 'criterion', id, on_behalf_of: 'verification-sample-outline' }))
 }

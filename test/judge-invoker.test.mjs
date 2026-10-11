@@ -719,7 +719,7 @@ test('the judge reasoning effort is pinned explicitly rather than left to the CL
   await invoke({ job: 'scene-kit', authority: { model: 'm', effort: 'medium' }, schema: {}, prompt: 'x' })
   await invoke({ job: 'scene-kit', authority: { model: 'm' }, schema: {}, prompt: 'y' })
   assert.ok(spawnImpl.calls[0].args.includes('model_reasoning_effort="medium"'))
-  assert.ok(spawnImpl.calls[1].args.includes('model_reasoning_effort="medium"'))
+  assert.ok(spawnImpl.calls[1].args.includes('model_reasoning_effort="high"'))
 })
 
 // Inside the sandbox `claude` is Agent Runner's yolo wrapper, which sources the

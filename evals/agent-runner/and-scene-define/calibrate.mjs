@@ -4,7 +4,7 @@
 // Each calibration input is judged `--repeats` times (at least 3) through the
 // same gates-and-judging phase a candidate run uses, every repeat in its own
 // fresh run directory so no judged unit is reused. Up to `--concurrency`
-// repeats are judged at once. The decider alone is then
+// repeats are judged at once, each judging its jobs one at a time. The decider alone is then
 // re-run 3 times on each first-repeat panel record that went to it, and the
 // report (lib/calibration.mjs) is written to the output directory together
 // with the eval-owned usage ledger.
@@ -30,6 +30,8 @@ export const DEFAULT_CALIBRATION_DIR = join(SUITE_ROOT, 'calibration')
 // Each repeat's panel already runs its three seats together, so six repeats
 // keep about eighteen judge CLIs in flight.
 export const CALIBRATION_CONCURRENCY = 6
+// Repeats already run concurrently, so the jobs within each repeat run one at a time.
+export const CALIBRATION_JOB_CONCURRENCY = 1
 export const calibrationOutputRoot = (repoRoot = REPO_ROOT) => join(repoRoot, 'artifacts/evals/and-scene-define-calibration')
 
 export const CALIBRATE_HELP = `Usage: evals/agent-runner/and-scene-define/run.sh --calibrate [options]
@@ -102,7 +104,7 @@ async function judgeRepeat({ input, runDir, suiteRoot, judges, gateCommand, repe
   await writeJsonAtomic(join(runDir, 'audits/disclosure.json'), { status: 'not-run', reason: 'calibration inputs have no simulated-user conversation to audit for disclosure', flags: [], panel_flags: [], leaked_items: [] })
   let checkpoint = createCheckpoint({ run_id: `calibration-${input.input_id}-${repeat}`, kind: 'calibration', identity: { series_identity: { calibration: input.input_id, input_hash: input.input_hash } } })
   const persist = () => writeJsonAtomic(join(runDir, 'run-state.json'), checkpoint)
-  const phases = createJudgingPhases({ runDir, suiteRoot, judges, gateCommand, persist, getCheckpoint: () => checkpoint, setCheckpoint: value => { checkpoint = value } })
+  const phases = createJudgingPhases({ runDir, suiteRoot, judges, gateCommand, persist, getCheckpoint: () => checkpoint, setCheckpoint: value => { checkpoint = value }, concurrency: CALIBRATION_JOB_CONCURRENCY })
   await phases['gates-and-judging']()
   return readJson(join(runDir, 'judges/score.json'))
 }

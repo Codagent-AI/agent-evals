@@ -173,6 +173,10 @@ test('a completed candidate run imports its immutable change name for evaluator-
   assert.equal(imported.delivery.acceptance.manifest_sha256, undefined)
   assert.equal(imported.delivery.acceptance.lineage, undefined)
   assert.match(imported.provenance_sha256, /^[a-f0-9]{64}$/)
+  // The verified hashes behind that identity, recorded by a judge diagnostic.
+  assert.equal(hashJson(imported.manifest_hashes), imported.provenance_sha256)
+  assert.equal(imported.manifest_hashes.final_sha, finalSha)
+  assert.equal(imported.manifest_hashes.acceptance.length, imported.delivery.acceptance.artifacts.length)
 })
 
 test('candidate rescore rejects acceptance evidence whose recorded hash changed', async () => {

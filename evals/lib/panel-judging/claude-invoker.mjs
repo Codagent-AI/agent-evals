@@ -57,24 +57,33 @@ export function createClaudeJudgeInvoker({
         const files = await openAttemptFiles(openFile, runtimeDir, stem)
         let final = null
         let modelOutput = false
-        let invalidTool = null
+        let offeredTool = null
+        // A forbidden tool call stays invalid unless the CLI refused it: the
+        // session never offered the tool, so a refusal ran nothing.
+        const forbiddenCalls = new Map()
         const readIds = new Set()
+        const permitted = name => [...tools, 'StructuredOutput'].includes(name)
         const observeLine = line => {
           let event
           try { event = JSON.parse(line) } catch { return }
           if (event.type === 'result') final = event
           if (event.type === 'assistant') modelOutput = true
-          const names = event.type === 'init' || event.type === 'system' && event.subtype === 'init' ? [...(event.tools ?? [])] : []
+          if (event.type === 'init' || event.type === 'system' && event.subtype === 'init') {
+            for (const name of event.tools ?? []) if (!permitted(name)) offeredTool = name
+          }
           const inspect = value => {
             if (!value || typeof value !== 'object') return
             if (value.type === 'tool_use') {
-              names.push(value.name)
+              if (!permitted(value.name)) forbiddenCalls.set(value.id ?? `call-${forbiddenCalls.size}`, value.name)
               if (value.name === 'Read') readIds.add(value.id)
+            }
+            if (value.type === 'tool_result' && forbiddenCalls.has(value.tool_use_id)) {
+              const text = typeof value.content === 'string' ? value.content : JSON.stringify(value.content ?? '')
+              if (value.is_error === true || /<tool_use_error>/.test(text)) forbiddenCalls.delete(value.tool_use_id)
             }
             for (const child of Object.values(value)) if (typeof child === 'object') inspect(child)
           }
           inspect(event)
-          for (const name of names) if (![...tools, 'StructuredOutput'].includes(name)) invalidTool = name
         }
         const persistLine = line => {
           let event
@@ -127,6 +136,7 @@ export function createClaudeJudgeInvoker({
           if (quotaWaits < 2 && reset && reset.wait_ms > 0 && reset.wait_ms <= 6 * 60 * 60 * 1000 + 60000 && (await waitForQuotaReset({ audit, now })).waited) { quotaWaits++; attempt--; continue }
           throw harnessError(`Claude judge limit requires resume: ${diagnostic}`, { code: 'claude-quota', resumable: true, retryable: false })
         }
+        const invalidTool = offeredTool ?? [...forbiddenCalls.values()][0]
         if (invalidTool) throw harnessError(`Claude judge used forbidden tool: ${invalidTool}`)
         if (execution.timedOut && attempt < 2) continue
         if (execution.timedOut || execution.error || execution.status !== 0 || final?.is_error || !final?.structured_output) throw harnessError(`Claude judge produced no valid final response: ${diagnostic}`)

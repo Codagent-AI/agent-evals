@@ -732,7 +732,8 @@ test('the engineering-quality component renders with its points, no floor, subco
     gates: pass(automated.gates.map(({ id }) => id)),
   })
   const engineering = score.components.find(({ id }) => id === 'engineering-quality')
-  assert.equal(engineering.points_awarded, 8 - 1.5 / 4 - 1)
+  // Both failures are minor engineering criteria worth 0.375 each.
+  assert.equal(engineering.points_awarded, 8 - 0.375 - 0.375)
 
   const base = result()
   const html = renderReport(result({ score: { ...base.score, components: score.components } }))

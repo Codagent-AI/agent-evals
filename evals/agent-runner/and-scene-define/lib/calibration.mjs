@@ -264,7 +264,7 @@ export function deciderFlips(reruns) {
   const flipped = items.filter(x => x.flips)
   return { reruns_per_record: Math.max(0, ...reruns.map(x => x.runs.length)), criteria_rerun: items.length, comparisons: pairs, flips, flip_rate: rate(flips, pairs),
     flipped_items: flipped.map(x => ({ input_id: x.input_id, id: x.id, job: x.job, kind: x.kind, recorded: x.recorded, reruns: x.reruns, flips: x.flips })),
-    note: 'Decider ruling flips are measured on fixed recorded panel outputs, separately from panel spread across repeats. Flipped items name anchors to sharpen.', items }
+    note: 'Decider ruling flips are measured on fixed recorded panel outputs, separately from panel spread across repeats, on the verdict each ruling settles after its overrule check. Flipped items name anchors to sharpen.', items }
 }
 
 export function isRestructuredReference(input) {
