@@ -530,13 +530,17 @@ function keyInstrumentationReadSource(reset) {
 }`
 }
 
-function waitForSelectorSource(selector, timeout) {
+// Polls for a selector and assigns whether it appeared to `variable`. A page
+// that never exposes it is the candidate's doing, so the script reports it as
+// data rather than failing the adapter, which would read as a harness fault.
+function waitForSelectorSource(selector, timeout, variable) {
   const probe = JSON.stringify(`!!document.querySelector(${JSON.stringify(selector)})`)
-  return `{
+  return `let ${variable} = false;
+{
   const deadline = Date.now() + ${timeout};
   for (;;) {
-    if (await page.eval(${probe})) break;
-    if (Date.now() >= deadline) throw new Error(${JSON.stringify(`timed out waiting for ${selector}`)});
+    if (await page.eval(${probe})) { ${variable} = true; break; }
+    if (Date.now() >= deadline) break;
     ${sleepSource(50)}
   }
 }`
@@ -718,20 +722,31 @@ console.log(JSON.stringify([...new Set(routes)]));
 
     async open(route) {
       await invoke(['resize', '1280', '720'])
-      return run(`
+      const opened = await run(`
 const opened = await page.open(${JSON.stringify(routeUrl(route))});
-${waitForSelectorSource('[data-step-count]', 30000)}
-const initialMode = await page.eval(() => {
-  ${modeReadingSource()}
-  return modeReading().mode;
-});
-const progress = await page.eval(() => document.querySelector('[data-step-count]')?.getAttribute('data-step-index'));
-console.log(JSON.stringify({
-  ...opened,
-  initialMode,
-  initialPosition: Number(progress),
-}));
+${waitForSelectorSource('[data-step-count]', 30000, 'hooked')}
+if (!hooked) {
+  console.log(JSON.stringify({ missing_hook: '[data-step-count]' }));
+} else {
+  const initialMode = await page.eval(() => {
+    ${modeReadingSource()}
+    return modeReading().mode;
+  });
+  const progress = await page.eval(() => document.querySelector('[data-step-count]')?.getAttribute('data-step-index'));
+  console.log(JSON.stringify({
+    ...opened,
+    initialMode,
+    initialPosition: Number(progress),
+  }));
+}
 `)
+      // The page loaded but lacks the design's step hook: a plain error, so the
+      // probe that opened it fails its criterion as a broken demo would.
+      if (opened?.missing_hook) {
+        throw new Error(`timed out waiting for ${opened.missing_hook}: `
+          + 'the loaded demo page does not expose the required step-count hook')
+      }
+      return opened
     },
 
     async setMode(requiredMode) {
