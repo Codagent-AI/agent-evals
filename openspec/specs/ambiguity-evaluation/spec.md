@@ -133,6 +133,8 @@ The evaluation SHALL score candidate assumption-handling quality out of four poi
 | Decisions and escalations are proportionate | 1 | Decisions, assumptions, and escalations are evidence-backed, within authority, and proportionate to consequence and uncertainty. |
 | Final handoff preserves decisions | 1 | The handoff is evidence-backed and actionable, and preserves unresolved decisions, options, consequences, and known limitations. |
 
+The assumption-handling judge packet SHALL hold its primary claim-bearing records in full, never truncated: the assumptions ledger, final handoff, findings history, and exploration log. Every panel judge and the decider SHALL see the complete records, and the audits and checks SHALL receive their cited lines from those same complete records. When those records alone would exceed the judge packet budget, or evidence collection skipped one of them for its size, the assumption-handling job SHALL fail as an evaluation-harness failure naming its criteria. The approved requirements the judge receives as reference SHALL likewise be complete, or the job SHALL fail the same way. Other supporting artifacts MAY be truncated under the packet budget, marked as the product-quality-scoring robust judge verdicts requirement defines.
+
 The component SHALL have no independent score floor. For a reference-baseline evaluation, the component SHALL be not applicable and SHALL contribute neither points earned nor points possible.
 
 #### Scenario: Genuine unresolved gap is handled well
@@ -156,7 +158,7 @@ The component SHALL have no independent score floor. For a reference-baseline ev
 #### Scenario: A plan commitment is neither observed nor disclosed
 - **WHEN** the exploration plan commits to a behavior the log neither observed nor disclosed and no requirement deviation is shown
 - **THEN** the surfaced-ambiguities criterion does not fail for it
-- **AND** its materiality is scored once, under testing-evidence complete-honest-record
+- **AND** the omission is scored once, under testing-evidence traceable coverage
 
 #### Scenario: Final handoff names decisions and points to the ledger
 - **WHEN** the handoff names each unresolved decision by identifier and subject and points to the ledger entry that holds its consequence and options
@@ -205,4 +207,9 @@ The component SHALL have no independent score floor. For a reference-baseline ev
 - **WHEN** the evaluator scores the reference baseline
 - **THEN** it marks assumption-handling quality not applicable
 - **AND** it excludes the component's four points from the reference denominator
+
+#### Scenario: A long assumptions ledger
+- **WHEN** the assumptions ledger is longer than any per-artifact excerpt limit
+- **THEN** every panel judge and the decider receive it in full, and any line of it can be cited and audited
+- **AND** when the primary records together exceed the judge packet budget, the assumption-handling job fails as an evaluation-harness failure rather than judging a truncated record
 
