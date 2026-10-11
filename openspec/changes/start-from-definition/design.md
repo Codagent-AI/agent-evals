@@ -83,7 +83,7 @@ The acceptance artifacts must be under the Runner session's `output/` directory,
 
 ## Fixture preparation
 
-1. **Wait for #78.** Cut the fixture only after #78 decides on task-compliance review. Choose the new baseline's Validator mode at the same time, so there is one fixture and one series.
+1. **Choose the base.** Paul chose to cut the fixture on `f0695b9` without waiting for #78. If #78 keeps task-compliance review, the fixture is re-cut on that base and re-pinned. The new baseline's Validator mode is chosen when the baseline runs.
    - **Base:** `f0695b9` on `eval/fixture-baseline-scrub`, or `eval/fixture-task-compliance` if #78 adopts it.
    - Under task-compliance, the Validator compares the implementation with tasks the same run wrote. That measures something different from #78's hand-written tasks, so #78's verdict may not carry over directly.
    - With `--skip-validator`, task-compliance never runs and the fixture base makes no difference.
@@ -92,6 +92,8 @@ The acceptance artifacts must be under the Runner session's `output/` directory,
    - in `AGENTS.md` "Source of Truth", replaces the `tasks/` bullet with a `` `openspec/changes/create-and-scene/test-plan.md`: testing obligations `` bullet;
    - replaces "Read the proposal, design, canonical specs, and all task files before editing. Treat the canonical specs as authoritative when task summaries are less detailed." with "Read the proposal, design, canonical specs, and test plan before editing. Treat the canonical specs as authoritative.";
    - keeps the following "Keep implementation work inside the repository." sentence.
+   - A second commit, `chore: tell candidates not to add ci configuration`, adds a "Change Guidelines" bullet that forbids CI configuration such as `.github/workflows/`. The eval's GitHub credentials cannot push workflow files, and smoke attempt 1 failed at the draft PR after its plan added CI.
+   - The pinned result is `ba19a6a` on `eval/fixture-definition-only`, the commit the passing smoke run used.
 3. **Change nothing else.** At `f0695b9`, only those `AGENTS.md` lines refer to tasks: `CLAUDE.md` contains only `AGENTS.md`, and `.validator/config.yml` and `README.md` mention none. Repeat that search on the chosen base.
 4. **Check the definition passes planning.** Run `workflows/core/validate-planning-artifacts.sh` with `require_tasks=false` at the Runner commit to be evaluated, and confirm it passes without repair.
    - At Runner `main` `46b92af`, `f0695b9` with the tasks removed printed "Change 'create-and-scene' is valid".

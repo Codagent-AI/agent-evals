@@ -12,7 +12,7 @@ REPO="${REPO:-https://github.com/Codagent-AI/and-scene.git}"
 # are reproducible. This is the reviewed planning-only fixture merged into
 # eval/create-and-scene-spec-only on 2026-08-28; bump it deliberately when the
 # fixture snapshot changes.
-FIXTURE_REF="${FIXTURE_REF:-f0695b96c0c23b2d17ecc6cfbaf8be1fcdedd6f8}"
+FIXTURE_REF="${FIXTURE_REF:-ba19a6ac3d6eca4034571cd23c87ce44f884b2e8}"
 # Pin the known-good reference used for calibration and judge tiebreaks.
 REFERENCE_REF="${REFERENCE_REF:-171c7def1e12aca2a5f605a5e5feafb20d4e4d19}"
 if [[ -n "${CHANGE_NAME+x}" ]]; then
@@ -109,7 +109,7 @@ Options:
   --fixture-ref REF      Definition-only fixture ref: the change has a proposal,
                           design, test plan, and specs, and no tasks.md or
                           tasks/. A fixture that still has tasks fails preflight.
-                          Default: f0695b96c0c23b2d17ecc6cfbaf8be1fcdedd6f8
+                          Default: ba19a6ac3d6eca4034571cd23c87ce44f884b2e8
   --reference-ref REF    Implemented/reference ref.
                           Default: 171c7def1e12aca2a5f605a5e5feafb20d4e4d19
   --candidate-ref REF    Grade an existing candidate ref.

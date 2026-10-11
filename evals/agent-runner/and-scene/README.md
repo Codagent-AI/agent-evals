@@ -245,9 +245,7 @@ node evals/agent-runner/and-scene/fixture-snapshot.mjs --checkout /path/to/and-s
 ```
 
 The snapshot copies the fixture README and the change's proposal, design,
-specs, and test plan; it no longer copies `tasks.md`. The committed
-`fixture-snapshot/snapshot.json` still records the earlier pin's `tasks.md` and
-is regenerated when the definition-only fixture is pinned.
+specs, and test plan; the definition-only fixture has no `tasks.md`.
 
 This suite gives the evaluated workflow a reviewed OpenSpec change that has
 definition artifacts and no tasks or implementation, runs the real Agent Runner
@@ -711,14 +709,14 @@ files to pass this check. A new run and `--resume` apply it; an evaluator-only
 rescore keeps its source's starting line and skips it.
 
 The external fixture is pinned to commit
-`f0695b96c0c23b2d17ecc6cfbaf8be1fcdedd6f8` in
+`ba19a6ac3d6eca4034571cd23c87ce44f884b2e8` in
 `https://github.com/Codagent-AI/and-scene.git`, on the and-scene branch
-`eval/fixture-baseline-scrub`. That commit still carries the hand-written
-`tasks.md` and `tasks/` used by earlier `core:implement-change` runs, so a new
-run against it fails the definition-only check until the definition-only
-fixture commit is cut and pinned (agent-evals#78). The implemented reference
-commit `171c7def1e12aca2a5f605a5e5feafb20d4e4d19` is the comparable reference
-baseline. It is not a similarity target. The fixture's `.validator/config.yml`
+`eval/fixture-definition-only`. It is the earlier pin `f0695b9` with the
+hand-written `tasks.md` and `tasks/` removed, the fixture `AGENTS.md` worded for
+a change that starts without tasks, and a rule that candidates add no CI
+configuration: the eval's GitHub credentials cannot push `.github/workflows/`.
+The implemented reference commit `171c7def1e12aca2a5f605a5e5feafb20d4e4d19` is
+the comparable reference baseline. It is not a similarity target. The fixture's `.validator/config.yml`
 runs the checks and `all-reviewers` on the root entry point and scopes the
 `skill-quality` review to a separate `skills` entry point, so that review runs
 only when files under `skills/` change.
