@@ -92,7 +92,7 @@ function dissentCheckPrompt({ request, scopeRule, id, original, majority = [], r
   if (ruling) reasons.push({ decider_ruling: true, verdict: ruling.verdict, rationale: ruling.rationale, citations: ruling.citations,
     ...(ruling.cited_files_omitted ? { cited_files_omitted: 'the decider\'s cited files did not fit this packet; judge its reason from the material shown' } : {}) })
   // The dissent, the majority's reasons and the complete material are measured; the job's own context is not.
-  const packet = JSON.stringify({ id, rationale: original.rationale, citations: original.citations, majority: reasons, material })
+  const packet = JSON.stringify({ id, verdict: original.verdict, rationale: original.rationale, citations: original.citations, majority: reasons, material })
   if (packet.length > MAX_AUDIT_PACKET_CHARS) throw new PacketOverflowError(`${request.job} dissent check exceeds the ${MAX_AUDIT_PACKET_CHARS}-character packet limit: ${id}`, [id])
   return [request.prompt_body ?? request.prompt, scopeRule,
     ['Check only the dissent\'s stated reason. Confirm only when both hold: the cited material shows what the dissent',
@@ -108,7 +108,7 @@ function dissentCheckPrompt({ request, scopeRule, id, original, majority = [], r
       'Insufficient when the complete, in-scope material cannot settle it.', MISSING_MATERIAL_RULE,
       ...(lineCited ? [EVIDENCE_CITATION_RULE] : [])].join(' '),
     'Return confirmed if it holds, contradicted if refuted, insufficient if undecided, missing-material if it depends on marked material.',
-    '# BEGIN UNTRUSTED DISSENT', JSON.stringify({ id, rationale: original.rationale, citations: original.citations, majority: reasons, material, evidence: request.input_roots?.evidence ? request.prompt_body ?? request.prompt : null }), '# END UNTRUSTED DISSENT', '# Response', `Reply with JSON matching this schema: ${JSON.stringify(schema)}`].join('\n')
+    '# BEGIN UNTRUSTED DISSENT', JSON.stringify({ id, verdict: original.verdict, rationale: original.rationale, citations: original.citations, majority: reasons, material, evidence: request.input_roots?.evidence ? request.prompt_body ?? request.prompt : null }), '# END UNTRUSTED DISSENT', '# Response', `Reply with JSON matching this schema: ${JSON.stringify(schema)}`].join('\n')
 }
 
 function route(votes, checks, order, fallbackIds = []) {
@@ -195,18 +195,17 @@ async function checkRejectedVotes({ request, scopeRule, record, order, validateC
     const keptVerdict = own.filter(v => effective(v, record.checks, order, fallbackIds).verdict === decided.verdict)
     for (const original of rejectedVotes(own, record.checks, order, fallbackIds, decided.verdict)) {
       const backing = await backDissent(original, request, validateCitations, validateCitation)
+      // The vote keeps the citations the decider was shown, so a re-run sends
+      // the same decider request; the check is shown only those that validated.
       original.citations_valid = backing.valid
-      if (backing.dropped.length) {
-        original.dropped_citations = backing.dropped
-        original.citations = backing.kept
-      }
+      if (backing.dropped.length) original.dropped_citations = backing.dropped
       if (backing.error || backing.dropped.length) {
         record.citation_checks ??= []
         record.citation_checks.push({ id, panel_index: original.panel_index, valid: backing.valid, dropped: backing.dropped.length,
           ...(backing.error ? { error: backing.error } : {}) })
       }
       if (!original.citations_valid) continue
-      const next = await dissentCheckRequest({ request, scopeRule, id, original, majority: keptVerdict, ruling: decided })
+      const next = await dissentCheckRequest({ request, scopeRule, id, original: checkedVote(original), majority: keptVerdict, ruling: decided })
       const result = await check(next, id)
       record.checks.push({ ...result, stage: 'ruling-dissent-check', panel_index: original.panel_index })
       settledCheck(result, 'ruling dissent check')
@@ -263,6 +262,13 @@ function rejectedVotes(votes, checks, order, fallbackIds, verdict) {
   })
 }
 const rulingResult = ruling => ruling.result ?? ruling
+
+// A rejected vote as its ruling-dissent check is shown it: without the
+// citations that did not validate.
+function checkedVote(vote) {
+  const dropped = new Set((vote.dropped_citations ?? []).map(d => JSON.stringify(d.citation)))
+  return dropped.size ? { ...vote, citations: (vote.citations ?? []).filter(c => !dropped.has(JSON.stringify(c))) } : vote
+}
 
 // The ruling a ruling-dissent check is shown. A line-cited ruling's settled
 // result names only its cited paths; an evidence check quotes the line spans
@@ -595,7 +601,7 @@ export async function rerunDecider({ record, decider, buildPrompt, schema, valid
   const scopeRule = request.scope_rule ?? [JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE].join('\n')
   const usage = {}
   const call = deciderCall(decider, usage)
-  const settledVerdicts = new Map(resolvePanel(record).results.map(r => [r.id, r.verdict]))
+  resolvePanel(record)
   const rulings = []
   const pending = (record.rulings ?? []).map(r => r.id)
   if (pending.length) {
@@ -610,7 +616,13 @@ export async function rerunDecider({ record, decider, buildPrompt, schema, valid
         ;[check] = await call(next, 'overrule-check-rerun', text => parseCheck(request, next, fresh.id, text))
         settledCheck(check, 'overrule check')
       }
-      const before = settledVerdicts.get(recorded.id)
+      // Like is compared with like: the recorded ruling after its own overrule
+      // check, before any check of a vote it rejected. Those checks are re-run
+      // and counted below.
+      const ruled = rulingResult(recorded)
+      const recordedOverruled = overruledVerdict(record, ruled, order)
+      const recordedCheck = record.checks.find(c => c.stage === 'overrule-check' && c.id === recorded.id)
+      const before = recordedOverruled !== null && recordedCheck?.classification !== 'confirmed' ? recordedOverruled : ruled.verdict
       const rerun = overruled !== null && check.classification !== 'confirmed' ? overruled : fresh.verdict
       rulings.push({ id: recorded.id, recorded: before, rerun, flipped: rerun !== before,
         recorded_ruling: recorded.vote ?? recorded.verdict, rerun_ruling: fresh.verdict, overrule_check: check?.classification ?? null })
@@ -625,7 +637,7 @@ export async function rerunDecider({ record, decider, buildPrompt, schema, valid
     } else {
       const decided = checkedRuling(record, request, check.id)
       const kept = record.votes.filter(v => v.id === check.id && effective(v, record.checks, order, record.fallback_ids ?? []).verdict === decided.verdict)
-      next = await dissentCheckRequest({ request, scopeRule, id: check.id, original, majority: kept, ruling: decided })
+      next = await dissentCheckRequest({ request, scopeRule, id: check.id, original: checkedVote(original), majority: kept, ruling: decided })
     }
     const [fresh] = await call(next, 'dissent-check-rerun', text => parseCheck(request, next, check.id, text))
     settledCheck(fresh, 'dissent check')
@@ -666,7 +678,9 @@ export async function checkRecordedRuling({ record, id, decider, buildPrompt, sc
   const ruling = (record.rulings ?? []).find(r => r.id === id)
   if (!ruling) throw new Error(`retained record ${job} holds no decider ruling for ${id}`)
   const votes = (record.votes ?? []).filter(v => v.id === id)
-  const priorChecks = (record.checks ?? []).filter(c => c.id === id && c.stage !== 'overrule-check')
+  // Checks of the votes a ruling rejected settle after it, so the reported
+  // verdict is the ruling's after its overrule check.
+  const priorChecks = (record.checks ?? []).filter(c => c.id === id && c.stage !== 'overrule-check' && c.stage !== 'ruling-dissent-check')
   const fallback_ids = record.fallback_ids ?? []
   const overruled = overruledVerdict({ votes, checks: priorChecks, fallback_ids }, ruling, order)
   let check = null

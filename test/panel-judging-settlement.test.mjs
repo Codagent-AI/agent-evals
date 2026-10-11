@@ -1,7 +1,7 @@
 import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { runPanelJob, rerunDecider, resolvePanel, verifyCachedPanelJob, PANEL_PROTOCOL, DECIDER_REASONS_RULE } from '../evals/lib/panel-judging/panel.mjs'
+import { runPanelJob, rerunDecider, resolvePanel, verifyCachedPanelJob, checkRecordedRuling, PANEL_PROTOCOL, DECIDER_REASONS_RULE } from '../evals/lib/panel-judging/panel.mjs'
 import { REQUIREMENT_QUESTION_RULE, JUDGE_SCOPE_RULE, buildReciteRequest } from '../evals/lib/panel-judging/protocol.mjs'
 
 const result = (verdict, extra = {}) => ({ id: 'x', verdict, rationale: 'reason', citations: ['a'], evidence: ['a'], ...extra })
@@ -126,6 +126,57 @@ for (const [classification, verdict, basis] of [['confirmed', 'fail', 'checked-d
   assert.equal(outcome.results[0].basis, basis)
   assert.deepEqual(outcome.record.checks.map(c => [c.stage, c.panel_index, c.classification]), [['ruling-dissent-check', 2, classification]])
   assert.deepEqual(verifyCachedPanelJob(outcome.record).results, outcome.results)
+})
+test('a re-run compares the ruling with the recorded ruling, not with the verdict a rejected-vote check restored', async () => {
+  const options = twoClaude(['pass', 'pass', 'fail'], { decider: rulingDecider('pass', { rulingCheck: 'confirmed' }) })
+  const outcome = await runPanelJob(options)
+  assert.equal(outcome.results[0].basis, 'checked-dissent-fail')
+  const rerun = await rerunDecider({ record: outcome.record, buildPrompt: options.buildPrompt, schema: options.schema, validateCitations: async () => true,
+    decider: { model: 'opus', effort: 'high', invoke: async request => request.audit_stage ? checkAnswer('confirmed')
+      : JSON.stringify({ results: [result('pass', { rationale: 'ruling pass' })] }) } })
+  assert.deepEqual(rerun.rulings.map(({ recorded, rerun: again, flipped }) => [recorded, again, flipped]), [['pass', 'pass', false]])
+  assert.deepEqual(rerun.checks.map(({ stage, recorded, rerun: again, flipped }) => [stage, recorded, again, flipped]), [['ruling-dissent-check', 'confirmed', 'confirmed', false]])
+})
+test('a three-way split ruling stands when checks confirm both rejected votes, each shown with its own verdict', async () => {
+  const checks = []
+  const outcome = await runPanelJob({ ...setup(['met', 'partial', 'missing']), verdicts: ['met', 'partial', 'missing'], order: ['met', 'partial', 'missing'],
+    decider: { model: 'opus', effort: 'high', invoke: async request => {
+      if (request.usage_phase !== 'ruling-dissent-check') return JSON.stringify({ results: [result('partial')] })
+      checks.push(JSON.parse(request.prompt.split('# BEGIN UNTRUSTED DISSENT\n')[1].split('\n# END UNTRUSTED DISSENT')[0]).verdict)
+      return checkAnswer('confirmed')
+    } } })
+  assert.equal(outcome.ok, true, outcome.record.error)
+  assert.deepEqual(checks, ['met', 'missing'])
+  assert.equal(outcome.results[0].verdict, 'partial')
+  assert.equal(outcome.results[0].basis, 'decider-partial')
+  assert.deepEqual(verifyCachedPanelJob(outcome.record).results, outcome.results)
+})
+test('a rejected vote keeps the citations the decider saw, and its check is shown only those that validated', async () => {
+  const seen = []
+  const options = citedDissent(twoClaude(['fail', 'fail', 'pass'], { decider: rulingDecider('fail', { seen }), validateCitations: rejectBad }), ['a', 'bad'])
+  const outcome = await runPanelJob(options)
+  assert.equal(outcome.ok, true, outcome.record.error)
+  const vote = outcome.record.votes.find(v => v.panel_index === 2)
+  assert.deepEqual(vote.citations, ['a', 'bad'])
+  assert.deepEqual(vote.dropped_citations.map(d => d.citation), ['bad'])
+  const check = seen.find(request => request.usage_phase === 'ruling-dissent-check')
+  assert.ok(check && !check.prompt.split('# BEGIN UNTRUSTED DISSENT')[1].includes('"bad"'))
+  const reseen = []
+  await rerunDecider({ record: outcome.record, buildPrompt: options.buildPrompt, schema: options.schema, validateCitations: rejectBad,
+    decider: { model: 'opus', effort: 'high', invoke: async request => {
+      reseen.push(request)
+      return request.audit_stage ? checkAnswer('contradicted') : JSON.stringify({ results: [result('fail', { rationale: 'ruling fail' })] })
+    } } })
+  assert.equal(reseen.find(request => request.usage_phase === 'decider-rerun').prompt, seen.find(request => request.usage_phase === 'decider').prompt)
+  assert.equal(reseen.find(request => request.usage_phase === 'dissent-check-rerun').prompt, check.prompt)
+})
+test('the retained-ruling check reads a record with rejected-vote checks and reports the ruling', async () => {
+  const options = twoClaude(['pass', 'pass', 'fail'], { decider: rulingDecider('pass', { rulingCheck: 'confirmed' }) })
+  const outcome = await runPanelJob(options)
+  assert.equal(outcome.results[0].basis, 'checked-dissent-fail')
+  const report = await checkRecordedRuling({ record: outcome.record, id: 'x', buildPrompt: options.buildPrompt, schema: options.schema,
+    decider: { model: 'opus', effort: 'high', invoke: async () => { throw new Error('unexpected call') } } })
+  assert.deepEqual([report.verdict, report.basis], ['pass', 'decider-pass'])
 })
 test('a rejected vote whose citations do not validate gets no check, and the ruling stands', async () => {
   const seen = []
@@ -542,8 +593,10 @@ test('a ruling dissent rerun on a record without that ruling fails before any ca
   assert.equal(outcome.ok, true, outcome.record.error)
   assert.ok(outcome.record.checks.some(c => c.stage === 'ruling-dissent-check' && c.id === 'x'))
   const record = { ...outcome.record, rulings: [] }
-  await assert.rejects(rerunDecider({ record, decider: schemaFollowingDecider([]), buildPrompt: partlyDisputed().buildPrompt,
-    schema: scopedSchema, validateCitations: async () => true }), /missing or invalid decider ruling/)
+  let calls = 0
+  await assert.rejects(rerunDecider({ record, decider: { model: 'opus', effort: 'medium', invoke: async () => { calls++; throw new Error('unexpected call') } },
+    buildPrompt: partlyDisputed().buildPrompt, schema: scopedSchema, validateCitations: async () => true }), /missing or invalid decider ruling/)
+  assert.equal(calls, 0)
 })
 
 test('a decider dissent rerun needing missing material fails instead of reporting a flip', async () => {
