@@ -59,9 +59,9 @@ export async function resolveWorkflowFile({ agentRunnerDir, workflow }) {
 }
 
 function scalar(value) {
-  const trimmed = value.replace(/\s+#.*$/, '').trim()
-  const quoted = trimmed.match(/^(["'])(.*)\1$/)
-  return quoted ? quoted[2] : trimmed
+  // A quoted value keeps any '#' inside its quotes; only a trailing comment goes.
+  const quoted = value.trim().match(/^(["'])(.*?)\1(?:\s+#.*)?$/)
+  return quoted ? quoted[2] : value.replace(/\s+#.*$/, '').trim()
 }
 
 // A deliberately small reader for the two facts the harness depends on: the

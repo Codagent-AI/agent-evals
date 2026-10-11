@@ -127,6 +127,8 @@ test('a workflow definition exposes its declared name and top-level parameters o
     ['change_name', 'skip_validator'],
   )
   assert.equal(parseWorkflowDefinition("name: 'quoted' # comment\n").name, 'quoted')
+  assert.equal(parseWorkflowDefinition('name: "a #b" # comment\n').name, 'a #b')
+  assert.equal(parseWorkflowDefinition('name: plain # comment\n').name, 'plain')
 })
 
 test('workflow input verification checks parameters and nothing about steps', () => {
