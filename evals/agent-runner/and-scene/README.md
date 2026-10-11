@@ -216,7 +216,8 @@ present in only one rescore is a difference, and free text is ignored. A flip
 is `settlement` when the seat verdicts are identical but a check, effective
 vote or ruling differs, `seat-noise` when the seat verdicts differ and every
 check and ruling is the same, and `mixed` when both differ (`deterministic`
-for a flip of a criterion no judge decided). The labels say where the recorded
+for a flip of a criterion no judge decided, and `unattributed` when no
+recorded layer differs). The labels say where the recorded
 outputs differ, not which difference caused the flip.
 
 Per pair it reports total flipped points (the sum of every changed verdict's
@@ -226,7 +227,8 @@ gate, floor and eligibility changes. Per rep it reports per-criterion
 disagreement counts with their denominators, always including every
 engineering-quality criterion. `--blocker-rep` names the rep that decides
 merge (#78 rep 2 for the `followups` change): when any of its pairs has more
-than 1.0 settlement and mixed points outside engineering quality, the command
+than 1.0 settlement, mixed and unattributed points outside engineering
+quality, the command
 prints `MERGE BLOCKED` and exits 1. Seat-noise points and misses on other reps
 are reported but never block.
 
