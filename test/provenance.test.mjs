@@ -8,8 +8,6 @@ import { test } from 'node:test'
 import { hashString } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
 import {
   AGENT_SKILLS_MANIFEST_PATH,
-  VERIFICATION_WORKFLOW_RELATIVE_PATH,
-  WORKFLOW_RELATIVE_PATH,
   compareAgentSkillsProvenance,
   compareProvenance,
   readAgentSkillsProvenance,
@@ -17,7 +15,8 @@ import {
   resolveAgentRunnerDir,
 } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
 
-const workflowYaml = 'name: implement-change\nsteps:\n  - id: verify-acceptance-handoff\n'
+const WORKFLOW_RELATIVE_PATH = 'workflows/core/plan-and-implement-change-v1.0.yaml'
+const workflowYaml = 'name: plan-and-implement-change\nsteps:\n  - id: anything\n'
 
 // A scripted `git`/`agent-runner` stub keeps provenance reading testable without
 // building a real Agent Runner checkout for every case.
@@ -48,8 +47,24 @@ async function checkout({ workflow = workflowYaml } = {}) {
   return dir
 }
 
-test('the pinned workflow path is the versioned implement-change contract', () => {
-  assert.equal(WORKFLOW_RELATIVE_PATH, 'workflows/core/implement-change-v1.0.yaml')
+test('the evaluated workflow defaults to the core plan-and-implement composite', async () => {
+  const provenance = await readWorkflowProvenance({ agentRunnerDir: await checkout(), exec: execStub() })
+  assert.equal(provenance.workflow, 'core:plan-and-implement-change')
+  assert.equal(provenance.workflow_relative_path, WORKFLOW_RELATIVE_PATH)
+})
+
+test('a selected workflow is located and hashed under its own logical reference', async () => {
+  const dir = await checkout()
+  const other = 'name: orchestrated-implement-change\n'
+  await writeFile(join(dir, 'workflows/core/orchestrated-implement-change-v1.0.yaml'), other)
+  const provenance = await readWorkflowProvenance({
+    agentRunnerDir: dir,
+    workflow: 'core:orchestrated-implement-change',
+    exec: execStub(),
+  })
+  assert.equal(provenance.workflow, 'core:orchestrated-implement-change')
+  assert.equal(provenance.workflow_sha256, hashString(other))
+  assert.equal(provenance.runner_workflow_name, 'orchestrated-implement-change')
 })
 
 test('a clean Agent Skills checkout records its commit and plugin manifest hash', async () => {
@@ -109,24 +124,9 @@ test('a clean checkout records commit, workflow hash, and CLI version', async ()
   assert.equal(provenance.workflow_sha256, hashString(workflowYaml))
   assert.equal(provenance.cli_version, 'agent-runner 2.4.0')
   assert.equal(provenance.workflow_path, join(dir, WORKFLOW_RELATIVE_PATH))
+  assert.equal(provenance.runner_workflow_name, 'plan-and-implement-change')
   assert.equal(provenance.complete, true)
-})
-
-test('the delegated verify-change workflow is recorded when the checkout has one', async () => {
-  const legacy = await readWorkflowProvenance({ agentRunnerDir: await checkout(), exec: execStub() })
-  assert.equal(legacy.verification_workflow_path, null)
-  assert.equal(legacy.verification_workflow_sha256, null)
-  assert.equal(legacy.complete, true)
-
-  const dir = await checkout()
-  const verification = 'name: verify-change\nsteps:\n  - id: verify-acceptance-handoff\n'
-  await writeFile(join(dir, VERIFICATION_WORKFLOW_RELATIVE_PATH), verification)
-
-  const provenance = await readWorkflowProvenance({ agentRunnerDir: dir, exec: execStub() })
-
-  assert.equal(provenance.verification_workflow_path, join(dir, VERIFICATION_WORKFLOW_RELATIVE_PATH))
-  assert.equal(provenance.verification_workflow_sha256, hashString(verification))
-  assert.equal(provenance.workflow_sha256, hashString(workflowYaml))
+  assert.equal(Object.hasOwn(provenance, 'verification_workflow_sha256'), false)
 })
 
 test('the recorded commit is not compared against a predetermined value', async () => {
@@ -148,11 +148,11 @@ test('an unstaged change stops the evaluation before Agent Runner', async () => 
   await assert.rejects(
     () => readWorkflowProvenance({
       agentRunnerDir: dir,
-      exec: execStub({ 'git status --porcelain': { status: 0, stdout: ' M workflows/core/implement-change-v1.0.yaml\n' } }),
+      exec: execStub({ 'git status --porcelain': { status: 0, stdout: ' M workflows/core/plan-and-implement-change-v1.0.yaml\n' } }),
     }),
     (error) => {
       assert.equal(error.code, 'dirty-agent-runner-checkout')
-      assert.match(error.message, /implement-change-v1\.0\.yaml/)
+      assert.match(error.message, /plan-and-implement-change-v1\.0\.yaml/)
       return true
     },
   )
@@ -200,12 +200,21 @@ test('a non-worktree checkout is rejected', async () => {
   )
 })
 
-test('a missing workflow stops the evaluation before Agent Runner', async () => {
+test('a workflow that does not resolve stops the evaluation before Agent Runner', async () => {
   const dir = await checkout({ workflow: null })
 
   await assert.rejects(
     () => readWorkflowProvenance({ agentRunnerDir: dir, exec: execStub() }),
-    (error) => assert.equal(error.code, 'missing-workflow') ?? true,
+    (error) => {
+      assert.equal(error.code, 'workflow-resolution')
+      assert.match(error.message, /core:plan-and-implement-change/)
+      return true
+    },
+  )
+  const present = await checkout()
+  await assert.rejects(
+    () => readWorkflowProvenance({ agentRunnerDir: present, workflow: 'not a ref', exec: execStub() }),
+    (error) => error.code === 'workflow-resolution',
   )
 })
 
@@ -229,13 +238,25 @@ test('compareProvenance accepts an identical checkout on resume', () => {
 })
 
 test('compareProvenance reports a changed commit, workflow hash, and CLI version', () => {
-  const recorded = { commit: 'a', workflow_sha256: 'b', cli_version: 'c' }
+  const recorded = { commit: 'a', workflow: 'core:x', workflow_sha256: 'b', runner_workflow_name: 'x', cli_version: 'c' }
 
-  const mismatches = compareProvenance(recorded, { commit: 'z', workflow_sha256: 'b', cli_version: 'c2' })
+  const mismatches = compareProvenance(recorded, { ...recorded, commit: 'z', cli_version: 'c2' })
 
   assert.deepEqual(mismatches, [
     { field: 'commit', recorded: 'a', current: 'z' },
     { field: 'cli_version', recorded: 'c', current: 'c2' },
+  ])
+})
+
+test('compareProvenance reports a changed workflow reference, definition hash, or reported name', () => {
+  const recorded = { commit: 'a', workflow: 'core:x', workflow_sha256: 'b', runner_workflow_name: 'x', cli_version: 'c' }
+
+  assert.deepEqual(compareProvenance(recorded, {
+    ...recorded, workflow: 'core:y', workflow_sha256: 'b2', runner_workflow_name: 'y',
+  }), [
+    { field: 'workflow', recorded: 'core:x', current: 'core:y' },
+    { field: 'workflow_sha256', recorded: 'b', current: 'b2' },
+    { field: 'runner_workflow_name', recorded: 'x', current: 'y' },
   ])
 })
 
@@ -262,16 +283,4 @@ test('a blank AGENT_RUNNER_DIR falls back rather than selecting an empty path', 
     resolveAgentRunnerDir({ env: { AGENT_RUNNER_DIR: '   ' }, evalsRoot: '/repos/agent-evals' }),
     '/repos/agent-runner',
   )
-})
-
-test('verification workflow hash drift is reported on resume', () => {
-  const recorded = { commit: 'a', workflow_sha256: 'b', verification_workflow_sha256: 'old', cli_version: 'c' }
-  assert.deepEqual(compareProvenance(recorded, { ...recorded, verification_workflow_sha256: 'new' }), [
-    { field: 'verification_workflow_sha256', recorded: 'old', current: 'new' },
-  ])
-})
-
-test('a checkpoint predating verification workflow provenance does not drift', () => {
-  const recorded = { commit: 'a', workflow_sha256: 'b', cli_version: 'c' }
-  assert.deepEqual(compareProvenance(recorded, { ...recorded, verification_workflow_sha256: 'new' }), [])
 })

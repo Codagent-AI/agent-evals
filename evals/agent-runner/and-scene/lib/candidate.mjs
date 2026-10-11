@@ -5,13 +5,12 @@
 // while cleanliness still covers tracked changes and every untracked file
 // except screenshot evidence in the suite's bounded inspection directory.
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
-import { dirname, join, posix, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 import { hashFile, hashJson, hashString, writeJsonAtomic } from './persistence.mjs'
 import { inspectCandidateEvidenceReadiness } from './evidence.mjs'
-import { checkWorkflowHistory, finalWorkflowStepEntry } from './workflow.mjs'
 
 export const CANDIDATE_SOURCE_MANIFEST_SCHEMA_VERSION = 1
 export const EVAL_GIT_EXCLUDES = ['/.agent-runner/config.yaml']
@@ -177,6 +176,10 @@ function planningContractError(message) {
   return error
 }
 
+// The evaluated change starts from definition artifacts only: the evaluated
+// workflow writes its own tasks, so a fixture that still carries a task index
+// or task files is the wrong starting line. Nothing here deletes or rewrites
+// fixture files to satisfy the contract.
 function assertPlanningReadyFixture(exec, worktree, fixtureCommit, changeName) {
   const changeDir = `openspec/changes/${changeName}`
   const testPlanPath = `${changeDir}/test-plan.md`
@@ -184,7 +187,6 @@ function assertPlanningReadyFixture(exec, worktree, fixtureCommit, changeName) {
     `${changeDir}/proposal.md`,
     `${changeDir}/design.md`,
     testPlanPath,
-    `${changeDir}/tasks.md`,
   ]
   const failures = requiredFiles
     .filter((path) => !fixtureFile(exec, worktree, fixtureCommit, path)?.trim())
@@ -203,33 +205,15 @@ function assertPlanningReadyFixture(exec, worktree, fixtureCommit, changeName) {
     failures.push(`no non-empty specification under ${changeDir}/specs/`)
   }
 
-  const taskFiles = fixtureFiles(
-    exec,
-    worktree,
-    fixtureCommit,
-    `${changeDir}/tasks`,
-  ).filter((path) => /^openspec\/changes\/[^/]+\/tasks\/[^/]+\.md$/.test(path))
-  const tasks = taskFiles.filter(
-    (path) => fixtureFile(exec, worktree, fixtureCommit, path)?.trim(),
-  )
-  if (tasks.length === 0) {
-    failures.push(`no non-empty task file under ${changeDir}/tasks/`)
-  }
-
-  const taskIndex = fixtureFile(exec, worktree, fixtureCommit, `${changeDir}/tasks.md`) ?? ''
-  const linkedTasks = new Set([...taskIndex.matchAll(/(?<!!)\[[^\]]+\]\(([^)]+)\)/g)].map((match) => {
-    const raw = match[1].trim().replace(/^<|>$/g, '').split(/[?#]/, 1)[0]
-    try {
-      return posix.normalize(decodeURIComponent(raw))
-    } catch {
-      return posix.normalize(raw)
-    }
-  }))
-  for (const task of tasks) {
-    const relative = task.slice(changeDir.length + 1)
-    if (!linkedTasks.has(relative)) {
-      failures.push(`${changeDir}/tasks.md does not link to ${relative}`)
-    }
+  const taskIndexPath = `${changeDir}/tasks.md`
+  const taskArtifacts = [
+    ...fixtureFiles(exec, worktree, fixtureCommit, taskIndexPath)
+      .filter((path) => path === taskIndexPath),
+    ...fixtureFiles(exec, worktree, fixtureCommit, `${changeDir}/tasks`)
+      .filter((path) => path.startsWith(`${changeDir}/tasks/`)),
+  ]
+  for (const path of taskArtifacts) {
+    failures.push(`task artifact ${path} is present; the fixture must start from definition artifacts only`)
   }
 
   if (failures.length > 0) {
@@ -347,6 +331,29 @@ async function installEvalExcludes(worktree) {
   await writeFile(path, `${current}${prefix}${additions.join('\n')}\n`)
 }
 
+// Workflow shell steps commit in the candidate worktree with no identity of
+// their own, and the sandbox has no global git identity. The harness owns the
+// candidate repository, so it supplies a neutral repo-local one. It is set only
+// where missing: an agent CLI's own per-commit author still takes precedence,
+// and nothing score-affecting records it.
+export const CANDIDATE_COMMIT_IDENTITY = Object.freeze({
+  'user.name': 'and-scene eval candidate',
+  'user.email': 'and-scene-eval@users.noreply.github.com',
+})
+
+function ensureCandidateCommitIdentity(exec, worktree) {
+  for (const [key, value] of Object.entries(CANDIDATE_COMMIT_IDENTITY)) {
+    const current = exec('git', ['-C', worktree, 'config', '--local', '--get', key], { encoding: 'utf8' })
+    if (current.error) throw new Error(`candidate ${key} lookup failed: ${current.error.message}`)
+    // Exit status 1 means the key is unset; anything else is a real failure.
+    if (current.status === 0 && (current.stdout ?? '').trim() !== '') continue
+    if (current.status !== 0 && current.status !== 1) {
+      throw new Error(`candidate ${key} lookup failed: ${(current.stderr ?? '').trim()}`)
+    }
+    run(exec, 'git', ['-C', worktree, 'config', '--local', key, value], {}, `candidate ${key} setup`)
+  }
+}
+
 export async function prepareCandidateWorktree({
   repo,
   worktree,
@@ -435,6 +442,7 @@ export async function prepareCandidateWorktree({
   }
 
   await installEvalExcludes(worktree)
+  ensureCandidateCommitIdentity(exec, worktree)
   const headCommit = run(exec, 'git', ['-C', worktree, 'rev-parse', 'HEAD'], {}, 'candidate commit lookup')
   if (resume) {
     if (branch) {
@@ -512,13 +520,26 @@ export async function prepareCandidateRescoreWorktree({
     'candidate rescore final SHA lookup',
   )
   assertSame('candidate final SHA', finalSha, source.final_sha)
+  // The branch was there when the source run was verified, so its absence is
+  // a later change such as operator cleanup, not a fact about the workflow.
+  // Only a ref Git reports absent (show-ref exit 1) counts; a ref that exists
+  // but cannot be resolved fails the ordinary lookup below.
+  const remoteRef = `refs/remotes/origin/${source.branch}`
+  const presence = exec('git', ['-C', worktree, 'show-ref', '--verify', '--quiet', remoteRef], { encoding: 'utf8' })
+  if (presence.status === 1 && !presence.error) {
+    const unavailable = new Error(
+      `rescore-source-unavailable: candidate branch ${source.branch} no longer matches the retained record; `
+      + 'it is missing from the candidate repository',
+    )
+    unavailable.code = 'rescore-source-unavailable'
+    unavailable.owner = 'evaluation-harness'
+    unavailable.resumable = false
+    throw unavailable
+  }
   const remoteBranchSha = run(
     exec,
     'git',
-    [
-      '-C', worktree, 'rev-parse', '--verify', '--end-of-options',
-      `refs/remotes/origin/${source.branch}^{commit}`,
-    ],
+    ['-C', worktree, 'rev-parse', '--verify', '--end-of-options', `${remoteRef}^{commit}`],
     {},
     'candidate rescore remote branch lookup',
   )
@@ -746,6 +767,37 @@ export async function verifyRecordedDeliveryIdentity({
   return { verified: true, branch, final_sha: recorded.final_sha ?? null }
 }
 
+function observationUnavailable(observation, error) {
+  const failure = new Error(
+    `cannot observe the ${observation} after workflow completion, so the publication boundary is unverified: ${error.message}`,
+  )
+  failure.code = 'delivery-observation-unavailable'
+  failure.owner = 'evaluation-harness'
+  failure.resumable = true
+  failure.observation = observation
+  return failure
+}
+
+// What the publication-boundary check can and cannot see. Prohibited effects
+// are detected only from observable final state, wherever in the workflow they
+// were caused; effects reversed before completion and releases are invisible.
+export const PUBLICATION_BOUNDARY_SCOPE = {
+  scope: 'final-state-only',
+  observed: [
+    'pull request state and draft status',
+    'remote candidate branch existence and head',
+    'OpenSpec change directory presence',
+  ],
+  not_detectable: [
+    'effects reversed before completion (ready then back to draft, branch deleted and recreated, archive reverted)',
+    'product releases',
+  ],
+}
+
+// Delivery is established from outcomes alone: Agent Runner's completion
+// status, the candidate repository and branch, pull-request metadata, and the
+// acceptance artifacts under the Runner session's output/ directory. No named
+// workflow step, step path, or step outcome is consulted.
 export async function verifyCandidateDelivery({
   worktree,
   fixtureCommit,
@@ -753,40 +805,22 @@ export async function verifyCandidateDelivery({
   expectedBase,
   changeName,
   sessionDir,
-  workflowHistory,
-  skipValidator = false,
+  runCompleted,
   exec = defaultExec,
   inspectPullRequest = (options) => inspectDraftPullRequest({ ...options, exec }),
 }) {
+  if (runCompleted !== true) {
+    throw deliveryError(
+      'workflow-not-completed',
+      'Agent Runner did not report the evaluated workflow run as completed successfully',
+      { missing_delivery_output: 'runner-completion' },
+    )
+  }
   if (!expectedBase) {
     throw deliveryError(
       'missing-delivery-identity',
       'candidate delivery has no recorded expected base branch',
       { missing_delivery_output: 'candidate-base-branch' },
-    )
-  }
-  const history = checkWorkflowHistory(workflowHistory, { skipValidator })
-  if (history.prohibited_effects.length > 0) {
-    const unexpected = history.prohibited_effects[0]
-    throw deliveryError(
-      'workflow-side-effect-violation',
-      `workflow-side-effect-violation: observed prohibited action ${unexpected.step}`,
-      { unexpected_action: unexpected.step, workflow_history: workflowHistory },
-    )
-  }
-  if (history.missing_steps.length > 0) {
-    throw deliveryError(
-      'incomplete-workflow-history',
-      `completed workflow history is missing: ${history.missing_steps.join(', ')}`,
-      { missing_delivery_output: history.missing_steps },
-    )
-  }
-  if (history.invalid_outcomes.length > 0) {
-    const invalid = history.invalid_outcomes[0]
-    throw deliveryError(
-      'invalid-workflow-step-outcome',
-      `${invalid.step} expected ${invalid.expected}, observed ${invalid.observed}`,
-      { invalid_workflow_outcome: invalid },
     )
   }
 
@@ -829,18 +863,24 @@ export async function verifyCandidateDelivery({
     )
   }
 
-  const remote = run(
-    exec,
-    'git',
-    ['-C', worktree, 'ls-remote', '--heads', 'origin', `refs/heads/${branch}`],
-    {},
-    'remote candidate branch lookup',
-  )
+  let remote
+  try {
+    remote = run(
+      exec,
+      'git',
+      ['-C', worktree, 'ls-remote', '--heads', 'origin', `refs/heads/${branch}`],
+      {},
+      'remote candidate branch lookup',
+    )
+  } catch (error) {
+    throw observationUnavailable('remote candidate branch', error)
+  }
   const remoteSha = remote.split(/\s+/)[0] || null
   if (remoteSha !== finalSha) {
     throw deliveryError(
-      'remote-branch-mismatch',
-      `remote candidate branch ${branch} is ${remoteSha ?? 'missing'}, expected ${finalSha}`,
+      'workflow-side-effect-violation',
+      `workflow-side-effect-violation: remote candidate branch ${branch} is ${remoteSha ?? 'missing'}, expected ${finalSha}`,
+      { unexpected_action: remoteSha ? 'remote-branch-moved' : 'delete-candidate-branch', remote_sha: remoteSha },
     )
   }
 
@@ -853,7 +893,18 @@ export async function verifyCandidateDelivery({
     )
   }
 
-  const pullRequest = normalizePullRequest(await inspectPullRequest({ worktree, branch }))
+  let observedPullRequest
+  try {
+    observedPullRequest = await inspectPullRequest({ worktree, branch })
+  } catch (error) {
+    // No pull request for the branch is missing delivery output; an
+    // unreadable answer leaves the boundary unobserved.
+    if (error.code !== 'pull-request-identity-mismatch') {
+      throw observationUnavailable('pull-request metadata', error)
+    }
+    throw error
+  }
+  const pullRequest = normalizePullRequest(observedPullRequest)
   if (!pullRequest
     || pullRequest.state !== 'OPEN'
     || pullRequest.draft !== true
@@ -866,7 +917,11 @@ export async function verifyCandidateDelivery({
       prohibited
         ? 'workflow-side-effect-violation: candidate pull request is closed, merged, or ready for review'
         : 'draft pull request does not match the recorded candidate branch and final HEAD',
-      { pull_request: pullRequest },
+      {
+        pull_request: pullRequest,
+        ...(prohibited ? { unexpected_action: pullRequest.state === 'MERGED' ? 'merge-pull-request'
+          : pullRequest.state !== 'OPEN' ? 'close-pull-request' : 'mark-ready-for-review' } : {}),
+      },
     )
   }
   if (pullRequest.base !== expectedBase) {
@@ -887,14 +942,14 @@ export async function verifyCandidateDelivery({
 
   return {
     verified: true,
+    run_status: 'completed',
     branch,
     base_branch: expectedBase,
     fixture_commit: fixtureCommit,
     final_sha: finalSha,
     remote_sha: remoteSha,
     pull_request: pullRequest,
-    final_validator: finalWorkflowStepEntry(workflowHistory, 'run-validator'),
-    workflow_history: workflowHistory,
+    publication_boundary: { verified: true, ...PUBLICATION_BOUNDARY_SCOPE },
     acceptance_artifacts: acceptance.artifacts,
     acceptance_findings: acceptance.findings,
     acceptance_missing_roles: acceptance.missing_roles,

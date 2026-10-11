@@ -4,10 +4,10 @@
 import { lstat, mkdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
+import { verifyCandidateDelivery } from './candidate.mjs'
 import { loadCheckpoint } from './checkpoint.mjs'
 import { hashFile, hashJson, hashString, readJson } from './persistence.mjs'
 import { normalizeRoleProfiles } from './profiles.mjs'
-import { checkWorkflowHistory } from './workflow.mjs'
 
 const ARTIFACT_ROOT = '/artifacts'
 
@@ -33,7 +33,7 @@ function sourcePath(sourceDir, recordedPath) {
   return path
 }
 
-function validateDelivery(state, delivery, { skipValidator }) {
+function validateDelivery(state, delivery) {
   if (delivery?.verified !== true) throw new Error('rescore source delivery was not verified')
   for (const field of ['fixture_commit', 'branch', 'base_branch', 'final_sha']) {
     same(`delivery ${field}`, state.delivery?.[field], delivery[field])
@@ -57,10 +57,35 @@ function validateDelivery(state, delivery, { skipValidator }) {
   ) {
     throw new Error('rescore source does not describe an aligned open draft pull request')
   }
-  const history = checkWorkflowHistory(delivery.workflow_history ?? [], { skipValidator })
-  if (!history.ok) {
-    throw new Error('rescore source did not complete the full implementation workflow')
+}
+
+// The source's own retained completion record, never its step layout. Results
+// written before the harness recorded Agent Runner's completion status carry
+// only their own history verdict, which is read as that record.
+function sourceCompleted(workflow) {
+  if (workflow?.run_completed !== undefined) return workflow.run_completed === true
+  return workflow?.history_complete === true
+    && (workflow?.missing_steps ?? []).length === 0
+    && (workflow?.prohibited_effects ?? []).length === 0
+}
+
+// The roles the source ran with: its run-state profiles, or, for a source
+// whose run state kept none, the profiles its result configured. A source
+// recorded before a role existed keeps only the roles it had; one that
+// recorded none at all is refused rather than given operator-supplied ones.
+function recordedRoleProfiles(state, result) {
+  const usable = (profiles) => {
+    const entries = Object.entries(normalizeRoleProfiles(profiles) ?? {})
+      .filter(([, profile]) => profile && typeof profile === 'object')
+    return entries.length > 0 ? Object.fromEntries(entries) : null
   }
+  const configured = Object.fromEntries(
+    Object.entries(result?.role_configuration?.roles ?? {})
+      .map(([role, entry]) => [role, entry?.configured]),
+  )
+  const profiles = usable(state.role_profiles) ?? usable(configured)
+  if (!profiles) throw new Error('rescore source records no role profiles')
+  return profiles
 }
 
 function skipValidatorFromWorkflow(workflow) {
@@ -148,16 +173,15 @@ export async function loadCandidateRescoreSource({ sourceDir, stagingDir = null 
     result?.run_kind !== 'candidate'
     || result.mode !== 'agent-runner'
     || result.workflow?.full_workflow !== true
-    || result.workflow?.history_complete !== true
-    || (result.workflow?.missing_steps ?? []).length > 0
-    || (result.workflow?.prohibited_effects ?? []).length > 0
+    || !sourceCompleted(result.workflow)
   ) {
     throw new Error('rescore source did not complete the full implementation workflow')
   }
   same('run id', state.run_id, result.run_id)
-  const skipValidator = skipValidatorFromWorkflow(result.workflow)
-  validateDelivery(state, delivery, { skipValidator })
+  skipValidatorFromWorkflow(result.workflow)
+  validateDelivery(state, delivery)
   const changeName = changeNameFromWorkflow(result.workflow)
+  const roleProfiles = recordedRoleProfiles(state, result)
 
   const recordedArtifacts = delivery.acceptance_artifacts ?? []
   if (recordedArtifacts.length === 0) {
@@ -263,12 +287,94 @@ export async function loadCandidateRescoreSource({ sourceDir, stagingDir = null 
     },
     runner: { ...runner, session_dir: sessionDir },
     session_reconstruction: sessionReconstruction,
-    role_profiles: normalizeRoleProfiles(state.role_profiles),
+    role_profiles: roleProfiles,
+    // The retained completion record stands in for live Runner status.
+    run_completed: sourceCompleted(result.workflow),
     agent_runner_provenance: state.agent_runner_provenance,
     agent_skills_provenance: state.agent_skills_provenance,
     workflow: result.workflow,
     implementation_metrics: result.implementation_metrics ?? null,
     cost: result.cost ?? null,
     pricing: result.pricing ?? null,
+  }
+}
+
+const PULL_REQUEST_IDENTITY = ['number', 'url', 'state', 'draft', 'base', 'head_branch', 'head_sha']
+
+// Live remote state a rescore observes but the source run did not leave behind.
+// The source was accepted only with a verified delivery whose remote branch was
+// at its final SHA and whose pull request was an open draft, so a branch that
+// is now gone or moved, or a pull request now closed, merged, or ready, changed
+// after the evaluated workflow finished: typically operator cleanup. Such a
+// change says nothing about the workflow, so it is a harness-owned unavailable
+// source rather than a side-effect verdict. An archived change is not listed:
+// it is read from the recorded final commit itself, so it is the workflow's.
+const POST_RUN_STATE_CHANGES = new Set([
+  'delete-candidate-branch',
+  'remote-branch-moved',
+  'close-pull-request',
+  'merge-pull-request',
+  'mark-ready-for-review',
+])
+
+function rescoreSourceUnavailable(violation, recorded) {
+  const error = new Error(
+    `rescore-source-unavailable: the live candidate branch or pull request no longer matches the retained record `
+    + `(branch ${recorded.branch ?? null}, pull request ${recorded.pull_request?.url ?? null}); `
+    + `it changed after the source run, so this is not a verdict about the evaluated workflow: `
+    + violation.message.replace(/^workflow-side-effect-violation:\s*/, ''),
+    { cause: violation },
+  )
+  error.code = 'rescore-source-unavailable'
+  error.owner = 'evaluation-harness'
+  error.resumable = false
+  error.post_run_change = violation.unexpected_action
+  if (violation.remote_sha !== undefined) error.remote_sha = violation.remote_sha
+  if (violation.pull_request !== undefined) error.observed_pull_request = violation.pull_request
+  return error
+}
+
+// Delivery for an imported run goes through the same outcome-based checks as a
+// new run, with the source's retained completion status in place of live
+// Runner status and its retained or restored session as the session output.
+// The observed outcome must still be the delivery the source recorded; the
+// hash-verified recorded acceptance evidence is kept rather than rediscovered.
+export async function verifyRescoreDelivery({
+  imported,
+  worktree,
+  exec,
+  verify = verifyCandidateDelivery,
+}) {
+  const recorded = imported.delivery
+  let observed
+  try {
+    observed = await verify({
+      worktree,
+      fixtureCommit: imported.candidate_source.fixture_commit,
+      branch: imported.candidate_source.branch,
+      expectedBase: imported.candidate_source.base_branch,
+      changeName: imported.change_name,
+      sessionDir: imported.runner.session_dir,
+      runCompleted: imported.run_completed,
+      ...(exec ? { exec } : {}),
+    })
+  } catch (error) {
+    if (error?.code === 'workflow-side-effect-violation' && POST_RUN_STATE_CHANGES.has(error.unexpected_action)) {
+      throw rescoreSourceUnavailable(error, recorded)
+    }
+    throw error
+  }
+  for (const field of ['branch', 'final_sha']) {
+    same(`delivery ${field}`, observed?.[field], recorded[field])
+  }
+  for (const field of PULL_REQUEST_IDENTITY) {
+    same(`pull request ${field}`, observed?.pull_request?.[field], recorded.pull_request?.[field])
+  }
+  return {
+    ...recorded,
+    verified: true,
+    run_status: observed.run_status,
+    remote_sha: observed.remote_sha,
+    publication_boundary: observed.publication_boundary,
   }
 }

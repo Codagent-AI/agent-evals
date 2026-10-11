@@ -12,11 +12,12 @@ import { validateRoleProfiles } from '../evals/agent-runner/and-scene/lib/profil
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const runScript = join(root, 'evals/agent-runner/and-scene/run.sh')
 const shotsScript = join(root, 'evals/agent-runner/and-scene/scene-shots.mjs')
-const fixtureSha = 'f0695b96c0c23b2d17ecc6cfbaf8be1fcdedd6f8'
+const fixtureSha = 'ba19a6ac3d6eca4034571cd23c87ce44f884b2e8'
 const referenceSha = '171c7def1e12aca2a5f605a5e5feafb20d4e4d19'
 
 const profileArgs = [
   '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+  '--crosscheck-cli', 'codex', '--crosscheck-model', 'gpt-5', '--crosscheck-effort', 'medium',
   '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
   '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
 ]
@@ -28,9 +29,9 @@ function git(cwd, ...args) {
   assert.equal(result.status, 0, result.stderr)
 }
 
-// The scored path now requires a clean Agent Runner worktree containing
-// core implement-change-v1.0, so the fixture runner directory is a real Git checkout.
-async function setup({ workflow = 'name: implement-change\n', dirty = false } = {}) {
+// The scored path requires a clean Agent Runner worktree containing the
+// selected workflow, so the fixture runner directory is a real Git checkout.
+async function setup({ workflow = 'name: plan-and-implement-change\n', dirty = false, extraWorkflows = {} } = {}) {
   const dir = await makeTempDir(join(tmpdir(), 'agent-evals-'))
   const runner = join(dir, 'agent-runner')
   const agentSkills = join(dir, 'agent-skills')
@@ -47,7 +48,11 @@ async function setup({ workflow = 'name: implement-change\n', dirty = false } = 
   await chmod(sandbox, 0o755)
   if (workflow !== null) {
     await mkdir(join(runner, 'workflows/core'), { recursive: true })
-    await writeFile(join(runner, 'workflows/core/implement-change-v1.0.yaml'), workflow)
+    await writeFile(join(runner, 'workflows/core/plan-and-implement-change-v1.0.yaml'), workflow)
+  }
+  for (const [file, text] of Object.entries(extraWorkflows)) {
+    await mkdir(dirname(join(runner, file)), { recursive: true })
+    await writeFile(join(runner, file), text)
   }
   git(runner, 'init', '-q')
   git(runner, 'add', '-A')
@@ -121,10 +126,15 @@ test('scored mode delegates the lifecycle to the suite controller', async () => 
     'AGENT_RUNNER_NO_TUI=1', '--repo',
     '--skip-validator', '--change-name', 'create-and-scene',
     '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+    '--crosscheck-cli', 'codex', '--crosscheck-model', 'gpt-5', '--crosscheck-effort', 'medium',
     '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
     '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
     'bootstrap-agent-skills.sh', '/agent-skills-source',
   ]) assert.ok(result.output.includes(expected), `missing ${expected}\n${result.output}`)
+  const order = ['--lead-cli', '--crosscheck-cli', '--implementor-cli', '--tester-cli']
+    .map((flag) => result.output.indexOf(flag))
+  assert.deepEqual([...order].sort((a, b) => a - b), order, result.output)
+  assert.match(result.output, /claude codex claude claude/)
 })
 
 test('scored mode prepares private per-evaluation agent session state before the controller starts', async () => {
@@ -182,7 +192,7 @@ test('scored mode mounts one clean pinned Agent Skills checkout for every select
   assert.equal(result.status, 0, result.output)
   assert.ok(result.output.includes('agent-skills\\,target=/agent-skills-source\\,readonly'), result.output)
   assert.match(result.output, /bootstrap-agent-skills\.sh/)
-  assert.match(result.output, /claude claude claude/)
+  assert.match(result.output, /claude codex claude claude/)
 })
 
 test('scored mode exposes linked-worktree Git metadata read-only to the sandbox', async () => {
@@ -232,16 +242,62 @@ test('scored mode validates provenance from the mounted Agent Runner checkout', 
   )
 })
 
-test('scored mode hard-codes core implement-change-v1.0 and no longer accepts workflow overrides', async () => {
+test('scored mode evaluates core:plan-and-implement-change by default', async () => {
   const context = await setup()
 
   const result = await scored(context, ['--skip-validator', ...profileArgs])
-  const overridden = await scored(context, ['--workflow', '/tmp/custom.yaml', ...profileArgs])
 
-  assert.ok(result.output.includes('implement-change-v1.0'), result.output)
-  assert.ok(!result.output.includes('implement-change.yaml'), result.output)
-  assert.notEqual(overridden.status, 0)
-  assert.match(overridden.output, /Unknown option: --workflow/)
+  assert.equal(result.status, 0, result.output)
+  assert.match(result.output, /--workflow core:plan-and-implement-change/)
+  assert.match(result.output, /IMPLEMENTATION_WORKFLOW=core:plan-and-implement-change/)
+  assert.match(result.output, /IMPLEMENTATION_WORKFLOW_PATH=workflows\/core\/plan-and-implement-change-v1\.0\.yaml/)
+})
+
+test('scored mode passes a selected logical workflow to the controller and skills bootstrap', async () => {
+  const context = await setup({
+    extraWorkflows: {
+      'workflows/core/orchestrated-implement-change-v1.0.yaml': 'name: old\n',
+      'workflows/core/orchestrated-implement-change-v1.2.yaml': 'name: orchestrated-implement-change\n',
+    },
+  })
+
+  const result = await scored(context, ['--workflow', 'core:orchestrated-implement-change', ...profileArgs])
+
+  assert.equal(result.status, 0, result.output)
+  assert.match(result.output, /--workflow core:orchestrated-implement-change/)
+  assert.match(result.output, /IMPLEMENTATION_WORKFLOW_PATH=workflows\/core\/orchestrated-implement-change-v1\.2\.yaml/)
+})
+
+test('an exported WORKFLOW variable never selects the evaluated workflow', async () => {
+  const context = await setup({
+    extraWorkflows: {
+      'workflows/core/orchestrated-implement-change-v1.2.yaml': 'name: orchestrated-implement-change\n',
+    },
+  })
+  const withStrayWorkflow = { ...context, env: { WORKFLOW: 'core:orchestrated-implement-change' } }
+
+  const result = await scored(withStrayWorkflow, ['--skip-validator', ...profileArgs])
+
+  assert.equal(result.status, 0, result.output)
+  assert.match(result.output, /--workflow core:plan-and-implement-change/)
+  assert.ok(!result.output.includes('orchestrated-implement-change'), result.output)
+
+  const source = join(context.dir, 'completed-candidate')
+  await mkdir(source)
+  const rescore = await scored(withStrayWorkflow, ['--rescore-from', source])
+  assert.equal(rescore.status, 0, rescore.output)
+  assert.ok(!rescore.output.includes('--workflow'), rescore.output)
+  assert.ok(!rescore.output.includes('orchestrated-implement-change'), rescore.output)
+})
+
+test('scored mode rejects a workflow file path or malformed reference', async () => {
+  const context = await setup()
+
+  const result = await scored(context, ['--workflow', '/tmp/custom.yaml', ...profileArgs])
+
+  assert.notEqual(result.status, 0)
+  assert.match(result.output, /logical workflow reference/)
+  assert.ok(!result.output.includes('/eval-input/controller.mjs'), result.output)
 })
 
 test('scored mode no longer carries the legacy reward and tier scoring lifecycle', async () => {
@@ -260,18 +316,28 @@ test('all role profiles are required before the sandbox is invoked', async () =>
     '--skip-validator',
     '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
   ])
+  const noCrosscheck = await scored(context, [
+    '--skip-validator', '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+    '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
+    '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
+  ])
   const noImplementor = await scored(context, [
     '--skip-validator', '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+    '--crosscheck-cli', 'codex', '--crosscheck-model', 'gpt-5', '--crosscheck-effort', 'medium',
     '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
   ])
   const noTester = await scored(context, [
     '--skip-validator',
     '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+    '--crosscheck-cli', 'codex', '--crosscheck-model', 'gpt-5', '--crosscheck-effort', 'medium',
     '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
   ])
 
   assert.notEqual(noLead.status, 0)
   assert.match(noLead.output, /lead-agent profile/)
+  assert.notEqual(noCrosscheck.status, 0)
+  assert.match(noCrosscheck.output, /crosscheck profile/)
+  assert.ok(!noCrosscheck.output.includes('controller.mjs'), noCrosscheck.output)
   assert.notEqual(noImplementor.status, 0)
   assert.match(noImplementor.output, /task-implementor profile/)
   assert.notEqual(noTester.status, 0)
@@ -288,6 +354,7 @@ test('the pinned capabilities do not enumerate volatile model names', async () =
   assert.equal(Object.hasOwn(capabilities.clis.cursor, 'models'), false)
   const result = validateRoleProfiles({
     lead: { cli: 'codex', model: 'gpt-6-astra', effort: 'high' },
+    crosscheck: { cli: 'cursor', model: 'composer', effort: 'medium' },
     implementor: { cli: 'codex', model: 'future-codex-model', effort: 'high' },
     tester: { cli: 'claude', model: 'sonnet', effort: 'high' },
     capabilities,
@@ -296,10 +363,11 @@ test('the pinned capabilities do not enumerate volatile model names', async () =
   assert.equal(result.ok, true, JSON.stringify(result.errors))
 })
 
-test('Cursor is a first-class role CLI and forwards family model names', async () => {
+test('Cursor is a first-class non-lead role CLI and forwards family model names', async () => {
   const context = await setup()
   const cursorArgs = [
-    '--lead-cli', 'cursor', '--lead-model', 'grok', '--lead-effort', 'high',
+    '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+    '--crosscheck-cli', 'cursor', '--crosscheck-model', 'grok', '--crosscheck-effort', 'high',
     '--implementor-cli', 'cursor', '--implementor-model', 'grok-4.6', '--implementor-effort', 'medium',
     '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
   ]
@@ -309,11 +377,42 @@ test('Cursor is a first-class role CLI and forwards family model names', async (
   assert.equal(result.status, 0, result.output)
   assert.ok(result.output.includes('--mount-cursor-auth'), result.output)
   assert.ok(result.output.includes('--mount-claude-auth'), result.output)
-  assert.ok(result.output.includes('--lead-cli cursor'), result.output)
-  assert.ok(result.output.includes('--lead-model grok'), result.output)
+  assert.ok(result.output.includes('--crosscheck-cli cursor'), result.output)
+  assert.ok(result.output.includes('--crosscheck-model grok'), result.output)
   assert.ok(result.output.includes('--implementor-cli cursor'), result.output)
   assert.ok(result.output.includes('--implementor-model grok-4.6'), result.output)
-  assert.match(result.output, /cursor cursor claude/)
+  assert.match(result.output, /claude cursor cursor claude/)
+})
+
+test('a Cursor lead is rejected before the sandbox is invoked', async () => {
+  const context = await setup()
+  const cursorLead = profileArgs.map((value, index) => (
+    profileArgs[index - 1] === '--lead-cli' ? 'cursor' : value
+  ))
+
+  const result = await scored(context, ['--skip-validator', ...cursorLead])
+
+  assert.equal(result.status, 2, result.output)
+  assert.match(result.output, /lead/)
+  assert.match(result.output, /Cursor agent calls are not yet verified/)
+  assert.ok(!result.output.includes('controller.mjs'), result.output)
+})
+
+test('role auth is mounted in lead, crosscheck, implementor, tester order', async () => {
+  const context = await setup()
+  const mixed = [
+    '--lead-cli', 'codex', '--lead-model', 'gpt-5', '--lead-effort', 'high',
+    '--crosscheck-cli', 'cursor', '--crosscheck-model', 'composer', '--crosscheck-effort', 'medium',
+    '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
+    '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
+  ]
+
+  const result = await scored(context, ['--skip-validator', ...mixed])
+
+  assert.equal(result.status, 0, result.output)
+  const mounts = [...result.output.matchAll(/--mount-(codex|cursor|claude)-auth/g)].map((match) => match[1])
+  assert.deepEqual(mounts.slice(0, 3), ['codex', 'cursor', 'claude'], result.output)
+  assert.match(result.output, /codex cursor claude claude/)
 })
 
 test('a partially specified role profile is rejected', async () => {
@@ -389,6 +488,7 @@ test('an evaluator-only rescore mounts a completed run read-only and invokes no 
   assert.ok(!result.output.includes('bootstrap-agent-skills.sh'), result.output)
   assert.ok(!result.output.includes('--lead-cli'), result.output)
   assert.ok(!result.output.includes('--change-name'), result.output)
+  assert.ok(!result.output.includes('--workflow'), result.output)
   assert.ok(result.output.includes('--mount-claude-auth'), result.output)
   assert.ok(result.output.includes('--mount-codex-auth'), result.output)
 })
@@ -416,6 +516,7 @@ test('an evaluator-only rescore rejects modes that could mutate or replace its r
     ['--resume'],
     ['--reference-baseline'],
     ['--candidate-ref', referenceSha],
+    ['--workflow', 'core:plan-and-implement-change'],
   ]) {
     const result = await scored(context, ['--rescore-from', source, ...conflicting])
     assert.notEqual(result.status, 0)
@@ -433,13 +534,14 @@ test('a dirty Agent Runner checkout is rejected on the host before the sandbox r
   assert.ok(!result.output.includes('/eval-input/controller.mjs'), result.output)
 })
 
-test('an Agent Runner checkout without core implement-change-v1.0 is rejected on the host', async () => {
+test('an Agent Runner checkout without the selected workflow is rejected on the host', async () => {
   const context = await setup({ workflow: null })
 
   const result = await scored(context, ['--skip-validator', ...profileArgs])
 
   assert.notEqual(result.status, 0)
-  assert.match(result.output, /implement-change-v1\.0\.yaml/)
+  assert.match(result.output, /core:plan-and-implement-change/)
+  assert.ok(!result.output.includes('/eval-input/controller.mjs'), result.output)
 })
 
 test('the run receives a stable container identity that resume reuses', async () => {
@@ -599,12 +701,24 @@ test('help documents the exact fixture pin, role profiles, and validator option'
   assert.ok(result.stdout.includes(referenceSha))
   assert.ok(result.stdout.includes('--agent-runner-dir PATH'))
   assert.ok(result.stdout.includes('--skip-validator'))
-  assert.match(result.stdout, /skip all Agent Validator\s+execution/i)
+  assert.match(result.stdout, /which owns its meaning/)
+  assert.match(result.stdout, /requested Validator mode/)
+  assert.ok(result.stdout.includes('--workflow REF'))
+  assert.ok(result.stdout.includes('Default: core:plan-and-implement-change'))
   assert.ok(result.stdout.includes('--lead-cli'))
+  assert.ok(result.stdout.includes('--crosscheck-cli'))
+  assert.ok(result.stdout.includes('--crosscheck-model'))
+  assert.ok(result.stdout.includes('--crosscheck-effort'))
   assert.ok(result.stdout.includes('--implementor-cli'))
   assert.ok(result.stdout.includes('--calibrate'))
   assert.ok(result.stdout.includes('--mount-cursor-auth'))
   assert.ok(!result.stdout.includes('--calibration-record'))
+  // The starting line is definition-only and the workflow is opaque, so the
+  // help names neither a task-ready fixture nor workflow-specific steps.
+  assert.match(result.stdout, /--fixture-ref REF\s+Definition-only fixture ref/)
+  for (const workflowSpecific of ['Implementation-ready', 'implement-change lead', 'Task-implementor', 'task review']) {
+    assert.ok(!result.stdout.includes(workflowSpecific), `help still says ${workflowSpecific}`)
+  }
 })
 
 test('calibration runs the reference and degraded mutations without Docker, Agent Runner, or Claude auth', async () => {
@@ -759,6 +873,8 @@ test('a diagnostic is refused without its pair of flags, a source, the host, or 
     [['--host', '--rescore-from', source, '--judge-jobs', 'scene-kit', '--expected', join(context.dir, 'missing.json')],
       /Expected-verdict file does not exist/],
     [['--host', '--reference-baseline', '--judge-jobs', 'scene-kit', '--expected', expected], /cannot be combined/],
+    [['--host', '--resume', '--workflow', 'core:plan-and-implement-change', '--judge-jobs', 'scene-kit', '--expected', expected],
+      /--judge-jobs cannot be combined with --workflow/],
   ]) {
     const result = await scored(context, args)
     assert.notEqual(result.status, 0, args.join(' '))

@@ -1,6 +1,6 @@
 {
   "repository": "Codagent-AI/and-scene",
-  "fixture_ref": "f0695b96c0c23b2d17ecc6cfbaf8be1fcdedd6f8",
+  "fixture_ref": "ba19a6ac3d6eca4034571cd23c87ce44f884b2e8",
   "files": [
     {
       "path": "fixture-root-README.md",
@@ -31,11 +31,6 @@
       "path": "openspec/changes/create-and-scene/design.md",
       "source_path": "openspec/changes/create-and-scene/design.md",
       "blob": "25f41899f667b5f480e1b1a73fb0f4e82c994094"
-    },
-    {
-      "path": "openspec/changes/create-and-scene/tasks.md",
-      "source_path": "openspec/changes/create-and-scene/tasks.md",
-      "blob": "3d9dd0e77403cc174d874c352e37ee9832d00aa8"
     },
     {
       "path": "openspec/changes/create-and-scene/test-plan.md",

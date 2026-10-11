@@ -346,39 +346,15 @@ test('the reducer records evolving delivery identity and rejects conflicting ide
   )
 })
 
-test('revalidating a legacy final Validator adopts its nested leaf', () => {
-  const initial = createRunState({
-    runId: 'legacy',
-    delivery: { final_validator: { step: 'verify-change', outcome: 'success' } },
-  })
-  const finalValidator = {
-    step: 'run-validator',
-    step_path: ['verify-change', 'sub:verify-change', 'run-validator'],
-    outcome: 'success',
-  }
+test('delivery state records run completion and the publication-boundary scope, not a Validator step', () => {
+  const initial = createRunState({ runId: 'opaque' })
+  assert.equal(Object.hasOwn(initial.delivery, 'final_validator'), false)
+  const boundary = { verified: true, scope: 'final-state-only' }
   const updated = applyRunStateEvent(initial, {
-    type: 'delivery-identity-recorded', final_validator: finalValidator,
+    type: 'delivery-identity-recorded', run_status: 'completed', publication_boundary: boundary,
   })
-  assert.deepEqual(updated.delivery.final_validator, finalValidator)
-  assert.throws(() => applyRunStateEvent(initial, {
-    type: 'delivery-identity-recorded',
-    final_validator: { ...finalValidator, step_path: ['other', 'sub:other', 'run-validator'] },
-  }), /conflicting delivery identity at delivery.final_validator.step/)
-})
-
-test('revalidating a legacy final Validator rejects a different nested leaf', () => {
-  const initial = createRunState({
-    runId: 'legacy',
-    delivery: { final_validator: { step: 'verify-change', outcome: 'success' } },
-  })
-  assert.throws(() => applyRunStateEvent(initial, {
-    type: 'delivery-identity-recorded',
-    final_validator: {
-      step: 'push-pr',
-      step_path: ['verify-change', 'sub:verify-change', 'push-pr'],
-      outcome: 'success',
-    },
-  }), /conflicting delivery identity at delivery.final_validator.step/)
+  assert.equal(updated.delivery.run_status, 'completed')
+  assert.deepEqual(updated.delivery.publication_boundary, boundary)
 })
 
 test('revalidating acceptance identity preserves artifact arrays as arrays', () => {

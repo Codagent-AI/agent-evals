@@ -2,21 +2,20 @@ import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { lstat, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 
 import { runEvaluation } from '../evals/agent-runner/and-scene/controller.mjs'
 import { loadCheckpoint } from '../evals/agent-runner/and-scene/lib/checkpoint.mjs'
-import { readJson } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
-import {
-  VERIFICATION_WORKFLOW_RELATIVE_PATH,
-  WORKFLOW_RELATIVE_PATH,
-} from '../evals/agent-runner/and-scene/lib/provenance.mjs'
+import { hashJson, hashString, readJson } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
+import { verifyCandidateDelivery } from '../evals/agent-runner/and-scene/lib/candidate.mjs'
 import { DEMO_CONTRACT } from '../evals/agent-runner/and-scene/lib/demo-contract.mjs'
 
-const workflowYaml = `name: implement-change
+const WORKFLOW_RELATIVE_PATH = 'workflows/core/plan-and-implement-change-v1.0.yaml'
+
+const workflowYaml = `name: plan-and-implement-change
 params:
   - name: change_name
     required: true
@@ -38,33 +37,6 @@ steps:
   - id: prepare-acceptance
   - id: verify-acceptance-handoff
 `
-
-// Current Agent Runner delegates final delivery to core:verify-change.
-const delegatingWorkflowYaml = `${workflowYaml.slice(0, workflowYaml.indexOf('steps:\n'))}steps:
-  - id: implement-tasks
-  - id: verify-change
-    workflow: verify-change-v1.0.yaml
-`
-
-const verificationWorkflowYaml = `name: verify-change
-params:
-  - name: skip_validator
-    default: "false"
-steps:
-  - id: run-validator
-  - id: open-draft-pr
-  - id: verify-draft-pr
-  - id: prepare-acceptance
-  - id: write-acceptance-status
-  - id: verify-acceptance-handoff
-`
-
-const delegatedHistory = [
-  { step: 'implement-tasks', step_path: ['implement-tasks'], outcome: 'success' },
-  ...['run-validator', 'open-draft-pr', 'verify-draft-pr', 'prepare-acceptance', 'verify-acceptance-handoff']
-    .map((step) => ({ step: 'verify-change', step_path: ['verify-change', 'sub:verify-change', step], outcome: 'success' })),
-  { step: 'verify-change', step_path: ['verify-change'], outcome: 'success' },
-]
 
 const history = [
   { step: 'run-validator', outcome: 'success' },
@@ -101,6 +73,7 @@ AT-001
 
 const profiles = [
   '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+  '--crosscheck-cli', 'codex', '--crosscheck-model', 'gpt-5', '--crosscheck-effort', 'medium',
   '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
   '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
 ]
@@ -108,13 +81,16 @@ const profiles = [
 async function environment({
   workflow = workflowYaml,
   resolvedWorkflow = workflow,
-  verificationWorkflow = null,
-  resolvedVerificationWorkflow = verificationWorkflow,
+  // Further workflows in the checkout, by logical reference: { file, text }.
+  extraWorkflows = {},
   dirty = '',
   commit = 'a'.repeat(40),
   ghAuthenticated = true,
   ghPermission = 'WRITE',
   planningReady = true,
+  // The pinned fixture starts from definition artifacts only; true plants a
+  // task index and task file the starting-line preflight must reject.
+  fixtureHasTasks = false,
   runnerResult = { status: 0, stdout: '' },
   runnerResults = null,
 } = {}) {
@@ -123,8 +99,8 @@ async function environment({
   const agentSkillsDir = join(root, 'agent-skills')
   await mkdir(join(agentRunnerDir, 'workflows/core'), { recursive: true })
   if (workflow !== null) await writeFile(join(agentRunnerDir, WORKFLOW_RELATIVE_PATH), workflow)
-  if (verificationWorkflow !== null) {
-    await writeFile(join(agentRunnerDir, VERIFICATION_WORKFLOW_RELATIVE_PATH), verificationWorkflow)
+  for (const { file, text } of Object.values(extraWorkflows)) {
+    await writeFile(join(agentRunnerDir, file), text)
   }
   await mkdir(join(agentSkillsDir, '.claude-plugin'), { recursive: true })
   await writeFile(join(agentSkillsDir, '.claude-plugin/marketplace.json'), '{"name":"codagent"}\n')
@@ -138,6 +114,9 @@ async function environment({
   await mkdir(home)
 
   const invocations = []
+  // A rescore's source run pushed its candidate branch, so the remote ref
+  // exists then; a fresh run's branch must not exist yet.
+  const remote = { candidateBranchPublished: false }
   const exec = (command, args, options = {}) => {
     invocations.push({ command, args: [...args], options })
     if (command === 'git') {
@@ -150,19 +129,17 @@ async function environment({
           ? { status: 0, stdout: planningTestPlan }
           : { status: 1, stderr: 'missing test plan' }
       }
-      if (joined.includes('show') && joined.includes('/tasks.md')) {
-        return { status: 0, stdout: '- [Demo task](tasks/01-demo.md)\n' }
-      }
-      if (joined.includes('show') && /\/(?:proposal|design|tasks)\.md/.test(joined)) {
+      if (joined.includes('show') && /\/(?:proposal|design)\.md/.test(joined)) {
         return { status: 0, stdout: '# Planning artifact\n' }
       }
       if (joined.includes('show') && /\/specs\/[^/]+\/spec\.md/.test(joined)) {
         return { status: 0, stdout: '# Specification\n' }
       }
-      if (joined.includes('show') && /\/tasks\/[^/]+\.md/.test(joined)) {
-        return { status: 0, stdout: '# Task\n' }
+      if (joined.includes('show-ref --verify --quiet')) {
+        return remote.candidateBranchPublished && joined.includes('refs/remotes/origin/')
+          ? { status: 0, stdout: '' }
+          : { status: 1, stdout: '' }
       }
-      if (joined.includes('show-ref --verify --quiet')) return { status: 1, stdout: '' }
       if (joined.includes('--is-inside-work-tree')) return { status: 0, stdout: 'true\n' }
       if (joined.includes('remote get-url origin')) {
         return { status: 0, stdout: 'https://github.com/Codagent-AI/and-scene.git\n' }
@@ -181,8 +158,11 @@ async function environment({
         if (planningPath.endsWith('/specs')) {
           return { status: 0, stdout: `${planningPath}/demo/spec.md\n` }
         }
-        if (planningPath.endsWith('/tasks')) {
+        if (fixtureHasTasks && planningPath.endsWith('/tasks')) {
           return { status: 0, stdout: `${planningPath}/01-demo.md\n` }
+        }
+        if (fixtureHasTasks && planningPath.endsWith('/tasks.md')) {
+          return { status: 0, stdout: `${planningPath}\n` }
         }
         return { status: 0, stdout: '' }
       }
@@ -199,10 +179,10 @@ async function environment({
       return { status: 0, stdout: 'agent-runner 2.4.0\n' }
     }
     if (command === 'agent-runner' && args[0] === 'debug') {
-      if (args.includes('core:verify-change')) {
-        return resolvedVerificationWorkflow === null
-          ? { status: 1, stderr: 'unknown workflow core:verify-change' }
-          : { status: 0, stdout: resolvedVerificationWorkflow }
+      const extra = extraWorkflows[args.at(-1)]
+      if (extra) return { status: 0, stdout: extra.text }
+      if (args.at(-1) !== 'core:plan-and-implement-change') {
+        return { status: 1, stderr: `workflow ref ${args.at(-1)} not found` }
       }
       return { status: 0, stdout: resolvedWorkflow }
     }
@@ -226,7 +206,7 @@ async function environment({
       status: 'closed',
     }],
   }))
-  return { root, runDir, home, agentRunnerDir, agentSkillsDir, exec, invocations, commit, sessionDir }
+  return { root, runDir, home, agentRunnerDir, agentSkillsDir, exec, invocations, commit, sessionDir, remote }
 }
 
 function runnerInvocations(context) {
@@ -247,7 +227,7 @@ function completedReader(context) {
     : {
         run_id: 'runner-7',
         session_dir: context.sessionDir,
-        workflow_name: 'implement-change',
+        workflow_name: 'plan-and-implement-change',
         workflow_completed: true,
         history,
       }
@@ -288,8 +268,8 @@ function delivery(context) {
       head_branch: 'eval/and-scene/run-1',
       head_sha: context.commit,
     },
-    final_validator: history[0],
-    workflow_history: history,
+    run_status: 'completed',
+    publication_boundary: { verified: true, scope: 'final-state-only' },
     acceptance_artifacts: [
       { role: 'acceptance-handoff', path: '/sessions/runner-7/output/acceptance-handoff.md', sha256: 'b'.repeat(64) },
     ],
@@ -311,6 +291,7 @@ function importedRescore(context, { changeName = 'create-and-scene' } = {}) {
     },
     delivery: importedDelivery,
     runner: { run_id: 'runner-complete', session_dir: context.root },
+    run_completed: true,
     role_profiles: {
       lead: { cli: 'claude', model: 'opus', effort: 'high', agent: 'lead' },
       implementor: { cli: 'claude', model: 'sonnet', effort: 'medium', agent: 'implementor' },
@@ -344,6 +325,8 @@ async function evaluate(context, extra = [], overrides = {}) {
     ...dependencies
   } = overrides
   const readState = readRunnerState ?? completedReader(context)
+  // A rescore, including a resumed judge diagnostic, reads the published candidate branch.
+  context.remote.candidateBranchPublished = extra.includes('--rescore-from') || extra.includes('--judge-jobs')
   return runEvaluation({
     argv: [
       '--run-dir', context.runDir,
@@ -520,7 +503,7 @@ test('a complete below-minimum automated score finishes without human review', a
 test('--skip-validator launches the verified workflow by logical name without --until', async () => {
   const context = await environment()
   const skippedHistory = [
-    { step: 'run-validator', outcome: 'skipped' },
+    { step: 'run-validator', outcome: 'success' },
     ...history.slice(1),
   ]
 
@@ -530,23 +513,18 @@ test('--skip-validator launches the verified workflow by logical name without --
       : {
           run_id: 'runner-7',
           session_dir: '/sessions/runner-7',
-          workflow_name: 'implement-change',
+          workflow_name: 'plan-and-implement-change',
           workflow_completed: true,
           history: skippedHistory,
         },
     observedSteps: (state) => state.history,
-    verifyDelivery: async () => ({
-      ...delivery(context),
-      final_validator: skippedHistory[0],
-      workflow_history: skippedHistory,
-    }),
   })
 
   assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
   const [invocation] = runnerInvocations(context)
   assert.deepEqual(invocation.args, [
     'run',
-    'core:implement-change',
+    'core:plan-and-implement-change',
     'change_name=create-and-scene',
     'change_dir=openspec/changes/create-and-scene',
     'change_label=OpenSpec change',
@@ -558,9 +536,10 @@ test('--skip-validator launches the verified workflow by logical name without --
   const written = await readJson(join(context.runDir, 'result.json'))
   assert.equal(written.workflow.task_level_compliance, 'skipped')
   assert.equal(written.workflow.final_validator, 'skipped')
-  assert.equal(written.workflow.history_complete, true)
-  assert.deepEqual(written.workflow.invalid_outcomes, [])
-  assert.equal(written.delivery.final_validator.outcome, 'skipped')
+  assert.equal(written.workflow.validator_mode, 'skipped')
+  // The requested mode is recorded, not verified: a run-validator step that
+  // reported success here does not contradict it.
+  assert.deepEqual(written.workflow.observed_steps, skippedHistory)
 })
 
 test('--skip-validator hides Agent Validator from every Runner-launched agent', async () => {
@@ -576,7 +555,7 @@ test('--skip-validator hides Agent Validator from every Runner-launched agent', 
       : {
           run_id: 'runner-7',
           session_dir: context.sessionDir,
-          workflow_name: 'implement-change',
+          workflow_name: 'plan-and-implement-change',
           workflow_completed: true,
           history: skippedHistory,
         },
@@ -641,6 +620,18 @@ test('an incompatible fixture is a typed harness preflight failure and launches 
   assert.equal(runnerInvocations(context).length, 0)
 })
 
+test('a fixture that still carries tasks is a starting-line preflight failure and launches no Runner', async () => {
+  const context = await environment({ fixtureHasTasks: true })
+
+  const result = await evaluate(context, ['--skip-validator', ...profiles])
+
+  assert.equal(result.exitCode, 2)
+  assert.equal(result.errors[0].code, 'fixture-planning-contract')
+  assert.match(result.errors[0].message, /openspec\/changes\/create-and-scene\/tasks\.md/)
+  assert.match(result.errors[0].message, /openspec\/changes\/create-and-scene\/tasks\/01-demo\.md/)
+  assert.equal(runnerInvocations(context).length, 0)
+})
+
 test('logical workflow resolution must match the verified pinned workflow before Runner starts', async () => {
   const context = await environment({
     resolvedWorkflow: `${workflowYaml}\n# unexpected newer workflow`,
@@ -653,21 +644,33 @@ test('logical workflow resolution must match the verified pinned workflow before
   assert.match(JSON.stringify(result.errors), /workflow-resolution/)
 })
 
-test('a workflow delegating to verify-change is verified and resolved through that sub-workflow', async () => {
-  const context = await environment({
-    workflow: delegatingWorkflowYaml,
-    verificationWorkflow: verificationWorkflowYaml,
-  })
+const orchestratedYaml = workflowYaml
+  .replace('name: plan-and-implement-change', 'name: orchestrated-implement-change')
+  .replace(/steps:\n[\s\S]*$/, 'steps:\n  - id: orchestrate\n  - id: merge-pr\n')
 
-  const result = await evaluate(context, profiles, {
+test('a selected workflow is resolved, launched, and recorded without workflow-specific code', async () => {
+  const context = await environment({
+    extraWorkflows: {
+      'core:orchestrated-implement-change': {
+        file: 'workflows/core/orchestrated-implement-change-v1.0.yaml',
+        text: orchestratedYaml,
+      },
+    },
+  })
+  const foreignHistory = [
+    { step: 'orchestrate', step_path: ['orchestrate'], outcome: 'success' },
+    { step: 'merge-pr', step_path: ['merge-pr'], outcome: 'success' },
+  ]
+
+  const result = await evaluate(context, ['--workflow', 'core:orchestrated-implement-change', ...profiles], {
     readRunnerState: () => (runnerInvocations(context).length === 0
       ? null
       : {
           run_id: 'runner-7',
           session_dir: context.sessionDir,
-          workflow_name: 'implement-change',
+          workflow_name: 'orchestrated-implement-change',
           workflow_completed: true,
-          history: delegatedHistory,
+          history: foreignHistory,
         }),
   })
 
@@ -675,34 +678,90 @@ test('a workflow delegating to verify-change is verified and resolved through th
   const inspected = context.invocations
     .filter(({ command, args }) => command === 'agent-runner' && args[0] === 'debug')
     .map(({ args }) => args.at(-1))
-  assert.deepEqual(inspected, ['core:implement-change', 'core:verify-change'])
+  assert.deepEqual(inspected, ['core:orchestrated-implement-change'])
+  assert.equal(runnerInvocations(context)[0].args[1], 'core:orchestrated-implement-change')
   const written = await readJson(join(context.runDir, 'result.json'))
-  assert.equal(written.workflow.history_complete, true)
-  assert.deepEqual(written.workflow.missing_steps, [])
+  assert.equal(written.workflow.workflow, 'core:orchestrated-implement-change')
+  assert.equal(written.workflow.runner_workflow_name, 'orchestrated-implement-change')
+  assert.equal(written.workflow.workflow_sha256, hashString(orchestratedYaml))
+  assert.equal(written.workflow.workflow_path, hashString(orchestratedYaml))
+  assert.equal(written.workflow.provenance.workflow, 'core:orchestrated-implement-change')
+  // Step names are data: a step named like a prohibited effect is not one.
+  assert.deepEqual(written.workflow.observed_steps, foreignHistory)
+  assert.equal(written.evaluation_status, 'pending-human-review')
 })
 
-test('a delegating workflow without its verify-change sub-workflow is rejected before Runner starts', async () => {
-  const context = await environment({ workflow: delegatingWorkflowYaml })
+test('a selected workflow that does not resolve stops before Runner starts', async () => {
+  const context = await environment()
 
-  const result = await evaluate(context, profiles)
+  const result = await evaluate(context, ['--workflow', 'core:not-a-workflow', ...profiles])
 
   assert.equal(result.exitCode, 2)
   assert.deepEqual(runnerInvocations(context), [])
-  assert.match(JSON.stringify(result.errors), /workflow-contract.*verify-change-v1\.0\.yaml/)
+  assert.equal(result.errors[0].code, 'workflow-resolution')
+  assert.match(result.errors[0].message, /core:not-a-workflow/)
 })
 
-test('the resolved verify-change workflow must match the verified checkout before Runner starts', async () => {
+test('a malformed workflow reference is rejected as an invalid argument', async () => {
+  const context = await environment()
+
+  const result = await evaluate(context, ['--workflow', 'plan-and-implement-change', ...profiles])
+
+  assert.equal(result.exitCode, 2)
+  assert.equal(result.errors[0].code, 'invalid-arguments')
+  assert.deepEqual(runnerInvocations(context), [])
+})
+
+test('a workflow lacking a required parameter is rejected before Runner starts and names it', async () => {
   const context = await environment({
-    workflow: delegatingWorkflowYaml,
-    verificationWorkflow: verificationWorkflowYaml,
-    resolvedVerificationWorkflow: `${verificationWorkflowYaml}# unexpected newer workflow\n`,
+    workflow: workflowYaml.replace('  - name: artifact_validation_instruction\n    required: true\n', ''),
   })
 
   const result = await evaluate(context, profiles)
 
   assert.equal(result.exitCode, 2)
   assert.deepEqual(runnerInvocations(context), [])
-  assert.match(JSON.stringify(result.errors), /workflow-resolution/)
+  assert.equal(result.errors[0].code, 'workflow-parameters')
+  assert.match(result.errors[0].message, /artifact_validation_instruction/)
+})
+
+test('a discovered run reporting another workflow is not adopted', async () => {
+  const context = await environment()
+
+  const result = await evaluate(context, profiles, {
+    readRunnerState: () => ({
+      run_id: 'runner-old',
+      session_dir: context.sessionDir,
+      workflow_name: 'implement-change',
+      workflow_completed: true,
+      history,
+    }),
+  })
+
+  assert.equal(result.exitCode, 1)
+  assert.deepEqual(runnerInvocations(context), [])
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(written.failure.code, 'workflow-identity')
+  assert.match(written.failure.message ?? written.failure.error ?? JSON.stringify(written.failure), /plan-and-implement-change/)
+})
+
+test('a resume that selects a different workflow is a resume-provenance error', async () => {
+  const context = await environment({
+    extraWorkflows: {
+      'core:orchestrated-implement-change': {
+        file: 'workflows/core/orchestrated-implement-change-v1.0.yaml',
+        text: orchestratedYaml,
+      },
+    },
+  })
+  await evaluate(context, profiles)
+  const before = runnerInvocations(context).length
+
+  const result = await evaluate(context, ['--resume', '--workflow', 'core:orchestrated-implement-change', ...profiles])
+
+  assert.equal(result.exitCode, 2)
+  assert.ok(result.errors.some(({ code, field }) => code === 'resume-provenance' && field === 'workflow'), JSON.stringify(result.errors))
+  assert.equal(runnerInvocations(context).length, before)
 })
 
 test('task-level and final validation are included by default', async () => {
@@ -714,28 +773,20 @@ test('task-level and final validation are included by default', async () => {
   assert.ok(runnerInvocations(context)[0].args.includes('skip_validator=false'))
   const written = await readJson(join(context.runDir, 'result.json'))
   assert.equal(written.workflow.final_validator, 'required')
+  assert.equal(written.workflow.validator_mode, 'required')
   assert.equal(written.workflow.full_workflow, true)
-  assert.equal(written.workflow.configured_stop_step, null)
+  assert.equal(written.workflow.workflow, 'core:plan-and-implement-change')
+  assert.equal(written.workflow.runner_workflow_name, 'plan-and-implement-change')
+  assert.equal(written.workflow.workflow_sha256, hashString(workflowYaml))
+  assert.equal(written.workflow.run_completed, true)
+  assert.equal(written.workflow.provenance.commit, context.commit)
+  assert.equal(written.workflow.provenance.cli_version, 'agent-runner 2.4.0')
   assert.equal(runnerInvocations(context)[0].options.env.PATH, process.env.PATH)
   assert.equal(
     written.workflow.events.some(({ event }) => event === 'validator-unavailable'),
     false,
   )
   await assert.rejects(readFile(join(context.runDir, '.runtime/validator-unavailable/bin/agent-validator')))
-})
-
-test('workflow preflight rejects missing required and declared prohibited steps before Runner starts', async () => {
-  for (const workflow of [
-    workflowYaml.replace('  - id: prepare-acceptance\n', ''),
-    `${workflowYaml}  - id: merge-pr\n`,
-  ]) {
-    const context = await environment({ workflow })
-    const result = await evaluate(context, profiles)
-
-    assert.equal(result.exitCode, 2)
-    assert.deepEqual(runnerInvocations(context), [])
-    assert.match(JSON.stringify(result.errors), /prepare-acceptance|prohibited.*merge-pr/)
-  }
 })
 
 test('publishing credentials are required before Runner starts', async () => {
@@ -776,6 +827,81 @@ test('the candidate branch identity exists in run-state before Runner starts', a
   assert.match(state.agent_skills_provenance.manifest_sha256, /^[a-f0-9]{64}$/)
   assert.match(state.identity.agent_skills_provenance, /^[a-f0-9]{64}$/)
   assert.equal(state.role_profiles.tester.agent, 'tester')
+})
+
+test('the crosscheck profile is configured and recorded wherever role profiles are', async () => {
+  const context = await environment()
+
+  const result = await evaluate(context, profiles)
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const crosscheck = { cli: 'codex', model: 'gpt-5', effort: 'medium', agent: 'crosscheck' }
+  const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
+  assert.deepEqual(state.role_profiles.crosscheck, crosscheck)
+  assert.deepEqual(Object.keys(state.role_profiles), ['lead', 'crosscheck', 'implementor', 'tester'])
+  const preflight = await readJson(join(context.runDir, 'phases/preflight.json'))
+  assert.deepEqual(preflight.role_profiles.crosscheck, crosscheck)
+  const execution = await readJson(join(context.runDir, 'phases/workflow-execution.json'))
+  assert.deepEqual(execution.role_profiles.crosscheck, crosscheck)
+  const config = await readFile(
+    join(context.runDir, '.runtime/candidate-worktree/.agent-runner/config.yaml'),
+    'utf8',
+  )
+  assert.match(config, /crosscheck:\n {8}default_mode: autonomous\n {8}cli: codex\n {8}model: gpt-5\n {8}effort: medium/)
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.deepEqual(written.role_configuration.roles.crosscheck.configured, crosscheck)
+  assert.equal(written.role_configuration.roles.crosscheck.invocation, 'not-invoked')
+  const report = await readFile(join(context.runDir, 'report.html'), 'utf8')
+  assert.match(report, /crosscheck/)
+})
+
+test('a new run without a crosscheck profile is rejected before Runner starts', async () => {
+  const context = await environment()
+  const withoutCrosscheck = profiles.filter((value, index) => (
+    !profiles[index - (index % 2)].startsWith('--crosscheck-')
+  ))
+
+  const result = await evaluate(context, withoutCrosscheck)
+
+  assert.equal(result.exitCode, 2)
+  assert.deepEqual(
+    result.errors.map(({ code, role, field }) => [code, role, field]),
+    [['invalid-role-profile', 'crosscheck', 'profile']],
+  )
+  assert.deepEqual(runnerInvocations(context), [])
+})
+
+test('a Cursor lead is rejected before any model execution', async () => {
+  const context = await environment()
+  const cursorLead = profiles.map((value, index) => (
+    profiles[index - 1] === '--lead-cli' ? 'cursor' : value
+  ))
+
+  const result = await evaluate(context, cursorLead)
+
+  assert.equal(result.exitCode, 2)
+  assert.equal(result.errors.length, 1)
+  assert.equal(result.errors[0].role, 'lead')
+  assert.match(result.errors[0].message, /Cursor agent calls are not yet verified/)
+  assert.deepEqual(runnerInvocations(context), [])
+})
+
+test('a resume that changes only the crosscheck profile is rejected', async () => {
+  const context = await environment()
+  await evaluate(context, profiles)
+  const before = runnerInvocations(context).length
+  const changed = profiles.map((value, index) => (
+    profiles[index - 1] === '--crosscheck-model' ? 'gpt-6' : value
+  ))
+
+  const result = await evaluate(context, ['--resume', ...changed])
+
+  assert.equal(result.exitCode, 2)
+  assert.deepEqual(
+    result.errors.map(({ code, role, field, recorded, requested }) => [code, role, field, recorded, requested]),
+    [['role-profile-mismatch', 'crosscheck', 'model', 'gpt-5', 'gpt-6']],
+  )
+  assert.equal(runnerInvocations(context).length, before)
 })
 
 test('an explicit host run identity survives the fixed container artifact mount', async () => {
@@ -839,8 +965,9 @@ test('candidate evidence is frozen after delivery and neutral inputs exist befor
         findings: [],
       }
     },
-    materializeNeutral: async ({ finalSha }) => {
+    materializeNeutral: async ({ finalSha, fixtureCommit }) => {
       order.push(`neutral:${finalSha}`)
+      order.push(`requirements:${fixtureCommit}`)
       return {
         source: { root: 'neutral/source' },
         requirements: { root: 'neutral/requirements' },
@@ -856,6 +983,7 @@ test('candidate evidence is frozen after delivery and neutral inputs exist befor
   assert.deepEqual(order, [
     `evidence:${context.commit}`,
     `neutral:${context.commit}`,
+    `requirements:${context.commit}`,
     'judging',
   ])
   const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
@@ -896,7 +1024,7 @@ test('an active recorded Runner process is waited for rather than duplicated', a
     readRunnerState: () => ({
       run_id: 'runner-7',
       session_dir: '/sessions/runner-7',
-      workflow_name: 'implement-change',
+      workflow_name: 'plan-and-implement-change',
       lock: { pid: 99, run_id: 'runner-7' },
     }),
     waitForRun: async (runId) => {
@@ -904,7 +1032,7 @@ test('an active recorded Runner process is waited for rather than duplicated', a
       return {
         run_id: runId,
         session_dir: '/sessions/runner-7',
-        workflow_name: 'implement-change',
+        workflow_name: 'plan-and-implement-change',
         workflow_completed: true,
         history,
       }
@@ -927,7 +1055,7 @@ test('a fresh Runner execution waits for its linked audit before delivery verifi
       : {
           run_id: 'runner-7',
           session_dir: '/sessions/runner-7',
-          workflow_name: 'implement-change',
+          workflow_name: 'plan-and-implement-change',
           workflow_completed: true,
           history,
           audit: {
@@ -940,7 +1068,7 @@ test('a fresh Runner execution waits for its linked audit before delivery verifi
       return {
         run_id: runId,
         session_dir: '/sessions/runner-7',
-        workflow_name: 'implement-change',
+        workflow_name: 'plan-and-implement-change',
         workflow_completed: true,
         history,
         audit: { links: [{ auditRunId: 'audit-child', state: 'completed' }] },
@@ -969,7 +1097,7 @@ test('a fresh Runner execution waits for its linked audit before delivery verifi
   assert.deepEqual(report.workflow.linked_audits, execution.linked_audits)
 })
 
-test('a completed core implement-change run without a linked audit starts replay and waits', async () => {
+test('a completed evaluated-workflow run without a linked audit starts replay and waits', async () => {
   const context = await environment()
   const waited = []
   // The sandbox has no reporting connection, so the replayed audit's report
@@ -986,7 +1114,7 @@ test('a completed core implement-change run without a linked audit starts replay
       : {
           run_id: 'runner-7',
           session_dir: context.sessionDir,
-          workflow_name: 'implement-change',
+          workflow_name: 'plan-and-implement-change',
           workflow_completed: true,
           history,
           audit: auditReplayInvocations(context).length === 0
@@ -1005,7 +1133,7 @@ test('a completed core implement-change run without a linked audit starts replay
       return {
         run_id: runId,
         session_dir: context.sessionDir,
-        workflow_name: 'implement-change',
+        workflow_name: 'plan-and-implement-change',
         workflow_completed: true,
         history,
         audit: {
@@ -1068,7 +1196,7 @@ test('an unreadable linked audit report is recorded as a failed audit with its e
       : {
           run_id: 'runner-7',
           session_dir: context.sessionDir,
-          workflow_name: 'implement-change',
+          workflow_name: 'plan-and-implement-change',
           workflow_completed: true,
           history,
           audit: auditReplayInvocations(context).length === 0
@@ -1087,7 +1215,7 @@ test('an unreadable linked audit report is recorded as a failed audit with its e
       return {
         run_id: runId,
         session_dir: context.sessionDir,
-        workflow_name: 'implement-change',
+        workflow_name: 'plan-and-implement-change',
         workflow_completed: true,
         history,
         audit: {
@@ -1125,7 +1253,7 @@ test('a completed run with multiple execution sessions replays the last closed s
       : {
           run_id: 'runner-7',
           session_dir: context.sessionDir,
-          workflow_name: 'implement-change',
+          workflow_name: 'plan-and-implement-change',
           workflow_completed: true,
           history,
           audit: {
@@ -1157,7 +1285,7 @@ test('a completed Runner run with an existing audit link does not start a second
       : {
           run_id: 'runner-7',
           session_dir: context.sessionDir,
-          workflow_name: 'implement-change',
+          workflow_name: 'plan-and-implement-change',
           workflow_completed: true,
           history,
           audit: {
@@ -1169,7 +1297,7 @@ test('a completed Runner run with an existing audit link does not start a second
       return {
         run_id: runId,
         session_dir: context.sessionDir,
-        workflow_name: 'implement-change',
+        workflow_name: 'plan-and-implement-change',
         workflow_completed: true,
         history,
         audit: { links: [{ auditRunId: 'audit-child', state: 'completed' }] },
@@ -1201,7 +1329,7 @@ test('a failed explicit audit replay is a harness error', async () => {
       : {
           run_id: 'runner-7',
           session_dir: context.sessionDir,
-          workflow_name: 'implement-change',
+          workflow_name: 'plan-and-implement-change',
           workflow_completed: true,
           history,
         },
@@ -1221,7 +1349,7 @@ test('an already-terminal linked audit warning is recorded without changing sour
       : {
           run_id: 'runner-7',
           session_dir: '/sessions/runner-7',
-          workflow_name: 'implement-change',
+          workflow_name: 'plan-and-implement-change',
           workflow_completed: true,
           history,
           audit: {
@@ -1261,13 +1389,13 @@ test('an inactive unfinished Runner resumes only its exact recorded run', async 
         ? {
             run_id: 'runner-7',
             session_dir: '/sessions/runner-7',
-            workflow_name: 'implement-change',
+            workflow_name: 'plan-and-implement-change',
             workflow_completed: false,
           }
         : {
             run_id: 'runner-7',
             session_dir: '/sessions/runner-7',
-            workflow_name: 'implement-change',
+            workflow_name: 'plan-and-implement-change',
             workflow_completed: true,
             history,
           }
@@ -1295,7 +1423,7 @@ test('a Claude quota exit waits for reset and resumes the exact Runner run', asy
       return {
         run_id: 'runner-7',
         session_dir: '/sessions/runner-7',
-        workflow_name: 'implement-change',
+        workflow_name: 'plan-and-implement-change',
         workflow_completed: runnerCalls >= 2,
         history: runnerCalls >= 2 ? history : [],
       }
@@ -1329,7 +1457,7 @@ test('a Claude tester quota during an outer resume waits and retries that same r
       return {
         run_id: 'runner-7',
         session_dir: '/sessions/runner-7',
-        workflow_name: 'implement-change',
+        workflow_name: 'plan-and-implement-change',
         workflow_completed: calls >= 3,
         history: calls >= 3 ? history : [],
       }
@@ -1373,7 +1501,7 @@ test('completed judge units are rehashed and reused while identity-sensitive pha
     readRunnerState: () => ({
       run_id: 'runner-7',
       session_dir: '/sessions/runner-7',
-      workflow_name: 'implement-change',
+      workflow_name: 'plan-and-implement-change',
       workflow_completed: true,
       history,
     }),
@@ -1468,12 +1596,14 @@ test('an evaluator-only rescore imports a completed candidate and never starts A
 
   const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
     controllerChangeName: null,
-    verifyDelivery: async () => {
-      throw new Error('rescore must not rediscover historical artifact paths')
-    },
-    verifyResumeDelivery: async ({ recorded }) => {
-      identityReverified = recorded.final_sha === context.commit
-      return { verified: true }
+    // Delivery goes through the outcome checks; whatever artifact paths they
+    // rediscover, the hash-verified recorded evidence is what is kept.
+    verifyDelivery: async ({ runCompleted, sessionDir }) => {
+      identityReverified = runCompleted === true && sessionDir === context.root
+      return {
+        ...delivery(context),
+        acceptance_artifacts: [{ role: 'acceptance-handoff', path: '/rediscovered/handoff.md', sha256: 'c'.repeat(64) }],
+      }
     },
     loadRescoreSource: async () => importedRescore(context, {
       changeName: 'custom-scene-change',
@@ -1495,8 +1625,35 @@ test('an evaluator-only rescore imports a completed candidate and never starts A
   assert.equal(written.mode, 'agent-runner')
   assert.equal(written.score_denominator, 100)
   assert.equal(written.delivery.final_sha, context.commit)
+  const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
+  assert.deepEqual(state.delivery.acceptance.artifacts, delivery(context).acceptance_artifacts)
   assert.equal(written.workflow.run_id, 'runner-complete')
   assert.equal(written.workflow.events[0].event, 'imported-completed-run')
+})
+
+test('a rescore pins judged requirements to the imported run\'s recorded fixture commit', async () => {
+  const context = await environment()
+  const olderFixture = 'e'.repeat(40)
+  const exec = (command, args, options) => (
+    command === 'git' && args.includes(`${olderFixture}^{commit}`)
+      ? { status: 0, stdout: `${olderFixture}\n` }
+      : context.exec(command, args, options)
+  )
+  let pinned = null
+
+  const result = await evaluate({ ...context, exec }, ['--rescore-from', '/rescore-source'], {
+    loadRescoreSource: async () => {
+      const imported = importedRescore(context)
+      return { ...imported, candidate_source: { ...imported.candidate_source, fixture_commit: olderFixture } }
+    },
+    materializeNeutral: async ({ finalSha, fixtureCommit }) => {
+      pinned = { finalSha, fixtureCommit }
+      return null
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.deepEqual(pinned, { finalSha: context.commit, fixtureCommit: olderFixture })
 })
 
 test('a rescore restores a missing Runner session under the run directory and records it', async () => {
@@ -1504,9 +1661,6 @@ test('a rescore restores a missing Runner session under the run directory and re
   let staging = null
   const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
     controllerChangeName: null,
-    verifyDelivery: async () => {
-      throw new Error('rescore must not rediscover historical artifact paths')
-    },
     loadRescoreSource: async ({ stagingDir }) => {
       staging = stagingDir
       return { ...importedRescore(context), session_reconstruction: { source: 'evidence/candidate/artifacts', files: 3 } }
@@ -1529,9 +1683,6 @@ test('a rescore of an older run scores the engineering-quality component afresh'
   let servedIdentity = null
   const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
     controllerChangeName: null,
-    verifyDelivery: async () => {
-      throw new Error('rescore must not rediscover historical artifact paths')
-    },
     loadRescoreSource: async () => importedRescore(context),
     browserDriver: browserDemo(),
     isProcessAlive: () => true,
@@ -1570,9 +1721,6 @@ test('a host rescore leaves an existing Agent Runner projects store in the home 
   await mkdir(join(context.home, '.agent-runner/projects/someone-else'), { recursive: true })
   const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
     controllerChangeName: null,
-    verifyDelivery: async () => {
-      throw new Error('rescore must not rediscover historical artifact paths')
-    },
     loadRescoreSource: async () => importedRescore(context),
   })
 
@@ -1614,9 +1762,6 @@ test('a rescore of a source without recorded metrics reads them from the Runner 
   const context = await environment()
   const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
     controllerChangeName: null,
-    verifyDelivery: async () => {
-      throw new Error('rescore must not rediscover historical artifact paths')
-    },
     loadRescoreSource: async () => ({ ...importedRescore(context), implementation_metrics: null, cost: null, pricing: null }),
   })
 
@@ -1732,6 +1877,226 @@ test('rescore starts the candidate server and confirms a browser overturn by rep
   assert.ok(lifecycle.lastIndexOf('release') > lifecycle.lastIndexOf('replay'), lifecycle.join(' '))
 })
 
+// A source recorded by the implement-only workflow: `core:implement-change`
+// against the hand-written-tasks fixture f0695b9, with lead, implementor, and
+// tester profiles only and the history-verdict completion record of its time.
+const LEGACY_FIXTURE = 'f0695b96c0c23b2d17ecc6cfbaf8be1fcdedd6f8'
+const LEGACY_SESSION = '.runtime/agent-runner-projects/-artifacts--runtime-candidate-worktree/runs/implement-change-2026-08-28T20-15-27Z'
+const LEGACY_PROFILES = {
+  lead: { cli: 'codex', model: 'gpt-5', effort: 'high', agent: 'lead' },
+  implementor: { cli: 'claude', model: 'sonnet', effort: 'medium', agent: 'implementor' },
+  tester: { cli: 'claude', model: 'opus', effort: 'high', agent: 'tester' },
+}
+
+async function legacyImplementOnlySource(context, { retainSession = true } = {}) {
+  const sourceDir = await makeTempDir(join(tmpdir(), 'and-scene-legacy-source-'))
+  const sessionDir = join(sourceDir, LEGACY_SESSION)
+  const evidence = [
+    ['final-handoff', 'acceptance-handoff.md', `Ready SHA: ${context.commit}\n`],
+    ['findings-history', 'acceptance-findings.md', 'No remaining findings.\n'],
+  ]
+  const artifacts = []
+  for (const [role, relativePath, bytes] of evidence) {
+    await mkdir(join(sessionDir, 'output'), { recursive: true })
+    await writeFile(join(sessionDir, 'output', relativePath), bytes)
+    artifacts.push({ role, path: `/artifacts/${LEGACY_SESSION}/output/${relativePath}`, sha256: hashString(bytes) })
+  }
+  const recordedDelivery = {
+    ...delivery(context),
+    base_branch: 'main',
+    fixture_commit: LEGACY_FIXTURE,
+    acceptance_artifacts: artifacts,
+  }
+  const arguments_ = [
+    'change_name=create-and-scene',
+    'change_dir=openspec/changes/create-and-scene',
+    'skip_validator=false',
+  ]
+  const candidateSource = {
+    repository: 'github.com/Codagent-AI/and-scene',
+    fixture_commit: LEGACY_FIXTURE,
+    branch: recordedDelivery.branch,
+    base_branch: 'main',
+  }
+  const state = {
+    schema_version: 2,
+    state_kind: 'and-scene-run-state',
+    run_id: 'legacy-implement-only',
+    run_kind: 'candidate',
+    identity: { candidate_repository: candidateSource.repository },
+    candidate_source: candidateSource,
+    delivery: {
+      applicable: true,
+      ...candidateSource,
+      origin: candidateSource.repository,
+      pull_request: recordedDelivery.pull_request,
+      final_sha: recordedDelivery.final_sha,
+      acceptance: { artifacts },
+    },
+    agent_runner: { run_id: 'implement-change-2026-08-28', session_dir: `/artifacts/${LEGACY_SESSION}` },
+    role_profiles: LEGACY_PROFILES,
+    agent_runner_provenance: { commit: '3'.repeat(40), workflow_sha256: '4'.repeat(64), complete: true },
+    agent_skills_provenance: { commit: '5'.repeat(40), manifest_sha256: '6'.repeat(64), complete: true },
+  }
+  const result = {
+    schema_version: 4,
+    run_id: state.run_id,
+    run_kind: 'candidate',
+    mode: 'agent-runner',
+    candidate_source: candidateSource,
+    workflow: {
+      workflow: 'implement-change',
+      workflow_path: 'workflows/core/implement-change-v1.0.yaml',
+      arguments: arguments_,
+      full_workflow: true,
+      history_complete: true,
+      missing_steps: [],
+      prohibited_effects: [],
+    },
+    role_configuration: {
+      applicable: true,
+      roles: {
+        lead: { configured: LEGACY_PROFILES.lead, attempts: [] },
+        implementor: { configured: LEGACY_PROFILES.implementor, attempts: [] },
+        reviewer: { configured: LEGACY_PROFILES.tester, attempts: [] },
+      },
+    },
+  }
+  if (!retainSession) {
+    // A factory run keeps hash-verified copies but drops its Runner session.
+    const retained = []
+    for (const [index, [role, relativePath, bytes]] of evidence.entries()) {
+      const path = `evidence/candidate/artifacts/candidate-${index}-${relativePath}`
+      await mkdir(join(sourceDir, 'evidence/candidate/artifacts'), { recursive: true })
+      await writeFile(join(sourceDir, path), bytes)
+      retained.push({ id: `candidate-${index}`, role,
+        origin: { namespace: 'runner-session', relative_path: `output/${relativePath}` },
+        path, sha256: hashString(bytes) })
+    }
+    const manifest = { schema_version: 1, ownership: 'candidate-produced', artifacts: retained }
+    manifest.manifest_sha256 = hashJson(manifest)
+    await writeFile(join(sourceDir, 'evidence/candidate/manifest.json'), `${JSON.stringify(manifest)}\n`)
+    state.delivery.acceptance.manifest_sha256 = manifest.manifest_sha256
+    // Its run state predates recorded role profiles; its result names them.
+    delete state.role_profiles
+    await rm(join(sourceDir, '.runtime'), { recursive: true, force: true })
+  }
+  await mkdir(join(sourceDir, 'phases'), { recursive: true })
+  await writeFile(join(sourceDir, 'run-state.json'), `${JSON.stringify(state)}\n`)
+  await writeFile(join(sourceDir, 'result.json'), `${JSON.stringify(result)}\n`)
+  await writeFile(join(sourceDir, 'phases/delivery-verification.json'), `${JSON.stringify(recordedDelivery)}\n`)
+  return { sourceDir, sessionDir, artifacts }
+}
+
+// The outcome-based checks a new run's delivery goes through, observing a
+// remote branch and draft pull request that still match the recorded delivery.
+function observedLegacyDelivery(context, calls) {
+  const exec = (command, args, options) => (
+    command === 'git' && args.includes('ls-remote') && args.includes('--heads')
+      ? { status: 0, stdout: `${context.commit}\trefs/heads/eval/and-scene/run-1\n` }
+      : context.exec(command, args, options)
+  )
+  return async (options) => {
+    const handoff = await readFile(join(options.sessionDir, 'output/acceptance-handoff.md'), 'utf8')
+    calls.push({ ...options, handoff })
+    return verifyCandidateDelivery({
+      ...options,
+      exec,
+      inspectPullRequest: async () => delivery(context).pull_request,
+    })
+  }
+}
+
+async function rescoreLegacySource({ retainSession }) {
+  const context = await environment({ commit: LEGACY_FIXTURE, planningReady: false })
+  await mkdir(join(context.runDir, '.runtime/candidate-worktree/openspec/changes/create-and-scene'), { recursive: true })
+  const source = await legacyImplementOnlySource(context, { retainSession })
+  const calls = []
+  const result = await evaluate(context, ['--rescore-from', source.sourceDir], {
+    controllerChangeName: null,
+    verifyDelivery: observedLegacyDelivery(context, calls),
+    verifyResumeDelivery: async () => {
+      throw new Error('a rescore verifies delivery through the outcome checks, not the step-era identity check')
+    },
+  })
+  return { context, source, calls, result }
+}
+
+function assertLegacyRescore({ context, calls, result }) {
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  // Agent Runner is never invoked in any form, and no planning preflight reads
+  // the fixture's definition files.
+  assert.deepEqual(context.invocations.filter(({ command }) => command === 'agent-runner'), [])
+  assert.deepEqual(context.invocations.filter(({ command, args }) => (
+    command === 'git' && args.includes('show') && args.some((arg) => /\/(?:test-plan|tasks)\.md$/.test(arg))
+  )), [])
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].runCompleted, true)
+  assert.equal(calls[0].fixtureCommit, LEGACY_FIXTURE)
+  assert.equal(calls[0].handoff, `Ready SHA: ${context.commit}\n`)
+}
+
+async function assertLegacyRecord(context, source) {
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(written.workflow.workflow, 'implement-change')
+  assert.equal(written.workflow.runner_workflow_name, 'implement-change')
+  assert.equal(written.workflow.workflow_path, 'workflows/core/implement-change-v1.0.yaml')
+  assert.deepEqual(written.workflow.arguments, [
+    'change_name=create-and-scene',
+    'change_dir=openspec/changes/create-and-scene',
+    'skip_validator=false',
+  ])
+  assert.equal(written.candidate_source.fixture_commit, LEGACY_FIXTURE)
+  assert.deepEqual(Object.keys(written.role_configuration.roles).sort(), ['implementor', 'lead', 'tester'])
+  assert.equal(written.delivery.publication_boundary.verified, true)
+  const state = await loadCheckpoint(join(context.runDir, 'run-state.json'))
+  assert.deepEqual(state.role_profiles, LEGACY_PROFILES)
+  assert.deepEqual(
+    state.delivery.acceptance.artifacts.map(({ role, sha256 }) => ({ role, sha256 })),
+    source.artifacts.map(({ role, sha256 }) => ({ role, sha256 })),
+  )
+}
+
+test('a three-role implement-only source with a retained Runner session is rescored from its completion record', async () => {
+  const run = await rescoreLegacySource({ retainSession: true })
+
+  assertLegacyRescore(run)
+  assert.equal(run.calls[0].sessionDir, await realpath(run.source.sessionDir))
+  await assertLegacyRecord(run.context, run.source)
+})
+
+test('a three-role implement-only source with reconstructed evidence is rescored without live Runner state', async () => {
+  const run = await rescoreLegacySource({ retainSession: false })
+
+  assertLegacyRescore(run)
+  assert.equal(run.calls[0].sessionDir, join(run.context.runDir, '.runtime/rescore-session'))
+  await assertLegacyRecord(run.context, run.source)
+  const written = await readJson(join(run.context.runDir, 'result.json'))
+  assert.equal(written.workflow.events[0].session_reconstruction.source, 'evidence/candidate/artifacts')
+})
+
+test('a rescore whose source recorded no role profiles is refused rather than validated as a new run', async () => {
+  const context = await environment()
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source', ...profiles], {
+    loadRescoreSource: async () => ({ ...importedRescore(context), role_profiles: null }),
+  })
+
+  assert.equal(result.exitCode, 2)
+  assert.ok(result.errors.some(({ code }) => code === 'invalid-rescore-source'), JSON.stringify(result.errors))
+})
+
+test('a rescore refuses a source whose observed delivery no longer matches its recorded pull request', async () => {
+  const context = await environment()
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    loadRescoreSource: async () => importedRescore(context),
+    verifyDelivery: async () => ({ ...delivery(context), pull_request: { ...delivery(context).pull_request, number: 54 } }),
+  })
+
+  assert.notEqual(result.exitCode, 0)
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(written.failed_phase, 'delivery-verification')
+})
+
 test('an evaluator-only rescore accepts a historical reviewer profile as tester', async () => {
   const context = await environment()
 
@@ -1742,12 +2107,6 @@ test('an evaluator-only rescore accepts a historical reviewer profile as tester'
     '--tester-effort', 'high',
   ], {
     controllerChangeName: null,
-    verifyDelivery: async () => {
-      throw new Error('rescore must not rediscover historical artifact paths')
-    },
-    verifyResumeDelivery: async ({ recorded }) => ({
-      verified: recorded.final_sha === context.commit,
-    }),
     loadRescoreSource: async () => {
       const imported = importedRescore(context, { changeName: 'custom-scene-change' })
       const { tester: _tester, ...profiles } = imported.role_profiles
@@ -2179,36 +2538,30 @@ test('evaluator-only rescore refreshes retained Codex usage and pricing', async 
   assert.ok(validators.every((cost) => cost.state === 'unavailable' && cost.reason === 'exact provider and model identity are required for pricing'))
 })
 
-test('published result reports the leaf of the last nested workflow step', async () => {
-  const context = await environment({
-    workflow: delegatingWorkflowYaml,
-    verificationWorkflow: verificationWorkflowYaml,
-  })
-  const nestedHistory = delegatedHistory
+test('published result records the last observed leaf as Runner reports it', async () => {
+  const context = await environment()
+  const nestedHistory = [
+    { step: 'plan', step_path: ['plan'], outcome: null },
+    { step: 'plan', step_path: ['plan', 'sub:plan', 'write-tasks'], outcome: 'success' },
+    { step: 'plan', step_path: ['plan'], outcome: 'success' },
+  ]
   const result = await evaluate(context, profiles, {
-    verifyDelivery: async () => ({
-      ...delivery(context),
-      final_validator: { ...nestedHistory[1], step: 'run-validator' },
-      workflow_history: nestedHistory,
-    }),
     readRunnerState: () => (runnerInvocations(context).length === 0
       ? null
       : {
           run_id: 'runner-7',
           session_dir: context.sessionDir,
-          workflow_name: 'implement-change',
+          workflow_name: 'plan-and-implement-change',
           workflow_completed: true,
           history: nestedHistory,
         }),
   })
   assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
   const written = await readJson(join(context.runDir, 'result.json'))
-  assert.equal(written.workflow.last_observed_step, 'verify-acceptance-handoff')
-  assert.equal(written.delivery.final_validator.step, 'run-validator')
-  assert.deepEqual(written.delivery.final_validator.step_path, [
-    'verify-change', 'sub:verify-change', 'run-validator',
-  ])
-  assert.deepEqual(written.workflow.observed_steps.at(-1).step_path, ['verify-change'])
+  assert.equal(written.workflow.last_observed_step, 'write-tasks')
+  assert.deepEqual(written.workflow.observed_steps.at(-1).step_path, ['plan'])
+  assert.equal(Object.hasOwn(written.workflow, 'missing_steps'), false)
+  assert.equal(Object.hasOwn(written.workflow, 'prohibited_effects'), false)
 })
 
 for (const [code, resumable] of [['claude-quota', true], ['judge-schema-invalid', false], ['packet-overflow', false],
@@ -2296,7 +2649,9 @@ function diagnosticJudge(calls, { fail = () => false, onCall = () => {} } = {}) 
 async function diagnose(context, inputs, extra, overrides = {}) {
   return evaluate(context, [...extra, '--expected', inputs.expectedPath], {
     controllerChangeName: null,
-    verifyDelivery: async () => { throw new Error('a diagnostic must not rediscover historical artifact paths') },
+    // A diagnostic is a rescore: its delivery goes through the same outcome
+    // checks, observing the branch and pull request the source recorded.
+    verifyDelivery: async () => delivery(context),
     loadRescoreSource: async () => importedRescore(context),
     evaluatorRoots: inputs.evaluatorRoots,
     readEvaluatorCommit: () => 'c'.repeat(40),
@@ -2418,6 +2773,10 @@ test('an ordinary rescore cannot be resumed, and diagnostic flags need each othe
   assert.match(unknown.errors[0].message, /unknown scored judge jobs: no-such-job/)
   const notDiagnostic = await diagnose(context, inputs, ['--resume', '--judge-jobs', 'scene-kit'])
   assert.ok(notDiagnostic.errors.some(({ code }) => code === 'diagnostic-state-missing'), JSON.stringify(notDiagnostic.errors))
+  // A resumed diagnostic restores its source's workflow, so it never selects one.
+  const selecting = await diagnose(context, inputs, ['--resume', '--workflow', 'core:plan-and-implement-change', '--judge-jobs', 'scene-kit'])
+  assert.equal(selecting.exitCode, 2)
+  assert.match(selecting.errors[0].message, /--judge-jobs cannot be combined with --workflow/)
 })
 
 test('a diagnostic whose retained run fails input verification reports it unloadable without judging', async () => {

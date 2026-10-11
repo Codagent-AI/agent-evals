@@ -194,6 +194,10 @@ export function diagnosticVerdicts(judging) {
 
 export function diagnosticStatus({ outcome = null, errors = [] } = {}) {
   if (errors.some(({ code }) => code === 'invalid-rescore-source')) return 'unloadable'
+  // A live branch or pull request that changed after the source run leaves
+  // nothing the rescore inputs can be verified against.
+  if (errors.some(({ code }) => code === 'rescore-source-unavailable')) return 'unloadable'
+  if (outcome?.failure?.code === 'rescore-source-unavailable') return 'unloadable'
   if (outcome?.product_failure) return 'unloadable'
   if (errors.length > 0 || outcome?.failure) return 'failed'
   return 'complete'

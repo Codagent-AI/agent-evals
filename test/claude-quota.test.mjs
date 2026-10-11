@@ -110,3 +110,58 @@ test('waits until just after reset and reports the durable quota event', async (
   assert.equal(result.reset_at, '2026-08-30T22:00:00.000Z')
   assert.match(messages.join('\n'), /Claude implementor quota.*22:00:00\.000Z/)
 })
+
+function quotaAudit(payload, prefix = '[review-tasks] step_end ') {
+  return `2026-08-30T19:29:47.462986506Z ${prefix}${JSON.stringify({
+    exit_code: 1,
+    stdout: "You've hit your org's monthly spend limit · your session limit resets 10pm (UTC)",
+    ...payload,
+  })}`
+}
+
+const beforeReset = new Date('2026-08-30T19:30:00.000Z')
+
+test('a Claude tester limit in a renamed session is attributed by its recorded agent', () => {
+  const audit = quotaAudit(
+    { session: 'acceptance-review', identity: { cli: 'claude', role: 'tester' } },
+    '[verify > acceptance-review] step_end ',
+  )
+
+  const detected = quotaModule.detectClaudeQuotaReset({ audit, now: beforeReset })
+
+  assert.equal(detected?.role, 'tester')
+  assert.equal(detected?.reset_at, '2026-08-30T22:00:00.000Z')
+})
+
+test('a Claude crosscheck quota event is attributed to the crosscheck role', () => {
+  const audit = quotaAudit({
+    kind: 'agent-call',
+    identity: { cli: 'claude', role: 'crosscheck' },
+    usage: { provider: 'anthropic' },
+  })
+
+  const detected = quotaModule.detectClaudeQuotaReset({ audit, now: beforeReset })
+
+  assert.equal(detected?.role, 'crosscheck')
+})
+
+test('a misleading acceptance-tester session name is not evidence of Claude identity', () => {
+  const audit = quotaAudit(
+    { session: 'acceptance-tester', identity: { cli: 'codex', role: 'lead' }, usage: { provider: 'openai' } },
+    '[prepare-acceptance > acceptance-tester] step_end ',
+  )
+
+  assert.equal(quotaModule.detectClaudeQuotaReset({ audit, now: beforeReset }), null)
+})
+
+test('a Claude session name does not supply the role when no agent is recorded', () => {
+  const audit = quotaAudit(
+    { session: 'acceptance-tester', identity: { cli: 'claude' } },
+    '[prepare-acceptance > acceptance-tester] step_end ',
+  )
+
+  const detected = quotaModule.detectClaudeQuotaReset({ audit, now: beforeReset })
+
+  assert.notEqual(detected, null)
+  assert.equal(detected.role, null)
+})

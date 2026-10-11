@@ -746,3 +746,21 @@ test('the engineering-quality component renders with its points, no floor, subco
   ]) assert.match(html, new RegExp(id), id)
   assert.match(html, /<td>demo-technical-quality<\/td><td>[^<]*<\/td>(?:<td>[^<]*<\/td>){3}<td>20<\/td><td>12\.5<\/td>/)
 })
+
+test('the report discloses that the publication boundary covers final state only', () => {
+  const html = renderReport(result({
+    delivery: {
+      branch: 'eval/and-scene/run-1',
+      run_status: 'completed',
+      publication_boundary: {
+        verified: true,
+        scope: 'final-state-only',
+        not_detectable: ['effects reversed before completion', 'product releases'],
+      },
+    },
+  }))
+
+  assert.match(html, /publication boundary \(checks final state only\)/)
+  assert.match(html, /final-state-only/)
+  assert.match(html, /effects reversed before completion/)
+})

@@ -13,9 +13,10 @@ import {
   refreshBillingTokens,
 } from '../evals/agent-runner/and-scene/lib/runner-metrics.mjs'
 import { loadFallbackRates, resolveAttemptCost } from '../evals/agent-runner/and-scene/lib/pricing.mjs'
+import { reconcileRoleAttempts, validateRoleProfiles } from '../evals/agent-runner/and-scene/lib/profiles.mjs'
 
 const RUN_ID = 'run-7f3a'
-const WORKFLOW = 'implement-change'
+const WORKFLOW = 'plan-and-implement-change'
 
 function step(overrides = {}) {
   return {
@@ -294,7 +295,7 @@ function v4Metrics(overrides = {}) {
       duration_ms: 120_000, status: 'closed',
     }],
     steps: [
-      step({ role: 'task-implementor', tool: 'agent-runner', execution_session_id: 'execution-1' }),
+      step({ role: 'implementor', tool: 'agent-runner', execution_session_id: 'execution-1' }),
       step({
         record_id: `measurement/${head(validator).key}`,
         measurement_key: head(validator).key,
@@ -560,8 +561,9 @@ test('schema-v4 ingests authoritative native and Validator measurements without 
     'implement-task#1', 'validator-attempt-1',
   ])
   assert.deepEqual(ingested.attempts.map((attempt) => attempt.agent_role), [
-    'task-implementor', 'implementation-validator',
+    'implementor', 'implementation-validator',
   ])
+  assert.equal(ingested.attempts[1].invoked_by_attempt, 'parent-1')
   assert.equal(ingested.invocations.length, 1)
   assert.equal(ingested.invocations[0].record_id, 'validator-invocation-1')
   assert.deepEqual(ingested.measurement_totals, v4Metrics().measurement_totals)
@@ -943,60 +945,120 @@ test('resumed attempts are retained alongside the earlier ones', () => {
   assert.deepEqual(ingested.sessions, ['session-1', 'session-2'])
 })
 
-test('Runner-owned acceptance-tester calls are attributed to the acceptance-reviewer profile', () => {
+test('an agent call is attributed by the agent Runner records as its target', () => {
   const text = JSON.stringify(metrics({
+    schema_version: 2,
     steps: [step({
-      record_id: 'prepare-acceptance/acceptance-tester#1',
-      id: 'acceptance-tester',
+      record_id: 'review/crosscheck#1',
+      id: 'review-tasks',
       kind: 'agent-call',
-      target_name: 'acceptance-tester',
+      target_name: 'task-review',
+      role: 'crosscheck',
     })],
   }))
 
   const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
 
-  assert.equal(ingested.attempts[0].agent_role, 'acceptance-reviewer')
+  assert.equal(ingested.attempts[0].agent_role, 'crosscheck')
 })
 
-test('task-loop position attributes validator remediation to the implementor but not final validation', () => {
+test('agent calls Runner records for tester and crosscheck reach their roles in the reported role configuration', () => {
+  // Runner's agent-call records carry kind 'agent-call', the call's target as
+  // target_kind ('agent' or 'session') and target_name, and the agent profile
+  // that ran the call as role. A call to a named session records that
+  // session's agent, not the session name.
+  const call = (overrides) => step({
+    kind: 'agent-call',
+    type: 'agent',
+    tool: 'agent-runner',
+    ...overrides,
+  })
   const text = JSON.stringify(metrics({
+    schema_version: 2,
     steps: [
-      step({ id: 'fix-violations', prefix: 'implement-tasks:0/implement-single-task/sub:implement-task/run-validator/sub:run-validator' }),
-      step({ record_id: 'final-fix#1', id: 'fix-violations', prefix: 'run-validator/sub:run-validator' }),
+      step({ record_id: 'lead#1', id: 'prepare-acceptance', prefix: 'prepare-acceptance', role: 'lead' }),
+      call({
+        record_id: 'prepare-acceptance/call-1#1',
+        id: 'call-1',
+        prefix: 'prepare-acceptance/call-agent',
+        target_kind: 'session',
+        target_name: 'acceptance',
+        role: 'tester',
+        session_id: 'tester-session',
+      }),
+      call({
+        record_id: 'review-tasks/call-2#1',
+        id: 'call-2',
+        prefix: 'review-tasks/call-agent',
+        target_kind: 'agent',
+        target_name: 'crosscheck',
+        role: 'crosscheck',
+        session_id: 'crosscheck-session',
+      }),
+    ],
+  }))
+  const profile = { cli: 'codex', model: 'gpt-5-codex', effort: 'high' }
+  const capabilities = {
+    clis: { codex: { efforts: ['high'], roles: ['lead', 'crosscheck', 'implementor', 'tester'] } },
+  }
+  const { profiles } = validateRoleProfiles({
+    lead: profile, crosscheck: profile, implementor: profile, tester: profile, capabilities,
+  })
+
+  const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
+  const report = reconcileRoleAttempts(profiles, ingested.attempts)
+
+  assert.deepEqual(ingested.attempts.map((attempt) => attempt.agent_role), ['lead', 'tester', 'crosscheck'])
+  assert.deepEqual(report.roles.tester.attempts.map((attempt) => attempt.observed.session), ['tester-session'])
+  assert.equal(report.roles.tester.invocation, 'invoked')
+  assert.deepEqual(report.roles.crosscheck.attempts.map((attempt) => attempt.observed.session), ['crosscheck-session'])
+  assert.deepEqual(report.roles.lead.attempts.map((attempt) => attempt.observed.session), ['session-1'])
+  assert.equal(report.roles.implementor.invocation, 'not-invoked')
+  assert.deepEqual(report.unattributed, [])
+})
+
+test('the same step in two role contexts is attributed from the recorded agents alone', () => {
+  const text = JSON.stringify(metrics({
+    schema_version: 2,
+    steps: [
+      step({ id: 'fix-violations', prefix: 'run-validator/sub:run-validator', role: 'implementor' }),
+      step({ record_id: 'lead-fix#1', id: 'fix-violations', prefix: 'implement-tasks:0/x', role: 'lead' }),
     ],
   }))
 
   const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
 
-  assert.deepEqual(ingested.attempts.map((attempt) => attempt.agent_role), ['task-implementor', 'lead-agent'])
+  assert.deepEqual(ingested.attempts.map((attempt) => attempt.agent_role), ['implementor', 'lead'])
 })
 
-// Agent Runner renders a loop iteration as `<step-id>:<n>` and joins nesting
-// segments with `/` (internal/exec/step_audit.go, executionIdentityPrefix).
-// Attribution must key on that emitted form, not on a bracketed one.
-test('a real Agent Runner loop-iteration prefix attributes task work to the implementor', () => {
+test('an attempt with no recorded agent stays unattributed whatever its position or session name', () => {
   const text = JSON.stringify(metrics({
     steps: [
       step({ prefix: 'implement-tasks:0/implement-single-task/sub:implement-task' }),
       step({
-        record_id: 'task-fix#1',
-        id: 'fix-violations',
-        prefix: 'implement-tasks:0/implement-single-task/sub:implement-task/run-validator/sub:run-validator/validator-retry:0',
+        record_id: 'prepare-acceptance/acceptance-tester#1',
+        id: 'acceptance-tester',
+        kind: 'agent-call',
+        target_name: 'acceptance-tester',
       }),
-      step({
-        record_id: 'final-fix#1',
-        id: 'fix-violations',
-        prefix: 'run-validator/sub:run-validator/validator-retry:0',
-      }),
+      step({ record_id: 'legacy#1', role: 'legacy-unknown' }),
     ],
   }))
 
   const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
 
-  assert.deepEqual(
-    ingested.attempts.map((attempt) => attempt.agent_role),
-    ['task-implementor', 'task-implementor', 'lead-agent'],
-  )
+  assert.deepEqual(ingested.attempts.map((attempt) => attempt.agent_role), [null, null, null])
+  assert.ok(ingested.attempts.every((attempt) => attempt.cost.estimated_api_cost_usd === 0.0125))
+})
+
+test('a native measurement takes the agent its compatibility step records, not its prefix', () => {
+  const native = nativeMeasurement()
+  const unattributed = ingestRunnerMetrics({
+    text: JSON.stringify(v4Metrics({ steps: [step({ execution_session_id: 'execution-1' })] })),
+    runId: RUN_ID,
+    workflow: WORKFLOW,
+  })
+  assert.equal(unattributed.attempts.find((attempt) => attempt.attempt_id === native.key).agent_role, null)
 })
 
 test('incomplete Runner history is preserved rather than presented as complete', () => {

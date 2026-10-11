@@ -456,3 +456,18 @@ test('cost aggregation carries no scoring effect', () => {
 
   assert.equal(effect, 'none')
 })
+
+test('every invocation in the evaluated run counts toward the total, attributed or not', () => {
+  const attempts = [
+    attempt({ attempt_id: 'plan-1', step: 'write-tasks', agent_role: 'lead', prefix: 'plan/sub:plan-change' }),
+    attempt({ attempt_id: 'review-1', step: 'review-tasks', agent_role: 'crosscheck', prefix: 'plan/sub:plan-change' }),
+    attempt({ attempt_id: 'impl-1', step: 'generate-code', agent_role: 'implementor', prefix: 'implement/sub:implement-change' }),
+    attempt({ attempt_id: 'orphan-1', step: 'anything', agent_role: null, prefix: null }),
+  ]
+  const costs = attempts.map(({ attempt_id: id }) => resolved(id, 0.25))
+
+  const { rows, total } = aggregateImplementationCost({ attempts, costs })
+
+  assert.equal(total.estimated_api_cost_usd, 1)
+  assert.deepEqual(rows.map((row) => row.agent_role).sort(), ['crosscheck', 'implementor', 'lead', null].sort())
+})

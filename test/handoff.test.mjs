@@ -8,9 +8,10 @@ import { test } from 'node:test'
 import { runEvaluation } from '../evals/agent-runner/and-scene/controller.mjs'
 import { loadCheckpoint } from '../evals/agent-runner/and-scene/lib/checkpoint.mjs'
 import { readJson } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
-import { WORKFLOW_RELATIVE_PATH } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
 
-const workflowYaml = `name: implement-change
+const WORKFLOW_RELATIVE_PATH = 'workflows/core/plan-and-implement-change-v1.0.yaml'
+
+const workflowYaml = `name: plan-and-implement-change
 params:
   - name: change_name
     required: true
@@ -38,6 +39,7 @@ steps:
 
 const profileArgs = [
   '--lead-cli', 'claude', '--lead-model', 'opus', '--lead-effort', 'high',
+  '--crosscheck-cli', 'codex', '--crosscheck-model', 'gpt-5', '--crosscheck-effort', 'medium',
   '--implementor-cli', 'claude', '--implementor-model', 'sonnet', '--implementor-effort', 'medium',
   '--tester-cli', 'claude', '--tester-model', 'opus', '--tester-effort', 'high',
 ]
@@ -86,26 +88,18 @@ async function environment() {
       if (verb.includes('show') && verb.includes('/test-plan.md')) {
         return { status: 0, stdout: planningTestPlan }
       }
-      if (verb.includes('show') && verb.includes('/tasks.md')) {
-        return { status: 0, stdout: '- [Demo task](tasks/01-demo.md)\n' }
-      }
       if (verb.includes('show') && /\/(?:proposal|design)\.md/.test(verb)) {
         return { status: 0, stdout: '# Planning artifact\n' }
       }
       if (verb.includes('show') && /\/specs\/[^/]+\/spec\.md/.test(verb)) {
         return { status: 0, stdout: '# Specification\n' }
       }
-      if (verb.includes('show') && /\/tasks\/[^/]+\.md/.test(verb)) {
-        return { status: 0, stdout: '# Task\n' }
-      }
       if (verb.includes('ls-tree')) {
         const planningPath = args.at(-1)
         if (planningPath.endsWith('/specs')) {
           return { status: 0, stdout: `${planningPath}/demo/spec.md\n` }
         }
-        if (planningPath.endsWith('/tasks')) {
-          return { status: 0, stdout: `${planningPath}/01-demo.md\n` }
-        }
+        // The fixture is definition-only: no tasks.md and no tasks/.
         return { status: 0, stdout: '' }
       }
       if (verb.includes('show-ref --verify --quiet')) return { status: 1, stdout: '' }
@@ -193,7 +187,7 @@ async function evaluate(context, extra = {}) {
     readRunnerState: () => ({
       run_id: 'run-7',
       session_dir: '/sessions/run-7',
-      workflow_name: 'implement-change',
+      workflow_name: 'plan-and-implement-change',
       workflow_completed: true,
       audit: { links: [{ auditRunId: 'audit-fixture', state: 'completed' }] },
     }),
@@ -215,8 +209,7 @@ async function evaluate(context, extra = {}) {
         head_branch: 'eval/and-scene/run-1',
         head_sha: 'a'.repeat(40),
       },
-      final_validator: { step: 'run-validator', outcome: 'success' },
-      workflow_history: [],
+      run_status: 'completed',
       acceptance_artifacts: [],
     }),
     isProcessAlive: () => false,

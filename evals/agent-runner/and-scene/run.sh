@@ -12,7 +12,7 @@ REPO="${REPO:-https://github.com/Codagent-AI/and-scene.git}"
 # are reproducible. This is the reviewed planning-only fixture merged into
 # eval/create-and-scene-spec-only on 2026-08-28; bump it deliberately when the
 # fixture snapshot changes.
-FIXTURE_REF="${FIXTURE_REF:-f0695b96c0c23b2d17ecc6cfbaf8be1fcdedd6f8}"
+FIXTURE_REF="${FIXTURE_REF:-ba19a6ac3d6eca4034571cd23c87ce44f884b2e8}"
 # Pin the known-good reference used for calibration and judge tiebreaks.
 REFERENCE_REF="${REFERENCE_REF:-171c7def1e12aca2a5f605a5e5feafb20d4e4d19}"
 if [[ -n "${CHANGE_NAME+x}" ]]; then
@@ -21,9 +21,14 @@ else
   CHANGE_NAME_PROVIDED=0
 fi
 CHANGE_NAME="${CHANGE_NAME:-create-and-scene}"
-# The implementation workflow is hard-coded for this change. The suite records
-# whichever clean Agent Runner revision supplies it rather than pinning a commit.
-WORKFLOW_RELATIVE_PATH="workflows/core/implement-change-v1.0.yaml"
+# The evaluated workflow is a logical Agent Runner reference. The harness treats
+# it as opaque and records whichever clean Agent Runner revision supplies it
+# rather than pinning a commit. Only --workflow selects it: an inherited
+# WORKFLOW variable is ignored, so it can neither change the evaluated workflow
+# nor slip past the --rescore-from guard.
+WORKFLOW="core:plan-and-implement-change"
+WORKFLOW_PROVIDED=0
+WORKFLOW_RELATIVE_PATH=""
 # sandbox-run.sh mounts the validated host checkout here with its Git metadata.
 # Its separate /tmp/agent-runner-local copy is only the build source and cannot
 # satisfy the controller's clean-worktree provenance check.
@@ -36,6 +41,7 @@ JUDGE_JOBS=""
 EXPECTED=""
 ARTIFACT_DIR="${ARTIFACT_DIR:-}"
 LEAD_CLI="" LEAD_MODEL="" LEAD_EFFORT=""
+CROSSCHECK_CLI="" CROSSCHECK_MODEL="" CROSSCHECK_EFFORT=""
 IMPLEMENTOR_CLI="" IMPLEMENTOR_MODEL="" IMPLEMENTOR_EFFORT=""
 TESTER_CLI="" TESTER_MODEL="" TESTER_EFFORT=""
 SKIP_VALIDATOR=0
@@ -84,8 +90,14 @@ Options:
   --dry-run              Print the sandbox command instead of running it.
   --agent-runner-dir PATH
                           Agent Runner checkout. Must be a clean Git worktree
-                          containing workflows/core/implement-change-v1.0.yaml.
+                          containing the selected workflow's definition.
                           Default: sibling ../agent-runner.
+  --workflow REF         Logical Agent Runner workflow to evaluate, such as
+                          core:plan-and-implement-change. It must declare the
+                          change_name, change_dir, change_label, change_kind,
+                          artifact_validation_instruction, and skip_validator
+                          parameters. Not allowed with --rescore-from.
+                          Default: core:plan-and-implement-change
   --agent-skills-dir PATH
                           Agent Skills checkout. Must be a clean Git worktree
                           containing every Codagent skill named by the workflow.
@@ -94,8 +106,10 @@ Options:
                           proof: artifacts/evals/and-scene-proof/<timestamp>
                           run:   artifacts/evals/and-scene/<timestamp>
   --repo URL             and-scene repository URL.
-  --fixture-ref REF      Implementation-ready fixture ref.
-                          Default: f0695b96c0c23b2d17ecc6cfbaf8be1fcdedd6f8
+  --fixture-ref REF      Definition-only fixture ref: the change has a proposal,
+                          design, test plan, and specs, and no tasks.md or
+                          tasks/. A fixture that still has tasks fails preflight.
+                          Default: ba19a6ac3d6eca4034571cd23c87ce44f884b2e8
   --reference-ref REF    Implemented/reference ref.
                           Default: 171c7def1e12aca2a5f605a5e5feafb20d4e4d19
   --candidate-ref REF    Grade an existing candidate ref.
@@ -125,23 +139,30 @@ Options:
   --reference-baseline   Evaluate an existing candidate without invoking Agent
                           Runner. Role profiles are not required or applicable.
   --change-name NAME     OpenSpec change name. Default: create-and-scene
-  --skip-validator       Pass skip_validator=true to skip all Agent Validator
-                          execution: task-level, final, and acceptance-remediation.
-                          Draft PR, acceptance preparation, and handoff verification
-                          still run.
+  --skip-validator       Pass skip_validator=true to the evaluated workflow,
+                          which owns its meaning, and hide Agent Validator from
+                          Runner-launched agents. The result records the
+                          requested Validator mode; it is not verified from
+                          workflow steps. Default: skip_validator=false.
   --resume               Reopen run-state.json, revalidate the recorded fixture,
                           Runner, branch, draft PR, final SHA, and evidence, then
                           wait for/resume the exact Runner run as needed. Explicit
                           Claude quota resets up to six hours are waited out.
-  --lead-cli CLI         Lead-agent CLI adapter (core implement-change lead).
+  --lead-cli CLI         Lead-agent CLI adapter (the workflow's lead agent).
   --lead-model MODEL     Lead-agent model.
-  --lead-effort EFFORT   Lead-agent effort.
-  --implementor-cli CLI  Task-implementor CLI adapter.
+  --lead-effort EFFORT   Lead-agent effort. A cursor lead is rejected until
+                          Cursor agent calls are verified in the sandbox.
+  --crosscheck-cli CLI   Crosscheck CLI adapter (the workflow's crosscheck agent).
+  --crosscheck-model MODEL
+                          Crosscheck model.
+  --crosscheck-effort EFFORT
+                          Crosscheck effort.
+  --implementor-cli CLI  Implementor CLI adapter (the workflow's implementor agent).
   --implementor-model MODEL
-                          Task-implementor model.
+                          Implementor model.
   --implementor-effort EFFORT
-                          Task-implementor effort.
-  --tester-cli CLI       Tester CLI adapter.
+                          Implementor effort.
+  --tester-cli CLI       Tester CLI adapter (the workflow's tester agent).
   --tester-model MODEL   Tester model.
   --tester-effort EFFORT Tester effort.
   --judge-model MODEL    Eval-owned judge model. Default: gpt-6.1-sol.
@@ -239,6 +260,11 @@ while (($#)); do
       CHANGE_NAME_PROVIDED=1
       shift 2
       ;;
+    --workflow)
+      WORKFLOW="${2:?missing value for --workflow}"
+      WORKFLOW_PROVIDED=1
+      shift 2
+      ;;
     --skip-validator)
       SKIP_VALIDATOR=1
       shift
@@ -257,6 +283,18 @@ while (($#)); do
       ;;
     --lead-effort)
       LEAD_EFFORT="${2:?missing value for --lead-effort}"
+      shift 2
+      ;;
+    --crosscheck-cli)
+      CROSSCHECK_CLI="${2:?missing value for --crosscheck-cli}"
+      shift 2
+      ;;
+    --crosscheck-model)
+      CROSSCHECK_MODEL="${2:?missing value for --crosscheck-model}"
+      shift 2
+      ;;
+    --crosscheck-effort)
+      CROSSCHECK_EFFORT="${2:?missing value for --crosscheck-effort}"
       shift 2
       ;;
     --implementor-cli)
@@ -364,6 +402,18 @@ if [[ -n "$RESCORE_FROM" && (
   echo "--rescore-from cannot be combined with --resume, --reference-baseline, or --candidate-ref." >&2
   exit 2
 fi
+if [[ -n "$RESCORE_FROM" && "$WORKFLOW_PROVIDED" == 1 ]]; then
+  echo "--rescore-from cannot be combined with --workflow; a rescore keeps its source's workflow." >&2
+  exit 2
+fi
+if [[ "$DIAGNOSTIC" == 1 && "$WORKFLOW_PROVIDED" == 1 ]]; then
+  echo "--judge-jobs cannot be combined with --workflow; a diagnostic keeps its source's workflow." >&2
+  exit 2
+fi
+if [[ ! "$WORKFLOW" =~ ^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9-]*$ ]]; then
+  echo "--workflow must be a logical workflow reference such as core:plan-and-implement-change: $WORKFLOW" >&2
+  exit 2
+fi
 if [[ "$HOST" == 1 && ( "$RUN_AGENT" != 1 || ( -z "$RESCORE_FROM" && "$DIAGNOSTIC" != 1 ) ) ]]; then
   echo "--host is supported only with --run-agent --rescore-from." >&2
   exit 2
@@ -409,6 +459,35 @@ fi
 export AGENT_EVALS_SOURCE_COMMIT AGENT_EVALS_SOURCE_DIRTY
 ENV_ARGS+=(--env AGENT_EVALS_SOURCE_COMMIT --env AGENT_EVALS_SOURCE_DIRTY)
 
+# Agent Runner resolves a logical reference <namespace>:<name> to the latest
+# versioned workflows/<namespace>/<name>-v<major>.<minor>.yaml. The controller
+# later requires that file to match what the installed CLI resolves; here it
+# only names the file whose Codagent skills the bootstrap must provide.
+resolve_workflow_file() {
+  local checkout="$1" ref="$2" namespace name file base version major minor
+  local best="" best_major=-1 best_minor=-1
+  namespace="${ref%%:*}"
+  name="${ref#*:}"
+  for file in "$checkout/workflows/$namespace/$name"-v*.yaml; do
+    [[ -f "$file" ]] || continue
+    base="$(basename -- "$file")"
+    version="${base#"$name"-v}"
+    version="${version%.yaml}"
+    [[ "$version" =~ ^([0-9]+)\.([0-9]+)$ ]] || continue
+    major="${BASH_REMATCH[1]}"
+    minor="${BASH_REMATCH[2]}"
+    if ((10#$major > best_major || (10#$major == best_major && 10#$minor > best_minor))); then
+      best="workflows/$namespace/$base"
+      best_major=$((10#$major))
+      best_minor=$((10#$minor))
+    fi
+  done
+  if [[ -z "$best" && -f "$checkout/workflows/$namespace/$name.yaml" ]]; then
+    best="workflows/$namespace/$name.yaml"
+  fi
+  printf '%s' "$best"
+}
+
 # Reject a role profile that is only partially specified rather than silently
 # filling in a default the result would misreport.
 require_role_profile() {
@@ -443,8 +522,9 @@ if [[ "$RUN_AGENT" == 1 ]]; then
       echo "Agent Runner checkout has uncommitted changes: $AGENT_RUNNER_DIR" >&2
       exit 2
     fi
-    if [[ ! -f "$AGENT_RUNNER_DIR/$WORKFLOW_RELATIVE_PATH" ]]; then
-      echo "Agent Runner checkout does not contain $WORKFLOW_RELATIVE_PATH: $AGENT_RUNNER_DIR" >&2
+    WORKFLOW_RELATIVE_PATH="$(resolve_workflow_file "$AGENT_RUNNER_DIR" "$WORKFLOW")"
+    if [[ -z "$WORKFLOW_RELATIVE_PATH" ]]; then
+      echo "Agent Runner checkout has no definition for workflow $WORKFLOW: $AGENT_RUNNER_DIR" >&2
       exit 2
     fi
     if ! git -C "$AGENT_SKILLS_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -462,11 +542,19 @@ if [[ "$RUN_AGENT" == 1 ]]; then
     AGENT_SKILLS_DIR="$(cd -- "$AGENT_SKILLS_DIR" && pwd)"
 
     require_role_profile "lead-agent" "$LEAD_CLI" "$LEAD_MODEL" "$LEAD_EFFORT"
+    require_role_profile "crosscheck" "$CROSSCHECK_CLI" "$CROSSCHECK_MODEL" "$CROSSCHECK_EFFORT"
     require_role_profile "task-implementor" "$IMPLEMENTOR_CLI" "$IMPLEMENTOR_MODEL" "$IMPLEMENTOR_EFFORT"
     require_role_profile "tester" "$TESTER_CLI" "$TESTER_MODEL" "$TESTER_EFFORT"
+    # The lead calls the crosscheck agent; that call is unproven from Cursor in
+    # the sandbox. The controller enforces the same rule before any model runs.
+    if [[ "$LEAD_CLI" == cursor ]]; then
+      echo "The lead-agent profile cannot use cursor: Cursor agent calls are not yet verified in the evaluation sandbox." >&2
+      exit 2
+    fi
 
-    # Forward only the auth the selected role profiles and the judge need.
-    for cli in "$LEAD_CLI" "$IMPLEMENTOR_CLI" "$TESTER_CLI"; do
+    # Forward only the auth the selected role profiles and the judge need, in
+    # role order: lead, crosscheck, implementor, tester.
+    for cli in "$LEAD_CLI" "$CROSSCHECK_CLI" "$IMPLEMENTOR_CLI" "$TESTER_CLI"; do
       case "$cli" in
         claude)
           if [[ "$MOUNT_CLAUDE_AUTH" != 1 ]]; then
@@ -631,10 +719,12 @@ FIXTURE_REF_Q="$(shell_quote "$FIXTURE_REF")"
 REFERENCE_REF_Q="$(shell_quote "$REFERENCE_REF")"
 CANDIDATE_REF_Q="$(shell_quote "$CANDIDATE_REF")"
 CHANGE_NAME_Q="$(shell_quote "$CHANGE_NAME")"
+WORKFLOW_Q="$(shell_quote "$WORKFLOW")"
+WORKFLOW_RELATIVE_PATH_Q="$(shell_quote "$WORKFLOW_RELATIVE_PATH")"
 JUDGE_MODEL_Q="$(shell_quote "$JUDGE_MODEL")"
 CONTAINER_AGENT_RUNNER_DIR_Q="$(shell_quote "$CONTAINER_AGENT_RUNNER_DIR")"
 CONTAINER_AGENT_SKILLS_DIR_Q="$(shell_quote "$CONTAINER_AGENT_SKILLS_DIR")"
-SELECTED_ADAPTERS_Q="$(shell_quote "$LEAD_CLI") $(shell_quote "$IMPLEMENTOR_CLI") $(shell_quote "$TESTER_CLI")"
+SELECTED_ADAPTERS_Q="$(shell_quote "$LEAD_CLI") $(shell_quote "$CROSSCHECK_CLI") $(shell_quote "$IMPLEMENTOR_CLI") $(shell_quote "$TESTER_CLI")"
 
 # Assemble the controller argument list on the host so the container script
 # stays a fixed, quoted invocation rather than string-built shell.
@@ -647,6 +737,9 @@ if [[ -z "$RESCORE_FROM" || "$CHANGE_NAME_PROVIDED" == 1 ]]; then
   CONTROLLER_ARGS+=(--change-name "$CHANGE_NAME")
 fi
 CONTROLLER_ARGS+=(--fixture-ref "$FIXTURE_REF" --judge-model "$JUDGE_MODEL")
+if [[ -z "$RESCORE_FROM" ]]; then
+  CONTROLLER_ARGS+=(--workflow "$WORKFLOW")
+fi
 if [[ -n "$CANDIDATE_REF" ]]; then
   CONTROLLER_ARGS+=(--candidate-ref "$CANDIDATE_REF")
 fi
@@ -662,6 +755,8 @@ elif [[ -n "$RESCORE_FROM" ]]; then
   CONTROLLER_ARGS+=(--rescore-from /rescore-source)
 else
   CONTROLLER_ARGS+=(--lead-cli "$LEAD_CLI" --lead-model "$LEAD_MODEL" --lead-effort "$LEAD_EFFORT")
+  CONTROLLER_ARGS+=(--crosscheck-cli "$CROSSCHECK_CLI" --crosscheck-model "$CROSSCHECK_MODEL")
+  CONTROLLER_ARGS+=(--crosscheck-effort "$CROSSCHECK_EFFORT")
   CONTROLLER_ARGS+=(--implementor-cli "$IMPLEMENTOR_CLI" --implementor-model "$IMPLEMENTOR_MODEL")
   CONTROLLER_ARGS+=(--implementor-effort "$IMPLEMENTOR_EFFORT")
   CONTROLLER_ARGS+=(--tester-cli "$TESTER_CLI" --tester-model "$TESTER_MODEL")
@@ -833,10 +928,10 @@ if ! curl -fsS "\$CHROME_DEVTOOLS_AXI_BROWSER_URL/json/version" >/dev/null; then
   exit 1
 fi
 
-# The implementation workflow is fixed for this change; the controller records
-# the clean Agent Runner revision that supplies it.
-IMPLEMENTATION_WORKFLOW=core:implement-change
-IMPLEMENTATION_WORKFLOW_PATH=$WORKFLOW_RELATIVE_PATH
+# The evaluated logical workflow and the checkout file it resolves to; the
+# controller records the clean Agent Runner revision that supplies it.
+IMPLEMENTATION_WORKFLOW=$WORKFLOW_Q
+IMPLEMENTATION_WORKFLOW_PATH=$WORKFLOW_RELATIVE_PATH_Q
 REPO=$REPO_Q
 FIXTURE_REF=$FIXTURE_REF_Q
 REFERENCE_REF=$REFERENCE_REF_Q

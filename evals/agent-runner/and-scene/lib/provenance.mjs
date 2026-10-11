@@ -4,14 +4,12 @@
 // requires a clean worktree and records whichever revision it used, so a run
 // stays reproducible without freezing the evaluated product.
 import { spawnSync } from 'node:child_process'
+import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 
-import { hashFile } from './persistence.mjs'
+import { hashFile, hashString } from './persistence.mjs'
+import { DEFAULT_WORKFLOW, parseWorkflowDefinition, resolveWorkflowFile } from './workflow.mjs'
 
-export const WORKFLOW_RELATIVE_PATH = 'workflows/core/implement-change-v1.0.yaml'
-// Current Agent Runner delegates final delivery to this sub-workflow. It is
-// recorded when present; earlier revisions have none.
-export const VERIFICATION_WORKFLOW_RELATIVE_PATH = 'workflows/core/verify-change-v1.0.yaml'
 export const AGENT_SKILLS_MANIFEST_PATH = '.claude-plugin/marketplace.json'
 
 // `run.sh` reads AGENT_RUNNER_DIR and otherwise falls back to the sibling
@@ -22,8 +20,11 @@ export function resolveAgentRunnerDir({ env = {}, evalsRoot }) {
   return configured || resolve(evalsRoot, '..', 'agent-runner')
 }
 
-export const PROVENANCE_FIELDS = ['commit', 'workflow_sha256', 'verification_workflow_sha256', 'cli_version']
-const REQUIRED_PROVENANCE_FIELDS = ['commit', 'workflow_sha256', 'cli_version']
+// The workflow is identified by its logical reference, the hash of the
+// definition it resolves to, and the name that definition declares (the name
+// Agent Runner records for the run). Sub-workflows are covered by the commit.
+export const PROVENANCE_FIELDS = ['commit', 'workflow', 'workflow_sha256', 'runner_workflow_name', 'cli_version']
+const REQUIRED_PROVENANCE_FIELDS = ['commit', 'workflow_sha256', 'runner_workflow_name', 'cli_version']
 export const AGENT_SKILLS_PROVENANCE_FIELDS = ['commit', 'manifest_sha256']
 
 function provenanceError(code, message) {
@@ -36,7 +37,7 @@ function defaultExec(command, args, options = {}) {
   return spawnSync(command, args, { encoding: 'utf8', ...options })
 }
 
-export async function readWorkflowProvenance({ agentRunnerDir, exec = defaultExec }) {
+export async function readWorkflowProvenance({ agentRunnerDir, workflow = DEFAULT_WORKFLOW, exec = defaultExec }) {
   const worktree = exec('git', ['-C', agentRunnerDir, 'rev-parse', '--is-inside-work-tree'])
   if (worktree.status !== 0 || (worktree.stdout ?? '').trim() !== 'true') {
     throw provenanceError(
@@ -63,14 +64,20 @@ export async function readWorkflowProvenance({ agentRunnerDir, exec = defaultExe
     )
   }
 
-  const workflowPath = join(agentRunnerDir, WORKFLOW_RELATIVE_PATH)
-  const workflowSha256 = await hashFile(workflowPath)
-  if (workflowSha256 === null) {
-    throw provenanceError('missing-workflow', `Workflow not found: ${workflowPath}`)
+  let relativePath
+  try {
+    relativePath = await resolveWorkflowFile({ agentRunnerDir, workflow })
+  } catch (error) {
+    throw provenanceError('workflow-resolution', error.message)
   }
-
-  const verificationWorkflowPath = join(agentRunnerDir, VERIFICATION_WORKFLOW_RELATIVE_PATH)
-  const verificationWorkflowSha256 = await hashFile(verificationWorkflowPath)
+  const workflowPath = relativePath ? join(agentRunnerDir, relativePath) : null
+  const workflowText = workflowPath ? await readFile(workflowPath, 'utf8').catch(() => null) : null
+  if (workflowText === null) {
+    throw provenanceError(
+      'workflow-resolution',
+      `Agent Runner checkout ${agentRunnerDir} has no definition for workflow ${workflow}`,
+    )
+  }
 
   const head = exec('git', ['-C', agentRunnerDir, 'rev-parse', 'HEAD'])
   const commit = head.status === 0 ? (head.stdout ?? '').trim() || null : null
@@ -82,12 +89,14 @@ export async function readWorkflowProvenance({ agentRunnerDir, exec = defaultExe
     agent_runner_dir: agentRunnerDir,
     commit,
     clean: true,
+    workflow,
+    // The absolute file path read in the checkout, kept for diagnosis. Not the
+    // baseline-identity `workflow.workflow_path`, which holds the definition
+    // hash (see lib/workflow.mjs).
     workflow_path: workflowPath,
-    workflow_relative_path: WORKFLOW_RELATIVE_PATH,
-    workflow_sha256: workflowSha256,
-    verification_workflow_path: verificationWorkflowSha256 === null ? null : verificationWorkflowPath,
-    verification_workflow_relative_path: VERIFICATION_WORKFLOW_RELATIVE_PATH,
-    verification_workflow_sha256: verificationWorkflowSha256,
+    workflow_relative_path: relativePath,
+    workflow_sha256: hashString(workflowText),
+    runner_workflow_name: parseWorkflowDefinition(workflowText).name,
     cli_version: cliVersion,
   }
   // Incomplete provenance is recorded as such rather than presented as a
@@ -98,8 +107,7 @@ export async function readWorkflowProvenance({ agentRunnerDir, exec = defaultExe
 
 export function compareProvenance(recorded, current) {
   return PROVENANCE_FIELDS.flatMap((field) => (
-    (field === 'verification_workflow_sha256' && recorded[field] === undefined)
-      || recorded[field] === current[field]
+    recorded[field] === current[field]
       ? []
       : [{ field, recorded: recorded[field], current: current[field] }]
   ))

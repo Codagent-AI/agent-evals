@@ -1,10 +1,13 @@
 import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { chmod, mkdir, readFile, readlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readdir, readFile, readlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { test } from 'node:test'
 import { spawnSync } from 'node:child_process'
+
+import { resolveAgentRunnerDir } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
+import { DEFAULT_WORKFLOW, resolveWorkflowFile } from '../evals/agent-runner/and-scene/lib/workflow.mjs'
 
 const script = resolve('evals/agent-runner/and-scene/bootstrap-agent-skills.sh')
 
@@ -247,5 +250,38 @@ test('a builtin reference outside workflows fails even if a same-named local fil
   const result = run(context, ['claude'])
   assert.equal(result.status, 2)
   assert.match(result.stderr, /cannot root builtin sub-workflow builtin:core\/x.yaml/)
+  await assert.rejects(readFile(context.calls, 'utf8'), { code: 'ENOENT' })
+})
+
+// The default evaluated workflow composes plan-change and implement-change as
+// file-relative sub-workflows; skills named only inside task review must still
+// be required.
+test('the default workflow requires skills its nested planning sub-workflows name', async (t) => {
+  const evalsRoot = resolve('.')
+  const agentRunnerDir = resolveAgentRunnerDir({ env: process.env, evalsRoot })
+  const relativePath = await resolveWorkflowFile({ agentRunnerDir, workflow: DEFAULT_WORKFLOW }).catch(() => null)
+  if (!relativePath) {
+    t.skip(`no ${DEFAULT_WORKFLOW} definition in ${agentRunnerDir}`)
+    return
+  }
+  const named = new Set()
+  for (const file of await readdir(join(agentRunnerDir, 'workflows'), { recursive: true })) {
+    if (!file.endsWith('.yaml')) continue
+    const text = await readFile(join(agentRunnerDir, 'workflows', file), 'utf8')
+    for (const match of text.matchAll(/codagent:([a-z0-9][a-z0-9-]*)/g)) named.add(match[1])
+  }
+  assert.ok(named.has('review-tasks'))
+  const context = await fixture()
+  for (const skill of named) {
+    if (skill === 'review-tasks') continue
+    await mkdir(join(context.source, 'skills', skill), { recursive: true })
+    await writeFile(join(context.source, 'skills', skill, 'SKILL.md'), `# ${skill}\n`)
+  }
+  context.workflow = join(agentRunnerDir, relativePath)
+
+  const result = run(context, ['claude'])
+
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /missing required Codagent skill: review-tasks/)
   await assert.rejects(readFile(context.calls, 'utf8'), { code: 'ENOENT' })
 })
