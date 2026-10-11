@@ -1493,3 +1493,74 @@ test('runner main session layout produces verified scoring lineage and delivery 
   assert.equal(delivery.pull_request.head_sha, finalSha)
   assert.equal(delivery.pull_request.base, 'main')
 })
+
+function localConfig(worktree, key) {
+  const result = exec('git', ['-C', worktree, 'config', '--local', '--get', key])
+  return result.status === 0 ? result.stdout.trim() : null
+}
+
+test('a prepared candidate worktree carries a neutral repo-local commit identity', async () => {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
+
+  await prepareCandidateWorktree({
+    repo: repo.source,
+    worktree,
+    ref: repo.fixture,
+    resume: false,
+    runId: 'run-with-commit-identity',
+    kind: 'candidate',
+    exec,
+  })
+
+  assert.equal(localConfig(worktree, 'user.name'), 'and-scene eval candidate')
+  assert.equal(localConfig(worktree, 'user.email'), 'and-scene-eval@users.noreply.github.com')
+  // A workflow shell step commits with no identity of its own; it must not
+  // depend on any global or system git configuration.
+  await writeFile(join(worktree, 'PLAN.md'), 'plan\n')
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }
+  for (const key of ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL']) {
+    delete env[key]
+  }
+  const add = exec('git', ['-C', worktree, 'add', 'PLAN.md'], { env })
+  assert.equal(add.status, 0, add.stderr)
+  const commit = exec('git', ['-C', worktree, '-c', 'user.useConfigOnly=true', 'commit', '-qm', 'plan'], { env })
+  assert.equal(commit.status, 0, commit.stderr)
+  assert.equal(
+    git(worktree, 'log', '-1', '--format=%an <%ae>'),
+    'and-scene eval candidate <and-scene-eval@users.noreply.github.com>',
+  )
+})
+
+test('resume restores a missing candidate commit identity and keeps an existing one', async () => {
+  const repo = await repository()
+  const worktree = join(repo.root, 'candidate')
+  const runId = 'run-resumed-without-identity'
+  const prepared = await prepareCandidateWorktree({
+    repo: repo.source, worktree, ref: repo.fixture, resume: false, runId, kind: 'candidate', exec,
+  })
+  const expectedSource = {
+    repository: prepared.repository,
+    fixture_commit: prepared.fixture_commit,
+    branch: prepared.branch,
+    base_branch: prepared.base_branch,
+  }
+  const resume = () => prepareCandidateWorktree({
+    repo: repo.source, worktree, ref: repo.fixture, resume: true, expectedSource, runId, kind: 'candidate', exec,
+  })
+  // A worktree prepared before the identity existed has none.
+  git(worktree, 'config', '--local', '--unset', 'user.name')
+  git(worktree, 'config', '--local', '--unset', 'user.email')
+
+  await resume()
+
+  assert.equal(localConfig(worktree, 'user.name'), 'and-scene eval candidate')
+  assert.equal(localConfig(worktree, 'user.email'), 'and-scene-eval@users.noreply.github.com')
+
+  git(worktree, 'config', '--local', 'user.name', 'Kept Name')
+  git(worktree, 'config', '--local', 'user.email', 'kept@example.invalid')
+  await resume()
+
+  assert.equal(localConfig(worktree, 'user.name'), 'Kept Name')
+  assert.equal(localConfig(worktree, 'user.email'), 'kept@example.invalid')
+})

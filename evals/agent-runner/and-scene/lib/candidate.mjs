@@ -331,6 +331,29 @@ async function installEvalExcludes(worktree) {
   await writeFile(path, `${current}${prefix}${additions.join('\n')}\n`)
 }
 
+// Workflow shell steps commit in the candidate worktree with no identity of
+// their own, and the sandbox has no global git identity. The harness owns the
+// candidate repository, so it supplies a neutral repo-local one. It is set only
+// where missing: an agent CLI's own per-commit author still takes precedence,
+// and nothing score-affecting records it.
+export const CANDIDATE_COMMIT_IDENTITY = Object.freeze({
+  'user.name': 'and-scene eval candidate',
+  'user.email': 'and-scene-eval@users.noreply.github.com',
+})
+
+function ensureCandidateCommitIdentity(exec, worktree) {
+  for (const [key, value] of Object.entries(CANDIDATE_COMMIT_IDENTITY)) {
+    const current = exec('git', ['-C', worktree, 'config', '--local', '--get', key], { encoding: 'utf8' })
+    if (current.error) throw new Error(`candidate ${key} lookup failed: ${current.error.message}`)
+    // Exit status 1 means the key is unset; anything else is a real failure.
+    if (current.status === 0 && (current.stdout ?? '').trim() !== '') continue
+    if (current.status !== 0 && current.status !== 1) {
+      throw new Error(`candidate ${key} lookup failed: ${(current.stderr ?? '').trim()}`)
+    }
+    run(exec, 'git', ['-C', worktree, 'config', '--local', key, value], {}, `candidate ${key} setup`)
+  }
+}
+
 export async function prepareCandidateWorktree({
   repo,
   worktree,
@@ -419,6 +442,7 @@ export async function prepareCandidateWorktree({
   }
 
   await installEvalExcludes(worktree)
+  ensureCandidateCommitIdentity(exec, worktree)
   const headCommit = run(exec, 'git', ['-C', worktree, 'rev-parse', 'HEAD'], {}, 'candidate commit lookup')
   if (resume) {
     if (branch) {
