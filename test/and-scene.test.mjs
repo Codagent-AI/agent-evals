@@ -823,6 +823,20 @@ test('judging accepts a Claude setup-token instead of the credentials file', asy
   assert.match(missing.output, /CLAUDE_CODE_OAUTH_TOKEN/)
 })
 
+test('a factory Fly launch leaves the Claude login to the launcher', async () => {
+  const context = await setup()
+  // The factory streams a Keychain login to the machine itself and checks it in doctor.
+  await rm(join(context.home, '.claude/.credentials.json'))
+
+  const result = await scored(
+    { ...context, env: { AGENT_FACTORY_FLY_MANIFEST: join(context.dir, 'manifest.json') } },
+    profileArgs,
+  )
+  assert.equal(result.status, 0, result.output)
+  assert.doesNotMatch(result.output, /Cross-family judging requires Claude auth/)
+  assert.match(result.output, /--mount-claude-auth/)
+})
+
 test('sandbox judging mounts the shared panel modules read-only at their resolved import path', async () => {
   const context = await setup()
   const result = await scored(context, profileArgs)
