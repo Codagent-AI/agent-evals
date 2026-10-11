@@ -697,6 +697,7 @@ test('rubric 14.0 fails a scaffold that never installs or checks for the Chromiu
     .subcomponents.find(({ criterion_definitions: d }) => d?.['testing-evidence-usable-proof']).criterion_definitions
   assert.match(testing['testing-evidence-usable-proof'], /including the assumptions ledger, regardless of author\. Attributing a result to the implementation run does not prove it/)
   assert.match(testing['testing-evidence-complete-honest-record'], /missing supporting evidence alone is scored only by testing-evidence-usable-proof, while this criterion fails when the available evidence demonstrates that a claim is false or overstated/)
+  assert.match(testing['testing-evidence-complete-honest-record'], /An unbacked claim that maps to no basis scenario therefore fails neither criterion unless the evidence shows it false or overstated/)
 
   const citations = rubric.criterion_sources['skill-empty-directory-scaffold'].sources
   assert.ok(citations?.some(({ document, quote }) => (

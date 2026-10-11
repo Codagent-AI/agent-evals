@@ -561,7 +561,9 @@ controller recomputes the identity and refuses the resume, naming the field,
 when the jobs, source, expected-file hash, evaluator commit, evaluator content
 hash, rubric hash, or judge profiles differ, or when the diagnostic flags are
 missing. Like a rescore, a diagnostic keeps its source's workflow and refuses
-`--workflow`. A refused resume changes nothing in the directory. Completed
+`--workflow`. A refused resume leaves the diagnostic's checkpoints and results
+unchanged; it may stage the named source's retained Runner session under
+`.runtime/rescore-session` before refusing. Completed
 `product-judging/<job>` checkpoints are reused. An ordinary `--rescore-from`
 still cannot be resumed.
 

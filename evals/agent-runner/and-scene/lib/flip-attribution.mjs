@@ -8,6 +8,9 @@
 //     ruling differs;
 //   - seat-noise: the seat verdicts differ and every check and ruling is the same;
 //   - mixed: both differ.
+// A fifth layer, the criterion's verdict source and second-opinion decision,
+// is a model decision outside the judging record: a difference there is
+// settlement-side, also for a browser-owned criterion no judge decided.
 // The labels say where the recorded outputs differ, not which difference
 // caused the flip. Flipped points sum every changed verdict's points, so
 // opposing flips never cancel; engineering quality is reported separately.
@@ -54,7 +57,7 @@ export function criterionLayers(record, id) {
 }
 
 export function classifyFlip(differs) {
-  const settlementSide = differs.checks || differs.effective || differs.ruling
+  const settlementSide = differs.checks || differs.effective || differs.ruling || differs.opinion
   if (!differs.seats && settlementSide) return 'settlement'
   if (differs.seats && !differs.checks && !differs.ruling) return 'seat-noise'
   if (differs.seats) return 'mixed'
@@ -72,7 +75,9 @@ export async function loadRescore(runDir, label = runDir) {
     const record = JSON.parse(await readFile(join(judgesDir, name), 'utf8'))
     judges[record.job ?? name.slice(0, -'.json'.length)] = record
   }
-  return { label, runDir, score, judges }
+  // The candidate the rescore judged; a rep's rescores must share it.
+  const result = await readJson(join(runDir, 'result.json'), null)
+  return { label, runDir, score, judges, candidate: result?.candidate_identity ?? null }
 }
 
 function scoredCriteria(score) {
@@ -86,6 +91,8 @@ function scoredCriteria(score) {
           job: subcomponent.job ?? criterion.fallback_job ?? null,
           verdict: criterion.verdict ?? null,
           points: criterion.points_possible ?? null,
+          source: criterion.verdict_source ?? null,
+          opinion: criterion.second_opinion?.decision ?? null,
         })
       }
     }
@@ -109,6 +116,9 @@ export function comparePair(a, b) {
   if (a.score.rubrics?.automated?.sha256 !== b.score.rubrics?.automated?.sha256) {
     throw new Error(`${a.label} and ${b.label} were scored under different automated rubrics`)
   }
+  if ((a.candidate ?? null) !== (b.candidate ?? null)) {
+    throw new Error(`${a.label} and ${b.label} judged different candidates, so they are not rescores of the same code`)
+  }
   const left = scoredCriteria(a.score)
   const right = scoredCriteria(b.score)
   const flips = []
@@ -124,6 +134,7 @@ export function comparePair(a, b) {
     agreement.push({ criterion: id, component: first.component, engineering, agree: first.verdict === second.verdict })
     if (first.verdict === second.verdict) continue
     const records = [judgingRecord(a, id), judgingRecord(b, id)]
+    const opinion = first.source !== second.source || first.opinion !== second.opinion
     let differs = null
     let flipClass = 'deterministic'
     if (records[0] && records[1]) {
@@ -133,8 +144,12 @@ export function comparePair(a, b) {
         checks: !same(layers[0].checks, layers[1].checks),
         effective: !same(layers[0].effective, layers[1].effective),
         ruling: !same(layers[0].ruling, layers[1].ruling),
+        opinion,
       }
       flipClass = classifyFlip(differs)
+    } else if (opinion) {
+      differs = { seats: false, checks: false, effective: false, ruling: false, opinion }
+      flipClass = 'settlement'
     }
     if (!Number.isFinite(first.points) || !Number.isFinite(second.points)) {
       throw new Error(`${id} flipped between ${a.label} and ${b.label} but has no points_possible to weigh it`)

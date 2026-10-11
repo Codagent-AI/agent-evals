@@ -14,6 +14,11 @@
 // - each file is one Claude invocation, NN its sequence within the run; every
 //   line is one JSON event; the `system`/`init` event names the model, and the
 //   `result` event carries the parsed `structured_output`;
+// - a retried invocation adds `<NN>-<job>.attempt-<N>.events.jsonl` files; its
+//   last attempt with a `result` event is the invocation, and earlier attempts
+//   without one (a timeout, capacity or quota stop) are skipped;
+// - a resumed process restarts NN, so invocations are ordered by file
+//   modification time, then by NN;
 // - a decider verdict call is a file of the job whose model is the record's
 //   decider model and whose `structured_output.results` all carry a `verdict`
 //   (span audits and contradiction checks carry a `classification` instead);
@@ -75,8 +80,9 @@ export async function findRecordedRuns(root) {
 export async function readRawLogs(directory) {
   const logs = new Map()
   if (!directory || !await isDirectory(directory)) return logs
+  const invocations = new Map()
   for (const name of (await readdir(directory)).sort()) {
-    const match = /^(\d+)-(.+)\.events\.jsonl$/.exec(name)
+    const match = /^(\d+)-(.+?)(?:\.attempt-(\d+))?\.events\.jsonl$/.exec(name)
     if (!match) continue
     const events = []
     const lines = (await readFile(join(directory, name), 'utf8')).split('\n').filter((line) => line.trim())
@@ -89,12 +95,21 @@ export async function readRawLogs(directory) {
     }
     const init = events.find((event) => event.type === 'system' && event.subtype === 'init')
     const result = events.find((event) => event.type === 'result')
-    if (!init || !result) fail(`malformed raw judge log ${name}: it has no ${init ? 'result' : 'init'} event`)
-    const job = match[2]
-    if (!logs.has(job)) logs.set(job, [])
-    logs.get(job).push({ name, sequence: Number(match[1]), model: init.model ?? null, output: result.structured_output ?? null })
+    const stem = `${match[1]}-${match[2]}`
+    const attempts = invocations.get(stem) ?? []
+    attempts.push({ name, attempt: Number(match[3] ?? 1), init, result, mtime: (await stat(join(directory, name))).mtimeMs })
+    invocations.set(stem, attempts)
   }
-  for (const list of logs.values()) list.sort((left, right) => left.sequence - right.sequence)
+  for (const [stem, attempts] of invocations) {
+    attempts.sort((left, right) => left.attempt - right.attempt)
+    const answered = attempts.filter(({ result }) => result)
+    const last = answered.at(-1) ?? attempts.at(-1)
+    if (!last.init || !last.result) fail(`malformed raw judge log ${last.name}: it has no ${last.init ? 'result' : 'init'} event`)
+    const [, sequence, job] = /^(\d+)-(.+)$/.exec(stem)
+    if (!logs.has(job)) logs.set(job, [])
+    logs.get(job).push({ name: last.name, sequence: Number(sequence), mtime: attempts[0].mtime, model: last.init.model ?? null, output: last.result.structured_output ?? null })
+  }
+  for (const list of logs.values()) list.sort((left, right) => left.mtime - right.mtime || left.sequence - right.sequence)
   return logs
 }
 

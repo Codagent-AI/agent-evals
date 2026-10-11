@@ -7,7 +7,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { runPanelJob, verifyCachedPanelJob, judgeFailure } from '../evals/lib/panel-judging/panel.mjs'
+import { runPanelJob, verifyCachedPanelJob, judgeFailure, DECIDER_REASONS_RULE } from '../evals/lib/panel-judging/panel.mjs'
 import { validateLineCitations,
   MAX_AUDIT_PACKET_CHARS, PacketOverflowError, SOURCE_JUDGE_RESULT_SCHEMA,
   batchClaims, buildContradictionCheckRequest, buildSourceAuditRequest, buildSpanAuditRequest,
@@ -132,6 +132,8 @@ test('an evidence decider ruling against a backed vote is checked with the rulin
       return JSON.stringify({ results: [vote('x', 'pass', { citations: [{ path: 'packet.txt', start_line: 2, end_line: 2 }] })] })
     } } })
   assert.equal(outcome.ok, true, outcome.record.error)
+  // The line-cited decider, and-scene's production path, is told to answer the judges it rules against.
+  assert.ok(seen.find(next => !next.audit_stage).prompt.includes(DECIDER_REASONS_RULE))
   const [check] = seen.filter(next => next.audit_stage === 'ruling-dissent-check')
   assert.ok(check)
   assert.match(check.prompt, /second line/)
