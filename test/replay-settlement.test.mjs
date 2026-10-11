@@ -2,7 +2,7 @@
 import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,6 +12,7 @@ import { loadRubrics, rubricCriteria } from '../evals/agent-runner/and-scene/lib
 import {
   blockerCheck, classifyFlip, comparePair, compareRep, criterionLayers, loadRescore,
 } from '../evals/agent-runner/and-scene/lib/flip-attribution.mjs'
+import { readRawLogs } from '../evals/agent-runner/and-scene/lib/settlement-replay.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const script = join(root, 'evals/agent-runner/and-scene/scripts/replay-settlement.mjs')
@@ -252,6 +253,26 @@ test('a malformed or mismatched raw log fails the replay instead of falling back
   }
 })
 
+test('raw logs take a retried call\'s answered attempt and order a resumed run by time', async () => {
+  const dir = await makeTempDir(join(tmpdir(), 'and-scene-raw-logs-'))
+  const init = JSON.stringify({ type: 'system', subtype: 'init', model: 'claude-opus-5-5' })
+  const answer = (verdict) => JSON.stringify({ type: 'result', structured_output: { results: [{ id: 'x', verdict }] } })
+  const files = [
+    // The first process: a decider call whose first attempt timed out.
+    ['03-testing-evidence.events.jsonl', init, 1000],
+    ['03-testing-evidence.attempt-2.events.jsonl', `${init}\n${answer('pass')}`, 1001],
+    // The resumed process restarts the sequence at 01.
+    ['01-testing-evidence.events.jsonl', `${init}\n${answer('fail')}`, 2000],
+  ]
+  for (const [name, content, seconds] of files) {
+    await writeFile(join(dir, name), `${content}\n`)
+    await utimes(join(dir, name), seconds, seconds)
+  }
+  const calls = (await readRawLogs(dir)).get('testing-evidence')
+  assert.deepEqual(calls.map(({ name, output }) => [name, output.results[0].verdict]),
+    [['03-testing-evidence.attempt-2.events.jsonl', 'pass'], ['01-testing-evidence.events.jsonl', 'fail']])
+})
+
 // Flip attribution over canned rescore pairs.
 const flipScript = join(root, 'evals/agent-runner/and-scene/scripts/compare-rescores.mjs')
 
@@ -262,6 +283,7 @@ const CRITERIA = {
   D: { job: 'testing-evidence', component: 'testing-evidence-quality', points: 1 },
   E: { job: 'engineering-quality', component: 'engineering-quality', points: 0.5 },
   F: { job: null, component: 'engineering-quality', points: 1 },
+  G: { job: null, component: 'scene-kit-correctness', points: 1 },
 }
 
 // spec: { <criterion>: { verdict, seats?, disputed?, checks?, ruling? } }
@@ -276,7 +298,8 @@ async function rescoreDir(base, name, spec, { gate = 'pass', belowFloor = false,
       id: `${component}-all`,
       job: null,
       criteria: Object.entries(CRITERIA).filter(([, value]) => value.component === component)
-        .map(([id, value]) => ({ id, verdict: spec[id].verdict, points_possible: value.points, fallback_job: value.job })),
+        .map(([id, value]) => ({ id, verdict: spec[id].verdict, points_possible: value.points, fallback_job: value.job,
+          verdict_source: 'owner', ...(spec[id].opinion ? { second_opinion: { decision: spec[id].opinion } } : {}) })),
     }],
   }))
   await writeFile(join(runDir, 'phases/score.json'), JSON.stringify({
@@ -307,6 +330,7 @@ const stable = {
   D: { verdict: 'pass' },
   E: { verdict: 'pass', seats: ['pass', 'pass', 'fail'] },
   F: { verdict: 'pass' },
+  G: { verdict: 'fail', opinion: 'uphold' },
 }
 const flipped = {
   // The regression: identical seats whose effective votes differ through a check.
@@ -317,6 +341,8 @@ const flipped = {
   D: { verdict: 'fail', disputed: [2], checks: [[2, 'confirmed']], ruling: 'fail' },
   E: { verdict: 'fail', seats: ['fail', 'fail', 'pass'] },
   F: { verdict: 'fail' },
+  // A browser fail a second opinion overturns in only this rescore.
+  G: { verdict: 'pass', opinion: 'overturn' },
 }
 
 test('a decider ruling or decider audit present in only one record is a settlement-side difference', () => {
@@ -347,18 +373,20 @@ test('flip attribution separates settlement, seat noise and mixed flips from the
   const pair = comparePair(one, two)
   const flips = Object.fromEntries(pair.flips.map((flip) => [flip.criterion, flip]))
   assert.equal(flips.A.class, 'settlement')
-  assert.deepEqual(flips.A.differs, { seats: false, checks: true, effective: true, ruling: true })
+  assert.deepEqual(flips.A.differs, { seats: false, checks: true, effective: true, ruling: true, opinion: false })
   assert.equal(flips.B.class, 'seat-noise')
-  assert.deepEqual(flips.B.differs, { seats: true, checks: false, effective: true, ruling: false })
+  assert.deepEqual(flips.B.differs, { seats: true, checks: false, effective: true, ruling: false, opinion: false })
   assert.equal(flips.C.class, 'mixed')
-  assert.deepEqual(flips.C.differs, { seats: true, checks: false, effective: true, ruling: true })
+  assert.deepEqual(flips.C.differs, { seats: true, checks: false, effective: true, ruling: true, opinion: false })
   assert.equal(flips.D.class, 'settlement')
   assert.equal(flips.D.differs.checks, true)
   assert.equal(flips.E.class, 'seat-noise')
   assert.equal(flips.F.class, 'deterministic')
-  assert.equal(pair.flipped_points, 3.5)
+  assert.equal(flips.G.class, 'settlement')
+  assert.deepEqual(flips.G.differs, { seats: false, checks: false, effective: false, ruling: false, opinion: true })
+  assert.equal(pair.flipped_points, 4.5)
   assert.equal(pair.target_met, false)
-  assert.deepEqual(pair.by_class, { settlement: 2, 'seat-noise': 0.5, mixed: 1, deterministic: 0, unattributed: 0 })
+  assert.deepEqual(pair.by_class, { settlement: 3, 'seat-noise': 0.5, mixed: 1, deterministic: 0, unattributed: 0 })
   assert.equal(pair.engineering_flipped_points, 1.5)
   assert.deepEqual(pair.engineering_by_class, { settlement: 0, 'seat-noise': 0.5, mixed: 0, deterministic: 1, unattributed: 0 })
   assert.deepEqual(pair.changes.gates, [{ id: 'verification-sample-outline', verdicts: ['pass', 'fail'] }])
@@ -377,7 +405,7 @@ test('opposing flips never cancel, and disagreement counts carry their denominat
   // r2 -> r3 turns A pass -> fail and B fail -> pass: 1.5 flipped points, not a net 0.5.
   assert.deepEqual(rep.pairs.map(({ pair, flipped_points: points }) => [pair.join('/'), points]), [['r1/r2', 0.5], ['r1/r3', 1], ['r2/r3', 1.5]])
   const counts = Object.fromEntries(rep.disagreements.map(({ criterion, disagreements, pairs }) => [criterion, `${disagreements}/${pairs}`]))
-  assert.deepEqual(counts, { A: '2/3', B: '2/3', C: '0/3', D: '0/3', E: '0/3', F: '0/3' })
+  assert.deepEqual(counts, { A: '2/3', B: '2/3', C: '0/3', D: '0/3', E: '0/3', F: '0/3', G: '0/3' })
   assert.ok(rep.disagreements.filter(({ engineering }) => engineering).every(({ pairs }) => pairs === 3))
 })
 
@@ -388,7 +416,7 @@ test('the blocker sums settlement and mixed points for the named rep, excluding 
     await rescoreDir(base, 'base-b', { ...stable, B: { verdict: 'fail', seats: ['fail', 'fail', 'pass'] }, E: flipped.E, F: flipped.F })]
   const load = (dirs) => Promise.all(dirs.map((dir) => loadRescore(dir, dir)))
   const blocked = blockerCheck(compareRep('e78-rep-2', await load(e78)))
-  assert.equal(blocked.pairs[0].settlement_and_mixed_points, 3)
+  assert.equal(blocked.pairs[0].settlement_and_mixed_points, 4)
   assert.equal(blocked.blocked, true)
   // Seat noise and engineering-quality flips never block.
   const quiet = blockerCheck(compareRep('baseline-1', await load(noisy)))
@@ -413,6 +441,17 @@ test('the blocker sums settlement and mixed points for the named rep, excluding 
   const unnamed = cli(['--rep', 'e78-rep-2', ...e78, '--blocker-rep', 'missing'])
   assert.equal(unnamed.status, 2)
   assert.match(unnamed.stderr, /names no --rep/)
+})
+
+test('rescores of different candidates are refused rather than compared', async () => {
+  const base = await makeTempDir(join(tmpdir(), 'and-scene-flips-identity-'))
+  const dirs = [await rescoreDir(base, 'r1', stable), await rescoreDir(base, 'r2', stable)]
+  await writeFile(join(dirs[0], 'result.json'), JSON.stringify({ candidate_identity: 'a'.repeat(64) }))
+  await writeFile(join(dirs[1], 'result.json'), JSON.stringify({ candidate_identity: 'b'.repeat(64) }))
+  const [one, two] = await Promise.all(dirs.map((dir, i) => loadRescore(dir, `r${i + 1}`)))
+  assert.throws(() => comparePair(one, two), /r1 and r2 judged different candidates/)
+  await writeFile(join(dirs[1], 'result.json'), JSON.stringify({ candidate_identity: 'a'.repeat(64) }))
+  assert.equal(comparePair(one, await loadRescore(dirs[1], 'r2')).flips.length, 0)
 })
 
 test('a flipped criterion without points_possible fails the comparison instead of counting as zero points', () => {
