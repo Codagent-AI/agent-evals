@@ -116,7 +116,10 @@ export function comparePair(a, b) {
   if (a.score.rubrics?.automated?.sha256 !== b.score.rubrics?.automated?.sha256) {
     throw new Error(`${a.label} and ${b.label} were scored under different automated rubrics`)
   }
-  if ((a.candidate ?? null) !== (b.candidate ?? null)) {
+  for (const rescore of [a, b]) {
+    if (!rescore.candidate) throw new Error(`${rescore.label} records no candidate identity, so it cannot be paired as a rescore of the same code`)
+  }
+  if (a.candidate !== b.candidate) {
     throw new Error(`${a.label} and ${b.label} judged different candidates, so they are not rescores of the same code`)
   }
   const left = scoredCriteria(a.score)
