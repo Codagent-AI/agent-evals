@@ -549,7 +549,8 @@ publication. It writes the judge outputs (`phases/judges/<job>.json`,
 `phases/product-judging.json`) and `diagnostic-result.json`, never
 `result.json`, a score, or a publication record. A failure or early exit also
 writes `diagnostic-result.json`: `unloadable` when the retained run fails input
-verification or no longer builds or serves, `failed` when a judge job fails.
+verification, its live branch or pull request changed after it ran
+(`rescore-source-unavailable`), or it no longer builds or serves, `failed` when a judge job fails.
 Its results are calibration diagnostics, never a prerequisite or runtime gate
 for a candidate evaluation.
 

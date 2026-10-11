@@ -10,6 +10,7 @@ import { test } from 'node:test'
 import {
   compareDiagnosticIdentity,
   compareDiagnostics,
+  diagnosticStatus,
   evaluatorContentManifest,
   normalizeJudgeJobs,
 } from '../evals/agent-runner/and-scene/lib/judge-diagnostic.mjs'
@@ -134,4 +135,13 @@ test('a malformed expected-verdict file is refused naming the file', async () =>
   await writeFile(expectedPath, '{ not json')
   await assert.rejects(compareDiagnostics({ expectedPath, runDirs: [] }),
     (error) => error.code === 'invalid-expected' && error.message.includes(expectedPath))
+})
+
+test('a retained run whose live branch or pull request changed after it is unloadable, not a failed diagnostic', () => {
+  // Raised while preparing the rescore worktree: an early-exit error.
+  assert.equal(diagnosticStatus({ errors: [{ code: 'rescore-source-unavailable', message: 'branch is missing' }] }), 'unloadable')
+  // Raised by delivery verification: the run's outcome failure.
+  assert.equal(diagnosticStatus({ outcome: { failure: { code: 'rescore-source-unavailable' } } }), 'unloadable')
+  assert.equal(diagnosticStatus({ outcome: { failure: { code: 'judge-output' } } }), 'failed')
+  assert.equal(diagnosticStatus({ outcome: { failure: null } }), 'complete')
 })
