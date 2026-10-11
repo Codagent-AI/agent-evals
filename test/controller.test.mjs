@@ -2773,6 +2773,10 @@ test('an ordinary rescore cannot be resumed, and diagnostic flags need each othe
   assert.match(unknown.errors[0].message, /unknown scored judge jobs: no-such-job/)
   const notDiagnostic = await diagnose(context, inputs, ['--resume', '--judge-jobs', 'scene-kit'])
   assert.ok(notDiagnostic.errors.some(({ code }) => code === 'diagnostic-state-missing'), JSON.stringify(notDiagnostic.errors))
+  // A resumed diagnostic restores its source's workflow, so it never selects one.
+  const selecting = await diagnose(context, inputs, ['--resume', '--workflow', 'core:plan-and-implement-change', '--judge-jobs', 'scene-kit'])
+  assert.equal(selecting.exitCode, 2)
+  assert.match(selecting.errors[0].message, /--judge-jobs cannot be combined with --workflow/)
 })
 
 test('a diagnostic whose retained run fails input verification reports it unloadable without judging', async () => {

@@ -559,7 +559,8 @@ source is restored from `diagnostic.json`. Before any checkpoint is reused, the
 controller recomputes the identity and refuses the resume, naming the field,
 when the jobs, source, expected-file hash, evaluator commit, evaluator content
 hash, rubric hash, or judge profiles differ, or when the diagnostic flags are
-missing. A refused resume changes nothing in the directory. Completed
+missing. Like a rescore, a diagnostic keeps its source's workflow and refuses
+`--workflow`. A refused resume changes nothing in the directory. Completed
 `product-judging/<job>` checkpoints are reused. An ordinary `--rescore-from`
 still cannot be resumed.
 

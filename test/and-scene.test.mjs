@@ -873,6 +873,8 @@ test('a diagnostic is refused without its pair of flags, a source, the host, or 
     [['--host', '--rescore-from', source, '--judge-jobs', 'scene-kit', '--expected', join(context.dir, 'missing.json')],
       /Expected-verdict file does not exist/],
     [['--host', '--reference-baseline', '--judge-jobs', 'scene-kit', '--expected', expected], /cannot be combined/],
+    [['--host', '--resume', '--workflow', 'core:plan-and-implement-change', '--judge-jobs', 'scene-kit', '--expected', expected],
+      /--judge-jobs cannot be combined with --workflow/],
   ]) {
     const result = await scored(context, args)
     assert.notEqual(result.status, 0, args.join(' '))

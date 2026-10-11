@@ -406,6 +406,10 @@ if [[ -n "$RESCORE_FROM" && "$WORKFLOW_PROVIDED" == 1 ]]; then
   echo "--rescore-from cannot be combined with --workflow; a rescore keeps its source's workflow." >&2
   exit 2
 fi
+if [[ "$DIAGNOSTIC" == 1 && "$WORKFLOW_PROVIDED" == 1 ]]; then
+  echo "--judge-jobs cannot be combined with --workflow; a diagnostic keeps its source's workflow." >&2
+  exit 2
+fi
 if [[ ! "$WORKFLOW" =~ ^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9-]*$ ]]; then
   echo "--workflow must be a logical workflow reference such as core:plan-and-implement-change: $WORKFLOW" >&2
   exit 2

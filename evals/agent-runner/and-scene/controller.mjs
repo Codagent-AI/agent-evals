@@ -242,6 +242,10 @@ export function parseArgs(argv) {
   if (options.rescoreFrom && options.workflowProvided) {
     throw new Error('--rescore-from cannot be combined with --workflow')
   }
+  // A resumed diagnostic restores its source, and so its workflow, from diagnostic.json.
+  if (options.diagnostic && options.workflowProvided) {
+    throw new Error('--judge-jobs cannot be combined with --workflow')
+  }
   parseLogicalWorkflowRef(options.workflow)
   options.runId ??= basename(resolve(options.runDir))
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(options.runId)) {
