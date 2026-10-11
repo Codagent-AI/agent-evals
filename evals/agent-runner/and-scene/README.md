@@ -206,7 +206,10 @@ node evals/agent-runner/and-scene/scripts/compare-rescores.mjs \
   --blocker-rep e78-rep-2 [--json]
 ```
 
-Every pair within a rep is compared. For each criterion whose verdict differs,
+Every pair within a rep is compared. A pair is refused when the two rescores
+were scored under different automated rubrics, or when either `result.json`
+records no `candidate_identity` or the two identities differ. For each
+criterion whose verdict differs,
 it records separately whether the original seat verdicts, the audits and
 checks, the effective votes, and the decider ruling differ; a check or ruling
 present in only one rescore is a difference, and free text is ignored. A flip

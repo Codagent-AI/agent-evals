@@ -307,6 +307,7 @@ async function rescoreDir(base, name, spec, { gate = 'pass', belowFloor = false,
     components, gates: [{ id: 'verification-sample-outline', verdict: gate }],
     automated_pass: pass, automated_subtotal: { points: 50 },
   }))
+  await writeFile(join(runDir, 'result.json'), JSON.stringify({ candidate_identity: 'c'.repeat(64) }))
   for (const job of new Set(Object.values(CRITERIA).map(({ job }) => job).filter(Boolean))) {
     const ids = Object.keys(CRITERIA).filter((id) => CRITERIA[id].job === job)
     const record = { protocol: 'cross-family-panel-v2', job, criteria: ids, order: ['pass', 'fail'], fallback_ids: [],
@@ -452,11 +453,18 @@ test('rescores of different candidates are refused rather than compared', async 
   assert.throws(() => comparePair(one, two), /r1 and r2 judged different candidates/)
   await writeFile(join(dirs[1], 'result.json'), JSON.stringify({ candidate_identity: 'a'.repeat(64) }))
   assert.equal(comparePair(one, await loadRescore(dirs[1], 'r2')).flips.length, 0)
+  // A rescore that records no candidate cannot be paired at all.
+  await writeFile(join(dirs[1], 'result.json'), JSON.stringify({}))
+  const unrecorded = await loadRescore(dirs[1], 'r2')
+  assert.throws(() => comparePair(one, unrecorded), /r2 records no candidate identity/)
+  await rm(join(dirs[0], 'result.json'))
+  const missing = await loadRescore(dirs[0], 'r1')
+  assert.throws(() => comparePair(missing, unrecorded), /r1 records no candidate identity/)
 })
 
 test('a flipped criterion without points_possible fails the comparison instead of counting as zero points', () => {
   const rescore = (label, verdict) => ({
-    label, judges: {},
+    label, judges: {}, candidate: 'c'.repeat(64),
     score: { rubrics: { automated: { sha256: 'f'.repeat(64) } },
       components: [{ id: 'demo-technical-quality', subcomponents: [{ job: 'demo-integration',
         criteria: [{ id: 'untiered', verdict, points_possible: null }] }] }] },
