@@ -1,5 +1,5 @@
 // Suite-owned definitions and citations; settlement belongs to the shared panel.
-import { runPanelJob, rerunDecider, PANEL_PROTOCOL } from '../../../lib/panel-judging/panel.mjs'
+import { runPanelJob, rerunDecider, checkRecordedRuling, PANEL_PROTOCOL } from '../../../lib/panel-judging/panel.mjs'
 import { JudgeOutputError } from '../../../lib/panel-judging/protocol.mjs'
 import { JUDGE_PROFILE } from './profiles.mjs'
 export { PANEL_PROTOCOL, JUDGE_PROFILE }
@@ -180,6 +180,11 @@ export async function runDefinitionPanel({ job, panel, decider }) {
 // Calibration: the decider alone, re-run on a recorded panel record of this job.
 export async function rerunDefinitionDecider({ job, decider, record }) {
   return rerunDecider({ record, decider: guarded(decider, job), schema: judgeSchema(job.criteria), buildPrompt: definitionPrompt(job), validateCitations: r => validateFinding(r, job) })
+}
+// The retained-ruling check: the overrule check alone, run read-only on one
+// recorded decider ruling of this job, under any recorded protocol.
+export async function checkRetainedDefinitionRuling({ job, decider, record, id }) {
+  return checkRecordedRuling({ record, id, decider: guarded(decider, job), schema: judgeSchema(job.criteria), buildPrompt: definitionPrompt(job) })
 }
 export async function runDiscovery({ job, invoke }) {
   const schema = discoverySchema(job.criteria)

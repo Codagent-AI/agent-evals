@@ -43,7 +43,7 @@ function safeJobName(value) {
 }
 
 // The effort every eval-owned judge call runs at, recorded with its authority.
-export const JUDGE_REASONING_EFFORT = 'medium'
+export const JUDGE_REASONING_EFFORT = 'high'
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
 const DEFAULT_KILL_GRACE_MS = 10 * 1000
 const MAX_ATTEMPTS = 2

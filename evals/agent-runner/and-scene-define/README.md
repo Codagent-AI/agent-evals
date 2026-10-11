@@ -243,6 +243,10 @@ inventory version 5 records that review as `anchors_review: { reviewer, date,
 inventory_version }`; the anchors themselves are unchanged. Any later change to
 the anchors needs a new inventory version and a new review, recorded the same
 way under the versioning rules above, before calibration or a candidate run.
+Inventory version 6 (rubric version 10) tightens the INV-093 anchors: the
+non-zero exit must be stated, and a command or check that is only said to fail
+leaves the item `partial`. Calibration showed a decider, and the overrule check
+behind it, reading "fails" as a non-zero exit.
 Preference items have no coverage anchors.
 
 `rubric.json` is generated from the inventory. Its coverage criteria and
@@ -283,7 +287,7 @@ node evals/agent-runner/and-scene-define/scripts/build-rubric.mjs
 node evals/agent-runner/and-scene-define/scripts/build-rubric.mjs --check
 ```
 
-The host judges use the shared `cross-family-panel-v1` protocol with Sonnet
+The host judges use the shared `cross-family-panel-v2` protocol with Sonnet
 5.5, two independent `gpt-6-luna` samples, and Opus 5.5 for decisions and
 checks, all at high effort. Claude receives inlined inputs with no tools;
 Codex receives only the job packet in a scratch working directory and a private
@@ -292,6 +296,36 @@ authentication is saved atomically to the host auth file; private calls sharing
 that file are serialized. On startup the invoker removes legacy `home-*`
 credential copies from the run runtime directory. Calls write eval-owned usage to
 `phases/eval-owned-usage.jsonl`.
+
+The decider rules the criteria the panel did not settle in one batched call.
+A ruling that differs from a verdict exactly two judges gave overrules them, so
+it gets an `overrule-check`: the decider's model checks the ruling's stated
+reason against its citations. The ruling stands only when the check is
+`confirmed`. Otherwise, including `insufficient`, the two judges' verdict
+stands with basis `majority-<verdict>`, and the result's `overrule_check`
+records whether the ruling was upheld or rejected. A three-way split has no
+two-judge verdict, so its ruling stands unchecked. A check that needs missing
+material, or whose packet cannot fit, fails the job as a harness failure. Every
+define panel job gets the check, including the disclosure audit, where a
+not-leaked ruling against two Codex judges leaves the item leaked unless the
+check confirms it.
+
+The decider must answer, by label, the stated reason of each vote it rules
+against. Once a ruling stands, each vote it rejected whose citations validate
+gets a `ruling-dissent-check`: the dissent check, given that vote's reason
+beside the agreeing votes' reasons and the ruling's own. A confirmed check lets
+the rejected vote's verdict stand (`checked-dissent-<verdict>`); two confirmed
+checks for different verdicts leave the ruling standing. A ruling its overrule
+check rejected needs none. The shared panel module runs these checks for every
+suite.
+
+The disclosure audit runs first, because its leaked items change coverage:
+`gates-and-judging` reads `audits/disclosure.json` before it starts any job.
+The coverage (one job per area), quality and fidelity jobs then run through the
+shared bounded pool (`evals/lib/panel-judging/job-pool.mjs`), three at a time.
+Checkpoint updates are written one at a time, results are recorded in job
+order, and after a failed job or checkpoint no new job starts; jobs already
+running finish before the phase fails.
 
 `audits/disclosure.json` records settled and dissenting flags and leaked item
 ids. Leaks are excluded from both earned and possible coverage. If every item
@@ -306,6 +340,27 @@ so a resumed judging failure reuses jobs whose provenance and hashes still
 match. No hidden input, rubric, or judge packet is staged into the evaluated
 sandbox.
 
+
+## Retained-ruling check
+
+`scripts/check-retained-ruling.mjs` runs the overrule check against one
+decider ruling already recorded in a retained calibration record, of any
+protocol: the recorded ruling, its stated reason and citations, with the
+recorded votes. It prints the check's classification and the verdict v2
+settlement would give, such as `partial (majority-partial)`. It makes at most
+one decider call, on the pinned decider model, and only reads the record, its
+run directory and the suite inputs: no judging record or cache entry is
+written, so a retained record is never reused as v2 judging. The decider's raw
+logs and usage go to a fresh temporary directory, which the output names.
+
+```sh
+node evals/agent-runner/and-scene-define/scripts/check-retained-ruling.mjs \
+  --record <calibration-out>/inputs/<input_id>/repeat-<n>/judges/coverage-<area>.json \
+  --criterion INV-093 [--run-dir DIR] [--suite-root DIR] [--scratch-dir DIR] [--json]
+```
+
+`--run-dir` defaults to two levels above the record. A ruling that overrules no
+two-judge verdict needs no check, and the script says so without a model call.
 
 ## Calibration set
 
@@ -344,14 +399,17 @@ evals/agent-runner/and-scene-define/run.sh --calibrate [--out DIR] [--repeats N]
   quality, and fidelity when the input has a conversation). No judged unit is
   reused between repeats. Inputs have no disclosure audit, so nothing is leaked.
 - `--concurrency` is how many repeats are judged at once (default 6, at
-  least 1). Each repeat's panel already runs its three judges together, so the
-  default keeps about eighteen judge CLIs in flight. The report is the same
+  least 1). Each repeat judges its jobs one at a time, and each job's panel
+  runs its three judges together, so the default keeps about eighteen judge
+  CLIs in flight. The report is the same
   whatever order repeats finish in. After a failed repeat no new repeat
   starts, and the calibration fails once in-flight repeats finish.
 - For each input's first repeat, the decider alone is re-run 3 times on every
-  recorded panel record that reached it: the batched decider ruling and every
-  targeted dissent check, rebuilt exactly as the panel built them
-  (`rerunDecider` in the shared panel module).
+  recorded panel record that reached it: the batched decider ruling, the
+  overrule check of each re-run ruling that overrules a two-judge verdict, and
+  every targeted dissent check, rebuilt exactly as the panel built them
+  (`rerunDecider` in the shared panel module). A ruling counts as flipped when
+  the verdict it settles after its overrule check differs from the recorded one.
 - `--out` defaults to `artifacts/evals/and-scene-define-calibration/<timestamp>`
   (ignored by Git). Eval-owned usage is recorded in
   `<out>/phases/eval-owned-usage.jsonl`.
@@ -366,7 +424,8 @@ evals/agent-runner/and-scene-define/run.sh --calibrate [--out DIR] [--repeats N]
   `missing` rates beside the expected distribution, with an agreement rate and
   a signed leniency (mean judged minus expected value);
 - `decider_flips`: the ruling-flip rate on fixed recorded panel outputs,
-  separate from panel spread, naming each flipped item;
+  separate from panel spread, measured on each ruling's verdict after its
+  overrule check, naming each flipped item;
 - `identical_rescore`: repeats 1 and 2 of `--rescore-input` (default
   `reference`), two judgings under identical conditions, diffed per item;
 - `failures`, each naming the input and items: a removed mandatory item judged

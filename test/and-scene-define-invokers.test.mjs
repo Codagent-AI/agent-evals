@@ -174,6 +174,19 @@ test('INT-002 pinned Claude judge and decider are tool-less, strict, fail fast o
   assertStrictSchema(discoverySchema(['item']))
   const bad = await claudeStub(t, [stream({ results: [] }, [{ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read' }] } }])])
   await assert.rejects(createClaudeJudgeInvoker(bad)({ authority: JUDGE_PROFILE.decider, schema, prompt: 'inputs' }), /forbidden tool/)
+  // A forbidden call the CLI refused ran nothing; the judge's answer stands.
+  const refused = await claudeStub(t, [stream({ results: [] }, [
+    { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'b1', name: 'Bash', input: { command: 'ls' } }] } },
+    { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'b1', is_error: true, content: '<tool_use_error>Error: No such tool available: Bash.</tool_use_error>' }] } }])])
+  assert.equal(await createClaudeJudgeInvoker(refused)({ authority: JUDGE_PROFILE.decider, schema, prompt: 'inputs' }), JSON.stringify({ results: [] }))
+  // One that returned output did run, and stays invalid.
+  const ran = await claudeStub(t, [stream({ results: [] }, [
+    { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'b2', name: 'Bash', input: { command: 'ls' } }] } },
+    { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'b2', content: 'README.md' }] } }])])
+  await assert.rejects(createClaudeJudgeInvoker(ran)({ authority: JUDGE_PROFILE.decider, schema, prompt: 'inputs' }), /forbidden tool: Bash/)
+  // A session that offers a forbidden tool is invalid even unused.
+  const offered = await claudeStub(t, [stream({ results: [] }, [{ type: 'system', subtype: 'init', tools: ['Bash', 'StructuredOutput'] }])])
+  await assert.rejects(createClaudeJudgeInvoker(offered)({ authority: JUDGE_PROFILE.decider, schema, prompt: 'inputs' }), /forbidden tool: Bash/)
   const invalid = await claudeStub(t, [{ stdout: '', stderr: 'invalid_json_schema', code: 1 }])
   await assert.rejects(createClaudeJudgeInvoker(invalid)({ authority: JUDGE_PROFILE.decider, schema, prompt: 'inputs' }), error => error.retryable === false)
   assert.equal((await invalid.calls()).length, 1)

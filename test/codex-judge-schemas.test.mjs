@@ -11,12 +11,15 @@ import { test } from 'node:test'
 import { AMBIGUITY_RESULT_SCHEMA, parseAmbiguityOutput } from '../evals/agent-runner/and-scene/lib/ambiguity.mjs'
 import {
   JUDGE_RESULT_SCHEMA,
+  PANEL_AUDIT_RESULT_SCHEMA,
+  PANEL_CHECK_RESULT_SCHEMA,
   SOURCE_AUDIT_RESULT_SCHEMA,
   SOURCE_JUDGE_RESULT_SCHEMA,
 } from '../evals/agent-runner/and-scene/lib/judge-jobs.mjs'
 import { PRICING_FINDING_SCHEMA } from '../evals/agent-runner/and-scene/lib/pricing.mjs'
 import {
   LINE_CITED_RESULT_SCHEMA,
+  LINE_CITED_CLAIM_MAP_RESULT_SCHEMA,
   buildJudgeRequest,
   buildSpanAuditRequest,
   buildTiebreakRequest,
@@ -35,8 +38,13 @@ const CODEX_JUDGE_SCHEMAS = {
   JUDGE_RESULT_SCHEMA,
   SOURCE_JUDGE_RESULT_SCHEMA,
   SOURCE_AUDIT_RESULT_SCHEMA,
+  PANEL_AUDIT_RESULT_SCHEMA,
+  PANEL_CHECK_RESULT_SCHEMA,
   PRICING_FINDING_SCHEMA,
   LINE_CITED_RESULT_SCHEMA,
+  // The testing-evidence decider's schema: every criterion returns claim_map,
+  // the empty form when it takes none, because strict mode has no optional field.
+  LINE_CITED_CLAIM_MAP_RESULT_SCHEMA,
   SECOND_OPINION_SCHEMA,
 }
 

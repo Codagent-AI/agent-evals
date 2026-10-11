@@ -280,9 +280,9 @@ function compareToReference({ reference, score, target }) {
 
   for (const component of score.components) {
     const referenceComponent = reference.components.find(({ id }) => id === component.id)
-    const intended = (target.kind === 'component' && target.id === component.id)
-      || (target.kind === 'gate' && target.id === 'verification-sample-outline'
-        && component.id === 'demo-technical-quality')
+    // The outline gate's inputs are zero-point gate inputs, so failing the
+    // gate through one of them must leave every component's points unchanged.
+    const intended = target.kind === 'component' && target.id === component.id
     if (intended) {
       if (!(component.points_awarded < referenceComponent.points_awarded)) {
         problems.push(
