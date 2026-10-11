@@ -976,6 +976,26 @@ test('a driver error fails only the affected criterion rather than aborting the 
   assert.equal(result.criteria.length, DETERMINISTIC_BROWSER_CRITERIA.length)
 })
 
+test('a demo page missing the step-count hook fails its criteria instead of the evaluation', async () => {
+  const driver = createDemo()
+  // What the AXI driver raises when the page loads without data-step-count.
+  driver.open = async () => {
+    throw new Error('timed out waiting for [data-step-count]: the loaded demo page does not expose the required step-count hook')
+  }
+  const result = await runBrowserEvaluation({
+    driver,
+    build: passingBuild,
+    verification: passingVerification,
+    evidenceArtifacts: fixtureEvidenceArtifacts,
+  })
+
+  assert.equal(result.criteria.length, DETERMINISTIC_BROWSER_CRITERIA.length)
+  assert.ok(result.criteria.every(({ verdict }) => verdict === 'fail'))
+  assert.match(result.criteria[0].rationale, /data-step-count/)
+  assert.equal(verdictOf(result, 'verification-sample-outline'), 'fail')
+  assert.equal(verdictOf(result, 'verification-build-whole-app'), 'pass')
+})
+
 test('an absent build result leaves its gate unobserved rather than failed', async () => {
   const result = await evaluate({}, { build: null })
   const gate = result.gates.find(({ id }) => id === 'verification-build-whole-app')

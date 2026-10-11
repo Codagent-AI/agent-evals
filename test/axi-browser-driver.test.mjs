@@ -1125,3 +1125,47 @@ test('a replay swipe whose start element is missing is a failed replay', async (
   assert.equal(outcome.passed, false)
   assert.equal(outcome.product_failure, 'replay swipe start target was not found')
 })
+
+test('a loaded page without the data-step-count hook is product evidence, not an adapter failure', async () => {
+  const { createAxiBrowserDriver, BrowserDriverError } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
+  // The page loads, but its chrome exposes a renamed hook instead of the
+  // design's data-step-count. The clock jumps so the wait times out at once.
+  let clock = 0
+  const context = {
+    Date: { now: () => (clock += 5000) },
+    setTimeout: (callback) => callback(),
+    Number,
+    JSON,
+    document: { querySelector: (selector) => (selector === '[data-presentation-step-count]' ? {} : null) },
+  }
+  context.page = {
+    open: async (url) => ({ url }),
+    eval: async (callback) => (typeof callback === 'function'
+      ? callback() : runInNewContext(callback, context)),
+  }
+  const driver = createAxiBrowserDriver({ baseUrl: 'http://127.0.0.1:4319/', command: async (args, input) => {
+    if (args[0] === 'resize') return { status: 0, stdout: '' }
+    let stdout = ''
+    try {
+      await runInNewContext(`(async () => {\n${input}\n})()`,
+        { ...context, console: { log: (line) => { stdout += `${line}\n` } } })
+    } catch (error) {
+      // What chrome-devtools-axi prints when a script throws.
+      return { status: 1, stdout: `error: ${JSON.stringify(error.message)}\ncode: UNKNOWN\n` }
+    }
+    return { status: 0, stdout }
+  } })
+
+  const error = await driver.open('how-to-make-a-presentation').then(() => null, (caught) => caught)
+  assert.ok(error instanceof Error)
+  assert.ok(!(error instanceof BrowserDriverError), error.message)
+  assert.notEqual(error.owner, 'evaluation-harness')
+  assert.match(error.message, /\[data-step-count\]/)
+
+  // A navigation the adapter could not perform stays a harness failure.
+  const unreachable = createAxiBrowserDriver({ baseUrl: 'http://127.0.0.1:4319/',
+    command: async (args) => (args[0] === 'resize' ? { status: 0, stdout: '' }
+      : { status: 1, stdout: 'error: "net::ERR_CONNECTION_REFUSED at http://127.0.0.1:4319/"\ncode: UNKNOWN\n' }) })
+  await assert.rejects(unreachable.open('how-to-make-a-presentation'),
+    (caught) => caught instanceof BrowserDriverError && caught.owner === 'evaluation-harness')
+})
