@@ -410,24 +410,30 @@ test('opposing flips never cancel, and disagreement counts carry their denominat
   assert.ok(rep.disagreements.filter(({ engineering }) => engineering).every(({ pairs }) => pairs === 3))
 })
 
-test('the blocker sums settlement and mixed points for the named rep, excluding engineering quality', async () => {
+test('the blocker sums settlement, mixed and unattributed points for the named rep, excluding engineering quality', async () => {
   const base = await makeTempDir(join(tmpdir(), 'and-scene-flips-blocker-'))
   const e78 = [await rescoreDir(base, 'e78-a', stable), await rescoreDir(base, 'e78-b', flipped)]
   const noisy = [await rescoreDir(base, 'base-a', stable),
     await rescoreDir(base, 'base-b', { ...stable, B: { verdict: 'fail', seats: ['fail', 'fail', 'pass'] }, E: flipped.E, F: flipped.F })]
   const load = (dirs) => Promise.all(dirs.map((dir) => loadRescore(dir, dir)))
   const blocked = blockerCheck(compareRep('e78-rep-2', await load(e78)))
-  assert.equal(blocked.pairs[0].settlement_and_mixed_points, 4)
+  assert.equal(blocked.pairs[0].blocking_points, 4)
   assert.equal(blocked.blocked, true)
   // Seat noise and engineering-quality flips never block.
   const quiet = blockerCheck(compareRep('baseline-1', await load(noisy)))
-  assert.equal(quiet.pairs[0].settlement_and_mixed_points, 0)
+  assert.equal(quiet.pairs[0].blocking_points, 0)
   assert.equal(quiet.blocked, false)
   const engineering = [await rescoreDir(base, 'eq-a', { ...stable, E: { verdict: 'pass', disputed: [1], checks: [[1, 'insufficient']] } }),
     await rescoreDir(base, 'eq-b', { ...stable, E: { verdict: 'fail', disputed: [1], checks: [[1, 'confirmed']], ruling: 'fail' } })]
   const eqOnly = blockerCheck(compareRep('e78-rep-2', await load(engineering)))
-  assert.equal(eqOnly.pairs[0].settlement_and_mixed_points, 0)
+  assert.equal(eqOnly.pairs[0].blocking_points, 0)
   assert.equal(eqOnly.blocked, false)
+  // A verdict flip with identical judging records is unexplained, and blocks.
+  const unexplained = [await rescoreDir(base, 'un-a', stable),
+    await rescoreDir(base, 'un-b', { ...stable, A: { ...stable.A, verdict: 'fail' }, C: { ...stable.C, verdict: 'fail' } })]
+  const unattributed = blockerCheck(compareRep('e78-rep-2', await load(unexplained)))
+  assert.equal(unattributed.pairs[0].blocking_points, 2)
+  assert.equal(unattributed.blocked, true)
 
   // The rep that counts is an input to the command, never a hard-coded run.
   const cli = (args) => spawnSync(process.execPath, [flipScript, ...args], { encoding: 'utf8' })

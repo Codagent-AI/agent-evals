@@ -216,9 +216,10 @@ export function compareRep(rep, rescores) {
 // points, excluding engineering quality, exceed the limit blocks merge.
 export function blockerCheck(repReport, { limit = BLOCKER_POINTS } = {}) {
   const pairs = repReport.pairs.map(({ pair, by_class: classes }) => ({
-    pair, settlement_and_mixed_points: classes.settlement + classes.mixed,
+    // A flip no judging layer explains blocks too, rather than passing silently.
+    pair, blocking_points: classes.settlement + classes.mixed + classes.unattributed,
   }))
-  return { rep: repReport.rep, limit, pairs, blocked: pairs.some(({ settlement_and_mixed_points: points }) => points > limit) }
+  return { rep: repReport.rep, limit, pairs, blocked: pairs.some(({ blocking_points: points }) => points > limit) }
 }
 
 const formatPoints = (value) => String(Number(Number(value).toFixed(6)))
@@ -247,8 +248,8 @@ export function renderComparison({ reps, blocker }) {
     }
   }
   if (blocker) {
-    lines.push(`blocker (${blocker.rep}): ${blocker.pairs.map(({ pair, settlement_and_mixed_points: points }) => `${pair.join(' vs ')} settlement+mixed ${formatPoints(points)}`).join('; ')}`)
-    lines.push(blocker.blocked ? `MERGE BLOCKED: settlement and mixed points exceed ${blocker.limit}` : `not blocked: settlement and mixed points within ${blocker.limit}`)
+    lines.push(`blocker (${blocker.rep}): ${blocker.pairs.map(({ pair, blocking_points: points }) => `${pair.join(' vs ')} settlement+mixed+unattributed ${formatPoints(points)}`).join('; ')}`)
+    lines.push(blocker.blocked ? `MERGE BLOCKED: settlement, mixed and unattributed points exceed ${blocker.limit}` : `not blocked: settlement, mixed and unattributed points within ${blocker.limit}`)
   }
   return `${lines.join('\n')}\n`
 }

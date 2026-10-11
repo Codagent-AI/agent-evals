@@ -4,7 +4,16 @@
 Define the versioned automated and human product-quality rubrics, gates, thresholds, evidence contracts, and score calculation.
 ## Requirements
 ### Requirement: Official product score
-The evaluation SHALL calculate a candidate implementation-quality score out of 100 from the following components. Automated criteria SHALL award points only from binary pass/fail verdicts. A deterministic evaluator MAY report a criterion as not observed; that criterion is unresolved until a declared fallback judge supplies a pass/fail verdict. For every table row that lists multiple criteria, the row's points SHALL be divided equally among those criteria; the scorer SHALL NOT round intermediate values.
+The evaluation SHALL calculate a candidate implementation-quality score out of 100 from the following components. Automated criteria SHALL award points only from binary pass/fail verdicts. A deterministic evaluator MAY report a criterion as not observed; that criterion is unresolved until a declared fallback judge supplies a pass/fail verdict.
+
+Every scored criterion SHALL carry one importance tier: critical, major, or minor. A criterion's points SHALL be the weight the rubric assigns to its tier within its component, and SHALL NOT depend on how many criteria share its subcomponent. Within each component:
+- every criterion of one tier SHALL have the same weight;
+- a critical weight SHALL exceed a major weight, and a major weight SHALL exceed a minor weight;
+- no weight SHALL exceed 2 points;
+- every weight SHALL be a multiple of 1/16 point;
+- the weights of its scored criteria SHALL sum exactly to the component's points.
+
+A subcomponent SHALL be a reporting group whose points are the sum of its criteria's weights. A zero-point gate input SHALL carry no tier and no points; it SHALL exist only to feed a hard gate, under "Hard gates and official pass". Rubric validation SHALL reject a rubric that breaks any of these rules. The scorer SHALL NOT round intermediate values.
 
 | Candidate component | Points |
 |---|---:|
@@ -105,17 +114,39 @@ When the user explicitly approves a post-run technical adjudication, the harness
 - **AND** it recalculates the automated subtotal from the approved shared replacements and unchanged non-shared scores
 - **AND** it recalculates the official score and shared-92 comparison from their applicable components
 
+#### Scenario: Points follow the criterion's tier
+- **WHEN** a candidate passes `demo-required-scene-content`, a critical criterion, and fails `demo-scope-discipline`, a minor one
+- **THEN** the demo component gains 2 points for the first and loses 0.5 for the second
+- **AND** neither weight depends on how many criteria share its subcomponent
+
+#### Scenario: Subcomponent points are reported as sums
+- **WHEN** the scorer reports a component's subcomponents
+- **THEN** each subcomponent's possible points equal the sum of its scored criteria's weights
+
+#### Scenario: A rubric breaks the tier rules
+- **WHEN** a rubric gives two major criteria in one component different weights, gives any criterion more than 2 points, gives a minor criterion at least a major weight, or has component weights that do not sum to the component's points
+- **THEN** rubric validation fails and no score is produced
+
+#### Scenario: A zero-point gate input carries no points
+- **WHEN** `demo-route-and-registration` passes or fails
+- **THEN** the demo component's points are unchanged by that verdict
+- **AND** the verdict still feeds `verification-sample-outline`
+
 ### Requirement: Demo presentation technical quality
 The evaluation SHALL score the delivered demo presentation out of 20 using the following rubric. Deterministic browser evaluation SHALL inspect the built, running demo. LLM source review SHALL inspect the delivered source and supporting evidence. The LLM SHALL assess technical implementation and SHALL NOT assess visual taste, perceived motion quality, or responsive aesthetics, which belong to human review.
 
+The component's tier weights SHALL be critical 2, major 1, and minor 0.5.
+
 | Subcomponent | Points | Evaluator | Criteria |
 |---|---:|---|---|
-| Canonical content, routing, and technical structure | 4 | Deterministic browser | `demo-route-and-registration`, `demo-nine-step-content-and-order`, `demo-required-scene-content`, `demo-evolving-scene-structure`, `quality-captions-and-navigation` |
-| Navigation, modes, boundaries, and controls | 4 | Deterministic browser | `demo-present-mode-behavior`, `demo-browse-mode-behavior`, `demo-mode-position-preservation`, `demo-supported-navigation`, `demo-navigation-boundaries-and-control-keys` |
-| Runtime reliability and accessibility baseline | 3 | Deterministic browser | `demo-step-and-transition-reliability`, `demo-mode-interaction-reliability`, `demo-control-semantics`, `demo-focus-and-keyboard-accessibility` |
-| Uses scene-kit APIs without bypassing or duplicating them | 4 | LLM source review | `demo-scene-kit-api-use` |
-| Uses stable identities and appropriate grouped-scene architecture | 3 | LLM source review | `demo-stable-identity-and-grouping` |
-| Maintains clear boundaries and scope discipline | 2 | LLM source review | `demo-clear-code-boundaries`, `quality-active-chrome-and-attribution-local`, `demo-scope-discipline` |
+| Canonical content, routing, and technical structure | 5 | Deterministic browser | Critical: `demo-required-scene-content`, `demo-evolving-scene-structure`. Major: `quality-captions-and-navigation`. Zero-point gate inputs: `demo-route-and-registration`, `demo-nine-step-content-and-order` |
+| Navigation, modes, boundaries, and controls | 6 | Deterministic browser | Critical: `demo-supported-navigation`. Major: `demo-present-mode-behavior`, `demo-browse-mode-behavior`, `demo-mode-position-preservation`, `demo-navigation-boundaries-and-control-keys` |
+| Runtime reliability and accessibility baseline | 3.5 | Deterministic browser | Major: `demo-mode-interaction-reliability`, `demo-control-semantics`, `demo-focus-and-keyboard-accessibility`. Minor: `demo-step-and-transition-reliability` |
+| Uses scene-kit APIs without bypassing or duplicating them | 2 | LLM source review | Critical: `demo-scene-kit-api-use` |
+| Uses stable identities and appropriate grouped-scene architecture | 2 | LLM source review | Critical: `demo-stable-identity-and-grouping` |
+| Maintains clear boundaries and scope discipline | 1.5 | LLM source review | Minor: `demo-clear-code-boundaries`, `quality-active-chrome-and-attribution-local`, `demo-scope-discipline` |
+
+`demo-scene-kit-api-use` SHALL be critical because the demo exists to show the kit in use, and a demo that bypasses the kit does not show it. `demo-step-and-transition-reliability` SHALL remain scored, at the minor tier, because it checks forward and backward step-index progression as well as the rendering that `verification-every-produced-step-renders` gates.
 
 The deterministic evaluator SHALL preserve the presentation's initial mode when opening it. Before traversing captions and canonical content, it SHALL explicitly enter browse mode. Before a mode-specific probe, it SHALL explicitly enter that probe's required present or browse mode. It SHALL NOT treat captions intentionally hidden in present mode as missing content. It SHALL change modes through a presentation-exposed mode control when one is discoverable, and SHALL fall back to a keyboard shortcut only when no such control exists. When a presentation exposes more than one mode control, the evaluator SHALL select the control for the mode it is establishing; when it cannot identify exactly one such control, it SHALL raise a resumable harness failure rather than record the unchanged mode as a product deduction. The evaluator SHALL read a presentation's declared mode from a `data-presentation-mode` attribute, or failing that from a `data-mode` attribute on the element carrying the `data-step-count` hook or one containing it, whose value is `present` or `browse`, and SHALL ignore either attribute with any other value and a `data-mode` anywhere else. When a presentation declares no such mode, the evaluator SHALL infer browse mode from a visible caption or table of contents, and SHALL NOT count an element carrying a recognised title hook or the step-marker hook (`data-presentation-marker`) as a caption unless it carries an explicit caption hook. An inferred mode is a heuristic reading under "Deterministic criteria fail only on positive evidence": it MAY position the demo and support a `pass`, but a `fail` SHALL NOT rest on it.
 
@@ -374,22 +405,30 @@ Deterministic source facts supplied to an LLM source judge SHALL be treated as l
 ### Requirement: Scene kit correctness
 The evaluation SHALL score the reusable scene kit out of 20 using LLM review of delivered source and structured browser evidence. The judge SHALL assess implementation of the technical contracts rather than the aesthetic quality of the demo that uses them.
 
-For transition sequencing, the judge SHALL require persisting motion and newcomer delay to share one settlement contract or executable proof that newcomers wait until continuing entities settle; the presence of timing constants or named primitives alone SHALL NOT earn credit. Sharing or importing a timing value SHALL be insufficient unless persistent motion consumes that exact configuration, or newcomer admission waits on an observable completion signal from persistent motion. Newcomer sequencing SHALL follow the fixture design's timing mechanism: a newcomer entry delay at least as long as the continuing layout transition, applied to the newcomer only, SHALL satisfy `entity-newcomer-after-settle`; the same delay applied to the continuing motion, an entry that can start early, or no entry motion SHALL fail it. A step id SHALL be stable only when it survives inserting, removing, or reordering steps; a position-derived id fails `scene-step-narration-and-identity`. Newcomer timing SHALL be judged on the visible entry, so a zero-delay wrapper around an inner node whose entry is delayed past the layout transition passes. A warning SHALL identify an element by its visible text, or for a textless element by its accessible name, a stable hook, or a selector path. In present mode the marker is a visible indicator of the active step's position or section beside the title. Uniform fit SHALL be judged at the eval-owned reference viewports 1280×720 and 390×844 in both modes. Touch navigation SHALL be judged against the fixture scenario only: a horizontal swipe to the left advances one step and a swipe to the right goes back one step. The judge SHALL NOT require rejection of vertical scrolling or multi-touch gestures, which the fixture does not state.
+For transition sequencing, the judge SHALL require persisting motion and newcomer delay to share one settlement contract or executable proof that newcomers wait until continuing entities settle; the presence of timing constants or named primitives alone SHALL NOT earn credit. Sharing or importing a timing value SHALL be insufficient unless persistent motion consumes that exact configuration, or newcomer admission waits on an observable completion signal from persistent motion. Newcomer sequencing SHALL follow the fixture design's timing mechanism: a newcomer entry delay at least as long as the continuing layout transition, applied to the newcomer only, SHALL satisfy `entity-newcomer-after-settle`; the same delay applied to the continuing motion, an entry that can start early, or no entry motion SHALL fail it. Every entity the delivered sample introduces, meaning each element it gives a stable identity, SHALL be judged by whatever path renders it, including plain markup outside the kit's animated primitives; a structural wrapper the sample gives no identity SHALL NOT count as an entity. For `style-kit-hooks`, a spacing scale SHALL mean a spacing system the kit makes presentations adopt, such as spacing tokens, theme variables, or spacing applied to presentation content; fixed insets, offsets, padding, and gaps that lay out and place the kit's own chrome, overridable through its hooks, SHALL be chrome-placement geometry and SHALL NOT fail it. A step id SHALL be stable only when it survives inserting, removing, or reordering steps; a position-derived id fails `scene-step-narration-and-identity`. Newcomer timing SHALL be judged on the visible entry, so a zero-delay wrapper around an inner node whose entry is delayed past the layout transition passes. A warning SHALL identify an element by its visible text, or for a textless element by its accessible name, a stable hook, or a selector path. In present mode the marker is a visible indicator of the active step's position or section beside the title. Uniform fit SHALL be judged at the eval-owned reference viewports 1280×720 and 390×844 in both modes. Touch navigation SHALL be judged against the fixture scenario only: a horizontal swipe to the left advances one step and a swipe to the right goes back one step. The judge SHALL NOT require rejection of vertical scrolling or multi-touch gestures, which the fixture does not state.
 
 The step number SHALL count as on screen only when it is rendered visibly; an `aria-label`, other attribute, or visually hidden text SHALL NOT satisfy `scene-order-derived-numbering`. The default attribution SHALL link to the and-scene GitHub repository, `https://github.com/Codagent-AI/and-scene`; a link to another owner or repository path SHALL fail `attribution-default-link`. The deterministic attribution fact SHALL report the GitHub targets the source contains so the judge sees a wrong target by name. No network request decides the link; a reachability probe would make identical evidence score differently.
 
+`entity-departing-exit` SHALL pass when the kit provides an exit mechanism that keeps a departing entity rendered while it animates out, and the delivered sample renders its authored entities through that mechanism. An opt-in exit wrapper the sample uses SHALL satisfy it; the judge SHALL NOT additionally require the kit boundary to preserve entities removed by plain conditional rendering, or a focused integration test, unless the mechanism itself remains ambiguous.
+
+`entity-ungrouped-transition-morph` SHALL trace to the fixture scenario "Persisting entity morphs". It SHALL fail when an entity with the same identity in two consecutive steps that do not share a scene group vanishes and reappears instead of morphing. One cause is a step transition that removes the outgoing step before mounting the incoming one; for example, `AnimatePresence` with `mode="wait"` around per-step content. Another is a transition that keeps both steps mounted while the kit's entity primitives hide the incoming copy until the outgoing copy has faded out. It SHALL pass when the step transition keeps both steps' entities present together and the persisting entity stays visible while it animates in place; for example, `AnimatePresence` with `mode="popLayout"`, or with `mode="sync"` when the outgoing step is taken out of layout flow. The transition mode alone SHALL NOT establish a pass. Its implementation-specific terms (`AnimatePresence`, `mode="wait"`, `popLayout`, `sync`) SHALL be declared eval-owned values with reasons, under the rubric-fixture-traceability capability. `entity-persisting-morph` SHALL NOT be deducted for a step transition that hides the morph across ungrouped steps; that defect SHALL be scored only under `entity-ungrouped-transition-morph`.
+
+The component's tier weights SHALL be critical 1.5625, major 0.75, and minor 0.25. Major and minor keep the weights the tier table first gave them, and the morph criterion's points come from the critical tier.
+
+<!-- If calibration cuts entity-ungrouped-transition-morph from 15.0.0, revise this delta before archive: remove the criterion, its guidance and scenarios, and set the critical weight to 1.75. -->
+
 | Subcomponent | Points | Criteria |
 |---|---:|---|
-| Step model, stable identity, and typed boundary | 3 | `scene-step-narration-and-identity`, `scene-order-derived-numbering`, `scene-typed-payload-boundary` |
-| Entity transitions and persistent grouped scenes | 6 | `entity-persisting-morph`, `entity-newcomer-after-settle`, `entity-departing-exit`, `grouped-scene-updates-in-place`, `grouped-continuing-entities-not-newcomers`, `grouped-intentional-composition` |
-| Present/browse modes, navigation, controls, and boundaries | 5 | `mode-present-title-focused`, `mode-browse-reading-focused`, `mode-toggle-preserves-position`, `navigation-keyboard`, `navigation-touch-swipe`, `navigation-direct-jump`, `navigation-active-state`, `navigation-controls-keep-keys`, `navigation-clamp-start`, `navigation-clamp-end` |
-| Fixed-canvas behavior | 2 | `canvas-uniform-scaling`, `canvas-default-dimensions` |
-| Style ownership, hooks, framework neutrality, and attribution | 4 | `style-kit-hooks`, `style-unstyled-kit-output`, `style-framework-optional`, `style-coordinate-heavy-diagrams`, `attribution-default-link`, `attribution-styling-hook`, `attribution-top-left-opt-in` |
+| Step model, stable identity, and typed boundary | 2.5625 | Critical: `scene-step-narration-and-identity`. Major: `scene-order-derived-numbering`. Minor: `scene-typed-payload-boundary` |
+| Entity transitions and persistent grouped scenes | 6.375 | Critical: `entity-persisting-morph`, `grouped-scene-updates-in-place`. Major: `entity-ungrouped-transition-morph`, `entity-newcomer-after-settle`, `entity-departing-exit`, `grouped-continuing-entities-not-newcomers`. Minor: `grouped-intentional-composition` |
+| Present/browse modes, navigation, controls, and boundaries | 7.3125 | Critical: `navigation-keyboard`. Major: `mode-present-title-focused`, `mode-browse-reading-focused`, `mode-toggle-preserves-position`, `navigation-touch-swipe`, `navigation-direct-jump`, `navigation-active-state`, `navigation-controls-keep-keys`. Minor: `navigation-clamp-start`, `navigation-clamp-end` |
+| Fixed-canvas behavior | 1 | Major: `canvas-uniform-scaling`. Minor: `canvas-default-dimensions` |
+| Style ownership, hooks, framework neutrality, and attribution | 2.75 | Major: `style-kit-hooks`, `style-unstyled-kit-output`. Minor: `style-framework-optional`, `style-coordinate-heavy-diagrams`, `attribution-default-link`, `attribution-styling-hook`, `attribution-top-left-opt-in` |
 
 #### Scenario: Scene-kit contracts are scored
 - **WHEN** the LLM judge evaluates the reusable scene kit
 - **THEN** it returns a pass/fail verdict, rationale, and cited evidence for every listed scene-kit criterion
-- **AND** the scorer divides each subcomponent's points equally among that subcomponent's criteria
+- **AND** the scorer awards each criterion its tier weight
 
 #### Scenario: Technical continuity is distinguished from perceived quality
 - **WHEN** the judge evaluates entity identity, grouping, or transition implementation
@@ -413,15 +452,43 @@ The step number SHALL count as on screen only when it is rendered visibly; an `a
 - **WHEN** the default attribution links to a GitHub path other than `https://github.com/Codagent-AI/and-scene`
 - **THEN** `attribution-default-link` fails
 
+#### Scenario: The sample uses an opt-in exit wrapper
+- **WHEN** the kit provides an opt-in exit wrapper that keeps a departing entity rendered while it animates out, and the delivered sample renders its authored entities through it
+- **THEN** `entity-departing-exit` passes
+- **AND** the judge does not require plain conditional removal to animate out as well
+
+#### Scenario: Ungrouped steps wait for the outgoing step to leave
+- **WHEN** the kit wraps per-step content in `AnimatePresence` with `mode="wait"`, so an entity persisting across two ungrouped steps disappears and then reappears
+- **THEN** `entity-ungrouped-transition-morph` fails
+- **AND** `entity-persisting-morph` is judged on its own mechanism and is not deducted for that transition
+
+#### Scenario: Ungrouped steps overlap during the transition
+- **WHEN** the kit's step transition uses `mode="popLayout"`, or `mode="sync"` with the outgoing step taken out of layout flow, so a persisting entity animates from its old state to its new state
+- **THEN** `entity-ungrouped-transition-morph` passes
+
+#### Scenario: Overlapping steps whose entity primitives hide the persisting entity
+- **WHEN** the kit's step transition keeps both ungrouped steps mounted, for example with `mode="popLayout"`, but its entity primitives keep the incoming copy invisible until the outgoing copy has faded out, so the persisting entity disappears and then reappears
+- **THEN** `entity-ungrouped-transition-morph` fails
+
+#### Scenario: A sample newcomer bypasses the kit's delayed entry
+- **WHEN** the kit's motion primitives delay newcomer entry past the layout transition, but the delivered sample introduces an identified entity on a step through a plain element with no entry motion
+- **THEN** `entity-newcomer-after-settle` fails
+
+#### Scenario: Kit chrome has fixed placement padding
+- **WHEN** the kit's own stylesheet sets fixed padding and gaps to lay out its header, footer, and controls, exposes stable hooks for them, and imposes no spacing tokens or content spacing
+- **THEN** `style-kit-hooks` is not failed for that padding
+
 ### Requirement: Presentation skill correctness
 The evaluation SHALL score the delivered presentation skill out of seven points using LLM review of the skill, its templates, delivered source, and workflow evidence.
 
+The component's tier weights SHALL be critical 0.75, major 0.375, and minor 0.125.
+
 | Subcomponent | Points | Criteria |
 |---|---:|---|
-| Requirement gathering and proceeding with partial detail | 1 | `skill-missing-details-one-at-a-time`, `skill-partial-detail-proceeds`, `skill-complete-prompt-proceeds` |
-| Scaffold detection, location, dependencies, and style neutrality | 3 | `skill-empty-directory-scaffold`, `skill-already-scaffolded`, `skill-partial-scaffold`, `skill-scaffold-style-neutral`, `skill-template-path-resolution`, `skill-monorepo-target`, `skill-standalone-target`, `skill-nonempty-confirmation` |
-| Create, modify, route, and preserve presentations | 2 | `skill-new-presentation-routed`, `skill-presentation-owns-style`, `skill-existing-presentations-preserved`, `skill-modify-ambiguous-target`, `skill-scoped-modification` |
-| Automated self-verification and fixing failures before completion | 1 | `skill-checks-run-before-done`, `skill-failures-fixed-before-success` |
+| Requirement gathering and proceeding with partial detail | 1.25 | Critical: `skill-missing-details-one-at-a-time`. Major: `skill-partial-detail-proceeds`. Minor: `skill-complete-prompt-proceeds` |
+| Scaffold detection, location, dependencies, and style neutrality | 2.625 | Critical: `skill-empty-directory-scaffold`. Major: `skill-already-scaffolded`, `skill-partial-scaffold`, `skill-template-path-resolution`, `skill-monorepo-target`. Minor: `skill-scaffold-style-neutral`, `skill-standalone-target`, `skill-nonempty-confirmation` |
+| Create, modify, route, and preserve presentations | 2 | Critical: `skill-new-presentation-routed`. Major: `skill-presentation-owns-style`, `skill-existing-presentations-preserved`, `skill-scoped-modification`. Minor: `skill-modify-ambiguous-target` |
+| Automated self-verification and fixing failures before completion | 1.125 | Critical: `skill-checks-run-before-done`. Major: `skill-failures-fixed-before-success` |
 
 Visual-composition inspection and visual-warning review SHALL NOT receive presentation-skill points. The candidate's observable proof that those activities occurred and were handled SHALL be evaluated by the testing-evidence component.
 
@@ -430,7 +497,7 @@ The fixture design makes `SKILL.md` the agent procedure for scaffold detection, 
 #### Scenario: Skill contracts are scored
 - **WHEN** the LLM judge evaluates the presentation skill
 - **THEN** it returns a pass/fail verdict, rationale, and cited evidence for every listed skill criterion
-- **AND** the scorer divides each subcomponent's points equally among that subcomponent's criteria
+- **AND** the scorer awards each criterion its tier weight
 
 #### Scenario: Dogfooded demo provides skill evidence
 - **WHEN** the workflow task builds the demo by following the delivered skill or its prompt file
@@ -457,19 +524,33 @@ The fixture design makes `SKILL.md` the agent procedure for scaffold detection, 
 ### Requirement: Verification tool correctness
 The evaluation SHALL score the delivered verification tooling out of seven points using LLM review of its source, executable behavior, and produced artifacts. The four hard-gate criteria SHALL remain outside this point allocation.
 
-The verifier SHALL prove that browser checks connect to the preview process it started and SHALL fail if that process exits; an unrelated stale process on a fixed port SHALL NOT satisfy readiness. This behavior SHALL be scored only under `verification-preview-process-ownership`; `verification-ipv4-loopback` SHALL score only consistent use of `127.0.0.1` for preview binding, readiness probes, and browser URLs. Preview ownership SHALL be satisfied by either a fresh self-reserved port with a strict port and readiness taken from the spawned child's own announcement, or readiness polling raced against the child's exit; polling a fixed port with only a sampled liveness check SHALL NOT satisfy it. Console and page errors SHALL both fail verification in source, and one representative browser-error test asserting the non-zero exit and offending step SHALL suffice, as the fixture's end-to-end plan describes. A missing sample SHALL fail at a check that reports the sample as missing, as the design's sample assertion and the end-to-end plan's named failed phase require; a later unrelated timeout SHALL NOT satisfy `verification-missing-sample-fails`. Screenshot settlement SHALL be satisfied by a configured settle interval applied after each step advance and before each capture, as the fixture scenario states, or by an observed completion condition; the interval SHALL NOT be required to derive from the runtime motion configuration. Step capture SHALL require a test that runs the helper or its capture loop and asserts one screenshot per step; asserting the expected files SHALL suffice. Warning criteria SHALL require executable regression or verified browser evidence that each warning fires; token presence alone SHALL NOT earn credit. Overlap detection SHALL be judged on overlapping visible text or chrome elements, chrome counting whether or not it contains text, and skipping every pair with at least one element inside an allow-overlap subtree SHALL satisfy `visual-helper-allow-overlap`. Evidence from an earlier revision MAY satisfy a warning criterion only when verified lineage establishes it as an ancestor of the final SHA, hashes show the relevant warning implementation is unchanged, and retained raw executable output demonstrates the behavior; a narrative assertion about an earlier pass SHALL NOT suffice.
+The verifier SHALL prove that browser checks connect to the preview process it started and SHALL fail if that process exits; an unrelated stale process on a fixed port SHALL NOT satisfy readiness. This behavior SHALL be scored only under `verification-preview-process-ownership`; `verification-ipv4-loopback` SHALL score only consistent use of `127.0.0.1` for preview binding, readiness probes, and browser URLs. Preview ownership SHALL be satisfied by either a fresh self-reserved port with a strict port and readiness taken from the spawned child's own announcement, or readiness polling raced against the child's exit; polling a fixed port with only a sampled liveness check SHALL NOT satisfy it. Console and page errors SHALL both fail verification in source, and one representative browser-error test asserting the non-zero exit and offending step SHALL suffice, as the fixture's end-to-end plan describes. A missing sample SHALL fail at a check that reports the sample as missing, as the design's sample assertion and the end-to-end plan's named failed phase require; a later unrelated timeout SHALL NOT satisfy `verification-missing-sample-fails`. Screenshot settlement SHALL be satisfied by a configured settle interval applied after each step advance and before each capture, as the fixture scenario states, or by an observed completion condition; the interval SHALL NOT be required to derive from the runtime motion configuration. Step capture SHALL require a test that runs the helper or its capture loop and asserts one screenshot per step; asserting the expected files SHALL suffice. Warning criteria SHALL require executable regression or verified browser evidence that each warning fires; token presence alone SHALL NOT earn credit. Overlap detection SHALL be judged on overlapping visible text or chrome elements, chrome counting whether or not it contains text, and skipping every pair with at least one element inside an allow-overlap subtree SHALL satisfy `visual-helper-allow-overlap`. A comparison that drops chrome without text content SHALL fail `visual-helper-overlap-warning` only when the candidate's presentation renders textless chrome; when every chrome element the candidate renders contains text, that omission SHALL NOT fail it. Active-state detection SHALL compare the active step indicator with inactive step indicators; a helper that compares the active indicator with a control that is not a step indicator, such as the Previous or Next control, SHALL fail `visual-helper-active-state-warning`. Evidence from an earlier revision MAY satisfy a warning criterion only when verified lineage establishes it as an ancestor of the final SHA, hashes show the relevant warning implementation is unchanged, and retained raw executable output demonstrates the behavior; a narrative assertion about an earlier pass SHALL NOT suffice.
+
+The component's tier weights SHALL be critical 1.25, major 0.625, and minor 0.375.
 
 | Subcomponent | Points | Criteria |
 |---|---:|---|
-| Detects a missing reference sample | 1 | `verification-missing-sample-fails` |
-| Preview addressing, ownership, and runtime/step error detection | 2 | `verification-ipv4-loopback`, `verification-preview-process-ownership`, `verification-console-page-error-fails`, `verification-step-error-fails` |
-| Complete, settled screenshot capture | 2 | `quality-project-local-screenshot-helper`, `visual-helper-captures-steps`, `visual-helper-settled-screenshots` |
-| Overlap, active-state, attribution, and warning handling | 2 | `visual-helper-overlap-warning`, `visual-helper-allow-overlap`, `visual-helper-active-state-warning`, `visual-helper-attribution-warning` |
+| Detects a missing reference sample | 0.375 | Minor: `verification-missing-sample-fails` |
+| Preview addressing, ownership, and runtime/step error detection | 3.25 | Critical: `verification-console-page-error-fails`, `verification-step-error-fails`. Minor: `verification-ipv4-loopback`, `verification-preview-process-ownership` |
+| Complete, settled screenshot capture | 1.875 | Major: `quality-project-local-screenshot-helper`, `visual-helper-captures-steps`, `visual-helper-settled-screenshots` |
+| Overlap, active-state, attribution, and warning handling | 1.5 | Minor: `visual-helper-overlap-warning`, `visual-helper-allow-overlap`, `visual-helper-active-state-warning`, `visual-helper-attribution-warning` |
 
 #### Scenario: Verification contracts are scored
 - **WHEN** the LLM judge evaluates the verification tooling
 - **THEN** it returns a pass/fail verdict, rationale, and cited evidence for every listed verification criterion
-- **AND** the scorer divides each subcomponent's points equally among that subcomponent's criteria
+- **AND** the scorer awards each criterion its tier weight
+
+#### Scenario: Textless chrome is dropped but none is rendered
+- **WHEN** the overlap helper compares only elements with text content, and every chrome element the candidate's presentation renders contains text
+- **THEN** that omission does not fail `visual-helper-overlap-warning`
+
+#### Scenario: Textless chrome is dropped and is rendered
+- **WHEN** the overlap helper compares only elements with text content, and the candidate's presentation renders chrome without text, such as progress dots
+- **THEN** `visual-helper-overlap-warning` fails
+
+#### Scenario: Active state is compared with the Previous control
+- **WHEN** the active-state helper compares the active progress step with the first other button in its group, which is the Previous control
+- **THEN** `visual-helper-active-state-warning` fails
 
 #### Scenario: Hard-gate behavior is excluded from verification points
 - **WHEN** the scorer calculates the verification-tool component
@@ -494,7 +575,7 @@ The verifier SHALL prove that browser checks connect to the preview process it s
 - **AND** a narrative assertion without the retained output is ineligible
 
 ### Requirement: Existing criterion disposition
-The revised rubric SHALL classify each of the 68 legacy rubric criteria exactly once. It SHALL retain 59 as directly scored product criteria, use four exclusively as hard gates, remove three from scoring, and replace two presentation-skill evidence criteria with the broader testing-evidence criteria. It SHALL additionally define `verification-preview-process-ownership` as one new directly scored product criterion so preview ownership is not charged against the legacy IPv4-addressing criterion.
+The revised rubric SHALL classify each of the 68 legacy rubric criteria exactly once. It SHALL retain 59 as directly scored product criteria, use four exclusively as hard gates, remove three from scoring, and replace two presentation-skill evidence criteria with the broader testing-evidence criteria. It SHALL additionally define `verification-preview-process-ownership` as one new directly scored product criterion so preview ownership is not charged against the legacy IPv4-addressing criterion, and `entity-ungrouped-transition-morph` as one new directly scored scene-kit criterion so a step transition that hides the morph is not charged against `entity-persisting-morph`.
 
 | Disposition | Count | Criteria |
 |---|---:|---|
@@ -541,6 +622,11 @@ The replaced concerns SHALL remain observable through the testing-evidence crite
 - **WHEN** the revised rubric is validated
 - **THEN** each of the sixteen engineering-quality criteria appears exactly once, under the engineering-quality component
 - **AND** none is counted among the 68 legacy criteria or duplicates an existing criterion identifier
+
+#### Scenario: The ungrouped-transition morph criterion is classified
+- **WHEN** the revised rubric is validated
+- **THEN** `entity-ungrouped-transition-morph` appears exactly once under scene-kit correctness
+- **AND** it is not counted among the 68 legacy criteria
 
 ### Requirement: Hard gates and official pass
 The evaluation SHALL apply the following four product hard gates separately from point scoring.
@@ -679,30 +765,68 @@ The automated product rubric and human-review rubric SHALL have distinct explici
 - **AND** it returns exactly the criteria assigned to it
 
 ### Requirement: Robust judge verdicts
-No single model call SHALL decide a scored criterion, and no criterion SHALL be decided by Codex-family judges alone. Every scored judge job SHALL be judged by a cross-family panel of three independent judges with identical inputs, run concurrently, each at an explicitly pinned model and reasoning effort: one Claude-family judge and two independent Codex-family samples.
+No single model call SHALL decide a scored criterion, and no criterion SHALL be decided by the judges of one model family alone. Every scored judge job SHALL be judged by a cross-family panel of three independent judges with identical inputs, run concurrently, each at an explicitly pinned model and reasoning effort: two independent Claude-family samples and one Codex-family judge. The judging protocol SHALL be identified as `cross-family-panel-v2`.
+
+A verdict SHALL stand under uncertainty only when the material its settlement requires was supplied and its scope was adequate. Known missing required material SHALL produce an explicit evaluation-harness failure naming the criteria, never an undecided verdict. Every audit and check SHALL therefore classify its claim `confirmed`, `contradicted`, `insufficient`, or `missing-material`, and the span audit of an absence fail MAY also classify it `scope-inadequate`:
+- `insufficient` SHALL mean only that the material supplied, complete and in scope, does not decide the claim;
+- `missing-material` SHALL mean that the decision depends on material the harness marked truncated or omitted, and SHALL name that marker;
+- `missing-material` and `scope-inadequate` SHALL leave the criterion unresolved and record an evaluation-harness failure naming it, unless a confirmed contradiction of a pass already decides the criterion.
+
+Missing material SHALL mean material the harness withheld or could not deliver: a part of an artifact it marked truncated or omitted, or a file it could not read. Source that the judge under audit could have cited but did not SHALL NOT be missing material; it remains that judge's burden, and the re-cite addresses it.
+
+An evidence job's panel judges and decider SHALL report, for each criterion, any marked material their verdict depends on. Such a report SHALL name a marker present in the packet, or the output SHALL be invalid and retried. A valid report SHALL make the criterion an evaluation-harness failure before any vote settles it, whether the votes are unanimous, a majority, or a decider ruling.
 
 Each source-job panel judge SHALL pass through its own closed-world source audit:
-- `contradicted` SHALL mark that judge's vote disputed, and the vote SHALL turn only when an independent contradiction check confirms the audit's stated contradiction;
+- `contradicted` SHALL mark that judge's vote disputed, and the vote SHALL turn only when an independent contradiction check confirms the audit's stated contradiction. A check that refutes the contradiction, or cannot decide it (`insufficient`), SHALL leave the vote standing as cast and no longer disputed. As the one exception, a browser-fallback pass whose contradiction check cannot decide SHALL remain disputed, because it must be proven from source;
 - `insufficient` SHALL trigger at most one focused re-cite, and a verdict still undecided after the re-cite SHALL stand as the judge's vote. A browser-fallback pass SHALL then fail, because it must be proven from source.
+
+Every audit SHALL return the paths its classification relies on as structured citations. A contradiction check's closed-world material SHALL include both the cited material of the vote or ruling it checks and the files the audit's structured citations name. A path that a vote or ruling cites outside the verified neutral source inventory or the materialized evidence view SHALL appear in that material as a nonexistent citation, which is evidence about that vote or ruling rather than missing material. An audit's structured citation outside that inventory SHALL be invalid audit output, retried like any invalid output. A cited path inside the inventory that cannot be read SHALL be an evaluation-harness failure naming the criterion. No file SHALL be left out of that material for its size.
 
 Votes SHALL settle as follows, with no vote disputed:
 - a verdict all three judges give SHALL stand, pass or fail;
-- a verdict two judges give SHALL stand when the two include the Claude-family judge, unless the dissent is a pass backed by citations that pass validation. Such a backed dissent SHALL go to a targeted check, by a pinned Claude-family decider, of the dissent's stated reason. The dissent's verdict SHALL stand when the check confirms that reason, and the majority's otherwise;
-- a verdict the two Codex-family judges give against the Claude-family judge, and a criterion whose vote remains disputed, SHALL be settled by the decider.
+- when a confirmed contradiction check has turned any vote and the votes are not unanimous after the turn, the decider SHALL settle the criterion, even when the remaining votes form a majority that spans both families;
+- otherwise, a verdict two judges give SHALL stand when the two are a Claude-family judge and the Codex-family judge, unless the dissent is a pass backed by citations that pass validation. Such a backed dissent SHALL go to a targeted check, by a pinned Claude-family decider, of the dissent's stated reason, given beside the two majority votes' stated reasons and with both sides' cited material. The check SHALL confirm the dissent only when the material also refutes each clause a majority vote states is unmet; an accurate fact the dissent cites SHALL NOT confirm it while a majority reason it does not answer stands. The dissent's verdict SHALL stand when the check confirms it, and the majority's otherwise;
+- a verdict the two Claude-family judges give against the Codex-family judge, and a criterion whose vote remains disputed, SHALL be settled by the decider.
 
-The decider SHALL receive the job's unchanged context and all three votes with their rationales and citations, without being told which model gave which. It SHALL rule pass or fail.
+The decider SHALL receive the job's unchanged context and all three votes with their rationales and citations, without being told which model gave which. For a vote that a confirmed check turned, it SHALL also receive the audit's stated contradiction and the check's confirmation. It SHALL rule pass or fail. It SHALL be instructed to check the material each vote cites for the verdict it does not rule, and to answer in its rationale each such vote's stated reason by the vote's label, saying why the material shows that reason does not decide the requirement; a reason the material bears out that decides the requirement SHALL decide the ruling.
 
-A decider pass SHALL cite between one and twelve line spans, each under 200 lines. Their paths SHALL be in the verified neutral source inventory for a source job, or the materialized evidence view for an evidence job, and SHALL resolve inside that root without a symbolic link and lie inside the file. A closed-world span audit SHALL check the quoted lines against every clause of the criterion's requirement and review guidance:
-- `insufficient` SHALL ask the decider to re-cite once, and an audit that still cannot decide SHALL leave the decider pass standing with that recorded;
-- `contradicted` SHALL be checked by an independent contradiction check that judges that audit's stated contradiction against the quoted lines and the rubric. The decider pass SHALL be withdrawn only when the check confirms that same contradiction, and both SHALL be recorded.
+Every decider ruling SHALL carry citations whose paths are in the verified neutral source inventory for a source job, or the materialized evidence view for an evidence job, and resolve inside that root without a symbolic link:
+- a pass SHALL cite between one and twelve line spans, each under 200 lines and lying inside its file;
+- a fail SHALL cite either the line spans of a counterexample, under the same span rules, or its search scope: the files or evidence records that would contain the mechanism, test, or record it found missing, together with the obligation it found missing;
+- a fail that cites neither SHALL be invalid decider output.
 
-An unconfirmed browser-fallback decider pass SHALL fail. Invalid decider output, including an invalid span, SHALL be retried and, once exhausted, SHALL leave the job unobserved as a harness failure, as SHALL an exhausted panel judge. Contradiction checks and targeted dissent checks SHALL run on the decider's pinned model.
+For `testing-evidence-usable-proof` and `testing-evidence-complete-honest-record`, a decider ruling SHALL additionally return the claim mapping that the testing-evidence-evaluation capability defines.
 
-Every panel judge, decider, and audit SHALL see, beside each criterion, the requirement it traces to: the full fixture scenario from the pinned snapshot for a fixture-owned criterion, or the eval-owned reason. A pass SHALL meet every clause of that requirement as clarified by its review guidance, and judges SHALL NOT add requirements the requirement and its guidance do not state. Source judges SHALL trace a constant, member, prop, or input through every use before calling it dead, and SHALL treat shown, visible, or on-screen content as rendered content, not an `aria-label`, attribute, or visually hidden text. Evidence judges SHALL compare every behavior the exploration plan commits to with what the log observed or disclosed, and the assumption judge SHALL receive the full approved requirements as reference for its omission check.
+A closed-world span audit SHALL check every decider ruling, pass or fail, against every clause of the criterion's requirement and review guidance. It SHALL receive the quoted lines, the files of a fail's search scope, and any claim mapping with the lines it references. For a fail about absence, the audit SHALL also receive the complete verified inventory, every path in full, and SHALL judge whether the stated scope is where the obligation would be found. It SHALL confirm the fail when an adequate scope demonstrably omits the obligation, or when no file in the inventory could hold it, and SHALL classify it contradicted when the audited material shows the obligation met. When it finds the scope inadequate, it SHALL name the inventory files where the obligation would be found, and the harness SHALL run exactly one repair round that audits the fail again with those files added to its scope. After that round, an adequate scope whose material does not decide the claim SHALL be `insufficient` and leave the fail standing, and a scope still inadequate SHALL be `scope-inadequate`. No second repair round SHALL run. An absence fail's scope SHALL be repaired only by this round, never by a re-cite.
+- `insufficient` on a pass or a counterexample fail SHALL ask the decider to re-cite once. A re-cite MAY replace the ruling's citations and SHALL NOT change its verdict, and the re-cite prompt SHALL NOT invite a verdict change. The result SHALL record the first and the re-cited citations separately. A re-cite of a counterexample fail SHALL keep citing a counterexample: it SHALL NOT turn the fail into an absence fail, and a re-cite that does SHALL be invalid decider output. When every re-cite attempt is invalid output, such as an invalid span, the first ruling SHALL stand on its undecided initial audit, with the exhausted re-cite recorded, and the job SHALL NOT fail. An exhausted re-cite SHALL instead remain a harness failure when any attempt turned a counterexample fail into an absence fail, because that absence claim's scope was never audited, and when the re-cite was stopped by anything other than invalid output, such as a usage limit. An audit that still cannot decide SHALL leave the ruling standing, with that recorded;
+- `contradicted` SHALL be checked by an independent contradiction check that judges that audit's stated contradiction against the audited material and the rubric. The ruling SHALL be reversed, a pass to a fail or a fail to a pass, only when the check confirms that same contradiction, and both SHALL be recorded. A check SHALL confirm the contradiction of a fail only when the audited material meets every clause of the requirement and its review guidance, not merely when the decider's stated reason is refuted. A fail on a browser-fallback criterion SHALL be reversed only when that confirmation rests on cited delivered source. A check that refutes the contradiction or cannot decide it SHALL leave the ruling standing.
+
+An audit that runs in several parts, such as the claim mapping's row audits and completeness audit, SHALL record each part with its part identity and its audit cycle. The first audit, the audit after a re-cite, and the audit after a repair round SHALL be separate cycles, and a ruling SHALL be judged on the parts of one cycle only:
+- each contradicted part SHALL get its own contradiction check, and a pass SHALL be reversed when any part's contradiction is confirmed;
+- a fail SHALL be reversed only when a contradiction check given the material of every part of that cycle confirms that every clause is met;
+- a ruling SHALL be confirmed only when every required part of the cycle is present and confirmed;
+- a contradicted part whose check refutes or cannot decide the contradiction SHALL stand, as a one-part audit does: it SHALL neither reverse the ruling nor count as confirmed;
+- otherwise, a part that is `missing-material` or `scope-inadequate`, or a required part that is absent, SHALL make the criterion an evaluation-harness failure; an `insufficient` part SHALL make the ruling undecided, as a one-part `insufficient` audit does; and any other combination SHALL leave the ruling standing unconfirmed.
+
+A re-cite SHALL re-run every part as a new cycle. A record SHALL persist each cycle's required parts and the cycle it settled on. It SHALL reproduce its outcome from that cycle's parts alone, under the same rules live settlement applies, including the confirmed-contradiction exception, and each retained check SHALL be verified against the part and cycle it checked. A record whose settled cycle lacks a required part, or that combines parts of different cycles in one settlement, SHALL NOT verify.
+
+Once a decider ruling has settled, after its span audit and any contradiction check, every vote whose verdict the ruling rejects SHALL go to the targeted dissent check when its citations pass validation, except a vote a confirmed contradiction check turned. The check SHALL judge that vote's stated reason beside the stated reasons of the votes that gave the ruling's verdict and the ruling's own stated reason, marked as the decider's, with the votes' complete cited material and the ruling's cited files when the packet can hold them, under the confirmation rules of the dissent check above. When the ruling's files cannot fit, the check SHALL be told they were left out, and the packet SHALL still hold the rejected vote's and the agreeing votes' complete material or fail as a packet overflow. The rejected vote's verdict SHALL stand, as `checked-dissent-pass` or `checked-dissent-fail`, when the check confirms it, and the ruling's verdict otherwise. A rejected vote whose citations fail validation SHALL get no check. A cached record SHALL NOT be reused unless every backed rejected vote has its check.
+
+A browser-fallback decider pass that its span audit does not confirm SHALL fail. Invalid decider output, including an invalid span or a fail that cites neither a counterexample nor a search scope, SHALL be retried and, once exhausted, SHALL leave the job unobserved as a harness failure, as SHALL an exhausted panel judge; an exhausted re-cite instead leaves the first ruling standing, as above. Each retry after invalid output from a panel judge, audit, check, or decider SHALL state, after the unchanged request, the reason the previous reply was rejected; a retry after any other failure SHALL repeat the request unchanged. Contradiction checks and targeted dissent checks SHALL run on the decider's pinned model.
+
+Audit, contradiction-check, and decider request packets SHALL be serialized compactly. When the combined packet of an audit, a check, or a decider request would exceed the packet limit, the harness SHALL split its per-claim or per-criterion material into batches that each hold whole claims or whole criteria, repeating the material all of them share. When a single claim or criterion cannot fit within the limit on its own, the harness SHALL leave that criterion unresolved and record an evaluation-harness failure that names it. When the shared material alone, such as a decider's evidence view, cannot fit, the harness SHALL record an evaluation-harness failure naming every criterion pending for that request. It SHALL NOT settle any criterion on material it silently omitted.
+
+Every prompt that lists the verified inventory SHALL list each path in full, with none dropped; a listing that cannot fit SHALL be shared material under the same overflow rule. An evidence job's panel judges and decider SHALL be given the judge packet's path directly, however many files the evidence view holds.
+
+Every truncation or omission in an evidence judge packet SHALL be marked in place and listed in the packet with the artifact, its full size, and the size kept. The primary claim-bearing records of the testing-evidence and assumption-handling jobs, which the testing-evidence-evaluation and ambiguity-evaluation capabilities name, and the approved requirements a judge receives as reference SHALL be held in full; when one was skipped at collection or cannot fit, the job SHALL fail as an evaluation-harness failure naming its criteria. A stage whose decision depends on any other marked artifact SHALL return `missing-material`. Every line an evidence audit or check quotes SHALL be labelled with the artifact it lies in and, when that artifact was cut, with its marker, and every evidence audit and check SHALL receive the packet's list of cuts, so that a stage shown only cited lines still knows what was cut. An evidence audit or check SHALL cite the judge packet by line range; a citation of the whole packet without a line range SHALL be invalid output, retried like any invalid output.
+
+Every panel judge, decider, and audit SHALL see, beside each criterion, the requirement it traces to: the full fixture scenario from the pinned snapshot for a fixture-owned criterion, or the eval-owned reason. A pass SHALL meet every clause of that requirement as clarified by its review guidance, and judges SHALL NOT add requirements the requirement and its guidance do not state. Source judges SHALL trace a constant, member, prop, or input through every use before calling it dead, and SHALL treat shown, visible, or on-screen content as rendered content, not an `aria-label`, attribute, or visually hidden text. Evidence judges SHALL judge testing evidence against the evidence basis that the testing-evidence-evaluation capability defines, and the assumption judge SHALL receive the full approved requirements as reference for its omission check.
 
 Each criterion result SHALL record:
-- its judging basis: `consensus-pass`, `consensus-fail`, `majority-pass`, `majority-fail`, `checked-dissent-pass`, `decider-pass`, or `decider-fail`;
-- every panel verdict, with the model family that gave it.
+- its judging basis: `consensus-pass`, `consensus-fail`, `majority-pass`, `majority-fail`, `checked-dissent-pass`, `checked-dissent-fail`, `decider-pass`, or `decider-fail`;
+- every panel verdict, with the model family that gave it;
+- every audit and contradiction check, and whether a confirmed contradiction routed the criterion to the decider;
+- for a decider ruling, its first and any re-cited citations, its span audit, and whether that audit or a check reversed it.
 
 The eval-owned usage ledger SHALL record each call's stage, provider, and model. A Codex or Claude call rejected before any model output, for example a capacity rejection, SHALL be recorded as a call that consumed no tokens. A capacity rejection SHALL be waited out with backoff rather than spending a judge attempt.
 
@@ -715,22 +839,36 @@ Every response schema the harness sends SHALL satisfy strict structured-output r
 - **THEN** that verdict stands without a decider call
 
 #### Scenario: Samples disagree
-- **WHEN** both Codex-family judges pass a criterion and the Claude-family judge fails it
+- **WHEN** both Claude-family judges pass a criterion and the Codex-family judge fails it
 - **THEN** the decider decides it
 - **AND** its pass must cite mechanically valid line spans
 
 #### Scenario: Cross-family majority stands
-- **WHEN** the Claude-family judge and one Codex-family judge fail a criterion, and the other Codex-family judge also fails it or passes it without citations that pass validation
+- **WHEN** one Claude-family judge and the Codex-family judge fail a criterion, and the other Claude-family judge also fails it or passes it without citations that pass validation
 - **THEN** the criterion fails without a decider call
 
 #### Scenario: Backed dissent is checked
-- **WHEN** the Claude-family judge and one Codex-family judge fail a criterion, and the other Codex-family judge passes it with citations that pass validation
+- **WHEN** one Claude-family judge and the Codex-family judge fail a criterion, and the other Claude-family judge passes it with citations that pass validation
 - **THEN** the decider checks that dissent's stated reason, and the criterion passes only when the check confirms it
+
+#### Scenario: The decider answers a judge it rules against
+- **WHEN** the two Claude-family judges pass a criterion, the Codex-family judge fails it with citations that pass validation, and the decider rules pass
+- **THEN** the decider's rationale answers the failing judge's stated reason, and the targeted dissent check judges that reason beside the two passes and the ruling's reason
+- **AND** the criterion fails as `checked-dissent-fail` when the check confirms the reason, and passes on the ruling otherwise
+
+#### Scenario: A rejected vote without valid citations is not checked
+- **WHEN** the decider rules against a vote whose citations fail validation
+- **THEN** no check runs for that vote and the ruling stands
+
+#### Scenario: A backed dissent must answer the majority's reason
+- **WHEN** two votes fail a criterion because one clause is unmet, and a backed pass dissent cites accurate facts about other clauses without addressing that one
+- **THEN** the dissent check receives the majority's stated reasons and does not confirm the dissent
+- **AND** the majority's fail stands
 
 #### Scenario: A sample's own audit contradicts its vote
 - **WHEN** all three panel judges pass a criterion and one judge's source audit classifies its pass as contradicted
 - **THEN** that vote is marked disputed and an independent check judges the stated contradiction
-- **AND** a refuted contradiction leaves all three passes standing, while a confirmed one turns that vote and the remaining votes settle the criterion under the panel rule
+- **AND** a refuted or undecided contradiction leaves all three passes standing, while a confirmed one turns that vote and sends the criterion to the decider
 
 #### Scenario: Two audits contradict for different reasons
 - **WHEN** a span audit contradicts a decider pass and the contradiction check finds that stated reason does not hold under the rubric
@@ -751,6 +889,7 @@ Every response schema the harness sends SHALL satisfy strict structured-output r
 #### Scenario: The span audit cannot decide
 - **WHEN** the span audit finds the quoted lines insufficient, the decider re-cites, and the audit still cannot decide
 - **THEN** the decider pass stands and the evidence records that the audit could not confirm it
+- **AND** the result records the first and the re-cited spans separately
 
 #### Scenario: A sample's audit cannot decide after a re-cite
 - **WHEN** a panel judge's source audit is still insufficient after one focused re-cite
@@ -768,6 +907,149 @@ Every response schema the harness sends SHALL satisfy strict structured-output r
 #### Scenario: OpenAI rejects a response schema
 - **WHEN** a judge call fails with `invalid_json_schema`
 - **THEN** it is not retried and the owning phase fails as a harness error
+
+#### Scenario: A contradiction check cannot decide
+- **WHEN** all three panel judges pass a source-reviewed criterion, one judge's audit classifies its pass as contradicted, and the contradiction check returns `insufficient`
+- **THEN** that vote stands as a pass and is not disputed
+- **AND** the criterion passes by consensus without a decider call
+
+#### Scenario: A browser-fallback pass meets an undecided check
+- **WHEN** a panel judge's pass on a browser-fallback criterion is contradicted by its audit and the contradiction check returns `insufficient`
+- **THEN** that vote remains disputed and the decider settles the criterion
+
+#### Scenario: A confirmed defect reaches the decider
+- **WHEN** all three panel judges pass `visual-helper-active-state-warning`, one judge's audit finds that the helper compares the active step with the Previous control, and the contradiction check confirms it
+- **THEN** that vote turns to fail and the decider settles the criterion
+- **AND** the decider receives the audit's stated contradiction and the check's confirmation
+
+#### Scenario: A turned vote leaves a Claude-backed majority
+- **WHEN** a confirmed contradiction turns one Claude-family pass to fail, and the other Claude-family judge and the Codex-family judge still pass
+- **THEN** the criterion goes to the decider rather than standing as a majority pass
+
+#### Scenario: A re-cite cannot change the decider's verdict
+- **WHEN** the decider passes a criterion, its span audit returns `insufficient`, and the decider re-cites
+- **THEN** the re-cited result keeps the verdict pass and may only replace the spans
+- **AND** the re-cite prompt does not tell the decider to change its verdict
+
+#### Scenario: A decider fail is overturned
+- **WHEN** the decider fails a criterion citing a counterexample, its span audit classifies the fail as contradicted, and the contradiction check confirms that the cited lines meet the requirement
+- **THEN** the criterion passes
+- **AND** the result records the decider's fail, the audit, and the check
+
+#### Scenario: A decider fail about absence names where it looked
+- **WHEN** the decider fails a criterion because a required focused test is missing, citing the test files that would contain it
+- **THEN** the span audit checks those files for the test
+- **AND** the fail stands when the files omit it, and goes to a contradiction check when the audit cites material showing the test exists
+
+#### Scenario: An absence scope is inadequate
+- **WHEN** the decider fails a criterion because a focused test is missing, citing only implementation files where no test would live
+- **THEN** the span audit, given the full verified inventory, names the test files where the test would live, and the harness audits the fail once more with those files added to its scope
+- **AND** the fail is confirmed when the repaired scope omits the test, stands as undecided when that material is inconclusive, and becomes an evaluation-harness failure when the audit still finds the scope inadequate
+- **AND** no second repair round or re-cite runs for that scope
+
+#### Scenario: Refuting the decider's reason is not enough to reverse a fail
+- **WHEN** a contradiction check finds the decider's stated reason for a fail wrong, but the audited material does not meet another clause of the requirement
+- **THEN** the check does not confirm the contradiction and the fail stands
+
+#### Scenario: A decider fail cites nothing
+- **WHEN** the decider fails a criterion with neither counterexample spans nor a search scope
+- **THEN** the output is invalid and the decider is retried
+
+#### Scenario: A check sees the auditor's evidence
+- **WHEN** a seat's audit contradicts its pass on the strength of a file the seat did not cite, and returns that file as a structured citation
+- **THEN** the contradiction check's material includes that file
+- **AND** an audit citation outside the verified inventory is invalid audit output and is retried
+
+#### Scenario: An audit packet is too large
+- **WHEN** an audit's combined packet for a job's criteria exceeds the packet limit and each claim fits within it on its own
+- **THEN** the audit runs in batches of whole claims and the job is not failed
+
+#### Scenario: One claim cannot fit
+- **WHEN** a single claim's audit packet exceeds the packet limit on its own
+- **THEN** that criterion is left unresolved and recorded as an evaluation-harness failure naming it
+- **AND** no verdict for it is settled on omitted material
+
+#### Scenario: A check's material is large but fits
+- **WHEN** a contradiction check's cited files together exceed half the packet limit but fit within it
+- **THEN** the check receives every cited file in full, none is replaced by a size-omission marker, and the check is not left `insufficient` for want of material it was never shown
+
+#### Scenario: A decider request is too large
+- **WHEN** a decider request's per-criterion material for several criteria exceeds the packet limit, but each criterion fits beside the shared evidence
+- **THEN** the decider runs in batches of whole criteria, each repeating the shared evidence, and its rulings are recorded as one decision
+- **AND** when the shared evidence alone cannot fit, the harness records an evaluation-harness failure naming every pending criterion
+
+#### Scenario: A vote cites a path that does not exist
+- **WHEN** a panel judge's pass cites a path outside the verified inventory and its audit contradicts the pass
+- **THEN** the contradiction check's material shows that citation as nonexistent, and the check may judge the vote on it
+
+#### Scenario: A cited file cannot be read
+- **WHEN** a contradiction check's material names a file in the verified inventory that cannot be read
+- **THEN** the criterion is left unresolved as an evaluation-harness failure naming it, and no verdict stands as undecided
+
+#### Scenario: A check depends on truncated evidence
+- **WHEN** a contradiction check's decision depends on a supporting log that the judge packet marks as truncated
+- **THEN** the check returns `missing-material` naming that marker
+- **AND** the criterion is an evaluation-harness failure naming it, rather than a vote left standing as undecided
+
+#### Scenario: One audit part contradicts a pass
+- **WHEN** every row audit of a claim mapping confirms a decider pass, the completeness audit contradicts it, and that part's contradiction check confirms
+- **THEN** the pass is reversed
+
+#### Scenario: Audit parts leave a ruling undecided
+- **WHEN** one part of a decider pass's audit is confirmed and another is `insufficient`
+- **THEN** the ruling is not confirmed, and the decider re-cites once, which re-runs every part as a new cycle
+- **AND** the ruling is judged and replayed from the second cycle's parts only
+
+#### Scenario: A fail is contradicted in one part
+- **WHEN** one part of a decider fail's audit is contradicted
+- **THEN** the contradiction check receives the material of every part of that cycle, and the fail is reversed only when the check confirms every clause is met
+
+#### Scenario: An evidence judge needs a truncated log
+- **WHEN** all three evidence panel judges pass a criterion and one reports that its verdict depends on a supporting log the packet marks as truncated
+- **THEN** the criterion is an evaluation-harness failure naming it, and the unanimous pass does not stand
+- **AND** a report naming a marker the packet does not hold is invalid output and is retried
+
+#### Scenario: A row audit quotes the start of a cut log
+- **WHEN** a claim-mapping row cites the retained lines of a supporting log that the packet cut, without quoting the marker
+- **THEN** the row audit sees those lines labelled with the log's truncation marker and receives the packet's list of cuts
+- **AND** it returns `missing-material` when the claim's proof would lie in the cut part
+
+#### Scenario: A re-cited ruling is reused from cache
+- **WHEN** a cached record holds an initial audit cycle with an inconclusive contradiction check and a re-cite cycle whose parts are all confirmed
+- **THEN** the record verifies from the re-cite cycle, with the initial cycle's check verified against its own part and cycle
+
+#### Scenario: A long source inventory
+- **WHEN** the verified neutral source inventory holds more than 200 paths, one of them longer than 200 characters
+- **THEN** every path appears in full in the panel, decider, and absence-audit listings
+
+#### Scenario: A v1 judging record is offered from cache
+- **WHEN** a rescore finds a cached judge job recorded under `cross-family-panel-v1`
+- **THEN** it is not reused, and the job is judged under `cross-family-panel-v2`
+
+#### Scenario: A re-cited counterexample fail stays a counterexample fail
+- **WHEN** the span audit of a decider fail that cites a counterexample returns `insufficient`, and the decider's re-cite cites only a search scope
+- **THEN** the re-cite is invalid decider output and is retried
+- **AND** the fail never receives a scope repair round
+
+#### Scenario: A retry names the rejected reply's defect
+- **WHEN** a panel judge cites a source path that does not exist, or a decider returns an invalid claim map
+- **THEN** its retry repeats the request followed by the reason the previous reply was rejected
+- **AND** a retry after a usage limit or transport failure repeats the request unchanged
+
+#### Scenario: A re-cite that stays invalid leaves the first ruling standing
+- **WHEN** every re-cite attempt of an undecided counterexample fail cites a span outside the verified inventory
+- **THEN** the job completes and the first fail stands on its undecided initial audit
+- **AND** the record marks the re-cite as exhausted, and a replay accepts it only where the initial audit needed a re-cite
+
+#### Scenario: A re-cite that claims absence cannot leave the fail standing
+- **WHEN** a re-cite attempt of an undecided counterexample fail cites only a search scope, and the re-cite's attempts are exhausted
+- **THEN** the job fails as an evaluation-harness failure for exhausted judge output
+- **AND** the fail does not stand on an absence scope no audit has judged
+
+#### Scenario: An evidence audit cites the whole packet
+- **WHEN** an evidence audit or check cites the judge packet without a line range
+- **THEN** its output is invalid and is retried
+- **AND** the whole packet is not added to any check's material
 
 ### Requirement: Deterministic criteria fail only on positive evidence
 A scored deterministic browser criterion SHALL have exactly three outcomes: `pass`, `fail`, and not observed. The evaluator SHALL record `fail` only when it holds positive evidence that the candidate violates the requirement the criterion enforces, such as visible text that differs from the normative text, an input that lands on the wrong step, or a browser failure raised by the page. The evaluator SHALL NOT record `fail` because it could not locate the thing it needed to inspect.
@@ -873,6 +1155,8 @@ Exact criterion coverage SHALL continue to hold in both directions for every eva
 
 Points SHALL only ever be awarded from a binary `pass` or `fail` verdict; not observed is an unresolved state, never a scored verdict. The scorer SHALL award a fallback-resolved criterion the same points it would award for the same verdict from its owner. It SHALL record, for every scored criterion, whether the verdict came from the owning evaluator or from the fallback judge, and SHALL retain the fallback judge's source citations. An unresolved criterion SHALL make only its own subcomponent and component incomplete; other deterministic subcomponents SHALL keep their scores. When the fallback verdict is missing after the judge's retry budget is exhausted, the criterion's component SHALL be incomplete and the existing missing-judge-output outcome SHALL apply; a missing fallback verdict SHALL never be scored as `fail`.
 
+A zero-point gate input SHALL keep its deterministic observation, its declared fallback judge, and its second opinion. Because it carries no points, an unresolved zero-point gate input SHALL NOT make its subcomponent or component incomplete; it SHALL leave the gate it feeds unobserved, which makes automated eligibility unavailable. The result SHALL preserve the unresolved input's evidence and report the applicable harness failure, and SHALL NOT turn the unresolved input into a gate pass or a product failure.
+
 Hard-gate handling of unobserved evidence SHALL NOT change, except that `verification-sample-outline` is derived from its input criteria's final verdicts as specified under "Hard gates and official pass". Hard gates SHALL NOT have fallback judges. A failed hard gate's second opinion SHALL be governed by the failure-second-opinion capability; it is not a fallback judge and SHALL NOT resolve an unobserved gate.
 
 #### Scenario: A not-observed criterion is resolved by its fallback judge
@@ -925,6 +1209,11 @@ Hard-gate handling of unobserved evidence SHALL NOT change, except that `verific
 - **THEN** every deterministic browser criterion names one fallback judge
 - **AND** every criterion's owner, points, and subcomponent are unchanged, while the rubric version and hash differ from the prior rubric
 
+#### Scenario: A zero-point gate input stays unresolved
+- **WHEN** `demo-nine-step-content-and-order` is not observed and its fallback verdict is unresolved, for example while its second opinion is pending, and every scored demo criterion is resolved
+- **THEN** the demo component is complete and reports its points
+- **AND** `verification-sample-outline` is unobserved, automated eligibility is unavailable, and the unresolved gate input is reported
+
 ### Requirement: Focused controls keep their keys
 The deterministic control-key check SHALL follow the pinned fixture scenario "Controls keep their keys": while focus is on an interactive control, navigation keys drive that control rather than also advancing the deck. After activating a navigation control the way a pointer does, the check SHALL NOT require a deck navigation key pressed while that control still holds focus to advance the deck, and SHALL NOT deduct when the deck stays on its step. The check SHALL deduct when it holds positive evidence of a violation: the deck fails to clamp at its first or last step, or deck navigation keys do not advance the deck once focus rests on a non-interactive part of the presentation itself. The check SHALL keep focus inside the presentation when it releases a control, so that a presentation which listens for keys on its own root is not failed, and SHALL verify that focus is no longer on an interactive control. When it cannot establish that state, it SHALL raise a resumable harness failure rather than record a product deduction.
 
@@ -956,4 +1245,44 @@ The check SHALL continue to establish whichever mode exposes a navigation contro
 - **WHEN** a presentation lets a deck navigation key advance the deck even while a button holds focus
 - **THEN** the check records the observation and does not deduct for it
 - **AND** whether that pass-through conforms is left to the scene-kit criterion `navigation-controls-keep-keys`
+
+### Requirement: Job-filtered judging diagnostic
+The suite SHALL provide a maintainer diagnostic that judges only the named scored judge jobs, for example `scene-kit` or `verification-tooling`, against a retained run's verified inputs under the current rubric and judging protocol. It SHALL apply the same input verification as an evaluator-only rescore, SHALL refresh the browser evidence the named jobs receive, and SHALL run the named jobs exactly as a full evaluation would run them. It SHALL support repeating each input.
+
+Before judging, the diagnostic SHALL record in its run directory its mode, the normalized list of selected jobs, the source run's provenance, the evaluator identity, and the SHA-256 of the expected-verdict file. The evaluator identity SHALL include the evaluator revision, a content hash of the evaluator's files whether committed or not, including its judging code, prompts, rubrics, and the fixture requirements judges read, and the judge profiles. Resuming the directory SHALL restore that source and mode, SHALL keep completed judgings, and SHALL be rejected, before any completed judging is reused, when it names different jobs, a different source, a changed expected-verdict file, or a different evaluator identity, or when it is resumed as an ordinary evaluation. The comparison of verdicts with expected verdicts SHALL verify the expected-verdict file against its recorded hash, and SHALL report, for every judged criterion in every repeat, the verdict, its judging basis, and whether it matches.
+
+Its results SHALL be calibration diagnostics. On success, failure, or early exit it SHALL write only diagnostic artifacts: it SHALL NOT write an official result, score, or verdict, SHALL NOT publish, and SHALL NOT be a prerequisite or runtime gate for a candidate evaluation.
+
+#### Scenario: A new criterion is calibrated on retained runs
+- **WHEN** a maintainer judges the `scene-kit` job twice on each of seven retained runs, with expected verdicts for `entity-ungrouped-transition-morph`
+- **THEN** the diagnostic reports each run's verdict in both repeats and whether each matches its expected verdict
+- **AND** it runs no other judge job
+
+#### Scenario: Diagnostic results are never published
+- **WHEN** the job-filtered diagnostic completes
+- **THEN** no official result, score, or verdict is written and nothing is published
+
+#### Scenario: A retained run fails input verification
+- **WHEN** a named run's retained evidence does not match its manifest
+- **THEN** the diagnostic reports that run as unloadable without judging it
+
+#### Scenario: An interrupted diagnostic resumes
+- **WHEN** the diagnostic stops after some judgings complete
+- **THEN** resuming it keeps the completed judgings and runs only the rest
+
+#### Scenario: A diagnostic is resumed with different jobs
+- **WHEN** a diagnostic directory recorded for `scene-kit` is resumed naming `verification-tooling`
+- **THEN** the resume is rejected and nothing is judged
+
+#### Scenario: The evaluator changes between interruption and resume
+- **WHEN** a diagnostic stops after some judgings complete, and an uncommitted edit then changes the controller, a judge prompt, a rubric, or the fixture requirements judges read
+- **THEN** the resume is rejected, naming the changed identity, and no completed judging is reused
+
+#### Scenario: Expected verdicts change after judging starts
+- **WHEN** the expected-verdict file is edited after the diagnostic recorded its hash
+- **THEN** the comparison refuses to report matches against the edited file
+
+#### Scenario: A diagnostic fails partway
+- **WHEN** a judge job fails as a harness failure during the diagnostic
+- **THEN** the run directory holds diagnostic artifacts naming the failure, and no official result or publication
 
