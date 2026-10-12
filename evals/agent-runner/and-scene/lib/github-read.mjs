@@ -32,6 +32,6 @@ export function compare(repo, base, head, { exec = spawnSync } = {}) {
   const result = read(`repos/${repo}/compare/${base}...${head}`, PROJECTIONS.compare, exec)
   if (!result.ok) return result
   const data = result.data
-  if (!['ahead', 'behind', 'diverged', 'identical'].includes(data?.status) || ![data.ahead_by, data.behind_by].every(x => Number.isSafeInteger(x) && x >= 0) || !validSha(data.merge_base) || !Array.isArray(data.commits) || data.commits.some(x => !validSha(x.sha) || typeof x.subject !== 'string')) return { ok: false, message: 'Invalid compare response' }
+  if (!['ahead', 'behind', 'diverged', 'identical'].includes(data?.status) || ![data.ahead_by, data.behind_by].every(x => Number.isSafeInteger(x) && x >= 0) || !validSha(data.merge_base) || !Array.isArray(data.commits) || data.commits.some(x => !validSha(x?.sha) || typeof x.subject !== 'string')) return { ok: false, message: 'Invalid compare response' }
   return { ok: true, ...data, commits: data.commits.slice(0, 20) }
 }

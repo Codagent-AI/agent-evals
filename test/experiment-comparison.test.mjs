@@ -339,6 +339,14 @@ test('INT-001: projected real gh subprocess reads, >1 MiB response, errors and s
   process.env.PATH = '/does-not-exist'
   assert.equal(github.resolveMain(repo).ok, false)
 })
+test('GitHub compare refuses a null commit entry without throwing', () => {
+  const exec = () => ({ status: 0, stdout: JSON.stringify({
+    status: 'ahead', ahead_by: 1, behind_by: 0, merge_base: sha('a'), commits: [null],
+  }) })
+  assert.deepEqual(github.compare('Codagent-AI/agent-runner', sha('a'), sha('b'), { exec }), {
+    ok: false, message: 'Invalid compare response',
+  })
+})
 async function writeResult(root, result) {
   const directory = join(root, result.run_id)
   await mkdir(directory, { recursive: true })
