@@ -5,6 +5,7 @@
 // there to answer. Agent Runner's sandbox forwards Claude's credentials and
 // settings but not `~/.claude.json`, where Claude records that those screens
 // were completed, so the harness records it before Agent Runner starts.
+import { randomBytes } from 'node:crypto'
 import { lstat, readFile, realpath, rename, unlink, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 
@@ -54,7 +55,9 @@ export async function seedClaudeFirstRunState({ home, worktree }) {
   const paths = new Set([resolve(worktree)])
   paths.add(await realpath(worktree).catch(() => resolve(worktree)))
   const next = mergeClaudeFirstRunState(existing, [...paths])
-  const temporary = `${path}.${process.pid}.tmp`
+  // A random suffix, since a restarted container can reuse the PID of a run
+  // that crashed and left its temporary file behind.
+  const temporary = `${path}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`
   // Exclusive creation never follows a planted link at the temporary path.
   await writeFile(temporary, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600, flag: 'wx' })
   try {
