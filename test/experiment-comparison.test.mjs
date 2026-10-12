@@ -339,6 +339,18 @@ test('INT-001: projected real gh subprocess reads, >1 MiB response, errors and s
   process.env.PATH = '/does-not-exist'
   assert.equal(github.resolveMain(repo).ok, false)
 })
+test('GitHub compare invalid-input errors identify repository and both commits', () => {
+  const exec = () => { throw Error('invalid inputs must not call GitHub') }
+  for (const [repo, base, head] of [
+    ['Codagent-AI/agent-runner', sha('a'), null],
+    ['Codagent-AI/agent-runner', 'abc123', sha('b')],
+    ['../bad', sha('a'), sha('b')],
+  ]) {
+    assert.deepEqual(github.compare(repo, base, head, { exec }), {
+      ok: false, message: `Invalid repository or commit SHA: ${repo} ${base}...${head}`,
+    })
+  }
+})
 test('GitHub compare refuses a null commit entry without throwing', () => {
   const exec = () => ({ status: 0, stdout: JSON.stringify({
     status: 'ahead', ahead_by: 1, behind_by: 0, merge_base: sha('a'), commits: [null],

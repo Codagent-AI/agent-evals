@@ -28,7 +28,7 @@ export function resolveMain(repo, { exec = spawnSync, now = () => new Date() } =
   return validSha(result.data?.sha) ? { ok: true, sha: result.data.sha, resolved_at: now().toISOString() } : { ok: false, message: 'Invalid main SHA response' }
 }
 export function compare(repo, base, head, { exec = spawnSync } = {}) {
-  if (!validRepo(repo) || !validSha(base) || !validSha(head)) return { ok: false, message: 'Invalid repository or commit SHA' }
+  if (!validRepo(repo) || !validSha(base) || !validSha(head)) return { ok: false, message: `Invalid repository or commit SHA: ${repo} ${base}...${head}` }
   const result = read(`repos/${repo}/compare/${base}...${head}`, PROJECTIONS.compare, exec)
   if (!result.ok) return result
   const data = result.data
