@@ -1,9 +1,9 @@
 export const RECORD_SCHEMA_VERSION = 1
 export const SUPPORTED_RESULT_SCHEMA_VERSIONS = [8, 9]
 export const SOURCES = ['accepted-candidate', 'profile-change', 'manual']
-const WORKFLOW_FIELDS = ['workflow', 'workflow_path', 'task_level_compliance', 'final_validator', 'skip_validator']
-const PROFILE_FIELDS = ['cli', 'model', 'effort', 'agent']
-const RUBRIC_FIELDS = ['rubric_id', 'version', 'sha256']
+export const WORKFLOW_FIELDS = ['workflow', 'workflow_path', 'task_level_compliance', 'final_validator', 'skip_validator']
+export const PROFILE_FIELDS = ['cli', 'model', 'effort', 'agent']
+export const RUBRIC_FIELDS = ['rubric_id', 'version', 'sha256']
 const value = x => x ?? null
 const object = x => x !== null && typeof x === 'object' && !Array.isArray(x)
 const copyFields = (x, fields) => Object.fromEntries(fields.map(field => [field, value(x?.[field])]))
@@ -128,7 +128,7 @@ export function compareIdentity(base, entry) {
   return differences
 }
 
-function overlapping(a, b) { return (a.execution_run_id && a.execution_run_id === b.execution_run_id) || [a.run_id, a.rescored_from].filter(Boolean).some(id => id === b.run_id || id === b.rescored_from) }
+export function lineageOverlaps(a, b) { return (a.execution_run_id && a.execution_run_id === b.execution_run_id) || [a.run_id, a.rescored_from].filter(Boolean).some(id => id === b.run_id || id === b.rescored_from) }
 function duplicate(a, b) { return refusal(a, 'duplicate-run', `Repetitions ${a.run_id} and ${b.run_id} share an execution${a.execution_run_id && a.execution_run_id === b.execution_run_id ? ` (${a.execution_run_id})` : ''} lineage.${a.rescored_from || b.rescored_from ? ' Rebuild with set using only the rescored directory.' : ''}`) }
 function archive(record, kind, date, reason) { record.history.push({ kind, replaced_at: date, replacement_reason: reason, record: structuredClone(record[kind]) }) }
 function identityRefusals(base, entry, allowMismatch, directory = null) {
@@ -152,7 +152,7 @@ export function selectMedian(reps) {
   return sorted[Math.floor((sorted.length - 1) / 2)]?.run_id ?? null
 }
 
-function stats(values) {
+export function stats(values) {
   const mean = values.reduce((sum, x) => sum + x, 0) / values.length
   return { complete: true, mean, min: Math.min(...values), max: Math.max(...values), stddev: values.length === 1 ? null : Math.sqrt(values.reduce((sum, x) => sum + (x - mean) ** 2, 0) / (values.length - 1)) }
 }
@@ -182,7 +182,7 @@ export function applySet(record, items, { source, reason, allowMismatch, now }) 
   if (entries.length) {
     const identity = identityOf(entries[0])
     for (let i = 1; i < entries.length; i++) errors.push(...identityRefusals(identity, entries[i], allowMismatch, admissible[i]?.directory))
-    for (let i = 0; i < entries.length; i++) for (let j = 0; j < i; j++) if (overlapping(entries[i], entries[j])) errors.push(duplicate({ ...entries[i], directory: admissible[i]?.directory }, entries[j]))
+    for (let i = 0; i < entries.length; i++) for (let j = 0; j < i; j++) if (lineageOverlaps(entries[i], entries[j])) errors.push(duplicate({ ...entries[i], directory: admissible[i]?.directory }, entries[j]))
   }
   if (errors.length) return { refusals: errors }
   const median = selectMedian(entries), index = entries.findIndex(x => x.run_id === median)
@@ -200,7 +200,7 @@ export function applyAddRep(record, item, { allowMismatch, now }) {
   const errors = [...(item?.refusals ?? [])], entry = structuredClone(entryOf(item))
   if (!entry) return { refusals: errors }
   errors.push(...identityRefusals(record.current.identity, entry, allowMismatch, item?.directory))
-  for (const old of record.current.reps) if (overlapping(entry, old)) errors.push(duplicate({ ...entry, directory: item?.directory }, old))
+  for (const old of record.current.reps) if (lineageOverlaps(entry, old)) errors.push(duplicate({ ...entry, directory: item?.directory }, old))
   if (errors.length) return { refusals: errors }
   const result = structuredClone(record)
   result.current.reps.push(entry)

@@ -2,7 +2,7 @@
 
 Implement on the change's feature branch. The task must leave `npm run check` green.
 
-- [ ] 1. Comparison report: `experiments.mjs compare` against the experiment baseline
+- [x] 1. Comparison report: `experiments.mjs compare` against the experiment baseline
 
 These are not implementor tasks. They run after this task:
 
