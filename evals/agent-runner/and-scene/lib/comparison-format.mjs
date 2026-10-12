@@ -1,4 +1,4 @@
-const safe = value => String(value ?? 'null').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replace(/[\`*_|\[\]\\]/g, '\\$&').replace(/[\r\n]/g, ' ')
+const safe = value => String(value ?? 'null').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replace(/[\`*_|\[\]\\]/g, '\\$&').replace(/[\r\n]/g, ' ').replace(/[@#]/g, '$&\u200b').replace(/\b(https?|ftp):\/\//gi, '$1:\u200b//').replace(/\bwww\./gi, 'www.\u200b')
 const val = x => safe(typeof x === 'string' ? x : JSON.stringify(x))
 const more = n => n > 0 ? `… and ${n} more` : ''
 export function formatRefusals(refusals, { json = false } = {}) {

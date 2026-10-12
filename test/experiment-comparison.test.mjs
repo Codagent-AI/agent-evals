@@ -630,3 +630,50 @@ test('resource qualifications apply to either better side, never same bands or s
   assert.equal(report.flags.shortfall_check, 'unavailable')
   assert.match(formatMarkdown(report), /Score-shortfall check unavailable/)
 })
+
+test('baseline cost read warnings identify missing, corrupt and mismatched evidence without refusing', async t => {
+  const { root, base, cand, record } = await syntheticSetup(t)
+  await invoke(['baseline', 'set', ...base, '--source', 'manual', '--reason', 'test', '--record', record], { write: undefined })
+  const argv = ['compare', '--eval-issue', 'o/r#1', ...cand, '--record', record, '--baseline-results', root, '--json']
+  const path = join(base[0], 'result.json')
+  for (const variant of ['missing', 'corrupt', 'mismatched', 'unreadable']) {
+    await rm(path, { recursive: true, force: true })
+    if (variant === 'corrupt') await writeFile(path, '{broken')
+    if (variant === 'mismatched') await writeFile(path, JSON.stringify(makeResult({ run_id: 'wrong' })))
+    if (variant === 'unreadable') await mkdir(path)
+    let diagnostics = ''
+    const result = await invoke(argv, { exec: projectedExec(), stderr: text => { diagnostics += text } })
+    assert.equal(result.exitCode, 0, variant)
+    assert.deepEqual(result.report.metrics['cost_role:lead'], { status: 'incomplete', missing_run_ids: ['base-1'] })
+    assert.equal(result.report.metrics.estimated_cost_usd.status, 'compared')
+    const warning = JSON.parse(diagnostics.trim())
+    assert.equal(warning.code, 'baseline-cost-unreadable')
+    assert.equal(warning.run_id, 'base-1')
+    assert.match(warning.message, variant === 'missing' ? /ENOENT/ : variant === 'corrupt' ? /JSON|property/i : variant === 'mismatched' ? /run id mismatch.*wrong/ : /EISDIR/)
+  }
+})
+
+test('Markdown neutralizes mentions, issue references and URLs while JSON retains source text', () => {
+  const text = '@org/team fixes #123 o/r#456 https://example.com www.example.com'
+  const report = reportFor()
+  report.request.settings.agent_runner_ref = text
+  report.differences.primary = [{ repo: 'o/r', requested_ref: text, recorded_commit: sha('a'), main_sha: sha('b'), ahead_by: 1, omitted: 0, commits: [{ sha: sha('c'), subject: text }] }]
+  const original = JSON.stringify(report)
+  const markdown = formatMarkdown(report)
+  assert.ok(markdown.includes('@\u200borg/team'))
+  assert.ok(markdown.includes('#\u200b123'))
+  assert.ok(markdown.includes('o/r#\u200b456'))
+  assert.ok(markdown.includes('https:\u200b//example.com'))
+  assert.ok(markdown.includes('www.\u200bexample.com'))
+  for (const live of ['@org/team', '#123', 'o/r#456', 'https://example.com', 'www.example.com']) assert.ok(!markdown.includes(live), live)
+  assert.equal(JSON.stringify(report), original)
+})
+
+test('one-repetition baseline uses candidate sample variance as specified', () => {
+  const base = { n: 1, mean: 100, stddev: null }
+  const cand = { n: 2, mean: 50, stddev: 10 }
+  const result = comparison.band({ kind: 'resource', base, cand })
+  assert.equal(result.sd, cand.stddev)
+  assert.equal(result.se, 10 * Math.sqrt(1 + 1 / 2))
+  assert.equal(result.level, 'clear')
+})

@@ -90,14 +90,14 @@ export function parseArgs(argv) {
   return options
 }
 
-export async function runExperimentsCommand({ argv, now = () => new Date(), stdout = s => process.stdout.write(s), write = writeJsonAtomic, exec = spawnSync } = {}) {
+export async function runExperimentsCommand({ argv, now = () => new Date(), stdout = s => process.stdout.write(s), write = writeJsonAtomic, exec = spawnSync, stderr = s => process.stderr.write(s) } = {}) {
   const errors = []
   const error = (code, message, exitCode) => { const item = { code, message }; errors.push(item); process.stderr.write(`${JSON.stringify(item)}\n`); return { exitCode, errors } }
   let args
   try { args = parseArgs(argv) } catch (cause) { stdout(usage); return error('invalid-arguments', cause.message, 2) }
   if (args.help) { stdout(usage); return { exitCode: 0, errors } }
   if (args.command === 'compare') {
-    try { return await runCompare(args, { now, stdout, exec }) }
+    try { return await runCompare(args, { now, stdout, stderr, exec }) }
     catch (cause) { return error('internal-error', cause.stack ?? cause.message, 2) }
   }
   let record
@@ -170,10 +170,10 @@ function parseCompareArgs(argv) {
   return options
 }
 
-async function runCompare(args, { now, stdout, exec }) {
+async function runCompare(args, { now, stdout, stderr, exec }) {
   const refusals = [], candidates = [], costs = Object.create(null)
   const emit = (items, exitCode) => {
-    for (const item of items) process.stderr.write(JSON.stringify(item) + '\n')
+    for (const item of items) stderr(JSON.stringify(item) + '\n')
     if (exitCode === 1) stdout(formatRefusals(items, { json: args.json }))
     return { exitCode, errors: items }
   }
@@ -202,13 +202,18 @@ async function runCompare(args, { now, stdout, exec }) {
       candidates.push({ entry: null, refusals: [{ directory, code: cause instanceof SyntaxError ? 'invalid-result' : 'missing-result', message: `${path}: ${cause.message}` }] })
     }
   }
+  const unavailableCost = (rep, message) => {
+    costs[rep.run_id] = { complete: false, error: message }
+    stderr(JSON.stringify({ code: 'baseline-cost-unreadable', run_id: rep.run_id, message }) + '\n')
+  }
   for (const rep of baseline?.reps ?? []) {
     // Persisted ids must not escape the selected results directory.
-    if (rep.run_id === '.' || rep.run_id === '..' || /[/\\]/.test(rep.run_id)) { costs[rep.run_id] = { complete: false }; continue }
+    if (rep.run_id === '.' || rep.run_id === '..' || /[/\\]/.test(rep.run_id)) { unavailableCost(rep, 'Invalid run id: cannot read baseline result path'); continue }
     try {
       const result = await readJson(join(args.baselineResults, rep.run_id, 'result.json'))
-      costs[rep.run_id] = result?.run_id === rep.run_id ? roleCosts(result) : { complete: false }
-    } catch { costs[rep.run_id] = { complete: false } }
+      if (result?.run_id === rep.run_id) costs[rep.run_id] = roleCosts(result)
+      else unavailableCost(rep, `Baseline result run id mismatch: expected ${rep.run_id}, found ${JSON.stringify(result?.run_id ?? null)}`)
+    } catch (cause) { unavailableCost(rep, `${join(args.baselineResults, rep.run_id, 'result.json')}: ${cause.message}`) }
   }
   let request
   const issue = github.issueBody(args.issue, { exec })

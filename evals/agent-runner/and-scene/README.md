@@ -1575,7 +1575,8 @@ may have merged since the eval ran; its original branch-only commits cannot be r
 Bands are `same`, `leaning better/worse`, or `clearly better/worse`, using pooled sample
 variation, a 3-point score noise floor, and a 15% minimum resource change for a clear band.
 Higher score is better; fewer tokens, less active time and lower estimated cost are better.
-Incomplete metrics name every missing run rather than averaging a subset. Favorable resource
+Incomplete metrics name every missing run rather than averaging a subset. Unreadable baseline
+cost files also emit a diagnostic on stderr naming the run and the read failure. Favorable resource
 bands involving product failures are marked. Reliability flags identify gate/product failures
 and scores more than 6 points below the baseline mean. Review the named candidate median by
 hand; its human score is informational and has no band.
