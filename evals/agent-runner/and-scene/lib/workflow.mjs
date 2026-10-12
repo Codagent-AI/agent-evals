@@ -11,8 +11,8 @@
 // Agent Runner records a run under the `name` its resolved definition declares,
 // not under the logical reference it was started with, so the harness keeps both
 // identities and checks persisted runs against the expected declared name.
-import { readdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { readdir, readFile } from 'node:fs/promises'
+import { basename, dirname, join, resolve } from 'node:path'
 
 export const DEFAULT_WORKFLOW = 'core:plan-and-implement-change'
 
@@ -84,6 +84,44 @@ export function parseWorkflowDefinition(text) {
     if (mapped) parameters.push(mapped[1])
   }
   return { name, parameters }
+}
+
+// Lead CLIs verified to run a step that requests the autonomous-interactive
+// backend in the sandbox. Agent Runner hands such a step the terminal, and only
+// Claude has been shown to complete one there without a human.
+export const INTERACTIVE_LEAD_CLIS = new Set(['claude'])
+
+const INTERACTIVE_BACKEND = /^\s*autonomous_backend:\s*["']?interactive["']?\s*(?:#.*)?$/m
+const SUB_WORKFLOW = /^\s*workflow:\s*["']?([^"'\s#]+)/gm
+
+// Whether any step of the workflow, or of a sub-workflow it references by file,
+// requests the autonomous-interactive backend outright. `interactive-claude`
+// falls back to headless for other CLIs, so it imposes no requirement. This is
+// the one step-level fact the harness reads: it decides which lead CLIs can
+// run the workflow at all, not how the run is judged.
+export async function workflowRequestsInteractiveBackend(workflowPath) {
+  let workflowsRoot = dirname(resolve(workflowPath))
+  while (basename(workflowsRoot) !== 'workflows' && dirname(workflowsRoot) !== workflowsRoot) {
+    workflowsRoot = dirname(workflowsRoot)
+  }
+  const pending = [resolve(workflowPath)]
+  const visited = new Set()
+  while (pending.length > 0) {
+    const path = pending.pop()
+    if (visited.has(path)) continue
+    visited.add(path)
+    let text
+    try { text = await readFile(path, 'utf8') } catch { continue }
+    if (INTERACTIVE_BACKEND.test(text)) return true
+    for (const match of text.matchAll(SUB_WORKFLOW)) {
+      const value = match[1]
+      if (value.includes('{{') || value.includes('$')) continue
+      pending.push(value.startsWith('builtin:')
+        ? resolve(workflowsRoot, value.slice('builtin:'.length))
+        : resolve(dirname(path), value))
+    }
+  }
+  return false
 }
 
 export function verifyWorkflowInputs(text, { workflow = 'the evaluated workflow' } = {}) {

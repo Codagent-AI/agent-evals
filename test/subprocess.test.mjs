@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { runTimed, summarizeTimings } from '../evals/agent-runner/and-scene/lib/subprocess.mjs'
+import { runTimed, runTimedAsync, summarizeTimings } from '../evals/agent-runner/and-scene/lib/subprocess.mjs'
 
 test('a successful command reports its output and machine duration', () => {
   const result = runTimed('node', ['-e', 'process.stdout.write("ok")'], { label: 'probe' })
@@ -87,4 +87,37 @@ test('timings aggregate into a per-label machine duration breakdown', () => {
 
 test('an empty timing list summarizes to zero rather than missing data', () => {
   assert.deepEqual(summarizeTimings([]), { total_ms: 0, by_label: {} })
+})
+
+test('the asynchronous form logs, times, and reports an executor-ended command', async () => {
+  const dir = await makeTempDir(join(tmpdir(), 'agent-evals-subprocess-'))
+  const outputPath = join(dir, 'logs/runner.log')
+  let seen
+  const result = await runTimedAsync('agent-runner', ['run', 'core:x'], {
+    label: 'agent-runner',
+    outputPath,
+    stall: { timeoutMs: 1 },
+    exec: async (command, args, options) => {
+      seen = { command, args, options }
+      return { status: 143, signal: null, ended: 'stalled', error: Object.assign(new Error('stalled'), { code: 'ESTALLED' }), stdout: 'buffered' }
+    },
+  })
+
+  assert.deepEqual([seen.command, seen.args], ['agent-runner', ['run', 'core:x']])
+  assert.equal(seen.options.stdio[0], 'pipe')
+  assert.deepEqual(seen.options.stall, { timeoutMs: 1 })
+  assert.equal(result.ok, false)
+  assert.equal(result.ended, 'stalled')
+  assert.equal(result.error_code, 'ESTALLED')
+  assert.equal(result.stdout, '')
+  assert.match(await readFile(outputPath, 'utf8'), /\] agent-runner\nbuffered$/)
+})
+
+test('the asynchronous form accepts a synchronous executor and omits ended when unset', async () => {
+  const result = await runTimedAsync('agent-runner', ['--resume', 'r'], {
+    exec: () => ({ status: 0, stdout: 'ok' }),
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.stdout, 'ok')
+  assert.equal('ended' in result, false)
 })

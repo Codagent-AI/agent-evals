@@ -899,3 +899,36 @@ test('a diagnostic is refused without its pair of flags, a source, the host, or 
   assert.notEqual(ordinary.status, 0)
   assert.match(ordinary.output, /--rescore-from cannot be combined/)
 })
+
+test('scored mode rejects a non-Claude lead for a workflow that requests the interactive backend', async () => {
+  const context = await setup({
+    extraWorkflows: {
+      'workflows/core/orchestrated-implement-change-v1.0.yaml':
+        'name: orchestrated-implement-change\nsteps:\n  - id: nest\n    workflow: inner-v1.0.yaml\n',
+      'workflows/core/inner-v1.0.yaml': 'name: inner\nsteps:\n  - id: lead\n    autonomous_backend: interactive\n',
+    },
+  })
+  const codexLead = profileArgs.map((value, index) => (profileArgs[index - 1] === '--lead-cli' ? 'codex' : value))
+
+  const rejected = await scored(context, ['--workflow', 'core:orchestrated-implement-change', ...codexLead])
+  assert.notEqual(rejected.status, 0)
+  assert.match(rejected.output, /verified in the evaluation sandbox only for a claude lead, not codex/)
+  assert.ok(!rejected.output.includes('/eval-input/controller.mjs'), rejected.output)
+
+  const claudeLead = profileArgs.map((value, index) => (profileArgs[index - 1] === '--lead-cli' ? 'claude' : value))
+  const accepted = await scored(context, ['--workflow', 'core:orchestrated-implement-change', ...claudeLead])
+  assert.equal(accepted.status, 0, accepted.output)
+})
+
+test('scored mode passes runner stall and time limits to the controller only when given', async () => {
+  const context = await setup()
+
+  const defaults = await scored(context, profileArgs)
+  assert.equal(defaults.status, 0, defaults.output)
+  assert.ok(!defaults.output.includes('--runner-stall-minutes'), defaults.output)
+
+  const given = await scored(context, ['--runner-stall-minutes', '60', '--runner-max-hours', '30', ...profileArgs])
+  assert.equal(given.status, 0, given.output)
+  assert.match(given.output, /--runner-stall-minutes 60/)
+  assert.match(given.output, /--runner-max-hours 30/)
+})

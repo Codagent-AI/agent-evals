@@ -29,6 +29,8 @@ CHANGE_NAME="${CHANGE_NAME:-create-and-scene}"
 WORKFLOW="core:plan-and-implement-change"
 WORKFLOW_PROVIDED=0
 WORKFLOW_RELATIVE_PATH=""
+RUNNER_STALL_MINUTES=""
+RUNNER_MAX_HOURS=""
 # sandbox-run.sh mounts the validated host checkout here with its Git metadata.
 # Its separate /tmp/agent-runner-local copy is only the build source and cannot
 # satisfy the controller's clean-worktree provenance check.
@@ -97,7 +99,17 @@ Options:
                           change_name, change_dir, change_label, change_kind,
                           artifact_validation_instruction, and skip_validator
                           parameters. Not allowed with --rescore-from.
+                          A workflow with a step that requests the interactive
+                          backend needs a claude lead; Agent Runner always runs
+                          under a pseudo-terminal.
                           Default: core:plan-and-implement-change
+  --runner-stall-minutes N
+                          End and report a stalled Agent Runner run when its run
+                          store, CLI transcripts, and candidate worktree show no
+                          activity for N minutes. It stays resumable.
+                          Default: 45
+  --runner-max-hours N   End an Agent Runner start or resume still running after
+                          N hours. It stays resumable. Default: 24
   --agent-skills-dir PATH
                           Agent Skills checkout. Must be a clean Git worktree
                           containing every Codagent skill named by the workflow.
@@ -263,6 +275,14 @@ while (($#)); do
     --workflow)
       WORKFLOW="${2:?missing value for --workflow}"
       WORKFLOW_PROVIDED=1
+      shift 2
+      ;;
+    --runner-stall-minutes)
+      RUNNER_STALL_MINUTES="${2:?missing value for --runner-stall-minutes}"
+      shift 2
+      ;;
+    --runner-max-hours)
+      RUNNER_MAX_HOURS="${2:?missing value for --runner-max-hours}"
       shift 2
       ;;
     --skip-validator)
@@ -551,6 +571,19 @@ if [[ "$RUN_AGENT" == 1 ]]; then
       echo "The lead-agent profile cannot use cursor: Cursor agent calls are not yet verified in the evaluation sandbox." >&2
       exit 2
     fi
+    # A step that requests the interactive backend hands the lead the terminal;
+    # only a claude lead is verified to finish one unattended. The controller
+    # enforces the same rule, so a host without node still fails before any
+    # model runs.
+    if [[ -n "$WORKFLOW_RELATIVE_PATH" && "$LEAD_CLI" != claude ]] && command -v node >/dev/null 2>&1; then
+      if node --input-type=module -e "
+        const { workflowRequestsInteractiveBackend } = await import(process.argv[1])
+        process.exit(await workflowRequestsInteractiveBackend(process.argv[2]) ? 0 : 1)
+      " "$SUITE_DIR/lib/workflow.mjs" "$AGENT_RUNNER_DIR/$WORKFLOW_RELATIVE_PATH"; then
+        echo "Workflow $WORKFLOW requests the autonomous-interactive backend, which is verified in the evaluation sandbox only for a claude lead, not $LEAD_CLI." >&2
+        exit 2
+      fi
+    fi
 
     # Forward only the auth the selected role profiles and the judge need, in
     # role order: lead, crosscheck, implementor, tester.
@@ -741,6 +774,12 @@ fi
 CONTROLLER_ARGS+=(--fixture-ref "$FIXTURE_REF" --judge-model "$JUDGE_MODEL")
 if [[ -z "$RESCORE_FROM" ]]; then
   CONTROLLER_ARGS+=(--workflow "$WORKFLOW")
+fi
+if [[ -n "$RUNNER_STALL_MINUTES" ]]; then
+  CONTROLLER_ARGS+=(--runner-stall-minutes "$RUNNER_STALL_MINUTES")
+fi
+if [[ -n "$RUNNER_MAX_HOURS" ]]; then
+  CONTROLLER_ARGS+=(--runner-max-hours "$RUNNER_MAX_HOURS")
 fi
 if [[ -n "$CANDIDATE_REF" ]]; then
   CONTROLLER_ARGS+=(--candidate-ref "$CANDIDATE_REF")

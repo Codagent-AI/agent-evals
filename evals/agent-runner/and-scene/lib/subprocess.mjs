@@ -20,25 +20,66 @@ export function runTimed(command, args = [], options = {}) {
   let outputFd = null
   let result
   try {
-    if (outputPath) {
-      mkdirSync(dirname(outputPath), { recursive: true })
-      outputFd = openSync(outputPath, 'a')
-      writeSync(outputFd, `\n[${startedAt}] ${label}\n`)
-    }
+    outputFd = openLog(outputPath, label, startedAt)
     result = exec(command, args, {
       encoding: 'utf8',
       ...spawnOptions,
       ...(outputFd === null ? {} : { stdio: ['ignore', outputFd, outputFd] }),
     })
-    // Injected executors return buffered strings even when given stdio. Preserve
-    // those strings in the same durable log production subprocesses stream to.
-    if (outputFd !== null) {
-      if (result.stdout) writeSync(outputFd, result.stdout)
-      if (result.stderr) writeSync(outputFd, result.stderr)
-    }
+    preserveBuffered(outputFd, result)
   } finally {
     if (outputFd !== null) closeSync(outputFd)
   }
+  return timingRecord({ label, command, args, outputPath, startedAt, start, result })
+}
+
+function openLog(outputPath, label, startedAt) {
+  if (!outputPath) return null
+  mkdirSync(dirname(outputPath), { recursive: true })
+  const fd = openSync(outputPath, 'a')
+  writeSync(fd, `\n[${startedAt}] ${label}\n`)
+  return fd
+}
+
+function preserveBuffered(outputFd, result) {
+  // Injected executors return buffered strings even when given stdio. Preserve
+  // those strings in the same durable log production subprocesses stream to.
+  if (outputFd === null) return
+  if (result.stdout) writeSync(outputFd, result.stdout)
+  if (result.stderr) writeSync(outputFd, result.stderr)
+}
+
+// The asynchronous form, for executors that must keep running while the
+// controller watches them (Agent Runner under a pseudo-terminal). stdin is a
+// pipe so such an executor can hold it open; a synchronous executor still
+// works, since awaiting its plain result is harmless.
+export async function runTimedAsync(command, args = [], options = {}) {
+  const {
+    label = command,
+    exec,
+    outputPath = null,
+    ...spawnOptions
+  } = options
+  if (typeof exec !== 'function') throw new Error('runTimedAsync requires an executor')
+  const startedAt = new Date().toISOString()
+  const start = process.hrtime.bigint()
+  let outputFd = null
+  let result
+  try {
+    outputFd = openLog(outputPath, label, startedAt)
+    result = await exec(command, args, {
+      encoding: 'utf8',
+      ...spawnOptions,
+      ...(outputFd === null ? {} : { stdio: ['pipe', outputFd, outputFd] }),
+    })
+    preserveBuffered(outputFd, result)
+  } finally {
+    if (outputFd !== null) closeSync(outputFd)
+  }
+  return timingRecord({ label, command, args, outputPath, startedAt, start, result })
+}
+
+function timingRecord({ label, command, args, outputPath, startedAt, start, result }) {
   const durationMs = Number(process.hrtime.bigint() - start) / 1e6
 
   // Preserve a command-launch failure's native null status and error code.
@@ -60,6 +101,9 @@ export function runTimed(command, args = [], options = {}) {
     output_path: outputPath,
     started_at: startedAt,
     duration_ms: durationMs,
+    // Set only when the executor ended the command itself: 'stalled' or
+    // 'timed-out'.
+    ...(result.ended ? { ended: result.ended } : {}),
   }
 }
 
