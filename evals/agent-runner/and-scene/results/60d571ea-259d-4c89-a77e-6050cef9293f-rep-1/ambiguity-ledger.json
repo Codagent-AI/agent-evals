@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "run_id": "plan-and-implement-change-2026-10-12T01-33-02-679399141Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement__sub_implement-change__implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_3__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_3__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__verify-change__sub_verify-change__review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": "product verification",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Delivered verification failed the IPv4 loopback requirement.",
+      "evidence": [
+        "verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost.",
+        "The supplied session-report excerpts end before substantive audit findings; implementation code and complete task requirements are unavailable."
+      ],
+      "handling": "No host-selection decision or subsequent correction is visible.",
+      "consequence": "The IPv4 loopback verification check failed. No resulting runtime failure is established.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure establishes an unmet verification requirement, but does not establish whether its cause was an assumption, an implementation error, missing repository context, or an omission from the imp…",
+      "resolution": "unresolved",
+      "id": "f65997aa7bab6e32"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "product verification",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The check for ignoring swipes originating from controls failed.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail —",
+        "input-modifier-keys-pass-through: pass —",
+        "demo-focus-and-keyboard-accessibility: pass —"
+      ],
+      "handling": "No relevant implementation decision, failure trace, or correction is visible.",
+      "consequence": "Control-origin swipe handling failed its dedicated check; the exact observed interaction is unspecified.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The check identifies a narrow input-handling problem, but provides no evidence distinguishing a specification gap, overlooked context, an incorrect assumption, or a coding defect. The truncated repor…",
+      "resolution": "unresolved",
+      "id": "7f278bac497aa2da"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}

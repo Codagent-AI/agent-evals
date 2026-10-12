@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const MAX_QUOTA_WAIT_MS = 6 * 60 * 60 * 1000
@@ -126,4 +126,67 @@ export async function waitForClaudeQuotaReset({
   log(`Claude ${detected.role ?? 'unattributed'} quota reached; waiting until ${detected.reset_at} before resuming Agent Runner`)
   await sleep(detected.wait_ms)
   return { waited: true, ...detected }
+}
+
+const TRANSCRIPT_FILES_SCANNED = 5
+const TRANSCRIPT_TAIL_BYTES = 256 * 1024
+
+async function newestTranscripts(projectsDir) {
+  const files = []
+  const pending = [projectsDir]
+  while (pending.length > 0) {
+    const path = pending.pop()
+    let entries
+    try { entries = await readdir(path, { withFileTypes: true }) } catch { continue }
+    for (const entry of entries) {
+      const child = join(path, entry.name)
+      if (entry.isDirectory() || entry.isSymbolicLink()) {
+        const stats = await stat(child).catch(() => null)
+        if (stats?.isDirectory()) pending.push(child)
+        else if (stats?.isFile() && entry.name.endsWith('.jsonl')) files.push({ path: child, mtimeMs: stats.mtimeMs })
+      } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
+        const stats = await stat(child).catch(() => null)
+        if (stats) files.push({ path: child, mtimeMs: stats.mtimeMs })
+      }
+    }
+  }
+  return files.sort((left, right) => right.mtimeMs - left.mtimeMs).slice(0, TRANSCRIPT_FILES_SCANNED)
+}
+
+function messageText(message) {
+  const content = message?.content
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  return content.map((part) => (typeof part?.text === 'string' ? part.text : '')).join(' ')
+}
+
+// An interactive Claude session shows a usage limit in its terminal, so it
+// never reaches Agent Runner's audit log. Claude records API errors in the
+// session transcript as assistant entries flagged `isApiErrorMessage`; this
+// renders the newest such entries as audit-style lines, so the same quota
+// rule decides whether the run waits for a reset.
+// Only errors recorded at or after `sinceMs` count, so a limit left in a
+// transcript by an earlier run never causes a wait.
+export async function readTranscriptQuotaAudit({ projectsDir, sinceMs = null }) {
+  if (!projectsDir) return ''
+  const lines = []
+  for (const { path } of await newestTranscripts(projectsDir)) {
+    let text
+    try {
+      const buffer = await readFile(path)
+      text = buffer.subarray(Math.max(0, buffer.length - TRANSCRIPT_TAIL_BYTES)).toString('utf8')
+    } catch {
+      continue
+    }
+    for (const raw of text.split('\n')) {
+      if (!raw.includes('isApiErrorMessage')) continue
+      let entry
+      try { entry = JSON.parse(raw) } catch { continue }
+      if (entry?.isApiErrorMessage !== true || typeof entry.timestamp !== 'string') continue
+      if (Number.isFinite(sinceMs) && !(Date.parse(entry.timestamp) >= sinceMs)) continue
+      const message = messageText(entry.message).replace(/\s+/g, ' ').trim()
+      if (message) lines.push(`${entry.timestamp} transcript_api_error {"cli":"claude"} ${message}`)
+    }
+  }
+  return lines.sort().join('\n')
 }

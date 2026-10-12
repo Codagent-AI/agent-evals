@@ -15,9 +15,10 @@ Describe the change or comparison this evaluation should perform.
 agent_runner_ref = "main"
 agent_skills_ref = "main"
 # fixture_ref = "<and-scene branch, tag, or commit>"  # default: the agent-evals pin
-lead = "codex:gpt-5.6-sol:high"
-implementor = "codex:gpt-5.6-sol:high"
-tester = "codex:gpt-5.6-sol:high"
+# lead = "claude:claude-sonnet-5-5:high"        # default: factory [eval.defaults]
+# crosscheck = "codex:gpt-6.1-sol:high"          # default: factory [eval.defaults]
+# implementor = "codex:gpt-6-luna:medium"        # default: factory [eval.defaults]
+# tester = "codex:gpt-6-luna:medium"             # default: factory [eval.defaults]
 skip_validator = false
 repetitions = 3
 ```
