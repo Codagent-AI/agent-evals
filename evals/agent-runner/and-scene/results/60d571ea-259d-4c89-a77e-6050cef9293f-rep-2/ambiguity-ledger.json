@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "run_id": "plan-and-implement-change-2026-10-12T05-43-40-833564916Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement__sub_implement-change__implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_3__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_3__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__verify-change__sub_verify-change__review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": "attribution-default-link",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered default attribution uses a different repository URL from the verification expectation.",
+      "evidence": [
+        "attribution-default-link: fail — expected https://github.com/Codagent-AI/and-scene; found https://github.com/and-scene/and-scene."
+      ],
+      "handling": "The delivered default uses https://github.com/and-scene/and-scene. No rationale for that target is visible in the supplied workflow excerpts.",
+      "consequence": "The default attribution directs users to a URL different from the expected project repository.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The mismatch is observable, but the original requirements and completed assumption reports are unavailable. The evidence cannot distinguish an incorrect assumption from an unspecified target or overl…",
+      "resolution": "unresolved",
+      "id": "0594e94b9d38944a"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "quality-project-local-screenshot-helper",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered project lacks the screenshot helper expected by verification.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: fail — Project-local Playwright screenshot helper is missing."
+      ],
+      "handling": "Verification found no project-local Playwright screenshot helper. The supplied excerpts do not explain the omission.",
+      "consequence": "The expected project-local screenshot workflow is unavailable.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The missing artifact is established, but no task requirements or implementation decisions are visible that establish whether its omission arose from ambiguity, missing context, or an implementation e…",
+      "resolution": "unresolved",
+      "id": "a06bc7da94e585e5"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "visual-helper verification",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Visual helper warnings are missing or incomplete for overlap, active-state comparison, and attribution.",
+      "evidence": [
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "The delivered artifacts omit the first two warning mechanisms and incompletely cover attribution warnings. No related assumption or rationale is visible in the excerpts.",
+      "consequence": "The expected diagnostic coverage is incomplete. These results do not establish that actual overlap, active-state, or attribution-size defects occurred.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "Verification establishes missing coverage, but cannot establish its cause or whether these failures share a cause with the missing screenshot helper. The supplied session-report outputs are truncated…",
+      "resolution": "unresolved",
+      "id": "9440befd04eb551f"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
