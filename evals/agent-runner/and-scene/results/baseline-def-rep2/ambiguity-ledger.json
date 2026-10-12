@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "run_id": "plan-and-implement-change-2026-10-11T23-49-54-202921549Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement__sub_implement-change__implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__verify-change__sub_verify-change__review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered default attribution link differs from the repository expected by product verification.",
+      "evidence": [
+        "attribution-default-link: fail — expected https://github.com/Codagent-AI/and-scene; found https://github.com/and-scene/and-scene.",
+        "The supplied session-report excerpts end before substantive audit findings; no complete workflow files were available in the workspace."
+      ],
+      "handling": "The delivered default uses https://github.com/and-scene/and-scene. Its selection rationale and any remediation are unavailable.",
+      "consequence": "The default attribution directs users to a different repository URL and fails the attribution check.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The mismatch is observable, but the artifacts do not establish whether it arose from an incorrect assumption, missing discoverable context, unclear specification, or an implementation error unrelated…",
+      "resolution": "unresolved",
+      "id": "a5c744fa4b0a976f"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The visual helper lacks the expected overlap warning or explicit allow-overlap marker.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: pass — Project-local Playwright screenshot helper is present.",
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing."
+      ],
+      "handling": "A screenshot helper was delivered without the checked overlap diagnostic or exception marker.",
+      "consequence": "The helper fails the overlap-warning check; the evidence does not demonstrate an actual overlapping scene.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "Neither the governing helper requirements nor the implementation rationale is available, so the omission cannot be attributed to a specification gap, overlooked repository context, or an incorrect as…",
+      "resolution": "unresolved",
+      "id": "11d14ba8cfc64552"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The visual helper lacks the expected active-state visual comparison warning.",
+      "evidence": [
+        "navigation-active-state: pass — Semantic current state and stable active hook are present.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing."
+      ],
+      "handling": "Semantic navigation state and an active hook were delivered, but the checked visual comparison warning was absent.",
+      "consequence": "The helper fails the visual-warning check despite passing the semantic active-state check. No actual visual indistinguishability is established.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The evidence establishes a diagnostic omission but does not reveal the specification available to the agents or their interpretation of it.",
+      "resolution": "unresolved",
+      "id": "e25ddfdea25bba05"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The visual helper&#39;s attribution warnings are incomplete.",
+      "evidence": [
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "The delivered helper did not satisfy the combined attribution-warning check; the excerpt does not identify which warning components were implemented.",
+      "consequence": "Attribution diagnostic coverage fails verification. Specific missing checks and their runtime effects are not recoverable.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The aggregate failure and truncated workflow reports cannot establish the omitted components, their requirement provenance, or an underlying assumption. No substantive self-reported findings are visi…",
+      "resolution": "unresolved",
+      "id": "730b6de2497612bf"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
