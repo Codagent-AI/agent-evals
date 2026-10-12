@@ -47,7 +47,12 @@ consult `run.sh --help` before constructing an unfamiliar invocation.
   `fixture-snapshot/snapshot.json`, and `test/and-scene.test.mjs`.
 - Factory evals fetch this repository's `main` at admission, along with Agent
   Runner and Agent Skills `main` (and Agent Validator `main` on Fly). A change merged here applies
-  to the next eval with no factory deploy.
+  to the next eval with no factory deploy. Factory evals, including judging,
+  run on Fly; judging needs Claude auth as well as Codex auth.
+- Keep the fixture's `AGENTS.md` bullet telling candidates not to add CI. The
+  sandbox token that pushes candidate branches lacks `workflow` permission, so a
+  planner-added `.github/workflows/` file fails the push. A re-cut fixture must
+  carry the same bullet.
 
 - New runs and `--resume` require the pinned fixture change to be
   definition-only: proposal, design, test plan, and specs, with no `tasks.md`
@@ -80,6 +85,21 @@ consult `run.sh --help` before constructing an unfamiliar invocation.
   path, including the final Validator; it does not skip eval-owned scoring.
   The harness passes `skip_validator=true` and records the requested Validator
   mode as provenance; it does not verify the mode from workflow steps.
+
+## Experiment baseline and human review
+
+- The current experiment baseline is `evals/agent-runner/and-scene/experiments/baseline.json`
+  (the definition-only starting line; see the suite README, "Experiment
+  baseline"). Compare new candidates against it; until automated comparison
+  exists, use `experiments.mjs baseline show` and compare by hand.
+- Keep the and-scene draft PRs of the baseline repetitions open. Rescores need
+  them.
+- To review from another machine, run `human-review.sh --no-publish --run-dir
+  <artifact-dir>`. It prints a `http://127.0.0.1:<port>/` URL with a random
+  port; forward that same port, for example `ssh -N -L <port>:127.0.0.1:<port>
+  <user>@<host>`, and open the URL locally.
+- Local runs can miss uncached input tokens for the Validator's Claude reviews
+  (`claude_otel_not_observed`); Fly runs record them, and cost stays complete.
 
 ## Operational diagnostics
 

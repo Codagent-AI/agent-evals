@@ -113,8 +113,7 @@ Criterion records and reports show the basis (`consensus-pass/fail`,
 family-labelled votes, targeted checks, and rulings. Cache reuse requires
 `cross-family-panel-v2` and reproduction from the recorded votes, checks, and
 rulings, each ruling from its settled audit cycle alone. Rubric **13.0.0** starts a new scoring series; no criterion changed,
-and earlier results stay published. Acceptance `E2E-004` pairs baseline
-rescores under this panel.
+and earlier results stay published.
 
 Claude source judges use only Read/Grep/Glob inside the evaluation sandbox.
 Evidence and closed-world packets are inlined with no tools. Evidence panel
@@ -226,7 +225,7 @@ engineering quality excluded and reported separately; points by class; and
 gate, floor and eligibility changes. Per rep it reports per-criterion
 disagreement counts with their denominators, always including every
 engineering-quality criterion. `--blocker-rep` names the rep that decides
-merge (#78 rep 2 for the `followups` change): when any of its pairs has more
+merge (the `followups` change used #78 rep 2): when any of its pairs has more
 than 1.0 settlement, mixed and unattributed points outside engineering
 quality, the command
 prints `MERGE BLOCKED` and exits 1. Seat-noise points and misses on other reps
@@ -394,7 +393,9 @@ workflow events record a `validator-unavailable` entry. The evaluated workflow
 is expected to need no Validator in skipped mode. The sandbox is unprivileged,
 so the installed binary still exists; only name lookup is blocked. Validator-on
 runs are unchanged.
-The first complete benchmark candidate explicitly uses `--skip-validator`.
+The experiment baseline and factory evals run with the Validator on
+(`skip_validator=false`); a `--skip-validator` run is a workflow-settings
+mismatch against that baseline.
 The harness never queries CI and never permits merge, ready-for-review, close,
 archive, release, or candidate-branch deletion behavior.
 
@@ -1270,13 +1271,15 @@ Exit code 0 means success, including `show` and `--help`; 1 means an admission
 refusal; 2 means a usage, invalid-record, or I/O error. Refusals are JSON lines
 on stderr. Writes are atomic and the record is intended for git review.
 
-The first baseline is seeded manually after the factory has saved all three
-agent-evals#67 result directories. Run `set` with those three directories,
-`--source profile-change`, and a reason describing the profile change. Check
-that rep 2 is the reviewed median, then run `anchor --from-current` with a
-reason. Commit the resulting `experiments/baseline.json` separately.
-If rep 2 was rescored, use its rescored directory. Its prior review carries over
-from the published source directory when the human rubric still matches.
+The current baseline (`experiments/baseline.json`) is the definition-only
+starting line: `baseline-def-rep2` (local, human-reviewed 20/30, the median)
+plus the two Fly repetitions of factory claim 60d571ea, set with
+`--source profile-change` and anchored. Automated mean 56.13/70 (sd 2.39);
+mean estimated cost $4.90. `experiments.mjs` only maintains this record;
+comparing a candidate's repetitions against it is not implemented yet.
+To publish a local repetition for the record, copy its curated result files
+into `results/<run-id>/` with the same file set as the other published
+repetitions (the reviewed median also carries `human-review.json`).
 
 ## Outcomes
 

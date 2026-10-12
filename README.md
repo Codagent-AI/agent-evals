@@ -10,6 +10,7 @@ Suites are grouped by the product they evaluate:
 evals/
   agent-runner/
     and-scene/
+    and-scene-define/
 ```
 
 The suites do not share a required scorer or result schema. Common conventions
@@ -22,6 +23,9 @@ The `and-scene` suite evaluates Agent Runner against an external, commit-pinned
 fixture. This repository owns the eval logic and artifacts. Agent Runner owns
 the Docker image, local-source build, authentication forwarding, devcontainer,
 and sandbox adapter.
+
+`and-scene-define` evaluates the interactive define workflow against a hidden
+reference; see its [runbook](evals/agent-runner/and-scene-define/README.md).
 
 Clone this repository next to Agent Runner, then read the
 [`and-scene` runbook](evals/agent-runner/and-scene/README.md).
