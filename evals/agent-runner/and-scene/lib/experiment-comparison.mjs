@@ -158,10 +158,10 @@ export function reliabilityFlags(candidateReps, baselineSummary) {
   return { items, shortfall_check: baselineSummary.automated_points.complete ? 'available' : 'unavailable' }
 }
 export function humanReviewPointers(baseline, candidates) {
-  const median = selectMedian(candidates.map(entryOf)), item = candidates.find(x => entryOf(x).run_id === median), rep = entryOf(item)
+  const baselineMedian = selectMedian(baseline.reps), median = selectMedian(candidates.map(entryOf)), item = candidates.find(x => entryOf(x).run_id === median), rep = entryOf(item)
   return {
-    baseline_median: selectMedian(baseline.reps),
-    baseline: { ...baseline.human_review, is_current_median: selectMedian(baseline.reps) === baseline.human_review.run_id },
+    baseline_median: baselineMedian,
+    baseline: { ...baseline.human_review, is_current_median: baselineMedian === baseline.human_review.run_id },
     candidate: { run_id: median, review_by_hand: true, status: rep.outcome.human_review_complete ? 'complete' : 'pending',
       ...(rep.outcome.human_review_complete ? { official_score: rep.outcome.official_score, points: item.reviewSnapshot?.points ?? null, possible: item.reviewSnapshot?.possible ?? null, carried_from: item.reviewSnapshot?.carried_from ?? null } : {}) },
   }
