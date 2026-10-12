@@ -10,6 +10,7 @@ const profile = (identity, role) => {
   return configured ? ['cli', 'model', 'effort'].map(key => configured[key] ?? '').join(':') : null
 }
 const boolean = x => x === true || x === 'true' ? true : x === false || x === 'false' ? false : null
+const settingValue = (identity, key) => key === 'skip_validator' ? boolean(identity.workflow?.skip_validator) : profile(identity, key)
 
 export function admitCohorts({ baseline, candidates }) {
   const refusals = candidates.flatMap(x => x.refusals ?? [])
@@ -49,7 +50,7 @@ export function checkRequest(settings, identity) {
   const refusals = []
   for (const key of [...REQUEST_ROLES, 'skip_validator']) {
     if (!Object.hasOwn(settings, key)) continue
-    const recorded = key === 'skip_validator' ? boolean(identity.workflow?.skip_validator) : profile(identity, key)
+    const recorded = settingValue(identity, key)
     if (settings[key] !== recorded) refusals.push(refusal('request-results-mismatch', `${key}: requested ${JSON.stringify(settings[key])}, recorded ${JSON.stringify(recorded)}`))
   }
   return refusals
@@ -76,8 +77,7 @@ export function classifyDifferences(settings, baseline, candidate, compares) {
   }
   for (const key of [...REQUEST_ROLES, 'skip_validator']) {
     if (!Object.hasOwn(settings, key)) continue
-    const a = key === 'skip_validator' ? boolean(baseline.workflow?.skip_validator) : profile(baseline, key)
-    const b = key === 'skip_validator' ? boolean(candidate.workflow?.skip_validator) : profile(candidate, key)
+    const a = settingValue(baseline, key), b = settingValue(candidate, key)
     if (a !== b) primary.push({ setting: key, baseline: a, candidate: b })
   }
   for (const diff of compareIdentity(baseline, candidate)) {
