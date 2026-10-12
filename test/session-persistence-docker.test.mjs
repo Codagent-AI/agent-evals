@@ -30,13 +30,15 @@ test('replacement containers reuse only their own mounted agent sessions', {
 }, async t => {
   const dir = await makeTempDir(join(tmpdir(), 'agent-evals-session-docker-'))
   const env = { ...process.env }
-  if (!process.env.AGENT_EVALS_DOCKER_TEST_IMAGE) {
+  const endpoint = process.env.AGENT_EVALS_DOCKER_TEST_IMAGE ? null : process.env.DOCKER_HOST ?? spawnSync('docker', [
+    'context', 'inspect', '--format', '{{.Endpoints.docker.Host}}',
+  ], { encoding: 'utf8', timeout: 10_000 }).stdout?.trim()
+  // A tcp:// daemon may need TLS certificates from the Docker config directory
+  // (the context store, or the default cert path), so keep the user's config there.
+  if (!process.env.AGENT_EVALS_DOCKER_TEST_IMAGE && !endpoint?.startsWith('tcp://')) {
     // The default public image needs no registry credentials. Isolate Docker's
     // config so a desktop keychain helper cannot block an unattended pull. Keep
     // the active daemon endpoint rather than reverting to another context.
-    const endpoint = process.env.DOCKER_HOST ?? spawnSync('docker', [
-      'context', 'inspect', '--format', '{{.Endpoints.docker.Host}}',
-    ], { encoding: 'utf8', timeout: 10_000 }).stdout?.trim()
     assert.ok(endpoint, 'Could not resolve the active Docker daemon endpoint')
     const config = join(dir, 'docker-config')
     await mkdir(config)
