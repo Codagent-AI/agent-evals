@@ -2844,3 +2844,155 @@ test('a diagnostic of a rep the current harness cannot build is unloadable, with
   assert.equal(existsSync(join(context.runDir, 'result.json')), false)
   assert.equal(existsSync(join(context.runDir, 'phases/second-opinions')), false)
 })
+
+// A runner executor that ends the first start or resume the way the
+// pseudo-terminal executor does, then behaves like the stubbed runner.
+function endingRunnerExec(context, ended) {
+  let calls = 0
+  return (command, args, options) => {
+    const result = context.exec(command, args, options)
+    calls += 1
+    if (calls > 1) return result
+    const code = ended === 'stalled' ? 'ESTALLED' : 'ETIMEDOUT'
+    return { status: 143, signal: null, ended, error: Object.assign(new Error(`ended: ${ended}`), { code }) }
+  }
+}
+
+function runningThenCompleted(context, completeAfter) {
+  return () => {
+    const calls = runnerInvocations(context).length
+    if (calls === 0) return null
+    return {
+      run_id: 'runner-7',
+      session_dir: context.sessionDir,
+      workflow_name: 'plan-and-implement-change',
+      workflow_completed: calls >= completeAfter,
+      history: calls >= completeAfter ? history : [],
+    }
+  }
+}
+
+test('a stalled Runner run without a usage limit fails as a resumable runner-stalled failure', async () => {
+  const context = await environment()
+  const result = await evaluate(context, profiles, {
+    runnerExec: endingRunnerExec(context, 'stalled'),
+    readRunnerState: runningThenCompleted(context, 2),
+    readTranscriptQuota: async () => '',
+    killOrphans: async () => [],
+  })
+
+  assert.equal(result.outcome.failure.code, 'runner-stalled')
+  assert.equal(result.outcome.resumable, true)
+  assert.match(result.outcome.failure.reason, /no run, transcript, or worktree activity for 45 minutes/)
+  assert.deepEqual(runnerInvocations(context).map(({ args }) => args[0]), ['run'])
+})
+
+test('a Runner run past its hard cap fails as a resumable runner-timeout without a quota check', async () => {
+  const context = await environment()
+  let transcriptReads = 0
+  const result = await evaluate(context, ['--runner-max-hours', '2', ...profiles], {
+    runnerExec: endingRunnerExec(context, 'timed-out'),
+    readRunnerState: runningThenCompleted(context, 2),
+    readTranscriptQuota: async () => { transcriptReads += 1; return '' },
+    killOrphans: async () => [],
+  })
+
+  assert.equal(result.outcome.failure.code, 'runner-timeout')
+  assert.equal(result.outcome.resumable, true)
+  assert.match(result.outcome.failure.reason, /still running after 2 hours/)
+  assert.equal(transcriptReads, 0)
+})
+
+test('a stall caused by a transcript usage limit waits, ends orphans, and resumes the same run', async () => {
+  const context = await environment()
+  const waits = []
+  const orphanChecks = []
+  const result = await evaluate(context, profiles, {
+    runnerExec: endingRunnerExec(context, 'stalled'),
+    readRunnerState: runningThenCompleted(context, 2),
+    readTranscriptQuota: async ({ projectsDir, sinceMs }) => {
+      assert.equal(projectsDir, join(context.home, '.claude/projects'))
+      assert.ok(Number.isFinite(sinceMs))
+      return '2026-10-12T10:05:00.000Z transcript_api_error {"cli":"claude"} You\'ve hit your session limit · resets 1pm (UTC)'
+    },
+    waitForClaudeQuotaReset: async ({ sessionDir, audit }) => {
+      waits.push({ sessionDir, audit })
+      return { waited: true, reset_at: '2026-10-12T13:00:00.000Z' }
+    },
+    killOrphans: async ({ worktree, runId }) => {
+      assert.equal(runId, 'runner-7')
+      orphanChecks.push(worktree)
+      return [{ pid: 4242, cwd: worktree, command: 'npm test' }]
+    },
+  })
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  assert.equal(waits.length, 1)
+  assert.equal(waits[0].sessionDir, context.sessionDir)
+  assert.match(waits[0].audit, /hit your session limit/)
+  assert.deepEqual(orphanChecks, [join(context.runDir, '.runtime/candidate-worktree')])
+  assert.deepEqual(runnerInvocations(context).map(({ args }) => args), [
+    runnerInvocations(context)[0].args,
+    ['--resume', 'runner-7'],
+  ])
+  const execution = await readJson(join(context.runDir, 'phases/workflow-execution.json'))
+  const events = execution.events.map(({ event }) => event)
+  assert.ok(events.includes('runner-stalled'), JSON.stringify(events))
+  assert.ok(events.includes('claude-quota-wait'))
+  assert.ok(events.includes('orphan-processes-ended'))
+})
+
+test('a workflow that requests the interactive backend rejects a non-Claude lead before Runner starts', async () => {
+  const interactiveYaml = orchestratedYaml.replace('  - id: orchestrate\n', '  - id: orchestrate\n    autonomous_backend: interactive\n')
+  const context = await environment({
+    extraWorkflows: {
+      'core:orchestrated-implement-change': {
+        file: 'workflows/core/orchestrated-implement-change-v1.0.yaml',
+        text: interactiveYaml,
+      },
+    },
+  })
+  const codexLead = profiles.map((value, index) => (profiles[index - 1] === '--lead-cli' ? 'codex' : value))
+
+  const result = await evaluate(context, ['--workflow', 'core:orchestrated-implement-change', ...codexLead])
+
+  assert.equal(result.exitCode, 2)
+  assert.equal(result.errors[0].code, 'unverified-interactive-lead')
+  assert.match(result.errors[0].message, /only for a claude lead, not codex/)
+  assert.deepEqual(runnerInvocations(context), [])
+})
+
+test('a missing pseudo-terminal fails preflight before Runner starts', async () => {
+  const context = await environment()
+  const { ptyExec } = await import('../evals/agent-runner/and-scene/lib/pty-exec.mjs')
+  const result = await evaluate(context, profiles, {
+    runnerExec: ptyExec,
+    checkPty: () => ({ ok: false, reason: 'util-linux script is not installed' }),
+  })
+
+  assert.equal(result.exitCode, 2)
+  assert.deepEqual(result.errors.map(({ code }) => code), ['pty-unavailable'])
+  assert.deepEqual(runnerInvocations(context), [])
+})
+
+test('Runner starts with Claude first-run state seeded and the auto-updater disabled', async () => {
+  const context = await environment()
+  const result = await evaluate(context, profiles)
+
+  assert.equal(result.exitCode, 0, JSON.stringify(result.errors))
+  const state = JSON.parse(await readFile(join(context.home, '.claude.json'), 'utf8'))
+  assert.equal(state.hasCompletedOnboarding, true)
+  assert.equal(state.bypassPermissionsModeAccepted, true)
+  const worktree = join(context.runDir, '.runtime/candidate-worktree')
+  assert.equal(state.projects[worktree].hasTrustDialogAccepted, true)
+  assert.equal(runnerInvocations(context)[0].options.env.DISABLE_AUTOUPDATER, '1')
+})
+
+test('runner stall options must be positive numbers', async () => {
+  const context = await environment()
+  for (const bad of [['--runner-stall-minutes', '0'], ['--runner-max-hours', 'soon']]) {
+    const result = await evaluate(context, [...bad, ...profiles])
+    assert.equal(result.exitCode, 2)
+    assert.match(JSON.stringify(result.errors), /must be a positive number/)
+  }
+})

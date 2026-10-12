@@ -120,15 +120,23 @@ import {
   resolveProjectsDir,
   waitForRunnerRun,
 } from './lib/runner-state.mjs'
-import { runTimed, summarizeTimings } from './lib/subprocess.mjs'
-import { waitForClaudeQuotaReset as waitForDetectedClaudeQuota } from './lib/claude-quota.mjs'
+import { runTimed, runTimedAsync, summarizeTimings } from './lib/subprocess.mjs'
+import {
+  readTranscriptQuotaAudit,
+  waitForClaudeQuotaReset as waitForDetectedClaudeQuota,
+} from './lib/claude-quota.mjs'
+import { ptyAvailable, ptyExec } from './lib/pty-exec.mjs'
+import { killWorktreeOrphans, latestActivityMs } from './lib/runner-activity.mjs'
+import { seedClaudeFirstRunState } from './lib/claude-first-run.mjs'
 import {
   classifyRunnerRun,
   DEFAULT_WORKFLOW,
+  INTERACTIVE_LEAD_CLIS,
   parseLogicalWorkflowRef,
   resolveBoundary,
   summarizeObservedSteps,
   verifyWorkflowInputs,
+  workflowRequestsInteractiveBackend,
 } from './lib/workflow.mjs'
 
 const SUITE_DIR = dirname(fileURLToPath(import.meta.url))
@@ -154,6 +162,11 @@ const BROWSER_EVALUATOR_FILES = [
   'lib/demo-contract.mjs',
 ]
 const GITHUB_WRITE_PERMISSIONS = new Set(['WRITE', 'MAINTAIN', 'ADMIN'])
+// A run whose durable traces stop changing for this long is ended so it can be
+// resumed. The longest silence observed across recorded runs was under seven
+// minutes; the hard cap only backs up the stall check.
+const DEFAULT_RUNNER_STALL_MINUTES = 45
+const DEFAULT_RUNNER_MAX_HOURS = 24
 
 const FLAGS = new Map([
   ['--skip-validator', 'skipValidator'],
@@ -175,6 +188,8 @@ const VALUES = new Map([
   ['--judge-model', 'judgeModel'],
   ['--capabilities', 'capabilitiesPath'],
   ['--workflow', 'workflow'],
+  ['--runner-stall-minutes', 'runnerStallMinutes'],
+  ['--runner-max-hours', 'runnerMaxHours'],
   ['--lead-cli', 'leadCli'],
   ['--lead-model', 'leadModel'],
   ['--lead-effort', 'leadEffort'],
@@ -202,6 +217,8 @@ export function parseArgs(argv) {
     capabilitiesPath: DEFAULT_CAPABILITIES,
     workflow: DEFAULT_WORKFLOW,
     workflowProvided: false,
+    runnerStallMinutes: String(DEFAULT_RUNNER_STALL_MINUTES),
+    runnerMaxHours: String(DEFAULT_RUNNER_MAX_HOURS),
   }
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index]
@@ -247,6 +264,13 @@ export function parseArgs(argv) {
     throw new Error('--judge-jobs cannot be combined with --workflow')
   }
   parseLogicalWorkflowRef(options.workflow)
+  for (const [flag, key] of [['--runner-stall-minutes', 'runnerStallMinutes'], ['--runner-max-hours', 'runnerMaxHours']]) {
+    const value = Number(options[key])
+    if (!/^\d+(?:\.\d+)?$/.test(String(options[key])) || !(value > 0)) {
+      throw new Error(`${flag} must be a positive number`)
+    }
+    options[key] = value
+  }
   options.runId ??= basename(resolve(options.runDir))
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(options.runId)) {
     throw new Error('--run-id must be a single safe path component')
@@ -420,6 +444,14 @@ export async function runEvaluation(args) {
 async function evaluateRun({
   argv,
   exec,
+  // Starts and resumes Agent Runner. It defaults to a pseudo-terminal only when
+  // `exec` is the real one: an injected test executor keeps seeing the plain
+  // agent-runner command.
+  runnerExec = null,
+  checkPty = ptyAvailable,
+  readRunnerActivity = latestActivityMs,
+  killOrphans = killWorktreeOrphans,
+  readTranscriptQuota = readTranscriptQuotaAudit,
   isProcessAlive = (pid) => { try { process.kill(pid, 0); return true } catch { return false } },
   isRunnerProcessAlive = isAgentRunnerProcessAlive,
   readRunnerState,
@@ -463,7 +495,9 @@ async function evaluateRun({
   evaluatorRoots = EVALUATOR_ROOTS,
   log = () => {},
 }, diagnosticExit = {}) {
+  const realExec = !exec
   exec ??= (command, args, options = {}) => spawnSync(command, args, { encoding: 'utf8', ...options })
+  runnerExec ??= realExec ? ptyExec : exec
   let options
   try {
     options = parseArgs(argv)
@@ -675,6 +709,20 @@ async function evaluateRun({
     })
     if (!inputs.ok) {
       return failure(inputs.errors.map((message) => ({ code: 'workflow-parameters', message })))
+    }
+    // A step that requests the interactive backend hands its agent the
+    // terminal. Only the CLIs proven to finish such a step unattended may lead.
+    const leadCli = validation.profiles?.lead?.cli ?? null
+    if (await workflowRequestsInteractiveBackend(provenance.workflow_path)
+      && !INTERACTIVE_LEAD_CLIS.has(leadCli)) {
+      return failure([{
+        code: 'unverified-interactive-lead',
+        message: `workflow ${options.workflow} requests the autonomous-interactive backend, which is verified in the evaluation sandbox only for a ${[...INTERACTIVE_LEAD_CLIS].join(' or ')} lead, not ${leadCli}`,
+      }])
+    }
+    if (runnerExec === ptyExec) {
+      const pty = checkPty({ exec })
+      if (!pty.ok) return failure([{ code: 'pty-unavailable', message: pty.reason }])
     }
     const credentials = exec('gh', ['auth', 'status'], { cwd: resolve(options.agentRunnerDir) })
     if (credentials.status !== 0 || credentials.error) {
@@ -943,6 +991,11 @@ async function evaluateRun({
     )
     await mkdir(join(home, '.agent-runner'), { recursive: true })
     await writeFile(join(home, '.agent-runner/settings.yaml'), renderEvalSettings())
+    try {
+      await seedClaudeFirstRunState({ home, worktree: candidateWorktree })
+    } catch (error) {
+      return failure([{ code: 'claude-first-run-state', message: error.message }])
+    }
   }
 
   const record = {
@@ -1009,7 +1062,24 @@ async function evaluateRun({
   // run state from so both agree on the run store.
   const runnerSpawnOptions = {
     cwd: candidateWorktree,
-    env: { ...process.env, HOME: home, AGENT_RUNNER_NO_TUI: '1' },
+    // An interactive CLI under the pseudo-terminal must not try to update
+    // itself mid-run; the update fails in the sandbox and repaints the screen.
+    env: { ...process.env, HOME: home, AGENT_RUNNER_NO_TUI: '1', DISABLE_AUTOUPDATER: '1' },
+  }
+  // A stalled run is recognised by its durable traces: Agent Runner's run
+  // store, the CLIs' transcripts, and the candidate worktree with its commits.
+  const runnerStall = {
+    timeoutMs: options.runnerStallMinutes * 60 * 1000,
+    maxMs: options.runnerMaxHours * 60 * 60 * 1000,
+    lastActivityMs: () => readRunnerActivity({
+      roots: [
+        projectsDir,
+        join(home ?? '', '.claude/projects'),
+        join(home ?? '', '.codex/sessions'),
+        candidateWorktree,
+      ].filter(Boolean),
+      gitWorktrees: [candidateWorktree],
+    }),
   }
   // With every workflow-owned validator step skipped, Runner needs no
   // validator and its agents must not reach one on their own.
@@ -1168,6 +1238,42 @@ async function evaluateRun({
         return failedState
       }
 
+      // The pseudo-terminal executor ended a run that stopped progressing. An
+      // interactive Claude step shows a usage limit only in its terminal and
+      // transcript, so a stall is first checked against the transcripts; a
+      // limit that resets within the usual window is waited out and resumed.
+      async function afterRunnerEnded(timing, runId) {
+        const failedState = await readState(runId ?? null)
+        if (failedState?.run_id) await persistRunnerState(failedState)
+        record.events.push({ event: `runner-${timing.ended}`, run_id: failedState?.run_id ?? runId ?? null })
+        if (timing.ended === 'stalled') {
+          const audit = await readTranscriptQuota({
+            projectsDir: home ? join(home, '.claude/projects') : null,
+            sinceMs: Date.parse(timing.started_at),
+          })
+          const quota = audit
+            ? await waitForClaudeQuotaReset({ sessionDir: failedState?.session_dir ?? null, audit, log })
+            : { waited: false }
+          if (quota.waited) {
+            record.events.push({
+              event: 'claude-quota-wait',
+              source: 'transcript',
+              role: quota.role ?? null,
+              reset_at: quota.reset_at ?? null,
+            })
+            return failedState
+          }
+        }
+        const stalled = timing.ended === 'stalled'
+        throw Object.assign(new Error(stalled
+          ? `${runnerFailure(timing)}: no run, transcript, or worktree activity for ${options.runnerStallMinutes} minutes`
+          : `${runnerFailure(timing)}: still running after ${options.runnerMaxHours} hours`), {
+          code: stalled ? 'runner-stalled' : 'runner-timeout',
+          run_id: failedState?.run_id ?? runId ?? null,
+          resumable: true,
+        })
+      }
+
       let state = await readState(checkpoint.agent_runner?.run_id ?? null)
       let runnerStateSnapshot = state
       // Persisted runs are checked against the name the resolved definition
@@ -1208,34 +1314,44 @@ async function evaluateRun({
 
         let waitedState = null
         if (action === 'start') {
-          const timing = runTimed('agent-runner', [
+          const timing = await runTimedAsync('agent-runner', [
             'run', boundary.workflow,
             ...boundary.workflow_arguments,
           ], {
             label: 'agent-runner',
-            exec,
+            exec: runnerExec,
+            stall: runnerStall,
             outputPath: join(runDir, 'logs/agent-runner.log'),
             ...runnerSpawnOptions,
           })
           record.timings.push(timing)
           if (!timing.ok) {
-            waitedState = await waitAfterClaudeQuota(timing, record.run?.run_id)
+            waitedState = timing.ended
+              ? await afterRunnerEnded(timing, record.run?.run_id)
+              : await waitAfterClaudeQuota(timing, record.run?.run_id)
             quotaWaited = true
           }
         } else if (action === 'resume') {
+          // Temporary mitigation for Agent Runner issue 259; see
+          // lib/runner-activity.mjs. No Runner process owns this run now.
+          const orphans = await killOrphans({ worktree: candidateWorktree, runId: decision.run_id })
+          if (orphans.length > 0) {
+            record.events.push({ event: 'orphan-processes-ended', processes: orphans })
+          }
           const [command, ...args] = decision.command
-          const timing = runTimed(command, args, {
+          const timing = await runTimedAsync(command, args, {
             label: 'agent-runner-resume',
-            exec,
+            exec: runnerExec,
+            stall: runnerStall,
             outputPath: join(runDir, 'logs/agent-runner.log'),
             ...runnerSpawnOptions,
           })
           record.timings.push(timing)
           if (!timing.ok) {
-            waitedState = await waitAfterClaudeQuota(
-              timing,
-              record.run?.run_id ?? decision.run_id,
-            )
+            const runId = record.run?.run_id ?? decision.run_id
+            waitedState = timing.ended
+              ? await afterRunnerEnded(timing, runId)
+              : await waitAfterClaudeQuota(timing, runId)
             quotaWaited = true
           }
         } else if (action === 'wait') {

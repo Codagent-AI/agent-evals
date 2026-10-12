@@ -267,7 +267,10 @@ You need:
 
 Agent Runner owns the sandbox image, local-source build, authentication
 forwarding, and devcontainer. This suite calls its `scripts/sandbox-run.sh`
-adapter and mounts only this suite at `/eval-input`.
+adapter and mounts only this suite at `/eval-input`. The sandbox image must
+provide util-linux `script` (it does through Ubuntu's `bsdutils`): the
+controller starts and resumes Agent Runner under a pseudo-terminal, and a
+missing `script` fails preflight as `pty-unavailable`.
 
 Each lead, crosscheck, implementor, and tester profile selects its own CLI
 adapter (`claude`, `codex`, or `cursor`); a new run rejects a `cursor` lead (see
@@ -366,7 +369,12 @@ not rewrite either form. `grok-4.6` works; a bare family such as `grok` does
 not. A new run rejects a `cursor` lead before any model call: the lead makes
 agent calls, and nothing has yet shown that Cursor can make them in the
 sandbox. `--proof-browser` and `--dry-run` launch no lead, so neither can prove
-it. Cursor remains available for the other roles:
+it. A workflow with any step that sets `autonomous_backend: interactive`, such as
+`core:orchestrated-implement-change`, additionally requires a `claude` lead:
+Agent Runner hands that step the terminal, and only Claude has been shown to
+finish one unattended. `run.sh` and the controller both reject another lead as
+`unverified-interactive-lead` before any model call. Cursor remains available
+for the other roles:
 
 ```bash
 evals/agent-runner/and-scene/run.sh \
@@ -423,6 +431,28 @@ those recorded session IDs. Replacement containers link those allowlisted
 directories into their otherwise disposable home, so genuine CLI continuation
 survives without retaining auth files, CLI settings, or the rest of either home
 directory.
+
+Agent Runner always runs under a pseudo-terminal (util-linux `script`), because
+a step that requests the interactive backend refuses to start without one.
+Before each start the controller records Claude's first-run state (onboarding,
+theme, bypass-permissions acceptance, and trust for the candidate worktree) in
+the sandbox home's `~/.claude.json`, which Agent Runner's sandbox does not
+forward; otherwise an interactive Claude session stops on its theme picker. It
+also sets `DISABLE_AUTOUPDATER=1`.
+
+An interactive step has no timeout of its own, so the controller ends a run
+whose Runner run store, Claude and Codex transcripts, and candidate worktree
+(including its commits) show no change for `--runner-stall-minutes` (default 45)
+as `runner-stalled`, and any start or resume still running after
+`--runner-max-hours` (default 24) as `runner-timeout`. Both are resumable: rerun
+with `--resume` in the same directory. Before ending a stalled run as a failure,
+the controller reads the newest Claude transcripts, because an interactive
+session shows a usage limit only there, never in Agent Runner's audit log. A
+limit that resets within six hours is waited out and the same run resumed, as
+for a quota recorded in the audit log. Before any resume the controller also
+ends processes still working inside the candidate worktree, a temporary
+mitigation for Agent Runner issue 259 (agent-call children that outlive a killed
+run), and records them as `orphan-processes-ended`.
 
 If an agent running on Claude, in any role, exhausts its session allowance,
 the controller recognizes the limit from the recorded CLI or provider and
@@ -785,6 +815,9 @@ focused modules under `lib/`:
 | `lib/orchestrator.mjs` | Dependency-aware, hash-verified fine-grained resume plans |
 | `lib/checkpoint.mjs` | Run-state persistence and work-unit artifact verification |
 | `lib/subprocess.mjs` | Subprocess execution with active machine timing |
+| `lib/pty-exec.mjs` | Agent Runner under a util-linux `script` pseudo-terminal, with stall and hard-cap timeouts |
+| `lib/runner-activity.mjs` | Durable run activity for stall detection; worktree orphan cleanup before a resume |
+| `lib/claude-first-run.mjs` | Claude's first-run state in the sandbox home |
 | `lib/provenance.mjs` | Agent Runner and Agent Skills clean-checkout, revision, workflow, manifest, and CLI-version provenance |
 | `lib/profiles.mjs` | Role profile validation, eval-scoped config, effective-profile reconciliation |
 | `lib/workflow.mjs` | Logical workflow resolution, required-parameter checks, workflow arguments and Validator mode, Runner run classification, observed-step summaries |
@@ -1071,7 +1104,8 @@ The automated command runs these phases in order:
 1. Preflight the fixture, unique candidate branch, Runner checkout and workflow,
    Agent Skills checkout and required skills, publishing credentials, profiles,
    evaluator inputs, and run directory.
-2. Start, wait for, resume, or continue the one recorded complete Runner run.
+2. Start, wait for, resume, or continue the one recorded complete Runner run,
+   under a pseudo-terminal.
 3. Verify Agent Runner reported the run completed, then the delivered branch,
    remote head, and open draft PR whose base exactly matches the recorded
    `origin/HEAD`, plus its head, the unarchived change, and the acceptance
@@ -1461,7 +1495,9 @@ Skills checkout, a workflow that does not resolve or lacks a required
 parameter, a missing Codagent skill named by the workflow or a sub-workflow it
 invokes, missing publishing credentials, an invalid role profile with its role
 and field (including a missing crosscheck profile or a `cursor` lead), a
-role-profile mismatch on resume, a resume-provenance change (workflow reference,
+non-Claude lead for a workflow that requests the interactive backend
+(`unverified-interactive-lead`), a sandbox without util-linux `script`
+(`pty-unavailable`), a role-profile mismatch on resume, a resume-provenance change (workflow reference,
 resolved hash, Runner-reported name, Runner commit, or CLI version), or a stale
 run-state identity.
 
@@ -1478,6 +1514,13 @@ a later recovery of the same call writes `NN-<job>.attempt-<n>.*` beside the
 earlier attempt. The last event shows what a stalled call was waiting on. Shell
 command output is omitted from persisted events. A call that runs longer than
 10 minutes is stopped, noted in its stderr log, and retried once.
+
+`logs/agent-runner.log` holds Agent Runner's output as written to its
+pseudo-terminal, so an interactive step's screen output appears there with
+terminal escape sequences; no harness code parses it. A `runner-stalled` or
+`runner-timeout` failure names the limit that ended the run. Read the run's
+Claude and Codex transcripts under `.runtime/agent-session-state/` to see what
+the agent was doing, then rerun with `--resume` in the same directory.
 
 For publication failures, `publication.json` records the stage, the result
 commit if one exists, and the git error. Re-run the review command against the
