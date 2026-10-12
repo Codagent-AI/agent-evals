@@ -521,6 +521,31 @@ test('E2E-001: real operator CLI journey, JSON parity, all refusals and help', a
   assert.equal(help.status, 0); assert.match(help.stdout, /compare --eval-issue <owner\/repo#N> <result-dir>/)
   assert.deepEqual(await hashes(root), before)
 })
+test('CLI refuses a baseline repetition with missing roles as invalid-record', async t => {
+  const { root, cand, record } = await syntheticSetup(t)
+  const doc = { ...baseline.emptyRecord(), current: current() }
+  delete doc.current.reps[0].roles
+  await writeFile(record, JSON.stringify(doc))
+  const gh = await stub(t, { [issuePath]: { body: block('') } })
+  const result = spawnSync(process.execPath, [join(suite, 'experiments.mjs'), 'compare', '--eval-issue', 'Codagent-AI/agent-evals#1', ...cand, '--record', record, '--baseline-results', root, '--json'], { env: gh.env, encoding: 'utf8' })
+  assert.equal(result.status, 1, result.stderr)
+  const errors = result.stderr.trim().split('\n').map(JSON.parse)
+  assert.ok(errors.some(x => x.code === 'invalid-record'))
+  assert.ok(errors.every(x => x.code !== 'internal-error'))
+  assert.equal(JSON.parse(result.stdout).status, 'refused')
+})
+test('baseline validation rejects malformed repetition identity objects', () => {
+  for (const field of ['workflow', 'roles', 'roles.implementor', 'roles.implementor.configured', 'rubrics', 'rubrics.automated', 'rubrics.human']) {
+    for (const value of [undefined, null, [], 'invalid']) {
+      const doc = { ...baseline.emptyRecord(), current: current() }
+      const keys = field.split('.'); let target = doc.current.reps[0]
+      for (const key of keys.slice(0, -1)) target = target[key]
+      target[keys.at(-1)] = value
+      const errorField = field === 'roles.implementor' ? field + '.configured' : field
+      assert.throws(() => baseline.validateRecord(doc), { message: `current.reps[0].${errorField}: must be an object` })
+    }
+  }
+})
 test('CLI collects independent loading refusals and never compares refused evidence', async t => {
   const root = await makeTempDir('experiment-comparison-refusals-')
   t.after(() => rm(root, { recursive: true, force: true }))

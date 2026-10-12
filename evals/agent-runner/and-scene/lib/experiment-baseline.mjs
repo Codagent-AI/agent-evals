@@ -22,7 +22,9 @@ export function validateBaseline(baseline, path = 'current', anchor = path === '
   baseline.reps.forEach((rep, i) => {
     if (!object(rep) || typeof rep.run_id !== 'string' || !rep.run_id) fail(`reps[${i}].run_id`, 'must be a non-empty string')
     if (ids.has(rep.run_id)) fail(`reps[${i}].run_id`, 'duplicate repetition id')
-    for (const field of ['automated_score', 'tokens', 'cost', 'failure', 'outcome']) if (!object(rep[field])) fail(`reps[${i}].${field}`, 'must be an object')
+    for (const field of ['automated_score', 'tokens', 'cost', 'failure', 'outcome', 'workflow', 'roles', 'rubrics']) if (!object(rep[field])) fail(`reps[${i}].${field}`, 'must be an object')
+    for (const [name, role] of Object.entries(rep.roles)) if (!object(role) || !object(role.configured)) fail(`reps[${i}].roles.${name}.configured`, 'must be an object')
+    for (const kind of ['automated', 'human']) if (!object(rep.rubrics[kind])) fail(`reps[${i}].rubrics.${kind}`, 'must be an object')
     if (rep.execution_run_id !== null && typeof rep.execution_run_id !== 'string') fail(`reps[${i}].execution_run_id`, 'must be a string or null')
     if (!object(rep.tokens.by_provider)) fail(`reps[${i}].tokens.by_provider`, 'must be an object')
     ids.add(rep.run_id)
