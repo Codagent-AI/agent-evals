@@ -324,6 +324,31 @@ test('browser phases score in their own Chrome and AXI session, then restore the
   })
 })
 
+// A stale evaluator bridge that cannot be stopped could leave the phase
+// driving that bridge's browser, so the phase fails instead of launching.
+test('a browser phase whose stale evaluator bridge cannot be stopped fails as a harness fault without launching', async () => {
+  const { createHostBrowser } = await import('../evals/agent-runner/and-scene/lib/host-browser.mjs')
+  const launched = []
+  const env = { CHROME_DEVTOOLS_AXI_BROWSER_URL: 'http://127.0.0.1:9333' }
+  const browser = createHostBrowser({
+    chromePath: '/fake/chrome', port: 9334, env,
+    spawnImpl: (...args) => { launched.push(args); throw new Error('must not launch') },
+    log: () => {},
+    fetchImpl: async () => ({ ok: true }),
+    axi: async () => { throw new Error('bridge did not stop') },
+    sleep: async () => {},
+  })
+  await assert.rejects(browser.ensure(), (error) => {
+    assert.equal(error.owner, 'evaluation-harness')
+    assert.equal(error.code, 'browser-driver-failed')
+    assert.equal(error.resumable, true)
+    assert.match(error.message, /bridge did not stop/)
+    return true
+  })
+  assert.deepEqual(launched, [])
+  assert.deepEqual(env, { CHROME_DEVTOOLS_AXI_BROWSER_URL: 'http://127.0.0.1:9333' })
+})
+
 // A sanity rescore failed its browser phase when Chrome's helpers were still
 // writing the profile while it was removed.
 test('releasing the host browser never fails the phase that used it', async t => {

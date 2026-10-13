@@ -58,7 +58,12 @@ const BROWSER_ENV = [
 ]
 
 const defaultAxi = async (args, env = process.env) => {
-  spawnSync('chrome-devtools-axi', args, { encoding: 'utf8', timeout: 30_000, env })
+  const result = spawnSync('chrome-devtools-axi', args, { encoding: 'utf8', timeout: 30_000, env })
+  if (result.error || result.status !== 0) {
+    const detail = result.error?.message || result.stderr?.trim()
+      || (result.signal ? `killed by ${result.signal}` : `exited with status ${result.status}`)
+    throw new Error(`chrome-devtools-axi ${args.join(' ')} failed: ${detail}`)
+  }
 }
 
 export function createHostBrowser({
@@ -89,8 +94,17 @@ export function createHostBrowser({
       delete env.CHROME_DEVTOOLS_AXI_PORT
     }
     // A bridge an earlier phase or job left in this session is attached to a
-    // Chrome that is gone; drop it so the first command attaches afresh.
-    await axi(['stop'], env).catch(() => {})
+    // Chrome that is gone; drop it so the first command attaches afresh. If it
+    // cannot be dropped, the phase could drive that bridge's browser instead
+    // of this one, so it fails as the harness's own resumable fault.
+    try {
+      await axi(['stop'], env)
+    } catch (error) {
+      await release()
+      throw Object.assign(new Error(`could not stop a stale evaluator AXI bridge: ${error.message}`), {
+        owner: 'evaluation-harness', code: 'browser-driver-failed', resumable: true,
+      })
+    }
     profile = await mkdtemp(join(tmpdir(), 'and-scene-host-chrome-'))
     child = spawnImpl(chromePath, [
       '--headless=new',
