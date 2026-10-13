@@ -180,6 +180,12 @@ test('scored mode always attaches AXI to the sandbox Playwright Chromium', async
   assert.match(result.output, /find \/ms-playwright/)
   assert.match(result.output, /--remote-debugging-port=9333/)
   assert.match(result.output, /CHROME_DEVTOOLS_AXI_BROWSER_URL=http:\/\/127\.0\.0\.1:9333/)
+  // The evaluator scores with its own Chromium on another port, never the one
+  // the implementation agents can stop or replace.
+  assert.match(result.output, /export AND_SCENE_HOST_CHROME="\$AXI_CHROMIUM"/)
+  assert.match(result.output, /export AND_SCENE_HOST_DEVTOOLS_PORT=9334/)
+  assert.match(result.output, /export AND_SCENE_HOST_CHROME_ARGS="--no-sandbox"/)
+  assert.ok(result.output.indexOf('AND_SCENE_HOST_DEVTOOLS_PORT=9334') < result.output.indexOf('exec node /eval-input/controller.mjs'))
   assert.match(result.output, /Could not find a runnable Chromium for chrome-devtools-axi/)
   assert.doesNotMatch(result.output, /\/opt\/google\/chrome\/chrome.*--version/)
 })

@@ -2421,7 +2421,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const candidateWorktree = productionRunDir
     ? join(resolve(productionRunDir), '.runtime/candidate-worktree')
     : null
-  // run.sh --host hands the controller a Chrome binary to manage per phase.
+  // run.sh hands the controller a Chrome binary to manage per browser phase,
+  // in the sandbox and with --host alike.
   const hostBrowser = process.env.AND_SCENE_HOST_CHROME
     ? createHostBrowser({
         chromePath: process.env.AND_SCENE_HOST_CHROME,

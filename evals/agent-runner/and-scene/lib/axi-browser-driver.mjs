@@ -806,7 +806,10 @@ if (observedPosition !== ${requiredPosition}) {
     document.querySelector('[data-step-count]')?.getAttribute('data-step-count'),
   ));
   if (!Number.isInteger(stepCount) || stepCount < 1) {
-    throw new Error('presentation step count was not found');
+    // The page that answered, so a failure says whether the demo lost its hook
+    // or the browser was no longer on the demo at all.
+    const answeredFrom = await page.eval(() => String(location.href));
+    throw new Error('presentation step count was not found on ' + answeredFrom);
   }
   for (let index = 0; index < stepCount; index += 1) {
     await page.press('ArrowLeft');
