@@ -256,7 +256,7 @@ test('the host browser starts lean on demand and releases its process and profil
 
   await browser.release()
   assert.deepEqual(signals, ['SIGTERM'])
-  assert.deepEqual(axi, ['stop'])
+  assert.deepEqual(axi, ['stop', 'stop'])
   assert.equal(env.CHROME_DEVTOOLS_AXI_BROWSER_URL, undefined)
   await assert.rejects(() => access(profile))
   await browser.release()
@@ -266,6 +266,87 @@ test('the host browser starts lean on demand and releases its process and profil
   await browser.ensure()
   assert.equal(launched.length, 2)
   await browser.release()
+})
+
+// Factory eval repetition 5190d29c rep 1 failed its browser evaluation with
+// "presentation step count was not found": an implementation agent had killed
+// the sandbox Chromium and launched its own on the same port, and the
+// evaluation drove that browser through the agent's AXI bridge. Browser phases
+// now use their own Chrome through their own AXI session, and give the
+// environment back afterwards.
+test('browser phases score in their own Chrome and AXI session, then restore the agents\' browser environment', async t => {
+  const { createHostBrowser, EVALUATOR_AXI_SESSION } = await import('../evals/agent-runner/and-scene/lib/host-browser.mjs')
+  const { EventEmitter } = await import('node:events')
+  const launched = []
+  const axi = []
+  const env = {
+    CHROME_DEVTOOLS_AXI_BROWSER_URL: 'http://127.0.0.1:9333',
+    CHROME_DEVTOOLS_AXI_PORT: '9224',
+    AND_SCENE_HOST_CHROME_ARGS: '--no-sandbox  --disable-setuid-sandbox',
+  }
+  let chrome = null
+  const browser = createHostBrowser({
+    chromePath: '/fake/chrome', port: 9334, env,
+    spawnImpl: (_command, args) => {
+      launched.push(args)
+      const profile = args.find((arg) => arg.startsWith('--user-data-dir=')).slice('--user-data-dir='.length)
+      t.after(() => rm(profile, { recursive: true, force: true }))
+      chrome = Object.assign(new EventEmitter(), { pid: 7171, exitCode: null, kill: () => true })
+      return chrome
+    },
+    killGroup: () => {
+      chrome.exitCode = 0
+      setImmediate(() => chrome.emit('exit', 0))
+    },
+    log: () => {},
+    fetchImpl: async () => ({ ok: true }),
+    axi: async (args, axiEnv) => { axi.push([args.join(' '), axiEnv.CHROME_DEVTOOLS_AXI_SESSION, axiEnv.CHROME_DEVTOOLS_AXI_PORT]) },
+    sleep: async () => {},
+  })
+  t.after(() => browser.release())
+
+  await browser.ensure()
+  assert.equal(env.CHROME_DEVTOOLS_AXI_BROWSER_URL, 'http://127.0.0.1:9334')
+  assert.equal(env.CHROME_DEVTOOLS_AXI_SESSION, EVALUATOR_AXI_SESSION)
+  assert.equal(env.CHROME_DEVTOOLS_AXI_PORT, undefined, 'an inherited bridge port would reach the agents\' bridge')
+  assert.ok(launched[0].includes('--no-sandbox'))
+  assert.ok(launched[0].includes('--disable-setuid-sandbox'))
+  assert.ok(!launched[0].includes(''))
+  // A stale evaluator bridge is dropped before the phase attaches.
+  assert.deepEqual(axi, [['stop', EVALUATOR_AXI_SESSION, undefined]])
+
+  await browser.release()
+  assert.deepEqual(axi.at(-1), ['stop', EVALUATOR_AXI_SESSION, undefined], 'release stops only the evaluator session')
+  assert.deepEqual(env, {
+    CHROME_DEVTOOLS_AXI_BROWSER_URL: 'http://127.0.0.1:9333',
+    CHROME_DEVTOOLS_AXI_PORT: '9224',
+    AND_SCENE_HOST_CHROME_ARGS: '--no-sandbox  --disable-setuid-sandbox',
+  })
+})
+
+// A stale evaluator bridge that cannot be stopped could leave the phase
+// driving that bridge's browser, so the phase fails instead of launching.
+test('a browser phase whose stale evaluator bridge cannot be stopped fails as a harness fault without launching', async () => {
+  const { createHostBrowser } = await import('../evals/agent-runner/and-scene/lib/host-browser.mjs')
+  const launched = []
+  const env = { CHROME_DEVTOOLS_AXI_BROWSER_URL: 'http://127.0.0.1:9333' }
+  const browser = createHostBrowser({
+    chromePath: '/fake/chrome', port: 9334, env,
+    spawnImpl: (...args) => { launched.push(args); throw new Error('must not launch') },
+    log: () => {},
+    fetchImpl: async () => ({ ok: true }),
+    axi: async () => { throw new Error('bridge did not stop') },
+    sleep: async () => {},
+  })
+  await assert.rejects(browser.ensure(), (error) => {
+    assert.equal(error.owner, 'evaluation-harness')
+    assert.equal(error.code, 'browser-driver-failed')
+    assert.equal(error.resumable, true)
+    assert.match(error.message, /bridge did not stop/)
+    return true
+  })
+  assert.deepEqual(launched, [])
+  assert.deepEqual(env, { CHROME_DEVTOOLS_AXI_BROWSER_URL: 'http://127.0.0.1:9333' })
 })
 
 // A sanity rescore failed its browser phase when Chrome's helpers were still
@@ -373,7 +454,8 @@ test('a release that starts while another is running waits for the same cleanup'
     },
     log: () => {},
     fetchImpl: async () => ({ ok: true }),
-    axi: () => new Promise((resolve) => { finishStop = resolve }),
+    // Only the release's stop is held; the stop before launch returns at once.
+    axi: () => (chrome ? new Promise((resolve) => { finishStop = resolve }) : Promise.resolve()),
     rmImpl: async (path) => { profileRemoved = path },
     sleep: async () => {},
   })

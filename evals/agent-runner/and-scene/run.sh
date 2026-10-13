@@ -968,6 +968,12 @@ if ! curl -fsS "\$CHROME_DEVTOOLS_AXI_BROWSER_URL/json/version" >/dev/null; then
   echo "Sandbox Chromium did not expose its DevTools endpoint." >&2
   exit 1
 fi
+# That Chromium is for the implementation agents, who can stop or replace it.
+# The evaluator scores with a Chromium of its own, started from the same
+# binary for each browser phase on another port (lib/host-browser.mjs).
+export AND_SCENE_HOST_CHROME="\$AXI_CHROMIUM"
+export AND_SCENE_HOST_DEVTOOLS_PORT=9334
+export AND_SCENE_HOST_CHROME_ARGS="--no-sandbox"
 
 # The evaluated logical workflow and the checkout file it resolves to; the
 # controller records the clean Agent Runner revision that supplies it.

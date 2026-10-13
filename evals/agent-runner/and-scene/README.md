@@ -538,7 +538,13 @@ launch), cap renderer processes at two, and cap the JavaScript heap; it
 stops Chrome and removes its profile as soon as each of those phases ends, so
 no browser runs during source judging (`lib/host-browser.mjs`). It also stops
 Chrome and the AXI bridge when the rescore fails or is interrupted with SIGINT
-or SIGTERM.
+or SIGTERM. Those phases drive Chrome through their own AXI session,
+`and-scene-evaluator`, so they never stop or reuse another session's bridge.
+
+The sandbox scores the same way. The Chromium on port 9333 belongs to the
+implementation agents, who may stop or replace it, so the browser evaluation
+and second-opinion replays start their own Chromium from the same binary on
+port 9334 for each phase.
 
 **Run host rescores one at a time on a small machine.** A long-lived headless
 Chrome reached about 9 GB on a 16 GB Mac, and two parallel rescores exhausted
