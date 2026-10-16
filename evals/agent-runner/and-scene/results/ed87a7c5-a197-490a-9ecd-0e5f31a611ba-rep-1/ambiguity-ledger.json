@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "run_id": "plan-and-implement-change-2026-10-14T13-55-41-401760202Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement__sub_implement-change__implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__verify-change__sub_verify-change__review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": "Product verification",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The IPv4 loopback verification requirement was not satisfied.",
+      "evidence": [
+        "verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost.",
+        "The supplied session-report excerpts contain initialization metadata, without substantive assumption reports."
+      ],
+      "handling": "The verification check reported failure; the verification commands and any subsequent correction are unavailable.",
+      "consequence": "The workflow failed the required verification-host check. No connection failure is established.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The check establishes noncompliance but does not reveal the chosen host, the agent&#39;s reasoning, or whether the requirement was available in the implementation context.",
+      "resolution": "unresolved",
+      "id": "fd40967c2cde1810"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "Product verification",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The project-local screenshot helper and associated visual-warning requirements were unmet.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: fail — Project-local Playwright screenshot helper is missing.",
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "attribution-default-link and navigation-active-state both passed."
+      ],
+      "handling": "The product checks identified the missing helper and missing or incomplete warnings. No implementation rationale or remediation is visible.",
+      "consequence": "Four tooling checks failed, despite passing checks for the default attribution link and navigation active state.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The evidence establishes omissions in verification tooling. It cannot distinguish a specification gap, overlooked repository context, an incorrect assumption, or an implementation omission unrelated …",
+      "resolution": "unresolved",
+      "id": "3d2425eb203530ea"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "Product verification",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered interaction failed the check for ignoring swipes originating from controls.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail.",
+        "demo-supported-navigation, demo-control-semantics, and input-modifier-keys-pass-through passed.",
+        "No event-handler implementation, failure trace, or substantive agent explanation is supplied."
+      ],
+      "handling": "The product check recorded failure; the handling of control-originated swipe events is not otherwise shown.",
+      "consequence": "A specific input-interaction check failed while the listed navigation and control checks passed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure establishes a behavioral mismatch but does not identify the triggering control, observed response, or underlying assumption. The available artifacts cannot determine whether ambiguity, mi…",
+      "resolution": "unresolved",
+      "id": "b039b5a7ac415bae"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
