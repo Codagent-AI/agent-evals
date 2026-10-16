@@ -2427,6 +2427,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     ? createHostBrowser({
         chromePath: process.env.AND_SCENE_HOST_CHROME,
         port: Number(process.env.AND_SCENE_HOST_DEVTOOLS_PORT || 9333),
+        runDir: productionRunDir ? resolve(productionRunDir) : null,
       })
     : null
   const result = await withHostBrowser(hostBrowser, () => runEvaluation({
