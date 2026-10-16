@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-16T13-28-54-994422907Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Verification failed the requirement to use the IPv4 loopback address.",
+      "evidence": [
+        "verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost."
+      ],
+      "handling": "The supplied artifacts contain no verification commands, agent explanation, or recorded response to this failure.",
+      "consequence": "The loopback verification requirement was reported as unmet; the exact host used is not shown.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure establishes a verification discrepancy, but does not establish an underlying assumption or whether the requirement was available to the implementation agents.",
+      "resolution": "unresolved",
+      "id": "ebc46a6210c7e24f"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The project-local screenshot helper and its required visual warnings were reported missing or incomplete.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: fail — Project-local Playwright screenshot helper is missing.",
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "attribution-default-link: pass — Default attribution label and target https://github.com/Codagent-AI/and-scene are present.",
+        "navigation-active-state: pass — Semantic current state and stable active hook are present."
+      ],
+      "handling": "No implementation rationale or response is supplied. The evidence does not show whether the warning failures follow solely from the missing helper.",
+      "consequence": "Four helper-related checks failed. The passing attribution and navigation checks do not establish that their corresponding visual warnings exist.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The summaries establish missing verification support, but cannot distinguish an implementation omission, unavailable repository context, or an unspecified requirement. They also do not establish an a…",
+      "resolution": "unresolved",
+      "id": "8fa48b7f037e59e5"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The check for ignoring swipes originating from controls failed.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail",
+        "demo-supported-navigation: pass",
+        "demo-control-semantics: pass",
+        "demo-focus-and-keyboard-accessibility: pass"
+      ],
+      "handling": "No gesture implementation, failing interaction trace, or agent explanation is provided.",
+      "consequence": "The control-origin swipe exclusion check failed; the resulting interaction is not described.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check identifies a specific interaction concern, but the artifacts cannot establish what assumption caused it or whether its expected behavior was specified or discoverable. Broader naviga…",
+      "resolution": "unresolved",
+      "id": "e064c578c28c5628"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
