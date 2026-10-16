@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-10-04T16-39-59-832936497Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_verify-change__sub_verify-change__review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": "verify-change",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered product lacks the default made by and-scene GitHub attribution.",
+      "evidence": [
+        "Product evidence: attribution-default-link: fail — Default made by and-scene GitHub attribution is missing."
+      ],
+      "handling": "The verification recorded a failure. The available session excerpts do not show how the implementation agent addressed attribution.",
+      "consequence": "The delivered product is missing the default attribution checked by verification.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure is observable, but the available artifacts do not show the relevant specification, implementation decision, or agent reasoning. They cannot distinguish an assumption from an omission or a…",
+      "resolution": "unresolved",
+      "id": "2ae0ca0bceba8bef"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "verify-change",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The project-local visual helper lacks three checked warnings or markers.",
+      "evidence": [
+        "Product evidence: quality-project-local-screenshot-helper: pass — Project-local Playwright screenshot helper is present.",
+        "Product evidence: visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "Product evidence: visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "Product evidence: visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "The helper was delivered, and verification recorded the three warning failures. The available session excerpts do not show the agent&#39;s reasoning about them.",
+      "consequence": "The helper does not provide the complete visual checks expected by verification.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The omissions materially affect the delivered verification workflow, but the artifacts do not establish whether their cause was an ambiguous requirement, missed repository context, or an implementati…",
+      "resolution": "unresolved",
+      "id": "34e1964337d30928"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
