@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "run_id": "plan-and-implement-change-2026-10-15T03-29-01-398807982Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement__sub_implement-change__implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_3__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_3__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__verify-change__sub_verify-change__review-assumptions_.err",
+      "scratch/acceptance-test/failure/scripts/review-assumptions.test.ts",
+      "scratch/acceptance-test/reference/scripts/review-assumptions.test.ts"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": "Product evidence: attribution-default-link",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The default attribution points to a repository different from the expected target.",
+      "evidence": [
+        "attribution-default-link: fail — expected https://github.com/Codagent-AI/and-scene; GitHub targets found: https://github.com/and-scene/and-scene."
+      ],
+      "handling": "The delivered default uses https://github.com/and-scene/and-scene. The selection rationale is not visible.",
+      "consequence": "The default attribution fails the repository-target check.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The incorrect target is observable, but the supplied excerpts omit the governing requirement, repository context, and implementation reasoning. They cannot establish whether this resulted from a spec…",
+      "resolution": "unresolved",
+      "id": "5cdf0e2ada04befb"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "Product evidence: demo-nine-step-content-and-order",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The demo fails the nine-step content-and-order check; the underlying assumption or context gap is unidentified.",
+      "evidence": [
+        "demo-nine-step-content-and-order: fail.",
+        "demo-required-scene-content: pass.",
+        "The supplied task 02 session-report excerpt ends before any audit findings."
+      ],
+      "handling": "The delivered demo was evaluated, but neither its exact content mismatch nor the agent&#39;s interpretation is supplied.",
+      "consequence": "The demo did not satisfy the content-and-order check despite passing the required-scene-content check.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The result establishes a failed check, but does not identify the affected step, the expected ordering, or a consequential implementation assumption.",
+      "resolution": "unresolved",
+      "id": "00b10db5e44fc564"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "Product evidence: demo-present-mode-behavior",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Present-mode behavior fails its check without enough detail to identify an interpretation issue.",
+      "evidence": [
+        "demo-present-mode-behavior: fail.",
+        "demo-browse-mode-behavior: pass.",
+        "demo-mode-position-preservation: pass.",
+        "demo-mode-interaction-reliability: pass."
+      ],
+      "handling": "Present mode was delivered and evaluated; the failing interaction and implementation rationale are absent.",
+      "consequence": "Present mode fails a behavioral check while several related mode checks pass.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "These results do not reveal whether the failure reflects ambiguous requirements, an incorrect assumption, or an implementation defect unrelated to ambiguity.",
+      "resolution": "unresolved",
+      "id": "9b32342e3447887a"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "Product evidence: input-swipe-from-control-ignored",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The implementation fails the check for ignoring swipes originating from a control.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail.",
+        "input-modifier-keys-pass-through: pass.",
+        "demo-focus-and-keyboard-accessibility: pass."
+      ],
+      "handling": "The delivered input behavior was checked, but no event trace, handler source, or decision about control-origin gestures is supplied.",
+      "consequence": "The swipe-from-control check fails; the exact user-visible behavior is not documented.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The check identifies a concrete interaction concern, but does not establish that an assumption caused it or whether the relevant rule was specified or discoverable.",
+      "resolution": "unresolved",
+      "id": "151cfe7e15569ce7"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "Product evidence: verification-sample-outline",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Conflicting sample-outline results prevent a reliable conclusion about verification coverage.",
+      "evidence": [
+        "verification-sample-outline: pass — Canonical nine-step sample is present.",
+        "A later entry also states verification-sample-outline: fail, without explanation.",
+        "verification-every-produced-step-renders: pass.",
+        "verification-clear-outcome: pass."
+      ],
+      "handling": "Both pass and fail results are supplied without identifying different revisions, scopes, or execution times.",
+      "consequence": "The artifacts do not establish whether verification used the required canonical outline.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The conflicting results cannot be reconciled from the supplied evidence. The session-report excerpts contain no visible final findings, and the acceptance-test source files include no execution resul…",
+      "resolution": "unresolved",
+      "id": "8340976aaae72107"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
