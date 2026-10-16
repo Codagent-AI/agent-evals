@@ -1,0 +1,3977 @@
+diff --git a/.gitignore b/.gitignore
+index 3a4debaf67257b2794c75ba9c4788ff256121a4d..ff2317dc263b66b46a2f502e7f077a6d972213e9 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -10,6 +10,7 @@ lerna-debug.log*
+ node_modules
+ dist
+ dist-ssr
++artifacts/presentation-inspection/
+ validator_logs
+ *.local
+ 
+diff --git a/eslint.config.js b/eslint.config.js
+index ef614d25c11dd1e89a8df0b2eaf934170b44daa8..547eae340fd0eac39f23febd04652d5dc8ab123f 100644
+--- a/eslint.config.js
++++ b/eslint.config.js
+@@ -6,7 +6,8 @@ import tseslint from 'typescript-eslint'
+ import { defineConfig, globalIgnores } from 'eslint/config'
+ 
+ export default defineConfig([
+-  globalIgnores(['dist']),
++  // The bootstrap kit is an intentional source snapshot with its own TS project.
++  globalIgnores(['dist', 'skills/presentation/templates/bootstrap/**']),
+   {
+     files: ['**/*.{ts,tsx}'],
+     extends: [
+diff --git a/openspec/changes/create-and-scene/tasks.md b/openspec/changes/create-and-scene/tasks.md
+index 3d9dd0e77403cc174d874c352e37ee9832d00aa8..248df4d7ba9699b0758f9d4fa0f20b8dba9ea4fe 100644
+--- a/openspec/changes/create-and-scene/tasks.md
++++ b/openspec/changes/create-and-scene/tasks.md
+@@ -4,6 +4,6 @@ These tasks are **sequential** and must be executed in order: 02 builds on the
+ scene kit from 01, and 03 dogfoods the skill from 02 (and the `npm run verify`
+ script delivered in 03 is the command the skill's self-verify step references).
+ 
+-- [ ] [Scene kit + app shell](tasks/01-scene-kit-app-shell.md)
+-- [ ] [Presentation skill](tasks/02-presentation-skill.md) — depends on 01
+-- [ ] [Reference sample (via the skill) + verification](tasks/03-reference-sample-verification.md) — depends on 02
++- [x] [Scene kit + app shell](tasks/01-scene-kit-app-shell.md)
++- [x] [Presentation skill](tasks/02-presentation-skill.md) — depends on 01
++- [x] [Reference sample (via the skill) + verification](tasks/03-reference-sample-verification.md) — depends on 02
+diff --git a/package-lock.json b/package-lock.json
+index 3256a59ebd1aaad98952449ef39838d1259ead31..c4ba45e01bc0508574c1f01ceb9724b774446428 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -15,6 +15,7 @@
+       },
+       "devDependencies": {
+         "@eslint/js": "^10.0.1",
++        "@testing-library/react": "^16.3.3",
+         "@types/node": "^24.12.3",
+         "@types/react": "^19.2.14",
+         "@types/react-dom": "^19.2.3",
+@@ -23,9 +24,65 @@
+         "eslint-plugin-react-hooks": "^7.1.1",
+         "eslint-plugin-react-refresh": "^0.5.2",
+         "globals": "^17.6.0",
++        "jsdom": "^30.1.1",
++        "playwright": "^1.58.2",
+         "typescript": "~6.0.2",
+         "typescript-eslint": "^8.59.2",
+-        "vite": "^8.0.12"
++        "vite": "^8.0.12",
++        "vitest": "^5.0.3"
++      }
++    },
++    "node_modules/@asamuzakjp/css-color": {
++      "version": "7.1.3",
++      "resolved": "https://registry.npmjs.org/@asamuzakjp/css-color/-/css-color-7.1.3.tgz",
++      "integrity": "sha512-1t1U8Cm3RBl9vh3RAZhjkPaduzLSvQJRToRrxpGR/eDRW99mOREleuu+mWfiFa795bUzjwht7NgphCKTs2ianQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@csstools/css-calc": "^3.4.2",
++        "@csstools/css-color-parser": "^4.2.5",
++        "@csstools/css-parser-algorithms": "^4.0.2",
++        "@csstools/css-tokenizer": "^4.0.2",
++        "lru-cache": "^11.5.3"
++      },
++      "engines": {
++        "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
++      }
++    },
++    "node_modules/@asamuzakjp/css-color/node_modules/lru-cache": {
++      "version": "11.5.3",
++      "resolved": "https://registry.npmjs.org/lru-cache/-/lru-cache-11.5.3.tgz",
++      "integrity": "sha512-U4N8FgzmWxc8k1VH8Kr6lQg18U7Fjvby6wXHVRX/ZZ7IwWbRMgrRbP0Wrb5q5NVinryp4SQampHKdvtecItxUg==",
++      "dev": true,
++      "license": "BlueOak-1.0.0",
++      "engines": {
++        "node": "20 || >=22"
++      }
++    },
++    "node_modules/@asamuzakjp/dom-selector": {
++      "version": "9.2.4",
++      "resolved": "https://registry.npmjs.org/@asamuzakjp/dom-selector/-/dom-selector-9.2.4.tgz",
++      "integrity": "sha512-YnVzxDxLaqL0t7Q4wfcgHZjg55Wm6y5EaO7Bhu3q9J7wq/8iw3PhsnWiOQhYekx4VexnbkgWpTT6n+QIV7kczw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "bidi-js": "^1.1.0",
++        "css-tree": "^3.2.1",
++        "is-potential-custom-element-name": "^1.0.1",
++        "lru-cache": "^11.5.3"
++      },
++      "engines": {
++        "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
++      }
++    },
++    "node_modules/@asamuzakjp/dom-selector/node_modules/lru-cache": {
++      "version": "11.5.3",
++      "resolved": "https://registry.npmjs.org/lru-cache/-/lru-cache-11.5.3.tgz",
++      "integrity": "sha512-U4N8FgzmWxc8k1VH8Kr6lQg18U7Fjvby6wXHVRX/ZZ7IwWbRMgrRbP0Wrb5q5NVinryp4SQampHKdvtecItxUg==",
++      "dev": true,
++      "license": "BlueOak-1.0.0",
++      "engines": {
++        "node": "20 || >=22"
+       }
+     },
+     "node_modules/@babel/code-frame": {
+@@ -220,6 +277,16 @@
+         "node": ">=6.0.0"
+       }
+     },
++    "node_modules/@babel/runtime": {
++      "version": "7.29.7",
++      "resolved": "https://registry.npmjs.org/@babel/runtime/-/runtime-7.29.7.tgz",
++      "integrity": "sha512-Nq8OhGWiZIZGV6hLHoyAKLLcJihP/xFeBMGJoUrxTX2psI8dCifzLhZISFb+VWS3wFMRDmCGw5R+dOySCqPLhw==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
+     "node_modules/@babel/template": {
+       "version": "7.29.7",
+       "resolved": "https://registry.npmjs.org/@babel/template/-/template-7.29.7.tgz",
+@@ -268,6 +335,159 @@
+         "node": ">=6.9.0"
+       }
+     },
++    "node_modules/@bramus/specificity": {
++      "version": "2.4.2",
++      "resolved": "https://registry.npmjs.org/@bramus/specificity/-/specificity-2.4.2.tgz",
++      "integrity": "sha512-ctxtJ/eA+t+6q2++vj5j7FYX3nRu311q1wfYH3xjlLOsczhlhxAg2FWNUXhpGvAw3BWo1xBcvOV6/YLc2r5FJw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "css-tree": "^3.0.0"
++      },
++      "bin": {
++        "specificity": "bin/cli.js"
++      }
++    },
++    "node_modules/@csstools/color-helpers": {
++      "version": "6.1.2",
++      "resolved": "https://registry.npmjs.org/@csstools/color-helpers/-/color-helpers-6.1.2.tgz",
++      "integrity": "sha512-grhRy3OKmniaAEKXMjua5z/EODX0MSqBGjunw8+j/3HQjOnahs2AGhvEOIYVUWcU6ScApbhLhVrQTX8XqrMrow==",
++      "dev": true,
++      "funding": [
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/csstools"
++        },
++        {
++          "type": "opencollective",
++          "url": "https://opencollective.com/csstools"
++        }
++      ],
++      "license": "MIT-0",
++      "engines": {
++        "node": ">=20.19.0"
++      }
++    },
++    "node_modules/@csstools/css-calc": {
++      "version": "3.4.3",
++      "resolved": "https://registry.npmjs.org/@csstools/css-calc/-/css-calc-3.4.3.tgz",
++      "integrity": "sha512-iex20d8CHVkyvg6B7UKV7uHnI2Bqo9g+EFfT9E0y+GvTvhZ/DwONJ+9aKb1dlqm0ZiGsL5RXjp0fCoJYnkeDjA==",
++      "dev": true,
++      "funding": [
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/csstools"
++        },
++        {
++          "type": "opencollective",
++          "url": "https://opencollective.com/csstools"
++        }
++      ],
++      "license": "MIT",
++      "engines": {
++        "node": ">=20.19.0"
++      },
++      "peerDependencies": {
++        "@csstools/css-parser-algorithms": "^4.0.2",
++        "@csstools/css-tokenizer": "^4.0.2"
++      }
++    },
++    "node_modules/@csstools/css-color-parser": {
++      "version": "4.2.6",
++      "resolved": "https://registry.npmjs.org/@csstools/css-color-parser/-/css-color-parser-4.2.6.tgz",
++      "integrity": "sha512-iiPQ3iRWwnJkeEn6RIu6SJPr7hYrLz6XZ9s/QZl+2/LI5KQVjpl2fdmDSZKuD4xP6GMmMPgHFFXg6k1Wkz0Trg==",
++      "dev": true,
++      "funding": [
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/csstools"
++        },
++        {
++          "type": "opencollective",
++          "url": "https://opencollective.com/csstools"
++        }
++      ],
++      "license": "MIT",
++      "dependencies": {
++        "@csstools/color-helpers": "^6.1.2",
++        "@csstools/css-calc": "^3.4.3"
++      },
++      "engines": {
++        "node": ">=20.19.0"
++      },
++      "peerDependencies": {
++        "@csstools/css-parser-algorithms": "^4.0.2",
++        "@csstools/css-tokenizer": "^4.0.2"
++      }
++    },
++    "node_modules/@csstools/css-parser-algorithms": {
++      "version": "4.0.2",
++      "resolved": "https://registry.npmjs.org/@csstools/css-parser-algorithms/-/css-parser-algorithms-4.0.2.tgz",
++      "integrity": "sha512-40cSKyMvK+tq4qz6Awrlye2WGuOKt3FwPgtGg6KTfbHOWNw+Rk1rzbAtZnZ6IBhsY491HLRnDXwoyBAijmmILA==",
++      "dev": true,
++      "funding": [
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/csstools"
++        },
++        {
++          "type": "opencollective",
++          "url": "https://opencollective.com/csstools"
++        }
++      ],
++      "license": "MIT",
++      "engines": {
++        "node": ">=20.19.0"
++      },
++      "peerDependencies": {
++        "@csstools/css-tokenizer": "^4.0.2"
++      }
++    },
++    "node_modules/@csstools/css-syntax-patches-for-csstree": {
++      "version": "1.1.15",
++      "resolved": "https://registry.npmjs.org/@csstools/css-syntax-patches-for-csstree/-/css-syntax-patches-for-csstree-1.1.15.tgz",
++      "integrity": "sha512-J0u7HkVl2nzSlhsiTOp4AmwcUQ3D+mGEEKfBy/7To5/y7F2OHwyLrXfrhR0SMgr4p5Lo+eaMVSeai24zUcBIxA==",
++      "dev": true,
++      "funding": [
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/csstools"
++        },
++        {
++          "type": "opencollective",
++          "url": "https://opencollective.com/csstools"
++        }
++      ],
++      "license": "MIT-0",
++      "peerDependencies": {
++        "css-tree": "^3.2.1"
++      },
++      "peerDependenciesMeta": {
++        "css-tree": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/@csstools/css-tokenizer": {
++      "version": "4.0.2",
++      "resolved": "https://registry.npmjs.org/@csstools/css-tokenizer/-/css-tokenizer-4.0.2.tgz",
++      "integrity": "sha512-OoKoR0f76dCY666JlcbhmVTs2drYj1GUXZTYTcbUgJjh9Nv41aFfZ21bPQTERm5+L5cBDo466NltB2lplS5GBw==",
++      "dev": true,
++      "funding": [
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/csstools"
++        },
++        {
++          "type": "opencollective",
++          "url": "https://opencollective.com/csstools"
++        }
++      ],
++      "license": "MIT",
++      "engines": {
++        "node": ">=20.19.0"
++      }
++    },
+     "node_modules/@emnapi/core": {
+       "version": "1.11.1",
+       "resolved": "https://registry.npmjs.org/@emnapi/core/-/core-1.11.1.tgz",
+@@ -430,6 +650,24 @@
+         "node": "^20.19.0 || ^22.13.0 || >=24"
+       }
+     },
++    "node_modules/@exodus/bytes": {
++      "version": "1.16.0",
++      "resolved": "https://registry.npmjs.org/@exodus/bytes/-/bytes-1.16.0.tgz",
++      "integrity": "sha512-IcpW84uEn3N7ETtNZMlxKhfl6Pec8rUNGOTBtWbK1FKhJxIFAptZyVrvVRVBimAJxJCgc3PxepxkdWWG4DVzfA==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": "^20.19.0 || ^22.12.0 || >=24.0.0"
++      },
++      "peerDependencies": {
++        "@noble/hashes": "^1.8.0 || ^2.0.0"
++      },
++      "peerDependenciesMeta": {
++        "@noble/hashes": {
++          "optional": true
++        }
++      }
++    },
+     "node_modules/@humanfs/core": {
+       "version": "0.19.2",
+       "resolved": "https://registry.npmjs.org/@humanfs/core/-/core-0.19.2.tgz",
+@@ -529,9 +767,9 @@
+       }
+     },
+     "node_modules/@jridgewell/sourcemap-codec": {
+-      "version": "1.5.5",
+-      "resolved": "https://registry.npmjs.org/@jridgewell/sourcemap-codec/-/sourcemap-codec-1.5.5.tgz",
+-      "integrity": "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==",
++      "version": "1.6.0",
++      "resolved": "https://registry.npmjs.org/@jridgewell/sourcemap-codec/-/sourcemap-codec-1.6.0.tgz",
++      "integrity": "sha512-T7jf+5zgsZHwNJ4lvQ7/aezbyk0nNX+zJVWpmHA7VYsEx7a7qr5Rg5IbtJFqkgze5Y2sruq1RUY8Q837Od7iFw==",
+       "dev": true,
+       "license": "MIT"
+     },
+@@ -839,6 +1077,55 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/@testing-library/dom": {
++      "version": "10.4.2",
++      "resolved": "https://registry.npmjs.org/@testing-library/dom/-/dom-10.4.2.tgz",
++      "integrity": "sha512-yzr2S9HyAIdhz2/6qHgbs665Q7PKVcDF05vsOlHPxG1mo36gKVesdYVeDLnXgfjJ03CrKRk08knc6+E/9m8v2Q==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "@babel/code-frame": "^7.10.4",
++        "@babel/runtime": "^7.12.5",
++        "@types/aria-query": "^5.0.1",
++        "aria-query": "5.3.0",
++        "dom-accessibility-api": "^0.5.9",
++        "lz-string": "^1.5.0",
++        "picocolors": "1.1.1",
++        "pretty-format": "^27.0.2"
++      },
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/@testing-library/react": {
++      "version": "16.3.3",
++      "resolved": "https://registry.npmjs.org/@testing-library/react/-/react-16.3.3.tgz",
++      "integrity": "sha512-Uo193NgQbPMz6lrrhtRQQFcMC6Re/ELLFbbuVL30WDlZxlpZf9/lMHTAVxPRLw1q1iu9OJmR1c2BLiENRstdBg==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@babel/runtime": "^7.12.5"
++      },
++      "engines": {
++        "node": ">=18"
++      },
++      "peerDependencies": {
++        "@testing-library/dom": "^10.0.0",
++        "@types/react": "^18.0.0 || ^19.0.0",
++        "@types/react-dom": "^18.0.0 || ^19.0.0",
++        "react": "^18.0.0 || ^19.0.0",
++        "react-dom": "^18.0.0 || ^19.0.0"
++      },
++      "peerDependenciesMeta": {
++        "@types/react": {
++          "optional": true
++        },
++        "@types/react-dom": {
++          "optional": true
++        }
++      }
++    },
+     "node_modules/@tybys/wasm-util": {
+       "version": "0.10.3",
+       "resolved": "https://registry.npmjs.org/@tybys/wasm-util/-/wasm-util-0.10.3.tgz",
+@@ -850,6 +1137,32 @@
+         "tslib": "^2.4.0"
+       }
+     },
++    "node_modules/@types/aria-query": {
++      "version": "5.0.4",
++      "resolved": "https://registry.npmjs.org/@types/aria-query/-/aria-query-5.0.4.tgz",
++      "integrity": "sha512-rfT93uj5s0PRL7EzccGMs3brplhcrghnDoV26NqKhCAS1hVo+WdNsPvE/yb6ilfr5hi2MEk6d5EWJTKdxg8jVw==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true
++    },
++    "node_modules/@types/chai": {
++      "version": "5.2.3",
++      "resolved": "https://registry.npmjs.org/@types/chai/-/chai-5.2.3.tgz",
++      "integrity": "sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@types/deep-eql": "*",
++        "assertion-error": "^2.0.1"
++      }
++    },
++    "node_modules/@types/deep-eql": {
++      "version": "4.0.2",
++      "resolved": "https://registry.npmjs.org/@types/deep-eql/-/deep-eql-4.0.2.tgz",
++      "integrity": "sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/@types/esrecurse": {
+       "version": "4.3.1",
+       "resolved": "https://registry.npmjs.org/@types/esrecurse/-/esrecurse-4.3.1.tgz",
+@@ -1170,6 +1483,44 @@
+         }
+       }
+     },
++    "node_modules/@vitest/mocker": {
++      "version": "5.0.3",
++      "resolved": "https://registry.npmjs.org/@vitest/mocker/-/mocker-5.0.3.tgz",
++      "integrity": "sha512-T8sWAIbkSyAjkwTcaEc3Iu0o9A27X1/kdXrizhZkGuSKScRQtRzclfAMpOTcGdXCsqxeWlpGy3XjqaW8CpLORg==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@jridgewell/trace-mapping": "0.3.31",
++        "@vitest/spy": "5.0.3",
++        "estree-walker": "^3.0.3",
++        "magic-string": "^1.2.3"
++      },
++      "funding": {
++        "url": "https://opencollective.com/vitest"
++      },
++      "peerDependencies": {
++        "msw": "^2.4.9",
++        "vite": "^6.0.0 || ^7.0.0 || ^8.0.0"
++      },
++      "peerDependenciesMeta": {
++        "msw": {
++          "optional": true
++        },
++        "vite": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/@vitest/spy": {
++      "version": "5.0.3",
++      "resolved": "https://registry.npmjs.org/@vitest/spy/-/spy-5.0.3.tgz",
++      "integrity": "sha512-XhFysQTB8AZ+P4gMi+Lpo99vg2AZi0qKpaB9yXQl37+CaMEAPO3iH/wGVnSyL5MPERiLezpqTVtrR6UZH5GCXg==",
++      "dev": true,
++      "license": "MIT",
++      "funding": {
++        "url": "https://opencollective.com/vitest"
++      }
++    },
+     "node_modules/acorn": {
+       "version": "8.17.0",
+       "resolved": "https://registry.npmjs.org/acorn/-/acorn-8.17.0.tgz",
+@@ -1210,6 +1561,52 @@
+         "url": "https://github.com/sponsors/epoberezkin"
+       }
+     },
++    "node_modules/ansi-regex": {
++      "version": "5.0.1",
++      "resolved": "https://registry.npmjs.org/ansi-regex/-/ansi-regex-5.0.1.tgz",
++      "integrity": "sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/ansi-styles": {
++      "version": "5.2.0",
++      "resolved": "https://registry.npmjs.org/ansi-styles/-/ansi-styles-5.2.0.tgz",
++      "integrity": "sha512-Cxwpt2SfTzTtXcfOlzGEee8O+c+MmUgGrNiBcXnuWxuFJHe6a5Hz7qwhwe5OgaSYI0IJvkLqWX1ASG+cJOkEiA==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "engines": {
++        "node": ">=10"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/ansi-styles?sponsor=1"
++      }
++    },
++    "node_modules/aria-query": {
++      "version": "5.3.0",
++      "resolved": "https://registry.npmjs.org/aria-query/-/aria-query-5.3.0.tgz",
++      "integrity": "sha512-b0P0sZPKtyu8HkeRAfCq0IfURZK+SuwMjY1UXGBU27wpAiTwQAIlq56IbIO+ytk/JjS1fMR14ee5WBBfKi5J6A==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "peer": true,
++      "dependencies": {
++        "dequal": "^2.0.3"
++      }
++    },
++    "node_modules/assertion-error": {
++      "version": "2.0.1",
++      "resolved": "https://registry.npmjs.org/assertion-error/-/assertion-error-2.0.1.tgz",
++      "integrity": "sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=12"
++      }
++    },
+     "node_modules/balanced-match": {
+       "version": "4.0.4",
+       "resolved": "https://registry.npmjs.org/balanced-match/-/balanced-match-4.0.4.tgz",
+@@ -1233,6 +1630,16 @@
+         "node": ">=6.0.0"
+       }
+     },
++    "node_modules/bidi-js": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/bidi-js/-/bidi-js-1.1.0.tgz",
++      "integrity": "sha512-fX1Onk0tdVPC7obPWB5EbJ1z7NVhLq4m2xZLq2YXBkxzMXIGRpNMU88n0EPgWseKl12J7zXs7qrDxPK4sRs2fg==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "require-from-string": "^2.0.2"
++      }
++    },
+     "node_modules/brace-expansion": {
+       "version": "5.0.7",
+       "resolved": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.7.tgz",
+@@ -1301,6 +1708,16 @@
+       ],
+       "license": "CC-BY-4.0"
+     },
++    "node_modules/chai": {
++      "version": "6.3.0",
++      "resolved": "https://registry.npmjs.org/chai/-/chai-6.3.0.tgz",
++      "integrity": "sha512-XWAtwJ6OHO+tj0EKCs0Y2UamnyOxseZWltU4x2U2wh8g4AigdjwvtUjvLP2tqkA/avxHEtzxNaqGq/YGNwckKg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=18"
++      }
++    },
+     "node_modules/convert-source-map": {
+       "version": "2.0.0",
+       "resolved": "https://registry.npmjs.org/convert-source-map/-/convert-source-map-2.0.0.tgz",
+@@ -1323,6 +1740,20 @@
+         "node": ">= 8"
+       }
+     },
++    "node_modules/css-tree": {
++      "version": "3.2.1",
++      "resolved": "https://registry.npmjs.org/css-tree/-/css-tree-3.2.1.tgz",
++      "integrity": "sha512-X7sjQzceUhu1u7Y/ylrRZFU2FS6LRiFVp6rKLPg23y3x3c3DOKAwuXGDp+PAGjh6CSnCjYeAul8pcT8bAl+lSA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "mdn-data": "2.27.1",
++        "source-map-js": "^1.2.1"
++      },
++      "engines": {
++        "node": "^10 || ^12.20.0 || ^14.13.0 || >=15.0.0"
++      }
++    },
+     "node_modules/csstype": {
+       "version": "3.2.3",
+       "resolved": "https://registry.npmjs.org/csstype/-/csstype-3.2.3.tgz",
+@@ -1330,6 +1761,35 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/data-urls": {
++      "version": "7.0.0",
++      "resolved": "https://registry.npmjs.org/data-urls/-/data-urls-7.0.0.tgz",
++      "integrity": "sha512-23XHcCF+coGYevirZceTVD7NdJOqVn+49IHyxgszm+JIiHLoB2TkmPtsYkNWT1pvRSGkc35L6NHs0yHkN2SumA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "whatwg-mimetype": "^5.0.0",
++        "whatwg-url": "^16.0.0"
++      },
++      "engines": {
++        "node": "^20.19.0 || ^22.12.0 || >=24.0.0"
++      }
++    },
++    "node_modules/data-urls/node_modules/whatwg-url": {
++      "version": "16.0.1",
++      "resolved": "https://registry.npmjs.org/whatwg-url/-/whatwg-url-16.0.1.tgz",
++      "integrity": "sha512-1to4zXBxmXHV3IiSSEInrreIlu02vUOvrhxJJH5vcxYTBDAx51cqZiKdyTxlecdKNSjj8EcxGBxNf6Vg+945gw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@exodus/bytes": "^1.11.0",
++        "tr46": "^6.0.0",
++        "webidl-conversions": "^8.0.1"
++      },
++      "engines": {
++        "node": "^20.19.0 || ^22.12.0 || >=24.0.0"
++      }
++    },
+     "node_modules/debug": {
+       "version": "4.4.3",
+       "resolved": "https://registry.npmjs.org/debug/-/debug-4.4.3.tgz",
+@@ -1348,6 +1808,13 @@
+         }
+       }
+     },
++    "node_modules/decimal.js": {
++      "version": "10.6.0",
++      "resolved": "https://registry.npmjs.org/decimal.js/-/decimal.js-10.6.0.tgz",
++      "integrity": "sha512-YpgQiITW3JXGntzdUmyUR1V812Hn8T1YVXhCu+wO3OpS4eU9l4YdD3qjyiKdV6mvV29zapkMeD390UVEf2lkUg==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/deep-is": {
+       "version": "0.1.4",
+       "resolved": "https://registry.npmjs.org/deep-is/-/deep-is-0.1.4.tgz",
+@@ -1355,6 +1822,17 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/dequal": {
++      "version": "2.0.3",
++      "resolved": "https://registry.npmjs.org/dequal/-/dequal-2.0.3.tgz",
++      "integrity": "sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "engines": {
++        "node": ">=6"
++      }
++    },
+     "node_modules/detect-libc": {
+       "version": "2.1.2",
+       "resolved": "https://registry.npmjs.org/detect-libc/-/detect-libc-2.1.2.tgz",
+@@ -1365,6 +1843,14 @@
+         "node": ">=8"
+       }
+     },
++    "node_modules/dom-accessibility-api": {
++      "version": "0.5.16",
++      "resolved": "https://registry.npmjs.org/dom-accessibility-api/-/dom-accessibility-api-0.5.16.tgz",
++      "integrity": "sha512-X7BJ2yElsnOJ30pZF4uIIDfBEVgF4XEBxL9Bxhy6dnrm5hkzqmsWHGTiHqRiITNhMyFLyAiWndIJP7Z1NTteDg==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true
++    },
+     "node_modules/electron-to-chromium": {
+       "version": "1.5.385",
+       "resolved": "https://registry.npmjs.org/electron-to-chromium/-/electron-to-chromium-1.5.385.tgz",
+@@ -1372,6 +1858,26 @@
+       "dev": true,
+       "license": "ISC"
+     },
++    "node_modules/entities": {
++      "version": "8.1.0",
++      "resolved": "https://registry.npmjs.org/entities/-/entities-8.1.0.tgz",
++      "integrity": "sha512-kxL7msIffSuh9aaFAMD7rxAIuTRMAHMeBtgHW2yUdWw732ZNh4MehkF2gdjvtdmikkaIP9bFDDJOPlsvm7avrA==",
++      "dev": true,
++      "license": "BSD-2-Clause",
++      "engines": {
++        "node": ">=20.19.0"
++      },
++      "funding": {
++        "url": "https://github.com/fb55/entities?sponsor=1"
++      }
++    },
++    "node_modules/es-module-lexer": {
++      "version": "2.3.2",
++      "resolved": "https://registry.npmjs.org/es-module-lexer/-/es-module-lexer-2.3.2.tgz",
++      "integrity": "sha512-poHGpORABojJJucnV9KbOavETW8lBVnphkW77ER5/BQ5Fz7oXSoCNek7IH3vR5nRjdsEz926ibFYX8KtLQmdyw==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/escalade": {
+       "version": "3.2.0",
+       "resolved": "https://registry.npmjs.org/escalade/-/escalade-3.2.0.tgz",
+@@ -1570,6 +2076,16 @@
+         "node": ">=4.0"
+       }
+     },
++    "node_modules/estree-walker": {
++      "version": "3.0.3",
++      "resolved": "https://registry.npmjs.org/estree-walker/-/estree-walker-3.0.3.tgz",
++      "integrity": "sha512-7RUKfXgSMMkzt6ZuXmqapOurLGPPfgj6l9uRZ7lRGolvk0y2yocc35LdcxKC5PQZdn2DMqioAQ2NoWcrTKmm6g==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@types/estree": "^1.0.0"
++      }
++    },
+     "node_modules/esutils": {
+       "version": "2.0.3",
+       "resolved": "https://registry.npmjs.org/esutils/-/esutils-2.0.3.tgz",
+@@ -1580,6 +2096,16 @@
+         "node": ">=0.10.0"
+       }
+     },
++    "node_modules/expect-type": {
++      "version": "1.4.0",
++      "resolved": "https://registry.npmjs.org/expect-type/-/expect-type-1.4.0.tgz",
++      "integrity": "sha512-KfYbmpRm0VbLjEvVa9yGwCi9GI34xvi7A/HXYWQO65CSD2u3MczUJSuwXKFIxlGsgBQizV9q5J9NHj4VG0n+pA==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "engines": {
++        "node": ">=12.0.0"
++      }
++    },
+     "node_modules/fast-deep-equal": {
+       "version": "3.1.3",
+       "resolved": "https://registry.npmjs.org/fast-deep-equal/-/fast-deep-equal-3.1.3.tgz",
+@@ -1765,6 +2291,19 @@
+         "hermes-estree": "0.25.1"
+       }
+     },
++    "node_modules/html-encoding-sniffer": {
++      "version": "7.0.0",
++      "resolved": "https://registry.npmjs.org/html-encoding-sniffer/-/html-encoding-sniffer-7.0.0.tgz",
++      "integrity": "sha512-UikN5yr7xsCDAq87Or5or0PAlD3HJJOKVzM05az588WnpDJ4Ux7a2A53Qi6gofGg2/EtvF/H4hCi/TXfCW4Y6w==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@exodus/bytes": "^1.15.1"
++      },
++      "engines": {
++        "node": "^22.13.0 || >=24.0.0"
++      }
++    },
+     "node_modules/ignore": {
+       "version": "5.3.2",
+       "resolved": "https://registry.npmjs.org/ignore/-/ignore-5.3.2.tgz",
+@@ -1808,6 +2347,13 @@
+         "node": ">=0.10.0"
+       }
+     },
++    "node_modules/is-potential-custom-element-name": {
++      "version": "1.0.1",
++      "resolved": "https://registry.npmjs.org/is-potential-custom-element-name/-/is-potential-custom-element-name-1.0.1.tgz",
++      "integrity": "sha512-bCYeRA2rVibKZd+s2625gGnGF/t7DSqDs4dP7CrLA1m7jKWz6pps0LpYLJN8Q64HtmPKJ1hrN3nzPNKFEKOUiQ==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/isexe": {
+       "version": "2.0.0",
+       "resolved": "https://registry.npmjs.org/isexe/-/isexe-2.0.0.tgz",
+@@ -1822,6 +2368,56 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/jsdom": {
++      "version": "30.1.1",
++      "resolved": "https://registry.npmjs.org/jsdom/-/jsdom-30.1.1.tgz",
++      "integrity": "sha512-FahmoPK5vbPc+jxV1iErMHmAZypCZ942NHF4+qqaWAuvaKKTBZxawnmAtrbGWLU7MtlxfqIP0qw6aSI+aWGtLg==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@asamuzakjp/css-color": "^7.0.0",
++        "@asamuzakjp/dom-selector": "^9.2.1",
++        "@bramus/specificity": "^2.4.2",
++        "@csstools/css-syntax-patches-for-csstree": "^1.1.13",
++        "@exodus/bytes": "^1.15.1",
++        "css-tree": "^3.2.1",
++        "data-urls": "^7.0.0",
++        "decimal.js": "^10.6.0",
++        "html-encoding-sniffer": "^7.0.0",
++        "is-potential-custom-element-name": "^1.0.1",
++        "lru-cache": "^11.5.2",
++        "parse5": "^8.0.1",
++        "saxes": "^6.0.0",
++        "tough-cookie": "^6.0.2",
++        "undici": "^8.10.2",
++        "w3c-xmlserializer": "^6.0.0",
++        "webidl-conversions": "^8.0.1",
++        "whatwg-mimetype": "^5.0.0",
++        "whatwg-url": "^17.1.1",
++        "xml-name-validator": "^5.0.0"
++      },
++      "engines": {
++        "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
++      },
++      "peerDependencies": {
++        "canvas": "^3.2.3"
++      },
++      "peerDependenciesMeta": {
++        "canvas": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/jsdom/node_modules/lru-cache": {
++      "version": "11.5.3",
++      "resolved": "https://registry.npmjs.org/lru-cache/-/lru-cache-11.5.3.tgz",
++      "integrity": "sha512-U4N8FgzmWxc8k1VH8Kr6lQg18U7Fjvby6wXHVRX/ZZ7IwWbRMgrRbP0Wrb5q5NVinryp4SQampHKdvtecItxUg==",
++      "dev": true,
++      "license": "BlueOak-1.0.0",
++      "engines": {
++        "node": "20 || >=22"
++      }
++    },
+     "node_modules/jsesc": {
+       "version": "3.1.0",
+       "resolved": "https://registry.npmjs.org/jsesc/-/jsesc-3.1.0.tgz",
+@@ -2189,6 +2785,34 @@
+         "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0"
+       }
+     },
++    "node_modules/lz-string": {
++      "version": "1.5.0",
++      "resolved": "https://registry.npmjs.org/lz-string/-/lz-string-1.5.0.tgz",
++      "integrity": "sha512-h5bgJWpxJNswbU7qCrV0tIKQCaS3blPDrqKWx+QxzuzL1zGUzij9XCWLrSLsJPu5t+eWA/ycetzYAO5IOMcWAQ==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "bin": {
++        "lz-string": "bin/bin.js"
++      }
++    },
++    "node_modules/magic-string": {
++      "version": "1.4.2",
++      "resolved": "https://registry.npmjs.org/magic-string/-/magic-string-1.4.2.tgz",
++      "integrity": "sha512-vG+rjFRj1PqdIBozIxAGMjPlOhaVe+GXpbttY/iSK7rGcJRMlwNJO7dcUwmUqkymsFLJiNGI06t4D7Fr7yRC9g==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@jridgewell/sourcemap-codec": "^1.6.0"
++      }
++    },
++    "node_modules/mdn-data": {
++      "version": "2.27.1",
++      "resolved": "https://registry.npmjs.org/mdn-data/-/mdn-data-2.27.1.tgz",
++      "integrity": "sha512-9Yubnt3e8A0OKwxYSXyhLymGW4sCufcLG6VdiDdUGVkPhpqLxlvP5vl1983gQjJl3tqbrM731mjaZaP68AgosQ==",
++      "dev": true,
++      "license": "CC0-1.0"
++    },
+     "node_modules/minimatch": {
+       "version": "10.2.5",
+       "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-10.2.5.tgz",
+@@ -2289,6 +2913,20 @@
+         "node": ">=18"
+       }
+     },
++    "node_modules/obug": {
++      "version": "2.2.1",
++      "resolved": "https://registry.npmjs.org/obug/-/obug-2.2.1.tgz",
++      "integrity": "sha512-XrsrhT5sybtKI6wakr2SPOlGZWWYbUXZ7a0jT8/QOeAPau+1X/bSegNe5YR75oJmEZQbKningirmGOEJCIk61Q==",
++      "dev": true,
++      "funding": [
++        "https://github.com/sponsors/sxzz",
++        "https://opencollective.com/debug"
++      ],
++      "license": "MIT",
++      "engines": {
++        "node": ">=12.20.0"
++      }
++    },
+     "node_modules/optionator": {
+       "version": "0.9.4",
+       "resolved": "https://registry.npmjs.org/optionator/-/optionator-0.9.4.tgz",
+@@ -2339,6 +2977,19 @@
+         "url": "https://github.com/sponsors/sindresorhus"
+       }
+     },
++    "node_modules/parse5": {
++      "version": "8.0.1",
++      "resolved": "https://registry.npmjs.org/parse5/-/parse5-8.0.1.tgz",
++      "integrity": "sha512-z1e/HMG90obSGeidlli3hj7cbocou0/wa5HacvI3ASx34PecNjNQeaHNo5WIZpWofN9kgkqV1q5YvXe3F0FoPw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "entities": "^8.0.0"
++      },
++      "funding": {
++        "url": "https://github.com/inikulin/parse5?sponsor=1"
++      }
++    },
+     "node_modules/path-exists": {
+       "version": "4.0.0",
+       "resolved": "https://registry.npmjs.org/path-exists/-/path-exists-4.0.0.tgz",
+@@ -2367,9 +3018,9 @@
+       "license": "ISC"
+     },
+     "node_modules/picomatch": {
+-      "version": "4.0.5",
+-      "resolved": "https://registry.npmjs.org/picomatch/-/picomatch-4.0.5.tgz",
+-      "integrity": "sha512-RvwwcruNjI1ncT5xRakeyS9Lf8lcItv34KD+aif+VH9kduAyfYBipGh12274xtenIPZ119/R9BdTBa8gAwSh0A==",
++      "version": "4.0.7",
++      "resolved": "https://registry.npmjs.org/picomatch/-/picomatch-4.0.7.tgz",
++      "integrity": "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==",
+       "dev": true,
+       "license": "MIT",
+       "engines": {
+@@ -2379,6 +3030,35 @@
+         "url": "https://github.com/sponsors/jonschlinkert"
+       }
+     },
++    "node_modules/playwright": {
++      "version": "1.63.0",
++      "resolved": "https://registry.npmjs.org/playwright/-/playwright-1.63.0.tgz",
++      "integrity": "sha512-+7ziBLidS4NaNCdt57SUDT+wYmmd5fmiQejUic/kb+YsYSCPyOOE9sebzMjNmQrsnNpDJqd4WHvV/8lfKfUDUg==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "dependencies": {
++        "playwright-core": "1.63.0"
++      },
++      "bin": {
++        "playwright": "cli.js"
++      },
++      "engines": {
++        "node": ">=20"
++      }
++    },
++    "node_modules/playwright-core": {
++      "version": "1.63.0",
++      "resolved": "https://registry.npmjs.org/playwright-core/-/playwright-core-1.63.0.tgz",
++      "integrity": "sha512-rYCsBF/M5HjUch52bbtVONEFjv6Xu8sm8h72dNlR5bzIE1fvC/bxgspzkjSfU+MweEMmPM8KJebG6nnyxo5mCg==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "bin": {
++        "playwright-core": "cli.js"
++      },
++      "engines": {
++        "node": ">=20"
++      }
++    },
+     "node_modules/postcss": {
+       "version": "8.5.16",
+       "resolved": "https://registry.npmjs.org/postcss/-/postcss-8.5.16.tgz",
+@@ -2418,6 +3098,22 @@
+         "node": ">= 0.8.0"
+       }
+     },
++    "node_modules/pretty-format": {
++      "version": "27.5.1",
++      "resolved": "https://registry.npmjs.org/pretty-format/-/pretty-format-27.5.1.tgz",
++      "integrity": "sha512-Qb1gy5OrP5+zDf2Bvnzdl3jsTf1qXVMazbvCoKhtKqVs4/YK4ozX4gKQJJVyNe+cajNPn0KoC0MC3FUmaHWEmQ==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true,
++      "dependencies": {
++        "ansi-regex": "^5.0.1",
++        "ansi-styles": "^5.0.0",
++        "react-is": "^17.0.1"
++      },
++      "engines": {
++        "node": "^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0"
++      }
++    },
+     "node_modules/punycode": {
+       "version": "2.3.1",
+       "resolved": "https://registry.npmjs.org/punycode/-/punycode-2.3.1.tgz",
+@@ -2449,6 +3145,24 @@
+         "react": "^19.2.7"
+       }
+     },
++    "node_modules/react-is": {
++      "version": "17.0.2",
++      "resolved": "https://registry.npmjs.org/react-is/-/react-is-17.0.2.tgz",
++      "integrity": "sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==",
++      "dev": true,
++      "license": "MIT",
++      "peer": true
++    },
++    "node_modules/require-from-string": {
++      "version": "2.0.2",
++      "resolved": "https://registry.npmjs.org/require-from-string/-/require-from-string-2.0.2.tgz",
++      "integrity": "sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=0.10.0"
++      }
++    },
+     "node_modules/rolldown": {
+       "version": "1.1.4",
+       "resolved": "https://registry.npmjs.org/rolldown/-/rolldown-1.1.4.tgz",
+@@ -2483,6 +3197,19 @@
+         "@rolldown/binding-win32-x64-msvc": "1.1.4"
+       }
+     },
++    "node_modules/saxes": {
++      "version": "6.0.0",
++      "resolved": "https://registry.npmjs.org/saxes/-/saxes-6.0.0.tgz",
++      "integrity": "sha512-xAg7SOnEhrm5zI3puOOKyy1OMcMlIJZYNJY7xLBwSze0UjhPLnWfj2GF2EpT0jmzaJKIWKHLsaSSajf35bcYnA==",
++      "dev": true,
++      "license": "ISC",
++      "dependencies": {
++        "xmlchars": "^2.2.0"
++      },
++      "engines": {
++        "node": ">=v12.22.7"
++      }
++    },
+     "node_modules/scheduler": {
+       "version": "0.27.0",
+       "resolved": "https://registry.npmjs.org/scheduler/-/scheduler-0.27.0.tgz",
+@@ -2532,6 +3259,33 @@
+         "node": ">=0.10.0"
+       }
+     },
++    "node_modules/std-env": {
++      "version": "4.3.0",
++      "resolved": "https://registry.npmjs.org/std-env/-/std-env-4.3.0.tgz",
++      "integrity": "sha512-OtU/EgQ1kIm5KwqQpBC6ZEMXrZRui11w8zgfTWp8cdO9B8OaPsbA8bTHO2P+HNo1VlUTGMVBwPhydu6poeXiag==",
++      "dev": true,
++      "license": "MIT"
++    },
++    "node_modules/tinybench": {
++      "version": "6.2.0",
++      "resolved": "https://registry.npmjs.org/tinybench/-/tinybench-6.2.0.tgz",
++      "integrity": "sha512-78U2TlB2CnVenajOFzf3BKSm0J6oz5L0NV7g32LCPccvYc0lbWvys4d3uUUCS2B1N8PAf2+aekR8i1KbC3HO7Q==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=20.0.0"
++      }
++    },
++    "node_modules/tinyexec": {
++      "version": "1.3.1",
++      "resolved": "https://registry.npmjs.org/tinyexec/-/tinyexec-1.3.1.tgz",
++      "integrity": "sha512-GCvB3aoys96IuDFBMcTB46JOR6mdMtAToqwiW8JlWhsoh1mhHi/xn9ss/Dg7N555GiJyEt2qzoG/NHCwM6h1EA==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=18"
++      }
++    },
+     "node_modules/tinyglobby": {
+       "version": "0.2.17",
+       "resolved": "https://registry.npmjs.org/tinyglobby/-/tinyglobby-0.2.17.tgz",
+@@ -2549,6 +3303,52 @@
+         "url": "https://github.com/sponsors/SuperchupuDev"
+       }
+     },
++    "node_modules/tldts": {
++      "version": "7.4.16",
++      "resolved": "https://registry.npmjs.org/tldts/-/tldts-7.4.16.tgz",
++      "integrity": "sha512-QwBER5KMR86IIjpIiO7H/Z3IMJPsZ1A6RKPAqzTTgOyUQUSt9FdnKcqhTaJmkY6HVrgouZHZR0ncK5QxvmnQeg==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "tldts-core": "^7.4.16"
++      },
++      "bin": {
++        "tldts": "bin/cli.js"
++      }
++    },
++    "node_modules/tldts-core": {
++      "version": "7.4.16",
++      "resolved": "https://registry.npmjs.org/tldts-core/-/tldts-core-7.4.16.tgz",
++      "integrity": "sha512-MDolfaSJtlSK5Y0A1xl3277ekubZwobpBjugknDizI9O5Rm60a1m8k4ICK+MRsCDzPygT81mp3BBf5RKDlFRfA==",
++      "dev": true,
++      "license": "MIT"
++    },
++    "node_modules/tough-cookie": {
++      "version": "6.0.2",
++      "resolved": "https://registry.npmjs.org/tough-cookie/-/tough-cookie-6.0.2.tgz",
++      "integrity": "sha512-exgYmnmL/sJpR3upZfXG5PoatXQii55xAiXGXzY+sROLZ/Y+SLcp9PgJNI9Vz37HpQ74WvDcLT8eqm+kV3FzrA==",
++      "dev": true,
++      "license": "BSD-3-Clause",
++      "dependencies": {
++        "tldts": "^7.0.5"
++      },
++      "engines": {
++        "node": ">=16"
++      }
++    },
++    "node_modules/tr46": {
++      "version": "6.0.0",
++      "resolved": "https://registry.npmjs.org/tr46/-/tr46-6.0.0.tgz",
++      "integrity": "sha512-bLVMLPtstlZ4iMQHpFHTR7GAGj2jxi8Dg0s2h2MafAE4uSWF98FC/3MomU51iQAMf8/qDUbKWf5GxuvvVcXEhw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "punycode": "^2.3.1"
++      },
++      "engines": {
++        "node": ">=20"
++      }
++    },
+     "node_modules/ts-api-utils": {
+       "version": "2.5.0",
+       "resolved": "https://registry.npmjs.org/ts-api-utils/-/ts-api-utils-2.5.0.tgz",
+@@ -2619,6 +3419,16 @@
+         "typescript": ">=4.8.4 <6.1.0"
+       }
+     },
++    "node_modules/undici": {
++      "version": "8.11.2",
++      "resolved": "https://registry.npmjs.org/undici/-/undici-8.11.2.tgz",
++      "integrity": "sha512-u4UB2/IrKdU6lFxumHmmo1a3fCQO5tzQllRorfoRS63txhrB7xTpSn1PftwC4qEHkOaqP95fCWW4lJzwErwzhQ==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=22.19.0"
++      }
++    },
+     "node_modules/undici-types": {
+       "version": "7.18.2",
+       "resolved": "https://registry.npmjs.org/undici-types/-/undici-types-7.18.2.tgz",
+@@ -2745,6 +3555,137 @@
+         }
+       }
+     },
++    "node_modules/vitest": {
++      "version": "5.0.3",
++      "resolved": "https://registry.npmjs.org/vitest/-/vitest-5.0.3.tgz",
++      "integrity": "sha512-xMw97S3rjdtj5dkVat7jCsqWBpvchs3RlpQctUqwJD0KkERk40vz2fJ77lDwW/Vzh/pk18eItYAzkodhSes3jQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@types/chai": "^5.2.2",
++        "@vitest/mocker": "5.0.3",
++        "chai": "^6.2.2",
++        "es-module-lexer": "^2.3.2",
++        "expect-type": "^1.4.0",
++        "magic-string": "^1.2.3",
++        "obug": "^2.1.4",
++        "picomatch": "^4.0.7",
++        "std-env": "^4.2.0",
++        "tinybench": "^6.1.4",
++        "tinyexec": "^1.3.0",
++        "tinyglobby": "^0.2.17",
++        "why-is-node-running": "3.2.1"
++      },
++      "bin": {
++        "vitest": "vitest.mjs"
++      },
++      "engines": {
++        "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
++      },
++      "funding": {
++        "url": "https://opencollective.com/vitest"
++      },
++      "peerDependencies": {
++        "@edge-runtime/vm": "*",
++        "@opentelemetry/api": "^1.9.0",
++        "@types/node": "^22.0.0 || >=24.0.0",
++        "@vitest/browser-playwright": "5.0.3",
++        "@vitest/browser-preview": "5.0.3",
++        "@vitest/browser-webdriverio": "^5.0.0-beta.5 || >=5.0.0",
++        "@vitest/coverage-istanbul": "5.0.3",
++        "@vitest/coverage-v8": "5.0.3",
++        "@vitest/ui": "5.0.3",
++        "happy-dom": "*",
++        "jsdom": "*",
++        "vite": "^6.4.0 || ^7.0.0 || ^8.0.0"
++      },
++      "peerDependenciesMeta": {
++        "@edge-runtime/vm": {
++          "optional": true
++        },
++        "@opentelemetry/api": {
++          "optional": true
++        },
++        "@types/node": {
++          "optional": true
++        },
++        "@vitest/browser-playwright": {
++          "optional": true
++        },
++        "@vitest/browser-preview": {
++          "optional": true
++        },
++        "@vitest/browser-webdriverio": {
++          "optional": true
++        },
++        "@vitest/coverage-istanbul": {
++          "optional": true
++        },
++        "@vitest/coverage-v8": {
++          "optional": true
++        },
++        "@vitest/ui": {
++          "optional": true
++        },
++        "happy-dom": {
++          "optional": true
++        },
++        "jsdom": {
++          "optional": true
++        },
++        "vite": {
++          "optional": false
++        }
++      }
++    },
++    "node_modules/w3c-xmlserializer": {
++      "version": "6.0.0",
++      "resolved": "https://registry.npmjs.org/w3c-xmlserializer/-/w3c-xmlserializer-6.0.0.tgz",
++      "integrity": "sha512-4Nsy8K5Tr6SPDH9jhKJOHf7ChDrc1zufZTVSF7x72hwuEXBqxqk9G6cK+K2NRUtB3iELRJqjXb4JPDMBjMTl2Q==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "xml-name-validator": "^5.0.0"
++      },
++      "engines": {
++        "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
++      }
++    },
++    "node_modules/webidl-conversions": {
++      "version": "8.0.1",
++      "resolved": "https://registry.npmjs.org/webidl-conversions/-/webidl-conversions-8.0.1.tgz",
++      "integrity": "sha512-BMhLD/Sw+GbJC21C/UgyaZX41nPt8bUTg+jWyDeg7e7YN4xOM05YPSIXceACnXVtqyEw/LMClUQMtMZ+PGGpqQ==",
++      "dev": true,
++      "license": "BSD-2-Clause",
++      "engines": {
++        "node": ">=20"
++      }
++    },
++    "node_modules/whatwg-mimetype": {
++      "version": "5.0.0",
++      "resolved": "https://registry.npmjs.org/whatwg-mimetype/-/whatwg-mimetype-5.0.0.tgz",
++      "integrity": "sha512-sXcNcHOC51uPGF0P/D4NVtrkjSU2fNsm9iog4ZvZJsL3rjoDAzXZhkm2MWt1y+PUdggKAYVoMAIYcs78wJ51Cw==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=20"
++      }
++    },
++    "node_modules/whatwg-url": {
++      "version": "17.1.2",
++      "resolved": "https://registry.npmjs.org/whatwg-url/-/whatwg-url-17.1.2.tgz",
++      "integrity": "sha512-TEZA+Zqxin7Jjsm2cjRohCmen5awh+hT6Zi3VZdqZlNRk7zvOI/9WpBFg/DWlA56bWnzwm6DuB8NS0EsxQH9uQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@exodus/bytes": "^1.15.1",
++        "tr46": "^6.0.0",
++        "webidl-conversions": "^8.0.1"
++      },
++      "engines": {
++        "node": "^22.14.0 || >=24.0.0"
++      }
++    },
+     "node_modules/which": {
+       "version": "2.0.2",
+       "resolved": "https://registry.npmjs.org/which/-/which-2.0.2.tgz",
+@@ -2761,6 +3702,19 @@
+         "node": ">= 8"
+       }
+     },
++    "node_modules/why-is-node-running": {
++      "version": "3.2.1",
++      "resolved": "https://registry.npmjs.org/why-is-node-running/-/why-is-node-running-3.2.1.tgz",
++      "integrity": "sha512-Tb2FUhB4vUsGQlfSquQLYkApkuPAFQXGFzxWKHHumVz2dK+X1RUm/HnID4+TfIGYJ1kTcwOaCk/buYCEJr6YjQ==",
++      "dev": true,
++      "license": "MIT",
++      "bin": {
++        "why-is-node-running": "cli.js"
++      },
++      "engines": {
++        "node": ">=20.11"
++      }
++    },
+     "node_modules/word-wrap": {
+       "version": "1.2.5",
+       "resolved": "https://registry.npmjs.org/word-wrap/-/word-wrap-1.2.5.tgz",
+@@ -2771,6 +3725,23 @@
+         "node": ">=0.10.0"
+       }
+     },
++    "node_modules/xml-name-validator": {
++      "version": "5.0.0",
++      "resolved": "https://registry.npmjs.org/xml-name-validator/-/xml-name-validator-5.0.0.tgz",
++      "integrity": "sha512-EvGK8EJ3DhaHfbRlETOWAS5pO9MZITeauHKJyb8wyajUfQUenkIg2MvLDTZ4T/TgIcm3HU0TFBgWWboAZ30UHg==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/xmlchars": {
++      "version": "2.2.0",
++      "resolved": "https://registry.npmjs.org/xmlchars/-/xmlchars-2.2.0.tgz",
++      "integrity": "sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/yallist": {
+       "version": "3.1.1",
+       "resolved": "https://registry.npmjs.org/yallist/-/yallist-3.1.1.tgz",
+diff --git a/package.json b/package.json
+index 4a3779047797b2b6111f455839d6179455d4428a..ca3a38a4e39328cc9337b909b54d9c1b052ba272 100644
+--- a/package.json
++++ b/package.json
+@@ -7,7 +7,12 @@
+     "dev": "vite",
+     "build": "tsc -b && vite build",
+     "lint": "eslint .",
+-    "preview": "vite preview"
++    "preview": "vite preview",
++    "test": "vitest run --environment jsdom",
++    "test:bootstrap": "node scripts/test-bootstrap.mjs",
++    "verify": "node scripts/verify.mjs",
++    "inspect": "node scripts/inspect-presentation.mjs",
++    "test:verification": "node scripts/test-verification.mjs"
+   },
+   "dependencies": {
+     "lucide-react": "^1.17.0",
+@@ -17,6 +22,7 @@
+   },
+   "devDependencies": {
+     "@eslint/js": "^10.0.1",
++    "@testing-library/react": "^16.3.3",
+     "@types/node": "^24.12.3",
+     "@types/react": "^19.2.14",
+     "@types/react-dom": "^19.2.3",
+@@ -25,8 +31,11 @@
+     "eslint-plugin-react-hooks": "^7.1.1",
+     "eslint-plugin-react-refresh": "^0.5.2",
+     "globals": "^17.6.0",
++    "jsdom": "^30.1.1",
+     "typescript": "~6.0.2",
+     "typescript-eslint": "^8.59.2",
+-    "vite": "^8.0.12"
++    "vite": "^8.0.12",
++    "vitest": "^5.0.3",
++    "playwright": "^1.58.2"
+   }
+ }
+diff --git a/scripts/inspect-presentation.mjs b/scripts/inspect-presentation.mjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..0112dd9163997f731e07c06f922f946ce44fc4b8
+--- /dev/null
++++ b/scripts/inspect-presentation.mjs
+@@ -0,0 +1,129 @@
++import { spawn } from 'node:child_process'
++import { createServer } from 'node:net'
++import { mkdir } from 'node:fs/promises'
++import path from 'node:path'
++import { setTimeout as delay } from 'node:timers/promises'
++import { chromium } from 'playwright'
++
++const slug = process.argv[2]
++const args = process.argv.slice(3)
++const option = (name, fallback) => args.includes(name) ? args[args.indexOf(name) + 1] : fallback
++for (let index = 0; index < args.length; index += 2) {
++  if (!['--url', '--settle'].includes(args[index]) || !args[index + 1] || args[index + 1].startsWith('--')) {
++    console.error('Options are [--url <base-url>] [--settle <ms>]')
++    process.exit(2)
++  }
++}
++if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
++  console.error('Usage: npm run inspect -- <presentation-slug> [--url <base-url>] [--settle <ms>]')
++  process.exit(2)
++}
++// Motion nodes enter with a 650 ms delay and 350 ms animation; this adds review time after motion settles.
++const settleMs = Number(option('--settle', process.env.INSPECT_SETTLE_MS ?? '1400'))
++if (!Number.isFinite(settleMs) || settleMs < 0) {
++  console.error('--settle must be a non-negative number of milliseconds')
++  process.exit(2)
++}
++const suppliedUrl = option('--url')
++const baseUrl = suppliedUrl?.replace(/\/$/, '')
++const outputDir = path.resolve('artifacts/presentation-inspection', slug)
++const run = (command, args) => new Promise((resolve, reject) => {
++  const child = spawn(command, args, { stdio: 'inherit', shell: process.platform === 'win32' })
++  child.once('error', reject)
++  child.once('exit', (code) => code === 0 ? resolve() : reject(new Error(`${command} ${args.join(' ')} exited ${code}`)))
++})
++const reservePort = () => new Promise((resolve, reject) => {
++  const server = createServer()
++  server.once('error', reject)
++  server.listen(0, '127.0.0.1', () => {
++    const address = server.address()
++    if (!address || typeof address === 'string') return reject(new Error('Could not reserve an IPv4 preview port'))
++    server.close((error) => error ? reject(error) : resolve(address.port))
++  })
++})
++
++let preview
++let browser
++try {
++  if (!baseUrl) await run('npm', ['run', 'build'])
++  await mkdir(outputDir, { recursive: true })
++  let url = baseUrl
++  if (!url) {
++    const port = await reservePort()
++    url = `http://127.0.0.1:${port}`
++    let startupOutput = ''
++    let startupError
++    preview = spawn(process.execPath, [path.resolve('node_modules/vite/bin/vite.js'), 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], { stdio: ['ignore', 'ignore', 'pipe'] })
++    preview.on('error', (error) => { startupError = error })
++    preview.stderr.setEncoding('utf8').on('data', (chunk) => { startupOutput += chunk })
++    for (let attempt = 0; attempt < 60; attempt++) {
++      if (startupError || preview.exitCode !== null) throw new Error(`Preview failed to start: ${startupError?.message ?? startupOutput}`)
++      try { if ((await fetch(url)).ok) break } catch {}
++      if (attempt === 59) throw new Error(`Preview did not become ready at ${url}: ${startupOutput}`)
++      await delay(250)
++    }
++  }
++
++  browser = await chromium.launch({ headless: true })
++  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 })
++  await page.goto(`${url}/${encodeURIComponent(slug)}`, { waitUntil: 'networkidle' })
++  const count = Number(await page.locator('[data-step-count]').getAttribute('data-step-count'))
++  if (!Number.isInteger(count) || count < 1) throw new Error(`/${slug} does not expose a positive data-step-count`)
++  for (let index = 0; index < count; index++) {
++    await page.waitForFunction((expected) => Number(document.querySelector('[data-step-index]')?.getAttribute('data-step-index')) === expected, index, { timeout: 5000 })
++    try {
++      await page.waitForFunction(() => document.getAnimations().every((animation) => animation.effect?.getComputedTiming().iterations === Infinity || animation.playState === 'finished' || animation.playState === 'idle'), undefined, { timeout: 10000 })
++    } catch {
++      console.warn(`WARN step ${index + 1}/${count}: animations did not fully settle before the 10 second limit`)
++    }
++    await page.waitForTimeout(settleMs)
++    const warnings = await page.evaluate(() => {
++      const visible = (element) => {
++        const rect = element.getBoundingClientRect()
++        const style = getComputedStyle(element)
++        return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) > 0.1
++      }
++      const allow = (element) => element.closest('[data-presentation-allow-overlap]') !== null
++      const candidates = [...document.querySelectorAll('h1,h2,h3,p,a,button,[data-presentation-title],[data-presentation-attribution],[data-presentation-toc-item],[data-presentation-step]')]
++        .filter((element) => visible(element) && (element.textContent?.trim() || element.matches('button')) && !allow(element))
++      const overlaps = []
++      for (let i = 0; i < candidates.length; i++) for (let j = i + 1; j < candidates.length; j++) {
++        const a = candidates[i].getBoundingClientRect(), b = candidates[j].getBoundingClientRect()
++        const area = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top))
++        // Ignore incidental edge contact and sub-four-pixel intersections.
++        if (area > 16 && !candidates[i].contains(candidates[j]) && !candidates[j].contains(candidates[i])) overlaps.push(`“${candidates[i].textContent.trim().slice(0, 36)}” / “${candidates[j].textContent.trim().slice(0, 36)}”`)
++      }
++      const diagnostics = []
++      if (overlaps.length) diagnostics.push(`overlap: ${[...new Set(overlaps)].slice(0, 4).join('; ')}`)
++      const compare = (selector) => {
++        const controls = [...document.querySelectorAll(selector)].filter(visible)
++        const active = controls.find((item) => item.getAttribute('data-presentation-active') === 'true')
++        const inactive = controls.find((item) => item.getAttribute('data-presentation-active') === 'false')
++        if (!active || !inactive) return
++        const a = getComputedStyle(active), b = getComputedStyle(inactive)
++        const distinct = a.color !== b.color || a.backgroundColor !== b.backgroundColor || a.borderColor !== b.borderColor || a.fontWeight !== b.fontWeight || active.getBoundingClientRect().width !== inactive.getBoundingClientRect().width
++        if (!distinct) diagnostics.push(`active navigation: ${selector} active state resembles inactive state`)
++      }
++      compare('[data-presentation-step]')
++      compare('[data-presentation-toc-item]')
++      const attribution = document.querySelector('[data-presentation-attribution]')
++      if (!attribution || !visible(attribution)) diagnostics.push('attribution: missing or not visible; style [data-presentation-attribution]')
++      else {
++        const style = getComputedStyle(attribution)
++        const link = attribution.querySelector('a')
++        if (parseFloat(style.fontSize) < 12 || style.fontFamily.includes('Times') || (link && getComputedStyle(link).color === 'rgb(0, 0, 238)')) diagnostics.push('attribution: browser-default or undersized; style [data-presentation-attribution]')
++      }
++      return diagnostics
++    })
++    for (const warning of warnings) console.warn(`WARN step ${index + 1}/${count}: ${warning}`)
++    await page.screenshot({ path: path.join(outputDir, `step-${String(index + 1).padStart(2, '0')}.png`), fullPage: true })
++    if (index < count - 1) await page.keyboard.press('ArrowRight')
++  }
++  console.log(`Captured ${count} settled steps at ${outputDir}`)
++} catch (error) {
++  console.error(`Inspection failed for /${slug}: ${error.message}`)
++  process.exitCode = 1
++} finally {
++  await browser?.close()
++  if (preview && preview.exitCode === null) { preview.kill('SIGTERM'); await delay(200) }
++}
+diff --git a/scripts/test-bootstrap.mjs b/scripts/test-bootstrap.mjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..56a53018e1e85510c49e0049e6682e66d04aefac
+--- /dev/null
++++ b/scripts/test-bootstrap.mjs
+@@ -0,0 +1,77 @@
++import { cp, mkdtemp, readFile, readdir, rm, writeFile, mkdir, stat } from 'node:fs/promises'
++import os from 'node:os'
++import path from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { spawnSync } from 'node:child_process'
++
++const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
++const templateRoot = path.join(repositoryRoot, 'skills/presentation/templates/bootstrap')
++const canonicalKit = path.join(repositoryRoot, 'src/presentation-kit')
++const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'and-scene-bootstrap-'))
++const run = (command, args, cwd) => {
++  const result = spawnSync(command, args, { cwd, stdio: 'inherit', shell: process.platform === 'win32' })
++  if (result.error) throw result.error
++  if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} failed with ${result.status}`)
++}
++const walk = async (directory) => {
++  const files = []
++  for (const entry of await readdir(directory, { withFileTypes: true })) {
++    const fullPath = path.join(directory, entry.name)
++    if (entry.isDirectory()) files.push(...await walk(fullPath))
++    else files.push(fullPath)
++  }
++  return files
++}
++
++try {
++  const canonicalFiles = await walk(canonicalKit)
++  const templateKit = path.join(templateRoot, 'src/presentation-kit')
++  const templateFiles = await walk(templateKit)
++  const canonicalPaths = canonicalFiles.map((file) => path.relative(canonicalKit, file)).sort()
++  const templatePaths = templateFiles.map((file) => path.relative(templateKit, file)).sort()
++  if (JSON.stringify(canonicalPaths) !== JSON.stringify(templatePaths)) throw new Error(`scene-kit template file set differs: canonical=${canonicalPaths.join(',')} snapshot=${templatePaths.join(',')}`)
++  for (const source of canonicalFiles) {
++    const relative = path.relative(canonicalKit, source)
++    const snapshot = path.join(templateRoot, 'src/presentation-kit', relative)
++    if ((await readFile(source)).compare(await readFile(snapshot)) !== 0) throw new Error(`scene-kit template drift: ${relative}`)
++  }
++  const manifest = JSON.parse(await readFile(path.join(templateRoot, 'package.json'), 'utf8'))
++  const dependencies = { ...manifest.dependencies, ...manifest.devDependencies }
++  const required = ['react', 'react-dom', 'motion', 'lucide-react', 'vite', '@vitejs/plugin-react', 'typescript', '@types/react', '@types/react-dom', '@types/node', 'eslint', '@eslint/js', 'globals', 'typescript-eslint', 'eslint-plugin-react-hooks', 'eslint-plugin-react-refresh', 'playwright']
++  for (const dependency of required) if (!dependencies[dependency]) throw new Error(`bootstrap missing required dependency: ${dependency}`)
++  if (dependencies.tailwindcss || dependencies['@tailwindcss/vite']) throw new Error('bootstrap must not require Tailwind')
++
++  await cp(templateRoot, tempRoot, { recursive: true })
++  const appManifest = path.join(tempRoot, 'package.json')
++  const json = JSON.parse(await readFile(appManifest, 'utf8'))
++  json.name = 'and-scene-bootstrap-contract'
++  await writeFile(appManifest, `${JSON.stringify(json, null, 2)}\n`)
++  const fixtureDir = path.join(tempRoot, 'src/presentations/bootstrap-contract')
++  await mkdir(fixtureDir, { recursive: true })
++  await writeFile(path.join(fixtureDir, 'Talk.tsx'), `import { Presentation, type SceneProps, type Step } from '../../presentation-kit'\nimport './fixture.css'\nfunction Scene({ index }: SceneProps<null>) { return <div className="fixture-scene"><p className="collision-a">Collision A</p><p className="collision-b">Collision B</p><div className="allowed" data-presentation-allow-overlap><p>Allowed A</p><p>Allowed B</p></div><span>Step {index + 1}</span></div> }\nconst steps: Step<null>[] = [1, 2].map((n) => ({ id: 'fixture:' + n, era: 'Fixture ' + n, title: 'Bootstrap smoke ' + n, caption: 'The materialized route works.', Scene, payload: null }))\nexport default function Talk() { return <Presentation steps={steps} title="Bootstrap contract" /> }\n`)
++  await writeFile(path.join(fixtureDir, 'fixture.css'), `.fixture-scene { position: relative; height: 100%; } .fixture-scene p { position: absolute; margin: 0; } .collision-a, .collision-b { left: 20px; top: 20px; } .allowed { position: absolute; left: 200px; top: 20px; } .allowed p { left: 0; top: 0; } .allowed p + p { left: 0; top: 0; }`)
++  await writeFile(path.join(tempRoot, 'src/presentations/index.ts'), `export interface PresentationRegistration { slug: string; title: string; load: () => Promise<{ default: React.ComponentType }> }\nexport const presentations: PresentationRegistration[] = [{ slug: 'bootstrap-contract', title: 'Bootstrap contract', load: () => import('./bootstrap-contract/Talk') }]\n`)
++  run('npm', ['install', '--prefer-offline', '--no-audit', '--no-fund'], tempRoot)
++  run('npx', ['playwright', 'install', 'chromium'], tempRoot)
++  run('npm', ['run', 'build'], tempRoot)
++  const missingSlug = spawnSync(process.execPath, ['scripts/verify.mjs'], { cwd: tempRoot, encoding: 'utf8' })
++  const missingSlugOutput = `${missingSlug.stdout ?? ''}${missingSlug.stderr ?? ''}`
++  if (missingSlug.status !== 2 || !missingSlugOutput.includes('Usage: npm run verify -- <presentation-slug>')) {
++    throw new Error(`verification without a slug should exit with usage status 2: ${missingSlugOutput}`)
++  }
++  run('npm', ['run', 'verify', '--', 'bootstrap-contract'], tempRoot)
++  const inspection = spawnSync('npm', ['run', 'inspect', '--', 'bootstrap-contract', '--settle', '40'], { cwd: tempRoot, encoding: 'utf8' })
++  const inspectionOutput = `${inspection.stdout ?? ''}${inspection.stderr ?? ''}`
++  if (inspection.status !== 0) throw new Error(`inspection failed with ${inspection.status}: ${inspectionOutput}`)
++  if (!/WARN step 1\/2: overlap: .*Collision A.*Collision B/s.test(inspectionOutput)) throw new Error(`inspection did not report the unmarked collision: ${inspectionOutput}`)
++  if (!/WARN step 1\/2: active navigation: .*resembles inactive state/.test(inspectionOutput)) throw new Error(`inspection did not report indistinct active navigation: ${inspectionOutput}`)
++  if (!/WARN step 1\/2: attribution: .*browser-default or undersized/.test(inspectionOutput)) throw new Error(`inspection did not report unpolished attribution: ${inspectionOutput}`)
++  if (/overlap: .*Allowed A.*Allowed B/s.test(inspectionOutput)) throw new Error('inspection reported an explicitly allowed overlap')
++  for (const name of ['step-01.png', 'step-02.png']) await stat(path.join(tempRoot, 'artifacts/presentation-inspection/bootstrap-contract', name))
++  console.log('PASS: materialized bootstrap built, rendered, and captured a route screenshot in an isolated directory')
++} catch (error) {
++  console.error(`FAIL: ${error.message}`)
++  process.exitCode = 1
++} finally {
++  await rm(tempRoot, { recursive: true, force: true })
++}
+diff --git a/scripts/test-verification.mjs b/scripts/test-verification.mjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..ab11b359a811b7e24ff22dcfd8fd76eac4b20809
+--- /dev/null
++++ b/scripts/test-verification.mjs
+@@ -0,0 +1,44 @@
++import { cp, mkdir, mkdtemp, readFile, rm, writeFile, symlink } from 'node:fs/promises'
++import { spawnSync } from 'node:child_process'
++import os from 'node:os'
++import path from 'node:path'
++
++const root = process.cwd()
++const temp = await mkdtemp(path.join(os.tmpdir(), 'and-scene-verification-'))
++const files = ['package.json', 'package-lock.json', 'index.html', 'vite.config.ts', 'tsconfig.json', 'tsconfig.app.json', 'tsconfig.node.json', 'src', 'scripts', 'node_modules']
++const copyCase = async (name) => {
++  const directory = path.join(temp, name)
++  await mkdir(directory)
++  for (const entry of files) {
++    if (entry === 'node_modules') await symlink(path.join(root, entry), path.join(directory, entry), 'dir')
++    else await cp(path.join(root, entry), path.join(directory, entry), { recursive: true })
++  }
++  return directory
++}
++const runCase = (name, mutate, expected) => {
++  return (async () => {
++    const directory = await copyCase(name)
++    await mutate(directory)
++    const result = spawnSync(process.execPath, ['scripts/verify.mjs'], { cwd: directory, encoding: 'utf8', timeout: 120_000 })
++    const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
++    if (result.status === 0) throw new Error(`${name}: verification unexpectedly passed\n${output}`)
++    if (!expected.test(output)) throw new Error(`${name}: failure was not actionable (exit ${result.status})\n${output}`)
++  })()
++}
++const update = async (directory, relative, transform) => {
++  const file = path.join(directory, relative)
++  await writeFile(file, transform(await readFile(file, 'utf8')))
++}
++
++try {
++  await runCase('build-failure', (directory) => update(directory, 'src/presentations/how-to-make-a-presentation/steps.tsx', (text) => `${text}\nconst broken: = true\n`), /FAIL during build and sample contract: .*build.*exited/si)
++  await runCase('sample-order', (directory) => update(directory, 'src/presentations/how-to-make-a-presentation/steps.tsx', (text) => text.replace('You have a topic', 'Topic missing')), /Sample contract failed: missing or out-of-order step/)
++  await runCase('browser-error', (directory) => update(directory, 'src/presentations/how-to-make-a-presentation/Scene.tsx', (text) => text.replace('return <div className="sample-scene">', 'if (index === 2) throw new Error("injected browser fault")\n  return <div className="sample-scene">')), /FAIL during step 3\/9: \[step 3\/9\] (?:console error|page error): .*injected browser fault/s)
++  await runCase('transition-failure', (directory) => update(directory, 'src/presentation-kit/usePresentationNav.ts', (text) => text.replace('const next = useCallback(() => goTo(index + 1), [goTo, index])', 'const next = useCallback(() => undefined, [])')), /FAIL during step 2\/9: .*Timeout/si)
++  console.log('PASS: isolated build, sample-contract, browser-error, and transition faults fail with actionable reports')
++} catch (error) {
++  console.error(`FAIL: ${error.message}`)
++  process.exitCode = 1
++} finally {
++  await rm(temp, { recursive: true, force: true })
++}
+diff --git a/scripts/verify.mjs b/scripts/verify.mjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..0d2ff0e63fb28246062bd100057aabd8989700a5
+--- /dev/null
++++ b/scripts/verify.mjs
+@@ -0,0 +1,123 @@
++import { spawn } from 'node:child_process'
++import { createServer } from 'node:net'
++import { readFile } from 'node:fs/promises'
++import path from 'node:path'
++import { setTimeout as delay } from 'node:timers/promises'
++import { chromium } from 'playwright'
++
++const referenceSlug = 'how-to-make-a-presentation'
++const slug = process.argv[2] ?? referenceSlug
++const title = 'How to Use This Skill to Make a Presentation'
++if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
++  console.error('Usage: npm run verify -- <presentation-slug>')
++  process.exit(2)
++}
++const outline = [
++  ['the ask', 'You have a topic', 'It starts with you, a topic, and mild overconfidence.'],
++  ['the ask', 'The skill interviews you', 'One question at a time: the topic, the look, then each beat of the story.'],
++  ['the gathering', 'Answers become steps', 'Each answer lands as a step card — title, caption, visual — plus what morphs from one step into the next.'],
++  ['the gathering', 'The deck grows', 'Same shapes, new beats. Every answer extends the story without redrawing it.'],
++  ['the gathering', 'You set the depth', 'Spell out every step, or sketch a few and see how it looks. You hold the gate.'],
++  ['the build', 'It assembles the scene', 'Your steps are wired into one evolving scene, drawn with a shared scene kit — ready-made boxes, arrows, and motion that make entities morph.'],
++  ['the build', 'It checks its own work', 'Before saying done, it builds and renders every step — and fixes what breaks.'],
++  ['the loop', 'Changed your mind? Loop it.', 'Point at a step and ask. The skill edits the scene in place — nothing is redrawn from scratch.'],
++  ['the reveal', "You're looking at one", 'This presentation was built exactly this way. Thanks for watching.'],
++]
++
++function run(command, args) {
++  return new Promise((resolve, reject) => {
++    const child = spawn(command, args, { stdio: 'inherit', shell: process.platform === 'win32' })
++    child.once('error', reject)
++    child.once('exit', (code) => code === 0 ? resolve() : reject(new Error(`${command} ${args.join(' ')} exited with ${code}`)))
++  })
++}
++function reservePort() {
++  return new Promise((resolve, reject) => {
++    const server = createServer()
++    server.once('error', reject)
++    server.listen(0, '127.0.0.1', () => {
++      const address = server.address()
++      if (!address || typeof address === 'string') return reject(new Error('Could not reserve an IPv4 preview port'))
++      server.close((error) => error ? reject(error) : resolve(address.port))
++    })
++  })
++}
++
++let preview
++let browser
++let activeStep = 'build and sample contract'
++try {
++  await run('npm', ['run', 'build'])
++  const [registry, talk] = await Promise.all([
++    readFile('src/presentations/index.ts', 'utf8'),
++    readFile(`src/presentations/${slug}/Talk.tsx`, 'utf8'),
++  ])
++  const source = await readFile(`src/presentations/${slug}/steps.tsx`, 'utf8').catch(() => '')
++  if (!registry.includes(`slug: '${slug}'`) || !registry.includes(`import('./${slug}/Talk')`) || (slug === referenceSlug && !registry.includes(title))) throw new Error(`Sample contract failed: ${slug} is not registered with the expected title`)
++  if (slug === referenceSlug && !talk.includes('<Presentation steps={STEPS}')) throw new Error('Sample contract failed: presentation entry does not render STEPS')
++  if (slug === referenceSlug) {
++    if (!source) throw new Error('Sample contract failed: reference steps file is missing')
++    let previous = -1
++    for (const [era, stepTitle, caption] of outline) {
++      const eraIndex = source.indexOf(era, previous + 1)
++      const titleIndex = source.indexOf(stepTitle, eraIndex + 1)
++      const captionIndex = source.indexOf(caption, titleIndex + 1)
++      if (eraIndex < 0 || titleIndex < 0 || captionIndex < 0) throw new Error(`Sample contract failed: missing or out-of-order step “${stepTitle}” (${era})`)
++      previous = captionIndex
++    }
++  }
++
++  const port = await reservePort()
++  const url = `http://127.0.0.1:${port}`
++  let startupOutput = ''
++  let startupError
++  preview = spawn(process.execPath, [path.resolve('node_modules/vite/bin/vite.js'), 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], { stdio: ['ignore', 'ignore', 'pipe'] })
++  preview.on('error', (error) => { startupError = error })
++  preview.stderr.setEncoding('utf8').on('data', (chunk) => { startupOutput += chunk })
++  let ready = false
++  for (let attempt = 0; attempt < 60; attempt++) {
++    if (startupError || preview.exitCode !== null) throw new Error(`Preview startup failed: ${startupError?.message ?? startupOutput}`)
++    try { if ((await fetch(url)).ok) { ready = true; break } } catch {}
++    await delay(250)
++  }
++  if (!ready) throw new Error(`Preview readiness check failed at ${url}: ${startupOutput}`)
++
++  browser = await chromium.launch({ headless: true })
++  const page = await browser.newPage()
++  const errors = []
++  page.on('console', (message) => { if (message.type() === 'error') errors.push(`[${activeStep}] console error: ${message.text()}`) })
++  page.on('pageerror', (error) => errors.push(`[${activeStep}] page error: ${error.message}`))
++  await page.goto(`${url}/${encodeURIComponent(slug)}`, { waitUntil: 'networkidle' })
++  const root = page.locator('[data-step-count]')
++  const count = Number(await root.getAttribute('data-step-count'))
++  if (!Number.isInteger(count) || count < 1) throw new Error(`Render check failed: route /${slug} exposed invalid data-step-count ${count}`)
++  if (slug === referenceSlug && count !== outline.length) throw new Error(`Render check failed: expected ${outline.length} steps, found ${count}`)
++  const waitForIndex = async (expected) => {
++    try {
++      await page.waitForFunction((value) => Number(document.querySelector('[data-step-index]')?.getAttribute('data-step-index')) === value, expected, { timeout: 5000 })
++    } catch (error) {
++      if (errors.length) throw new Error(errors.join('\n'))
++      throw new Error(`failed to reach ${activeStep}: ${error.message}`)
++    }
++  }
++  for (let index = 0; index < count; index++) {
++    activeStep = `step ${index + 1}/${count}`
++    await waitForIndex(index)
++    if (errors.length) throw new Error(errors.join('\n'))
++    if (index < count - 1) {
++      activeStep = `step ${index + 2}/${count}`
++      await page.keyboard.press('ArrowRight')
++      await waitForIndex(index + 1)
++    }
++  }
++  if (errors.length) throw new Error(errors.join('\n'))
++  await browser.close()
++  browser = undefined
++  console.log(`PASS: reference sample registered and rendered all ${count} steps at ${url}/${slug}`)
++} catch (error) {
++  console.error(`FAIL during ${activeStep}: ${error.message}`)
++  process.exitCode = 1
++} finally {
++  await browser?.close()
++  if (preview && preview.exitCode === null) { preview.kill('SIGTERM'); await delay(200) }
++}
+diff --git a/skills/presentation/SKILL.md b/skills/presentation/SKILL.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..7784fc831f260d20de69b6e8adff825854fc93f0
+--- /dev/null
++++ b/skills/presentation/SKILL.md
+@@ -0,0 +1,79 @@
++---
++name: presentation
++description: Creates or modifies browser presentations as one evolving diagram using the local scene kit. Use when the user asks to "make a presentation", "build a talk", "create slides", "add a step or beat", or "edit my presentation", or mentions scene kit, beats, or a presentation slug.
++---
++
++# Create or modify browser presentations
++
++Build one scene that changes through named beats. Reuse the scene kit for behavior; put visual choices in presentation-owned CSS.
++
++## Template map
++
++- `templates/bootstrap/`: self-contained app, canonical kit snapshot, registry, and local verification/inspection scripts.
++- `templates/presentation/`: presentation entry, styles, entity namespace, and starter step list.
++- `templates/step/`: a step scene component starter.
++
++Replace every `{{...}}` placeholder: `{{APP_NAME}}` is the lowercase package name; `{{SLUG}}` is the route/entity namespace; `{{SLUG_CLASS}}` is a CSS-safe class based on the slug; `{{PRESENTATION_TITLE}}` is the presentation title; `{{SECTION}}` is the step's era; `{{STEP_TITLE}}` and `{{STEP_CAPTION}}` are that beat's narration. Replace example IDs and visuals with the gathered content.
++
++Read `references/scaffolding.md` for exact anchor contracts and the complete dependency list.
++
++## Out of scope
++
++This skill creates and modifies browser presentations. It does not export PPTX, PDF, or Google Slides; host or deploy a presentation; or change the reusable scene kit's behavior or visual defaults. Keep requested styling frameworks in the host or presentation, never in the kit. Route kit changes to a separate scene-kit task.
++
++## 1. Identify the request and gather details
++
++Decide whether the request is to create a presentation or modify one. Use details already supplied. For a new presentation, gather the topic, visual direction, and each beat's narration/content and intended visual change, asking one concise question at a time. Stop when the beats are described or the user chooses to proceed with partial details. Do not invent missing details. A complete prompt needs no follow-up.
++
++Summarize captured beats in this compact form when useful:
++
++```text
++1. [section] Beat title — what the viewer sees; what changes from the prior beat
++```
++
++For a key or complex layout, an ASCII sketch can confirm arrangement; use it selectively.
++
++For modifications, first identify the target. If the name or slug is missing or ambiguous, list registered presentations and ask which one. Then ask only about the requested edits. Do not repeat the creation interview or alter unrelated presentations.
++
++## 2. Resolve the app and scaffold
++
++1. **Resolve the target.** Work in the user's current project. An empty directory or standalone app uses its root. A monorepo (workspace declaration, `pnpm-workspace.yaml`, or a `packages/` / `apps/` layout) gets a self-contained app in `presentations/`. If already inside an app, use it. In a non-empty unscaffolded target, state the proposed location and wait for confirmation before writing. Resolve this skill's directory from this `SKILL.md`; template paths are relative to it, never to the shell's current directory.
++
++2. **Inspect anchors.** Check the target app for these three contracts; equivalent filenames, formatting, and extra dependencies are fine. A monorepo root's build setup does not count as the self-contained app's build anchor.
++
++3. **Scaffold missing contracts.** Reuse all present anchors. For a full scaffold, copy `templates/bootstrap/` into the resolved app root. For a partial scaffold, copy only missing infrastructure and compatible support files, merging deliberately without overwriting host files. The scene kit includes a generic `Step`/`Scene` contract, fixed-canvas active-step host with entity morph support, present/browse navigation and caption/contents chrome, and fit scaling. The index maps multiple slugs to independently loadable routes.
++
++4. **Install and check dependencies.** Do not assume required packages are globally available. The bootstrap's dependency list is in `references/scaffolding.md`; add the full set when scaffolding. Do not add Tailwind or another styling framework unless the host already uses it or the user requests it.
++
++The kit may define canvas and chrome geometry and behavior, but no palette, typeface, spacing system, border, shadow, card/button treatment, theme token, or CSS framework. Use presentation-owned plain CSS by default.
++
++## 3. Create or modify
++
++For a new presentation:
++
++1. Read the registry and one existing presentation's steps, entities, and CSS; match their names and structure. In this repository, see `src/presentations/how-to-make-a-presentation/` when it exists.
++2. Choose a URL-safe unique slug and create `src/presentations/<slug>/` (or equivalent) as a self-contained presentation. Keep entities and stable `layoutId` values namespaced to it.
++3. Create step data/components with stable IDs, era/section, one-line title, browse caption, and scene state. Derive numbering from array order. Use a shared `groupKey` and scene component for successive states; preserve continuing identity/position, delay newcomers until continuing motion settles, and exit departing entities. Do not redraw the scene as unrelated slides.
++4. Design in presentation-owned files. Keep captions useful, controls navigable, text readable, and content clear of chrome. Distinguish active progress/contents and style attribution through its hook.
++5. Add one explicit registry entry and ensure the route is reachable. Preserve existing entries and routes.
++
++For a modification, edit only the selected presentation and the minimum registry/host files required by the request. Preserve other presentation directories, registry entries, and behavior. Ask only for the requested visual/content decisions.
++
++## 4. Build, render, and inspect
++
++Run the app's build and fix all type/build failures. Then render the route in a real browser and check for runtime and console errors. Use the project's `npm run verify` if it checks that route; otherwise use its local render check or launch its preview and inspect the route. At minimum inspect the first step. Before completion, visually inspect settled views of the first, last, and densest/key step; check a narrow viewport when layout is responsive-sensitive. Use the project-local screenshot helper when available (`npm run inspect -- <slug>` in the bootstrap); it keeps Playwright local, waits for motion, and reports advisory collisions and chrome polish issues. Otherwise put any temporary Playwright helper under the app root.
++
++Review every warning. Fix accidental text/chrome collisions and indistinct active state, and style attribution. Mark an overlap with `data-presentation-allow-overlap` only when intentional and readable. Re-run checks after fixes. The densest step is the beat with the most visible entities or the most crowded chrome/content arrangement.
++
++Do not report success if build/render fails or key content is visibly broken. Keep `templates/bootstrap/src/presentation-kit/` aligned with the canonical kit; never place topic-specific visuals there.
++
++Use this completion format:
++
++```text
++Route: /<slug>
++Files changed: <paths>
++Build: pass/fail
++Render: pass/fail; <steps checked>
++Visual inspection: <step numbers and viewport sizes>
++Warnings: <resolved items or remaining advisory warnings>
++```
+diff --git a/skills/presentation/references/scaffolding.md b/skills/presentation/references/scaffolding.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..37b5220093c747304a52c5864251ad52bf182152
+--- /dev/null
++++ b/skills/presentation/references/scaffolding.md
+@@ -0,0 +1,32 @@
++# Scaffold contracts
++
++## Contract anchors
++
++Inspect behavior, not filenames:
++
++- **Build setup:** Vite + React + TypeScript with a working `npm run build`.
++- **Scene kit:** generic `Step`/`Scene` types, fixed-canvas active-step host and entity morphs, present/browse navigation, caption/contents chrome, and fit scaling.
++- **Presentation index:** explicit or equivalent registry from unique slugs to separately loadable routes.
++
++Scaffold only missing anchors. In a monorepo, resolve a self-contained `presentations/` app first; root build files do not satisfy that app's build anchor. Preserve unrelated files and existing presentations. If the target is non-empty and unscaffolded, state the target and wait for confirmation before writes.
++
++## Bootstrap dependencies
++
++When scaffolding, install the whole set rather than assuming packages are globally available.
++
++- Runtime: `react`, `react-dom`, `motion`, `lucide-react`.
++- Build and types: `vite`, `@vitejs/plugin-react`, `typescript`, `@types/react`, `@types/react-dom`, `@types/node`.
++- Lint: `eslint`, `@eslint/js`, `globals`, `typescript-eslint`, `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`.
++- Browser verification: `playwright`.
++
++Use the host package manager. For the supplied bootstrap, run `npm install`. If Playwright cannot find Chromium, run `npx playwright install chromium` from the app directory. Do not add Tailwind or another framework unless the host already uses it or the user asks for it.
++
++## Template locations and styling
++
++Resolve the skill directory from this skill's `SKILL.md`, then copy its `templates/` content from there. Never build template paths from the shell's current working directory.
++
++The kit owns behavior, stable hooks, and canvas/chrome geometry. It has no visual defaults: no colors, fonts, spacing scale, borders, shadows, card/button treatments, theme tokens, or styling-framework dependency. Presentation-owned plain CSS is the default. Scaffold host landing/layout CSS may provide structural positioning, but visual choices for a presentation belong in that presentation or its host.
++
++The bootstrap includes `npm run verify -- <slug>` for production build and all-step Chromium rendering. Unlike this repository's no-argument root verifier, the scaffold verifier requires a slug and checks the generic registered-route contract; the root verifier also checks the canonical nine-step reference outline.
++
++Use `npm run inspect -- <slug>` to build a production preview, capture settled screenshots, and report advisory visual diagnostics. Inspection writes beneath `artifacts/presentation-inspection/<slug>/`. Pass `--url <base-url>` to inspect an already-running server without building, or `--settle <ms>` to choose the additional wait after motion finishes. The default 1400 ms gives screenshots time to settle after entrance motion. Overlap checks require at least 16 px² of intersection to ignore touching edges and subpixel collisions. Keep kit files in `templates/bootstrap/src/presentation-kit/` byte-aligned with the canonical kit when updating either copy.
+diff --git a/skills/presentation/templates/bootstrap/eslint.config.js b/skills/presentation/templates/bootstrap/eslint.config.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..ef614d25c11dd1e89a8df0b2eaf934170b44daa8
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/eslint.config.js
+@@ -0,0 +1,22 @@
++import js from '@eslint/js'
++import globals from 'globals'
++import reactHooks from 'eslint-plugin-react-hooks'
++import reactRefresh from 'eslint-plugin-react-refresh'
++import tseslint from 'typescript-eslint'
++import { defineConfig, globalIgnores } from 'eslint/config'
++
++export default defineConfig([
++  globalIgnores(['dist']),
++  {
++    files: ['**/*.{ts,tsx}'],
++    extends: [
++      js.configs.recommended,
++      tseslint.configs.recommended,
++      reactHooks.configs.flat.recommended,
++      reactRefresh.configs.vite,
++    ],
++    languageOptions: {
++      globals: globals.browser,
++    },
++  },
++])
+diff --git a/skills/presentation/templates/bootstrap/index.html b/skills/presentation/templates/bootstrap/index.html
+new file mode 100644
+index 0000000000000000000000000000000000000000..a74fcc2b0023f02f4e935265a72c10e8e395843e
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/index.html
+@@ -0,0 +1,13 @@
++<!doctype html>
++<html lang="en">
++  <head>
++    <meta charset="UTF-8" />
++    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
++    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
++    <title>and-scene</title>
++  </head>
++  <body>
++    <div id="root"></div>
++    <script type="module" src="/src/main.tsx"></script>
++  </body>
++</html>
+diff --git a/skills/presentation/templates/bootstrap/package.json b/skills/presentation/templates/bootstrap/package.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..138f444f718671d1fe7c49babb54ebfc9d15d1f3
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/package.json
+@@ -0,0 +1,35 @@
++{
++  "name": "{{APP_NAME}}",
++  "private": true,
++  "version": "0.0.0",
++  "type": "module",
++  "scripts": {
++    "dev": "vite",
++    "build": "tsc -b && vite build",
++    "lint": "eslint .",
++    "preview": "vite preview --host 127.0.0.1",
++    "verify": "node scripts/verify.mjs",
++    "inspect": "node scripts/inspect-presentation.mjs"
++  },
++  "dependencies": {
++    "lucide-react": "^1.17.0",
++    "motion": "^12.40.0",
++    "react": "^19.2.6",
++    "react-dom": "^19.2.6"
++  },
++  "devDependencies": {
++    "@eslint/js": "^10.0.1",
++    "@types/node": "^24.12.3",
++    "@types/react": "^19.2.14",
++    "@types/react-dom": "^19.2.3",
++    "@vitejs/plugin-react": "^6.0.1",
++    "eslint": "^10.3.0",
++    "eslint-plugin-react-hooks": "^7.1.1",
++    "eslint-plugin-react-refresh": "^0.5.2",
++    "globals": "^17.6.0",
++    "playwright": "^1.58.2",
++    "typescript": "~6.0.2",
++    "typescript-eslint": "^8.59.2",
++    "vite": "^8.0.12"
++  }
++}
+diff --git a/skills/presentation/templates/bootstrap/scripts/inspect-presentation.mjs b/skills/presentation/templates/bootstrap/scripts/inspect-presentation.mjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..0112dd9163997f731e07c06f922f946ce44fc4b8
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/scripts/inspect-presentation.mjs
+@@ -0,0 +1,129 @@
++import { spawn } from 'node:child_process'
++import { createServer } from 'node:net'
++import { mkdir } from 'node:fs/promises'
++import path from 'node:path'
++import { setTimeout as delay } from 'node:timers/promises'
++import { chromium } from 'playwright'
++
++const slug = process.argv[2]
++const args = process.argv.slice(3)
++const option = (name, fallback) => args.includes(name) ? args[args.indexOf(name) + 1] : fallback
++for (let index = 0; index < args.length; index += 2) {
++  if (!['--url', '--settle'].includes(args[index]) || !args[index + 1] || args[index + 1].startsWith('--')) {
++    console.error('Options are [--url <base-url>] [--settle <ms>]')
++    process.exit(2)
++  }
++}
++if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
++  console.error('Usage: npm run inspect -- <presentation-slug> [--url <base-url>] [--settle <ms>]')
++  process.exit(2)
++}
++// Motion nodes enter with a 650 ms delay and 350 ms animation; this adds review time after motion settles.
++const settleMs = Number(option('--settle', process.env.INSPECT_SETTLE_MS ?? '1400'))
++if (!Number.isFinite(settleMs) || settleMs < 0) {
++  console.error('--settle must be a non-negative number of milliseconds')
++  process.exit(2)
++}
++const suppliedUrl = option('--url')
++const baseUrl = suppliedUrl?.replace(/\/$/, '')
++const outputDir = path.resolve('artifacts/presentation-inspection', slug)
++const run = (command, args) => new Promise((resolve, reject) => {
++  const child = spawn(command, args, { stdio: 'inherit', shell: process.platform === 'win32' })
++  child.once('error', reject)
++  child.once('exit', (code) => code === 0 ? resolve() : reject(new Error(`${command} ${args.join(' ')} exited ${code}`)))
++})
++const reservePort = () => new Promise((resolve, reject) => {
++  const server = createServer()
++  server.once('error', reject)
++  server.listen(0, '127.0.0.1', () => {
++    const address = server.address()
++    if (!address || typeof address === 'string') return reject(new Error('Could not reserve an IPv4 preview port'))
++    server.close((error) => error ? reject(error) : resolve(address.port))
++  })
++})
++
++let preview
++let browser
++try {
++  if (!baseUrl) await run('npm', ['run', 'build'])
++  await mkdir(outputDir, { recursive: true })
++  let url = baseUrl
++  if (!url) {
++    const port = await reservePort()
++    url = `http://127.0.0.1:${port}`
++    let startupOutput = ''
++    let startupError
++    preview = spawn(process.execPath, [path.resolve('node_modules/vite/bin/vite.js'), 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], { stdio: ['ignore', 'ignore', 'pipe'] })
++    preview.on('error', (error) => { startupError = error })
++    preview.stderr.setEncoding('utf8').on('data', (chunk) => { startupOutput += chunk })
++    for (let attempt = 0; attempt < 60; attempt++) {
++      if (startupError || preview.exitCode !== null) throw new Error(`Preview failed to start: ${startupError?.message ?? startupOutput}`)
++      try { if ((await fetch(url)).ok) break } catch {}
++      if (attempt === 59) throw new Error(`Preview did not become ready at ${url}: ${startupOutput}`)
++      await delay(250)
++    }
++  }
++
++  browser = await chromium.launch({ headless: true })
++  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 })
++  await page.goto(`${url}/${encodeURIComponent(slug)}`, { waitUntil: 'networkidle' })
++  const count = Number(await page.locator('[data-step-count]').getAttribute('data-step-count'))
++  if (!Number.isInteger(count) || count < 1) throw new Error(`/${slug} does not expose a positive data-step-count`)
++  for (let index = 0; index < count; index++) {
++    await page.waitForFunction((expected) => Number(document.querySelector('[data-step-index]')?.getAttribute('data-step-index')) === expected, index, { timeout: 5000 })
++    try {
++      await page.waitForFunction(() => document.getAnimations().every((animation) => animation.effect?.getComputedTiming().iterations === Infinity || animation.playState === 'finished' || animation.playState === 'idle'), undefined, { timeout: 10000 })
++    } catch {
++      console.warn(`WARN step ${index + 1}/${count}: animations did not fully settle before the 10 second limit`)
++    }
++    await page.waitForTimeout(settleMs)
++    const warnings = await page.evaluate(() => {
++      const visible = (element) => {
++        const rect = element.getBoundingClientRect()
++        const style = getComputedStyle(element)
++        return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) > 0.1
++      }
++      const allow = (element) => element.closest('[data-presentation-allow-overlap]') !== null
++      const candidates = [...document.querySelectorAll('h1,h2,h3,p,a,button,[data-presentation-title],[data-presentation-attribution],[data-presentation-toc-item],[data-presentation-step]')]
++        .filter((element) => visible(element) && (element.textContent?.trim() || element.matches('button')) && !allow(element))
++      const overlaps = []
++      for (let i = 0; i < candidates.length; i++) for (let j = i + 1; j < candidates.length; j++) {
++        const a = candidates[i].getBoundingClientRect(), b = candidates[j].getBoundingClientRect()
++        const area = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top))
++        // Ignore incidental edge contact and sub-four-pixel intersections.
++        if (area > 16 && !candidates[i].contains(candidates[j]) && !candidates[j].contains(candidates[i])) overlaps.push(`“${candidates[i].textContent.trim().slice(0, 36)}” / “${candidates[j].textContent.trim().slice(0, 36)}”`)
++      }
++      const diagnostics = []
++      if (overlaps.length) diagnostics.push(`overlap: ${[...new Set(overlaps)].slice(0, 4).join('; ')}`)
++      const compare = (selector) => {
++        const controls = [...document.querySelectorAll(selector)].filter(visible)
++        const active = controls.find((item) => item.getAttribute('data-presentation-active') === 'true')
++        const inactive = controls.find((item) => item.getAttribute('data-presentation-active') === 'false')
++        if (!active || !inactive) return
++        const a = getComputedStyle(active), b = getComputedStyle(inactive)
++        const distinct = a.color !== b.color || a.backgroundColor !== b.backgroundColor || a.borderColor !== b.borderColor || a.fontWeight !== b.fontWeight || active.getBoundingClientRect().width !== inactive.getBoundingClientRect().width
++        if (!distinct) diagnostics.push(`active navigation: ${selector} active state resembles inactive state`)
++      }
++      compare('[data-presentation-step]')
++      compare('[data-presentation-toc-item]')
++      const attribution = document.querySelector('[data-presentation-attribution]')
++      if (!attribution || !visible(attribution)) diagnostics.push('attribution: missing or not visible; style [data-presentation-attribution]')
++      else {
++        const style = getComputedStyle(attribution)
++        const link = attribution.querySelector('a')
++        if (parseFloat(style.fontSize) < 12 || style.fontFamily.includes('Times') || (link && getComputedStyle(link).color === 'rgb(0, 0, 238)')) diagnostics.push('attribution: browser-default or undersized; style [data-presentation-attribution]')
++      }
++      return diagnostics
++    })
++    for (const warning of warnings) console.warn(`WARN step ${index + 1}/${count}: ${warning}`)
++    await page.screenshot({ path: path.join(outputDir, `step-${String(index + 1).padStart(2, '0')}.png`), fullPage: true })
++    if (index < count - 1) await page.keyboard.press('ArrowRight')
++  }
++  console.log(`Captured ${count} settled steps at ${outputDir}`)
++} catch (error) {
++  console.error(`Inspection failed for /${slug}: ${error.message}`)
++  process.exitCode = 1
++} finally {
++  await browser?.close()
++  if (preview && preview.exitCode === null) { preview.kill('SIGTERM'); await delay(200) }
++}
+diff --git a/skills/presentation/templates/bootstrap/scripts/verify.mjs b/skills/presentation/templates/bootstrap/scripts/verify.mjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..6b097a4dce3e8d3b0c19f7d466779d0a9819f5c4
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/scripts/verify.mjs
+@@ -0,0 +1,93 @@
++import { spawn } from 'node:child_process'
++import { createServer } from 'node:net'
++import { readFile } from 'node:fs/promises'
++import path from 'node:path'
++import { setTimeout as delay } from 'node:timers/promises'
++import { chromium } from 'playwright'
++
++const slug = process.argv[2]
++if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
++  console.error('Usage: npm run verify -- <presentation-slug>')
++  process.exit(2)
++}
++function run(command, args) {
++  return new Promise((resolve, reject) => {
++    const child = spawn(command, args, { stdio: 'inherit', shell: process.platform === 'win32' })
++    child.once('error', reject)
++    child.once('exit', (code) => code === 0 ? resolve() : reject(new Error(`${command} ${args.join(' ')} exited with ${code}`)))
++  })
++}
++function reservePort() {
++  return new Promise((resolve, reject) => {
++    const server = createServer()
++    server.once('error', reject)
++    server.listen(0, '127.0.0.1', () => {
++      const address = server.address()
++      if (!address || typeof address === 'string') return reject(new Error('Could not reserve an IPv4 preview port'))
++      server.close((error) => error ? reject(error) : resolve(address.port))
++    })
++  })
++}
++
++let preview
++let browser
++let activeStep = 'build and sample contract'
++try {
++  await run('npm', ['run', 'build'])
++  const registry = await readFile('src/presentations/index.ts', 'utf8')
++  await readFile(`src/presentations/${slug}/Talk.tsx`, 'utf8')
++  if (!registry.includes(`slug: '${slug}'`) || !registry.includes(`import('./${slug}/Talk')`)) throw new Error(`Presentation contract failed: ${slug} is not registered`)
++
++  const port = await reservePort()
++  const url = `http://127.0.0.1:${port}`
++  let startupOutput = ''
++  let startupError
++  preview = spawn(process.execPath, [path.resolve('node_modules/vite/bin/vite.js'), 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], { stdio: ['ignore', 'ignore', 'pipe'] })
++  preview.on('error', (error) => { startupError = error })
++  preview.stderr.setEncoding('utf8').on('data', (chunk) => { startupOutput += chunk })
++  let ready = false
++  for (let attempt = 0; attempt < 60; attempt++) {
++    if (startupError || preview.exitCode !== null) throw new Error(`Preview startup failed: ${startupError?.message ?? startupOutput}`)
++    try { if ((await fetch(url)).ok) { ready = true; break } } catch {}
++    await delay(250)
++  }
++  if (!ready) throw new Error(`Preview readiness check failed at ${url}: ${startupOutput}`)
++
++  browser = await chromium.launch({ headless: true })
++  const page = await browser.newPage()
++  const errors = []
++  page.on('console', (message) => { if (message.type() === 'error') errors.push(`[${activeStep}] console error: ${message.text()}`) })
++  page.on('pageerror', (error) => errors.push(`[${activeStep}] page error: ${error.message}`))
++  await page.goto(`${url}/${encodeURIComponent(slug)}`, { waitUntil: 'networkidle' })
++  const root = page.locator('[data-step-count]')
++  const count = Number(await root.getAttribute('data-step-count'))
++  if (!Number.isInteger(count) || count < 1) throw new Error(`Render check failed: route /${slug} exposed invalid data-step-count ${count}`)
++  const waitForIndex = async (expected) => {
++    try {
++      await page.waitForFunction((value) => Number(document.querySelector('[data-step-index]')?.getAttribute('data-step-index')) === value, expected, { timeout: 5000 })
++    } catch (error) {
++      if (errors.length) throw new Error(errors.join('\n'))
++      throw new Error(`failed to reach ${activeStep}: ${error.message}`)
++    }
++  }
++  for (let index = 0; index < count; index++) {
++    activeStep = `step ${index + 1}/${count}`
++    await waitForIndex(index)
++    if (errors.length) throw new Error(errors.join('\n'))
++    if (index < count - 1) {
++      activeStep = `step ${index + 2}/${count}`
++      await page.keyboard.press('ArrowRight')
++      await waitForIndex(index + 1)
++    }
++  }
++  if (errors.length) throw new Error(errors.join('\n'))
++  await browser.close()
++  browser = undefined
++  console.log(`PASS: reference sample registered and rendered all ${count} steps at ${url}/${slug}`)
++} catch (error) {
++  console.error(`FAIL during ${activeStep}: ${error.message}`)
++  process.exitCode = 1
++} finally {
++  await browser?.close()
++  if (preview && preview.exitCode === null) { preview.kill('SIGTERM'); await delay(200) }
++}
+diff --git a/skills/presentation/templates/bootstrap/src/AppRouter.tsx b/skills/presentation/templates/bootstrap/src/AppRouter.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..7b0cd6d3643457c5592421691f790cbcc11c0e65
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/AppRouter.tsx
+@@ -0,0 +1,13 @@
++import { createElement, lazy, Suspense } from 'react'
++import { presentations } from './presentations'
++import Landing from './Landing'
++import { resolvePresentationSlug } from './route'
++
++const registry = new Map(presentations.map((presentation) => [presentation.slug, lazy(presentation.load)]))
++
++export default function AppRouter() {
++  const slug = resolvePresentationSlug(window.location.pathname, import.meta.env.BASE_URL)
++  const route = slug ? registry.get(slug) : undefined
++  if (!route) return <Landing />
++  return <Suspense fallback={<main data-route-loading="">Loading presentation…</main>}>{createElement(route)}</Suspense>
++}
+diff --git a/skills/presentation/templates/bootstrap/src/Landing.tsx b/skills/presentation/templates/bootstrap/src/Landing.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..dc48f9232c01bec2aab696e57252c8eabdac03f4
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/Landing.tsx
+@@ -0,0 +1,17 @@
++import { presentations } from './presentations'
++
++export default function Landing() {
++  return <main className="landing" data-landing="">
++    <header className="landing__intro">
++      <p className="landing__eyebrow">and-scene</p>
++      <h1>Presentations as evolving diagrams.</h1>
++      <p>This is a home for browser presentations built around one scene moving through named states.</p>
++    </header>
++    <section className="landing__presentations" aria-labelledby="presentations-title">
++      <h2 id="presentations-title">Presentations</h2>
++      {presentations.length === 0 ? <p data-presentation-empty="">No presentations yet.</p> : <ul>
++        {presentations.map(({ slug, title }) => <li key={slug}><a href={`${import.meta.env.BASE_URL.replace(/\/?$/, '/')}${slug}`} data-presentation-link="">{title}</a></li>)}
++      </ul>}
++    </section>
++  </main>
++}
+diff --git a/skills/presentation/templates/bootstrap/src/index.css b/skills/presentation/templates/bootstrap/src/index.css
+new file mode 100644
+index 0000000000000000000000000000000000000000..e5ef228e47a314537bcf5b13eaaf160e1e964bb8
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/index.css
+@@ -0,0 +1,36 @@
++:root {
++  font-synthesis: none;
++  text-rendering: optimizeLegibility;
++  -webkit-font-smoothing: antialiased;
++  -moz-osx-font-smoothing: grayscale;
++}
++
++*, *::before, *::after { box-sizing: border-box; }
++html, body, #root { min-width: 320px; min-height: 100%; margin: 0; }
++button, input, textarea, select { font: inherit; }
++
++.landing { width: min(1120px, calc(100% - 40px)); margin: 0 auto; padding: 56px 0; }
++.landing__intro { max-width: 800px; }
++.landing__eyebrow { margin: 0 0 14px; }
++.landing h1 { margin: 0; font-size: clamp(2.5rem, 7vw, 5.5rem); line-height: .98; }
++.landing__intro > p:last-child { max-width: 680px; margin-top: 24px; }
++.landing__presentations { margin-top: 56px; }
++.landing__presentations h2 { margin: 0 0 16px; }
++.landing__presentations ul { padding-left: 24px; }
++
++.presentation { position: relative; display: flex; flex-direction: column; width: 100%; min-height: 100vh; overflow: hidden; }
++.presentation-header, .presentation-footer { position: relative; z-index: 2; flex: none; }
++.presentation-header { display: flex; align-items: center; justify-content: space-between; min-height: 58px; }
++.presentation-header__brand:empty { display: none; }
++.presentation-header__title { margin: 0; }
++.presentation-toc { position: absolute; z-index: 3; top: 64px; right: 20px; display: flex; flex-direction: column; }
++.presentation-stage-host { display: grid; flex: 1; min-height: 0; place-items: center; touch-action: pan-y; }
++.presentation-stage { position: relative; overflow: visible; }
++.presentation-stage__canvas { position: absolute; top: 0; left: 0; transform-origin: top left; }
++.presentation-stage__scene, .presentation-scene-layer { position: absolute; inset: 0; }
++.presentation-footer__controls, .presentation-progress { display: flex; align-items: center; }
++.presentation-progress { gap: 8px; }
++.presentation-footer__controls { justify-content: center; gap: 16px; }
++.presentation-attribution { position: absolute; right: 12px; bottom: 8px; }
++.presentation[data-presentation-mode="present"] .presentation-header { min-height: 36px; }
++@media (max-width: 760px) { .presentation-toc { display: none; } .landing { width: calc(100% - 24px); padding-top: 32px; } }
+diff --git a/skills/presentation/templates/bootstrap/src/main.tsx b/skills/presentation/templates/bootstrap/src/main.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..4d4fa2a711bbbb9fe267b589f676c6ac4ee01e27
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/main.tsx
+@@ -0,0 +1,6 @@
++import { StrictMode } from 'react'
++import { createRoot } from 'react-dom/client'
++import AppRouter from './AppRouter'
++import './index.css'
++
++createRoot(document.getElementById('root')!).render(<StrictMode><AppRouter /></StrictMode>)
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/Presentation.tsx b/skills/presentation/templates/bootstrap/src/presentation-kit/Presentation.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..485ce2a5edf8fcdb43f25776c2b4ae8505ae4c2e
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/Presentation.tsx
+@@ -0,0 +1,36 @@
++import { useRef, type PointerEvent } from 'react'
++import { DESIGN_H, DESIGN_W } from './constants'
++import { Footer } from './chrome/Footer'
++import { Header } from './chrome/Header'
++import { Toc } from './chrome/Toc'
++import { Stage } from './Stage'
++import { useFitScale } from './useFitScale'
++import { usePresentationNav } from './usePresentationNav'
++import type { PresentationProps } from './types'
++
++export function Presentation<TPayload>({ steps, title, initialMode = 'browse', designSize = { width: DESIGN_W, height: DESIGN_H }, attribution }: PresentationProps<TPayload>) {
++  const nav = usePresentationNav(steps.length, initialMode)
++  const scale = useFitScale(nav.mode, designSize.width, designSize.height)
++  const activeIndex = Math.min(nav.index, Math.max(0, steps.length - 1))
++  const pointer = useRef<{ x: number; y: number } | null>(null)
++  if (steps.length === 0) return <main className="presentation" data-presentation="" data-presentation-mode={nav.mode} data-step-count="0" data-step-index="0" />
++  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => { pointer.current = { x: event.clientX, y: event.clientY } }
++  const onPointerUp = (event: PointerEvent<HTMLDivElement>) => {
++    if (!pointer.current) return
++    const dx = event.clientX - pointer.current.x
++    const dy = event.clientY - pointer.current.y
++    pointer.current = null
++    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.3) {
++      if (dx < 0) nav.next()
++      else nav.prev()
++    }
++  }
++  return <main className="presentation" data-presentation="" data-presentation-mode={nav.mode} data-step-count={steps.length} data-step-index={activeIndex}>
++    <Header title={title} mode={nav.mode} onToggleMode={nav.toggleMode} />
++    {nav.mode === 'browse' && <Toc steps={steps} index={activeIndex} onSelect={nav.goTo} />}
++    <div className="presentation-stage-host" data-presentation-stage-host="" onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
++      <Stage step={steps[activeIndex]} index={activeIndex} scale={scale} width={designSize.width} height={designSize.height} />
++    </div>
++    <Footer steps={steps} index={activeIndex} mode={nav.mode} title={title} onSelect={nav.goTo} onPrev={nav.prev} onNext={nav.next} attribution={attribution} />
++  </main>
++}
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/Stage.tsx b/skills/presentation/templates/bootstrap/src/presentation-kit/Stage.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..5f2351e3711bc9bce6059820320ed5a65b90e1a4
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/Stage.tsx
+@@ -0,0 +1,33 @@
++import { AnimatePresence, LayoutGroup, motion } from 'motion/react'
++import { DESIGN_H, DESIGN_W, EASE, LAYOUT_T } from './constants'
++import type { SceneProps, Step } from './types'
++import { SceneLayer } from './nodes/SceneLayer'
++
++interface StageProps<TPayload> {
++  step: Step<TPayload>
++  index: number
++  scale: number
++  width?: number
++  height?: number
++}
++
++export function Stage<TPayload>({ step, index, scale, width = DESIGN_W, height = DESIGN_H }: StageProps<TPayload>) {
++  const CurrentScene = step.Scene
++  const sceneProps: SceneProps<TPayload> = { payload: step.payload, step, index }
++  const sceneKey = step.groupKey ?? step.id
++  return (
++    <div className="presentation-stage" data-presentation-stage="" style={{ width: width * scale, height: height * scale }}>
++      <div className="presentation-stage__canvas" data-presentation-canvas="" style={{ width, height, transform: `scale(${scale})` }}>
++        <LayoutGroup id="presentation-scene">
++          <AnimatePresence mode="popLayout" initial={false}>
++            <motion.div key={sceneKey} className="presentation-stage__scene" data-presentation-scene="" style={{ width, height }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: LAYOUT_T, ease: EASE }}>
++              <SceneLayer>
++                <CurrentScene {...sceneProps} />
++              </SceneLayer>
++            </motion.div>
++          </AnimatePresence>
++        </LayoutGroup>
++      </div>
++    </div>
++  )
++}
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/chrome/Footer.tsx b/skills/presentation/templates/bootstrap/src/presentation-kit/chrome/Footer.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..74fb8f322b109e86f0adec643981806054456006
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/chrome/Footer.tsx
+@@ -0,0 +1,19 @@
++import type { StepMeta } from '../types'
++
++interface FooterProps { steps: readonly Pick<StepMeta, 'id' | 'era' | 'title' | 'caption'>[]; index: number; mode: 'browse' | 'present'; title: string; onSelect: (index: number) => void; onPrev: () => void; onNext: () => void; attribution?: React.ReactNode | false }
++export function Footer({ steps, index, mode, title, onSelect, onPrev, onNext, attribution }: FooterProps) {
++  const current = steps[index]
++  return <footer className="presentation-footer" data-presentation-footer="">
++    <div className="presentation-footer__narrative">
++      {mode === 'browse' ? <><p className="presentation-footer__title">{current?.title}</p><p className="presentation-footer__caption">{current?.caption}</p></> : <p className="presentation-footer__title">{current?.title ?? title}</p>}
++    </div>
++    {mode === 'browse' && <div className="presentation-footer__controls" data-presentation-controls="">
++      <button type="button" className="presentation-prev" data-presentation-prev="" onClick={onPrev} disabled={index === 0} aria-label="Previous step">Previous</button>
++      <nav className="presentation-progress" data-presentation-progress="" aria-label="Presentation steps">
++        {steps.map((step, stepIndex) => <button type="button" key={step.id} className="presentation-progress__item" data-presentation-step="" data-presentation-active={stepIndex === index ? 'true' : 'false'} aria-label={`Step ${stepIndex + 1}: ${step.title}`} aria-current={stepIndex === index ? 'step' : undefined} onClick={() => onSelect(stepIndex)} />)}
++      </nav>
++      <button type="button" className="presentation-next" data-presentation-next="" onClick={onNext} disabled={index === steps.length - 1} aria-label="Next step">Next</button>
++    </div>}
++    {attribution !== false && <div className="presentation-attribution" data-presentation-attribution="">{attribution ?? <a href="https://github.com/and-scene/and-scene">made by and-scene</a>}</div>}
++  </footer>
++}
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/chrome/Header.tsx b/skills/presentation/templates/bootstrap/src/presentation-kit/chrome/Header.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..9c8a528964f0c32bd9d04fb6721a336ccfb189ac
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/chrome/Header.tsx
+@@ -0,0 +1,11 @@
++import type { ReactNode } from 'react'
++import type { PresentationMode } from '../types'
++
++interface HeaderProps { title: string; mode: PresentationMode; onToggleMode: () => void; brand?: ReactNode }
++export function Header({ title, mode, onToggleMode, brand }: HeaderProps) {
++  return <header className="presentation-header" data-presentation-header="">
++    <div className="presentation-header__brand" data-presentation-brand="">{brand}</div>
++    {mode === 'browse' && <h1 className="presentation-header__title" data-presentation-title="">{title}</h1>}
++    <button type="button" className="presentation-mode-toggle" data-presentation-mode-toggle="" aria-label={`Switch to ${mode === 'browse' ? 'present' : 'browse'} mode`} onClick={onToggleMode}>{mode === 'browse' ? 'Present' : 'Browse'}</button>
++  </header>
++}
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/chrome/Toc.tsx b/skills/presentation/templates/bootstrap/src/presentation-kit/chrome/Toc.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..70944e92374f717e3be74897c6e0dd7d00766845
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/chrome/Toc.tsx
+@@ -0,0 +1,13 @@
++import type { StepMeta } from '../types'
++
++interface TocProps { steps: readonly Pick<StepMeta, 'id' | 'era' | 'title' | 'caption'>[]; index: number; onSelect: (index: number) => void }
++export function Toc({ steps, index, onSelect }: TocProps) {
++  const eras = [...new Set(steps.map((step) => step.era))]
++  return <nav className="presentation-toc" data-presentation-toc="" aria-label="Presentation sections">
++    {eras.map((era) => {
++      const firstIndex = steps.findIndex((step) => step.era === era)
++      const active = steps[index]?.era === era
++      return <button type="button" key={era} className="presentation-toc__item" data-presentation-toc-item="" data-presentation-active={active ? 'true' : 'false'} aria-current={active ? 'step' : undefined} onClick={() => onSelect(firstIndex)}>{era}</button>
++    })}
++  </nav>
++}
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/constants.ts b/skills/presentation/templates/bootstrap/src/presentation-kit/constants.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..40ace8b1a9c008bbcfcede8bceef2a1b459f96ab
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/constants.ts
+@@ -0,0 +1,11 @@
++export const DESIGN_W = 880
++export const DESIGN_H = 380
++export const EASE = [0.22, 1, 0.36, 1] as const
++export const LAYOUT_T = 0.65
++export const ENTER_T = 0.35
++export const ENTER_DELAY = LAYOUT_T
++
++export const STAGE_LAYOUT = {
++  browse: { top: 72, bottom: 190, horizontal: 64 },
++  present: { top: 58, bottom: 72, horizontal: 40 },
++} as const
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/index.ts b/skills/presentation/templates/bootstrap/src/presentation-kit/index.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..299a251dc0f76ca1a0b7bb2eb7e6f2b0a8b4b6ff
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/index.ts
+@@ -0,0 +1,14 @@
++export { Presentation } from './Presentation'
++export { Stage } from './Stage'
++export { useFitScale } from './useFitScale'
++export { usePresentationNav } from './usePresentationNav'
++export * from './types'
++export * from './constants'
++export { Appear } from './nodes/Appear'
++export { Arrow } from './nodes/Arrow'
++export { Box } from './nodes/Box'
++export { Emphasis } from './nodes/Emphasis'
++export { Frame } from './nodes/Frame'
++export { Label } from './nodes/Label'
++export { SceneLayer } from './nodes/SceneLayer'
++export { SymbolChip } from './nodes/SymbolChip'
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/Appear.tsx b/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/Appear.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..1060f102e5f63ab34d36782c518c5ba535ba1dd5
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/Appear.tsx
+@@ -0,0 +1,13 @@
++import { motion, type MotionProps } from 'motion/react'
++import type { ReactNode } from 'react'
++import { EASE, ENTER_DELAY, ENTER_T } from '../constants'
++
++export interface AppearProps extends MotionProps {
++  children: ReactNode
++  className?: string
++  'data-presentation-id'?: string
++}
++
++export function Appear({ children, className, ...props }: AppearProps) {
++  return <motion.div {...props} className={['presentation-appear', className].filter(Boolean).join(' ')} data-presentation-appear="" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: ENTER_T, delay: ENTER_DELAY, ease: EASE }}>{children}</motion.div>
++}
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/Arrow.tsx b/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/Arrow.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..0bb543cfa27c756de4ebd984e2c366ed0cecc3a6
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/Arrow.tsx
+@@ -0,0 +1,7 @@
++import { motion, type HTMLMotionProps } from 'motion/react'
++import { EASE, ENTER_DELAY, ENTER_T } from '../constants'
++
++export interface ArrowProps extends HTMLMotionProps<'div'> { entityId: string; children?: React.ReactNode }
++export function Arrow({ entityId, className, children, ...props }: ArrowProps) {
++  return <motion.div {...props} layout layoutId={entityId} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: ENTER_T, delay: ENTER_DELAY, ease: EASE }} className={['presentation-arrow', className].filter(Boolean).join(' ')} data-presentation-node="arrow" data-presentation-id={entityId} aria-hidden={props['aria-hidden'] ?? true}>{children}</motion.div>
++}
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/Box.tsx b/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/Box.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..96a481a9d39848de41704d8d581bc985312cdcfc
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/Box.tsx
+@@ -0,0 +1,11 @@
++import { motion, type HTMLMotionProps } from 'motion/react'
++import { EASE, ENTER_DELAY, ENTER_T } from '../constants'
++
++export interface BoxProps extends HTMLMotionProps<'div'> {
++  entityId: string
++  children?: React.ReactNode
++}
++
++export function Box({ entityId, className, children, ...props }: BoxProps) {
++  return <motion.div {...props} layout layoutId={entityId} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: ENTER_T, delay: ENTER_DELAY, ease: EASE }} className={['presentation-box', className].filter(Boolean).join(' ')} data-presentation-node="box" data-presentation-id={entityId}>{children}</motion.div>
++}
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/Emphasis.tsx b/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/Emphasis.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..497c27cd61bd8332a459e1328a980b7b8716e9e7
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/Emphasis.tsx
+@@ -0,0 +1,7 @@
++import { motion, type HTMLMotionProps } from 'motion/react'
++import { EASE, ENTER_DELAY, ENTER_T } from '../constants'
++
++export interface EmphasisProps extends HTMLMotionProps<'div'> { entityId: string; children?: React.ReactNode }
++export function Emphasis({ entityId, className, children, ...props }: EmphasisProps) {
++  return <motion.div {...props} layout layoutId={entityId} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: ENTER_T, delay: ENTER_DELAY, ease: EASE }} className={['presentation-emphasis', className].filter(Boolean).join(' ')} data-presentation-node="emphasis" data-presentation-id={entityId}>{children}</motion.div>
++}
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/Frame.tsx b/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/Frame.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..807b128061d59635648bd5e3bdede77032c9d5df
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/Frame.tsx
+@@ -0,0 +1,7 @@
++import { motion, type HTMLMotionProps } from 'motion/react'
++import { EASE, ENTER_DELAY, ENTER_T } from '../constants'
++
++export interface FrameProps extends HTMLMotionProps<'div'> { entityId: string; children?: React.ReactNode }
++export function Frame({ entityId, className, children, ...props }: FrameProps) {
++  return <motion.div {...props} layout layoutId={entityId} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: ENTER_T, delay: ENTER_DELAY, ease: EASE }} className={['presentation-frame', className].filter(Boolean).join(' ')} data-presentation-node="frame" data-presentation-id={entityId}>{children}</motion.div>
++}
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/Label.tsx b/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/Label.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..5582b0e3e51f265a6b537c5ac16b61f6966cb958
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/Label.tsx
+@@ -0,0 +1,7 @@
++import { motion, type HTMLMotionProps } from 'motion/react'
++import { EASE, ENTER_DELAY, ENTER_T } from '../constants'
++
++export interface LabelProps extends HTMLMotionProps<'div'> { entityId: string; children?: React.ReactNode }
++export function Label({ entityId, className, children, ...props }: LabelProps) {
++  return <motion.div {...props} layout layoutId={entityId} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: ENTER_T, delay: ENTER_DELAY, ease: EASE }} className={['presentation-label', className].filter(Boolean).join(' ')} data-presentation-node="label" data-presentation-id={entityId}>{children}</motion.div>
++}
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/SceneLayer.tsx b/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/SceneLayer.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..26bdbc99abd41214721e0f710043aadaedcb6383
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/SceneLayer.tsx
+@@ -0,0 +1,9 @@
++import type { HTMLAttributes, ReactNode } from 'react'
++
++export interface SceneLayerProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
++  children: ReactNode
++}
++
++export function SceneLayer({ children, className, ...props }: SceneLayerProps) {
++  return <div {...props} className={['presentation-scene-layer', className].filter(Boolean).join(' ')} data-presentation-scene-layer="">{children}</div>
++}
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/SymbolChip.tsx b/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/SymbolChip.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..66d4051ca59b1cce3f6981472c503a2beec858d2
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/nodes/SymbolChip.tsx
+@@ -0,0 +1,8 @@
++import { motion, type HTMLMotionProps } from 'motion/react'
++import { EASE, ENTER_DELAY, ENTER_T } from '../constants'
++import type { LucideIcon } from 'lucide-react'
++
++export interface SymbolChipProps extends Omit<HTMLMotionProps<'div'>, 'children'> { entityId: string; Icon?: LucideIcon; label: string }
++export function SymbolChip({ entityId, Icon, label, className, ...props }: SymbolChipProps) {
++  return <motion.div {...props} layout layoutId={entityId} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: ENTER_T, delay: ENTER_DELAY, ease: EASE }} className={['presentation-symbol-chip', className].filter(Boolean).join(' ')} data-presentation-node="symbol-chip" data-presentation-id={entityId}>{Icon && <Icon aria-hidden="true" />}<span>{label}</span></motion.div>
++}
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/types.ts b/skills/presentation/templates/bootstrap/src/presentation-kit/types.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..1138bf4b0775dcf6bad327d1510d33a924f4e8a3
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/types.ts
+@@ -0,0 +1,32 @@
++import type { ComponentType } from 'react'
++
++export type PresentationMode = 'browse' | 'present'
++
++export interface StepMeta {
++  id: string
++  era: string
++  title: string
++  caption: string
++  groupKey?: string
++}
++
++export interface SceneProps<TPayload> {
++  payload: TPayload
++  step: StepMeta
++  index: number
++}
++
++export interface Step<TPayload = unknown> extends StepMeta {
++  Scene: ComponentType<SceneProps<TPayload>>
++  payload: TPayload
++}
++
++export interface PresentationProps<TPayload> {
++  steps: readonly Step<TPayload>[]
++  title: string
++  initialMode?: PresentationMode
++  designSize?: { width: number; height: number }
++  attribution?: React.ReactNode | false
++}
++
++export type PresentationComponent = <TPayload>(props: PresentationProps<TPayload>) => React.ReactElement
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/useFitScale.ts b/skills/presentation/templates/bootstrap/src/presentation-kit/useFitScale.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..a3630cd94177438afddd8e5b682490d67d42f28c
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/useFitScale.ts
+@@ -0,0 +1,27 @@
++import { useEffect, useState } from 'react'
++import { DESIGN_H, DESIGN_W, STAGE_LAYOUT } from './constants'
++import type { PresentationMode } from './types'
++
++const MIN_GUTTER = 16
++
++/** Uniform scale that fits the design canvas in the viewport; side gutters shrink on narrow viewports. */
++export function computeFitScale(mode: PresentationMode, viewportWidth: number, viewportHeight: number, width = DESIGN_W, height = DESIGN_H) {
++  const geometry = STAGE_LAYOUT[mode]
++  const gutter = Math.min(geometry.horizontal, Math.max(MIN_GUTTER, (viewportWidth - 320) / 10))
++  const availableWidth = Math.max(0, viewportWidth - gutter * 2)
++  const availableHeight = Math.max(0, viewportHeight - geometry.top - geometry.bottom)
++  return Math.min(1, availableWidth / width, availableHeight / height)
++}
++
++export function useFitScale(mode: PresentationMode, width = DESIGN_W, height = DESIGN_H) {
++  const [scale, setScale] = useState(1)
++  useEffect(() => {
++    const update = () => {
++      setScale(computeFitScale(mode, window.innerWidth, window.innerHeight, width, height))
++    }
++    update()
++    window.addEventListener('resize', update)
++    return () => window.removeEventListener('resize', update)
++  }, [mode, width, height])
++  return scale
++}
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/usePresentationNav.ts b/skills/presentation/templates/bootstrap/src/presentation-kit/usePresentationNav.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..8fa393187ed27164309d3d0c4840ec7575e6309a
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/usePresentationNav.ts
+@@ -0,0 +1,31 @@
++import { useCallback, useEffect, useState } from 'react'
++import type { PresentationMode } from './types'
++
++export function usePresentationNav(count: number, initialMode: PresentationMode = 'browse') {
++  const [navigation, setNavigation] = useState({ index: 0, count })
++  if (navigation.count !== count) {
++    setNavigation({ index: Math.min(navigation.index, Math.max(0, count - 1)), count })
++  }
++  const index = navigation.index
++  const [mode, setMode] = useState<PresentationMode>(initialMode)
++  const goTo = useCallback((next: number) => setNavigation({ index: Math.max(0, Math.min(count - 1, next)), count }), [count])
++  const next = useCallback(() => goTo(index + 1), [goTo, index])
++  const prev = useCallback(() => goTo(index - 1), [goTo, index])
++  const toggleMode = useCallback(() => setMode((current) => current === 'browse' ? 'present' : 'browse'), [])
++
++
++  useEffect(() => {
++    const onKeyDown = (event: KeyboardEvent) => {
++      const target = event.target instanceof HTMLElement ? event.target : null
++      const editing = target?.matches('input, textarea, select, [contenteditable="true"]')
++      if (editing || (target?.closest('button, a, [role="button"]') && event.key !== 'p' && event.key !== 'P')) return
++      if (['ArrowRight', ' ', 'PageDown'].includes(event.key)) { event.preventDefault(); next() }
++      else if (['ArrowLeft', 'PageUp'].includes(event.key)) { event.preventDefault(); prev() }
++      else if (event.key.toLowerCase() === 'p') toggleMode()
++    }
++    window.addEventListener('keydown', onKeyDown)
++    return () => window.removeEventListener('keydown', onKeyDown)
++  }, [next, prev, toggleMode])
++
++  return { index, mode, goTo, next, prev, toggleMode }
++}
+diff --git a/skills/presentation/templates/bootstrap/src/presentations/index.ts b/skills/presentation/templates/bootstrap/src/presentations/index.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..7e924eaf14155b8a151a48d3da774cfe50ef5a75
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/presentations/index.ts
+@@ -0,0 +1,7 @@
++export interface PresentationRegistration {
++  slug: string
++  title: string
++  load: () => Promise<{ default: React.ComponentType }>
++}
++
++export const presentations: PresentationRegistration[] = []
+diff --git a/skills/presentation/templates/bootstrap/src/route.ts b/skills/presentation/templates/bootstrap/src/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..80a8d2d264d1874b9fe57101796f7a843beb4608
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/src/route.ts
+@@ -0,0 +1,12 @@
++export function resolvePresentationSlug(pathname: string, baseUrl: string): string {
++  let path: string
++  try {
++    path = pathname.split('/').filter(Boolean).map(decodeURIComponent).join('/')
++  } catch {
++    return ''
++  }
++  const base = baseUrl.split('/').filter(Boolean).map(decodeURIComponent).join('/')
++  if (!base) return path
++  if (path === base) return ''
++  return path.startsWith(`${base}/`) ? path.slice(base.length + 1) : path
++}
+diff --git a/skills/presentation/templates/bootstrap/tsconfig.app.json b/skills/presentation/templates/bootstrap/tsconfig.app.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..7f42e5f7cd2e79c7b5a25b753e56b1bcf94e1381
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/tsconfig.app.json
+@@ -0,0 +1,25 @@
++{
++  "compilerOptions": {
++    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
++    "target": "es2023",
++    "lib": ["ES2023", "DOM"],
++    "module": "esnext",
++    "types": ["vite/client"],
++    "skipLibCheck": true,
++
++    /* Bundler mode */
++    "moduleResolution": "bundler",
++    "allowImportingTsExtensions": true,
++    "verbatimModuleSyntax": true,
++    "moduleDetection": "force",
++    "noEmit": true,
++    "jsx": "react-jsx",
++
++    /* Linting */
++    "noUnusedLocals": true,
++    "noUnusedParameters": true,
++    "erasableSyntaxOnly": true,
++    "noFallthroughCasesInSwitch": true
++  },
++  "include": ["src"]
++}
+diff --git a/skills/presentation/templates/bootstrap/tsconfig.json b/skills/presentation/templates/bootstrap/tsconfig.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..1ffef600d959ec9e396d5a260bd3f5b927b2cef8
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/tsconfig.json
+@@ -0,0 +1,7 @@
++{
++  "files": [],
++  "references": [
++    { "path": "./tsconfig.app.json" },
++    { "path": "./tsconfig.node.json" }
++  ]
++}
+diff --git a/skills/presentation/templates/bootstrap/tsconfig.node.json b/skills/presentation/templates/bootstrap/tsconfig.node.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..530665ec47eba9460db2b39babf89cd03f35d447
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/tsconfig.node.json
+@@ -0,0 +1,19 @@
++{
++  "compilerOptions": {
++    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
++    "target": "ES2023",
++    "lib": ["ES2023"],
++    "module": "ESNext",
++    "skipLibCheck": true,
++    "moduleResolution": "bundler",
++    "allowImportingTsExtensions": true,
++    "verbatimModuleSyntax": true,
++    "moduleDetection": "force",
++    "noEmit": true,
++    "strict": true,
++    "noUnusedLocals": true,
++    "noUnusedParameters": true,
++    "erasableSyntaxOnly": true
++  },
++  "include": ["vite.config.ts"]
++}
+diff --git a/skills/presentation/templates/bootstrap/vite.config.ts b/skills/presentation/templates/bootstrap/vite.config.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..8b0f57b91aeb45c54467e29f983a0893dc83c4d9
+--- /dev/null
++++ b/skills/presentation/templates/bootstrap/vite.config.ts
+@@ -0,0 +1,7 @@
++import { defineConfig } from 'vite'
++import react from '@vitejs/plugin-react'
++
++// https://vite.dev/config/
++export default defineConfig({
++  plugins: [react()],
++})
+diff --git a/skills/presentation/templates/presentation/Talk.tsx b/skills/presentation/templates/presentation/Talk.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..45357ef5915ac1f515e20ecc63155308751ea690
+--- /dev/null
++++ b/skills/presentation/templates/presentation/Talk.tsx
+@@ -0,0 +1,7 @@
++import { Presentation } from '../../presentation-kit'
++import { STEPS } from './steps'
++import './presentation.css'
++
++export default function Talk() {
++  return <div className="{{SLUG_CLASS}}"><Presentation steps={STEPS} title="{{PRESENTATION_TITLE}}" initialMode="browse" /></div>
++}
+diff --git a/skills/presentation/templates/presentation/entities.ts b/skills/presentation/templates/presentation/entities.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..89235477691c93edd87bd4e5cdde31d44d13d2a0
+--- /dev/null
++++ b/skills/presentation/templates/presentation/entities.ts
+@@ -0,0 +1,4 @@
++// Keep stable entity IDs namespaced to this presentation.
++export const ENTITY = {
++  example: '{{SLUG}}:example',
++} as const
+diff --git a/skills/presentation/templates/presentation/presentation.css b/skills/presentation/templates/presentation/presentation.css
+new file mode 100644
+index 0000000000000000000000000000000000000000..5364c26279a12c168140fd9b012750720712af93
+--- /dev/null
++++ b/skills/presentation/templates/presentation/presentation.css
+@@ -0,0 +1,4 @@
++/* This presentation owns its visual design. The scene kit supplies no visual defaults. */
++.{{SLUG_CLASS}} {
++  /* Define presentation-local colors, type, spacing, and node treatments here. */
++}
+diff --git a/skills/presentation/templates/presentation/steps.ts b/skills/presentation/templates/presentation/steps.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..7bff927a6510e704b4ee526b2bf1fd297ed1f161
+--- /dev/null
++++ b/skills/presentation/templates/presentation/steps.ts
+@@ -0,0 +1,14 @@
++import type { Step } from '../../presentation-kit'
++import { ExampleStep } from './steps/step-example'
++
++export const STEPS: Step<null>[] = [
++  {
++    id: '{{SLUG}}:opening',
++    era: '{{SECTION}}',
++    title: '{{STEP_TITLE}}',
++    caption: '{{STEP_CAPTION}}',
++    groupKey: '{{SLUG}}:scene',
++    Scene: ExampleStep,
++    payload: null,
++  },
++]
+diff --git a/skills/presentation/templates/step/step-example.tsx b/skills/presentation/templates/step/step-example.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..b04581c9ad0e43fe68f357a3236c79e1a757f5d8
+--- /dev/null
++++ b/skills/presentation/templates/step/step-example.tsx
+@@ -0,0 +1,10 @@
++import { Box, Label, SceneLayer } from '../../presentation-kit'
++import { ENTITY } from '../entities'
++
++export function ExampleStep() {
++  return <SceneLayer className="{{SLUG_CLASS}}__scene">
++    <Box entityId={ENTITY.example} className="{{SLUG_CLASS}}__box">
++      <Label entityId={`${ENTITY.example}:label`}>Replace with this beat's visual</Label>
++    </Box>
++  </SceneLayer>
++}
+diff --git a/src/App.css b/src/App.css
+deleted file mode 100644
+index 2240bdbca11c104ac8a2b0b6bc106a306cb287e2..0000000000000000000000000000000000000000
+--- a/src/App.css
++++ /dev/null
+@@ -1,160 +0,0 @@
+-.shell {
+-  width: min(1120px, calc(100vw - 40px));
+-  margin: 0 auto;
+-  padding: 56px 0 40px;
+-}
+-
+-.intro {
+-  max-width: 820px;
+-}
+-
+-.eyebrow {
+-  margin: 0 0 14px;
+-  color: #c7a755;
+-  font-size: 0.82rem;
+-  font-weight: 700;
+-  letter-spacing: 0.14em;
+-  text-transform: uppercase;
+-}
+-
+-h1,
+-h2,
+-p {
+-  margin: 0;
+-}
+-
+-h1 {
+-  max-width: 760px;
+-  color: #f8f3e6;
+-  font-size: clamp(2.45rem, 7vw, 5.8rem);
+-  line-height: 0.94;
+-  letter-spacing: 0;
+-}
+-
+-.summary {
+-  max-width: 690px;
+-  margin-top: 24px;
+-  color: #c9c2b4;
+-  font-size: 1.08rem;
+-}
+-
+-.stage {
+-  margin-top: 44px;
+-  border: 1px solid rgba(248, 243, 230, 0.18);
+-  border-radius: 8px;
+-  background:
+-    linear-gradient(rgba(248, 243, 230, 0.045) 1px, transparent 1px),
+-    linear-gradient(90deg, rgba(248, 243, 230, 0.045) 1px, transparent 1px),
+-    #12110f;
+-  background-size: 30px 30px;
+-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
+-}
+-
+-.stage-header {
+-  display: flex;
+-  justify-content: space-between;
+-  border-bottom: 1px solid rgba(248, 243, 230, 0.14);
+-  padding: 14px 18px;
+-  color: #91897c;
+-  font-size: 0.78rem;
+-  font-weight: 700;
+-  letter-spacing: 0.12em;
+-  text-transform: uppercase;
+-}
+-
+-.diagram {
+-  position: relative;
+-  display: grid;
+-  grid-template-columns: 1fr auto 1.15fr auto 1fr;
+-  gap: 18px;
+-  align-items: center;
+-  min-height: 340px;
+-  padding: 42px;
+-}
+-
+-.node {
+-  display: grid;
+-  min-height: 116px;
+-  place-items: center;
+-  gap: 12px;
+-  border: 1px solid rgba(248, 243, 230, 0.2);
+-  border-radius: 8px;
+-  color: #f8f3e6;
+-  font-size: 0.95rem;
+-  font-weight: 700;
+-  letter-spacing: 0.08em;
+-  text-transform: uppercase;
+-}
+-
+-.node-topic {
+-  background: #1a2230;
+-}
+-
+-.node-scene {
+-  min-height: 172px;
+-  border-color: rgba(199, 167, 85, 0.72);
+-  background: #253222;
+-}
+-
+-.node-talk {
+-  background: #312430;
+-}
+-
+-.connector {
+-  color: #c7a755;
+-}
+-
+-.beats {
+-  display: grid;
+-  grid-template-columns: repeat(3, 1fr);
+-  gap: 14px;
+-  margin-top: 18px;
+-}
+-
+-.beat {
+-  min-height: 148px;
+-  border: 1px solid rgba(248, 243, 230, 0.14);
+-  border-radius: 8px;
+-  padding: 22px;
+-  background: rgba(248, 243, 230, 0.045);
+-}
+-
+-.beat-number {
+-  color: #c7a755;
+-  font-size: 0.75rem;
+-  font-weight: 700;
+-  letter-spacing: 0.12em;
+-}
+-
+-.beat h2 {
+-  margin-top: 20px;
+-  color: #f8f3e6;
+-  font-size: 1.2rem;
+-}
+-
+-.beat p {
+-  margin-top: 10px;
+-  color: #b6aea0;
+-}
+-
+-@media (max-width: 820px) {
+-  .shell {
+-    width: min(100% - 24px, 620px);
+-    padding-top: 32px;
+-  }
+-
+-  .diagram {
+-    grid-template-columns: 1fr;
+-    min-height: auto;
+-    padding: 22px;
+-  }
+-
+-  .connector {
+-    justify-self: center;
+-    transform: rotate(90deg);
+-  }
+-
+-  .beats {
+-    grid-template-columns: 1fr;
+-  }
+-}
+diff --git a/src/App.tsx b/src/App.tsx
+deleted file mode 100644
+index 0946ce3c5b9be7640809a0edded34fc87cd46060..0000000000000000000000000000000000000000
+--- a/src/App.tsx
++++ /dev/null
+@@ -1,71 +0,0 @@
+-import { ArrowRight, Boxes, GitBranch, Sparkles } from 'lucide-react'
+-import './App.css'
+-
+-const beats = [
+-  {
+-    id: 'scene',
+-    label: 'Scene',
+-    detail: 'One shared canvas holds the talk together.',
+-  },
+-  {
+-    id: 'state',
+-    label: 'State',
+-    detail: 'Each step changes positions, labels, focus, or connections.',
+-  },
+-  {
+-    id: 'arc',
+-    label: 'Arc',
+-    detail: 'The audience follows one idea as it develops.',
+-  },
+-]
+-
+-function App() {
+-  return (
+-    <main className="shell">
+-      <section className="intro" aria-labelledby="page-title">
+-        <p className="eyebrow">and-scene</p>
+-        <h1 id="page-title">Presentations as evolving diagrams.</h1>
+-        <p className="summary">
+-          This repo is home to a future skill that generates browser-based
+-          talks from a topic. The core artifact is not a deck of isolated slides;
+-          it is one scene moving through named states.
+-        </p>
+-      </section>
+-
+-      <section className="stage" aria-label="Evolving diagram preview">
+-        <div className="stage-header">
+-          <span>single scene</span>
+-          <span>step 03</span>
+-        </div>
+-        <div className="diagram">
+-          <div className="node node-topic">
+-            <Sparkles size={24} aria-hidden="true" />
+-            <span>topic</span>
+-          </div>
+-          <ArrowRight className="connector connector-one" size={34} aria-hidden="true" />
+-          <div className="node node-scene">
+-            <Boxes size={26} aria-hidden="true" />
+-            <span>scene state</span>
+-          </div>
+-          <ArrowRight className="connector connector-two" size={34} aria-hidden="true" />
+-          <div className="node node-talk">
+-            <GitBranch size={24} aria-hidden="true" />
+-            <span>talk arc</span>
+-          </div>
+-        </div>
+-      </section>
+-
+-      <section className="beats" aria-label="Presentation model">
+-        {beats.map((beat, index) => (
+-          <article className="beat" key={beat.id}>
+-            <span className="beat-number">{String(index + 1).padStart(2, '0')}</span>
+-            <h2>{beat.label}</h2>
+-            <p>{beat.detail}</p>
+-          </article>
+-        ))}
+-      </section>
+-    </main>
+-  )
+-}
+-
+-export default App
+diff --git a/src/AppRouter.tsx b/src/AppRouter.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..7b0cd6d3643457c5592421691f790cbcc11c0e65
+--- /dev/null
++++ b/src/AppRouter.tsx
+@@ -0,0 +1,13 @@
++import { createElement, lazy, Suspense } from 'react'
++import { presentations } from './presentations'
++import Landing from './Landing'
++import { resolvePresentationSlug } from './route'
++
++const registry = new Map(presentations.map((presentation) => [presentation.slug, lazy(presentation.load)]))
++
++export default function AppRouter() {
++  const slug = resolvePresentationSlug(window.location.pathname, import.meta.env.BASE_URL)
++  const route = slug ? registry.get(slug) : undefined
++  if (!route) return <Landing />
++  return <Suspense fallback={<main data-route-loading="">Loading presentation…</main>}>{createElement(route)}</Suspense>
++}
+diff --git a/src/Landing.tsx b/src/Landing.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..3171c9559bda3d36156deb2e16dd4f85f01e7208
+--- /dev/null
++++ b/src/Landing.tsx
+@@ -0,0 +1,17 @@
++import { presentations } from './presentations'
++
++export default function Landing() {
++  return <main className="landing" data-landing="">
++    <header className="landing__intro">
++      <p className="landing__eyebrow">and-scene</p>
++      <h1>Presentations as evolving diagrams.</h1>
++      <p>This is a home for browser presentations built around one scene moving through named states.</p>
++    </header>
++    <section className="landing__presentations" aria-labelledby="presentations-title">
++      <h2 id="presentations-title">Presentations</h2>
++      {presentations.length === 0 ? <p data-presentation-empty="">No presentations yet.</p> : <ul>
++        {presentations.map(({ slug, title }) => <li key={slug}><a href={`/${slug}`} data-presentation-link="">{title}</a></li>)}
++      </ul>}
++    </section>
++  </main>
++}
+diff --git a/src/index.css b/src/index.css
+index 468cf1e9327a30de92f32f372827569d7c70218b..e5ef228e47a314537bcf5b13eaaf160e1e964bb8 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -1,32 +1,36 @@
+ :root {
+-  font-family:
+-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+-    sans-serif;
+-  color: #f8f3e6;
+-  background: #0d0c0b;
+   font-synthesis: none;
+-  line-height: 1.5;
+   text-rendering: optimizeLegibility;
+   -webkit-font-smoothing: antialiased;
+   -moz-osx-font-smoothing: grayscale;
+ }
+ 
+-* {
+-  box-sizing: border-box;
+-}
++*, *::before, *::after { box-sizing: border-box; }
++html, body, #root { min-width: 320px; min-height: 100%; margin: 0; }
++button, input, textarea, select { font: inherit; }
+ 
+-body {
+-  min-width: 320px;
+-  min-height: 100vh;
+-  margin: 0;
+-  background:
+-    radial-gradient(circle at 20% 10%, rgba(199, 167, 85, 0.16), transparent 28rem),
+-    linear-gradient(135deg, #0d0c0b 0%, #161412 58%, #0d0c0b 100%);
+-}
++.landing { width: min(1120px, calc(100% - 40px)); margin: 0 auto; padding: 56px 0; }
++.landing__intro { max-width: 800px; }
++.landing__eyebrow { margin: 0 0 14px; }
++.landing h1 { margin: 0; font-size: clamp(2.5rem, 7vw, 5.5rem); line-height: .98; }
++.landing__intro > p:last-child { max-width: 680px; margin-top: 24px; }
++.landing__presentations { margin-top: 56px; }
++.landing__presentations h2 { margin: 0 0 16px; }
++.landing__presentations ul { padding-left: 24px; }
+ 
+-button,
+-input,
+-textarea,
+-select {
+-  font: inherit;
+-}
++.presentation { position: relative; display: flex; flex-direction: column; width: 100%; min-height: 100vh; overflow: hidden; }
++.presentation-header, .presentation-footer { position: relative; z-index: 2; flex: none; }
++.presentation-header { display: flex; align-items: center; justify-content: space-between; min-height: 58px; }
++.presentation-header__brand:empty { display: none; }
++.presentation-header__title { margin: 0; }
++.presentation-toc { position: absolute; z-index: 3; top: 64px; right: 20px; display: flex; flex-direction: column; }
++.presentation-stage-host { display: grid; flex: 1; min-height: 0; place-items: center; touch-action: pan-y; }
++.presentation-stage { position: relative; overflow: visible; }
++.presentation-stage__canvas { position: absolute; top: 0; left: 0; transform-origin: top left; }
++.presentation-stage__scene, .presentation-scene-layer { position: absolute; inset: 0; }
++.presentation-footer__controls, .presentation-progress { display: flex; align-items: center; }
++.presentation-progress { gap: 8px; }
++.presentation-footer__controls { justify-content: center; gap: 16px; }
++.presentation-attribution { position: absolute; right: 12px; bottom: 8px; }
++.presentation[data-presentation-mode="present"] .presentation-header { min-height: 36px; }
++@media (max-width: 760px) { .presentation-toc { display: none; } .landing { width: calc(100% - 24px); padding-top: 32px; } }
+diff --git a/src/main.tsx b/src/main.tsx
+index bef5202a32cbd0632c43de40f6e908532903fd42..4d4fa2a711bbbb9fe267b589f676c6ac4ee01e27 100644
+--- a/src/main.tsx
++++ b/src/main.tsx
+@@ -1,10 +1,6 @@
+ import { StrictMode } from 'react'
+ import { createRoot } from 'react-dom/client'
++import AppRouter from './AppRouter'
+ import './index.css'
+-import App from './App.tsx'
+ 
+-createRoot(document.getElementById('root')!).render(
+-  <StrictMode>
+-    <App />
+-  </StrictMode>,
+-)
++createRoot(document.getElementById('root')!).render(<StrictMode><AppRouter /></StrictMode>)
+diff --git a/src/presentation-kit/Presentation.tsx b/src/presentation-kit/Presentation.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..485ce2a5edf8fcdb43f25776c2b4ae8505ae4c2e
+--- /dev/null
++++ b/src/presentation-kit/Presentation.tsx
+@@ -0,0 +1,36 @@
++import { useRef, type PointerEvent } from 'react'
++import { DESIGN_H, DESIGN_W } from './constants'
++import { Footer } from './chrome/Footer'
++import { Header } from './chrome/Header'
++import { Toc } from './chrome/Toc'
++import { Stage } from './Stage'
++import { useFitScale } from './useFitScale'
++import { usePresentationNav } from './usePresentationNav'
++import type { PresentationProps } from './types'
++
++export function Presentation<TPayload>({ steps, title, initialMode = 'browse', designSize = { width: DESIGN_W, height: DESIGN_H }, attribution }: PresentationProps<TPayload>) {
++  const nav = usePresentationNav(steps.length, initialMode)
++  const scale = useFitScale(nav.mode, designSize.width, designSize.height)
++  const activeIndex = Math.min(nav.index, Math.max(0, steps.length - 1))
++  const pointer = useRef<{ x: number; y: number } | null>(null)
++  if (steps.length === 0) return <main className="presentation" data-presentation="" data-presentation-mode={nav.mode} data-step-count="0" data-step-index="0" />
++  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => { pointer.current = { x: event.clientX, y: event.clientY } }
++  const onPointerUp = (event: PointerEvent<HTMLDivElement>) => {
++    if (!pointer.current) return
++    const dx = event.clientX - pointer.current.x
++    const dy = event.clientY - pointer.current.y
++    pointer.current = null
++    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.3) {
++      if (dx < 0) nav.next()
++      else nav.prev()
++    }
++  }
++  return <main className="presentation" data-presentation="" data-presentation-mode={nav.mode} data-step-count={steps.length} data-step-index={activeIndex}>
++    <Header title={title} mode={nav.mode} onToggleMode={nav.toggleMode} />
++    {nav.mode === 'browse' && <Toc steps={steps} index={activeIndex} onSelect={nav.goTo} />}
++    <div className="presentation-stage-host" data-presentation-stage-host="" onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
++      <Stage step={steps[activeIndex]} index={activeIndex} scale={scale} width={designSize.width} height={designSize.height} />
++    </div>
++    <Footer steps={steps} index={activeIndex} mode={nav.mode} title={title} onSelect={nav.goTo} onPrev={nav.prev} onNext={nav.next} attribution={attribution} />
++  </main>
++}
+diff --git a/src/presentation-kit/Stage.tsx b/src/presentation-kit/Stage.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..5f2351e3711bc9bce6059820320ed5a65b90e1a4
+--- /dev/null
++++ b/src/presentation-kit/Stage.tsx
+@@ -0,0 +1,33 @@
++import { AnimatePresence, LayoutGroup, motion } from 'motion/react'
++import { DESIGN_H, DESIGN_W, EASE, LAYOUT_T } from './constants'
++import type { SceneProps, Step } from './types'
++import { SceneLayer } from './nodes/SceneLayer'
++
++interface StageProps<TPayload> {
++  step: Step<TPayload>
++  index: number
++  scale: number
++  width?: number
++  height?: number
++}
++
++export function Stage<TPayload>({ step, index, scale, width = DESIGN_W, height = DESIGN_H }: StageProps<TPayload>) {
++  const CurrentScene = step.Scene
++  const sceneProps: SceneProps<TPayload> = { payload: step.payload, step, index }
++  const sceneKey = step.groupKey ?? step.id
++  return (
++    <div className="presentation-stage" data-presentation-stage="" style={{ width: width * scale, height: height * scale }}>
++      <div className="presentation-stage__canvas" data-presentation-canvas="" style={{ width, height, transform: `scale(${scale})` }}>
++        <LayoutGroup id="presentation-scene">
++          <AnimatePresence mode="popLayout" initial={false}>
++            <motion.div key={sceneKey} className="presentation-stage__scene" data-presentation-scene="" style={{ width, height }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: LAYOUT_T, ease: EASE }}>
++              <SceneLayer>
++                <CurrentScene {...sceneProps} />
++              </SceneLayer>
++            </motion.div>
++          </AnimatePresence>
++        </LayoutGroup>
++      </div>
++    </div>
++  )
++}
+diff --git a/src/presentation-kit/chrome/Footer.tsx b/src/presentation-kit/chrome/Footer.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..74fb8f322b109e86f0adec643981806054456006
+--- /dev/null
++++ b/src/presentation-kit/chrome/Footer.tsx
+@@ -0,0 +1,19 @@
++import type { StepMeta } from '../types'
++
++interface FooterProps { steps: readonly Pick<StepMeta, 'id' | 'era' | 'title' | 'caption'>[]; index: number; mode: 'browse' | 'present'; title: string; onSelect: (index: number) => void; onPrev: () => void; onNext: () => void; attribution?: React.ReactNode | false }
++export function Footer({ steps, index, mode, title, onSelect, onPrev, onNext, attribution }: FooterProps) {
++  const current = steps[index]
++  return <footer className="presentation-footer" data-presentation-footer="">
++    <div className="presentation-footer__narrative">
++      {mode === 'browse' ? <><p className="presentation-footer__title">{current?.title}</p><p className="presentation-footer__caption">{current?.caption}</p></> : <p className="presentation-footer__title">{current?.title ?? title}</p>}
++    </div>
++    {mode === 'browse' && <div className="presentation-footer__controls" data-presentation-controls="">
++      <button type="button" className="presentation-prev" data-presentation-prev="" onClick={onPrev} disabled={index === 0} aria-label="Previous step">Previous</button>
++      <nav className="presentation-progress" data-presentation-progress="" aria-label="Presentation steps">
++        {steps.map((step, stepIndex) => <button type="button" key={step.id} className="presentation-progress__item" data-presentation-step="" data-presentation-active={stepIndex === index ? 'true' : 'false'} aria-label={`Step ${stepIndex + 1}: ${step.title}`} aria-current={stepIndex === index ? 'step' : undefined} onClick={() => onSelect(stepIndex)} />)}
++      </nav>
++      <button type="button" className="presentation-next" data-presentation-next="" onClick={onNext} disabled={index === steps.length - 1} aria-label="Next step">Next</button>
++    </div>}
++    {attribution !== false && <div className="presentation-attribution" data-presentation-attribution="">{attribution ?? <a href="https://github.com/and-scene/and-scene">made by and-scene</a>}</div>}
++  </footer>
++}
+diff --git a/src/presentation-kit/chrome/Header.tsx b/src/presentation-kit/chrome/Header.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..9c8a528964f0c32bd9d04fb6721a336ccfb189ac
+--- /dev/null
++++ b/src/presentation-kit/chrome/Header.tsx
+@@ -0,0 +1,11 @@
++import type { ReactNode } from 'react'
++import type { PresentationMode } from '../types'
++
++interface HeaderProps { title: string; mode: PresentationMode; onToggleMode: () => void; brand?: ReactNode }
++export function Header({ title, mode, onToggleMode, brand }: HeaderProps) {
++  return <header className="presentation-header" data-presentation-header="">
++    <div className="presentation-header__brand" data-presentation-brand="">{brand}</div>
++    {mode === 'browse' && <h1 className="presentation-header__title" data-presentation-title="">{title}</h1>}
++    <button type="button" className="presentation-mode-toggle" data-presentation-mode-toggle="" aria-label={`Switch to ${mode === 'browse' ? 'present' : 'browse'} mode`} onClick={onToggleMode}>{mode === 'browse' ? 'Present' : 'Browse'}</button>
++  </header>
++}
+diff --git a/src/presentation-kit/chrome/Toc.tsx b/src/presentation-kit/chrome/Toc.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..70944e92374f717e3be74897c6e0dd7d00766845
+--- /dev/null
++++ b/src/presentation-kit/chrome/Toc.tsx
+@@ -0,0 +1,13 @@
++import type { StepMeta } from '../types'
++
++interface TocProps { steps: readonly Pick<StepMeta, 'id' | 'era' | 'title' | 'caption'>[]; index: number; onSelect: (index: number) => void }
++export function Toc({ steps, index, onSelect }: TocProps) {
++  const eras = [...new Set(steps.map((step) => step.era))]
++  return <nav className="presentation-toc" data-presentation-toc="" aria-label="Presentation sections">
++    {eras.map((era) => {
++      const firstIndex = steps.findIndex((step) => step.era === era)
++      const active = steps[index]?.era === era
++      return <button type="button" key={era} className="presentation-toc__item" data-presentation-toc-item="" data-presentation-active={active ? 'true' : 'false'} aria-current={active ? 'step' : undefined} onClick={() => onSelect(firstIndex)}>{era}</button>
++    })}
++  </nav>
++}
+diff --git a/src/presentation-kit/constants.ts b/src/presentation-kit/constants.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..40ace8b1a9c008bbcfcede8bceef2a1b459f96ab
+--- /dev/null
++++ b/src/presentation-kit/constants.ts
+@@ -0,0 +1,11 @@
++export const DESIGN_W = 880
++export const DESIGN_H = 380
++export const EASE = [0.22, 1, 0.36, 1] as const
++export const LAYOUT_T = 0.65
++export const ENTER_T = 0.35
++export const ENTER_DELAY = LAYOUT_T
++
++export const STAGE_LAYOUT = {
++  browse: { top: 72, bottom: 190, horizontal: 64 },
++  present: { top: 58, bottom: 72, horizontal: 40 },
++} as const
+diff --git a/src/presentation-kit/index.ts b/src/presentation-kit/index.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..299a251dc0f76ca1a0b7bb2eb7e6f2b0a8b4b6ff
+--- /dev/null
++++ b/src/presentation-kit/index.ts
+@@ -0,0 +1,14 @@
++export { Presentation } from './Presentation'
++export { Stage } from './Stage'
++export { useFitScale } from './useFitScale'
++export { usePresentationNav } from './usePresentationNav'
++export * from './types'
++export * from './constants'
++export { Appear } from './nodes/Appear'
++export { Arrow } from './nodes/Arrow'
++export { Box } from './nodes/Box'
++export { Emphasis } from './nodes/Emphasis'
++export { Frame } from './nodes/Frame'
++export { Label } from './nodes/Label'
++export { SceneLayer } from './nodes/SceneLayer'
++export { SymbolChip } from './nodes/SymbolChip'
+diff --git a/src/presentation-kit/nodes/Appear.tsx b/src/presentation-kit/nodes/Appear.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..1060f102e5f63ab34d36782c518c5ba535ba1dd5
+--- /dev/null
++++ b/src/presentation-kit/nodes/Appear.tsx
+@@ -0,0 +1,13 @@
++import { motion, type MotionProps } from 'motion/react'
++import type { ReactNode } from 'react'
++import { EASE, ENTER_DELAY, ENTER_T } from '../constants'
++
++export interface AppearProps extends MotionProps {
++  children: ReactNode
++  className?: string
++  'data-presentation-id'?: string
++}
++
++export function Appear({ children, className, ...props }: AppearProps) {
++  return <motion.div {...props} className={['presentation-appear', className].filter(Boolean).join(' ')} data-presentation-appear="" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: ENTER_T, delay: ENTER_DELAY, ease: EASE }}>{children}</motion.div>
++}
+diff --git a/src/presentation-kit/nodes/Arrow.tsx b/src/presentation-kit/nodes/Arrow.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..0bb543cfa27c756de4ebd984e2c366ed0cecc3a6
+--- /dev/null
++++ b/src/presentation-kit/nodes/Arrow.tsx
+@@ -0,0 +1,7 @@
++import { motion, type HTMLMotionProps } from 'motion/react'
++import { EASE, ENTER_DELAY, ENTER_T } from '../constants'
++
++export interface ArrowProps extends HTMLMotionProps<'div'> { entityId: string; children?: React.ReactNode }
++export function Arrow({ entityId, className, children, ...props }: ArrowProps) {
++  return <motion.div {...props} layout layoutId={entityId} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: ENTER_T, delay: ENTER_DELAY, ease: EASE }} className={['presentation-arrow', className].filter(Boolean).join(' ')} data-presentation-node="arrow" data-presentation-id={entityId} aria-hidden={props['aria-hidden'] ?? true}>{children}</motion.div>
++}
+diff --git a/src/presentation-kit/nodes/Box.tsx b/src/presentation-kit/nodes/Box.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..96a481a9d39848de41704d8d581bc985312cdcfc
+--- /dev/null
++++ b/src/presentation-kit/nodes/Box.tsx
+@@ -0,0 +1,11 @@
++import { motion, type HTMLMotionProps } from 'motion/react'
++import { EASE, ENTER_DELAY, ENTER_T } from '../constants'
++
++export interface BoxProps extends HTMLMotionProps<'div'> {
++  entityId: string
++  children?: React.ReactNode
++}
++
++export function Box({ entityId, className, children, ...props }: BoxProps) {
++  return <motion.div {...props} layout layoutId={entityId} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: ENTER_T, delay: ENTER_DELAY, ease: EASE }} className={['presentation-box', className].filter(Boolean).join(' ')} data-presentation-node="box" data-presentation-id={entityId}>{children}</motion.div>
++}
+diff --git a/src/presentation-kit/nodes/Emphasis.tsx b/src/presentation-kit/nodes/Emphasis.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..497c27cd61bd8332a459e1328a980b7b8716e9e7
+--- /dev/null
++++ b/src/presentation-kit/nodes/Emphasis.tsx
+@@ -0,0 +1,7 @@
++import { motion, type HTMLMotionProps } from 'motion/react'
++import { EASE, ENTER_DELAY, ENTER_T } from '../constants'
++
++export interface EmphasisProps extends HTMLMotionProps<'div'> { entityId: string; children?: React.ReactNode }
++export function Emphasis({ entityId, className, children, ...props }: EmphasisProps) {
++  return <motion.div {...props} layout layoutId={entityId} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: ENTER_T, delay: ENTER_DELAY, ease: EASE }} className={['presentation-emphasis', className].filter(Boolean).join(' ')} data-presentation-node="emphasis" data-presentation-id={entityId}>{children}</motion.div>
++}
+diff --git a/src/presentation-kit/nodes/Frame.tsx b/src/presentation-kit/nodes/Frame.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..807b128061d59635648bd5e3bdede77032c9d5df
+--- /dev/null
++++ b/src/presentation-kit/nodes/Frame.tsx
+@@ -0,0 +1,7 @@
++import { motion, type HTMLMotionProps } from 'motion/react'
++import { EASE, ENTER_DELAY, ENTER_T } from '../constants'
++
++export interface FrameProps extends HTMLMotionProps<'div'> { entityId: string; children?: React.ReactNode }
++export function Frame({ entityId, className, children, ...props }: FrameProps) {
++  return <motion.div {...props} layout layoutId={entityId} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: ENTER_T, delay: ENTER_DELAY, ease: EASE }} className={['presentation-frame', className].filter(Boolean).join(' ')} data-presentation-node="frame" data-presentation-id={entityId}>{children}</motion.div>
++}
+diff --git a/src/presentation-kit/nodes/Label.tsx b/src/presentation-kit/nodes/Label.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..5582b0e3e51f265a6b537c5ac16b61f6966cb958
+--- /dev/null
++++ b/src/presentation-kit/nodes/Label.tsx
+@@ -0,0 +1,7 @@
++import { motion, type HTMLMotionProps } from 'motion/react'
++import { EASE, ENTER_DELAY, ENTER_T } from '../constants'
++
++export interface LabelProps extends HTMLMotionProps<'div'> { entityId: string; children?: React.ReactNode }
++export function Label({ entityId, className, children, ...props }: LabelProps) {
++  return <motion.div {...props} layout layoutId={entityId} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: ENTER_T, delay: ENTER_DELAY, ease: EASE }} className={['presentation-label', className].filter(Boolean).join(' ')} data-presentation-node="label" data-presentation-id={entityId}>{children}</motion.div>
++}
+diff --git a/src/presentation-kit/nodes/SceneLayer.tsx b/src/presentation-kit/nodes/SceneLayer.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..26bdbc99abd41214721e0f710043aadaedcb6383
+--- /dev/null
++++ b/src/presentation-kit/nodes/SceneLayer.tsx
+@@ -0,0 +1,9 @@
++import type { HTMLAttributes, ReactNode } from 'react'
++
++export interface SceneLayerProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
++  children: ReactNode
++}
++
++export function SceneLayer({ children, className, ...props }: SceneLayerProps) {
++  return <div {...props} className={['presentation-scene-layer', className].filter(Boolean).join(' ')} data-presentation-scene-layer="">{children}</div>
++}
+diff --git a/src/presentation-kit/nodes/SymbolChip.tsx b/src/presentation-kit/nodes/SymbolChip.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..66d4051ca59b1cce3f6981472c503a2beec858d2
+--- /dev/null
++++ b/src/presentation-kit/nodes/SymbolChip.tsx
+@@ -0,0 +1,8 @@
++import { motion, type HTMLMotionProps } from 'motion/react'
++import { EASE, ENTER_DELAY, ENTER_T } from '../constants'
++import type { LucideIcon } from 'lucide-react'
++
++export interface SymbolChipProps extends Omit<HTMLMotionProps<'div'>, 'children'> { entityId: string; Icon?: LucideIcon; label: string }
++export function SymbolChip({ entityId, Icon, label, className, ...props }: SymbolChipProps) {
++  return <motion.div {...props} layout layoutId={entityId} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: ENTER_T, delay: ENTER_DELAY, ease: EASE }} className={['presentation-symbol-chip', className].filter(Boolean).join(' ')} data-presentation-node="symbol-chip" data-presentation-id={entityId}>{Icon && <Icon aria-hidden="true" />}<span>{label}</span></motion.div>
++}
+diff --git a/src/presentation-kit/types.ts b/src/presentation-kit/types.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..1138bf4b0775dcf6bad327d1510d33a924f4e8a3
+--- /dev/null
++++ b/src/presentation-kit/types.ts
+@@ -0,0 +1,32 @@
++import type { ComponentType } from 'react'
++
++export type PresentationMode = 'browse' | 'present'
++
++export interface StepMeta {
++  id: string
++  era: string
++  title: string
++  caption: string
++  groupKey?: string
++}
++
++export interface SceneProps<TPayload> {
++  payload: TPayload
++  step: StepMeta
++  index: number
++}
++
++export interface Step<TPayload = unknown> extends StepMeta {
++  Scene: ComponentType<SceneProps<TPayload>>
++  payload: TPayload
++}
++
++export interface PresentationProps<TPayload> {
++  steps: readonly Step<TPayload>[]
++  title: string
++  initialMode?: PresentationMode
++  designSize?: { width: number; height: number }
++  attribution?: React.ReactNode | false
++}
++
++export type PresentationComponent = <TPayload>(props: PresentationProps<TPayload>) => React.ReactElement
+diff --git a/src/presentation-kit/useFitScale.ts b/src/presentation-kit/useFitScale.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..a3630cd94177438afddd8e5b682490d67d42f28c
+--- /dev/null
++++ b/src/presentation-kit/useFitScale.ts
+@@ -0,0 +1,27 @@
++import { useEffect, useState } from 'react'
++import { DESIGN_H, DESIGN_W, STAGE_LAYOUT } from './constants'
++import type { PresentationMode } from './types'
++
++const MIN_GUTTER = 16
++
++/** Uniform scale that fits the design canvas in the viewport; side gutters shrink on narrow viewports. */
++export function computeFitScale(mode: PresentationMode, viewportWidth: number, viewportHeight: number, width = DESIGN_W, height = DESIGN_H) {
++  const geometry = STAGE_LAYOUT[mode]
++  const gutter = Math.min(geometry.horizontal, Math.max(MIN_GUTTER, (viewportWidth - 320) / 10))
++  const availableWidth = Math.max(0, viewportWidth - gutter * 2)
++  const availableHeight = Math.max(0, viewportHeight - geometry.top - geometry.bottom)
++  return Math.min(1, availableWidth / width, availableHeight / height)
++}
++
++export function useFitScale(mode: PresentationMode, width = DESIGN_W, height = DESIGN_H) {
++  const [scale, setScale] = useState(1)
++  useEffect(() => {
++    const update = () => {
++      setScale(computeFitScale(mode, window.innerWidth, window.innerHeight, width, height))
++    }
++    update()
++    window.addEventListener('resize', update)
++    return () => window.removeEventListener('resize', update)
++  }, [mode, width, height])
++  return scale
++}
+diff --git a/src/presentation-kit/usePresentationNav.ts b/src/presentation-kit/usePresentationNav.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..8fa393187ed27164309d3d0c4840ec7575e6309a
+--- /dev/null
++++ b/src/presentation-kit/usePresentationNav.ts
+@@ -0,0 +1,31 @@
++import { useCallback, useEffect, useState } from 'react'
++import type { PresentationMode } from './types'
++
++export function usePresentationNav(count: number, initialMode: PresentationMode = 'browse') {
++  const [navigation, setNavigation] = useState({ index: 0, count })
++  if (navigation.count !== count) {
++    setNavigation({ index: Math.min(navigation.index, Math.max(0, count - 1)), count })
++  }
++  const index = navigation.index
++  const [mode, setMode] = useState<PresentationMode>(initialMode)
++  const goTo = useCallback((next: number) => setNavigation({ index: Math.max(0, Math.min(count - 1, next)), count }), [count])
++  const next = useCallback(() => goTo(index + 1), [goTo, index])
++  const prev = useCallback(() => goTo(index - 1), [goTo, index])
++  const toggleMode = useCallback(() => setMode((current) => current === 'browse' ? 'present' : 'browse'), [])
++
++
++  useEffect(() => {
++    const onKeyDown = (event: KeyboardEvent) => {
++      const target = event.target instanceof HTMLElement ? event.target : null
++      const editing = target?.matches('input, textarea, select, [contenteditable="true"]')
++      if (editing || (target?.closest('button, a, [role="button"]') && event.key !== 'p' && event.key !== 'P')) return
++      if (['ArrowRight', ' ', 'PageDown'].includes(event.key)) { event.preventDefault(); next() }
++      else if (['ArrowLeft', 'PageUp'].includes(event.key)) { event.preventDefault(); prev() }
++      else if (event.key.toLowerCase() === 'p') toggleMode()
++    }
++    window.addEventListener('keydown', onKeyDown)
++    return () => window.removeEventListener('keydown', onKeyDown)
++  }, [next, prev, toggleMode])
++
++  return { index, mode, goTo, next, prev, toggleMode }
++}
+diff --git a/src/presentations/how-to-make-a-presentation/Scene.tsx b/src/presentations/how-to-make-a-presentation/Scene.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..830c803dda533cd5f04d5ab3e6b94e2a446e9759
+--- /dev/null
++++ b/src/presentations/how-to-make-a-presentation/Scene.tsx
+@@ -0,0 +1,44 @@
++import type { SceneProps } from '../../presentation-kit'
++import { Arrow, Box, Emphasis, Frame, Label, SymbolChip } from '../../presentation-kit'
++import { ENTITY } from './entities'
++
++export function EvolvingScene({ index }: SceneProps<null>) {
++  return <div className="sample-scene">
++    <div className="conversation">
++      <Box entityId={ENTITY.you} className="person you"><span className="eyebrow">THE AUTHOR</span><strong>you</strong><small>one good question</small></Box>
++      {index >= 1 && <>
++        <Arrow entityId="how-to-make-a-presentation:conversation-arrow" className="conversation-arrow">↔</Arrow>
++        <Box entityId={ENTITY.skill} className="person skill"><span className="eyebrow">YOUR GUIDE</span><strong>skill</strong><small>listening closely</small></Box>
++      </>}
++      {index === 0 && <Box entityId={ENTITY.prompt} className="prompt">“I have a topic…”</Box>}
++      {index >= 1 && <SymbolChip entityId={ENTITY.question} label="one question at a time" className="question-chip" />}
++      {index >= 4 && <Box entityId={ENTITY.depth} className="depth-control"><span>DEPTH</span><strong>partial ↔ full</strong></Box>}
++    </div>
++    {index >= 2 && <div className="route-row">
++      <div className="tray" aria-label="Accumulating step cards">
++        <span className="eyebrow tray-label">YOUR STORY · STEP CARDS</span>
++        <div className="cards">
++          <Box entityId={ENTITY.card1} className="step-card"><span>01 · ASK</span><strong>Title</strong><small>Caption · visual</small></Box>
++          {index >= 3 && <Arrow entityId="how-to-make-a-presentation:morph-link" className="morph-link">morphs →</Arrow>}
++          {index >= 3 && <Box entityId={ENTITY.card2} className="step-card"><span>02 · SHAPE</span><strong>New beat</strong><small>Same scene</small></Box>}
++          {index >= 3 && <Box entityId={ENTITY.card3} className="step-card"><span>03 · CONNECT</span><strong>What changes?</strong><small>Morph forward</small></Box>}
++          {index >= 4 && <Box entityId={ENTITY.ghost} className="step-card ghost"><span>···</span><strong>Your pace</strong><small>More when ready</small></Box>}
++          {index >= 6 && <>
++            <Arrow entityId="how-to-make-a-presentation:verify-link" className="card-link">→</Arrow>
++            <Box entityId={ENTITY.verify} className="verify-card"><span>BUILD + RENDER</span><strong>✓ All clear</strong></Box>
++          </>}
++        </div>
++        {index >= 3 && <div className="morph-note">what morphs →</div>}
++      </div>
++    </div>}
++    {index >= 5 && <>
++      <Arrow entityId="how-to-make-a-presentation:kit-connector" className="kit-connector">↓</Arrow>
++      <Box entityId={ENTITY.kit} className="kit-socket"><span>DRAWN WITH</span><strong>shared scene kit</strong><small>boxes · arrows · motion</small></Box>
++    </>}
++    {index >= 7 && <>
++      <Arrow entityId={ENTITY.modify} className="modify-arc">↘</Arrow>
++      <Emphasis entityId={ENTITY.edited} className="edited-flag">EDITED IN PLACE</Emphasis>
++    </>}
++    {index >= 8 && <Frame entityId={ENTITY.reveal} className="reveal-frame"><Label entityId="how-to-make-a-presentation:reveal-label" className="reveal-label">A PRESENTATION MADE WITH THIS SKILL</Label></Frame>}
++  </div>
++}
+diff --git a/src/presentations/how-to-make-a-presentation/Talk.tsx b/src/presentations/how-to-make-a-presentation/Talk.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..80f15060bc75bb241321b10970d5dea6df370aed
+--- /dev/null
++++ b/src/presentations/how-to-make-a-presentation/Talk.tsx
+@@ -0,0 +1,7 @@
++import { Presentation } from '../../presentation-kit'
++import { STEPS } from './steps'
++import './presentation.css'
++
++export default function Talk() {
++  return <div className="how-to-make-a-presentation"><Presentation steps={STEPS} title="How to Use This Skill to Make a Presentation" initialMode="browse" /></div>
++}
+diff --git a/src/presentations/how-to-make-a-presentation/entities.ts b/src/presentations/how-to-make-a-presentation/entities.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..94c701e6359327ac5f854164872e5ca36c005475
+--- /dev/null
++++ b/src/presentations/how-to-make-a-presentation/entities.ts
+@@ -0,0 +1,16 @@
++export const ENTITY = {
++  you: 'how-to-make-a-presentation:you',
++  prompt: 'how-to-make-a-presentation:prompt',
++  skill: 'how-to-make-a-presentation:skill',
++  question: 'how-to-make-a-presentation:question',
++  card1: 'how-to-make-a-presentation:card-1',
++  card2: 'how-to-make-a-presentation:card-2',
++  card3: 'how-to-make-a-presentation:card-3',
++  ghost: 'how-to-make-a-presentation:ghost',
++  depth: 'how-to-make-a-presentation:depth',
++  kit: 'how-to-make-a-presentation:kit',
++  verify: 'how-to-make-a-presentation:verify',
++  modify: 'how-to-make-a-presentation:modify',
++  edited: 'how-to-make-a-presentation:edited',
++  reveal: 'how-to-make-a-presentation:reveal',
++} as const
+diff --git a/src/presentations/how-to-make-a-presentation/presentation.css b/src/presentations/how-to-make-a-presentation/presentation.css
+new file mode 100644
+index 0000000000000000000000000000000000000000..a8dc06c803e1cbe0a1eaea44d1df6aff7ce4940a
+--- /dev/null
++++ b/src/presentations/how-to-make-a-presentation/presentation.css
+@@ -0,0 +1,75 @@
++.how-to-make-a-presentation { --ink: #17272d; --muted: #718187; --teal: #126c69; --coral: #e8795d; color: var(--ink); font-family: Manrope, sans-serif; }
++.how-to-make-a-presentation .presentation { min-height: 100svh; background: #f4f3ed; }
++.how-to-make-a-presentation .presentation-header { min-height: 62px; padding: 0 4vw; border-bottom: 1px solid #dfdfd6; }
++.how-to-make-a-presentation .presentation-header__title { font-size: 13px; font-weight: 700; letter-spacing: .01em; }
++.how-to-make-a-presentation .presentation-mode-toggle, .how-to-make-a-presentation .presentation-prev, .how-to-make-a-presentation .presentation-next { color: var(--ink); border: 1px solid #cfd6d1; border-radius: 999px; background: #fffdf7; padding: 9px 15px; cursor: pointer; }
++.how-to-make-a-presentation .presentation-mode-toggle { font-size: 12px; font-weight: 700; }
++.how-to-make-a-presentation .presentation-toc { top: 50%; right: 26px; transform: translateY(-50%); gap: 8px; }
++.how-to-make-a-presentation .presentation-toc__item { color: #76858a; border: 0; border-left: 2px solid #d5dbd7; background: transparent; text-align: left; padding: 4px 9px; font-size: 10px; cursor: pointer; text-transform: uppercase; letter-spacing: .08em; }
++.how-to-make-a-presentation .presentation-toc__item[data-presentation-active="true"] { color: var(--teal); border-left: 3px solid var(--coral); font-weight: 800; }
++.how-to-make-a-presentation .presentation-stage-host { padding: 10px 0; }
++.how-to-make-a-presentation .presentation-footer { min-height: 112px; padding: 12px 4vw 23px; border-top: 1px solid #dfdfd6; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
++.how-to-make-a-presentation .presentation-footer__narrative { grid-column: 1; max-width: 560px; }
++.how-to-make-a-presentation .presentation-footer__title { margin: 0 0 4px; font-weight: 800; font-size: 15px; }
++.how-to-make-a-presentation .presentation-footer__caption { margin: 0; color: #66767b; font-size: 12px; line-height: 1.5; }
++.how-to-make-a-presentation .presentation-footer__controls { grid-column: 2; }
++.how-to-make-a-presentation .presentation-progress__item { width: 9px; height: 9px; padding: 0; border: 0; border-radius: 9px; background: #bdc9c4; cursor: pointer; transition: width .2s, background .2s; }
++.how-to-make-a-presentation .presentation-progress__item[data-presentation-active="true"] { width: 27px; background: var(--coral); }
++.how-to-make-a-presentation .presentation-attribution { right: 4vw; bottom: 8px; color: #66767b; font-size: 12px; }
++.how-to-make-a-presentation .presentation-attribution a { color: inherit; text-decoration-color: #aab8b3; text-underline-offset: 3px; }
++.sample-scene { position: absolute; inset: 0; overflow: visible; }
++.sample-scene .presentation-box, .sample-scene .presentation-symbol-chip, .sample-scene .presentation-emphasis, .sample-scene .presentation-frame, .sample-scene .presentation-label, .sample-scene .presentation-arrow { position: absolute; }
++.conversation { position: absolute; inset: 0 0 auto; height: 130px; }
++.person { top: 13px; width: 190px; height: 78px; padding: 12px 16px; border: 1px solid #cbd8d2; border-radius: 14px; background: #fffdf8; box-shadow: 0 5px 14px #193d3510; display: flex; flex-direction: column; }
++.person.you { left: 112px; }.person.skill { left: 546px; border-color: #b3d2ca; background: #e8f2ec; }
++.eyebrow, .person .eyebrow, .step-card > span, .verify-card > span, .kit-socket > span { color: #778a86; font: 500 9px 'DM Mono', monospace; letter-spacing: .1em; }
++.person strong { margin-top: 1px; font-size: 21px; line-height: 1.2; }.person small { color: #72817e; font-size: 10px; }
++.conversation-arrow { left: 340px; top: 36px; width: 160px; color: var(--teal); text-align: center; font: 26px Manrope, sans-serif; }
++.prompt { left: 126px; top: 100px; padding: 7px 12px; color: #8a4f40; background: #fff0e8; border-radius: 8px; font-size: 11px; }
++.question-chip { left: 357px; top: 9px; padding: 5px 10px; border: 1px solid #d7ddd5; border-radius: 999px; color: #566d68; background: #fffdf8; font-size: 9px; white-space: nowrap; }
++.depth-control { left: 100px; top: 98px; width: 218px; display: flex; justify-content: space-between; padding: 7px 10px; border: 1px solid #e4b3a0; border-radius: 8px; background: #fff5ed; color: #764c3e; font-size: 10px; }
++.depth-control span { font: 500 9px 'DM Mono', monospace; letter-spacing: .1em; }
++.route-row { position: absolute; left: 62px; top: 154px; }
++.tray { position: relative; width: 756px; height: 145px; padding: 13px 15px; border: 1px solid #dbe1da; border-radius: 12px; background: #eeefe9; }
++.tray-label { position: absolute; top: 10px; left: 15px; }
++.cards { position: absolute; left: 15px; right: 15px; top: 33px; display: flex; align-items: center; gap: 10px; }
++.step-card { position: relative !important; width: 124px; height: 82px; flex: none; display: flex; flex-direction: column; padding: 9px 10px; border: 1px solid #b9d4ca; border-radius: 9px; background: #fffef9; box-shadow: 0 3px 9px #213d3710; }
++.step-card > span { color: var(--teal); }.step-card strong { margin-top: 5px; font-size: 12px; }.step-card small { color: #778681; font-size: 9px; }
++.step-card.ghost { border-style: dashed; background: #f4f3ed; color: #7b8984; box-shadow: none; }.ghost > span { color: #c17a62; }
++.morph-note { position: absolute; left: 300px; bottom: 8px; color: #74847f; font: 9px 'DM Mono', monospace; }
++.kit-connector { left: 424px; top: 294px; width: 30px; height: 20px; color: var(--coral); text-align: center; font-size: 18px; }
++.kit-socket { left: 344px; top: 315px; width: 192px; height: 53px; padding: 7px 11px; display: flex; flex-direction: column; border: 1px solid #a9c7bd; border-radius: 9px; background: #dfede6; }
++.kit-socket strong { font-size: 12px; }.kit-socket small { color: #6b8179; font-size: 9px; }
++.card-link { position: relative !important; color: var(--coral); font-size: 18px; }
++.morph-link { position: relative !important; width: 38px; flex: none; color: var(--teal); font: 8px 'DM Mono', monospace; text-align: center; white-space: nowrap; }
++.verify-card { position: relative !important; width: 112px; height: 70px; padding: 9px; display: flex; flex-direction: column; border: 1px solid #a7cbb3; border-radius: 9px; background: #e6f4e9; }
++.verify-card strong { margin-top: 7px; color: #31724d; font-size: 12px; }
++.modify-arc { left: 661px; top: 94px; color: var(--coral); font-size: 32px; transform: rotate(12deg); }
++.edited-flag { left: 592px; top: 124px; padding: 5px 8px; color: #8c4937; background: #ffebe1; border: 1px solid #edb59f; border-radius: 5px; font: 9px 'DM Mono', monospace; }
++.reveal-frame { inset: 0; border: 2px solid #e58a6f; border-radius: 18px; pointer-events: none; }
++.reveal-label { top: -10px; left: 50%; padding: 3px 10px; transform: translateX(-50%); color: #854c3d; background: #f4f3ed; font: 500 9px 'DM Mono', monospace; letter-spacing: .12em; white-space: nowrap; }
++@media (max-width: 760px) {
++  .how-to-make-a-presentation .presentation-header { min-height: 52px; padding: 0 16px; }
++  .how-to-make-a-presentation .presentation-header__title { max-width: 68vw; font-size: 11px; }
++  .how-to-make-a-presentation .presentation-footer { min-height: 128px; padding: 12px 14px 27px; grid-template-columns: 1fr; gap: 9px; }
++  .how-to-make-a-presentation .presentation-footer__narrative, .how-to-make-a-presentation .presentation-footer__controls { grid-column: 1; }
++  .how-to-make-a-presentation .presentation-footer__controls { justify-content: flex-start; gap: 11px; }
++  .how-to-make-a-presentation .presentation-footer__caption { font-size: 11px; }
++  .how-to-make-a-presentation .presentation-attribution { right: 14px; bottom: 8px; }
++}
++@media (max-width: 500px) {
++  .sample-scene .eyebrow, .sample-scene .person .eyebrow, .sample-scene .step-card > span, .sample-scene .verify-card > span, .sample-scene .kit-socket > span { font-size: 15px; }
++  .sample-scene .person strong { font-size: 26px; }
++  .sample-scene .person small, .sample-scene .step-card small { display: none; }
++  .sample-scene .step-card > span { font-size: 13px; letter-spacing: .04em; overflow-wrap: anywhere; }
++  .sample-scene .step-card strong, .sample-scene .verify-card strong, .sample-scene .kit-socket strong { font-size: 17px; line-height: 1.1; }
++  .sample-scene .verify-card { height: auto; min-height: 70px; }
++  .sample-scene .verify-card strong { font-size: 15px; overflow-wrap: anywhere; }
++  .sample-scene .prompt { font-size: 16px; }
++  .sample-scene .depth-control span, .sample-scene .reveal-label { font-size: 13px; }
++  .sample-scene .reveal-label { top: -14px; }
++  .sample-scene .morph-link { width: 54px; font-size: 12px; }
++  .sample-scene .question-chip, .sample-scene .depth-control, .sample-scene .edited-flag { font-size: 15px; }
++  .sample-scene .kit-socket small { display: none; }
++  .sample-scene .morph-note { font-size: 13px; }
++}
+diff --git a/src/presentations/how-to-make-a-presentation/steps.tsx b/src/presentations/how-to-make-a-presentation/steps.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..0b23044a418ab3d17c2e96b92c388017a5ac138a
+--- /dev/null
++++ b/src/presentations/how-to-make-a-presentation/steps.tsx
+@@ -0,0 +1,22 @@
++import type { Step } from '../../presentation-kit'
++import { EvolvingScene } from './Scene'
++
++const outline = [
++  ['the ask', 'You have a topic', 'It starts with you, a topic, and mild overconfidence.'],
++  ['the ask', 'The skill interviews you', 'One question at a time: the topic, the look, then each beat of the story.'],
++  ['the gathering', 'Answers become steps', 'Each answer lands as a step card — title, caption, visual — plus what morphs from one step into the next.'],
++  ['the gathering', 'The deck grows', 'Same shapes, new beats. Every answer extends the story without redrawing it.'],
++  ['the gathering', 'You set the depth', 'Spell out every step, or sketch a few and see how it looks. You hold the gate.'],
++  ['the build', 'It assembles the scene', 'Your steps are wired into one evolving scene, drawn with a shared scene kit — ready-made boxes, arrows, and motion that make entities morph.'],
++  ['the build', 'It checks its own work', 'Before saying done, it builds and renders every step — and fixes what breaks.'],
++  ['the loop', 'Changed your mind? Loop it.', 'Point at a step and ask. The skill edits the scene in place — nothing is redrawn from scratch.'],
++  ['the reveal', "You're looking at one", 'This presentation was built exactly this way. Thanks for watching.'],
++] as const
++
++export const STEPS: Step<null>[] = outline.map(([era, title, caption], index) => ({
++  id: `how-to-make-a-presentation:step-${index + 1}`,
++  era, title, caption,
++  groupKey: 'how-to-make-a-presentation:evolving-scene',
++  Scene: EvolvingScene,
++  payload: null,
++}))
+diff --git a/src/presentations/index.ts b/src/presentations/index.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..a0f7fff9a6e816bd1bc1421c06cbfc78df680f5f
+--- /dev/null
++++ b/src/presentations/index.ts
+@@ -0,0 +1,13 @@
++export interface PresentationRegistration {
++  slug: string
++  title: string
++  load: () => Promise<{ default: React.ComponentType }>
++}
++
++export const presentations: PresentationRegistration[] = [
++  {
++    slug: 'how-to-make-a-presentation',
++    title: 'How to Use This Skill to Make a Presentation',
++    load: () => import('./how-to-make-a-presentation/Talk'),
++  },
++]
+diff --git a/src/route.ts b/src/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..a655685429df9a0bcb4fb7416edb482a9151b3c1
+--- /dev/null
++++ b/src/route.ts
+@@ -0,0 +1,7 @@
++export function resolvePresentationSlug(pathname: string, baseUrl: string): string {
++  const path = pathname.split('/').filter(Boolean).join('/')
++  const base = baseUrl.split('/').filter(Boolean).join('/')
++  if (!base) return path
++  if (path === base) return ''
++  return path.startsWith(`${base}/`) ? path.slice(base.length + 1) : path
++}
+diff --git a/tests/presentation-kit.test.tsx b/tests/presentation-kit.test.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..7f50d954c197f21d6d0767c7950b4f4581d38a33
+--- /dev/null
++++ b/tests/presentation-kit.test.tsx
+@@ -0,0 +1,122 @@
++import { cleanup, fireEvent, render, screen } from '@testing-library/react'
++import { useEffect } from 'react'
++import { afterEach, describe, expect, it } from 'vitest'
++import { resolvePresentationSlug } from '../src/route'
++import { readdirSync, readFileSync, statSync } from 'node:fs'
++import { join } from 'node:path'
++import { computeFitScale } from '../src/presentation-kit/useFitScale'
++import { Presentation } from '../src/presentation-kit/Presentation'
++import { Appear, Arrow, Box, Emphasis, Frame, Label, SymbolChip } from '../src/presentation-kit'
++import type { SceneProps, Step } from '../src/presentation-kit/types'
++
++afterEach(cleanup)
++
++let mounts = 0
++function TypedScene({ payload }: SceneProps<{ value: number }>) {
++  useEffect(() => { mounts += 1 }, [])
++  return <div data-testid="payload">{payload.value}</div>
++}
++
++const typedSteps: readonly Step<{ value: number }>[] = [
++  { id: 'one', era: 'Start', title: 'First', caption: 'First caption', groupKey: 'story', Scene: TypedScene, payload: { value: 1 } },
++  { id: 'two', era: 'Build', title: 'Second', caption: 'Second caption', groupKey: 'story', Scene: TypedScene, payload: { value: 2 } },
++]
++
++describe('presentation kit contract', () => {
++  it('accepts typed grouped payloads at the Presentation boundary and retains the scene', () => {
++    mounts = 0
++    render(<Presentation steps={typedSteps} title="Typed" attribution={false} />)
++    expect(screen.getByTestId('payload').textContent).toBe('1')
++    const initialMounts = mounts
++    fireEvent.keyDown(window, { key: 'ArrowRight' })
++    expect(screen.getByTestId('payload').textContent).toBe('2')
++    expect(mounts).toBe(initialMounts)
++  })
++
++  it('clamps navigation and exposes semantic active state', () => {
++    const view = render(<Presentation steps={typedSteps} title="Typed" attribution={false} />)
++    fireEvent.keyDown(window, { key: 'ArrowLeft' })
++    expect(document.querySelector('[data-step-index]')?.getAttribute('data-step-index')).toBe('0')
++    fireEvent.click(screen.getByRole('button', { name: 'Step 2: Second' }))
++    expect(document.querySelector('[data-step-index]')?.getAttribute('data-step-index')).toBe('1')
++    expect(screen.getByRole('button', { name: 'Step 2: Second' }).getAttribute('aria-current')).toBe('step')
++    fireEvent.keyDown(window, { key: 'ArrowRight' })
++    expect(document.querySelector('[data-step-index]')?.getAttribute('data-step-index')).toBe('1')
++    view.rerender(<Presentation steps={typedSteps.slice(0, 1)} title="Typed" attribution={false} />)
++    expect(document.querySelector('[data-step-index]')?.getAttribute('data-step-index')).toBe('0')
++  })
++
++  it('resolves routes below the configured Vite base path', () => {
++    expect(resolvePresentationSlug('/studio/architecture/', '/studio/')).toBe('architecture')
++    expect(resolvePresentationSlug('/studio/', '/studio/')).toBe('')
++    expect(resolvePresentationSlug('/elsewhere/architecture', '/studio/')).toBe('elsewhere/architecture')
++  })
++
++  it('switches modes without changing position and renders default attribution', () => {
++    render(<Presentation steps={typedSteps} title="Typed" />)
++    fireEvent.keyDown(window, { key: 'ArrowRight' })
++    fireEvent.click(screen.getByRole('button', { name: 'Switch to present mode' }))
++    expect(document.querySelector('[data-step-index]')?.getAttribute('data-step-index')).toBe('1')
++    expect(screen.getByRole('main').getAttribute('data-presentation-mode')).toBe('present')
++    expect(screen.getByRole('link', { name: 'made by and-scene' }).getAttribute('href')).toBe('https://github.com/and-scene/and-scene')
++    expect(document.querySelector('[data-presentation-brand]')?.textContent).toBe('')
++  })
++
++  it('does not steal navigation keys from focused controls', () => {
++    render(<Presentation steps={typedSteps} title="Typed" />)
++    screen.getByRole('button', { name: 'Step 2: Second' }).focus()
++    fireEvent.keyDown(screen.getByRole('button', { name: 'Step 2: Second' }), { key: 'ArrowRight' })
++    expect(document.querySelector('[data-step-index]')?.getAttribute('data-step-index')).toBe('0')
++  })
++
++  it('keeps visual styling out of kit primitives, chrome, and source', () => {
++    function AllPrimitives() {
++      return (
++        <div>
++          <Box entityId="box">Box</Box>
++          <Arrow entityId="arrow" />
++          <Label entityId="label">Label</Label>
++          <Frame entityId="frame">Frame</Frame>
++          <Emphasis entityId="emphasis">Emphasis</Emphasis>
++          <SymbolChip entityId="chip" label="Chip" />
++          <Appear>Appear</Appear>
++        </div>
++      )
++    }
++    const steps: readonly Step<null>[] = [{ id: 'one', era: 'Start', title: 'First', caption: 'Caption', Scene: AllPrimitives, payload: null }]
++    const { container } = render(<Presentation steps={steps} title="Unstyled" />)
++    const visual = /^(color|background|font|border|box-shadow|text-shadow|outline|padding|margin|gap|filter|letter-spacing)/
++    for (const element of container.querySelectorAll<HTMLElement>('[style]')) {
++      const properties = Array.from(element.style, (name) => name)
++      expect(properties.filter((name) => visual.test(name)), element.outerHTML.slice(0, 120)).toEqual([])
++    }
++    for (const hook of ['box', 'arrow', 'label', 'frame', 'emphasis', 'symbol-chip']) {
++      expect(container.querySelector(`[data-presentation-node="${hook}"]`), hook).not.toBeNull()
++    }
++    expect(container.querySelector('[data-presentation-appear]')).not.toBeNull()
++
++    const sources: string[] = []
++    const walk = (directory: string) => {
++      for (const entry of readdirSync(directory)) {
++        const path = join(directory, entry)
++        if (statSync(path).isDirectory()) walk(path)
++        else sources.push(path)
++      }
++    }
++    walk('src/presentation-kit')
++    expect(sources.filter((path) => /\.(css|scss|sass|less)$/.test(path))).toEqual([])
++    for (const path of sources) {
++      const text = readFileSync(path, 'utf8')
++      expect(text, path).not.toMatch(/tailwind|styled-components|@emotion|\.css['"]/)
++      expect(text, path).not.toMatch(/(?:color|background(?:Color)?|fontFamily|boxShadow|border(?:Color|Radius)?)\s*:/)
++    }
++  })
++
++  it('keeps desktop fit geometry and reclaims side gutters on narrow viewports', () => {
++    expect(computeFitScale('browse', 1440, 900)).toBe(1)
++    expect(computeFitScale('browse', 1000, 900)).toBeCloseTo((1000 - 128) / 880)
++    const narrow = computeFitScale('browse', 390, 844)
++    expect(narrow).toBeCloseTo((390 - 32) / 880)
++    expect(narrow).toBeGreaterThan((390 - 128) / 880)
++  })
++})

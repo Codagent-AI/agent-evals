@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-10-04T05-06-42-844964666Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_verify-change__sub_verify-change__review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered app is missing the default made by and-scene GitHub attribution.",
+      "evidence": [
+        "Product evidence: attribution-default-link: fail — Default made by and-scene GitHub attribution is missing."
+      ],
+      "handling": "The delivered product omitted the default attribution.",
+      "consequence": "The attribution check failed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The check establishes an omission, but the available artifacts do not show whether it arose from an assumption, overlooked repository context, or another implementation error.",
+      "resolution": "unresolved",
+      "id": "9c00a2940751ac5a"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered demo failed the supported navigation check.",
+      "evidence": [
+        "Product evidence: demo-supported-navigation: fail.",
+        "Product evidence separately marks demo-navigation-boundaries-and-control-keys and demo-focus-and-keyboard-accessibility as pass."
+      ],
+      "handling": "The delivered navigation passed several related checks but failed the supported navigation check.",
+      "consequence": "At least one supported navigation behavior did not meet verification expectations; the artifacts do not identify which behavior.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure is observable, but its cause and the specific navigation behavior are absent from the supplied evidence.",
+      "resolution": "unresolved",
+      "id": "0d6a96241f0bf9c0"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
