@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "run_id": "plan-and-implement-change-2026-10-16T03-20-43-263520278Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement__sub_implement-change__implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_3__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_3__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__verify-change__sub_verify-change__review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": "Product verification",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The verification workflow failed the explicit IPv4 loopback requirement; the underlying assumption or context gap is not observable.",
+      "evidence": [
+        "Product evidence: &#39;verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost.&#39;",
+        "The supplied session-report excerpts contain initialization metadata followed by truncation, without substantive implementation decisions.",
+        "The accessible workspace contains no additional artifacts."
+      ],
+      "handling": "The product check recorded a failure. No explanation or corrective action is visible.",
+      "consequence": "The verification workflow did not satisfy the host requirement. The evidence does not establish an application runtime failure.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The requirement is explicit, but the supplied artifacts do not show the verification command or reasoning. They cannot distinguish an incorrect assumption, overlooked discoverable context, or another…",
+      "resolution": "unresolved",
+      "id": "fd759dd637cfb55d"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "Product verification",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The screenshot helper&#39;s attribution warning was incomplete, but the affected condition and underlying interpretation are unavailable.",
+      "evidence": [
+        "Product evidence: &#39;visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.&#39;",
+        "Product evidence: &#39;quality-project-local-screenshot-helper: pass — Project-local Playwright screenshot helper is present.&#39;",
+        "Product evidence: &#39;attribution-default-link: pass — Default attribution label and target https://github.com/Codagent-AI/and-scene are present.&#39;",
+        "No helper source or substantive agent report is supplied."
+      ],
+      "handling": "A project-local screenshot helper was delivered, and verification reported its attribution warning as incomplete.",
+      "consequence": "The helper failed the attribution-warning check. The evidence does not identify which missing/default/size condition failed; the separate default-attribution check passed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure establishes a delivered helper limitation, but neither the detailed warning contract nor its implementation is available. A specification gap, missed repository context, and incorrect ass…",
+      "resolution": "unresolved",
+      "id": "54466bf388a46c9d"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
