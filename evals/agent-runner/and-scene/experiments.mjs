@@ -1,4 +1,10 @@
 #!/usr/bin/env node
+import { spawnSync } from 'node:child_process'
+import { extractEvalBlock, parseTomlSubset, validateRequest } from './lib/eval-request.mjs'
+import * as github from './lib/github-read.mjs'
+import { admitCohorts, checkRequest, planCompares, roleCosts, buildReport } from './lib/experiment-comparison.mjs'
+import { formatMarkdown, formatRefusals } from './lib/comparison-format.mjs'
+import { identityOf } from './lib/experiment-baseline.mjs'
 import { realpathSync } from 'node:fs'
 import { mkdir, unlink } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
@@ -12,10 +18,11 @@ const usage = `Usage: experiments.mjs baseline <command> [options]
   baseline add-rep <result-dir> [--allow-mismatch <reason>] [--record <path>]
   baseline anchor --from-current --reason <text> [--record <path>]
   baseline show [--record <path>]
+  compare --eval-issue <owner/repo#N> <result-dir>... [--json] [--record <path>] [--baseline-results <dir>]
   baseline --help
 `
 
-const VALUE_OPTIONS = ['--record', '--source', '--reason', '--allow-mismatch']
+const VALUE_OPTIONS = ['--record', '--source', '--reason', '--allow-mismatch', '--eval-issue', '--baseline-results']
 
 function rescoreSource(result) {
   return result?.rescored_from ?? result?.workflow?.events?.find(event => event?.event === 'imported-completed-run')?.source_run_id ?? null
@@ -46,6 +53,7 @@ async function findCarriedReview(result, directory) {
 export function parseArgs(argv) {
   // --help is a flag; a --help that follows a value option is that option's (missing) value.
   if (argv.some((arg, i) => arg === '--help' && !VALUE_OPTIONS.includes(argv[i - 1]))) return { help: true }
+  if (argv[0] === 'compare') return parseCompareArgs(argv.slice(1))
   if (argv[0] !== 'baseline') throw Error('Expected baseline command')
   const command = argv[1]
   if (!['set', 'add-rep', 'anchor', 'show'].includes(command)) throw Error(`Unknown baseline command: ${command ?? '(missing)'}`)
@@ -53,7 +61,7 @@ export function parseArgs(argv) {
   const seen = new Set()
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i]
-    if (VALUE_OPTIONS.includes(arg)) {
+    if (['--record', '--source', '--reason', '--allow-mismatch'].includes(arg)) {
       if (seen.has(arg)) throw Error(`Duplicate option: ${arg}`)
       seen.add(arg)
       const next = argv[++i]
@@ -82,12 +90,16 @@ export function parseArgs(argv) {
   return options
 }
 
-export async function runExperimentsCommand({ argv, now = () => new Date(), stdout = s => process.stdout.write(s), write = writeJsonAtomic } = {}) {
+export async function runExperimentsCommand({ argv, now = () => new Date(), stdout = s => process.stdout.write(s), write = writeJsonAtomic, exec = spawnSync, stderr = s => process.stderr.write(s) } = {}) {
   const errors = []
   const error = (code, message, exitCode) => { const item = { code, message }; errors.push(item); process.stderr.write(`${JSON.stringify(item)}\n`); return { exitCode, errors } }
   let args
   try { args = parseArgs(argv) } catch (cause) { stdout(usage); return error('invalid-arguments', cause.message, 2) }
   if (args.help) { stdout(usage); return { exitCode: 0, errors } }
+  if (args.command === 'compare') {
+    try { return await runCompare(args, { now, stdout, stderr, exec }) }
+    catch (cause) { return error('internal-error', cause.stack ?? cause.message, 2) }
+  }
   let record
   try { { const raw = await readJson(args.record, undefined); record = validateRecord(raw === undefined ? emptyRecord() : raw) } } catch (cause) { return error('invalid-record', cause.message, 2) }
   if (args.command === 'show') {
@@ -132,6 +144,110 @@ export async function runExperimentsCommand({ argv, now = () => new Date(), stdo
   const current = applied.record.current
   stdout(`baseline ${args.command}: ${current.reps.length} repetitions, median ${current.median_rep}\n`)
   return { exitCode: 0, errors }
+}
+
+function parseCompareArgs(argv) {
+  const options = { command: 'compare', directories: [], record: defaultRecord, baselineResults: fileURLToPath(new URL('./results/', import.meta.url)) }
+  const seen = new Set()
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]
+    if (arg.startsWith('-')) {
+      if (seen.has(arg)) throw Error(`Duplicate option: ${arg}`)
+      seen.add(arg)
+      if (arg === '--json') { options.json = true; continue }
+      const key = { '--record': 'record', '--baseline-results': 'baselineResults', '--eval-issue': 'evalIssue' }[arg]
+      if (!key) throw Error(`Unknown option: ${arg}`)
+      const value = argv[++i]
+      if (!value || value.startsWith('-') || !value.trim()) throw Error(`Missing value for ${arg}`)
+      options[key] = value
+    } else options.directories.push(arg)
+  }
+  const issue = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)#([1-9][0-9]*)$/.exec(options.evalIssue ?? '')
+  if (!issue || issue.slice(1, 3).some(x => x === '.' || x === '..')) throw Error('--eval-issue requires <owner/repo#N>')
+  options.issue = { owner: issue[1], repo: issue[2], number: issue[3] }
+  options.record = resolve(options.record)
+  options.baselineResults = resolve(options.baselineResults)
+  return options
+}
+
+async function runCompare(args, { now, stdout, stderr, exec }) {
+  const refusals = [], candidates = [], costs = Object.create(null)
+  const emit = (items, exitCode) => {
+    for (const item of items) stderr(JSON.stringify(item) + '\n')
+    if (exitCode === 1) stdout(formatRefusals(items, { json: args.json }))
+    return { exitCode, errors: items }
+  }
+  const ioError = (cause, path) => emit([{ code: 'io-error', message: `${path}: ${cause.message}` }], 2)
+  let baseline = null
+  try {
+    const record = await readJson(args.record, undefined)
+    if (record !== undefined) baseline = validateRecord(record).current
+    if (!baseline) refusals.push({ code: 'no-current', message: 'Set a current experiment baseline first' })
+  } catch (cause) {
+    if (!(cause instanceof SyntaxError) && cause.code && cause.code !== 'ENOENT') return ioError(cause, args.record)
+    refusals.push({ code: 'invalid-record', message: cause.message })
+  }
+  for (const directory of args.directories) {
+    const path = join(directory, 'result.json')
+    try {
+      const result = await readJson(path)
+      const carry = result?.human_review?.complete === true && typeof result?.official_score === 'number' ? {} : await findCarriedReview(result, directory)
+      let item
+      try { item = extractRepetition(result, { directory, addedAt: now().toISOString(), addedBy: 'compare', ...carry }) }
+      catch (cause) { item = { entry: null, refusals: [{ code: 'invalid-result', directory, message: cause.message }] } }
+      candidates.push(item)
+      if (item.entry) costs[item.entry.run_id] = roleCosts(result)
+    } catch (cause) {
+      if (!(cause instanceof SyntaxError) && cause.code !== 'ENOENT') return ioError(cause, path)
+      candidates.push({ entry: null, refusals: [{ directory, code: cause instanceof SyntaxError ? 'invalid-result' : 'missing-result', message: `${path}: ${cause.message}` }] })
+    }
+  }
+  const unavailableCost = (rep, message) => {
+    costs[rep.run_id] = { complete: false, error: message }
+    stderr(JSON.stringify({ code: 'baseline-cost-unreadable', run_id: rep.run_id, message }) + '\n')
+  }
+  for (const rep of baseline?.reps ?? []) {
+    // Persisted ids must not escape the selected results directory.
+    if (rep.run_id === '.' || rep.run_id === '..' || /[/\\]/.test(rep.run_id)) { unavailableCost(rep, 'Invalid run id: cannot read baseline result path'); continue }
+    try {
+      const result = await readJson(join(args.baselineResults, rep.run_id, 'result.json'))
+      if (result?.run_id === rep.run_id) costs[rep.run_id] = roleCosts(result)
+      else unavailableCost(rep, `Baseline result run id mismatch: expected ${rep.run_id}, found ${JSON.stringify(result?.run_id ?? null)}`)
+    } catch (cause) { unavailableCost(rep, `${join(args.baselineResults, rep.run_id, 'result.json')}: ${cause.message}`) }
+  }
+  let request
+  const issue = github.issueBody(args.issue, { exec })
+  if (!issue.ok) refusals.push({ code: 'eval-issue-unreadable', message: issue.message })
+  else {
+    const block = extractEvalBlock(issue.body)
+    const parsed = block.refusals ? block : parseTomlSubset(block.text)
+    request = parsed.refusals ? parsed : validateRequest(parsed.settings)
+    if (request.refusals) refusals.push(...request.refusals)
+  }
+  const admission = admitCohorts({ baseline, candidates })
+  refusals.push(...admission.refusals)
+  if (request?.settings && admission.identity) refusals.push(...checkRequest(request.settings, admission.identity))
+  if (refusals.length) return emit(refusals, 1)
+  const compares = []
+  for (const plan of planCompares(request.settings, identityOf(baseline.reps[0]), admission.identity)) {
+    const main = github.resolveMain(plan.repo, { exec, now })
+    if (!main.ok) {
+      refusals.push({ code: 'github-compare-failed', message: `${plan.repo} ${plan.base}...${plan.head}: main resolution failed: ${main.message}` }); continue
+    }
+    const perform = range => {
+      const result = github.compare(range.repo, range.base, range.head, { exec })
+      if (!result.ok) refusals.push({ code: 'github-compare-failed', message: `${range.repo} ${range.base}...${range.head}: ${result.message}` })
+      else compares.push({ ...range, ...result, main_sha: main.sha, resolved_at: main.resolved_at })
+      return result
+    }
+    const range = { ...plan, base: plan.base === 'main' ? main.sha : plan.base }
+    const result = perform(range)
+    if (result.ok && plan.kind === 'primary' && result.merge_base !== plan.baseline_commit) perform({ repo: plan.repo, kind: 'main-moved', base: plan.baseline_commit, head: result.merge_base })
+  }
+  if (refusals.length) return emit(refusals, 1)
+  const report = buildReport({ baseline, candidates, roleCosts: costs, request, compares, eval_issue: args.evalIssue, baseline_mismatches: admission.baseline_mismatches })
+  stdout(args.json ? JSON.stringify(report, null, 2) + '\n' : formatMarkdown(report))
+  return { exitCode: 0, errors: [], report }
 }
 
 // Compare real paths so the command also runs when invoked through a symlink.

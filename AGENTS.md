@@ -90,8 +90,9 @@ consult `run.sh --help` before constructing an unfamiliar invocation.
 
 - The current experiment baseline is `evals/agent-runner/and-scene/experiments/baseline.json`
   (the definition-only starting line; see the suite README, "Experiment
-  baseline"). Compare new candidates against it; until automated comparison
-  exists, use `experiments.mjs baseline show` and compare by hand.
+  baseline"). Compare new candidates against it with
+  `experiments.mjs compare --eval-issue <owner/repo#N> <result-dir>...`, as
+  described in the suite README section "Compare an experiment with the current baseline".
 - Keep the and-scene draft PRs of the baseline repetitions open. Rescores need
   them.
 - To review from another machine, run `human-review.sh --no-publish --run-dir

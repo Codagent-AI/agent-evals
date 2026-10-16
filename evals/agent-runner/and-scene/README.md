@@ -1601,3 +1601,42 @@ node --test test/real-browser/adversarial.test.mjs
 Published result directories are immutable historical records. Correct an
 erroneous publication with a later revert commit rather than by rewriting
 history.
+
+### Compare an experiment with the current baseline
+
+Run from the repository root:
+
+```sh
+node evals/agent-runner/and-scene/experiments.mjs compare \
+  --eval-issue Codagent-AI/agent-evals#123 \
+  /path/to/candidate-rep-1 /path/to/candidate-rep-2
+```
+
+Use `--json` for the same report as structured JSON, `--record <path>` to select another
+baseline record, and `--baseline-results <dir>` to select the directory containing the
+baseline's published run directories. Defaults are the suite's `experiments/baseline.json`
+and `results/`, regardless of the working directory. Comparison is read-only.
+
+The command needs `gh` authenticated with read access to the eval issue's repository,
+`Codagent-AI/agent-runner`, and `Codagent-AI/agent-skills`. It reads the issue's single
+`eval` block and compares recorded commits against each repository's resolved `main`.
+Requested differences are primary; incidental changes are ancillary. Provenance includes
+the request hash, main SHAs, resolution times and compared ranges. A branch already on main
+may have merged since the eval ran; its original branch-only commits cannot be recovered.
+
+Bands are `same`, `leaning better/worse`, or `clearly better/worse`, using pooled sample
+variation, a 3-point score noise floor, and a 15% minimum resource change for a clear band.
+Higher score is better; fewer tokens, less active time and lower estimated cost are better.
+Incomplete metrics name every missing run rather than averaging a subset. Unreadable baseline
+cost files also emit a diagnostic on stderr naming the run and the read failure. Favorable resource
+bands involving product failures are marked. Reliability flags identify gate/product failures
+and scores more than 6 points below the baseline mean. Review the named candidate median by
+hand; its human score is informational and has no band.
+
+Success exits 0 with Markdown sized for one GitHub comment (or JSON). Untrusted evidence exits
+1 with all refusal codes on stderr and a refusal summary on stdout: missing/invalid baseline or
+candidate results, infrastructure failures, overlapping execution lineages, fewer than two
+independent candidates, mixed candidate identities, fixture/rubric mismatches, unreadable or
+invalid eval requests, request/results mismatches, or failed GitHub comparisons. Usage, I/O and
+internal errors exit 2. Baseline mismatches previously waived with a reason are listed separately;
+fixture and rubric mismatches cannot be waived for comparison.
