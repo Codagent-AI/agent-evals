@@ -396,7 +396,9 @@ function fakeChrome({ startsAfterMs = null, exitWith = null, output = '' } = {})
 test('a host Chrome that exits before listening fails at once with its exit code and output, kept under the run directory', async () => {
   const { createHostBrowser, HOST_CHROME_LOG } = await import('../evals/agent-runner/and-scene/lib/host-browser.mjs')
   const runDir = await makeTempDir(join(tmpdir(), 'agent-evals-host-chrome-'))
-  const fake = fakeChrome({ exitWith: { code: 1 }, output: 'starting\n[0101/000000.000:FATAL:zygote_host_impl_linux.cc(127)] No usable sandbox!\n' })
+  // Verbose output well past the bytes the failure reads back; only its tail reaches the error.
+  const verbose = `early output\n${'chrome noise\n'.repeat(20_000)}`
+  const fake = fakeChrome({ exitWith: { code: 1 }, output: `${verbose}starting\n[0101/000000.000:FATAL:zygote_host_impl_linux.cc(127)] No usable sandbox!\n` })
   const env = { CHROME_DEVTOOLS_AXI_BROWSER_URL: 'http://127.0.0.1:9333' }
   const browser = createHostBrowser({ chromePath: '/fake/chrome', port: 9334, env, runDir, log: () => {}, axi: async () => {}, ...fake })
   await assert.rejects(browser.ensure(), (error) => {
@@ -406,6 +408,7 @@ test('a host Chrome that exits before listening fails at once with its exit code
     assert.match(error.message, /did not expose its DevTools endpoint at http:\/\/127\.0\.0\.1:9334: it exited with code 1 after 0\.\d s/)
     assert.match(error.message, /last probe no answer \(ECONNREFUSED\)/)
     assert.match(error.message, /No usable sandbox!/)
+    assert.doesNotMatch(error.message, /early output/)
     assert.match(error.message, new RegExp(`full log ${HOST_CHROME_LOG}`))
     return true
   })

@@ -15,7 +15,7 @@
 // lean, and is released as soon as that phase ends; a later phase, such as a
 // second-opinion replay, starts a fresh one.
 import { spawn, spawnSync } from 'node:child_process'
-import { closeSync, mkdirSync, openSync, readFileSync, statSync, writeSync } from 'node:fs'
+import { closeSync, mkdirSync, openSync, readSync, statSync, writeSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -52,6 +52,8 @@ const READY_DELAY_MS = 250
 const PROBE_TIMEOUT_MS = 2_000
 const OUTPUT_TAIL_LINES = 15
 const OUTPUT_TAIL_CHARS = 2_000
+// Bytes read from the end of the log, so a large accumulated log is never loaded whole.
+const OUTPUT_TAIL_BYTES = 64 * 1024
 const EXIT_GRACE_MS = 5000
 
 // The AXI session browser phases drive, so the evaluator never reuses a bridge
@@ -148,11 +150,19 @@ export function createHostBrowser({
   // The last lines Chrome wrote since this launch began.
   function outputTail() {
     if (!output) return null
+    let fd
     try {
-      const text = readFileSync(output.path).subarray(output.start).toString('utf8').trim()
+      fd = openSync(output.path, 'r')
+      const size = statSync(output.path).size
+      const start = Math.max(output.start, size - OUTPUT_TAIL_BYTES)
+      const buffer = Buffer.alloc(Math.max(0, size - start))
+      const read = readSync(fd, buffer, 0, buffer.length, start)
+      const text = buffer.subarray(0, read).toString('utf8').trim()
       return text.split('\n').slice(-OUTPUT_TAIL_LINES).join('\n').slice(-OUTPUT_TAIL_CHARS)
     } catch {
       return null
+    } finally {
+      if (fd !== undefined) closeSync(fd)
     }
   }
 
