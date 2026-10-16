@@ -546,6 +546,13 @@ implementation agents, who may stop or replace it, so the browser evaluation
 and second-opinion replays start their own Chromium from the same binary on
 port 9334 for each phase.
 
+Each launch appends Chrome's output to `phases/command-output/host-chrome.log`
+with how long its DevTools endpoint took to answer. The phase waits up to 60 s
+for it, fails at once if Chrome exits first, and refuses to launch if something
+already answers on the port. A `browser-driver-failed` reason then names the
+exit code or signal, or says Chrome was still running, and quotes the end of
+its output.
+
 **Run host rescores one at a time on a small machine.** A long-lived headless
 Chrome reached about 9 GB on a 16 GB Mac, and two parallel rescores exhausted
 it. Start the next rescore only after the previous one exits, and check that no
