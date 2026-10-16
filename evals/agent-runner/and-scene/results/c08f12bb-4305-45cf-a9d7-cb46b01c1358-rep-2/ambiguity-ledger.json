@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-10-04T19-38-20-171176645Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_verify-change__sub_verify-change__review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": "verify-change",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered product lacks the default “made by” and in-scene GitHub attribution.",
+      "evidence": [
+        "Product evidence: attribution-default-link: fail — Default made by and-scene GitHub attribution is missing."
+      ],
+      "handling": "The verification result records the missing attribution; the available artifacts do not show the implementation decision that led to it.",
+      "consequence": "The attribution check failed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure shows a material product omission, but the available evidence cannot establish whether it came from an assumption, a context gap, or an implementation error.",
+      "resolution": "unresolved",
+      "id": "3255f086f19784dd"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "verify-change",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered demo did not pass present-mode behavior verification.",
+      "evidence": [
+        "Product evidence: demo-present-mode-behavior: fail."
+      ],
+      "handling": "The verification result records a failure but gives no behavior trace or implementation rationale.",
+      "consequence": "Present-mode behavior failed verification.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The check identifies an affected product behavior, but does not reveal the failed behavior or distinguish an assumption from another cause.",
+      "resolution": "unresolved",
+      "id": "73e2f055897ec3a6"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
