@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "run_id": "plan-and-implement-change-2026-10-14T18-27-52-658095437Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement__sub_implement-change__implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_3__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_3__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__verify-change__sub_verify-change__review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": "verification-sample-outline",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The evidence gives conflicting results for canonical sample verification.",
+      "evidence": [
+        "verification-sample-outline: fail — Canonical nine-step sample or nine-frame evidence is incomplete.",
+        "A separate entry states verification-sample-outline: pass.",
+        "verification-every-produced-step-renders: pass."
+      ],
+      "handling": "Both results are recorded without chronology, supporting artifacts, or an explanation of reconciliation.",
+      "consequence": "A verification failure is observable, but whether it remained unresolved in the delivered workflow cannot be established.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The results do not distinguish an implementation omission, an evidence collection gap, a subsequently resolved failure, or differing verification criteria. No underlying assumption is visible.",
+      "resolution": "unresolved",
+      "id": "40b206bc2c7ef686"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "visual-helper-attribution-warning",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The screenshot helper&#39;s attribution warning was reported incomplete.",
+      "evidence": [
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "quality-project-local-screenshot-helper: pass — Project-local Playwright screenshot helper is present.",
+        "attribution-default-link: pass — Default attribution label and target https://github.com/Codagent-AI/and-scene are present."
+      ],
+      "handling": "The supplied evidence contains no explanation or remediation of the warning failure.",
+      "consequence": "The helper failed its attribution-warning check; the evidence does not identify which warning condition was incomplete.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure establishes an observed helper deficiency, but without requirements, code, or substantive agent reports it cannot be attributed to a specification gap, missed repository context, or an in…",
+      "resolution": "unresolved",
+      "id": "5e5d2cd4d94256ec"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
