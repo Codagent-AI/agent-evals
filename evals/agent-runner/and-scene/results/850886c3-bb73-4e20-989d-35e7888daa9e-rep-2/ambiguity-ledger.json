@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-16T16-00-47-988048495Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err",
+      "output/_resolve-findings_.err.bak-20261016T201010.294685810Z-3547-00000000000000000002",
+      "output/_resolve-findings_.out"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": "Verification"
+      },
+      "source": "judge-discovered",
+      "concern": "Verification failed the IPv4-loopback requirement.",
+      "evidence": [
+        "Product evidence: verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost.",
+        "The supplied workflow output is truncated during session initialization and contains no verification commands or agent explanation."
+      ],
+      "handling": "The available artifacts show a failed check but do not show how the verification address was selected.",
+      "consequence": "Verification did not satisfy the reported address requirement.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure establishes noncompliance, but the underlying commands, original instructions, and agent reasoning are unavailable. It cannot establish whether an assumption, overlooked context, or anoth…",
+      "resolution": "unresolved",
+      "id": "026bbe089e1ca4c7"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": "Demo input handling"
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered demo failed the check that swipes originating from controls are ignored.",
+      "evidence": [
+        "Product evidence: input-swipe-from-control-ignored: fail.",
+        "Product evidence separately reports demo-supported-navigation and demo-focus-and-keyboard-accessibility as passing."
+      ],
+      "handling": "The available evidence records the failed interaction check without implementation details, reproduction steps, or an agent explanation.",
+      "consequence": "The demo did not satisfy the tested control-origin swipe behavior.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The result identifies a specific interaction failure, but does not establish whether it arose from an interpretation of the requirements, missing repository context, or a coding defect. The truncated…",
+      "resolution": "unresolved",
+      "id": "a93b30143ed9292b"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
