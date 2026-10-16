@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "run_id": "plan-and-implement-change-2026-10-16T00-08-43-378826108Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement__sub_implement-change__implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_3__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_3__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__verify-change__sub_verify-change__review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered default attribution URL differs from the target expected by verification.",
+      "evidence": [
+        "attribution-default-link: fail — expected https://github.com/Codagent-AI/and-scene; GitHub targets found: https://github.com/and-scene/and-scene."
+      ],
+      "handling": "The product uses https://github.com/and-scene/and-scene. The available session-report excerpts contain initialization metadata and do not explain the URL selection.",
+      "consequence": "The default attribution directs users to a different repository URL and fails the attribution check.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The mismatch is observable, but the original requirements, repository context, and implementation reasoning are unavailable. The evidence cannot distinguish an incorrect assumption from missing conte…",
+      "resolution": "unresolved",
+      "id": "f95259c4ba0ee26b"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered verification tooling lacks the expected project-local screenshot helper and visual warnings.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: fail — Project-local Playwright screenshot helper is missing.",
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "Verification reports the helper and warnings as missing or incomplete. No available implementation narrative explains their omission.",
+      "consequence": "The delivered workflow lacks the expected screenshot helper and complete visual checks for overlap, active state, and attribution.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "These results establish omissions in the delivered tooling, but do not establish whether the requirements were explicit, discoverable in the repository, ambiguous, or overlooked. The evidence also do…",
+      "resolution": "unresolved",
+      "id": "8f2f873011656e13"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered swipe behavior fails the check for gestures originating on controls.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail.",
+        "input-modifier-keys-pass-through: pass.",
+        "demo-supported-navigation: pass."
+      ],
+      "handling": "The implementation passes the listed general navigation checks but fails the control-origin swipe check. No event trace, implementation code, or explanatory report is provided.",
+      "consequence": "Verification identifies a failed interaction boundary involving swipe gestures that start on controls; the exact resulting behavior is not shown.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check establishes a specific interaction issue, but cannot establish an underlying assumption or distinguish a specification gap, missing repository context, or implementation error. Cover…",
+      "resolution": "unresolved",
+      "id": "229139f72a50edb5"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
