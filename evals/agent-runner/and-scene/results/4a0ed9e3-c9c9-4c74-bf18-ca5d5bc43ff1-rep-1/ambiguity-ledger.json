@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-10-05T06-08-31-634952712Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_verify-change__sub_verify-change__review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": "verify-change",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The default made by and-scene GitHub attribution is missing.",
+      "evidence": [
+        "Product evidence: attribution-default-link: fail — Default made by and-scene GitHub attribution is missing."
+      ],
+      "handling": "The delivered product lacks the checked default attribution. The implementation agent&#39;s reasoning is unavailable.",
+      "consequence": "The attribution check failed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure is observable, but the available artifacts do not show whether it arose from an ambiguous requirement, missed repository context, or another cause.",
+      "resolution": "unresolved",
+      "id": "845dddc74ef1ab11"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "verify-change",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The visual helper lacks an overlap warning or explicit allow-overlap marker.",
+      "evidence": [
+        "Product evidence: visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing."
+      ],
+      "handling": "The checked warning or marker is absent; the implementation agent&#39;s reasoning is unavailable.",
+      "consequence": "The overlap warning check failed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The check establishes a missing deliverable, but does not identify the assumption or context gap that caused it.",
+      "resolution": "unresolved",
+      "id": "bb85dae6f21cf0af"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "verify-change",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The visual helper lacks an active-state visual comparison warning.",
+      "evidence": [
+        "Product evidence: visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing."
+      ],
+      "handling": "The checked warning is absent; the implementation agent&#39;s reasoning is unavailable.",
+      "consequence": "The active-state warning check failed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The artifacts show the outcome but cannot distinguish among possible causes.",
+      "resolution": "unresolved",
+      "id": "1a104efd6ea206ce"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "verify-change",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The visual helper&#39;s attribution warning is incomplete.",
+      "evidence": [
+        "Product evidence: visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "The checked warning is incomplete; the implementation agent&#39;s reasoning is unavailable.",
+      "consequence": "The attribution warning check failed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The evidence identifies the incomplete output, but not which requirement interpretation or implementation decision produced it.",
+      "resolution": "unresolved",
+      "id": "7271a65a95aa2063"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
