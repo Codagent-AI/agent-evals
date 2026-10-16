@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-10-04T02-34-10-913894602Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_verify-change__sub_verify-change__review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": "product verification",
+        "agent_role": null,
+        "task": "nine-step sample"
+      },
+      "source": "judge-discovered",
+      "concern": "The nine-step sample passed one outline check but failed the demo content and order check and a later verification outline check.",
+      "evidence": [
+        "verification-sample-outline: pass — Canonical nine-step sample is present.",
+        "demo-nine-step-content-and-order: fail",
+        "verification-sample-outline: fail"
+      ],
+      "handling": "The available artifacts show conflicting check outcomes but do not show the expected steps, delivered steps, or implementation reasoning.",
+      "consequence": "The delivered sample failed checks concerning its content and order.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The evidence cannot distinguish a specification gap, a mistaken interpretation, or an implementation defect.",
+      "resolution": "unresolved",
+      "id": "9a5d44e4140d4c69"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "product verification",
+        "agent_role": null,
+        "task": "demo navigation and modes"
+      },
+      "source": "judge-discovered",
+      "concern": "The demo failed several present-mode and navigation checks, but the artifacts do not identify an underlying assumption or context gap.",
+      "evidence": [
+        "demo-present-mode-behavior: fail",
+        "demo-mode-position-preservation: fail",
+        "demo-supported-navigation: fail",
+        "demo-navigation-boundaries-and-control-keys: fail",
+        "demo-step-and-transition-reliability: fail",
+        "demo-mode-interaction-reliability: fail"
+      ],
+      "handling": "The available evidence gives check results without the relevant implementation history or failure details.",
+      "consequence": "Present-mode and navigation behavior did not satisfy multiple product checks.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failures establish a product effect, but do not establish whether an assumption, missing context, or ordinary defect caused it.",
+      "resolution": "unresolved",
+      "id": "d18b96eeb4244013"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
