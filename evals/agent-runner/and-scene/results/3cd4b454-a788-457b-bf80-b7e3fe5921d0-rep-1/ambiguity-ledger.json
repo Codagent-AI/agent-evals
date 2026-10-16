@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "run_id": "plan-and-implement-change-2026-10-13T21-57-55-718774202Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_implement__sub_implement-change__implement-tasks_0__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_0__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_1__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_1__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_2__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_2__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__implement-tasks_3__implement-single-task__sub_implement-task__session-report_.err",
+      "output/_implement__sub_implement-change__implement-tasks_3__implement-single-task__sub_implement-task__session-report_.out",
+      "output/_implement__sub_implement-change__verify-change__sub_verify-change__review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped at depth 12",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": "Product verification",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Navigation boundary and control-key handling failed verification, but any underlying assumption or context gap is unknown.",
+      "evidence": [
+        "demo-navigation-boundaries-and-control-keys: fail",
+        "demo-supported-navigation: pass",
+        "demo-focus-and-keyboard-accessibility: pass",
+        "The supplied session-report excerpts are truncated before their audit conclusions."
+      ],
+      "handling": "The delivered implementation passed related navigation checks but failed the boundary/control-key check. No implementation rationale or detailed failure trace is supplied.",
+      "consequence": "The delivered demo failed this product check; the affected boundary, key, and runtime behavior are unspecified.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The artifacts establish a verification failure but cannot distinguish a specification gap, an incorrect assumption, or an implementation defect unrelated to ambiguity. The truncated reports also prev…",
+      "resolution": "unresolved",
+      "id": "c360a6a2ac0dcf53"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "Product verification",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Ignoring swipes originating on controls failed verification, but the implementation&#39;s interpretation of gesture ownership is unavailable.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail",
+        "demo-mode-interaction-reliability: pass",
+        "demo-control-semantics: pass",
+        "The supplied artifacts contain no source code, gesture failure trace, or completed assumption audit."
+      ],
+      "handling": "The implementation failed the control-origin swipe check despite passing related interaction checks. Its gesture filtering decisions are not visible.",
+      "consequence": "The delivered demo failed verification of control-origin swipe suppression; the specific controls and triggering conditions are unknown.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure materially concerns delivered interaction behavior, but its cause cannot be attributed to an assumption or context gap from the available evidence. No fixture requirement or implementatio…",
+      "resolution": "unresolved",
+      "id": "da08b0eb8933599f"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
