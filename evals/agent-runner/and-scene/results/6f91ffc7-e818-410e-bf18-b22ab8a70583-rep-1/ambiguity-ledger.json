@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "run_id": "minimal-implement-change-2026-10-13T17-03-52-554215462Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_session-report_.err",
+      "output/_session-report_.out",
+      "output/_verify-change__sub_verify-change__review-assumptions_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": "visual-helper-active-state-warning",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Verification reports a missing active-state visual comparison warning, but the underlying assumption or context gap is not established.",
+      "evidence": [
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "navigation-active-state: pass — Semantic current state and stable active hook are present."
+      ],
+      "handling": "The delivered navigation has semantic state and an active hook. The warning is reported missing; implementation reasoning and corrective handling are unavailable.",
+      "consequence": "The visual helper lacks the reported active-state comparison warning. This does not establish that navigation styling itself is defective.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure establishes an omitted warning, but the supplied evidence lacks the governing specification and implementation needed to distinguish ambiguity, overlooked repository context, an implement…",
+      "resolution": "unresolved",
+      "id": "e81f39545a4da13e"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "visual-helper-attribution-warning",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Verification reports incomplete attribution warnings without identifying which checks are missing or why.",
+      "evidence": [
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "attribution-default-link: pass — Default attribution label and target https://github.com/Codagent-AI/and-scene are present."
+      ],
+      "handling": "Default attribution was delivered successfully. Warning coverage is reported incomplete, with no visible implementation decision or subsequent correction.",
+      "consequence": "The visual helper does not fully provide the reported attribution warnings. The evidence does not show an incorrect default attribution label or link.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The summary neither isolates the incomplete warning condition nor supplies requirements, code, or agent reasoning. It cannot establish whether a specification gap, missed context, or implementation e…",
+      "resolution": "unresolved",
+      "id": "e1c4a8d892a1149e"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "input-swipe-from-control-ignored",
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The control-origin swipe exclusion fails verification, but its cause and the implementation&#39;s interpretation are unavailable.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail —",
+        "demo-supported-navigation: pass —",
+        "input-modifier-keys-pass-through: pass —"
+      ],
+      "handling": "The implementation passed broader navigation and modifier-key checks but failed this swipe-specific check. No relevant decision, event trace, or correction is supplied.",
+      "consequence": "Ignoring swipes originating on controls was not verified successfully. The exact user-visible behavior is not documented in the supplied evidence.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check identifies a product concern but provides no diagnostic detail. It cannot distinguish a mistaken assumption about gesture handling from a coding defect, ambiguous requirement, or ver…",
+      "resolution": "unresolved",
+      "id": "a31306c224b7c284"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
