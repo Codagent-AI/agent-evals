@@ -185,6 +185,9 @@ test('scored mode always attaches AXI to the sandbox Playwright Chromium', async
   assert.match(result.output, /export AND_SCENE_HOST_CHROME="\$AXI_CHROMIUM"/)
   assert.match(result.output, /export AND_SCENE_HOST_DEVTOOLS_PORT=9334/)
   assert.match(result.output, /export AND_SCENE_HOST_CHROME_ARGS="--no-sandbox"/)
+  // A candidate's playwright install must not delete that Chromium.
+  assert.ok(result.output.indexOf('export PLAYWRIGHT_SKIP_BROWSER_GC=1') >= 0)
+  assert.ok(result.output.indexOf('export PLAYWRIGHT_SKIP_BROWSER_GC=1') < result.output.indexOf('exec node /eval-input/controller.mjs'))
   assert.ok(result.output.indexOf('AND_SCENE_HOST_DEVTOOLS_PORT=9334') < result.output.indexOf('exec node /eval-input/controller.mjs'))
   assert.match(result.output, /Could not find a runnable Chromium for chrome-devtools-axi/)
   assert.doesNotMatch(result.output, /\/opt\/google\/chrome\/chrome.*--version/)

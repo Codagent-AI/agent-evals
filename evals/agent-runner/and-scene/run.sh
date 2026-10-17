@@ -938,6 +938,9 @@ agent_script=$(cat <<AGENT
 set -euo pipefail
 mkdir -p /artifacts/logs
 export AGENT_RUNNER_NO_TUI=1
+# A candidate's own \`playwright install\` would otherwise delete the image's
+# Chromium builds it does not use, including the one the evaluator scores with.
+export PLAYWRIGHT_SKIP_BROWSER_GC=1
 if [[ " \${NODE_OPTIONS:-} " != *" --dns-result-order="* ]]; then
   export NODE_OPTIONS="\${NODE_OPTIONS:-} --dns-result-order=ipv4first"
 fi
