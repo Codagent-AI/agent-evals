@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-16T22-19-24-248043189Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Screenshot verification support is missing, but the evidence does not identify an underlying assumption or context gap.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: fail — Project-local Playwright screenshot helper is missing.",
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "The supplied workflow artifacts contain no explanation of these omissions.",
+      "consequence": "The delivered verification support failed the helper-presence check and three warning checks.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The checks establish missing verification support. Without the implementation instructions, repository context, or agent reasoning, they cannot distinguish a specification gap, overlooked discoverabl…",
+      "resolution": "unresolved",
+      "id": "158eea56d2c617b3"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Swipe handling failed the control-origin exclusion check; whether an assumption or context gap contributed is unknown.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail —",
+        "input-modifier-keys-pass-through: pass —",
+        "demo-focus-and-keyboard-accessibility: pass —"
+      ],
+      "handling": "No implementation explanation or response to this failure is supplied.",
+      "consequence": "The delivered interaction behavior failed the check for ignoring swipes that originate from controls. The exact observed interaction is not documented.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check identifies a specific interaction concern, but supplies neither reproduction details nor evidence of the agent&#39;s interpretation. Passing neighboring input checks does not establi…",
+      "resolution": "unresolved",
+      "id": "a44087119f8d559e"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
