@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-17T21-19-31-800948414Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Verification did not satisfy the reported IPv4 loopback requirement.",
+      "evidence": [
+        "verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost."
+      ],
+      "handling": "No implementation reasoning or verification commands were supplied.",
+      "consequence": "The loopback verification check failed; the actual address used is not shown.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The result establishes a failed requirement check, but cannot distinguish an incorrect assumption, missing context, or an implementation omission. The original instructions and agent reasoning are un…",
+      "resolution": "unresolved",
+      "id": "1913b795260dd783"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The project-local Playwright screenshot helper was reported missing.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: fail — Project-local Playwright screenshot helper is missing."
+      ],
+      "handling": "No explanation for the omission or alternative screenshot workflow is visible.",
+      "consequence": "The delivered project failed the screenshot-helper check.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The missing artifact is observable through the reported check, but there is no evidence establishing whether its absence followed an assumption, an undiscovered repository convention, or another caus…",
+      "resolution": "unresolved",
+      "id": "3a1aaea51799e780"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Required visual-helper warnings were reported missing or incomplete.",
+      "evidence": [
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "attribution-default-link: pass — Default attribution label and target https://github.com/Codagent-AI/and-scene are present.",
+        "navigation-active-state: pass — Semantic current state and stable active hook are present."
+      ],
+      "handling": "No agent discussion of the warning requirements or their implementation was supplied.",
+      "consequence": "Three visual-helper checks failed despite passing checks for default attribution and navigation state.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The evidence distinguishes warning deficiencies from the passing product features, but does not establish why the warnings were absent or whether these failures share a cause with the missing screens…",
+      "resolution": "unresolved",
+      "id": "3cffacbd915d0e19"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The check for ignoring swipes originating from controls failed.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail",
+        "demo-supported-navigation: pass",
+        "demo-control-semantics: pass"
+      ],
+      "handling": "No gesture implementation, failure trace, or agent explanation is available.",
+      "consequence": "The control-origin swipe check failed while broader navigation and control-semantics checks passed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The check identifies a specific interaction failure, but does not reveal the observed behavior or support attributing it to an assumption or specification gap. The supplied workflow artifacts contain…",
+      "resolution": "unresolved",
+      "id": "e064c578c28c5628"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
