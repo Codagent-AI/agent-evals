@@ -588,7 +588,7 @@ test('a release that starts while another is running waits for the same cleanup'
 })
 
 for (const kind of ['missing', 'not executable']) {
-  test(`a ${kind} host Chrome fails before spawn and logs the removed-browser diagnostic`, async () => {
+  test(`a ${kind} host Chrome fails before spawn and logs the unavailable-browser diagnostic`, async () => {
     const { createHostBrowser, HOST_CHROME_LOG } = await import('../evals/agent-runner/and-scene/lib/host-browser.mjs')
     const runDir = await makeTempDir(join(tmpdir(), 'agent-evals-host-chrome-'))
     const chromePath = join(runDir, 'chrome')
@@ -606,14 +606,30 @@ for (const kind of ['missing', 'not executable']) {
         assert.equal(error.owner, 'evaluation-harness')
         assert.equal(error.resumable, true)
         assert.ok(error.message.includes(chromePath))
-        assert.match(error.message, /missing or not executable.*evaluator browser was removed during the run/)
+        assert.match(error.message, /missing or not executable.*evaluator browser may have been removed during the run/)
         return true
       })
       assert.equal(launches, 0)
-      assert.match(await readFile(join(runDir, HOST_CHROME_LOG), 'utf8'), /missing or not executable.*evaluator browser was removed during the run/)
+      assert.match(await readFile(join(runDir, HOST_CHROME_LOG), 'utf8'), /missing or not executable.*evaluator browser may have been removed during the run/)
       assert.deepEqual(env, {})
     } finally {
       await browser.release()
     }
   })
 }
+
+test('a bare host Chrome command keeps native PATH lookup when spawning', async t => {
+  const { createHostBrowser } = await import('../evals/agent-runner/and-scene/lib/host-browser.mjs')
+  const fake = fakeChrome({ startsAfterMs: 0 })
+  const commands = []
+  const browser = createHostBrowser({
+    chromePath: 'node', env: {}, log: () => {}, axi: async () => {}, ...fake,
+    spawnImpl: (command, ...args) => {
+      commands.push(command)
+      return fake.spawnImpl(command, ...args)
+    },
+  })
+  t.after(() => browser.release())
+  await browser.ensure()
+  assert.deepEqual(commands, ['node'])
+})

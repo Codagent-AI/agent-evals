@@ -203,9 +203,11 @@ export function createHostBrowser({
       try { output.start = statSync(output.path).size } catch { output.start = 0 }
     }
     try {
-      accessSync(chromePath, constants.X_OK)
+      // Bare command names are resolved on PATH by spawn, not against cwd.
+      // Explicit paths (including the sandbox's private copy) can be checked here.
+      if (chromePath.includes('/')) accessSync(chromePath, constants.X_OK)
     } catch {
-      const message = `host Chrome is missing or not executable at ${chromePath}; the evaluator browser was removed during the run`
+      const message = `host Chrome is missing or not executable at ${chromePath}; the evaluator browser may have been removed during the run`
       note(message)
       await release()
       throw harnessFault(message)
