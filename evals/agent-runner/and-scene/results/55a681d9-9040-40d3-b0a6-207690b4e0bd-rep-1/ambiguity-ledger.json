@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-18T07-13-41-695481473Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Attribution warning coverage is incomplete; whether an assumption or context gap contributed is unknown.",
+      "evidence": [
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "attribution-default-link: pass — Default attribution label and target https://github.com/Codagent-AI/and-scene are present."
+      ],
+      "handling": "The supplied artifacts contain no implementation discussion explaining the warning behavior.",
+      "consequence": "The verification helper failed the attribution-warning check. The evidence does not identify which warning cases are missing.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check establishes incomplete warning coverage, but does not distinguish a specification gap, overlooked repository context, an assumption, or an implementation defect. The passing attribut…",
+      "resolution": "unresolved",
+      "id": "7045b0d038028e4c"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The swipe-from-control check failed; the underlying interpretation or implementation decision is undocumented.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail —",
+        "demo-supported-navigation: pass —",
+        "demo-mode-interaction-reliability: pass —"
+      ],
+      "handling": "No implementation trace or explanation of swipe-origin handling was supplied.",
+      "consequence": "The delivered interaction behavior failed the check requiring swipes originating from controls to be ignored; the precise observed behavior is unavailable.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The result identifies a specific verification failure, but provides no evidence tying it to an assumption or context gap. Passing broader navigation checks does not establish the cause.",
+      "resolution": "unresolved",
+      "id": "ad382435e1fe0c7d"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
