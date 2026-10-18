@@ -227,7 +227,7 @@ test('the host browser starts lean on demand and releases its process and profil
   const env = {}
   const children = []
   const browser = createHostBrowser({
-    chromePath: '/fake/chrome',
+    chromePath: process.execPath,
     port: 9555,
     env,
     // Never signal a real process group from a test.
@@ -295,7 +295,7 @@ test('browser phases score in their own Chrome and AXI session, then restore the
   }
   let chrome = null
   const browser = createHostBrowser({
-    chromePath: '/fake/chrome', port: 9334, env,
+    chromePath: process.execPath, port: 9334, env,
     spawnImpl: (_command, args) => {
       launched.push(args)
       const profile = args.find((arg) => arg.startsWith('--user-data-dir=')).slice('--user-data-dir='.length)
@@ -340,7 +340,7 @@ test('a browser phase whose stale evaluator bridge cannot be stopped fails as a 
   const launched = []
   const env = { CHROME_DEVTOOLS_AXI_BROWSER_URL: 'http://127.0.0.1:9333' }
   const browser = createHostBrowser({
-    chromePath: '/fake/chrome', port: 9334, env,
+    chromePath: process.execPath, port: 9334, env,
     spawnImpl: (...args) => { launched.push(args); throw new Error('must not launch') },
     log: () => {},
     fetchImpl: async () => ({ ok: true }),
@@ -400,7 +400,7 @@ test('a host Chrome that exits before listening fails at once with its exit code
   const verbose = `early output\n${'chrome noise\n'.repeat(20_000)}`
   const fake = fakeChrome({ exitWith: { code: 1 }, output: `${verbose}starting\n[0101/000000.000:FATAL:zygote_host_impl_linux.cc(127)] No usable sandbox!\n` })
   const env = { CHROME_DEVTOOLS_AXI_BROWSER_URL: 'http://127.0.0.1:9333' }
-  const browser = createHostBrowser({ chromePath: '/fake/chrome', port: 9334, env, runDir, log: () => {}, axi: async () => {}, ...fake })
+  const browser = createHostBrowser({ chromePath: process.execPath, port: 9334, env, runDir, log: () => {}, axi: async () => {}, ...fake })
   await assert.rejects(browser.ensure(), (error) => {
     assert.equal(error.owner, 'evaluation-harness')
     assert.equal(error.code, 'browser-driver-failed')
@@ -414,7 +414,7 @@ test('a host Chrome that exits before listening fails at once with its exit code
   })
   assert.equal(fake.state.launches, 1)
   const logText = await readFile(join(runDir, HOST_CHROME_LOG), 'utf8')
-  assert.match(logText, /launching \/fake\/chrome on port 9334/)
+  assert.ok(logText.includes(`launching ${process.execPath} on port 9334`))
   assert.match(logText, /No usable sandbox!/)
   assert.match(logText, /not ready: it exited with code 1/)
   assert.deepEqual(env, { CHROME_DEVTOOLS_AXI_BROWSER_URL: 'http://127.0.0.1:9333' })
@@ -424,7 +424,7 @@ test('a host Chrome that starts slowly is waited for beyond 10 s, and its start 
   const { createHostBrowser, HOST_CHROME_LOG } = await import('../evals/agent-runner/and-scene/lib/host-browser.mjs')
   const runDir = await makeTempDir(join(tmpdir(), 'agent-evals-host-chrome-'))
   const fake = fakeChrome({ startsAfterMs: 20_000 })
-  const browser = createHostBrowser({ chromePath: '/fake/chrome', port: 9334, env: {}, runDir, log: () => {}, axi: async () => {}, ...fake })
+  const browser = createHostBrowser({ chromePath: process.execPath, port: 9334, env: {}, runDir, log: () => {}, axi: async () => {}, ...fake })
   assert.equal(await browser.ensure(), 'http://127.0.0.1:9334')
   await browser.release()
   assert.match(await readFile(join(runDir, HOST_CHROME_LOG), 'utf8'), /DevTools endpoint ready after 20\.0 s/)
@@ -433,7 +433,7 @@ test('a host Chrome that starts slowly is waited for beyond 10 s, and its start 
 test('a host Chrome that never listens is stopped after the readiness deadline and reported as still running', async () => {
   const { createHostBrowser } = await import('../evals/agent-runner/and-scene/lib/host-browser.mjs')
   const fake = fakeChrome({ output: 'still loading\n' })
-  const browser = createHostBrowser({ chromePath: '/fake/chrome', port: 9334, env: {}, log: () => {}, axi: async () => {}, ...fake })
+  const browser = createHostBrowser({ chromePath: process.execPath, port: 9334, env: {}, log: () => {}, axi: async () => {}, ...fake })
   await assert.rejects(browser.ensure(), (error) => {
     assert.match(error.message, /it was still running after 60\.0 s; last probe no answer \(ECONNREFUSED\)/)
     // Without a run directory the log goes with the profile, but its tail is kept.
@@ -448,7 +448,7 @@ test('a port that already answers DevTools requests fails the phase without laun
   const launched = []
   const env = {}
   const browser = createHostBrowser({
-    chromePath: '/fake/chrome', port: 9334, env, log: () => {}, axi: async () => {},
+    chromePath: process.execPath, port: 9334, env, log: () => {}, axi: async () => {},
     spawnImpl: (...args) => { launched.push(args); throw new Error('must not launch') },
     fetchImpl: async () => ({ ok: false, status: 404 }),
     sleep: async () => {},
@@ -471,7 +471,7 @@ test('releasing the host browser never fails the phase that used it', async t =>
   const killed = []
   let chrome = null
   const browser = createHostBrowser({
-    chromePath: '/fake/chrome', port: 9556, env: {},
+    chromePath: process.execPath, port: 9556, env: {},
     spawnImpl: (_command, args) => {
       const profile = args.find(arg => arg.startsWith('--user-data-dir=')).slice('--user-data-dir='.length)
       // This test deliberately makes product cleanup fail; remove only its own profile.
@@ -556,7 +556,7 @@ test('a release that starts while another is running waits for the same cleanup'
   let finishStop
   let profileRemoved = null
   const browser = createHostBrowser({
-    chromePath: '/fake/chrome', port: 9557, env: {},
+    chromePath: process.execPath, port: 9557, env: {},
     spawnImpl: () => {
       chrome = Object.assign(new EventEmitter(), { pid: 6161, exitCode: null, kill: () => true })
       return chrome
@@ -586,3 +586,34 @@ test('a release that starts while another is running waits for the same cleanup'
   // The fake rmImpl removed nothing; remove the real temp profile.
   await rm(profileRemoved, { recursive: true, force: true })
 })
+
+for (const kind of ['missing', 'not executable']) {
+  test(`a ${kind} host Chrome fails before spawn and logs the removed-browser diagnostic`, async () => {
+    const { createHostBrowser, HOST_CHROME_LOG } = await import('../evals/agent-runner/and-scene/lib/host-browser.mjs')
+    const runDir = await makeTempDir(join(tmpdir(), 'agent-evals-host-chrome-'))
+    const chromePath = join(runDir, 'chrome')
+    if (kind === 'not executable') await writeFile(chromePath, 'not executable', { mode: 0o644 })
+    let launches = 0
+    const env = {}
+    const browser = createHostBrowser({
+      chromePath, runDir, env, axi: async () => {},
+      fetchImpl: devtoolsWhile(() => false),
+      spawnImpl: () => { launches += 1; throw new Error('must not spawn') },
+    })
+    try {
+      await assert.rejects(browser.ensure(), (error) => {
+        assert.equal(error.code, 'browser-driver-failed')
+        assert.equal(error.owner, 'evaluation-harness')
+        assert.equal(error.resumable, true)
+        assert.ok(error.message.includes(chromePath))
+        assert.match(error.message, /missing or not executable.*evaluator browser was removed during the run/)
+        return true
+      })
+      assert.equal(launches, 0)
+      assert.match(await readFile(join(runDir, HOST_CHROME_LOG), 'utf8'), /missing or not executable.*evaluator browser was removed during the run/)
+      assert.deepEqual(env, {})
+    } finally {
+      await browser.release()
+    }
+  })
+}

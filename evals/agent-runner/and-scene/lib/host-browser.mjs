@@ -15,7 +15,7 @@
 // lean, and is released as soon as that phase ends; a later phase, such as a
 // second-opinion replay, starts a fresh one.
 import { spawn, spawnSync } from 'node:child_process'
-import { closeSync, mkdirSync, openSync, readSync, statSync, writeSync } from 'node:fs'
+import { accessSync, constants, closeSync, mkdirSync, openSync, readSync, statSync, writeSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -201,6 +201,14 @@ export function createHostBrowser({
     if (output) {
       note(`launching ${chromePath} on port ${port}`)
       try { output.start = statSync(output.path).size } catch { output.start = 0 }
+    }
+    try {
+      accessSync(chromePath, constants.X_OK)
+    } catch {
+      const message = `host Chrome is missing or not executable at ${chromePath}; the evaluator browser was removed during the run`
+      note(message)
+      await release()
+      throw harnessFault(message)
     }
     exit = null
     const launched = spawnImpl(chromePath, [
