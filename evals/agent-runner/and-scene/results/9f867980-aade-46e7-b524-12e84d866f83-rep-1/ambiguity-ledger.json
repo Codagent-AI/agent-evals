@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-18T03-35-09-686878616Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err",
+      "output/_resolve-findings_.out",
+      "output/_session-report_.err",
+      "output/_session-report_.out",
+      "output/_verify-change__sub_verify-change__verify-acceptance-handoff_.err",
+      "output/_verify-change__sub_verify-change__verify-acceptance-handoff_.out",
+      "output/_verify-change__sub_verify-change__verify-assumptions-handoff_.err",
+      "output/_verify-change__sub_verify-change__verify-assumptions-handoff_.out"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Verification did not satisfy the IPv4 loopback requirement.",
+      "evidence": [
+        "verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost.",
+        "The supplied workflow logs contain empty outputs or initialization records truncated before substantive agent messages."
+      ],
+      "handling": "The verification command and any discussion of the host choice are unavailable.",
+      "consequence": "The IPv4 loopback verification check failed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check establishes noncompliance, but the artifacts do not establish whether the requirement was missing, overlooked, or interpreted incorrectly. No agent-reported assumption is visible.",
+      "resolution": "unresolved",
+      "id": "86c68519e328dc2d"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The default attribution used a different GitHub repository from the expected target.",
+      "evidence": [
+        "attribution-default-link: fail — expected https://github.com/Codagent-AI/and-scene; GitHub targets found: https://github.com/and-scene/and-scene."
+      ],
+      "handling": "The delivered default attribution points to https://github.com/and-scene/and-scene; its selection rationale is unavailable.",
+      "consequence": "The default attribution target check failed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The target mismatch is observable. The supplied evidence does not show whether the expected URL was specified, discoverable in the repository, or absent from the implementation agents&#39; context.",
+      "resolution": "unresolved",
+      "id": "c17baa7f63f43776"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The screenshot helper&#39;s attribution warnings did not cover all evaluated conditions.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: pass — Project-local Playwright screenshot helper is present.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "A project-local screenshot helper was delivered, but its implementation and the specific missing warning condition are unavailable.",
+      "consequence": "The attribution-warning check failed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The result establishes incomplete warning coverage without identifying which condition failed or connecting it to a reported assumption, specification gap, or discoverable repository context.",
+      "resolution": "unresolved",
+      "id": "77066d8fd69ac416"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Control-origin swipe handling failed its evaluated requirement.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail",
+        "input-modifier-keys-pass-through: pass"
+      ],
+      "handling": "No gesture-handler code, execution trace, or agent discussion is supplied.",
+      "consequence": "The check requiring swipes originating from controls to be ignored failed; the exact resulting interaction is not shown.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure identifies an affected interaction, but does not distinguish an implementation defect from an assumption or context gap. The neighboring passing input check does not establish the cause.",
+      "resolution": "unresolved",
+      "id": "39faeae479fef558"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
