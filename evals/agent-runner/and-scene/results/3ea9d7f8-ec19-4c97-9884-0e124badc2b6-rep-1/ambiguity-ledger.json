@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-18T22-38-54-57008848Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Verification failed the IPv4 loopback requirement, but the underlying decision or context gap is undocumented.",
+      "evidence": [
+        "verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost.",
+        "The supplied workflow artifact sections contain no explanatory output."
+      ],
+      "handling": "The supplied artifacts show no explanation or resolution of the failed requirement.",
+      "consequence": "The verification-address check failed. The actual command and address used are not provided.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The result establishes a requirement mismatch but cannot distinguish an assumption from an implementation oversight, unavailable context, or a specification gap. Implementation records and the origin…",
+      "resolution": "unresolved",
+      "id": "d8c6a3905efb70eb"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The screenshot helper&#39;s attribution warnings were incomplete; the omitted behavior and its cause are unspecified.",
+      "evidence": [
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "attribution-default-link: pass — Default attribution label and target https://github.com/Codagent-AI/and-scene are present.",
+        "quality-project-local-screenshot-helper: pass — Project-local Playwright screenshot helper is present."
+      ],
+      "handling": "A helper and default attribution were delivered, but the warning check failed. No explanation appears in the supplied workflow output.",
+      "consequence": "The delivered helper did not satisfy the attribution-warning check; the evidence does not identify which warning condition was incomplete.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The passing attribution check narrows the observed problem to warning coverage, but no implementation, detailed test output, or agent account establishes an underlying assumption or context gap.",
+      "resolution": "unresolved",
+      "id": "bb35ea807bc03249"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The check that swipes originating on controls are ignored failed, without supporting implementation or decision evidence.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail —",
+        "demo-supported-navigation: pass —",
+        "demo-control-semantics: pass —"
+      ],
+      "handling": "Navigation and control checks passed, while the control-origin swipe check failed. No handling of this specific failure is documented.",
+      "consequence": "The delivered interaction behavior failed the control-origin swipe check. No gesture trace or specific affected control is supplied.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The isolated failure establishes an interaction issue but does not reveal whether it arose from an assumption, missing context, specification ambiguity, or an implementation defect.",
+      "resolution": "unresolved",
+      "id": "96c35f42b40fea37"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
