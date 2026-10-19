@@ -1771,6 +1771,42 @@ test('a rescore of a source without recorded metrics reads them from the Runner 
   assert.ok(written.implementation_metrics)
 })
 
+// A source rejected by an earlier parser keeps the artifact text it was derived
+// from, so a rescore judges it with the current parser.
+test('a rescore re-ingests retained metrics that an earlier parser rejected', async () => {
+  const context = await environment()
+  const agentSessionContext = {
+    sessions: [{
+      cli: 'claude', session_id: 'session-1', high_water_mark_tokens: 88721,
+      max_last_request_input_tokens: 88721, context_window_limit_tokens: 1000000,
+      attempt_count: 1, coverage: 'complete',
+    }],
+    unattributed_attempts: 0,
+  }
+  const text = JSON.stringify({
+    schema_version: 4, run_id: 'runner-complete', workflow: 'implement-change', history_complete: true,
+    aggregate_version: 1, native_measurements: [], measurement_heads: [], validator_contexts: [],
+    measurement_totals: {}, sessions: [], steps: [], session_rollups: [], totals: { active_duration_ms: 1234 },
+    agent_session_context: agentSessionContext,
+  })
+  const imported = importedRescore(context)
+  imported.workflow = { ...imported.workflow, runner_workflow_name: 'implement-change' }
+  imported.implementation_metrics = {
+    state: 'rejected',
+    reason: 'run-metrics.json is malformed: unsupported field agent_session_context',
+    attempts: [],
+    source: { path: null, sha256: null, schema_version: 4, text },
+  }
+  const result = await evaluate(context, ['--rescore-from', '/rescore-source'], {
+    loadRescoreSource: async () => imported,
+  })
+  assert.equal(result.exitCode, 0, JSON.stringify(result.outcome?.failure ?? result.errors))
+  const written = await readJson(join(context.runDir, 'result.json'))
+  assert.equal(written.implementation_metrics.state, 'ingested', written.implementation_metrics.reason)
+  assert.equal(written.implementation_metrics.active_duration_ms, 1234)
+  assert.deepEqual(written.implementation_metrics.agent_session_context, agentSessionContext)
+})
+
 test('rescore checks browser failures while a reference baseline does not', async () => {
   const rescoreContext = await environment()
   const broken = () => {

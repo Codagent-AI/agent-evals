@@ -55,9 +55,15 @@ function rejected(reason, source = null) {
 }
 
 const V4_KEYS = [
+  'agent_session_context',
   'native_measurements', 'measurement_heads', 'validator_contexts', 'measurement_totals',
   'aggregate_version', 'schema_version', 'run_id', 'workflow', 'history_complete', 'sessions',
   'steps', 'session_rollups', 'repository_changes', 'totals', 'validator_delivery',
+]
+const AGENT_SESSION_CONTEXT_KEYS = ['sessions', 'unattributed_attempts']
+const AGENT_SESSION_KEYS = [
+  'cli', 'session_id', 'high_water_mark_tokens', 'max_last_request_input_tokens',
+  'context_window_limit_tokens', 'attempt_count', 'coverage',
 ]
 const ATTRIBUTION_KEYS = [
   'run_id', 'execution_session_id', 'parent_attempt_id', 'step_id', 'prefix', 'context_id',
@@ -105,6 +111,36 @@ function assertKnownKeys(value, allowed, label) {
   object(value, label)
   const unknown = Object.keys(value).find((key) => !allowed.includes(key))
   if (unknown) throw new Error(`${label} has unsupported field ${unknown}`)
+}
+
+function validateCount(value, label) {
+  if (!Number.isInteger(value) || value < 0) throw new Error(`${label} is not a non-negative integer`)
+}
+
+// Context size is a per-session peak, not a usage total: it is carried for the
+// report and never summed into tokens or cost.
+function validateAgentSessionContext(summary) {
+  assertKnownKeys(summary, AGENT_SESSION_CONTEXT_KEYS, 'agent_session_context')
+  if (!Array.isArray(summary.sessions)) throw new Error('agent_session_context.sessions is not an array')
+  validateCount(summary.unattributed_attempts, 'agent_session_context.unattributed_attempts')
+  for (const [index, session] of summary.sessions.entries()) {
+    const label = `agent_session_context.sessions[${index}]`
+    assertKnownKeys(session, AGENT_SESSION_KEYS, label)
+    for (const field of ['cli', 'session_id']) {
+      if (typeof session[field] !== 'string' || session[field] === '') {
+        throw new Error(`${label}.${field} is not a non-empty string`)
+      }
+    }
+    for (const field of [
+      'high_water_mark_tokens', 'max_last_request_input_tokens', 'context_window_limit_tokens',
+    ]) {
+      if (session[field] !== null) validateCount(session[field], `${label}.${field}`)
+    }
+    validateCount(session.attempt_count, `${label}.attempt_count`)
+    if (!['complete', 'partial', 'none'].includes(session.coverage)) {
+      throw new Error(`${label} has invalid coverage`)
+    }
+  }
 }
 
 function validateValue(value, label) {
@@ -933,6 +969,9 @@ function normalizeV4(payload) {
   const nativeMeasurements = payload.native_measurements ?? []
   const measurementHeads = payload.measurement_heads ?? []
   const validatorContexts = payload.validator_contexts ?? []
+  if (payload.agent_session_context !== null && payload.agent_session_context !== undefined) {
+    validateAgentSessionContext(payload.agent_session_context)
+  }
   if (payload.validator_delivery !== null && payload.validator_delivery !== undefined) {
     assertKnownKeys(
       payload.validator_delivery,
@@ -1010,6 +1049,7 @@ function normalizeV4(payload) {
     measurement_heads: measurementHeads,
     measurement_totals: payload.measurement_totals,
     aggregate_version: payload.aggregate_version,
+    agent_session_context: payload.agent_session_context ?? null,
   }
 }
 
@@ -1125,8 +1165,19 @@ export function ingestRunnerMetrics({ text, runId, workflow, path = null }) {
     excluded_measurement_heads: v4?.excluded_heads ?? [],
     measurement_totals: v4?.measurement_totals ?? null,
     measurement_aggregate_version: v4?.aggregate_version ?? null,
+    agent_session_context: v4?.agent_session_context ?? null,
     coverage,
   }
+}
+
+// A rejected record keeps the verbatim artifact it was derived from. A rescore
+// parses that text again, so a record rejected by an earlier parser is judged by
+// the current one instead of carrying the old rejection forward.
+export function reingestRejectedMetrics(metrics, { runId, workflow }) {
+  if (metrics?.state !== 'rejected' || typeof metrics.source?.text !== 'string') return metrics
+  return ingestRunnerMetrics({
+    text: metrics.source.text, runId, workflow, path: metrics.source.path ?? null,
+  })
 }
 
 export async function readRunnerMetrics({ sessionDir, runId, workflow }) {
