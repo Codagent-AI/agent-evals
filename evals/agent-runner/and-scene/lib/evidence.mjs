@@ -310,12 +310,14 @@ async function canonicalRoots({ worktree, sessionDir }) {
   return roots
 }
 
+const ABSENT_PATH_CODES = new Set(['ENOENT', 'ENOTDIR', 'ENAMETOOLONG', 'EINVAL'])
+
 async function safeOrigin(path, roots) {
   let info
   try {
     info = await lstat(path)
   } catch (error) {
-    if (error.code === 'ENOENT') return null
+    if (ABSENT_PATH_CODES.has(error.code)) return null
     throw new Error(`failed to inspect evidence artifact ${path}`, { cause: error })
   }
   if (!info?.isFile() || info.isSymbolicLink()) return null
@@ -341,7 +343,10 @@ function extractReferences(text) {
   for (const match of text.matchAll(/(?:^|[\s"'`])((?:\.{0,2}\/)?[\w@%+.,/ -]+\.(?:md|json|png|jpe?g|webp|ya?ml|log))(?:$|[\s"'`)])/gim)) {
     references.add(match[1].trim())
   }
-  return [...references].filter((value) => value && !/^(?:https?:|data:|#)/i.test(value))
+  return [...references].filter((value) => (
+    value && !/^(?:https?:|data:|#)/i.test(value)
+    && value.split('/').every((segment) => Buffer.byteLength(segment) <= 255)
+  ))
 }
 
 function claimedRevision(text) {
