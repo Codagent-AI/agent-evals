@@ -235,6 +235,7 @@ function implementationUsageSection(result) {
         measurement_aggregate_version: metrics.measurement_aggregate_version ?? null,
         active_duration_ms: metrics.active_duration_ms ?? null,
         coverage: metrics.coverage ?? null,
+        agent_session_context: metrics.agent_session_context ?? null,
       }
     : metrics
   return section(

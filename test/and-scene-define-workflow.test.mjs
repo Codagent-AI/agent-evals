@@ -80,6 +80,14 @@ test('define metrics attribute children to crosscheck and retain incomplete cost
   assert.equal(ingestDefineMetrics({ text, runId: 'other' }).state, 'rejected')
 })
 
+test('define metrics accept the schema-v4 agent session context and carry it through', () => {
+  const context = { sessions: [{ cli: 'codex', session_id: 's', high_water_mark_tokens: 5, max_last_request_input_tokens: 5, context_window_limit_tokens: 9, attempt_count: 1, coverage: 'complete' }], unattributed_attempts: 0 }
+  const payload = { schema_version: 4, run_id: 'r', workflow: 'change', history_complete: true, aggregate_version: 1, native_measurements: [], measurement_heads: [], validator_contexts: [], measurement_totals: {}, steps: [], sessions: [], session_rollups: [], totals: {}, agent_session_context: context }
+  const metrics = ingestDefineMetrics({ text: JSON.stringify(payload), runId: 'r' })
+  assert.equal(metrics.state, 'ingested')
+  assert.deepEqual(metrics.agent_session_context, context)
+})
+
 test('sandbox driver creates the pinned repository, preserves all CLI sessions, and caps fresh/resumed argv', async t => {
   const { execFileSync } = await import('node:child_process')
   const { readlink } = await import('node:fs/promises')

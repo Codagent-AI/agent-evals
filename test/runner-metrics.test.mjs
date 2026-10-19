@@ -817,6 +817,70 @@ test('schema-v4 rejects unknown fields instead of silently dropping new meanings
   assert.match(ingested.reason, /future_measurement_semantics/)
 })
 
+// Trimmed from a real Agent Runner artifact written once it began recording
+// per-session context size.
+function agentSessionContext() {
+  return {
+    sessions: [
+      {
+        cli: 'claude',
+        session_id: 'aeef90e6-5287-4366-a4ee-344353a97b1f',
+        high_water_mark_tokens: 88721,
+        max_last_request_input_tokens: 88721,
+        context_window_limit_tokens: 1000000,
+        attempt_count: 6,
+        coverage: 'complete',
+      },
+      {
+        cli: 'codex',
+        session_id: '01a15193-d8c6-7e31-a70d-2fc2a4be5d04',
+        high_water_mark_tokens: null,
+        max_last_request_input_tokens: 119829,
+        context_window_limit_tokens: 258400,
+        attempt_count: 1,
+        coverage: 'partial',
+      },
+    ],
+    unattributed_attempts: 0,
+  }
+}
+
+test('schema-v4 carries the agent session context size through without changing usage', () => {
+  const ingested = ingestRunnerMetrics({
+    text: JSON.stringify(v4Metrics({ agent_session_context: agentSessionContext() })),
+    runId: RUN_ID,
+    workflow: WORKFLOW,
+  })
+  const without = ingestRunnerMetrics({ text: JSON.stringify(v4Metrics()), runId: RUN_ID, workflow: WORKFLOW })
+
+  assert.equal(ingested.state, 'ingested')
+  assert.deepEqual(ingested.agent_session_context, agentSessionContext())
+  assert.equal(without.agent_session_context, null)
+  assert.deepEqual(ingested.attempts, without.attempts)
+  assert.deepEqual(ingested.measurement_totals, without.measurement_totals)
+})
+
+test('schema-v4 rejects a malformed agent session context', () => {
+  const malformed = [
+    ['unsupported field', (context) => { context.sessions[0].future_peak = 1 }, /future_peak/],
+    ['negative tokens', (context) => { context.sessions[0].high_water_mark_tokens = -1 }, /high_water_mark_tokens/],
+    ['unknown coverage', (context) => { context.sessions[0].coverage = 'mostly' }, /invalid coverage/],
+    ['missing session id', (context) => { context.sessions[0].session_id = '' }, /session_id/],
+    ['sessions not a list', (context) => { context.sessions = {} }, /sessions is not an array/],
+  ]
+  for (const [name, mutate, reason] of malformed) {
+    const context = agentSessionContext()
+    mutate(context)
+    const ingested = ingestRunnerMetrics({
+      text: JSON.stringify(v4Metrics({ agent_session_context: context })),
+      runId: RUN_ID,
+      workflow: WORKFLOW,
+    })
+    assert.equal(ingested.state, 'rejected', name)
+    assert.match(ingested.reason, reason, name)
+  }
+})
+
 test('schema-v4 rejects unknown nested measurement fields', () => {
   const payload = v4Metrics()
   payload.measurement_heads[1].record.payload.lifecycle.future_state_detail = 'new-semantics'
