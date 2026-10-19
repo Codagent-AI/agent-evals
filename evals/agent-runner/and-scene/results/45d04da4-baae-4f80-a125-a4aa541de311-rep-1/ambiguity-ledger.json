@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-19T02-14-40-054392826Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The visual helper is missing an overlap warning or explicit allow-overlap marker; the underlying assumption or context gap is unknown.",
+      "evidence": [
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "The supplied workflow artifact excerpts contain no agent explanation."
+      ],
+      "handling": "No handling is documented in the supplied evidence.",
+      "consequence": "The delivered helper failed the overlap-warning check.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The result establishes an omission, but the supplied evidence cannot distinguish a specification gap, overlooked repository context, an implementation assumption, or an ordinary implementation defect.",
+      "resolution": "unresolved",
+      "id": "7cce4a3558a785fa"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Attribution warning coverage is incomplete; the evidence does not identify which requirement was omitted or why.",
+      "evidence": [
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "attribution-default-link: pass — Default attribution label and target https://github.com/Codagent-AI/and-scene are present."
+      ],
+      "handling": "Default attribution was delivered, but no explanation of the incomplete warning coverage is provided.",
+      "consequence": "The attribution-warning check failed despite the default attribution check passing.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The aggregate failure does not identify the missing warning behavior, the applicable instructions, or the implementation agents&#39; interpretation.",
+      "resolution": "unresolved",
+      "id": "36aa378191046aa5"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The swipe-from-control exclusion check failed, with no evidence explaining the implementation&#39;s treatment of those gestures.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail —",
+        "demo-supported-navigation: pass —",
+        "demo-control-semantics: pass —"
+      ],
+      "handling": "No handling of this specific interaction is documented in the supplied evidence.",
+      "consequence": "The delivered interaction failed the swipe-from-control check; the exact observed behavior is not supplied.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The check result identifies a narrow interaction failure but provides no trace, implementation detail, or agent statement establishing an assumption or context gap.",
+      "resolution": "unresolved",
+      "id": "75f00a6ee63c2087"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
