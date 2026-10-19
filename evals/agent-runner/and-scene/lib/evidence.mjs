@@ -315,7 +315,8 @@ async function safeOrigin(path, roots) {
   try {
     info = await lstat(path)
   } catch (error) {
-    if (error.code === 'ENOENT') return null
+    // Prose that the reference pattern mistakes for a path can exceed the name limit.
+    if (error.code === 'ENOENT' || error.code === 'ENAMETOOLONG') return null
     throw new Error(`failed to inspect evidence artifact ${path}`, { cause: error })
   }
   if (!info?.isFile() || info.isSymbolicLink()) return null

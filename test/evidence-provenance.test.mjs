@@ -541,6 +541,24 @@ test('candidate references cannot traverse outside the worktree or recorded sess
   assert.ok(!manifest.artifacts.some(({ origin }) => origin.relative_path.includes('secret.md')))
 })
 
+test('a prose reference longer than a file name allows is treated as missing, not a harness error', async () => {
+  const context = await fixture()
+  const prose = `known-good example. ${'Applying them to every generated project would fail its test. '.repeat(6)}The SKILL.md`
+  await writeRequiredArtifacts(context, {
+    'final-acceptance-handoff.md': `# Final handoff\nFinal revision: ${FINAL_SHA}\nSee the template's ${prose} wording.\n`,
+  })
+
+  await inspectCandidateEvidenceReadiness({ worktree: context.worktree, sessionDir: context.sessionDir })
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  assert.ok(!manifest.artifacts.some(({ origin }) => origin.relative_path.includes('known-good')))
+})
+
 test('missing candidate evidence roles remain judgeable as incomplete coverage', async () => {
   const context = await fixture()
   await writeRequiredArtifacts(context, { 'retest-history.md': '' })
