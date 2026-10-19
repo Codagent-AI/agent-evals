@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-19T01-19-53-635587334Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err",
+      "output/_resolve-findings_.out",
+      "output/_session-report_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered visual-verification tooling lacks the project-local screenshot helper and required warning coverage.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: fail — Project-local Playwright screenshot helper is missing.",
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "The supplied workflow excerpt is truncated during initialization; it contains no recoverable agent explanation for these omissions. No additional workspace files were discoverable."
+      ],
+      "handling": "No implementation decision, acknowledgment, or remediation is visible in the supplied artifacts.",
+      "consequence": "The product evidence records missing screenshot tooling and incomplete visual-warning coverage, affecting the delivered verification workflow.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The checks establish omissions, but the implementation instructions, repository context, and substantive agent trace are unavailable. The evidence cannot distinguish a specification gap, overlooked r…",
+      "resolution": "unresolved",
+      "id": "c3842a133cfddce0"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Control-origin swipe handling failed the supplied interaction check.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail.",
+        "Other supplied navigation, keyboard-accessibility, and mode-interaction checks passed, but no detailed trace or implementation explanation accompanies this failure."
+      ],
+      "handling": "The artifacts show the failed check without a visible acknowledgment, rationale, or subsequent fix.",
+      "consequence": "The delivered interaction behavior failed verification for swipes beginning on controls; the exact gesture sequence and resulting behavior are not documented.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure demonstrates an interaction-verification shortfall but does not establish an underlying assumption or context gap. Without the specification, implementation, or test details, a more speci…",
+      "resolution": "unresolved",
+      "id": "9410554ec12924d7"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
