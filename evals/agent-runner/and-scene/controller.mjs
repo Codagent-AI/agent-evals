@@ -41,7 +41,7 @@ import { runCandidateVerification } from './lib/candidate-verification.mjs'
 import { createHostCandidateServer } from './lib/candidate-server-host.mjs'
 import { aggregateImplementationCost, summarizeEvalOwnedUsage } from './lib/cost.mjs'
 import { fetchPricingCatalog, needsPricingLookup, resolveImplementationPricing, loadFallbackRates } from './lib/pricing.mjs'
-import { readRunnerMetrics, refreshBillingTokens } from './lib/runner-metrics.mjs'
+import { readRunnerMetrics, refreshBillingTokens, reingestRejectedMetrics } from './lib/runner-metrics.mjs'
 import {
   createTimingLedger,
   mergeTimingLedgers,
@@ -2035,6 +2035,10 @@ async function evaluateRun({
 
     'metrics-pricing': async () => {
       if (rescore && Array.isArray(record.metrics?.attempts)) {
+        record.metrics = reingestRejectedMetrics(record.metrics, {
+          runId: record.run?.run_id ?? runId,
+          workflow: boundary.runner_workflow_name,
+        })
         refreshBillingTokens(record.metrics.attempts)
       } else {
         // A source that failed before its metrics phase recorded none, so a

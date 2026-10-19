@@ -1170,6 +1170,16 @@ export function ingestRunnerMetrics({ text, runId, workflow, path = null }) {
   }
 }
 
+// A rejected record keeps the verbatim artifact it was derived from. A rescore
+// parses that text again, so a record rejected by an earlier parser is judged by
+// the current one instead of carrying the old rejection forward.
+export function reingestRejectedMetrics(metrics, { runId, workflow }) {
+  if (metrics?.state !== 'rejected' || typeof metrics.source?.text !== 'string') return metrics
+  return ingestRunnerMetrics({
+    text: metrics.source.text, runId, workflow, path: metrics.source.path ?? null,
+  })
+}
+
 export async function readRunnerMetrics({ sessionDir, runId, workflow }) {
   if (!sessionDir) {
     return rejected('no Agent Runner session directory was recorded for this run')
