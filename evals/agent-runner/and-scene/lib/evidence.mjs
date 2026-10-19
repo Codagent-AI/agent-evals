@@ -310,7 +310,7 @@ async function canonicalRoots({ worktree, sessionDir }) {
   return roots
 }
 
-const ABSENT_PATH_CODES = new Set(['ENOENT', 'ENOTDIR', 'ENAMETOOLONG', 'EINVAL'])
+const ABSENT_PATH_CODES = new Set(['ENOENT', 'ENOTDIR', 'ENAMETOOLONG', 'EINVAL', 'ELOOP'])
 
 async function safeOrigin(path, roots) {
   let info

@@ -1,6 +1,6 @@
 import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -564,6 +564,27 @@ test('a reference through a regular file produces a non-fatal unresolved referen
   assert.ok(manifest.findings.some(({ code, reference }) => (
     ['missing-reference', 'unsafe-reference'].includes(code) && reference === 'existing-file.md/child.md'
   )))
+})
+
+test('a reference through a symlink loop produces a non-fatal unresolved reference finding', async () => {
+  const context = await fixture()
+  await symlink('loop', join(context.worktree, 'loop'))
+  await writeRequiredArtifacts(context, {
+    'final-acceptance-handoff.md': '# Final handoff\n[loop](loop/child.md)\n',
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  assert.ok(manifest.artifacts.some(({ role }) => role === 'final-handoff'))
+  assert.ok(manifest.findings.some(({ code, reference }) => (
+    ['missing-reference', 'unsafe-reference'].includes(code) && reference === 'loop/child.md'
+  )))
+  assert.ok(!manifest.artifacts.some(({ origin }) => origin.relative_path === 'loop/child.md'))
 })
 
 test('candidate references cannot traverse outside the worktree or recorded session', async () => {
