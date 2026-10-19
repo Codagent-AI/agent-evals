@@ -1,6 +1,6 @@
 import { makeTempDir } from './temp-dir.mjs'
 import assert from 'node:assert/strict'
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -521,6 +521,70 @@ test('a valid uppercase revision prefix expands to the canonical final SHA', asy
   const metadata = manifest.artifacts.find(({ role }) => role === 'screenshot-metadata')
   assert.equal(metadata.claimed_revision, FINAL_SHA)
   assert.equal(metadata.verification_state, 'verified')
+})
+
+test('long prose references do not prevent collecting the handoff and real referenced files', async () => {
+  const context = await fixture()
+  const prose = "the template's known-good example. Applying them to every generated project would "
+    + 'make the template fail its own required integration test, '.repeat(6)
+    + 'The SKILL.md'
+  assert.ok(Buffer.byteLength(prose) > 300)
+  await writeFile(join(context.worktree, 'real evidence.md'), '# Supporting evidence\n')
+  await writeRequiredArtifacts(context, {
+    'final-acceptance-handoff.md': `# Final handoff\n${prose}\nSee \`real evidence.md\`\n`,
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  assert.ok(manifest.artifacts.some(({ role }) => role === 'final-handoff'))
+  assert.ok(manifest.artifacts.some(({ origin }) => origin.relative_path === 'real evidence.md'))
+  assert.ok(!manifest.findings.some(({ reference }) => reference?.includes('The SKILL.md')))
+})
+
+test('a reference through a regular file produces a non-fatal unresolved reference finding', async () => {
+  const context = await fixture()
+  await writeFile(join(context.sessionDir, 'output', 'existing-file.md'), '# Regular file\n')
+  await writeRequiredArtifacts(context, {
+    'final-acceptance-handoff.md': '# Final handoff\n[child](existing-file.md/child.md)\n',
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  assert.ok(manifest.artifacts.some(({ role }) => role === 'final-handoff'))
+  assert.ok(manifest.findings.some(({ code, reference }) => (
+    ['missing-reference', 'unsafe-reference'].includes(code) && reference === 'existing-file.md/child.md'
+  )))
+})
+
+test('a reference through a symlink loop produces a non-fatal unresolved reference finding', async () => {
+  const context = await fixture()
+  await symlink('loop', join(context.worktree, 'loop'))
+  await writeRequiredArtifacts(context, {
+    'final-acceptance-handoff.md': '# Final handoff\n[loop](loop/child.md)\n',
+  })
+
+  const manifest = await buildCandidateEvidenceManifest({
+    worktree: context.worktree,
+    sessionDir: context.sessionDir,
+    runDir: context.runDir,
+    delivery: { final_sha: FINAL_SHA, pull_request: { head_sha: FINAL_SHA } },
+  })
+
+  assert.ok(manifest.artifacts.some(({ role }) => role === 'final-handoff'))
+  assert.ok(manifest.findings.some(({ code, reference }) => (
+    ['missing-reference', 'unsafe-reference'].includes(code) && reference === 'loop/child.md'
+  )))
+  assert.ok(!manifest.artifacts.some(({ origin }) => origin.relative_path === 'loop/child.md'))
 })
 
 test('candidate references cannot traverse outside the worktree or recorded session', async () => {
