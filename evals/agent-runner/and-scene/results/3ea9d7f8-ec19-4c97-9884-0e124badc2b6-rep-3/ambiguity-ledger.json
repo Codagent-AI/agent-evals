@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-19T03-51-48-100871243Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err",
+      "output/_resolve-findings_.out",
+      "output/_session-report_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Verification did not satisfy the IPv4 loopback requirement.",
+      "evidence": [
+        "verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost."
+      ],
+      "handling": "The supplied workflow excerpt contains initialization data but no explanation of the verification host choice.",
+      "consequence": "The host-specific verification check failed; the effect on runtime behavior is not established.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure establishes an unmet requirement, but the artifacts do not show whether it resulted from an assumption, unavailable context, or an implementation oversight.",
+      "resolution": "unresolved",
+      "id": "86c68519e328dc2d"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered screenshot helper lacked required visual warnings.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: pass — Project-local Playwright screenshot helper is present.",
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "A project-local helper was delivered, but its warning coverage was incomplete. No explanation is visible in the supplied workflow excerpt.",
+      "consequence": "Three checks covering the helper&#39;s visual warnings failed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The omissions materially affected the delivered verification tooling, but neither the governing instructions nor the implementation reasoning is available to distinguish a specification gap from over…",
+      "resolution": "unresolved",
+      "id": "13916a7040de10f6"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The interaction check for ignoring swipes originating from controls failed.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail",
+        "input-modifier-keys-pass-through: pass",
+        "demo-focus-and-keyboard-accessibility: pass"
+      ],
+      "handling": "The product failed this specific interaction check. No event-handling code, failure trace, or related agent explanation was supplied.",
+      "consequence": "The delivered interaction behavior did not pass the control-origin swipe check; the precise observed behavior is unavailable.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The result identifies a product issue but does not establish the underlying assumption or whether the expected behavior was specified or discoverable.",
+      "resolution": "unresolved",
+      "id": "f16d8e3ef7aa850e"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
