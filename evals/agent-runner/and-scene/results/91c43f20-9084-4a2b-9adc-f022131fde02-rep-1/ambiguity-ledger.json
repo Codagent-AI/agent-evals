@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-18T23-10-31-426801914Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Visual-verification tooling is missing; the evidence does not establish whether an assumption or context gap caused the omission.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: fail — Project-local Playwright screenshot helper is missing.",
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "The supplied workflow artifact excerpts contain no agent explanations."
+      ],
+      "handling": "Verification reported the missing helper and incomplete diagnostics. No implementation rationale or subsequent resolution is supplied.",
+      "consequence": "The delivered workflow lacks the reported screenshot helper and visual diagnostics. These failures alone do not establish corresponding defects in the rendered product.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The artifacts establish omissions but provide no implementation instructions, repository context, or agent reasoning to distinguish a specification gap, missed context, implementation choice, or inco…",
+      "resolution": "unresolved",
+      "id": "1cb652ab45b07499"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Swipe handling failed the control-origin exclusion check, but its connection to an assumption or context gap is unknown.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail.",
+        "demo-supported-navigation: pass.",
+        "demo-control-semantics: pass.",
+        "The supplied workflow artifact excerpts contain no agent explanations."
+      ],
+      "handling": "Verification flagged the control-origin swipe case. No implementation rationale, detailed failure trace, or resolution is supplied.",
+      "consequence": "The delivered interaction did not satisfy the verifier&#39;s control-origin swipe exclusion check; the precise observed response is unavailable.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check identifies a behavioral issue but cannot distinguish misunderstood requirements, unavailable context, a deliberate choice, or an ordinary implementation defect.",
+      "resolution": "unresolved",
+      "id": "4cd054c92c9ba698"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
