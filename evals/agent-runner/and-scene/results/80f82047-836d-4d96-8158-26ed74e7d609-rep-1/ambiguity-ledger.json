@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-20T16-49-13-453018673Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err",
+      "output/_resolve-findings_.out",
+      "output/_session-report_.err",
+      "output/_session-report_.out",
+      "output/_verify-change__sub_verify-change__verify-acceptance-handoff_.err",
+      "output/_verify-change__sub_verify-change__verify-acceptance-handoff_.out",
+      "output/_verify-change__sub_verify-change__verify-assumptions-handoff_.err",
+      "output/_verify-change__sub_verify-change__verify-assumptions-handoff_.out"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": "input-swipe-from-control-ignored"
+      },
+      "source": "judge-discovered",
+      "concern": "Verification identified a failure involving swipes originating from controls, but the underlying assumption or context gap is unknown.",
+      "evidence": [
+        "Product evidence: input-swipe-from-control-ignored: fail.",
+        "The supplied workflow excerpts contain empty outputs or truncated initialization records; no substantive assumption reports, implementation code, or governing specification are available."
+      ],
+      "handling": "No investigation or remediation is visible in the available artifacts.",
+      "consequence": "The delivered product failed the control-origin swipe check; the precise observed interaction is not documented.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check establishes a product issue but does not distinguish a specification gap, missed repository context, an incorrect assumption, or an implementation defect. The limited workflow excerp…",
+      "resolution": "unresolved",
+      "id": "d1779bd66bd2e97d"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
