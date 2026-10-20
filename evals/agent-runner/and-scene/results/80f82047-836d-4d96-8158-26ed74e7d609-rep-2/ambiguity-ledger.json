@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-20T19-42-52-660824467Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The control-origin swipe check failed, but its connection to an assumption or context gap is unestablished.",
+      "evidence": [
+        "Product evidence reports: input-swipe-from-control-ignored: fail.",
+        "The supplied workflow artifact sections contain no substantive agent statements.",
+        "No repository files or additional workflow artifacts were available in the workspace."
+      ],
+      "handling": "The verification result records the failure; no implementation decision, investigation, or subsequent fix is shown.",
+      "consequence": "The delivered product failed this input-interaction check. The exact observed interaction is not documented.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check establishes a verification failure, but cannot distinguish a specification gap, overlooked repository context, an incorrect assumption, or an implementation defect unrelated to ambig…",
+      "resolution": "unresolved",
+      "id": "507357deb55815f5"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
