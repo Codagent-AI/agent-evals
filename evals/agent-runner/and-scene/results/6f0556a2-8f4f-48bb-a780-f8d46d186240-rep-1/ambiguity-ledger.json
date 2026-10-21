@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-21T04-20-01-786524091Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err",
+      "output/_resolve-findings_.out",
+      "output/_session-report_.err",
+      "output/_session-report_.out",
+      "output/_verify-change__sub_verify-change__verify-acceptance-handoff_.err",
+      "output/_verify-change__sub_verify-change__verify-acceptance-handoff_.out",
+      "output/_verify-change__sub_verify-change__verify-assumptions-handoff_.err",
+      "output/_verify-change__sub_verify-change__verify-assumptions-handoff_.out"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Verification did not satisfy the IPv4-loopback check.",
+      "evidence": [
+        "verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost."
+      ],
+      "handling": "The supplied excerpts do not show the verification command, host selection rationale, or subsequent correction.",
+      "consequence": "The verification-host check failed; no resulting application failure is shown.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The checker states the required host, but the original instructions and executed commands are unavailable. The evidence cannot distinguish an incorrect assumption, overlooked repository context, or a…",
+      "resolution": "unresolved",
+      "id": "9508aa65d333d01c"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered project lacked the expected project-local Playwright screenshot helper.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: fail — Project-local Playwright screenshot helper is missing."
+      ],
+      "handling": "The helper was reported missing. No implementation rationale or alternative screenshot workflow is visible.",
+      "consequence": "The project-local screenshot-helper check failed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The supplied evidence does not include the fixture instructions, repository contents, or substantive agent logs needed to determine whether this arose from a specification gap, missing context, or an…",
+      "resolution": "unresolved",
+      "id": "672905e4792ec8db"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Expected visual-helper warnings were absent or incomplete.",
+      "evidence": [
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "attribution-default-link: pass — Default attribution label and target https://github.com/Codagent-AI/and-scene are present.",
+        "navigation-active-state: pass — Semantic current state and stable active hook are present."
+      ],
+      "handling": "The reported outcome lacks the expected warnings. Their relationship to the missing screenshot helper is not established by the excerpts.",
+      "consequence": "Three warning checks failed, although the separate default-attribution and navigation-state checks passed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "These failures establish missing verification feedback, not missing attribution or navigation state in the product. The available artifacts do not reveal the requirements available to agents or their…",
+      "resolution": "unresolved",
+      "id": "a587b39ab1658764"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The product failed the check for ignoring swipes that originate from controls.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail",
+        "demo-supported-navigation: pass",
+        "demo-control-semantics: pass",
+        "input-modifier-keys-pass-through: pass"
+      ],
+      "handling": "No gesture-handler implementation, failure trace, or agent explanation is supplied.",
+      "consequence": "The control-origin swipe check failed despite the listed navigation and control checks passing.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The check result identifies an interaction failure but does not establish its mechanism or whether agents assumed a particular gesture policy. Without the specification and implementation, a more spe…",
+      "resolution": "unresolved",
+      "id": "3657e8c0656a978d"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
