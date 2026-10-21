@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { runPanelJob, verifyCachedPanelJob, judgeFailure, DECIDER_REASONS_RULE } from '../evals/lib/panel-judging/panel.mjs'
 import { validateLineCitations,
-  MAX_AUDIT_PACKET_CHARS, PacketOverflowError, SOURCE_JUDGE_RESULT_SCHEMA,
+  MAX_AUDIT_PACKET_CHARS, MAX_DECIDER_PACKET_CHARS, PacketOverflowError, SOURCE_JUDGE_RESULT_SCHEMA,
   batchClaims, buildContradictionCheckRequest, buildSourceAuditRequest, buildSpanAuditRequest,
   buildTiebreakRequest, inventoryListing, lineCitationInventory, runJudgeJob,
 } from '../evals/lib/panel-judging/protocol.mjs'
@@ -198,12 +198,12 @@ test('a single claim too large for an audit fails the job, non-retryable, naming
 // limit, while each criterion fits beside the shared evidence.
 test('a decider request too large in total runs in batches of whole criteria and records one decision', async () => {
   const root = await makeTempDir(join(tmpdir(), 'panel-packets-view-'))
-  const evidenceText = Array.from({ length: 1000 }, (_, i) => `evidence line ${i} `.padEnd(100, 'e')).join('\n')
+  const evidenceText = Array.from({ length: 3000 }, (_, i) => `evidence line ${i} `.padEnd(100, 'e')).join('\n')
   await writeFile(join(root, 'packet.txt'), evidenceText)
   const request = { job: 'job', criteria: ['x', 'y'], prompt: 'context', prompt_body: 'context', schema: {},
     line_citations: 'evidence-view', panel_line_citations: true, input_roots: { evidence: root } }
   const seen = []
-  const rationale = id => id.toUpperCase().repeat(40_000)
+  const rationale = id => id.toUpperCase().repeat(60_000)
   const outcome = await runPanelJob({ job: 'job', criteria: ['x', 'y'], verdicts: ['pass', 'fail'], order: ['pass', 'fail'], schema: {},
     buildPrompt: () => request, validateCitations: async () => true,
     panel: panel(['fail', 'pass', 'pass']).map(member => ({ ...member, invoke: async () => JSON.stringify({ results: ['x', 'y']
@@ -233,7 +233,7 @@ test('a decider request too large in total runs in batches of whole criteria and
 
 test('shared decider evidence too large to fit fails the job naming every pending criterion', async () => {
   const root = await makeTempDir(join(tmpdir(), 'panel-packets-view-'))
-  await writeFile(join(root, 'packet.txt'), 'E'.repeat(LIMIT + 1))
+  await writeFile(join(root, 'packet.txt'), 'E'.repeat(MAX_DECIDER_PACKET_CHARS + 1))
   const request = { job: 'job', criteria: ['x', 'y', 'z'], prompt: 'context', prompt_body: 'context', schema: {},
     line_citations: 'evidence-view', panel_line_citations: true, input_roots: { evidence: root } }
   const seen = []
