@@ -1504,9 +1504,8 @@ async function copyViewArtifacts({ runDir, root, artifacts }) {
 
 export const JUDGE_PACKET_MAX_CHARS = 220_000
 // The primary records are never cut, so when they and the omission markers
-// outgrow the budget the packet grows to hold them, up to this hard limit.
-// Supporting artifacts then get only their omission markers, as they do when
-// the primary records come close to the budget.
+// outgrow the budget the packet grows to this hard limit, and supporting
+// artifacts fill the room left beside the primary records.
 export const JUDGE_PACKET_PRIMARY_MAX_CHARS = 400_000
 const JUDGE_PACKET_ARTIFACT_MAX_CHARS = 50_000
 // An approved requirement document the assumption judge receives as reference
@@ -1600,8 +1599,8 @@ const MAX_LINE_NUMBER = JUDGE_PACKET_PRIMARY_MAX_CHARS
 // budget left, is cut and marked after the cut; one with no room left is
 // replaced by an omission marker. Every marker is listed in the cut index, so
 // nothing is cut or dropped silently. The primary records are never cut: when
-// they and the omission markers outgrow the budget, the packet grows to hold
-// them, and overflows only past the hard limit.
+// they and the omission markers outgrow the budget, the packet grows to the
+// hard limit, and overflows only when they cannot fit that.
 export function buildEvidenceJudgePacket({ index, primary, supporting,
   maxChars = JUDGE_PACKET_MAX_CHARS, artifactMaxChars = JUDGE_PACKET_ARTIFACT_MAX_CHARS,
   primaryMaxChars = Math.max(maxChars, JUDGE_PACKET_PRIMARY_MAX_CHARS) }) {
@@ -1631,8 +1630,8 @@ export function buildEvidenceJudgePacket({ index, primary, supporting,
   // placed, so a later one can always be marked rather than vanish.
   const reserve = supporting.map(omissionCost)
   let reserved = reserve.reduce((total, cost) => total + cost, 0)
-  const budget = Math.max(maxChars, used + reserved)
-  if (budget > primaryMaxChars) {
+  const budget = used + reserved > maxChars ? primaryMaxChars : maxChars
+  if (used + reserved > budget) {
     throw new PacketOverflowError(`the judge packet cannot hold the omission markers of its ${supporting.length} supporting artifacts beside the primary records`, [])
   }
   const placed = primary.map((artifact) => ({ artifact, text: artifact.text, marker: null }))

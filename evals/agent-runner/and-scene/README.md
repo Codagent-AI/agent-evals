@@ -123,9 +123,9 @@ primary records whole: the acceptance flow record, exploration log, final
 handoff and findings history for testing evidence, and the assumptions ledger,
 final handoff, findings history and exploration log, with the complete approved
 requirements, for assumption handling. The packet budget is 220,000 characters;
-when the primary records outgrow it, the packet grows to hold them, and other
-artifacts get only their omission markers. When they cannot fit the
-400,000-character hard limit, or collection skipped one for its size, or a
+when the primary records outgrow it, the packet grows to a 400,000-character
+hard limit, and other artifacts fill the room left. When they cannot fit that
+limit, or collection skipped one for its size, or a
 requirement document exceeds 40,000 characters, that job fails with
 `packet-overflow`. Other artifacts may be cut or dropped; each is marked in place
 (`[truncated: …]` or `[omitted: …]`) and listed in the cut index at the top of

@@ -155,15 +155,19 @@ test('the packet builder never exceeds its budget and records every artifact it 
     (error) => error.code === 'packet-overflow' && /omission markers/.test(error.message))
 })
 
-test('primary records over the budget grow the packet to hold them whole, up to the hard limit', () => {
+test('primary records over the budget grow the packet to the hard limit, and supporting artifacts fill the room left', () => {
   const index = { a: 1 }
   const primary = [{ id: 'candidate-p', role: 'exploration-log', text: 'p'.repeat(2_500) }]
   const supporting = Array.from({ length: 3 }, (_, n) => ({ id: `candidate-s${n}`, role: 'session-audit', text: 's'.repeat(400) }))
   const { packet, cuts } = buildEvidenceJudgePacket({ index, primary, supporting, maxChars: 2_000, primaryMaxChars: 6_000 })
   assert.ok(packet.includes('p'.repeat(2_500)), 'the primary record is whole')
   assert.ok(packet.length <= 6_000)
-  assert.deepEqual(cuts.map((marker) => marker.split(' ').slice(0, 2).join(' ')),
-    supporting.map(({ id }) => `[omitted: ${id}`), 'every supporting artifact is replaced by its marker')
+  assert.deepEqual(cuts, [], 'every supporting artifact fits beside the primary record')
+  for (const { id } of supporting) assert.ok(packet.includes(`# BEGIN UNTRUSTED CANDIDATE ARTIFACT ${id}`))
+  // With less room left, supporting artifacts are cut or omitted and marked, never dropped silently.
+  const tight = buildEvidenceJudgePacket({ index, primary, supporting, maxChars: 2_000, primaryMaxChars: 4_200 })
+  assert.ok(tight.packet.length <= 4_200)
+  assert.ok(tight.cuts.length > 0 && tight.cuts.length <= 3)
   // A packet that fits the budget is unchanged by the hard limit.
   const small = [{ id: 'candidate-p', role: 'exploration-log', text: 'p'.repeat(900) }]
   assert.equal(buildEvidenceJudgePacket({ index, primary: small, supporting, maxChars: 4_000 }).packet,
