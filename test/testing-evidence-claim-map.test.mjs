@@ -82,7 +82,8 @@ async function evidenceViews({ artifacts, requirements = true, findings = [], ex
 }
 
 // Fixture 1: a deep claim past the old 50,000-character excerpt, a false claim
-// outside the basis, and supporting material the budget cuts and drops.
+// outside the basis, and supporting material that outgrows even the hard
+// limit, so the packet cuts and drops some.
 const deepRecord = () => [
   { role: 'final-handoff', name: 'acceptance-handoff.md', text: `# Handoff\nAll scenarios passed.\n${FALSE_CLAIM}\n` },
   { role: 'exploration-log', name: 'exploration-log.md',
@@ -90,7 +91,7 @@ const deepRecord = () => [
   { role: 'findings-history', name: 'findings-history.md', text: '# Findings\nF1 resolved.\n' },
   { role: 'acceptance-flow-record', name: 'acceptance-flow.md', text: '# Flow record\nStep 1: opened the deck; saw step 1.\n' },
   { role: 'session-audit', name: 'session-report.md', text: `# Session report\n${filler('session', 70_000)}\nSESSION TAIL\n` },
-  ...[1, 2, 3, 4].map((n) => ({ role: 'referenced-material', name: `ref-${n}.md`, text: `# Ref ${n}\n${filler(`ref${n}`, 45_000)}\n` })),
+  ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ role: 'referenced-material', name: `ref-${n}.md`, text: `# Ref ${n}\n${filler(`ref${n}`, 45_000)}\n` })),
 ]
 
 const lineOf = (packet, needle) => packet.split('\n').findIndex((line) => line.includes(needle)) + 1
@@ -100,7 +101,7 @@ test('the testing packet holds the four claim-bearing records first and in full,
   const view = views['testing-evidence']
   const packet = view.packet
   assert.equal(await readFile(join(view.root, 'packet.txt'), 'utf8'), packet)
-  assert.ok(packet.length <= JUDGE_PACKET_MAX_CHARS)
+  assert.ok(packet.length <= JUDGE_PACKET_PRIMARY_MAX_CHARS)
   assert.deepEqual(TESTING_PRIMARY_ROLES, ['acceptance-flow-record', 'exploration-log', 'final-handoff', 'findings-history'])
   // The deep claim lies past the old excerpt, and the whole log is present.
   const log = deepRecord().find(({ role }) => role === 'exploration-log').text
@@ -117,11 +118,11 @@ test('the testing packet holds the four claim-bearing records first and in full,
   const cutLine = lineOf(packet.slice(packet.indexOf('# BEGIN VERIFIED INDEX')), truncated)
   assert.ok(cutLine > 0)
   // The budget runs out among the references: one is cut and one dropped.
-  const omitted = `[omitted: ${idOf('ref-4.md')} (referenced-material), `
+  const omitted = `[omitted: ${idOf('ref-8.md')} (referenced-material), `
   assert.ok(packet.includes(`${omitted}`))
   const cuts = packetCuts(packet, { atStart: true })
   assert.deepEqual(cuts.map(({ id, kind }) => [kind, id]), [
-    ['truncated', idOf('session-report.md')], ['truncated', idOf('ref-3.md')], ['omitted', idOf('ref-4.md')]])
+    ['truncated', idOf('session-report.md')], ['truncated', idOf('ref-7.md')], ['omitted', idOf('ref-8.md')]])
   for (const { marker } of cuts) assert.equal(packet.split(marker).length, 4, `${marker} is in the index, layout and in place`)
   // The layout labels lines with the artifact they lie in and its marker.
   const layout = packetLayout(packet)
@@ -142,7 +143,7 @@ test('the packet builder never exceeds its budget and records every artifact it 
   const primary = [{ id: 'candidate-p', role: 'exploration-log', text: 'p'.repeat(900) }]
   const supporting = Array.from({ length: 6 }, (_, n) => ({ id: `candidate-s${n}`, role: 'session-audit', text: 's'.repeat(400) }))
   for (const maxChars of [3_000, 3_400, 4_000, 5_000, 8_000]) {
-    const { packet, cuts, entries } = buildEvidenceJudgePacket({ index, primary, supporting, maxChars, artifactMaxChars: 300 })
+    const { packet, cuts, entries } = buildEvidenceJudgePacket({ index, primary, supporting, maxChars, artifactMaxChars: 300, primaryMaxChars: maxChars })
     assert.ok(packet.length <= maxChars, `${packet.length} <= ${maxChars}`)
     assert.ok(packet.includes('p'.repeat(900)))
     assert.equal(entries.length, 7)
@@ -170,6 +171,10 @@ test('primary records over the budget grow the packet to the hard limit, and sup
   assert.ok(tight.cuts.length > 0 && tight.cuts.length <= 3)
   // A packet that fits the budget is unchanged by the hard limit.
   const small = [{ id: 'candidate-p', role: 'exploration-log', text: 'p'.repeat(900) }]
+  // Primary records within the budget still grow the packet when the budget would drop supporting artifacts.
+  const grown = buildEvidenceJudgePacket({ index, primary: small, supporting, maxChars: 2_500, primaryMaxChars: 6_000 })
+  assert.deepEqual(grown.cuts, [])
+  assert.ok(grown.packet.length > 2_500 && grown.packet.length <= 6_000)
   assert.equal(buildEvidenceJudgePacket({ index, primary: small, supporting, maxChars: 4_000 }).packet,
     buildEvidenceJudgePacket({ index, primary: small, supporting, maxChars: 4_000, primaryMaxChars: 4_000 }).packet)
   assert.throws(() => buildEvidenceJudgePacket({ index, primary, supporting, maxChars: 2_000, primaryMaxChars: 2_400 }),
@@ -239,7 +244,7 @@ test('the assumption packet holds its four primary records in full, and a long r
   const order = ['assumptions.md', 'acceptance-handoff.md', 'findings-history.md', 'exploration-log.md', 'session-report.md']
     .map((name) => packet.indexOf(`UNTRUSTED CANDIDATE ARTIFACT ${idOf(name)}`))
   assert.deepEqual([...order].sort((a, b) => a - b), order)
-  assert.ok(packet.length <= JUDGE_PACKET_MAX_CHARS)
+  assert.ok(packet.length <= JUDGE_PACKET_PRIMARY_MAX_CHARS)
 
   const long = await evidenceViews({ artifacts: deepRecord().slice(0, 4),
     requirementDocs: { 'zz-long.md': `### Requirement: Long\n${filler('req', 40_001)}` } })
@@ -587,7 +592,7 @@ test('a decider reporting missing material fails the criterion before its audits
   const { views, idOf } = await evidenceViews({ artifacts: deepRecord() })
   const { proof, honest } = fixtureOneRulings(views['testing-evidence'].packet)
   const outcome = await judgeTestingOnly(views, { seat: toDecider, stages: {
-    tiebreak: () => out(proof, { ...honest, missing_material: `[omitted: ${idOf('ref-4.md')} (referenced-material)]` }) } })
+    tiebreak: () => out(proof, { ...honest, missing_material: `[omitted: ${idOf('ref-8.md')} (referenced-material)]` }) } })
   assert.equal(outcome.failures['testing-evidence'].code, 'missing-material')
   assert.deepEqual(outcome.failures['testing-evidence'].criteria, [HONEST])
   assert.equal(ofStage(outcome.seen, 'tiebreak-span-audit').length, 0)
