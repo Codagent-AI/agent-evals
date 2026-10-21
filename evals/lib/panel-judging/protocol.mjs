@@ -62,6 +62,10 @@ const MAX_RATIONALE_CHARS = 4000
 const MAX_SOURCE_CITATIONS = 24
 const MAX_SOURCE_PATH_CHARS = 500
 export const MAX_AUDIT_PACKET_CHARS = 300_000
+// A decider re-reads a job's whole evidence packet, line-numbered, beside its
+// material. An and-scene evidence packet that grows to hold whole primary
+// records reaches 400,000 characters, so the decider's packet has room for it.
+export const MAX_DECIDER_PACKET_CHARS = 600_000
 
 export class JudgeOutputError extends Error {
   constructor(message, { missing = null, partial = null } = {}) {
@@ -2063,8 +2067,8 @@ async function settleTiebreak({ request, criteria, invoke, attempts, validateVer
     for (const path of inventory.paths) {
       const file = numberedFile(path, await readFile(await citationTarget(inventory.root, path), 'utf8'))
       size += file.length
-      if (size > MAX_AUDIT_PACKET_CHARS) {
-        throw new PacketOverflowError(`${request.job} decider evidence cannot fit within the ${MAX_AUDIT_PACKET_CHARS}-character packet limit; pending criteria: ${criteria.join(', ')}`, criteria)
+      if (size > MAX_DECIDER_PACKET_CHARS) {
+        throw new PacketOverflowError(`${request.job} decider evidence cannot fit within the ${MAX_DECIDER_PACKET_CHARS}-character packet limit; pending criteria: ${criteria.join(', ')}`, criteria)
       }
       files.push(file)
     }
@@ -2090,7 +2094,7 @@ async function settleTiebreak({ request, criteria, invoke, attempts, validateVer
   const material = (ids) => (criterionMaterial ? criterionMaterial(ids) : '')
   // A claim is { id, note? }; a re-cite's note is the audit reason it answers.
   const deciderPacket = (claims) => [material(claims.map(({ id }) => id)), ...claims.map(({ note }) => note ?? ''), evidence, listing].join('\n')
-  const deciderRequests = (claims, build) => batchClaims(claims, deciderPacket, MAX_AUDIT_PACKET_CHARS, `${request.job} decider request`)
+  const deciderRequests = (claims, build) => batchClaims(claims, deciderPacket, MAX_DECIDER_PACKET_CHARS, `${request.job} decider request`)
     .map(({ index, criteria: ids, claims: batch }) => {
       const contextRequest = { ...request, prompt_body: [request.prompt_body ?? request.prompt, material(ids), evidence].filter(Boolean).join('\n') }
       return { index, criteria: ids, request: build(buildTiebreakRequest({ request: contextRequest, criteria: ids, inventory }), batch) }

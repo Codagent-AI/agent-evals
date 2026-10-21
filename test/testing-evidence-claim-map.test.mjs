@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 
 import {
-  JUDGE_PACKET_MAX_CHARS, TESTING_PRIMARY_ROLES, ASSUMPTION_PRIMARY_ROLES, buildEvidenceJudgePacket,
+  JUDGE_PACKET_MAX_CHARS, JUDGE_PACKET_PRIMARY_MAX_CHARS, TESTING_PRIMARY_ROLES, ASSUMPTION_PRIMARY_ROLES, buildEvidenceJudgePacket,
   materializeEvidenceJudgeViews,
 } from '../evals/agent-runner/and-scene/lib/evidence.mjs'
 import { hashString } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
@@ -149,10 +149,31 @@ test('the packet builder never exceeds its budget and records every artifact it 
     assert.equal(cuts.length, 6, 'every supporting artifact is over the cap, so each is cut or dropped')
     assert.deepEqual(packetLayout(packet).artifacts.map(({ id }) => id), entries.map(({ id }) => id))
   }
-  assert.throws(() => buildEvidenceJudgePacket({ index, primary, supporting, maxChars: 1_000 }),
+  assert.throws(() => buildEvidenceJudgePacket({ index, primary, supporting, maxChars: 1_000, primaryMaxChars: 1_000 }),
     (error) => error.code === 'packet-overflow' && /primary claim-bearing records/.test(error.message))
-  assert.throws(() => buildEvidenceJudgePacket({ index, primary, supporting, maxChars: 2_000 }),
+  assert.throws(() => buildEvidenceJudgePacket({ index, primary, supporting, maxChars: 2_000, primaryMaxChars: 2_000 }),
     (error) => error.code === 'packet-overflow' && /omission markers/.test(error.message))
+})
+
+test('primary records over the budget grow the packet to the hard limit, and supporting artifacts fill the room left', () => {
+  const index = { a: 1 }
+  const primary = [{ id: 'candidate-p', role: 'exploration-log', text: 'p'.repeat(2_500) }]
+  const supporting = Array.from({ length: 3 }, (_, n) => ({ id: `candidate-s${n}`, role: 'session-audit', text: 's'.repeat(400) }))
+  const { packet, cuts } = buildEvidenceJudgePacket({ index, primary, supporting, maxChars: 2_000, primaryMaxChars: 6_000 })
+  assert.ok(packet.includes('p'.repeat(2_500)), 'the primary record is whole')
+  assert.ok(packet.length <= 6_000)
+  assert.deepEqual(cuts, [], 'every supporting artifact fits beside the primary record')
+  for (const { id } of supporting) assert.ok(packet.includes(`# BEGIN UNTRUSTED CANDIDATE ARTIFACT ${id}`))
+  // With less room left, supporting artifacts are cut or omitted and marked, never dropped silently.
+  const tight = buildEvidenceJudgePacket({ index, primary, supporting, maxChars: 2_000, primaryMaxChars: 4_200 })
+  assert.ok(tight.packet.length <= 4_200)
+  assert.ok(tight.cuts.length > 0 && tight.cuts.length <= 3)
+  // A packet that fits the budget is unchanged by the hard limit.
+  const small = [{ id: 'candidate-p', role: 'exploration-log', text: 'p'.repeat(900) }]
+  assert.equal(buildEvidenceJudgePacket({ index, primary: small, supporting, maxChars: 4_000 }).packet,
+    buildEvidenceJudgePacket({ index, primary: small, supporting, maxChars: 4_000, primaryMaxChars: 4_000 }).packet)
+  assert.throws(() => buildEvidenceJudgePacket({ index, primary, supporting, maxChars: 2_000, primaryMaxChars: 2_400 }),
+    (error) => error.code === 'packet-overflow' && /2400-character judge packet limit/.test(error.message))
 })
 
 test('a cut marker matches in full or by its bare prefix, never by paraphrase or an unknown id', () => {
@@ -169,7 +190,7 @@ test('a cut marker matches in full or by its bare prefix, never by paraphrase or
 
 test('claim-bearing records over the packet budget fail the testing-evidence job with packet-overflow naming its criteria', async () => {
   const { views } = await evidenceViews({ artifacts: [
-    { role: 'acceptance-flow-record', name: 'acceptance-flow.md', text: filler('huge', JUDGE_PACKET_MAX_CHARS - 20_000) },
+    { role: 'acceptance-flow-record', name: 'acceptance-flow.md', text: filler('huge', JUDGE_PACKET_PRIMARY_MAX_CHARS - 20_000) },
     { role: 'exploration-log', name: 'exploration-log.md', text: filler('log', 30_000) },
     { role: 'final-handoff', name: 'acceptance-handoff.md', text: '# Handoff\n' },
   ] })
@@ -250,7 +271,7 @@ test('a long assumptions ledger reaches every seat and the decider whole, its la
 
   // Primary records too large for the packet fail the assumption job, naming its criteria, and nothing is judged.
   const huge = await evidenceViews({ artifacts: [...deepRecord().slice(0, 4),
-    { role: 'assumptions-ledger', name: 'assumptions.md', text: filler('ledger', JUDGE_PACKET_MAX_CHARS) }] })
+    { role: 'assumptions-ledger', name: 'assumptions.md', text: filler('ledger', JUDGE_PACKET_PRIMARY_MAX_CHARS) }] })
   assert.equal(huge.views['assumption-handling'].failure.code, 'packet-overflow')
   const failed = await judgeTestingOnly(huge.views, { job: 'assumption-handling' })
   assert.equal(failed.failures['assumption-handling'].code, 'packet-overflow')

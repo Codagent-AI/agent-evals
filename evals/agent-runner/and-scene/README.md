@@ -122,10 +122,13 @@ which contains the exact inlined packet. Each evidence packet holds its job's
 primary records whole: the acceptance flow record, exploration log, final
 handoff and findings history for testing evidence, and the assumptions ledger,
 final handoff, findings history and exploration log, with the complete approved
-requirements, for assumption handling. When they cannot fit the 220,000-character
-packet, or collection skipped one for its size, or a requirement document
-exceeds 40,000 characters, that job fails with `packet-overflow`. Other
-artifacts may be cut or dropped; each is marked in place
+requirements, for assumption handling. The packet budget is 220,000 characters;
+when the primary records outgrow it, the packet grows to a 400,000-character
+hard limit, and other artifacts fill the room left. A decider re-reads the
+whole packet line-numbered, under a 600,000-character limit that holds it.
+When the primary records cannot fit the hard limit, or collection skipped one
+for its size, or a requirement document exceeds 40,000 characters, that job fails with
+`packet-overflow`. Other artifacts may be cut or dropped; each is marked in place
 (`[truncated: …]` or `[omitted: …]`) and listed in the cut index at the top of
 the packet, beside a layout that labels every quoted span with its artifact.
 Evidence panel judges and deciders report in `missing_material` the marker a
