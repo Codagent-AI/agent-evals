@@ -1318,11 +1318,13 @@ Exit code 0 means success, including `show` and `--help`; 1 means an admission
 refusal; 2 means a usage, invalid-record, or I/O error. Refusals are JSON lines
 on stderr. Writes are atomic and the record is intended for git review.
 
-The current baseline (`experiments/baseline.json`) is the definition-only
-starting line: `baseline-def-rep2` (local, human-reviewed 20/30, the median)
-plus the two Fly repetitions of factory claim 60d571ea, set with
-`--source profile-change` and anchored. Automated mean 56.13/70 (sd 2.39);
-mean estimated cost $4.90. `experiments.mjs` only maintains this record;
+The current baseline (`experiments/baseline.json`) is the audited
+implement-change workflow v2.3: the three Fly repetitions of factory eval
+agent-evals#133, set with `--source accepted-candidate`. Rep 2, the median, is
+human-reviewed 20.75/30. Automated mean 63.75/70 (sd 1.09). Its cost and active
+time are incomplete: those runs predate the eval's support for the
+`agent_session_context` run-metrics field, so their metrics were rejected. The
+anchor is still the definition-only starting line (automated mean 56.13/70). `experiments.mjs` only maintains this record;
 comparing a candidate's repetitions against it is not implemented yet.
 To publish a local repetition for the record, copy its curated result files
 into `results/<run-id>/` with the same file set as the other published
