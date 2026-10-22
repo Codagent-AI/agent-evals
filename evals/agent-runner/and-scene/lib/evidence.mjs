@@ -1598,9 +1598,10 @@ const MAX_LINE_NUMBER = JUDGE_PACKET_PRIMARY_MAX_CHARS
 // budget. A supporting artifact longer than the per-artifact cap, or than the
 // budget left, is cut and marked after the cut; one with no room left is
 // replaced by an omission marker. Every marker is listed in the cut index, so
-// nothing is cut or dropped silently. The primary records are never cut: when
-// they and the omission markers outgrow the budget, the packet grows to the
-// hard limit, and overflows only when they cannot fit that.
+// nothing is cut or dropped silently. The primary records are never cut. When
+// the budget would cut or drop a supporting artifact that the per-artifact cap
+// alone would not, the packet grows to the hard limit, and it overflows only
+// when the primary records and the omission markers cannot fit that.
 export function buildEvidenceJudgePacket({ index, primary, supporting,
   maxChars = JUDGE_PACKET_MAX_CHARS, artifactMaxChars = JUDGE_PACKET_ARTIFACT_MAX_CHARS,
   primaryMaxChars = Math.max(maxChars, JUDGE_PACKET_PRIMARY_MAX_CHARS) }) {
@@ -1630,7 +1631,10 @@ export function buildEvidenceJudgePacket({ index, primary, supporting,
   // placed, so a later one can always be marked rather than vanish.
   const reserve = supporting.map(omissionCost)
   let reserved = reserve.reduce((total, cost) => total + cost, 0)
-  const budget = used + reserved > maxChars ? primaryMaxChars : maxChars
+  const capped = (artifact) => (artifact.text.length <= artifactMaxChars ? blockCost(artifact, artifact.text.length)
+    : blockCost(artifact, artifactMaxChars, truncatedMarker(artifact.id, artifactMaxChars, artifact.text.length)))
+  const whole = used + supporting.reduce((total, artifact) => total + capped(artifact), 0)
+  const budget = whole > maxChars || used + reserved > maxChars ? primaryMaxChars : maxChars
   if (used + reserved > budget) {
     throw new PacketOverflowError(`the judge packet cannot hold the omission markers of its ${supporting.length} supporting artifacts beside the primary records`, [])
   }
