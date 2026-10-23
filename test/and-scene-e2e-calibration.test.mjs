@@ -16,6 +16,8 @@ const rubric = referenceRubric(product.rubric)
 const ids = rubric.components.flatMap(c => c.subcomponents.flatMap(s => s.criteria))
 const pass = (overrides = {}) => Object.fromEntries(ids.map(id => [id, { verdict: overrides[id] ?? 'pass' }]))
 const run = (score, verdicts, records = {}) => ({ score: { automated_score: score }, verdicts, judge_records: records })
+// The criteria the pinned reference is expected to fail, so a faithful judge of the reference fails exactly these.
+const shortfalls = Object.fromEntries(expected.inputs.reference.expect.fail.map(id => [id, 'fail']))
 
 test('INT-011 every real patch applies cleanly to the pinned reference bundle; preference shifts keep the verifier\'s hooks and mandatory behavior', async t => {
   const work = await temp(t, 'e2e-cal-')
@@ -65,8 +67,8 @@ test('INT-011 the report shows per-input scores, spread, accuracy, flip rates an
   const flip = id => (n) => ({ verdict: n === 1 ? 'fail' : 'pass' })
   const reversed = { 'scene-kit': [{ id: 'x', verdict: 'pass', basis: 'decider-pass', votes: [{ verdict: 'fail' }, { verdict: 'fail' }, { verdict: 'pass' }] }, { id: 'y', verdict: 'pass', basis: 'consensus-pass', votes: [{ verdict: 'pass' }] }] }
   const runs = {
-    reference: [0, 1, 2].map(n => run(62, pass(n === 1 ? { 'navigation-keyboard': 'fail' } : {}), n === 0 ? reversed : {})),
-    'preference-shifted': [0, 1, 2].map(() => run(60, pass())),
+    reference: [0, 1, 2].map(n => run(62, pass(n === 1 ? { ...shortfalls, 'navigation-keyboard': 'fail' } : shortfalls), n === 0 ? reversed : {})),
+    'preference-shifted': [0, 1, 2].map(() => run(60, pass(shortfalls))),
     'degraded-mode-toggle-loses-position': [0, 1, 2].map(() => run(58, pass({ 'mode-toggle-preserves-position': 'fail', 'demo-mode-position-preservation': 'fail' }))),
     'degraded-focused-controls-lose-keys': [0, 1, 2].map(() => run(58, pass({ 'navigation-controls-keep-keys': 'fail', 'demo-navigation-boundaries-and-control-keys': 'fail' }))),
   }
@@ -103,7 +105,7 @@ test('INT-011 a run produces no publication; the diagnostic never imports public
 
 test('INT-011 each pass prints its score and misses; a pass whose input did not build stops calibration without a report', async t => {
   const lines = []
-  await runCalibration({ calibrationDir: dir, rubric: product.rubric, repeats: 3, log: line => lines.push(line), evaluate: async ({ inputId }) => run(62, pass(inputId === 'degraded-captions-missing' ? { 'quality-captions-and-navigation': 'fail' } : {})) })
+  await runCalibration({ calibrationDir: dir, rubric: product.rubric, repeats: 3, log: line => lines.push(line), evaluate: async ({ inputId }) => run(62, pass(inputId === 'degraded-captions-missing' ? { 'quality-captions-and-navigation': 'fail' } : inputId.startsWith('degraded') ? {} : shortfalls)) })
   assert.equal(lines.length, Object.keys(expected.inputs).length * 3)
   assert.ok(lines.includes('calibration reference repeat 1: score 62; no misses'))
   assert.ok(lines.includes('calibration degraded-captions-missing repeat 2: score 62; no misses'))

@@ -15,7 +15,8 @@ export function referenceRubric(rubric) {
 }
 const majority = verdicts => { const pass = verdicts.filter(verdict => verdict === 'pass').length; return pass * 2 > verdicts.length ? 'pass' : 'fail' }
 const criteriaOf = rubric => rubric.components.flatMap(component => component.subcomponents.flatMap(subcomponent => subcomponent.criteria))
-const checksOf = (ids, spec = {}) => [...(spec.pass === 'all' ? ids.map(id => ({ id, expect: 'pass' })) : (spec.pass ?? []).map(id => ({ id, expect: 'pass' }))), ...(spec.fail ?? []).map(id => ({ id, expect: 'fail' }))]
+// `pass: "all"` expects every criterion not listed under `fail` to pass.
+const checksOf = (ids, spec = {}) => [...(spec.pass === 'all' ? ids.filter(id => !(spec.fail ?? []).includes(id)).map(id => ({ id, expect: 'pass' })) : (spec.pass ?? []).map(id => ({ id, expect: 'pass' }))), ...(spec.fail ?? []).map(id => ({ id, expect: 'fail' }))]
 // One pass's line for watching a long calibration: its score and the criteria that missed their expected verdict.
 export function passLine({ rubric, inputId, repeat, spec, run }) {
   const misses = checksOf(criteriaOf(rubric), spec?.expect).filter(check => (run.verdicts[check.id]?.verdict ?? 'fail') !== check.expect)
