@@ -242,7 +242,7 @@ export async function runEvaluation(options, deps = {}) {
     'requirement-trace': async () => {
       const productResult = await readJson(join(runDir, 'phases/product-result.json'), null)
       const target = join(runDir, 'phases/trace.json')
-      await writeJsonAtomic(target, await traceFor(productResult?.score ?? null))
+      await writeJsonAtomic(target, await traceFor(productResult?.score ?? null, productResult?.gates ?? []))
       return [target]
     },
     metrics: async () => {
@@ -256,10 +256,10 @@ export async function runEvaluation(options, deps = {}) {
   }
   // Definition-side judging reuses the define suite's phases over the collected copy and the define-only evidence.
   const judging = () => createJudgingPhases({ runDir, suiteRoot: DEFINE_ROOT, getCheckpoint: () => checkpoint, setCheckpoint: value => { checkpoint = value }, persist, judges: deps.judges ?? createDefinitionJudges({ runDir }), gateCommand: deps.gateCommand, loadInputs: deps.loadInputs })
-  async function traceFor(productScore) {
+  async function traceFor(productScore, gates = []) {
     const asked = (await readJson(join(runDir, 'discovery/asked.json'))).results
     const coverage = (await readJson(join(runDir, 'judges/score.json'))).coverage
-    return buildTrace({ inventory: product.inventory, rubric: product.rubric, asked, coverage, product: productScore })
+    return buildTrace({ inventory: product.inventory, rubric: product.rubric, asked, coverage, product: productScore, gates })
   }
   async function inspect() {
     const found = await (deps.inspect ?? inspectInputs)({ profiles: options.profiles, workflow: options.workflow, runnerDir: options.runnerDir, skillsDir: options.skillsDir, dryRun: options.dryRun ?? false, env, home: deps.home, command: deps.command, app: deps.app })
@@ -310,8 +310,8 @@ export async function runEvaluation(options, deps = {}) {
     if (!options.resume && await lstat(runDir).catch(() => null)) throw new Error('run directory is already used; use --resume with its exact path')
     if (options.resume && !await lstat(runDir).catch(() => null)) throw new Error('resume run directory does not exist')
     await mkdir(runDir, { recursive: true }); release = await acquireLock(runDir); writable = true
-    for (const path of ['phases', 'logs', 'sandbox-input', 'sandbox/exchange', 'sandbox/workspace/repo', 'sandbox/.runtime', 'evidence', 'collected', 'judges', 'audits', 'discovery', 'source', '.runtime', '.runtime/definition-job-inputs', '.runtime/judge', '.runtime/judge-claude', 'human-review']) await privatePath(join(runDir, path), runDir)
-    await mkdir(join(runDir, 'phases'), { recursive: true }); await mkdir(join(runDir, 'logs'), { recursive: true })
+    for (const path of ['phases', 'logs', 'sandbox-input', 'sandbox/exchange', 'sandbox/workspace/repo', 'sandbox/.runtime', 'evidence', 'collected', 'judges', 'audits', 'discovery', 'source', 'human-review', '.runtime', '.runtime/definition-job-inputs', '.runtime/judge', '.runtime/judge-claude', 'human-review']) await privatePath(join(runDir, path), runDir)
+    for (const dir of ['phases', 'logs', 'human-review', 'source', 'judges', 'audits', 'discovery']) await mkdir(join(runDir, dir), { recursive: true })
     const saved = options.resume ? await readJson(join(runDir, 'result.json'), null) : null
     if (saved && saved.evaluation_status !== 'complete' && saved.resumable === false) throw Object.assign(new Error(`this run ended ${saved.evaluation_status} (${saved.owning_phase ?? 'unknown phase'}) and cannot be resumed${saved.leaked_items?.length || saved.owning_phase === 'disclosure-audit' ? '; a new run is required' : ''}`), { resumable: false, refused: true })
     if (publicationEligibility(saved)) {
@@ -363,7 +363,6 @@ export async function runEvaluation(options, deps = {}) {
       const productError = error instanceof NotEvaluableError || error instanceof ProductHarnessError
       refused = Boolean(error.refused)
       result = failWith(error, productError ? { definition_scored: Boolean(checkpoint?.definition_scored) } : error.refused ? {} : { definition_scored: Boolean(checkpoint?.definition_scored) })
-      if (error instanceof InvocationError || error.workflow) result.defineCompleted = undefined
       if (checkpoint && writable && !error.refused) { checkpoint = failUnit(checkpoint, { phase, unit: 'phase', error: error.message }); await persist() }
       // A workflow that failed after define still reports the definition score and a trace with delivery unavailable.
       if (writable && checkpoint?.define_completed && result.evaluation_status === 'implementation-workflow-failed') {

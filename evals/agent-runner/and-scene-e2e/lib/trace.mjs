@@ -4,13 +4,16 @@ import { graded } from './product-rubric.mjs'
 export const OUTCOMES = ['delivered', 'partially-delivered', 'not-discovered', 'discovered-not-defined', 'defined-not-delivered', 'not-graded-in-product', 'delivery-unavailable']
 const covered = verdict => verdict === 'met' || verdict === 'partial'
 // product: the product score ({components}) or null when no product was delivered or scored.
-export function buildTrace({ inventory, rubric, asked, coverage, product }) {
+export function buildTrace({ inventory, rubric, asked, coverage, product, gates = [] }) {
   const askedBy = new Map(asked.map(entry => [entry.id, entry]))
   const coverageBy = new Map(coverage.map(entry => [entry.id, entry]))
   const verdictOf = new Map()
   if (product) for (const component of product.components) for (const subcomponent of component.subcomponents) for (const criterion of subcomponent.criteria) verdictOf.set(criterion.id, criterion.verdict)
+  // A gate that cites an item grades it like a criterion: it passes or it does not.
+  if (product) for (const gate of rubric.gates ?? []) { const outcome = gates.find(entry => entry.id === gate.id); if (outcome) verdictOf.set(gate.id, outcome.passed ? 'pass' : 'fail') }
   const mapped = new Map()
   for (const [criterion, source] of Object.entries(rubric.criterion_sources)) for (const item of source.inventory ?? []) mapped.set(item, [...(mapped.get(item) ?? []), criterion])
+  for (const gate of rubric.gates ?? []) for (const item of gate.inventory) mapped.set(item, [...(mapped.get(item) ?? []), gate.id])
   const itemsOfCriterion = new Map()
   for (const [item, criteria] of mapped) for (const criterion of criteria) itemsOfCriterion.set(criterion, [...(itemsOfCriterion.get(criterion) ?? []), item])
   const items = inventory.items.filter(graded).map(item => {

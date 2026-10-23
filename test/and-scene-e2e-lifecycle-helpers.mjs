@@ -1,5 +1,6 @@
 import { mkdir, writeFile, readFile } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { E2ESandbox } from '../evals/agent-runner/and-scene-e2e/lib/sandbox.mjs'
 import { buildRubric } from '../evals/agent-runner/and-scene-define/lib/rubric.mjs'
@@ -129,13 +130,16 @@ export async function lifecycle(t, { limitMs, stallMs, transcripts = {}, inspect
     handlers: {
       'delivery-verification': async () => {
         deliveryCalls.push(1)
-        const target = join(runDir, 'phases/delivery.json'); await mkdir(join(runDir, 'source'), { recursive: true }); await writeFile(join(runDir, 'source/candidate.bundle'), 'bundle')
-        await writeFile(target, JSON.stringify({ ok: true, repository: 'Codagent-AI/e2e-run-test', delivered_commit: 'c'.repeat(40), bundle: { path: 'source/candidate.bundle', sha256: 'h' }, acceptance: { delivered_commit: 'c'.repeat(40), artifacts: [], missing_roles: [], findings: [] }, extras: { branches: [], pull_requests: [] }, prohibited_effects: [] }))
+        const target = join(runDir, 'phases/delivery.json'); await mkdir(join(runDir, 'source'), { recursive: true }); await mkdir(join(runDir, 'evidence/final/acceptance'), { recursive: true })
+        const bundleText = 'bundle'; const handoff = 'handoff'
+        await writeFile(join(runDir, 'source/candidate.bundle'), bundleText); await writeFile(join(runDir, 'evidence/final/acceptance/000-final-handoff'), handoff)
+        const sha = text => createHash('sha256').update(text).digest('hex')
+        await writeFile(target, JSON.stringify({ ok: true, repository: 'Codagent-AI/e2e-run-test', delivered_commit: 'c'.repeat(40), bundle: { path: 'source/candidate.bundle', sha256: sha(bundleText) }, acceptance: { delivered_commit: 'c'.repeat(40), artifacts: [{ role: 'final-handoff', file: 'evidence/final/acceptance/000-final-handoff', sha256: sha(handoff) }], missing_roles: [], findings: [] }, extras: { branches: [], pull_requests: [] }, prohibited_effects: [] }))
         return [target, join(runDir, 'source/candidate.bundle')]
       },
       'product-evaluation': async () => {
         const target = join(runDir, 'phases/product-result.json')
-        await writeFile(target, JSON.stringify({ build_plan: {}, build: { ok: true }, gates: [], score: full, verdicts: {}, human_review: { eligible: true } }))
+        await writeFile(target, JSON.stringify({ build_plan: {}, build: { ok: true }, gates: [], score: full, verdicts: {}, human_review: harness.humanReview ?? { eligible: true } }))
         return [target]
       },
     },

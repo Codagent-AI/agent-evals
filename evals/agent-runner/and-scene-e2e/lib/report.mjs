@@ -1,7 +1,7 @@
 const escape = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;')
 const number = value => Number.isFinite(value) ? String(Math.round(value * 100) / 100) : 'n/a'
 const row = (label, value) => `<tr><th scope="row">${escape(label)}</th><td>${value}</td></tr>`
-const table = (caption, rows) => rows.length ? `<table><caption>${escape(caption)}</caption>${rows.join('')}</table>` : ''
+const table = (caption, rows) => `<table><caption>${escape(caption)}</caption>${rows.length ? rows.join('') : '<tr><td>none recorded</td></tr>'}</table>`
 function criteriaRows(product) {
   return (product?.score?.components ?? []).flatMap(component => component.subcomponents.flatMap(subcomponent => subcomponent.criteria.map(criterion => row(`${component.id} / ${criterion.id}`,
     `${escape(criterion.verdict ?? 'not observed')} (${escape(number(criterion.earned))} / ${escape(number(criterion.points))})${criterion.basis ? ` [${escape(criterion.basis)}]` : ''}${criterion.rationale ? ` — ${escape(criterion.rationale)}` : ''}${criterion.citations?.length ? ` — citations: ${escape(criterion.citations.map(c => typeof c === 'string' ? c : JSON.stringify(c)).join(', '))}` : ''}`))))
