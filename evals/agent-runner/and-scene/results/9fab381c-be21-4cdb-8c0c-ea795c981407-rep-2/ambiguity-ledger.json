@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-23T11-57-21-403493184Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err",
+      "output/_resolve-findings_.out",
+      "output/_session-report_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Verification did not satisfy the IPv4 loopback requirement.",
+      "evidence": [
+        "verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost.",
+        "verification-build-whole-app and verification-every-produced-step-renders both passed."
+      ],
+      "handling": "The supplied evidence records the failed check but contains no implementation-agent explanation or subsequent correction.",
+      "consequence": "The delivered verification failed a required addressing condition despite passing the build and rendering checks.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The result establishes a verification failure, but does not show the command used, the instructions available to the agent, or its reasoning. It cannot distinguish an incorrect assumption from missin…",
+      "resolution": "unresolved",
+      "id": "86c68519e328dc2d"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The screenshot helper lacked required visual-review warnings.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: pass — Project-local Playwright screenshot helper is present.",
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "A project-local helper was delivered, but the supplied checks report missing or incomplete warnings. No explanation or remediation is visible.",
+      "consequence": "The helper did not provide all checked review warnings for overlap, active-state appearance, and attribution.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "These results establish omissions in the helper, not defects in the rendered appearance itself. Without the specification, repository context, or implementation discussion, the omissions cannot be at…",
+      "resolution": "unresolved",
+      "id": "6e0e3056c88aef0d"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The interaction implementation failed the check requiring swipes originating on controls to be ignored.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail.",
+        "demo-supported-navigation, demo-control-semantics, and input-modifier-keys-pass-through passed."
+      ],
+      "handling": "The supplied product evidence records the failure without a trace, agent explanation, or visible correction.",
+      "consequence": "The delivered interaction behavior failed this control-origin swipe check despite passing other navigation and control checks.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check identifies an affected interaction requirement but supplies no detail sufficient to establish the underlying assumption. The workflow excerpt is truncated, and no additional files we…",
+      "resolution": "unresolved",
+      "id": "cfad52245338df7f"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
