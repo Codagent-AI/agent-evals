@@ -19,12 +19,23 @@ export const VARIANTS = {
     ['src/presentations/index.ts', text => text.replace("slug: 'how-to-make-a-presentation'", "slug: 'tour'")],
     [`${REFERENCE_DIR}/outline.ts`, text => text.replace(/title: '([^']+)'/g, (_, title) => `title: 'Part: ${title}'`).replace(/\n  \{\n    id: 'you-set-the-depth',[\s\S]*?\n  \},/, '')],
     [`${REFERENCE_DIR}/steps.ts`, text => text.replace(/\n  'you-set-the-depth':[^\n]*/, '')],
-    ['src/presentation-kit/chrome/Footer.tsx', text => text.replace(/\n\s*data-step-count=\{steps\.length\}/, '').replace(/\n\s*data-step-index=\{step\}/, '')],
+  ],
+  // Preferences only, in the chrome and controls: attribution corner and label, the mode-toggle key, the opening mode.
+  'preference-shifted-chrome': [
+    ['src/presentation-kit/Presentation.tsx', text => text.replace("attribution = 'made by and-scene',", "attribution = 'built with and-scene',").replace("            right: 16,\n            bottom: 8,", "            left: 16,\n            bottom: 8,")],
+    ['src/presentation-kit/usePresentationNav.ts', text => text.replace("e.key === 'p' || e.key === 'P'", "e.key === 'm' || e.key === 'M'")],
+    [`${REFERENCE_DIR}/Talk.tsx`, text => text.replace('initialMode="browse"', 'initialMode="present"')],
   ],
   // Mandatory: a mode toggle keeps the current step.
   'degraded-mode-toggle-loses-position': [
     ['src/presentation-kit/usePresentationNav.ts', text => text.replace("() => setMode((m) => (m === 'browse' ? 'present' : 'browse')),", "() => { setStep(0); setMode((m) => (m === 'browse' ? 'present' : 'browse')) },")],
   ],
+  // Mandatory: browse mode shows each step's caption.
+  'degraded-captions-missing': [
+    ['src/presentation-kit/chrome/Footer.tsx', text => text.replace(/\n\s*\{current\.caption\}/, '')],
+  ],
+  // Mandatory: verification fails on a console or page error and names the step. Both verifier copies lose the check.
+  'degraded-verifier-ignores-errors': ['scripts/verify.mjs', 'skills/presentation/templates/bootstrap/scripts/verify.mjs'].map(file => [file, text => text.replace(/\n    if \(errors\.length > 0\) \{\n      const first = errors\[0\]\n      throw new Error\(`\$\{slug\} step \$\{first\.step\}: \$\{first\.msg\}`\)\n    \}/, '')]),
   // Mandatory: focused controls keep their keys.
   'degraded-focused-controls-lose-keys': [
     ['src/presentation-kit/usePresentationNav.ts', text => text.replace(/      const target = e\.target\n      if \(\n[\s\S]*?\n      \) \{\n        return\n      \}\n/, '')],

@@ -17,7 +17,7 @@ const ids = rubric.components.flatMap(c => c.subcomponents.flatMap(s => s.criter
 const pass = (overrides = {}) => Object.fromEntries(ids.map(id => [id, { verdict: overrides[id] ?? 'pass' }]))
 const run = (score, verdicts, records = {}) => ({ score: { automated_score: score }, verdicts, judge_records: records })
 
-test('INT-011 every real patch applies cleanly to the pinned reference bundle; the preference-shifted copy has no reference-only hooks', async t => {
+test('INT-011 every real patch applies cleanly to the pinned reference bundle; preference shifts keep the verifier\'s hooks and mandatory behavior', async t => {
   const work = await temp(t, 'e2e-cal-')
   const trees = {}
   for (const [inputId, spec] of Object.entries(expected.inputs)) {
@@ -28,19 +28,27 @@ test('INT-011 every real patch applies cleanly to the pinned reference bundle; t
   }
   const read = (id, path) => readFile(join(trees[id], path), 'utf8')
   const hooks = async id => (await Promise.all(['src/presentation-kit/chrome/Footer.tsx'].map(path => read(id, path)))).join('\n')
-  assert.match(await hooks('reference'), /data-step-count/)
-  assert.doesNotMatch(await hooks('preference-shifted'), /data-step-count|data-step-index/)
+  // The reference's own verifier reads these hooks, so a preference shift that removed them would break verification.
+  for (const id of ['reference', 'preference-shifted', 'preference-shifted-chrome']) assert.match(await hooks(id), /data-step-count=\{steps\.length\}[\s\S]*data-step-index=\{step\}/, id)
   assert.match(await read('preference-shifted', 'src/presentation-kit/constants.ts'), /DESIGN_W = 960/); assert.match(await read('preference-shifted', 'src/presentations/index.ts'), /slug: 'tour'/)
   const steps = text => (text.match(/\bid: '/g) ?? []).length
   assert.equal(steps(await read('reference', 'src/presentations/how-to-make-a-presentation/outline.ts')) - steps(await read('preference-shifted', 'src/presentations/how-to-make-a-presentation/outline.ts')), 1, 'the step count changed')
   assert.match(await read('preference-shifted', 'src/presentations/how-to-make-a-presentation/outline.ts'), /title: 'Part: /)
   // Mandatory and alternative behavior is kept: the navigation hook is intact in the shifted copy.
   assert.equal(await read('preference-shifted', 'src/presentation-kit/usePresentationNav.ts'), await read('reference', 'src/presentation-kit/usePresentationNav.ts'))
+  const chrome = await read('preference-shifted-chrome', 'src/presentation-kit/Presentation.tsx')
+  assert.match(chrome, /attribution = 'built with and-scene'/); assert.match(chrome, /left: 16,\n\s*bottom: 8/)
+  assert.match(await read('preference-shifted-chrome', 'src/presentation-kit/usePresentationNav.ts'), /e\.key === 'm' \|\| e\.key === 'M'/)
+  assert.match(await read('preference-shifted-chrome', 'src/presentations/how-to-make-a-presentation/Talk.tsx'), /initialMode="present"/)
+  assert.doesNotMatch(await read('degraded-captions-missing', 'src/presentation-kit/chrome/Footer.tsx'), /\{current\.caption\}/)
+  for (const file of ['scripts/verify.mjs', 'skills/presentation/templates/bootstrap/scripts/verify.mjs']) {
+    assert.match(await read('reference', file), /if \(errors\.length > 0\)/, file); assert.doesNotMatch(await read('degraded-verifier-ignores-errors', file), /if \(errors\.length > 0\)/, file)
+  }
   assert.match(await read('degraded-mode-toggle-loses-position', 'src/presentation-kit/usePresentationNav.ts'), /setStep\(0\); setMode/)
   assert.doesNotMatch(await read('degraded-focused-controls-lose-keys', 'src/presentation-kit/usePresentationNav.ts'), /closest\('button, a, input/)
   assert.deepEqual(JSON.parse(await readFile(join(dir, 'reference.json'), 'utf8')).reference_ref, '171c7def1e12aca2a5f605a5e5feafb20d4e4d19')
   for (const entry of Object.values(expected.inputs)) for (const id of [...(entry.expect.fail ?? []), ...(Array.isArray(entry.expect.pass) ? entry.expect.pass : [])]) assert.ok(ids.includes(id), id)
-  assert.equal(expected.approved_by, null, 'expected verdicts wait for maintainer approval')
+  assert.ok(expected.approved_by?.trim(), 'the maintainer approved the expected verdicts')
 })
 
 test('INT-011 fewer than three repeats are refused; three are accepted; a dry run makes no model call', async t => {

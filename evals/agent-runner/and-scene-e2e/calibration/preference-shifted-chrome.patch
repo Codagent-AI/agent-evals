@@ -1,0 +1,48 @@
+diff --git a/src/presentation-kit/Presentation.tsx b/src/presentation-kit/Presentation.tsx
+index 8582c46..610d990 100644
+--- a/src/presentation-kit/Presentation.tsx
++++ b/src/presentation-kit/Presentation.tsx
+@@ -47,7 +47,7 @@ export function Presentation<P extends Record<string, unknown> = Record<string,
+   background,
+   overlay,
+   marker,
+-  attribution = 'made by and-scene',
++  attribution = 'built with and-scene',
+   attributionHref = 'https://github.com/Codagent-AI/and-scene',
+ }: PresentationProps<P>) {
+   const { step, setStep, next, prev, last, mode } = usePresentationNav(steps.length, initialMode)
+@@ -125,7 +125,7 @@ export function Presentation<P extends Record<string, unknown> = Record<string,
+           data-presentation-attribution
+           style={{
+             position: 'absolute',
+-            right: 16,
++            left: 16,
+             bottom: 8,
+             zIndex: 60,
+             fontSize: 12,
+diff --git a/src/presentation-kit/usePresentationNav.ts b/src/presentation-kit/usePresentationNav.ts
+index af1130c..66a33c8 100644
+--- a/src/presentation-kit/usePresentationNav.ts
++++ b/src/presentation-kit/usePresentationNav.ts
+@@ -46,7 +46,7 @@ export function usePresentationNav(stepCount: number, initialMode: Mode = 'brows
+       } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+         e.preventDefault()
+         prev()
+-      } else if (e.key === 'p' || e.key === 'P') {
++      } else if (e.key === 'm' || e.key === 'M') {
+         toggleMode()
+       }
+     }
+diff --git a/src/presentations/how-to-make-a-presentation/Talk.tsx b/src/presentations/how-to-make-a-presentation/Talk.tsx
+index 4196127..16532f7 100644
+--- a/src/presentations/how-to-make-a-presentation/Talk.tsx
++++ b/src/presentations/how-to-make-a-presentation/Talk.tsx
+@@ -8,7 +8,7 @@ export default function Talk() {
+       <Presentation
+         steps={STEPS}
+         title="How to Use This Skill to Make a Presentation"
+-        initialMode="browse"
++        initialMode="present"
+       />
+     </div>
+   )

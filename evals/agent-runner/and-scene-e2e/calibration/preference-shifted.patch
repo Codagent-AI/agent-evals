@@ -1,16 +1,3 @@
-diff --git a/src/presentation-kit/chrome/Footer.tsx b/src/presentation-kit/chrome/Footer.tsx
-index 120a358..6f7fc12 100644
---- a/src/presentation-kit/chrome/Footer.tsx
-+++ b/src/presentation-kit/chrome/Footer.tsx
-@@ -79,8 +79,6 @@ export function Footer({
-               space and wrap rather than shoving prev/next off a narrow screen. */}
-           <div
-             data-testid="step-progress"
--            data-step-count={steps.length}
--            data-step-index={step}
-             data-presentation-progress
-             style={{
-               display: 'flex',
 diff --git a/src/presentation-kit/constants.ts b/src/presentation-kit/constants.ts
 index d93b5ea..c590939 100644
 --- a/src/presentation-kit/constants.ts

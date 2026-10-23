@@ -152,8 +152,10 @@ may not appear in rubric wording unless a cited item's quote also contains them.
 reviewer. The rubric declares no threshold and no floor, and is **provisional**:
 every result scored under it says so.
 
-`--calibrate` judges the pinned reference (`calibration/reference.bundle`), a
-preference-shifted copy and degraded copies at least three times each and reports
+`--calibrate` judges the pinned reference (`calibration/reference.bundle`), two
+preference-shifted copies (layout and content; chrome and controls) and four degraded
+copies (mode toggle loses position, focused controls lose keys, captions missing,
+verifier ignores errors) at least three times each and reports
 per-input scores and spread, accuracy against `calibration/expected-verdicts.json`,
 per-criterion flip rates and decider reversals. It is never published and never
 required. Calibration alone does not clear the provisional flag: a maintainer must

@@ -1,0 +1,12 @@
+diff --git a/src/presentation-kit/chrome/Footer.tsx b/src/presentation-kit/chrome/Footer.tsx
+index 120a358..f314a0e 100644
+--- a/src/presentation-kit/chrome/Footer.tsx
++++ b/src/presentation-kit/chrome/Footer.tsx
+@@ -58,7 +58,6 @@ export function Footer({
+                 data-presentation-caption
+                 style={{ textAlign: 'center' }}
+               >
+-                {current.caption}
+               </motion.p>
+             </AnimatePresence>
+           </div>

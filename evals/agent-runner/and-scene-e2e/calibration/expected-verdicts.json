@@ -1,11 +1,14 @@
 {
   "version": 1,
-  "approved_by": null,
-  "note": "Expected verdicts are proposed from the inventory and wait for maintainer approval before the rubric can leave provisional status.",
+  "approved_by": "Paul Caplan, 2026-10-23",
+  "note": "Expected verdicts approved by the maintainer before the first real calibration run. Approval of the rubric itself is separate and still pending.",
   "inputs": {
-    "reference": { "kind": "reference", "expect": { "pass": "all" } },
-    "preference-shifted": { "kind": "preference-shifted", "patch": "preference-shifted.patch", "expect": { "pass": "all" } },
-    "degraded-mode-toggle-loses-position": { "kind": "degraded", "patch": "degraded-mode-toggle-loses-position.patch", "removes": ["INV-024"], "expect": { "fail": ["mode-toggle-preserves-position", "demo-mode-position-preservation"] } },
-    "degraded-focused-controls-lose-keys": { "kind": "degraded", "patch": "degraded-focused-controls-lose-keys.patch", "removes": ["INV-030"], "expect": { "fail": ["navigation-controls-keep-keys", "demo-navigation-boundaries-and-control-keys"] } }
+    "reference": { "kind": "reference", "expect": {"pass": "all"} },
+    "preference-shifted": { "kind": "preference-shifted", "patch": "preference-shifted.patch", "expect": {"pass": "all"} },
+    "preference-shifted-chrome": { "kind": "preference-shifted", "patch": "preference-shifted-chrome.patch", "expect": {"pass": "all"} },
+    "degraded-mode-toggle-loses-position": { "kind": "degraded", "patch": "degraded-mode-toggle-loses-position.patch", "removes": ["INV-024"], "expect": {"fail": ["mode-toggle-preserves-position", "demo-mode-position-preservation"]} },
+    "degraded-focused-controls-lose-keys": { "kind": "degraded", "patch": "degraded-focused-controls-lose-keys.patch", "removes": ["INV-030"], "expect": {"fail": ["navigation-controls-keep-keys", "demo-navigation-boundaries-and-control-keys"]} },
+    "degraded-captions-missing": { "kind": "degraded", "patch": "degraded-captions-missing.patch", "removes": ["INV-068"], "expect": {"fail": ["quality-captions-and-navigation"]} },
+    "degraded-verifier-ignores-errors": { "kind": "degraded", "patch": "degraded-verifier-ignores-errors.patch", "removes": ["INV-092"], "expect": {"fail": ["verification-console-page-error-fails"]} }
   }
 }
