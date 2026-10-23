@@ -27,7 +27,11 @@ export function classifyRun(state, until) {
   if (state.last_step === until && state.step_completed && !state.workflow_completed) return { kind: 'capped', step: until }
   const failedEnd = state.audit_summary?.last_run_end
   const step = state.last_step
-  if (['failed', 'aborted', 'exhausted'].includes(failedEnd?.outcome) || state.failureReason) return { kind: 'failed', step, reason: failedEnd?.error ?? state.failureReason ?? `Agent Runner ${failedEnd?.outcome}` }
+  // Only the last invocation counts: an earlier failed attempt may have recovered.
+  const invocation = state.audit_summary?.invocation_text
+  const current = invocation ? (state.history ?? []).filter(event => invocation.includes(event.at)) : state.history ?? []
+  const failedEvent = current.filter(event => event.event === 'step_end' && ['failed', 'aborted', 'exhausted'].includes(event.outcome)).sort((a, b) => b.step_path.length - a.step_path.length)[0]
+  if (failedEvent || ['failed', 'aborted', 'exhausted'].includes(failedEnd?.outcome) || state.failureReason) return { kind: 'failed', step: failedEvent?.step_path.filter(part => !part.startsWith('sub:')).join('.') ?? step, reason: failedEvent?.error ?? failedEnd?.error ?? state.failureReason ?? `Agent Runner ${failedEnd?.outcome}` }
   if (state.workflow_completed) return { kind: 'failed', step, reason: `the workflow passed the ${until} cap` }
   return { kind: 'interrupted', step, reason: `Agent Runner workflow interrupted before ${until} completed` }
 }

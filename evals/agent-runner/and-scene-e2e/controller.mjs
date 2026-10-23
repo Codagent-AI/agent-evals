@@ -71,13 +71,13 @@ export async function runEvaluation(options, deps = {}) {
   const tokenDir = join(runDir, '.github-auth')
   const patternsPath = join(SUITE_ROOT, 'contamination-patterns.json')
   const product = await loadProductInputs()
-  let checkpoint; let phase = 'preflight'; let result = null; let release; let writable = false; let artifactsWritten = false; let publicationFailed = false
+  let checkpoint; let phase = 'preflight'; let result = null; let release; let writable = false; let artifactsWritten = false; let publicationFailed = false; let refused = false
   let sandbox; let inspected; let app
   const persist = () => saveCheckpoint(statePath, checkpoint)
   const provenance = () => ({ ...checkpoint.identity, materialization: checkpoint.materialization ?? null, schema_version: checkpoint.schema_version })
   const failWith = (error, extra = {}) => {
     const workflow = Boolean(error.workflow) && !error.harness
-    return failureOutcome({ phase: error.phase ?? phase, reason: error.message, workflow, defineCompleted: Boolean(checkpoint?.define_completed), resumable: error.resumable ?? false, step: error.step ?? null, limit: error.limit ?? null, window: error.window ?? null, prohibited: error.prohibited ?? [], ...extra })
+    return failureOutcome({ phase: error.phase ?? phase, reason: error.message, workflow, defineCompleted: Boolean(checkpoint?.define_completed), resumable: error.resumable ?? true, step: error.step ?? null, limit: error.limit ?? null, window: error.window ?? null, prohibited: error.prohibited ?? [], ...extra })
   }
   // A unit is reused only when its inputs, dependencies and output hashes still match.
   async function unit(name, handler, { dependencies = {}, reuse = null } = {}) {
@@ -124,6 +124,11 @@ export async function runEvaluation(options, deps = {}) {
     const outcome = await invokeWorkflow({ until, mode, startResponder })
     return saveWorkflow(outcome.runnerState, until)
   }
+  async function safetyCheck({ plan, sandbox: planned, inputDir: staged, credentials, forwardedEnv }) {
+    verifyMountPlan(plan.output, { inputDir: staged, artifactDir: planned.artifactDir, runnerDir: options.runnerDir, skillsDir: options.skillsDir, credentialFiles: credentials, forwardedEnv, extraMounts: planned.extraMounts() })
+    const matches = await scanCanaries({ stagedDir: staged, skillsDir: options.skillsDir, credentialFiles: credentials, patternsPath })
+    if (matches.length) throw new Error(`canary check failed: ${matches.map(match => `${match.file} (${match.pattern})`).join(', ')}`)
+  }
   const handlers = {
     preflight: async () => {
       inspected = await inspect()
@@ -159,9 +164,7 @@ export async function runEvaluation(options, deps = {}) {
       await mkdir(tokenDir, { recursive: true, mode: 0o700 })
       const plan = await sandbox.plan(options.profiles, { kind: 'fresh' })
       // The staged input and the planned mounts are checked before anything is dispatched.
-      verifyMountPlan(plan.output, { inputDir, artifactDir: sandbox.artifactDir, runnerDir: options.runnerDir, skillsDir: options.skillsDir, credentialFiles: inspected.credentials, forwardedEnv: inspected.forwardedEnv, extraMounts: sandbox.extraMounts() })
-      const matches = await scanCanaries({ stagedDir: inputDir, skillsDir: options.skillsDir, credentialFiles: inspected.credentials, patternsPath })
-      if (matches.length) throw new Error(`canary check failed: ${matches.map(match => `${match.file} (${match.pattern})`).join(', ')}`)
+      await (deps.safetyCheck ?? safetyCheck)({ plan, sandbox, inputDir, credentials: inspected.credentials, forwardedEnv: inspected.forwardedEnv })
       checkpoint.plan = plan
       const path = join(runDir, 'phases/preflight.json')
       await writeJsonAtomic(path, { series_identity: inspected.seriesIdentity, candidate: inspected.candidate, planned_provisioning: plannedProvisioning(checkpoint.run_id), planned_invocation: plan, token_refresh_minutes: options.tokenRefreshMinutes, stall_window_ms: options.stallWindowMs })
@@ -183,13 +186,13 @@ export async function runEvaluation(options, deps = {}) {
       await writeJsonAtomic(target, checkpoint.materialization)
       return [target, ...await filesUnder(inputDir)]
     },
-    'define-workflow': () => dispatch('define', ({ signal, deadline }) => runResponder({ runDir, exchangeDir: sandbox.exchangeDir, deadline, signal, runnerRunId: checkpoint.runner_run_id, invoke: deps.simulatedUser, inputs: deps.simulatedInputs,
+    'define-workflow': () => dispatch('define', deps.startDefineResponder ?? (({ signal, deadline }) => runResponder({ runDir, exchangeDir: sandbox.exchangeDir, deadline, signal, runnerRunId: checkpoint.runner_run_id, invoke: deps.simulatedUser, inputs: deps.simulatedInputs,
       onExchangeDurable: async exchange => { if (checkpoint.runner_run_id && checkpoint.runner_run_id !== exchange.run_id) throw new Error('Runner exchange run identity mismatch'); checkpoint.runner_run_id = exchange.run_id; checkpoint.last_active_step = exchange.step; await persist() } })
-      .catch(error => ({ status: 'evaluation-harness-failed', reason: error.message }))),
+      .catch(error => ({ status: 'evaluation-harness-failed', reason: error.message })))),
     'definition-collection': async () => {
       const state = await readRunnerRun({ sandbox, runDir, recordedId: checkpoint.runner_run_id })
       await privatePath(join(sandbox.artifactDir, 'workspace/repo'), runDir)
-      const manifest = await (deps.collectDefinition ?? collectDefinition)({ workspaceRepo: join(sandbox.artifactDir, 'workspace/repo'), runDir })
+      const manifest = await (deps.collectDefinition ?? collectDefinition)({ workspaceRepo: join(sandbox.artifactDir, 'workspace/repo'), runDir, readHead: deps.readHead })
       checkpoint.collection = manifest
       const metrics = await readJson(join(state.session_dir, 'run-metrics.json'))
       const invocations = invocationsThrough(effectiveInvocations(metrics), checkpoint.step_order, 'define')
@@ -199,7 +202,7 @@ export async function runEvaluation(options, deps = {}) {
       return [join(runDir, 'phases/collection.json'), join(runDir, DEFINE_MANIFEST), ...evidence.files.map(file => join(runDir, file.path))]
     },
     'define-checkpoint': null,
-    'implement-workflow': () => dispatch('implement', ({ signal }) => watchForRequests({ exchangeDir: sandbox.exchangeDir, signal })),
+    'implement-workflow': () => dispatch('implement', deps.startImplementResponder ?? (({ signal }) => watchForRequests({ exchangeDir: sandbox.exchangeDir, signal }))),
     'delivery-verification': async () => {
       const state = await readRunnerRun({ sandbox, runDir, recordedId: checkpoint.runner_run_id })
       const github = deps.deliveryApi ?? deliveryApi(app, inspected.provisioning.token, checkpoint.delivery.full_name)
@@ -327,7 +330,6 @@ export async function runEvaluation(options, deps = {}) {
       for (const [name] of ordered) {
         if (name === 'preflight') { phase = name; await handlers.preflight(); checkpoint = await completeUnit(checkpoint, { phase: name, unit: 'phase', inputs: provenance(), dependencies: {}, outputs: [join(runDir, 'phases/preflight.json')] }); await persist(); continue }
         const dependencies = name === 'materialization' ? {} : { materialization: checkpoint.materialization }
-        if (name === 'define-workflow') { phase = name; checkpoint = beginUnit(checkpoint, { phase: name, unit: 'phase', inputs: provenance(), dependencies }); await persist(); const outputs = await handlers[name](); checkpoint = await completeUnit(checkpoint, { phase: name, unit: 'phase', inputs: provenance(), dependencies, outputs }); await persist(); continue }
         await unit(name, handlers[name], { dependencies })
       }
       if (await checkpointUnits() === 'stop') {
@@ -359,6 +361,7 @@ export async function runEvaluation(options, deps = {}) {
     if (phase === 'publication' && result?.evaluation_status === 'complete') publicationFailed = true
     else {
       const productError = error instanceof NotEvaluableError || error instanceof ProductHarnessError
+      refused = Boolean(error.refused)
       result = failWith(error, productError ? { definition_scored: Boolean(checkpoint?.definition_scored) } : error.refused ? {} : { definition_scored: Boolean(checkpoint?.definition_scored) })
       if (error instanceof InvocationError || error.workflow) result.defineCompleted = undefined
       if (checkpoint && writable && !error.refused) { checkpoint = failUnit(checkpoint, { phase, unit: 'phase', error: error.message }); await persist() }
@@ -374,11 +377,11 @@ export async function runEvaluation(options, deps = {}) {
     }
   } finally {
     try {
-      if (writable && result && !artifactsWritten && !options.dryRun) {
+      if (writable && result && !artifactsWritten && !options.dryRun && !refused) {
         try { result = await assembleResult({ runDir, outcome: result, checkpoint, rubric: product.rubric }) }
         catch (assemblyError) { result = { ...result, assembly_error: assemblyError.message, run_id: checkpoint?.run_id ?? null, series_identity: checkpoint?.series_identity ?? null, candidate: checkpoint?.candidate ?? null } }
         await writeResultArtifacts({ runDir, result })
-      } else if (writable && result && options.dryRun) await writeJsonAtomic(join(runDir, 'result.json'), result)
+      } else if (writable && result && options.dryRun && !refused) await writeJsonAtomic(join(runDir, 'result.json'), result)
     } finally { if (release) await release() }
   }
   const succeeded = ['complete', 'pending-human-review'].includes(result?.evaluation_status) && !publicationFailed
