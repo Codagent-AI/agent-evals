@@ -263,3 +263,12 @@ test('C-14 definition verdicts never change the product score, and the definitio
   }
   assert.notEqual(totals[0].definition, totals[1].definition); assert.equal(totals[0].product, totals[1].product)
 })
+
+test('I-57 eval-owned usage is reported only in its own ledger, never in the workflow metrics', async t => {
+  const f = await lifecycle(t); await mkdir(join(f.runDir, 'phases'), { recursive: true })
+  await writeFile(join(f.runDir, 'phases/eval-owned-usage.jsonl'), `${JSON.stringify({ kind: 'simulated-user', cli: 'claude', usage: { input_tokens: 5 } })}\n${JSON.stringify({ kind: 'judge', job: 'scene-kit' })}\n{"truncated`)
+  await writeFile(join(f.runDir, 'phases/workflow-metrics.json'), JSON.stringify({ state: 'ingested', by_step: { define: {}, implement: {} }, total: { cost: { total_usd: 1 } } }))
+  const result = await assembleResult({ runDir: f.runDir, outcome: { evaluation_status: 'evaluation-harness-failed', owning_phase: 'x', observed_error: 'e', resumable: true }, checkpoint: { run_id: 'r' } })
+  assert.deepEqual(result.eval_owned_usage.map(entry => entry.kind), ['simulated-user', 'judge']); assert.equal(result.eval_owned_usage_errors.length, 1)
+  assert.ok(!JSON.stringify(result.workflow_metrics).includes('simulated-user')); assert.ok(!JSON.stringify(result.workflow_metrics).includes('scene-kit'))
+})

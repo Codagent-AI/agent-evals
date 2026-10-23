@@ -22,7 +22,12 @@ test('INT-005 happy path: define, checkpoint, implement, delivery, scoring, trac
   assert.equal(result.contamination_audit.pass_1.status, 'clean'); assert.equal(result.contamination_audit.pass_2.status, 'clean')
   assert.equal(result.requirement_trace.scoring, false)
   assert.match(result.residual_risk, /token that can push to the run's own delivery repository/)
+  assert.deepEqual(result.configured_profiles, f.options.profiles); assert.equal(result.effective_invocations.length, 4); assert.deepEqual(result.effective_invocations.map(invocation => invocation.role).sort(), ['crosscheck', 'implementor', 'lead', 'tester'])
+  assert.ok(result.effective_invocations.every(invocation => invocation.cli && invocation.session_id), 'effective values are the Runner\'s, apart from the configured ones')
   assert.deepEqual(f.harness.published, [], 'a pending run is not published')
+  // I-19: no token value remains anywhere in the run directory once the invocations ended.
+  const { filesUnder } = await import('../evals/agent-runner/and-scene-e2e/lib/files.mjs')
+  for (const file of await filesUnder(f.runDir)) assert.ok(!/run-token-\d|prov-token/.test(await readFile(file, 'utf8').catch(() => '')), file)
   // The token directory is gone after each invocation.
   await assert.rejects(access(join(f.runDir, '.github-auth')))
 })
@@ -336,4 +341,58 @@ test('I-20 the host-only provisioning token is minted when needed, never reused 
   const { result } = await runEvaluation(f.options, f.deps)
   assert.equal(result.evaluation_status, 'pending-human-review', result.observed_error); assert.deepEqual(used, ['prov-token-fresh'])
   assert.ok(!JSON.stringify(result).includes('prov-token'), 'no provisioning token in the result')
+})
+
+import { loadSimulatedUserInputs } from '../evals/lib/define-run/simulated-user-inputs.mjs'
+test('I-27 the real responder answers every define request through the exchange directory, labelling approvals as simulated', async t => {
+  const f = await lifecycle(t); f.deps.startDefineResponder = undefined; f.harness.keepConversation = true
+  const startingPrompt = (await loadSimulatedUserInputs()).startingPrompt
+  const replies = [{ reply_type: 'answer', text: 'No preference.' }, { reply_type: 'approval', text: 'Looks good, approved.' }]
+  f.deps.simulatedUser = async () => ({ ...replies.shift(), usage: null })
+  const request = turn => ({ schema_version: 1, run_id: 'runner-one', step: 'define.proposal', step_id: 'proposal', attempt: 1, turn, cli: 'codex', session_id: 'lead-s', empty_turn: false, agent_message: `Question ${turn}?` })
+  const wait = async path => { for (let i = 0; i < 400; i++) { try { return JSON.parse(await readFile(path, 'utf8')) } catch { await new Promise(resolve => setTimeout(resolve, 25)) } } throw new Error(`no reply at ${path}`) }
+  f.harness.plans.define.push({ type: 'hang', during: ({ sandbox, harness }) => void (async () => {
+    const seen = []
+    for (const turn of [1, 2, 3]) { await writeFile(join(sandbox.exchangeDir, `t${turn}.request.json`), JSON.stringify(request(turn))); seen.push(await wait(join(sandbox.exchangeDir, `t${turn}.reply.json`))) }
+    harness.replied = seen
+    const conversation = (await readFile(join(sandbox.runDir, 'conversation.jsonl'), 'utf8')).split('\n').filter(Boolean).map(JSON.parse)
+    const identity = exchange => ({ step_key: exchange.step, attempt: exchange.attempt, turn: exchange.turn })
+    await writeFile(join(sandbox.artifactDir, '.runtime/agent-runner-projects/p/runs/runner-one/external-user/exchanges.jsonl'), '')
+    harness.exchanges = conversation.flatMap(exchange => [{ type: 'request_written', identity: identity(exchange), request: request(exchange.turn) }, { type: 'reply_acted', identity: identity(exchange), reply: { text: exchange.text } }]).map(record => JSON.stringify(record)).join('\n') + '\n'
+    harness.transcriptUsers = conversation.map(exchange => exchange.text)
+    await harness.writeRunner(sandbox, 'define', 'capped', {})
+    await writeFile(join(sandbox.artifactDir, '.runtime/agent-runner-projects/p/runs/runner-one/external-user/exchanges.jsonl'), harness.exchanges)
+    await writeFile(join(sandbox.artifactDir, '.runtime/codex/sessions/rollout-x-lead-s.jsonl'), harness.transcriptUsers.map(text => JSON.stringify({ type: 'message', role: 'user', content: [{ type: 'input_text', text }] })).join('\n') + '\n' + '{"type":"event_msg","payload":{"type":"task_complete"}}\n')
+    sandbox.release({ code: 0, signal: null })
+  })() })
+  const { result } = await runEvaluation(f.options, f.deps)
+  assert.equal(result.evaluation_status, 'pending-human-review', result.observed_error)
+  const conversation = (await readFile(join(f.runDir, 'conversation.jsonl'), 'utf8')).split('\n').filter(Boolean).map(JSON.parse)
+  assert.deepEqual(conversation.map(exchange => [exchange.turn, exchange.reply_type, exchange.simulated_approval]), [[1, 'answer', false], [2, 'answer', false], [3, 'approval', true]])
+  assert.equal(conversation[0].text, startingPrompt, 'the first answer is the pinned starting prompt')
+  assert.deepEqual(Object.keys(f.harness.replied[0]).sort(), ['schema_version', 'text'], 'the exchange carries only the conversation')
+  assert.ok(!JSON.stringify(f.harness.replied).includes('hidden'))
+})
+test('I-54 a resume with a changed series identity, candidate commit or time limit is refused naming the field and dispatches nothing', async t => {
+  const f = await lifecycle(t)
+  f.harness.plans.define.push({ type: 'failed' }); f.deps.quota = async () => ({ waited: false })
+  assert.equal((await runEvaluation(f.options, f.deps)).result.resumable, true)
+  const dispatched = f.sandbox.starts.length; const original = await f.deps.inspect()
+  const changes = [['series_identity', { ...original, seriesIdentity: { version: 2 } }, f.options], ['candidate.agent_skills_commit', { ...original, candidate: { ...original.candidate, agent_skills_commit: 'other' } }, f.options], ['time_limit_ms', original, { ...f.options, timeLimitMs: 60e3 }]]
+  for (const [field, inspected, options] of changes) {
+    const resumed = await runEvaluation({ ...options, resume: true }, { ...f.deps, inspect: async () => inspected })
+    assert.match(resumed.result.observed_error, new RegExp(`resume identity mismatch: ${field.replace('.', '\\.')}`), field)
+  }
+  assert.equal(f.sandbox.starts.length, dispatched)
+  const ok = await runEvaluation({ ...f.options, resume: true }, f.deps)
+  assert.equal(ok.result.evaluation_status, 'pending-human-review', ok.result.observed_error)
+})
+test('I-19 the token directory is removed after a failed invocation as well', async t => {
+  const f = await lifecycle(t, { limitMs: 3600e3 })
+  f.harness.plans.implement.push({ type: 'hang', during: ({ harness }) => setTimeout(() => { harness.clock.t += 2 * 3600e3 }, 20) })
+  const { result } = await runEvaluation(f.options, f.deps)
+  assert.equal(result.evaluation_status, 'implementation-workflow-failed')
+  await assert.rejects(access(join(f.runDir, '.github-auth')))
+  const { filesUnder } = await import('../evals/agent-runner/and-scene-e2e/lib/files.mjs')
+  for (const file of await filesUnder(f.runDir)) assert.ok(!/run-token-\d|prov-token/.test(await readFile(file, 'utf8').catch(() => '')), file)
 })

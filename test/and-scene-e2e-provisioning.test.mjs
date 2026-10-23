@@ -141,3 +141,16 @@ test('INT-004 a resume reuses the recorded repository, creates none, and refuses
   // The harness never deletes a repository.
   assert.equal(server.requests.filter(request => request.method === 'DELETE').length, 0)
 })
+
+test('INT-004 a fake token authority reaches only the repository the run token names', async t => {
+  const { app, server } = await setup(t)
+  const grants = new Map()
+  server.handler = (request, send) => {
+    if (request.path.endsWith('/access_tokens')) { const token = `scoped-${grants.size}`; grants.set(token, request.body?.repositories ?? null); send(201, { token, expires_at: 'x' }); return true }
+    const match = request.path.match(/^\/repos\/Codagent-AI\/([^/]+)/)
+    if (match) { const repositories = grants.get(request.auth.replace('Bearer ', '')); send(repositories && repositories.includes(match[1]) ? 200 : 403, { message: repositories ? 'allowed' : 'denied' }); return true }
+  }
+  const { token } = await app.runToken('e2e-run-mine')
+  assert.deepEqual((await app.request('GET', '/repos/Codagent-AI/e2e-run-mine', { token })).message, 'allowed')
+  for (const other of ['and-scene', 'agent-evals', 'e2e-run-other']) await assert.rejects(app.request('GET', `/repos/Codagent-AI/${other}`, { token }), error => error.status === 403, other)
+})

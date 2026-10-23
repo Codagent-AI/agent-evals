@@ -69,8 +69,8 @@ export async function lifecycle(t, { limitMs, stallMs, transcripts = {}, inspect
       await writeFile(join(session, 'audit.log'), `2026-10-23T00:00:00Z run_start {}\n${end}`)
       const invoked = until === 'define' ? DEFINE_INVOCATIONS : [...DEFINE_INVOCATIONS, ...IMPLEMENT_INVOCATIONS]
       await writeFile(join(session, 'run-metrics.json'), JSON.stringify({ schema_version: 3, run_id: 'runner-one', workflow: 'change', history_complete: false, steps: invoked }))
-      await writeFile(join(session, 'external-user/exchanges.jsonl'), harness.exchanges ?? '')
-      await writeFile(join(sandbox.runDir, 'conversation.jsonl'), harness.conversation ?? '')
+      if (!harness.keepConversation) await writeFile(join(session, 'external-user/exchanges.jsonl'), harness.exchanges ?? '')
+      if (!harness.keepConversation) await writeFile(join(sandbox.runDir, 'conversation.jsonl'), harness.conversation ?? '')
       for (const invocation of invoked) {
         const text = transcripts[invocation.session_id] ?? (invocation.cli === 'claude' ? claudeDone : codexDone)
         const native = invocation.cli === 'claude' ? join(sandbox.artifactDir, '.runtime/claude/projects/p') : join(sandbox.artifactDir, '.runtime/codex/sessions')
@@ -139,7 +139,7 @@ export async function lifecycle(t, { limitMs, stallMs, transcripts = {}, inspect
       },
       'product-evaluation': async () => {
         const target = join(runDir, 'phases/product-result.json')
-        await writeFile(target, JSON.stringify({ build_plan: {}, build: { ok: true }, gates: [], score: full, verdicts: {}, human_review: harness.humanReview ?? { eligible: true } }))
+        await writeFile(target, JSON.stringify({ build_plan: {}, build: { ok: true }, gates: [], score: harness.productScore ?? full, verdicts: {}, human_review: harness.humanReview ?? { eligible: true } }))
         return [target]
       },
     },

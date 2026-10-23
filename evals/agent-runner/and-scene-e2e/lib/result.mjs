@@ -25,8 +25,10 @@ export async function assembleResult({ runDir, outcome, checkpoint, rubric = nul
   const status = outcome.evaluation_status
   if (!EVALUATION_STATUSES.includes(status)) throw new Error(`unknown evaluation status ${status}`)
   const scored = SCORED_STATUSES.includes(status) || status === 'implementation-workflow-failed' || (status === 'evaluation-harness-failed' && outcome.definition_scored === true)
-  const [definitionScore, ledger, collection, delivery, trace, productResult, human, metrics, pass1, pass2, disclosure, reconciliation, manifest] = await Promise.all(
-    ['judges/score.json', 'discovery/ledger.json', 'phases/collection.json', 'phases/delivery.json', 'phases/trace.json', 'phases/product-result.json', 'human-review/review.json', 'phases/workflow-metrics.json', 'phases/contamination-pass-1.json', 'phases/contamination-pass-2.json', 'audits/disclosure.json', 'phases/reconciliation.json', 'evidence-manifest.json'].map(path => read(runDir, path)))
+  const [definitionScore, ledger, collection, delivery, trace, productResult, human, metrics, pass1, pass2, disclosure, reconciliation, finalManifest] = await Promise.all(
+    ['judges/score.json', 'discovery/ledger.json', 'phases/collection.json', 'phases/delivery.json', 'phases/trace.json', 'phases/product-result.json', 'human-review/review.json', 'phases/workflow-metrics.json', 'phases/contamination-pass-1.json', 'phases/contamination-pass-2.json', 'audits/disclosure.json', 'phases/reconciliation.json', 'evidence/final-manifest.json'].map(path => read(runDir, path)))
+  const defineManifest = await read(runDir, 'evidence/define-manifest.json')
+  const manifest = finalManifest ?? defineManifest
   const eval_owned = await usage(runDir)
   const product = scored && productResult ? { ...productResult, human_review: human ?? productResult.human_review ?? null } : null
   const delivered = product ? { automated_score: product.score.automated_score, human_points: human?.points ?? (product.human_review?.skipped ? 0 : null), score: productTotal(product), incomplete: product.score.automated_score === null } : null
@@ -43,7 +45,7 @@ export async function assembleResult({ runDir, outcome, checkpoint, rubric = nul
     requirement_trace: scored ? trace : null,
     contamination_audit: { pass_1: pass1, pass_2: pass2 }, disclosure_audit: disclosure, reconciliation,
     leaked_items: disclosure?.leaked_items ?? outcome.leaked_items ?? [], residual_risk: RESIDUAL_RISK,
-    provenance: { evidence_manifest: manifest, collection, pinned_inputs: checkpoint?.series_identity ?? null },
+    provenance: { evidence_manifest: manifest, define_evidence_manifest: defineManifest, collection, pinned_inputs: checkpoint?.series_identity ?? null },
     workflow_metrics: metrics, eval_owned_usage: eval_owned.records, eval_owned_usage_errors: eval_owned.errors,
     provisional_rubric: rubric?.provisional ?? product?.score?.provisional ?? null,
   }

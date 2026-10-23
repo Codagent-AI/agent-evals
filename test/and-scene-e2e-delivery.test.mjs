@@ -130,3 +130,23 @@ test('INT-006 the real HEAD reader is delegated to a throwaway container over a 
   assert.deepEqual(calls[0].mounts, [{ source: '/tmp/copy', target: '/repo', readonly: true }]); assert.ok(calls[0].command.includes('rev-parse'))
   assert.throws(() => readHeadInContainer({ copyDir: '/x', run: () => ({ stdout: 'nope' }) }), /no commit/)
 })
+
+test('INT-006 delivery is fetched from the explicit delivery URL into a harness-created bare repository with the provisioning token', async t => {
+  const w = await world(t); await acceptance(w)
+  const calls = []
+  const { gitCommand } = await import('../evals/agent-runner/and-scene-e2e/lib/provisioning.mjs')
+  const git_ = async (token, args, options) => { calls.push({ token, args }); return gitCommand(args, options) }
+  await verifyDelivery({ runDir: w.runDir, fullName: 'Codagent-AI/e2e-run-x', url: w.remote, token: 'provisioning-sentinel', api: { pulls: async () => [w.pull], refs: async () => w.refs }, git: git_, sessionDir: w.session })
+  assert.ok(calls.length >= 2)
+  for (const call of calls) { assert.equal(call.token, 'provisioning-sentinel'); assert.equal(call.args[0], '-C'); assert.equal(call.args[1], join(w.runDir, '.delivery.git')); assert.equal(call.args[2], 'fetch'); assert.ok(call.args.includes(w.remote)); assert.ok(!call.args.some(arg => arg.includes('sandbox') || arg.includes('workspace'))) }
+  assert.deepEqual(calls.map(call => call.args.at(-1)), ['+refs/heads/main:refs/heads/main', `+refs/heads/${BRANCH}:refs/heads/${BRANCH}`])
+  assert.equal(await readFile(join(w.runDir, '.delivery.git/config'), 'utf8').then(text => /bare = true/.test(text)), true)
+  const wrongBase = await world(t); await acceptance(wrongBase)
+  await assert.rejects(verify(wrongBase, { pulls: [{ ...wrongBase.pull, base: { ref: 'develop' } }] }), /base is main/)
+})
+test('INT-006 an unreadable acceptance artifact is a harness failure', async t => {
+  const w = await world(t); await acceptance(w)
+  const { chmod } = await import('node:fs/promises')
+  await chmod(join(w.session, 'output/acceptance-handoff.md'), 0o000)
+  try { await assert.rejects(verify(w), error => error instanceof HarnessEvidenceError) } finally { await chmod(join(w.session, 'output/acceptance-handoff.md'), 0o644) }
+})

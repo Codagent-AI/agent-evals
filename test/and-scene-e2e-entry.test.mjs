@@ -65,9 +65,11 @@ test('E2E-001 preflight fails with the missing profile field or CLI rule, before
   assert.notEqual(missing.status, 0); assert.match(missing.stdout + missing.stderr, /profiles: missing tester\.effort/)
   const cursorLead = await run(w, candidate(w).map((arg, index, all) => all[index - 1] === '--lead-cli' ? 'cursor' : arg))
   assert.match(cursorLead.stdout + cursorLead.stderr, /lead must use claude or codex/)
-  const cursorTester = await run(w, ['--dry-run', '--run-dir', join(w.root, 'run2'), '--runner-dir', w.runner, '--skills-dir', w.skills, ...ROLE_ARGS('codex').map((arg, index, all) => all[index - 1] === '--tester-cli' ? 'cursor' : arg)])
+  const cursorTesterDir = join(w.root, 'run2')
+  const cursorTester = await run(w, ['--dry-run', '--run-dir', cursorTesterDir, '--runner-dir', w.runner, '--skills-dir', w.skills, ...ROLE_ARGS('codex').map((arg, index, all) => all[index - 1] === '--tester-cli' ? 'cursor' : arg)])
   assert.match(cursorTester.stdout + cursorTester.stderr, /cursor is accepted only for crosscheck/)
   assert.equal(w.github.requests.length, 0); await assert.rejects(access(w.log))
+  const occupied = await run(w, candidate(w, [], cursorTesterDir)); assert.match(occupied.stdout + occupied.stderr, /run directory is already used; use --resume/)
 })
 
 test('E2E-001 preflight names a dirty checkout, a missing skill, a missing option and missing credentials', async t => {
@@ -97,6 +99,7 @@ test('E2E-001 the argument parser applies defaults, bounds and mode rules', () =
   assert.throws(() => parseArguments(['--run-agent', '--dry-run'], {}), /exactly one mode/)
   assert.throws(() => parseArguments(['--calibrate'], {}), /calibrate\.mjs/)
   assert.throws(() => parseArguments([...base, '--no-such', 'x'], {}), /unknown option/)
+  for (const pinned of ['--judge-model', '--judge-cli', '--simulated-user-model', '--judge-effort']) assert.throws(() => parseArguments([...base, pinned, 'x'], {}), /unknown option/, `${pinned} cannot override a pinned evaluator profile`)
   assert.equal(parseArguments([...base, '--workflow', 'openspec:change-v2'], {}).workflow, 'openspec:change-v2')
   assert.equal(TOKEN_REFRESH.max, 50)
 })

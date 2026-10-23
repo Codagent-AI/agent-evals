@@ -187,3 +187,13 @@ test('INT-009 the automated score arithmetic: tier weights, gate inputs earn not
   assert.equal(partial.automated_score, null); assert.deepEqual(partial.incomplete_components.map(entry => entry.id), ['scene-kit-correctness'])
   assert.deepEqual(evaluateGates({ rubric: inputs.rubric, verdicts: {}, build: { ok: true }, verifier: { found: false } }).map(gate => gate.passed), [true, false, false, false])
 })
+
+test('INT-009 after a not-evaluable failure the retained candidate is evaluated once the plan is supplied, reusing the completed work', async t => {
+  const world = await deliver(t, { 'README.md': 'nothing buildable\n', 'src/main.ts': 'x\n' })
+  const failing = await evaluate(t, {}, { runDirOverride: world })
+  await assert.rejects(failing.run(), error => error instanceof NotEvaluableError)
+  const corrected = await evaluate(t, {}, { runDirOverride: world })
+  const result = await evaluateProduct({ runDir: world.runDir, rubric: inputs.rubric, inventory: inputs.inventory, bundlePath: world.bundlePath, commit: world.commit, collectedDir: world.collectedDir, acceptance,
+    plan: { application_root: '.', install: ['npm', 'ci'], build: ['npm', 'run', 'build'], package_manager: 'npm' }, deps: { containerRun: corrected.container.run, panel: corrected.judges.panel, decider: corrected.judges.decider, invoke: corrected.judges.invoke, ...corrected.browser, serve: async () => ({ url: 'http://127.0.0.1:1', close: async () => {} }), verifierJudge: async () => ({ found: false, rationale: 'none' }) } })
+  assert.equal(result.build.ok, true); assert.equal(result.score.automated_score, 70, 'a supplied plan bypasses resolution and the candidate is evaluated normally')
+})
