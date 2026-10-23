@@ -4,8 +4,9 @@ import { spawn } from 'node:child_process'
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile, appendFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { findAxiMcp } from './host-chrome.mjs'
 // USER and LOGNAME let the Claude CLI find its macOS Keychain login, as the shared source judges do.
-const ENV_KEYS = ['PATH', 'HOME', 'USER', 'LOGNAME', 'TMPDIR', 'CLAUDE_CODE_OAUTH_TOKEN', 'CHROME_DEVTOOLS_AXI_BROWSER_URL', 'CHROME_DEVTOOLS_AXI_SESSION', 'CHROME_DEVTOOLS_AXI_PORT']
+const ENV_KEYS = ['PATH', 'HOME', 'USER', 'LOGNAME', 'TMPDIR', 'CLAUDE_CODE_OAUTH_TOKEN', 'CHROME_DEVTOOLS_AXI_BROWSER_URL', 'CHROME_DEVTOOLS_AXI_SESSION', 'CHROME_DEVTOOLS_AXI_PORT', 'CHROME_DEVTOOLS_AXI_MCP_PATH']
 const allowedEnvironment = (env, extra = {}) => ({ ...Object.fromEntries(ENV_KEYS.filter(key => env[key] !== undefined).map(key => [key, env[key]])), ...extra })
 function run(command, args, { input, env, cwd, timeoutMs, spawnImpl = spawn }) {
   return new Promise((resolve, reject) => {
@@ -45,7 +46,8 @@ export function createBrowserJudgeInvoker({ runDir, env = process.env, claudeCom
     }
     const scratch = await mkdtemp(join(tmpdir(), 'e2e-browser-judge-'))
     try {
-      const environment = allowedEnvironment(env, { CHROME_DEVTOOLS_AXI_SESSION: request.browser_session ?? env.CHROME_DEVTOOLS_AXI_SESSION })
+      const mcp = findAxiMcp(env)
+      const environment = allowedEnvironment(env, { CHROME_DEVTOOLS_AXI_SESSION: request.browser_session ?? env.CHROME_DEVTOOLS_AXI_SESSION, ...(mcp ? { CHROME_DEVTOOLS_AXI_MCP_PATH: mcp } : {}) })
       let text
       if (cli === 'claude') {
         const args = ['-p', '--model', model, '--effort', effort, '--tools', 'Bash', '--allowedTools', 'Bash(chrome-devtools-axi:*)', '--setting-sources', '', '--strict-mcp-config', '--disable-slash-commands', '--no-session-persistence', '--json-schema', JSON.stringify(request.schema), '--output-format', 'stream-json', '--verbose']
@@ -57,7 +59,9 @@ export function createBrowserJudgeInvoker({ runDir, env = process.env, claudeCom
       } else {
         const schemaPath = join(scratch, 'schema.json'); const outPath = join(scratch, 'last-message.json')
         await writeFile(schemaPath, JSON.stringify(request.schema))
-        const args = ['exec', '--model', model, '-c', `model_reasoning_effort="${effort}"`, '--sandbox', 'workspace-write', '--skip-git-repo-check', '--output-schema', schemaPath, '--output-last-message', outPath, '-']
+        // Unsandboxed by the maintainer's choice: Codex's macOS sandbox denies the signal AXI uses to find its live bridge,
+        // so every command would drop the selected page. The stripped environment and private Codex home still apply.
+        const args = ['exec', '--model', model, '-c', `model_reasoning_effort="${effort}"`, '--sandbox', 'danger-full-access', '--skip-git-repo-check', '--output-schema', schemaPath, '--output-last-message', outPath, '-']
         // A private Codex home holds only the login the call needs, not the host's configuration, history or other state.
         const codexHome = join(scratch, 'codex-home'); await mkdir(codexHome, { recursive: true })
         await copyFile(join(env.CODEX_HOME ?? join(env.HOME ?? '', '.codex'), 'auth.json'), join(codexHome, 'auth.json')).catch(() => {})

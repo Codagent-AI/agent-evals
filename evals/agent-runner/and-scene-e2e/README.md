@@ -120,7 +120,11 @@ is written to `<run-dir>/.github-auth/token` (mode 0600) while an invocation run
 removed after it. Browser judging and human review start host Chrome from
 `AND_SCENE_HOST_CHROME`, `CHROME_PATH`, or the standard install, on
 `AND_SCENE_HOST_DEVTOOLS_PORT` (default 9333), and drive it with
-`chrome-devtools-axi`; preflight fails when either is missing.
+`chrome-devtools-axi`; preflight fails when either is missing. The harness starts the
+AXI bridge itself, with the `chrome-devtools-mcp` installed beside `chrome-devtools-axi`.
+Claude browser judges may run only `chrome-devtools-axi` commands. The Codex browser
+judge runs outside Codex's sandbox, because the macOS sandbox blocks the process check
+AXI uses to find its bridge; it still gets a stripped environment and a private Codex home.
 
 `--no-publish` keeps a complete result in the run directory, for a launcher that
 publishes results itself. A run directory holding only a launcher's own output

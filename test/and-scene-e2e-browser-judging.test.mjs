@@ -157,3 +157,39 @@ test('INT-012 a Claude browser judge gets the user identity its Keychain login n
   await assert.rejects(invoke({ job: 'j', authority: { cli: 'claude', model: 'm', effort: 'high' }, schema: {}, prompt: 'p' }), /claude exited 1: Not logged in/)
   assert.equal(seen.USER, 'u'); assert.equal(seen.LOGNAME, 'u'); assert.equal(seen.SECRET_THING, undefined)
 })
+
+test('INT-012 a Codex browser judge runs outside Codex\'s sandbox with a stripped environment, a private Codex home and the installed AXI MCP', async t => {
+  const { createBrowserJudgeInvoker } = await import('../evals/agent-runner/and-scene-e2e/lib/browser-judge-invokers.mjs')
+  const { temp } = await import('./and-scene-e2e-helpers.mjs'); const { EventEmitter } = await import('node:events'); const { writeFile } = await import('node:fs/promises')
+  const runDir = await temp(t, 'e2e-codex-seat-')
+  let seen = null
+  const spawnImpl = (command, args, options) => { seen = { command, args, env: options.env }; const out = args[args.indexOf('--output-last-message') + 1]; const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); child.stdin = { end() { writeFile(out, '{"ok":true}').then(() => child.emit('close', 0)) } }; child.kill = () => {}; return child }
+  const invoke = createBrowserJudgeInvoker({ runDir, spawnImpl, env: { PATH: '/bin', HOME: '/home/u', USER: 'u', CHROME_DEVTOOLS_AXI_MCP_PATH: '/mcp.js', OPENAI_API_KEY: 'k' } })
+  assert.equal(await invoke({ job: 'j', authority: { cli: 'codex', model: 'm', effort: 'high' }, schema: {}, prompt: 'p', browser_session: 's' }), '{"ok":true}')
+  assert.equal(seen.args[seen.args.indexOf('--sandbox') + 1], 'danger-full-access')
+  assert.equal(seen.env.CHROME_DEVTOOLS_AXI_MCP_PATH, '/mcp.js'); assert.equal(seen.env.CHROME_DEVTOOLS_AXI_SESSION, 's')
+  assert.equal(seen.env.OPENAI_API_KEY, undefined); assert.ok(seen.env.CODEX_HOME && !seen.env.CODEX_HOME.startsWith('/home/u'))
+})
+
+test('INT-012 the evaluator AXI bridge starts on the host for a judge, and a bridge that cannot start is a resumable harness failure', async () => {
+  const { startAxiBridge } = await import('../evals/agent-runner/and-scene-e2e/lib/production-deps.mjs')
+  const calls = []
+  startAxiBridge({ PATH: '/bin', CHROME_DEVTOOLS_AXI_MCP_PATH: '/mcp.js' }, (command, args, options) => { calls.push({ command, args, env: options.env }); return { status: 0 } })
+  assert.deepEqual(calls.map(call => [call.command, call.args]), [['chrome-devtools-axi', ['start']]])
+  assert.equal(calls[0].env.CHROME_DEVTOOLS_AXI_SESSION, 'and-scene-evaluator'); assert.equal(calls[0].env.CHROME_DEVTOOLS_AXI_MCP_PATH, '/mcp.js')
+  assert.throws(() => startAxiBridge({ PATH: '/bin' }, () => ({ status: 1, stderr: 'BRIDGE_NOT_READY' })), error => /could not start the evaluator AXI bridge: BRIDGE_NOT_READY/.test(error.message) && error.owner === 'evaluation-harness' && error.resumable === true)
+})
+
+test('INT-012 the AXI MCP is found beside the installed chrome-devtools-axi, and is absent when it is not installed', async t => {
+  const { findAxiMcp } = await import('../evals/agent-runner/and-scene-e2e/lib/host-chrome.mjs')
+  const { temp } = await import('./and-scene-e2e-helpers.mjs'); const { mkdir, writeFile, symlink, rm } = await import('node:fs/promises'); const { join, dirname } = await import('node:path')
+  const root = await temp(t, 'e2e-axi-mcp-')
+  const axi = join(root, 'lib/node_modules/chrome-devtools-axi/dist/bin/chrome-devtools-axi.js'); const mcp = join(root, 'lib/node_modules/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js')
+  for (const file of [axi, mcp]) { await mkdir(dirname(file), { recursive: true }); await writeFile(file, '#!/usr/bin/env node\n', { mode: 0o755 }) }
+  await mkdir(join(root, 'bin')); await symlink(axi, join(root, 'bin/chrome-devtools-axi'))
+  const env = { PATH: join(root, 'bin') }
+  assert.equal(findAxiMcp(env).endsWith('lib/node_modules/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js'), true)
+  assert.equal(findAxiMcp({ ...env, CHROME_DEVTOOLS_AXI_MCP_PATH: '/chosen.js' }), '/chosen.js')
+  await rm(join(root, 'lib/node_modules/chrome-devtools-mcp'), { recursive: true })
+  assert.equal(findAxiMcp(env), null)
+})

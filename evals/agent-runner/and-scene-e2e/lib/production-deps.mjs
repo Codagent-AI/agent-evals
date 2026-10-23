@@ -1,4 +1,5 @@
 // The real dependencies of product evaluation: host judges, browser judges and fresh browser contexts.
+import { spawnSync } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createAxiBrowserDriver } from '../../and-scene/lib/axi-browser-driver.mjs'
@@ -6,10 +7,17 @@ import { createHostBrowser, EVALUATOR_AXI_SESSION } from '../../and-scene/lib/ho
 import { createProductJudges } from './product-judges.mjs'
 import { createBrowserJudgeInvoker } from './browser-judge-invokers.mjs'
 import { normalizeReplay } from './judge-requests.mjs'
-import { findHostChrome, hostDevtoolsPort } from './host-chrome.mjs'
+import { findAxiMcp, findHostChrome, hostDevtoolsPort } from './host-chrome.mjs'
 const SECOND_OPINION_SCHEMA = { type: 'object', additionalProperties: false, required: ['decision', 'rationale', 'replay'], properties: { decision: { type: 'string', enum: ['uphold', 'overturn'] }, rationale: { type: 'string', minLength: 1 }, replay: { anyOf: [{ type: 'null' }, { type: 'object' }] } } }
 const VERIFIER_SCHEMA = { type: 'object', additionalProperties: false, required: ['found', 'command', 'rationale'], properties: { found: { type: 'boolean' }, command: { type: ['array', 'null'], items: { type: 'string' } }, rationale: { type: 'string', minLength: 1 } } }
-export function createProductionDeps({ runDir, env = process.env, chromePath = findHostChrome(env), port = hostDevtoolsPort(env), judges = createProductJudges({ runDir, allowedRoots: [join(runDir, 'neutral')], env }) } = {}) {
+// A sandboxed judge's commands end the background processes they start, so the AXI bridge starts here, outside the
+// judge, and lives across its commands until the browser is released.
+export function startAxiBridge(env = process.env, run = spawnSync) {
+  const mcp = findAxiMcp(env)
+  const result = run('chrome-devtools-axi', ['start'], { encoding: 'utf8', timeout: 60_000, env: { ...env, CHROME_DEVTOOLS_AXI_SESSION: EVALUATOR_AXI_SESSION, ...(mcp ? { CHROME_DEVTOOLS_AXI_MCP_PATH: mcp } : {}) } })
+  if (result.error || result.status !== 0) throw Object.assign(new Error(`could not start the evaluator AXI bridge: ${result.error?.message || String(result.stderr || result.stdout || '').trim().slice(-300)}`), { owner: 'evaluation-harness', resumable: true })
+}
+export function createProductionDeps({ runDir, env = process.env, chromePath = findHostChrome(env), port = hostDevtoolsPort(env), startBridge = startAxiBridge, judges = createProductJudges({ runDir, allowedRoots: [join(runDir, 'neutral')], env }) } = {}) {
   const rawBrowserInvoke = createBrowserJudgeInvoker({ runDir, env })
   const decider = judges.profile.decider
   const deciderAuthority = { cli: decider.family, model: decider.model, effort: decider.effort }
@@ -27,10 +35,10 @@ export function createProductionDeps({ runDir, env = process.env, chromePath = f
   // A judge CLI drives the same evaluator browser the replays use, so it gets it for the length of the call.
   const browserInvoke = async request => {
     const browser = await startBrowser()
-    try { return await rawBrowserInvoke({ ...request, browser_session: EVALUATOR_AXI_SESSION }) } finally { await browser.release() }
+    try { startBridge(env); return await rawBrowserInvoke({ ...request, browser_session: EVALUATOR_AXI_SESSION }) } finally { await browser.release() }
   }
   const secondOpinion = async ({ id, entry, url, requirement }) => {
-    const prompt = [`A judge panel failed the criterion ${id} for a delivered web product: ${entry.rationale}`, `The product is served at ${url}. Open it with the chrome-devtools-axi command-line browser (always set CHROME_DEVTOOLS_AXI_SESSION=${EVALUATOR_AXI_SESSION}).`, requirement ? `Requirement the criterion judges:\n${requirement}` : '', 'Operate the product again as a person would and decide whether the failure stands. Overturn only if you can reproduce the behavior and give a replay: browser actions and the result you expect.', `Reply with JSON matching: ${JSON.stringify(SECOND_OPINION_SCHEMA)}`].join('\n')
+    const prompt = [`A judge panel failed the criterion ${id} for a delivered web product: ${entry.rationale}`, `The product is served at ${url}. Open it with the chrome-devtools-axi command-line browser (your browser session is already selected in your environment, so run chrome-devtools-axi commands as they are, with no environment-variable prefix).`, requirement ? `Requirement the criterion judges:\n${requirement}` : '', 'Operate the product again as a person would and decide whether the failure stands. Overturn only if you can reproduce the behavior and give a replay: browser actions and the result you expect.', `Reply with JSON matching: ${JSON.stringify(SECOND_OPINION_SCHEMA)}`].join('\n')
     const text = await browserInvoke({ job: `second-opinion:${id}`, authority: deciderAuthority, schema: SECOND_OPINION_SCHEMA, prompt })
     const answer = JSON.parse(text)
     return { decision: answer.decision, rationale: answer.rationale, replay: normalizeReplay(answer.replay) }
