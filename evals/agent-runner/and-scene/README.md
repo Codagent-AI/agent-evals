@@ -547,8 +547,9 @@ or SIGTERM. Those phases drive Chrome through their own AXI session,
 
 The sandbox scores the same way. The Chromium on port 9333 belongs to the
 implementation agents, who may stop or replace it, so the browser evaluation
-and second-opinion replays start their own Chromium from the same binary on
-port 9334 for each phase.
+and second-opinion replays start their own Chromium on port 9334 for each phase.
+The evaluator launches a private copy that agents' Playwright installs cannot
+garbage-collect.
 
 Each launch appends Chrome's output to `phases/command-output/host-chrome.log`
 with how long its DevTools endpoint took to answer. The phase waits up to 60 s
