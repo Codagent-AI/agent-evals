@@ -1,0 +1,1532 @@
+{
+  "rubric_id": "and-scene-e2e-product",
+  "version": "1.0.0",
+  "provisional": true,
+  "inventory_version": 6,
+  "calibration": {
+    "status": "pending",
+    "evidence": null,
+    "approved_by": null
+  },
+  "total_points": 100,
+  "automated_points": 70,
+  "human_points": 30,
+  "limits": {
+    "max_requirement_chars": 12000,
+    "calibration_tolerance": 6,
+    "spread_limit": 6,
+    "flip_rate_limit": 0.34
+  },
+  "components": [
+    {
+      "id": "demo-technical-quality",
+      "title": "Demo presentation technical quality",
+      "points": 20,
+      "tier_weights": {
+        "critical": 2,
+        "major": 1,
+        "minor": 0.5
+      },
+      "subcomponents": [
+        {
+          "id": "demo-canonical-content",
+          "title": "Canonical content, routing, and technical structure",
+          "points": 5,
+          "evaluator": "browser-judge",
+          "criteria": [
+            "demo-route-and-registration",
+            "demo-sample-explains-skill",
+            "demo-sample-step-content",
+            "demo-evolving-scene-structure",
+            "quality-captions-and-navigation"
+          ],
+          "tiers": {
+            "demo-route-and-registration": "gate-input",
+            "demo-sample-explains-skill": "gate-input",
+            "demo-sample-step-content": "critical",
+            "demo-evolving-scene-structure": "critical",
+            "quality-captions-and-navigation": "major"
+          }
+        },
+        {
+          "id": "demo-navigation-and-modes",
+          "title": "Navigation, modes, boundaries, and controls",
+          "points": 6,
+          "evaluator": "browser-judge",
+          "criteria": [
+            "demo-present-mode-behavior",
+            "demo-browse-mode-behavior",
+            "demo-mode-position-preservation",
+            "demo-supported-navigation",
+            "demo-navigation-boundaries-and-control-keys"
+          ],
+          "tiers": {
+            "demo-present-mode-behavior": "major",
+            "demo-browse-mode-behavior": "major",
+            "demo-mode-position-preservation": "major",
+            "demo-supported-navigation": "critical",
+            "demo-navigation-boundaries-and-control-keys": "major"
+          }
+        },
+        {
+          "id": "demo-runtime-reliability",
+          "title": "Runtime reliability and accessibility baseline",
+          "points": 3.5,
+          "evaluator": "browser-judge",
+          "criteria": [
+            "demo-step-and-transition-reliability",
+            "demo-mode-interaction-reliability",
+            "demo-control-semantics",
+            "demo-focus-and-keyboard-accessibility"
+          ],
+          "tiers": {
+            "demo-step-and-transition-reliability": "minor",
+            "demo-mode-interaction-reliability": "major",
+            "demo-control-semantics": "major",
+            "demo-focus-and-keyboard-accessibility": "major"
+          }
+        },
+        {
+          "id": "demo-scene-kit-integration",
+          "title": "Uses scene-kit APIs without bypassing or duplicating them",
+          "points": 2,
+          "evaluator": "llm-source-review",
+          "job": "demo-integration",
+          "criteria": [
+            "demo-scene-kit-api-use"
+          ],
+          "tiers": {
+            "demo-scene-kit-api-use": "critical"
+          },
+          "review_guidance": [
+            "Judge scene-kit use at the Talk orchestration and shared Scene boundaries. Do not require every thin step-state module when the verified shared Scene boundary proves the reusable API mechanism; if the rationale makes an all-step claim, cite every step module it relies on."
+          ]
+        },
+        {
+          "id": "demo-identity-and-grouping",
+          "title": "Uses stable identities and appropriate grouped-scene architecture",
+          "points": 2,
+          "evaluator": "llm-source-review",
+          "job": "demo-integration",
+          "criteria": [
+            "demo-stable-identity-and-grouping"
+          ],
+          "tiers": {
+            "demo-stable-identity-and-grouping": "critical"
+          },
+          "review_guidance": [
+            "An all-steps identity or grouping claim MUST cite every step module plus the shared Scene mechanism, or cite a focused executable test together with every imported implementation needed to evaluate its setup and assertions. A beginning/middle/end sample is insufficient.",
+            "For the delivered grouped-scene path, prove grouping by tracing each step's groupKey through Stage, and prove stable entity identity by tracing the presentation-owned ENTITY constants through Scene layoutId props to the node consumers. Cite every file used by that proof chain.",
+            "Do not claim that groupKey itself derives entity identity: groupKey preserves the grouped Scene mount, while the separate presentation-owned layoutId values preserve entity identity.",
+            "Before calling a presentation-owned ENTITY constant or member unused, trace every use of it across the delivered source, including member access passed as an id, layoutId, or key prop of any rendered element (an arrow or connector counts). A member that any rendered element consumes is used and is not a dead constant.",
+            "The canonical sample is one continuously evolving scene, so a single groupKey shared by all steps is the correct grouping for it; do not fail grouping because every step shares one groupKey.",
+            "For demo-stable-identity-and-grouping, stable presentation-owned ids carried through the Scene to the rendered nodes, combined with the kit's persisting layout mechanism, are the technical proof; do not require the sample deck to rearrange or resize an entity, or a focused test, unless the claimed identity path itself remains ambiguous."
+          ]
+        },
+        {
+          "id": "demo-code-boundaries",
+          "title": "Maintains clear boundaries and scope discipline",
+          "points": 1.5,
+          "evaluator": "llm-source-review",
+          "job": "demo-integration",
+          "criteria": [
+            "demo-clear-code-boundaries",
+            "quality-active-chrome-and-attribution-local",
+            "demo-scope-discipline"
+          ],
+          "tiers": {
+            "demo-clear-code-boundaries": "minor",
+            "quality-active-chrome-and-attribution-local": "minor",
+            "demo-scope-discipline": "minor"
+          },
+          "review_guidance": [
+            "Before calling a constant, member, or public input dead, trace it through every use in the delivered source, including member access and values forwarded as id, layoutId, or key props; a fail for a dead contract must name the declaration and the files searched. A member that any rendered element consumes is used.",
+            "Confirm that public API inputs and shared constants consumed by the delivered demo are actually used. Score a dead or misleading contract under demo-clear-code-boundaries exactly once, even when its declaration lives in shared scene-kit source; do not duplicate that deduction in another component.",
+            "For demo-clear-code-boundaries, trace the required presentation title input through the delivered demo and fail when the public title contract is ignored rather than consumed.",
+            "Accept any semantic current-state attribute paired with a stable presentation-owned active-state hook; do not require one hard-coded hook spelling.",
+            "For quality-active-chrome-and-attribution-local, local means the attribution implementation and default are project-local rather than supplied by an external package or remote embed. It does not require the demo to inject or customize attribution through its public Presentation call.",
+            "For demo-scope-discipline, inspect the presentation registry, Talk boundary, complete presentation-local implementation, and the shared Presentation boundary. Do not demand proof of absence across unrelated source files; fail only when the inspected architecture shows demo-specific logic outside its local boundary or duplicated shared mechanisms."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "scene-kit-correctness",
+      "title": "Scene kit correctness",
+      "points": 20,
+      "tier_weights": {
+        "critical": 1.5625,
+        "major": 0.75,
+        "minor": 0.25
+      },
+      "subcomponents": [
+        {
+          "id": "scene-step-model",
+          "title": "Step model, stable identity, and typed boundary",
+          "points": 2.5625,
+          "evaluator": "llm-source-review",
+          "job": "scene-kit",
+          "criteria": [
+            "scene-step-narration-and-identity",
+            "scene-order-derived-numbering",
+            "scene-typed-payload-boundary"
+          ],
+          "tiers": {
+            "scene-step-narration-and-identity": "critical",
+            "scene-order-derived-numbering": "major",
+            "scene-typed-payload-boundary": "minor"
+          },
+          "review_guidance": [
+            "For scene-order-derived-numbering, the step number must be rendered as visible on-screen text derived from the step's position in the step array. An aria-label, title or data attribute, or visually hidden text is not on screen; fail when the position-derived number appears only there.",
+            "For scene-step-narration-and-identity, a stable id is one that stays attached to the same step when steps are inserted, removed, or reordered, as the fixture's step model requires beside its order-derived numbering. An id authored with the step (a literal string or a key the step declares) is stable. An id computed from the step's array position or index, such as a template built from the beat number, is not stable and fails, even when the presentation never reorders its steps."
+          ]
+        },
+        {
+          "id": "scene-entity-transitions",
+          "title": "Entity transitions and persistent grouped scenes",
+          "points": 6.375,
+          "evaluator": "llm-source-review",
+          "job": "scene-kit",
+          "criteria": [
+            "entity-persisting-morph",
+            "entity-ungrouped-transition-morph",
+            "entity-newcomer-after-settle",
+            "entity-departing-exit",
+            "grouped-scene-updates-in-place",
+            "grouped-continuing-entities-not-newcomers",
+            "grouped-intentional-composition"
+          ],
+          "tiers": {
+            "entity-persisting-morph": "critical",
+            "entity-ungrouped-transition-morph": "major",
+            "entity-newcomer-after-settle": "major",
+            "entity-departing-exit": "major",
+            "grouped-scene-updates-in-place": "critical",
+            "grouped-continuing-entities-not-newcomers": "major",
+            "grouped-intentional-composition": "minor"
+          },
+          "review_guidance": [
+            "For entity-newcomer-after-settle, the fixture design sequences newcomers by timing: its constants include a layout transition duration and an entry delay, and Appear holds a newcomer until persisting entities settle. Credit a newcomer entry whose delay, or completion wait, is at least as long as the continuing entities' layout transition and that applies to the newcomer's entry only. A fixed configured delay that meets this is the fixture's own mechanism; do not require a shared settlement contract or an observed completion signal.",
+            "Fail entity-newcomer-after-settle when the newcomer entry can start before the continuing layout transition ends, when the same delay is also applied to the continuing entities' layout motion so both start late together, or when any entity the delivered sample introduces has no entry motion at all. Cite the delay value, the layout duration, and the elements each one is applied to.",
+            "Judge the visible entry, not each wrapper. When an outer wrapper starts with no delay but everything it reveals stays invisible until an inner node's entry, delayed at least as long as the continuing layout transition, begins (for example an outer Appear with delay 0 around a Box whose opacity starts at 0 and is delayed by the entry delay), the newcomer's visible entry starts after the persisting entities settle and the criterion passes.",
+            "Require departing and grouped-scene behavior to be exercised by implementation or focused tests, not inferred only from component names.",
+            "For entity-departing-exit, pass when the kit provides an exit mechanism that keeps a departing entity rendered while it animates out, and the delivered sample renders its authored entities through that mechanism. An opt-in exit wrapper the sample uses satisfies it; do not additionally require the scene-kit boundary to preserve entities removed by plain conditional rendering, or a focused integration test, unless the mechanism itself remains ambiguous.",
+            "For entity-newcomer-after-settle, inspect the exact continuing-entity motion path and newcomer entry path, and compare the newcomer's delay with the layout duration the continuing path actually uses. Judge every entity the delivered sample introduces on a step, meaning each element the sample gives a stable identity, such as an entity id, a layout id, or an entry in its entity registry, by whatever path renders it. Inspect each step's newly rendered entities in the sample, including conditional content rendered through plain markup or a non-motion component outside the kit's animated primitives; a delayed kit path that most newcomers use does not excuse one that appears with no entry motion. A structural wrapper the sample gives no identity is not an entity for this criterion.",
+            "For entity-persisting-morph, an implemented persisting layout-animation mechanism combined with stable entity identity is technical proof; do not require the sample deck to rearrange an entity or require a focused test unless the claimed mechanism itself remains ambiguous.",
+            "Do not double-deduct entity-persisting-morph solely because entity-newcomer-after-settle fails; score the implemented persisting layout mechanism independently.",
+            "Do not deduct entity-persisting-morph for a step transition that hides the morph across ungrouped steps; that defect is scored only under entity-ungrouped-transition-morph.",
+            "For entity-ungrouped-transition-morph, judge the kit's step transition between two consecutive steps that do not share a scene group, together with the kit's entity primitives that render the persisting entity: fail when an entity with the same identity in both steps vanishes and reappears instead of morphing. One cause is a transition that removes the outgoing step before mounting the incoming one, for example AnimatePresence with mode=\"wait\" around per-step content. Another is a transition that keeps both steps mounted while the entity primitives hide the incoming copy until the outgoing copy has faded out, for example a fixed initial opacity of 0 with an entrance delay as long as the step transition, applied to the layout animation as well. Pass when the step transition keeps both steps' entities present together and the persisting entity stays visible while it animates from its old state to its new state in place, for example AnimatePresence with mode=\"popLayout\", or with mode=\"sync\" when the outgoing step is taken out of layout flow. The mode alone does not establish a pass.",
+            "For grouped-continuing-entities-not-newcomers, credit an explicit implementation showing that the grouped scene and continuing child state remain mounted across updates and do not replay newcomer state. Require another focused test only when that implementation path is not explicit."
+          ]
+        },
+        {
+          "id": "scene-modes-and-navigation",
+          "title": "Present/browse modes, navigation, controls, and boundaries",
+          "points": 7.3125,
+          "evaluator": "llm-source-review",
+          "job": "scene-kit",
+          "criteria": [
+            "mode-present-title-focused",
+            "mode-browse-reading-focused",
+            "mode-toggle-preserves-position",
+            "navigation-keyboard",
+            "navigation-touch-swipe",
+            "navigation-direct-jump",
+            "navigation-active-state",
+            "navigation-controls-keep-keys",
+            "navigation-clamp-start",
+            "navigation-clamp-end"
+          ],
+          "tiers": {
+            "mode-present-title-focused": "major",
+            "mode-browse-reading-focused": "major",
+            "mode-toggle-preserves-position": "major",
+            "navigation-keyboard": "critical",
+            "navigation-touch-swipe": "major",
+            "navigation-direct-jump": "major",
+            "navigation-active-state": "major",
+            "navigation-controls-keep-keys": "major",
+            "navigation-clamp-start": "minor",
+            "navigation-clamp-end": "minor"
+          },
+          "review_guidance": [
+            "For navigation-touch-swipe, the fixture requires that a horizontal swipe navigates: a swipe to the left advances one step and a swipe to the right goes back one step. Credit a touch or pointer handler that compares start and end horizontal positions, maps the direction exactly that way, and calls the presentation's next or previous navigation. Any reasonable distance threshold is acceptable.",
+            "For navigation-touch-swipe, do not require rejection of vertical scrolling or multi-touch gestures, or focused tests of that rejection: the fixture spec, design, and test plan do not state it. Fail only when swipe navigation is absent, inverted, not wired to navigation, or moves by other than one step.",
+            "Equivalent semantic current-state attributes and stable active hooks satisfy the active-state contract; judge behavior rather than exact token spelling.",
+            "For mode-browse-reading-focused, require the active step's title, multi-line caption, wide-viewport table of contents, previous/next controls, and progress indicators exactly as specified.",
+            "For mode-present-title-focused, the marker is a visible indicator of the active step's position or section rendered beside the title in present mode, such as the step number, the section or era label, or a progress row; the fixture design places it in the header's logo/marker row. Fail when present mode renders the title without any such visible indicator, including when the only position indicator is hidden in present mode.",
+            "Browse mode does not require rendering all steps at once or a separate full-deck reading stack; fail only when the required active-step reading chrome is absent.",
+            "For navigation-controls-keep-keys, focused controls retain their own keyboard semantics: presentation navigation must not intercept the step-navigation keys (Right, Space, PageDown, Left, PageUp) while focus is on an interactive control, so they drive that control rather than also advancing the deck. The fixture scenario names navigation keys only; the mode-toggle shortcut is not part of this criterion. Judge the interactive controls the delivered presentation renders and any native interactive element the guard covers (buttons, links, form fields); do not fail the criterion for a hypothetical control type, such as an ARIA slider, that the delivered presentation never renders. Do not interpret this criterion as requiring global presentation navigation to run from a focused control."
+          ]
+        },
+        {
+          "id": "scene-fixed-canvas-uniform-fit",
+          "title": "Fixed-canvas uniform viewport fitting",
+          "points": 0.75,
+          "evaluator": "llm-source-review",
+          "job": "scene-kit",
+          "criteria": [
+            "canvas-uniform-scaling"
+          ],
+          "tiers": {
+            "canvas-uniform-scaling": "major"
+          },
+          "review_guidance": [
+            "Judge whether the delivered fit mechanism scales the authored canvas by one factor on both axes and keeps it inside its available bounds as the viewport shrinks. Cite the fit computation and its consumer. Do not require a particular rendering at an extreme viewport: an unreadably small viewport is not a presentation viewport, and how the kit degrades there is a design judgment for human review.",
+            "A minimum-scale floor or other lower clamp on the fit factor is not by itself a failure, even when it could exceed the available bounds at an unreadably small viewport. Judge fit at the suite's reference viewports, 1280×720 (wide) and 390×844 (narrow), in both present and browse mode. Fail only when, at a reference viewport, the computed scale places the canvas outside the area the stage actually occupies, for example because the fit is computed from the window instead of that area or reserves less space than the rendered chrome takes; cite that computation and the arithmetic at the reference viewport. Do not fail for another viewport size."
+          ]
+        },
+        {
+          "id": "scene-fixed-canvas",
+          "title": "Fixed-canvas authored dimensions",
+          "points": 0.25,
+          "evaluator": "llm-source-review",
+          "job": "scene-kit",
+          "criteria": [
+            "canvas-default-composition-area"
+          ],
+          "tiers": {
+            "canvas-default-composition-area": "minor"
+          },
+          "review_guidance": [
+            "Require the scene kit to compose the diagram on a fixed design area that it scales uniformly to fit the viewport; any default composition area that meets this passes, and you should inspect the values the rendered stage actually consumes."
+          ]
+        },
+        {
+          "id": "scene-style-and-attribution",
+          "title": "Style ownership, hooks, framework neutrality, and attribution",
+          "points": 2.75,
+          "evaluator": "llm-source-review",
+          "job": "scene-kit",
+          "criteria": [
+            "style-kit-hooks",
+            "style-unstyled-kit-output",
+            "style-framework-optional",
+            "style-coordinate-heavy-diagrams",
+            "attribution-default-link",
+            "attribution-styling-hook",
+            "attribution-no-unrequested-brand"
+          ],
+          "tiers": {
+            "style-kit-hooks": "major",
+            "style-unstyled-kit-output": "major",
+            "style-framework-optional": "minor",
+            "style-coordinate-heavy-diagrams": "minor",
+            "attribution-default-link": "minor",
+            "attribution-styling-hook": "minor",
+            "attribution-no-unrequested-brand": "minor"
+          },
+          "review_guidance": [
+            "For style-kit-hooks, a spacing scale is a spacing system the kit makes presentations adopt, such as spacing tokens, theme variables, or spacing it applies to presentation content. Fixed insets, offsets, padding, and gaps the kit uses to lay out and place its own chrome regions and controls are the chrome-placement geometry the requirement calls layout behavior, not a visual style system; when presentation-owned CSS can override them through the hooks, they do not fail this criterion.",
+            "For attribution-default-link, the default link target must be the and-scene GitHub repository, https://github.com/Codagent-AI/and-scene, the fixture's own repository. A link to another owner or repository path, such as a guessed organization, does not point to the and-scene repository and fails. The deterministic attribution-default-link fact reports which GitHub targets the source contains.",
+            "For attribution-default-link, any attribution the scene kit shows must be a link the presentation can restyle, reposition, or hide through the kit's styling hook. Judge the kit's default only; presentation-owned or host-owned CSS that restyles it does not fail this criterion.",
+            "For attribution-styling-hook, a stable class or data hook targetable by presentation-owned or host-owned CSS satisfies the contract. It does not require a caller-provided className or style prop.",
+            "For attribution-no-unrequested-brand, verify that the kit renders no unrequested brand mark when the host supplies none. Do not fail for the absence of a kit brand slot or input."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "presentation-skill-correctness",
+      "title": "Presentation skill correctness",
+      "points": 7,
+      "tier_weights": {
+        "critical": 0.75,
+        "major": 0.375,
+        "minor": 0.125
+      },
+      "subcomponents": [
+        {
+          "id": "skill-requirement-gathering",
+          "title": "Requirement gathering and proceeding with partial detail",
+          "points": 1.25,
+          "evaluator": "llm-source-review",
+          "job": "presentation-skill",
+          "criteria": [
+            "skill-missing-details-one-at-a-time",
+            "skill-partial-detail-proceeds",
+            "skill-complete-prompt-proceeds"
+          ],
+          "tiers": {
+            "skill-missing-details-one-at-a-time": "critical",
+            "skill-partial-detail-proceeds": "major",
+            "skill-complete-prompt-proceeds": "minor"
+          },
+          "review_guidance": [
+            "The normative skill instructions are the implementation for these agent-interaction policies. Credit explicit, unambiguous instructions that require one-at-a-time questioning, permit proceeding with partial detail, and bypass redundant questions for a complete prompt.",
+            "This subcomponent does not require a separate interaction driver or revision-bound transcript unless the instructions are ambiguous or contradictory."
+          ]
+        },
+        {
+          "id": "skill-scaffolding",
+          "title": "Scaffold detection, location, dependencies, and style neutrality",
+          "points": 2.625,
+          "evaluator": "llm-source-review",
+          "job": "presentation-skill",
+          "criteria": [
+            "skill-empty-directory-scaffold",
+            "skill-already-scaffolded",
+            "skill-partial-scaffold",
+            "skill-scaffold-style-neutral",
+            "skill-template-path-resolution",
+            "skill-monorepo-target",
+            "skill-standalone-target",
+            "skill-nonempty-confirmation"
+          ],
+          "tiers": {
+            "skill-empty-directory-scaffold": "critical",
+            "skill-already-scaffolded": "major",
+            "skill-partial-scaffold": "major",
+            "skill-scaffold-style-neutral": "minor",
+            "skill-template-path-resolution": "major",
+            "skill-monorepo-target": "major",
+            "skill-standalone-target": "minor",
+            "skill-nonempty-confirmation": "minor"
+          },
+          "review_guidance": [
+            "The fixture design makes SKILL.md the agent procedure for scaffold detection, target resolution, and confirmation, and its test plan verifies those agent branches through agent acceptance runs rather than unit tests. For skill-already-scaffolded, skill-partial-scaffold, skill-monorepo-target, skill-standalone-target, and skill-nonempty-confirmation, credit an explicit SKILL.md instruction that states that branch's detection condition and its required action. Do not require an executable test, driver, or transcript for these branches.",
+            "For skill-nonempty-confirmation, the fixture's condition is a non-empty project that lacks the scene kit or the presentation index, which includes a partially scaffolded project. Credit an instruction that requires stating the target location and waiting for the user's confirmation before scaffolding into a non-empty project, whatever word it uses for that project (unscaffolded, missing scaffolding, needing scaffolding); read such a word as covering every project the skill would scaffold into. Fail only when no such instruction exists, or when an instruction explicitly lets the skill write scaffolding into a non-empty project without that confirmation. Interactive confirmation needs no live human or test.",
+            "Fail an instruction-governed scaffold criterion when its instruction is missing, ambiguous, or contradicts the scenario, or when a delivered helper script or template implements that branch differently. A generic instruction such as scaffold if needed does not state a branch.",
+            "For skill-template-path-resolution, credit an explicit instruction or helper that resolves template paths from the directory containing SKILL.md rather than from the caller's working directory.",
+            "For skill-empty-directory-scaffold, require that the bootstrap template contains the build setup, scene kit, and presentation index with the required dependency set, that SKILL.md directs a full scaffold and dependency installation for an empty or unscaffolded target, and a test that materializes the bootstrap template in a fresh temporary location and builds it, as the fixture test plan's integration coverage describes. Any materialization pattern counts, including creating a temporary directory and copying the template into a new app path inside it; a test name or filename alone is not that test.",
+            "For skill-scaffold-style-neutral, inspect the bootstrap template's dependencies and styles: credit a scaffold that adds no styling framework and defines no default presentation colors, fonts, spacing scale, card or button styles, borders, shadows, or theme tokens.",
+            "For skill-empty-directory-scaffold, the scene kit in the bootstrap template is a snapshot of the canonical src/presentation-kit/, which the fixture requires to stay aligned with it. Fail when a non-test scene-kit file in the bootstrap template differs in behavior or public types from its canonical counterpart. Cite both files. Formatting-only differences do not fail.",
+            "For skill-empty-directory-scaffold, the dependencies needed for render verification include the Playwright Chromium browser, which the fixture design installs in the verify step. Credit SKILL.md, the bootstrap scripts, or the verify step when they install Chromium or check that it is available before the render check. Fail when none of them installs it or checks for it. A sentence saying Chromium is required, and a browser launch that simply fails when it is missing, are neither an install nor an availability check."
+          ]
+        },
+        {
+          "id": "skill-presentation-lifecycle",
+          "title": "Create, modify, route, and preserve presentations",
+          "points": 2,
+          "evaluator": "llm-source-review",
+          "job": "presentation-skill",
+          "criteria": [
+            "skill-new-presentation-routed",
+            "skill-presentation-owns-style",
+            "skill-existing-presentations-preserved",
+            "skill-modify-ambiguous-target",
+            "skill-scoped-modification"
+          ],
+          "tiers": {
+            "skill-new-presentation-routed": "critical",
+            "skill-presentation-owns-style": "major",
+            "skill-existing-presentations-preserved": "major",
+            "skill-modify-ambiguous-target": "minor",
+            "skill-scoped-modification": "major"
+          },
+          "review_guidance": [
+            "The normative skill instructions are the implementation for target selection, preservation, and scoped editing behavior. Credit explicit instructions that preserve existing presentations, resolve ambiguous modification targets before editing, and confine edits to the chosen presentation.",
+            "Implemented registry, routing, and presentation-owned styling mechanisms must still support those instructions; do not demand a separate multi-turn interaction transcript when the policy and supporting mechanisms are explicit."
+          ]
+        },
+        {
+          "id": "skill-self-verification",
+          "title": "Self-verification and fixing failures before completion",
+          "points": 1.125,
+          "evaluator": "llm-source-review",
+          "job": "presentation-skill",
+          "criteria": [
+            "skill-checks-run-before-done",
+            "skill-failures-fixed-before-success"
+          ],
+          "tiers": {
+            "skill-checks-run-before-done": "critical",
+            "skill-failures-fixed-before-success": "major"
+          },
+          "review_guidance": [
+            "The normative skill instructions are the implementation of the agent's completion gate. Credit explicit instructions that require build, render, and browser composition checks before success and require fixing and rerunning failures before completion.",
+            "Do not require an automated agent-remediation loop or interaction transcript; the verification tooling itself is scored separately for its executable technical behavior.",
+            "For skill-failures-fixed-before-success, credit a general instruction to fix failures and re-run the checks, together with a rule against reporting success while a build or render failure remains; fixing visual composition findings and re-inspecting satisfies the visual check. Do not fail it for a failure mode of a check tool the instructions do not mention. It need not name each check type. Fail it when the instructions allow completing with a failing check, or name a failure type that may be reported instead of fixed. A pass/fail field in a completion report format is not a permission to complete with a failing check.",
+            "For skill-checks-run-before-done, the fixture's self-verify requirement says that the visual composition check inspects the first step, the last step, and any dense or key steps, and that responsive-sensitive presentations are also checked at a narrow viewport. Fail when the instructions' visual composition check never directs a narrow-viewport check for a responsive-sensitive presentation. The project-local screenshot helper need not capture the narrow viewport, because the fixture defines it at a standard desktop viewport; any browser view satisfies the narrow check."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "verification-tool-correctness",
+      "title": "Verification tool correctness",
+      "points": 7,
+      "tier_weights": {
+        "critical": 1.25,
+        "major": 0.625,
+        "minor": 0.375
+      },
+      "subcomponents": [
+        {
+          "id": "verification-missing-sample",
+          "title": "Detects a missing reference sample",
+          "points": 0.375,
+          "evaluator": "llm-source-review",
+          "job": "verification-tooling",
+          "criteria": [
+            "verification-missing-sample-fails"
+          ],
+          "tiers": {
+            "verification-missing-sample-fails": "minor"
+          },
+          "review_guidance": [
+            "The fixture design's verification asserts the canonical sample is present with every normative title and caption in order before rendering, and its end-to-end plan requires a missing or out-of-order sample to exit non-zero with output naming the failed phase. A missing sample means the reference presentation is not registered, or its outline or steps content (titles, captions, steps) is absent or out of order. A non-zero exit whose output names the build or sample phase satisfies the criterion. Do not construct partial-deletion scenarios, such as removing one imported file while its import remains. Credit a verifier that fails a missing sample with a non-zero exit at a check that reports the sample as missing or not matching the outline. A failure that only surfaces later as an unrelated browser or render timeout does not name the failed phase and fails this criterion. A dedicated missing-sample regression test is not required when that check is explicit."
+          ]
+        },
+        {
+          "id": "verification-addressing-and-errors",
+          "title": "Preview addressing and runtime/step error detection",
+          "points": 3.25,
+          "evaluator": "llm-source-review",
+          "job": "verification-tooling",
+          "criteria": [
+            "verification-loopback-reachability",
+            "verification-preview-process-ownership",
+            "verification-console-page-error-fails",
+            "verification-step-error-fails"
+          ],
+          "tiers": {
+            "verification-loopback-reachability": "minor",
+            "verification-preview-process-ownership": "minor",
+            "verification-console-page-error-fails": "critical",
+            "verification-step-error-fails": "critical"
+          },
+          "review_guidance": [
+            "Score preview ownership only under verification-preview-process-ownership. Score loopback reachability only under verification-loopback-reachability, based on whether preview binding, readiness probes, and browser URLs consistently agree on the loopback address.",
+            "For verification-preview-process-ownership, credit either of these mechanisms: (a) the verifier picks a fresh port it reserved itself (for example an ephemeral port), starts the preview on it with a strict port, and takes readiness from the spawned child's own announcement of that address, with the child exiting before readiness rejecting it; or (b) readiness polling of the preview address is raced against the spawned child's exit, so the child's exit at any point before readiness fails verification.",
+            "Fail verification-preview-process-ownership when readiness comes from HTTP polling of a fixed or reused port and the only ownership check is the child's liveness sampled before each request or after a fixed delay: a stale server already listening there answers before the child's exit is observed. A strict port alone is likewise insufficient.",
+            "For verification-console-page-error-fails, the source must fail on both console errors and uncaught page errors and report the step. Executable evidence needs one representative browser-error test, either a console error or a page error, that asserts a non-zero exit and the offending step, as the fixture's end-to-end plan describes; separate tests for each error kind are not required.",
+            "For verification-step-error-fails, require a test of a step that fails to render or advance that asserts a non-zero exit and the offending step.",
+            "For verification-step-error-fails, the verifier must not treat a missing, zero, or non-numeric data-step-count or data-step-index as progress. Fail when the transition check converts an absent or non-numeric hook into a number that still satisfies its comparison (for example Number(null) === 0 on the first step). Also fail when an unreadable step count makes the verifier step through no steps and still pass. Cite the comparison. The inspect helper's handling of the same hooks is scored by engineering-inspect-fails-loudly, not here."
+          ]
+        },
+        {
+          "id": "verification-capture",
+          "title": "Complete, settled screenshot capture",
+          "points": 1.875,
+          "evaluator": "llm-source-review",
+          "job": "verification-tooling",
+          "criteria": [
+            "quality-project-local-screenshot-helper",
+            "visual-helper-captures-steps",
+            "visual-helper-settled-screenshots"
+          ],
+          "tiers": {
+            "quality-project-local-screenshot-helper": "major",
+            "visual-helper-captures-steps": "major",
+            "visual-helper-settled-screenshots": "major"
+          },
+          "review_guidance": [
+            "For visual-helper-settled-screenshots, the fixture requires that after advancing a step the helper waits for the configured settle interval before capturing. Credit a helper that applies a configured settle interval (a named constant or an option) after each step advance and before each capture, or that waits on an observed completion condition. A fixed configured interval satisfies the criterion; do not require it to be derived from or consumed by the runtime motion configuration.",
+            "Fail visual-helper-settled-screenshots when the capture runs immediately after advancing, when the wait happens only once rather than before each capture, or when no settle interval is applied.",
+            "For visual-helper-captures-steps, require that the helper enumerates every produced step of a registered presentation, captures each at one standard desktop viewport, and writes each image under a predictable project-local artifact directory, plus a test that runs the helper or its capture loop and asserts one screenshot per step by count, file names, or file contents. Asserting the expected files is sufficient; the test need not compare pixels.",
+            "The project-local screenshot helper is a separate inspection command from the build and render verifier. For quality-project-local-screenshot-helper, credit an implemented project-local helper that the skill can invoke; this criterion does not require the build or render verifier itself to invoke that helper."
+          ]
+        },
+        {
+          "id": "verification-warnings",
+          "title": "Overlap, active-state, and attribution warnings",
+          "points": 1.5,
+          "evaluator": "llm-source-review",
+          "job": "verification-tooling",
+          "criteria": [
+            "visual-helper-overlap-warning",
+            "visual-helper-allow-overlap",
+            "visual-helper-active-state-warning",
+            "visual-helper-attribution-warning"
+          ],
+          "tiers": {
+            "visual-helper-overlap-warning": "minor",
+            "visual-helper-allow-overlap": "minor",
+            "visual-helper-active-state-warning": "minor",
+            "visual-helper-attribution-warning": "minor"
+          },
+          "review_guidance": [
+            "Require executable warning regressions or verified browser evidence; token presence and uncalled helper functions are insufficient.",
+            "Evidence from an earlier revision may count only when verified lineage establishes that revision as an ancestor of the final SHA, hashes prove the relevant warning implementation is unchanged, and retained raw executable output demonstrates the behavior. A narrative claim that an earlier pass verified it is insufficient.",
+            "A passing warning criterion must cite a focused test whose setup triggers that exact warning and whose assertions verify the warning output or retained raw executable evidence. A generic alignment test filename or source inspection alone is insufficient.",
+            "Active-state comparison may use aria-current or any stable active-state hook, but it must compare the rendered styles of the active step indicator with inactive step indicators. Fail visual-helper-active-state-warning when the helper compares the active indicator with a control that is not a step indicator, such as the Previous or Next control.",
+            "A warning identifies an element when its output names something a reader can find on the page: the step, plus for each element its visible text, or for an element without visible text its accessible name, a stable hook or data attribute, or a selector path. For visual-helper-active-state-warning the warning must say which chrome is affected (the progress indicator or the table-of-contents entry); a stable hook or selector of that chrome, such as a progress or table-of-contents data attribute, says which chrome it is. An empty string, a bare tag name, or a generic label such as element for a textless element does not identify it and fails the criterion whose warning prints it.",
+            "For visual-helper-overlap-warning, the fixture covers visible text or presentation chrome overlapping another visible text or chrome element, so presentation chrome counts whether or not it contains text (for example progress dots or icon-only controls). Require that the helper compares those elements on each step and prints an advisory warning naming the step and the overlapping elements, with a focused test whose setup creates an unmarked collision and asserts that warning. A comparison that drops chrome without text content fails only when the candidate's presentation renders textless chrome; when every chrome element the candidate renders contains text, that omission does not fail the criterion. Do not require detection of any collision beyond overlapping visible text or chrome elements.",
+            "For visual-helper-allow-overlap, the fixture exempts elements inside a subtree marked as allowing overlap. Skipping every pair in which at least one element is inside a marked subtree is a correct reading; do not require the helper to keep reporting collisions between a marked element and an unmarked one. Require a focused test whose setup marks an overlapping subtree and asserts that no overlap warning is reported for it."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineering-quality",
+      "title": "Engineering quality beyond the spec",
+      "points": 8,
+      "tier_weights": {
+        "critical": 1.375,
+        "major": 0.625,
+        "minor": 0.375
+      },
+      "subcomponents": [
+        {
+          "id": "engineering-input-hygiene",
+          "title": "Input hygiene",
+          "points": 0.75,
+          "evaluator": "browser-judge",
+          "criteria": [
+            "input-modifier-keys-pass-through",
+            "input-swipe-from-control-ignored"
+          ],
+          "tiers": {
+            "input-modifier-keys-pass-through": "minor",
+            "input-swipe-from-control-ignored": "minor"
+          }
+        },
+        {
+          "id": "engineering-verification-tooling-robustness",
+          "title": "Verification tooling robustness",
+          "points": 3,
+          "evaluator": "llm-source-review",
+          "job": "engineering-quality",
+          "criteria": [
+            "engineering-preview-terminated-on-every-exit",
+            "engineering-preview-readiness-bounded",
+            "engineering-bootstrap-scripts-generic",
+            "engineering-inspect-fails-loudly",
+            "engineering-checks-read-rendered-page",
+            "engineering-diagnostics-cover-presentation"
+          ],
+          "tiers": {
+            "engineering-preview-terminated-on-every-exit": "major",
+            "engineering-preview-readiness-bounded": "major",
+            "engineering-bootstrap-scripts-generic": "major",
+            "engineering-inspect-fails-loudly": "minor",
+            "engineering-checks-read-rendered-page": "minor",
+            "engineering-diagnostics-cover-presentation": "minor"
+          },
+          "review_guidance": [
+            "Each criterion's eval-owned requirement states its complete pass condition. Score each defect once, under the one criterion whose clause names it.",
+            "For engineering-preview-terminated-on-every-exit, inspect the repository verify and inspect scripts and the skill's bootstrap template copies. Trace every exit path after the preview starts: success, a failing check, a browser launch failure, and an error thrown after the preview started. Each must terminate the preview server process itself and await its exit, or close a server started through Vite's preview() API. Fail when cleanup kills only an npm or npx wrapper while the server it spawned keeps running, when a browser launch failure or a later error leaves the preview running, or when any copy lacks such cleanup. Closing a preview() server in a finally path that every exit passes through satisfies the criterion.",
+            "Do not re-score preview ownership: whether readiness is connected to the scripts' own child, and whether verification fails when that child exits, is scored only by verification-preview-process-ownership. Termination on every exit path belongs to engineering-preview-terminated-on-every-exit; bounded readiness, building before previewing, and ready-URL parsing belong to engineering-preview-readiness-bounded.",
+            "For engineering-preview-readiness-bounded, fail when any readiness wait has no timeout, when verify starts the preview while the build it verifies is still running, or when readiness depends on the server's printed ready URL and the matching breaks on ANSI colour codes or on output split across chunks, such as a per-chunk regular expression over raw coloured output. When readiness does not parse printed output, for example a preview() API call that resolves with its address, the parsing clause does not apply.",
+            "For engineering-bootstrap-scripts-generic, judge only the skill's bootstrap template copies of verify and inspect. Fail when they check only a hardcoded sample route or only the first registry entry, when an unregistered slug times out or is accepted through the landing-page fallback instead of being rejected with a clear non-zero failure, or when they embed the repository reference sample's titles, captions, routes, or defaults. Sample assertions belong only in the repository's own verify script.",
+            "For engineering-inspect-fails-loudly, judge only the delivered inspect helper. Fail when it proceeds after reading a missing, zero, or non-numeric step count or step index, when it captures a step without first confirming that the reported step index equals the step it meant to reach, or when it can exit successfully with zero captures. Verify's detection of a non-advancing step stays scored by verification-step-error-fails and the hard gates; do not score it here.",
+            "For engineering-checks-read-rendered-page, fail when verification checks the sample's titles, captions, outline order, or registration by matching regular expressions over source text; pass when it reads them from the rendered page at each step. Hardening a source parser against shorthand properties, comments, quote styles, or other syntax that never occurs earns no credit.",
+            "For engineering-diagnostics-cover-presentation, fail when the inspect helper runs its diagnostics only on one step, for example only on the final step, rather than on every captured step, or when captures and diagnostics cover only a cropped scene so the caption, table of contents, and controls are never inspected. Whether each warning fires, and how far allow-overlap suppression reaches, stay scored by the visual-helper-* criteria. The performance of the overlap scan does not affect the verdict.",
+            "Validator noise is not rewarded. No engineering-quality criterion awards credit for, or fails for the absence of: hardening for runtime step-list changes beyond clamping at the ends; registry or source-parser hardening against syntax that never occurs; routing hardening for hosting concerns the proposal excludes; longer fixed settle delays; or arrow keys driving the deck while an interactive control holds focus."
+          ]
+        },
+        {
+          "id": "engineering-skill-instructions-and-templates",
+          "title": "Skill instructions and templates",
+          "points": 2.5,
+          "evaluator": "llm-source-review",
+          "job": "engineering-quality",
+          "criteria": [
+            "engineering-templates-build-at-destination",
+            "engineering-skill-description-triggers",
+            "engineering-skill-out-of-scope-redirects",
+            "engineering-skill-completion-report"
+          ],
+          "tiers": {
+            "engineering-templates-build-at-destination": "critical",
+            "engineering-skill-description-triggers": "minor",
+            "engineering-skill-out-of-scope-redirects": "minor",
+            "engineering-skill-completion-report": "minor"
+          },
+          "review_guidance": [
+            "Each criterion's eval-owned requirement states its complete pass condition. Score each defect once, under the one criterion whose clause names it. The normative SKILL.md instructions and the templates the skill materializes are the implementation judged here.",
+            "For engineering-templates-build-at-destination, establish for every step, presentation, and inspect template the skill materializes that it would type-check and build where the skill documents it lands: trace each template's relative imports, CSS imports, required props, and field names against the bootstrapped project layout and the kit's types, or cite a focused test that materializes the templates into a fresh bootstrap and runs the type check and build. Fail when a relative import resolves outside the project's src directory from its documented destination, a CSS import path does not resolve, a template renders a kit primitive without a prop the kit's types require, or a field name does not match the kit's types. Whether the skill finds its templates at all is scored only by skill-template-path-resolution; do not re-score it here.",
+            "For engineering-skill-description-triggers, read the SKILL.md frontmatter description. A first-person description, one that never says when to use the skill, or one that quotes fewer than two example user phrases fails. A third-person description that says when to use the skill and quotes trigger phrases such as create a presentation and add steps passes.",
+            "For engineering-skill-out-of-scope-redirects, require a SKILL.md section that lists each of the proposal's exclusions: PowerPoint or Keynote output, PDF or image export, a visual editor, and hosting. Each needs a redirect telling the agent what to do or suggest instead. Fail when the section is missing, omits an exclusion, or gives no redirect for any one of them, such as hosting.",
+            "No existing criterion scores the description or the out-of-scope section; score them only here.",
+            "For engineering-skill-completion-report, require a completion-report template naming the presentation route, the files changed, the build, render, and inspect results, and the advisory warnings that remain. Fail when SKILL.md tells the agent to report completion without defining the report's contents, or omits any of those items. Whether the checks run and pass before completion is scored only by skill-checks-run-before-done and skill-failures-fixed-before-success; score only the report template here.",
+            "Validator noise is not rewarded. No engineering-quality criterion awards credit for, or fails for the absence of: hardening for runtime step-list changes beyond clamping at the ends; registry or source-parser hardening against syntax that never occurs; routing hardening for hosting concerns the proposal excludes; longer fixed settle delays; or arrow keys driving the deck while an interactive control holds focus."
+          ]
+        },
+        {
+          "id": "engineering-presentation-code-and-tests",
+          "title": "Presentation code and tests",
+          "points": 1.75,
+          "evaluator": "llm-source-review",
+          "job": "engineering-quality",
+          "criteria": [
+            "engineering-presentation-css-scoped",
+            "engineering-typed-kit-primitives",
+            "engineering-tests-wait-on-state",
+            "engineering-tests-isolate-resources"
+          ],
+          "tiers": {
+            "engineering-presentation-css-scoped": "major",
+            "engineering-typed-kit-primitives": "minor",
+            "engineering-tests-wait-on-state": "minor",
+            "engineering-tests-isolate-resources": "minor"
+          },
+          "review_guidance": [
+            "Each criterion's eval-owned requirement states its complete pass condition. Score each defect once, under the one criterion whose clause names it.",
+            "For engineering-presentation-css-scoped, inspect every stylesheet a presentation owns. Each selector must sit under that presentation's own root class or hook, or come from a CSS module; this includes selectors that target the kit's hook classes or attributes, such as `.presentation-attribution`. Fail when a presentation-owned stylesheet has an unscoped rule, which leaks to other presentations after client-side navigation. A host-owned global stylesheet may style kit hooks without a presentation scope. Presentation CSS may restyle kit hooks, as attribution-styling-hook and skill-presentation-owns-style allow; this criterion adds only that such a rule is scoped. Do not score readability or narrow-viewport layout here.",
+            "For engineering-typed-kit-primitives, fail when a public primitive types its props as an untyped bag such as Record<string, unknown> instead of the rendered element's props, when it spreads caller props after setting its layoutId, entity identifier, or a data-presentation-* hook so a caller can override them, or when it forwards a kit-only prop, such as a label, to the DOM element. Typed primitives that apply identity hooks after caller props and strip kit-only props pass.",
+            "For engineering-tests-wait-on-state, judge the delivered automated tests that drive a browser. Fail when any waits a fixed number of milliseconds, or calls another fixed sleep, for a transition before asserting the step, or treats a call that returns immediately, such as reading an element count, as if it waited. Pass when every such wait is a polling or auto-waiting assertion on observable state, such as the step index or a settled signal.",
+            "For engineering-tests-isolate-resources, judge the delivered automated tests that start a preview server or a browser. Fail when two test files start a preview on the same hardcoded port, or when a test kills only the npx wrapper and leaves the preview server running. Pass when ports are allocated dynamically and every started process is terminated. A hardcoded browser path or a missing browser installation is not scored here.",
+            "Validator noise is not rewarded. No engineering-quality criterion awards credit for, or fails for the absence of: hardening for runtime step-list changes beyond clamping at the ends; registry or source-parser hardening against syntax that never occurs; routing hardening for hosting concerns the proposal excludes; longer fixed settle delays; or arrow keys driving the deck while an interactive control holds focus."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "testing-evidence-quality",
+      "title": "Testing-evidence quality",
+      "points": 4,
+      "tier_weights": {
+        "major": 1
+      },
+      "reference_applicable": false,
+      "subcomponents": [
+        {
+          "id": "testing-evidence-quality-criteria",
+          "title": "Verified candidate-produced testing evidence",
+          "points": 4,
+          "evaluator": "llm-evidence-review",
+          "job": "testing-evidence",
+          "criteria": [
+            "testing-evidence-traceable-coverage",
+            "testing-evidence-usable-proof",
+            "testing-evidence-final-revision-applicability",
+            "testing-evidence-complete-honest-record"
+          ],
+          "tiers": {
+            "testing-evidence-traceable-coverage": "major",
+            "testing-evidence-usable-proof": "major",
+            "testing-evidence-final-revision-applicability": "major",
+            "testing-evidence-complete-honest-record": "major"
+          },
+          "criterion_definitions": {
+            "testing-evidence-traceable-coverage": "Pass when verified candidate evidence shows that the user-visible behaviors the change adds, as described by the requirements and scenarios in the approved specs, were exercised through the product's public surfaces. Any testing approach is acceptable, including scripted flows and exploratory passes sized from the diff; do not require a fixed case inventory such as a test plan's numbered acceptance flows, and do not require one record per scenario. A behavior the acceptance environment could not exercise, for example a skill journey that needs a separate agent invocation the environment does not provide, does not count against coverage when the record discloses the impediment and why it is environmental; judge coverage over the behaviors the environment allowed. An omission the record discloses for any other reason counts against coverage in proportion to the user-visible behavior it leaves unexercised; an undisclosed omission counts fully. A behavior is covered when a recorded observation shows its scenario's user-visible outcome (for example the scene fitting the viewport without reflow at the tested sizes); internal properties a viewer cannot see, such as a scale factor or default dimensions, need no separate observation. An observation that checks a weaker property than the scenario states (for example DOM persistence instead of motion sequencing) does not cover it. This is the only criterion that scores an omitted behavior, including a behavior the exploration plan committed to that the exploration log neither observed nor disclosed as not exercised. Fail when a significant user-visible behavior the environment allowed is omitted without disclosure, or when omissions the candidate chose together leave a substantial share of that behavior unexercised.",
+            "testing-evidence-usable-proof": "Judge this criterion against a finite basis: the scenarios of the approved specs, whose requirement and scenario headings you receive. A claim is material when it asserts that a basis scenario was exercised or observed; decide for each claim whether it maps to a basis scenario. A claim about building or verifying the product is material when it maps to a basis scenario, such as one requiring the build to succeed or checks to run before completion. Pass when every material claim is backed by verified candidate artifacts in this packet, such as command output, logs, transcripts, captures with metadata, or recorded observations that state the action taken and the result seen, specific enough for a reviewer to tell what was done and what happened. Recorded visual inspection counts when it states what was inspected and what was observed. A bare verdict, a summary claim, or a screenshot without a recorded observation is not proof. Weigh material claims in every candidate record included in the packet, including the assumptions ledger, regardless of author. Attributing a result to the implementation run does not prove it. A verified record from an earlier pass proves behavior at the revision it names. A stated limitation, such as a behavior the record says was not exercised or could not be verified, is a disclosure, not a claim, and needs no proof. A compile-time or typed-boundary property (for example types accepted at a component boundary) is proven by a recorded successful type-checked build of the code that exercises it, such as a logged npm run verify or build PASS. A claim that maps to no basis scenario does not fail this criterion; testing-evidence-complete-honest-record judges whether it overstates the evidence. Fail only on a named material claim: identify the basis scenario, the claim, and the evidence that is missing or defective, including a claim with no artifact at all.",
+            "testing-evidence-final-revision-applicability": "Use the harness-computed tested_revision facts in the verified index together with verified candidate records. Pass when the candidate recorded the revision it last tested and either that revision is the final revision, or the final revision has no product changes since it. When the last pass was scoped to a diff, such as a re-test after a fix, every product file the harness lists between its declared diff base and the revision it tested must be explored: a file counts as explored when a verified record shows the pass exercised the behavior or command that runs that file's changed code, and a seam that runs several changed files counts for each of them. A file the harness lists in a mirror group with an explored file is byte-identical to it and counts as explored. A changed command counts as explored when the pass ran it, or when the record states that the acceptance workflow forbids running it (for example the acceptance skill's instruction not to run verification or automated suites). The project's verification script and the automated checks it contains are automated verification for this rule: when the record says the acceptance workflow forbids running automated tests, verification, or validators, a changed verification or test script counts as explored even though the record does not name that script. The harness's retest_scope fact says only that the changed files are listed; it never decides exploration. A full re-run of earlier passes and bounded-impact lineage are not required. Fail when any listed product file is unexplored, when the final revision has product changes after the last recorded tested revision, when no tested revision is recorded, or when the recorded revision is not an ancestor of the final revision.",
+            "testing-evidence-complete-honest-record": "Pass when the record discloses the gaps and limitations it shows or recognizes, self-played or simulated interactions, environment limits, CI status, the disposition of visual-inspection warnings, and every unresolved finding, and when no completion, coverage, or outcome claim exceeds what the verified evidence shows, whether or not the claim maps to a basis scenario of the approved specs. Do not compare the exploration plan with the exploration log, and do not fail this criterion for a behavior the record omitted, whether or not the plan committed to it: testing-evidence-traceable-coverage alone scores an omitted behavior. A demonstrably false or overstated claim fails this criterion whether or not it is material to testing-evidence-usable-proof. Fail when a gap, limitation, or unresolved finding the record shows is concealed, or when the record claims more testing or a stronger outcome than its evidence supports, for example a claim that every scenario was exercised when the record shows otherwise. Assess testing claims in every candidate record included in the packet, including the assumptions ledger, regardless of author; missing supporting evidence alone is scored only by testing-evidence-usable-proof, while this criterion fails when the available evidence demonstrates that a claim is false or overstated. An unbacked claim that maps to no basis scenario therefore fails neither criterion unless the evidence shows it false or overstated."
+          }
+        }
+      ]
+    },
+    {
+      "id": "assumption-handling-quality",
+      "title": "Assumption-handling quality",
+      "points": 4,
+      "tier_weights": {
+        "major": 1
+      },
+      "reference_applicable": false,
+      "subcomponents": [
+        {
+          "id": "assumption-handling-quality-criteria",
+          "title": "Observable assumption handling",
+          "points": 4,
+          "evaluator": "llm-evidence-review",
+          "job": "assumption-handling",
+          "criteria": [
+            "assumption-consequential-ambiguities-surfaced",
+            "assumption-repository-facts-distinguished",
+            "assumption-decisions-and-escalations-proportionate",
+            "assumption-final-handoff-preserves-decisions"
+          ],
+          "tiers": {
+            "assumption-consequential-ambiguities-surfaced": "major",
+            "assumption-repository-facts-distinguished": "major",
+            "assumption-decisions-and-escalations-proportionate": "major",
+            "assumption-final-handoff-preserves-decisions": "major"
+          },
+          "review_guidance": [
+            "Compare candidate classifications against approved requirements and discoverable repository facts. An environmental trigger does not make observed candidate behavior requirement-conforming.",
+            "A requirement violation is reproduced only when the record shows the workflow observed the nonconforming behavior in a run (an exploration step, a test, or a capture). When the workflow reproduced such a violation but calls it not a finding, optional hardening, or a design choice, fail assumption-repository-facts-distinguished and assumption-decisions-and-escalations-proportionate even if the raw observation was surfaced and preserved.",
+            "Surfacing is the behavior these criteria reward. A gap the record surfaces without having reproduced it, whether found by reading code, by a report, or by reasoning, may be framed as an open question or a decision with options, including accepting the limitation when the record states that option's consequence; do not fail assumption-repository-facts-distinguished or assumption-decisions-and-escalations-proportionate for that framing, for a surfaced gap left unverified or unresolved, or for a required tool failure the record discloses. Fail them only for a misstated fact, a reproduced violation classified as acceptable, or a decision taken without the authority the record shows it needed.",
+            "Never score silence above candor. Before scoring assumption-consequential-ambiguities-surfaced, check for unsurfaced requirement deviations: every deviation from the approved requirements that the log, findings, or recorded observations show, such as a required element missing on screen or a link pointing to the wrong target. Fail the criterion when such a deviation is not surfaced as a finding, gap, or decision. Do not fail it for a plan commitment the log neither observed nor disclosed: that omission is scored once, under testing-evidence-traceable-coverage. When the record shows it reproduced a requirement violation and omits it entirely, also fail assumption-repository-facts-distinguished and assumption-decisions-and-escalations-proportionate, because omitting a reproduced violation treats it as not a finding. A workflow that surfaces a gap must never score lower on any assumption criterion than one that omits the same gap.",
+            "Score assumption-final-handoff-preserves-decisions independently: fail it for omission of an unresolved decision, consequence, material limitation, or actionable option; do not fail it solely for a misclassification when the raw observation, consequence, and action remain preserved. A material limitation here is one the record itself identifies elsewhere, in its log, findings, ledger, or plan disposition; a gap the record never recognized is scored under testing-evidence-complete-honest-record, not here.",
+            "For assumption-final-handoff-preserves-decisions, the handoff preserves a decision when it names that decision, at least by a short identifier and subject, and points to the ledger entry that holds its consequence and options. A count of open decisions with only a pointer to the ledger does not name them and fails.",
+            "Do not use an assumption-handling deduction to replace the technical product deduction or to reduce testing-evidence credit when the evidence record remains candid and usable."
+          ]
+        }
+      ]
+    }
+  ],
+  "criterion_sources": {
+    "demo-route-and-registration": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-074"
+      ]
+    },
+    "demo-sample-explains-skill": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-076",
+        "INV-088"
+      ]
+    },
+    "demo-sample-step-content": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-076",
+        "INV-074",
+        "INV-075"
+      ]
+    },
+    "demo-evolving-scene-structure": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-077",
+        "INV-001",
+        "INV-069"
+      ]
+    },
+    "quality-captions-and-navigation": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-068"
+      ]
+    },
+    "demo-present-mode-behavior": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-022"
+      ]
+    },
+    "demo-browse-mode-behavior": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-023"
+      ]
+    },
+    "demo-mode-position-preservation": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-024"
+      ]
+    },
+    "demo-supported-navigation": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-025"
+      ]
+    },
+    "demo-navigation-boundaries-and-control-keys": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-030",
+        "INV-031"
+      ]
+    },
+    "demo-step-and-transition-reliability": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-090",
+        "INV-111"
+      ]
+    },
+    "demo-mode-interaction-reliability": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-067"
+      ]
+    },
+    "demo-control-semantics": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-029"
+      ]
+    },
+    "demo-focus-and-keyboard-accessibility": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-025"
+      ]
+    },
+    "demo-scene-kit-api-use": {
+      "owner": "eval",
+      "reason": "Judges how the delivered demo source consumes the kit; the fixture states kit behavior, not a demo source-integration rule.",
+      "presumes": []
+    },
+    "demo-stable-identity-and-grouping": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-006",
+        "INV-009"
+      ]
+    },
+    "demo-clear-code-boundaries": {
+      "owner": "eval",
+      "reason": "Judges source organization of the delivered demo, which the fixture does not specify.",
+      "presumes": []
+    },
+    "quality-active-chrome-and-attribution-local": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-072"
+      ]
+    },
+    "demo-scope-discipline": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-105",
+        "INV-106",
+        "INV-107",
+        "INV-108"
+      ]
+    },
+    "scene-step-narration-and-identity": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-002",
+        "INV-003"
+      ]
+    },
+    "scene-order-derived-numbering": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-002"
+      ]
+    },
+    "scene-typed-payload-boundary": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-002"
+      ]
+    },
+    "entity-persisting-morph": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-006"
+      ]
+    },
+    "entity-ungrouped-transition-morph": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-006"
+      ]
+    },
+    "entity-newcomer-after-settle": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-007"
+      ]
+    },
+    "entity-departing-exit": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-008"
+      ]
+    },
+    "grouped-scene-updates-in-place": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-009"
+      ]
+    },
+    "grouped-continuing-entities-not-newcomers": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-010"
+      ]
+    },
+    "grouped-intentional-composition": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-015"
+      ]
+    },
+    "mode-present-title-focused": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-022"
+      ]
+    },
+    "mode-browse-reading-focused": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-023"
+      ]
+    },
+    "mode-toggle-preserves-position": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-024",
+        "INV-020"
+      ]
+    },
+    "navigation-keyboard": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-025"
+      ]
+    },
+    "navigation-touch-swipe": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-025"
+      ]
+    },
+    "navigation-direct-jump": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-025"
+      ]
+    },
+    "navigation-active-state": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-029"
+      ]
+    },
+    "navigation-controls-keep-keys": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-030"
+      ]
+    },
+    "navigation-clamp-start": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-031"
+      ]
+    },
+    "navigation-clamp-end": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-031"
+      ]
+    },
+    "canvas-uniform-scaling": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-032",
+        "INV-034"
+      ]
+    },
+    "canvas-default-composition-area": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-032"
+      ]
+    },
+    "style-kit-hooks": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-013"
+      ]
+    },
+    "style-unstyled-kit-output": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-013"
+      ]
+    },
+    "style-framework-optional": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-013"
+      ]
+    },
+    "style-coordinate-heavy-diagrams": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-015"
+      ]
+    },
+    "attribution-default-link": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-072"
+      ]
+    },
+    "attribution-styling-hook": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-072"
+      ]
+    },
+    "attribution-no-unrequested-brand": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-072"
+      ]
+    },
+    "skill-missing-details-one-at-a-time": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-036"
+      ]
+    },
+    "skill-partial-detail-proceeds": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-038"
+      ]
+    },
+    "skill-complete-prompt-proceeds": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-038"
+      ]
+    },
+    "skill-empty-directory-scaffold": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-049",
+        "INV-046",
+        "INV-103"
+      ]
+    },
+    "skill-already-scaffolded": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-050",
+        "INV-041",
+        "INV-045"
+      ]
+    },
+    "skill-partial-scaffold": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-051",
+        "INV-042",
+        "INV-043",
+        "INV-044"
+      ]
+    },
+    "skill-scaffold-style-neutral": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-046"
+      ]
+    },
+    "skill-template-path-resolution": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-048",
+        "INV-118",
+        "INV-109"
+      ]
+    },
+    "skill-monorepo-target": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-054"
+      ]
+    },
+    "skill-standalone-target": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-054"
+      ]
+    },
+    "skill-nonempty-confirmation": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-054"
+      ]
+    },
+    "skill-new-presentation-routed": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-055",
+        "INV-102"
+      ]
+    },
+    "skill-presentation-owns-style": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-056"
+      ]
+    },
+    "skill-existing-presentations-preserved": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-058"
+      ]
+    },
+    "skill-modify-ambiguous-target": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-058"
+      ]
+    },
+    "skill-scoped-modification": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-058"
+      ]
+    },
+    "skill-checks-run-before-done": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-062",
+        "INV-104"
+      ]
+    },
+    "skill-failures-fixed-before-success": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-064",
+        "INV-066"
+      ]
+    },
+    "verification-missing-sample-fails": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-092",
+        "INV-089"
+      ]
+    },
+    "verification-loopback-reachability": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-090"
+      ]
+    },
+    "verification-preview-process-ownership": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-094"
+      ]
+    },
+    "verification-console-page-error-fails": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-092"
+      ]
+    },
+    "verification-step-error-fails": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-092"
+      ]
+    },
+    "quality-project-local-screenshot-helper": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-095"
+      ]
+    },
+    "visual-helper-captures-steps": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-095",
+        "INV-063"
+      ]
+    },
+    "visual-helper-settled-screenshots": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-096"
+      ]
+    },
+    "visual-helper-overlap-warning": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-071",
+        "INV-070"
+      ]
+    },
+    "visual-helper-allow-overlap": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-071"
+      ]
+    },
+    "visual-helper-active-state-warning": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-071"
+      ]
+    },
+    "visual-helper-attribution-warning": {
+      "owner": "fixture",
+      "inventory": [
+        "INV-071"
+      ]
+    },
+    "testing-evidence-traceable-coverage": {
+      "owner": "eval",
+      "reason": "Judges the candidate's acceptance-testing record against the approved specs; the fixture does not prescribe a testing process.",
+      "presumes": []
+    },
+    "testing-evidence-usable-proof": {
+      "owner": "eval",
+      "reason": "Judges the candidate's acceptance-testing record against the approved specs; the fixture does not prescribe a testing process.",
+      "presumes": []
+    },
+    "testing-evidence-final-revision-applicability": {
+      "owner": "eval",
+      "reason": "Judges the candidate's acceptance-testing record against the approved specs; the fixture does not prescribe a testing process.",
+      "presumes": []
+    },
+    "testing-evidence-complete-honest-record": {
+      "owner": "eval",
+      "reason": "Judges the candidate's acceptance-testing record against the approved specs; the fixture does not prescribe a testing process.",
+      "presumes": []
+    },
+    "assumption-consequential-ambiguities-surfaced": {
+      "owner": "eval",
+      "reason": "Judges implementation-workflow evidence, which the fixture does not describe.",
+      "presumes": []
+    },
+    "assumption-repository-facts-distinguished": {
+      "owner": "eval",
+      "reason": "Judges implementation-workflow evidence, which the fixture does not describe.",
+      "presumes": []
+    },
+    "assumption-decisions-and-escalations-proportionate": {
+      "owner": "eval",
+      "reason": "Judges implementation-workflow evidence, which the fixture does not describe.",
+      "presumes": []
+    },
+    "assumption-final-handoff-preserves-decisions": {
+      "owner": "eval",
+      "reason": "Judges implementation-workflow evidence, which the fixture does not describe.",
+      "presumes": []
+    },
+    "input-modifier-keys-pass-through": {
+      "owner": "eval",
+      "reason": "Pass only when, from a step that is neither the first nor the last, pressing ArrowRight and ArrowLeft while holding each of Alt, Control, and Meta in turn never changes the step index and the page never calls preventDefault on any of those modified keydowns, even when its handler also stops propagation. A modified press that makes the browser leave the presentation document, such as Alt+ArrowLeft navigating history, shows that the page let the shortcut through and counts as passing through. Fail when any modified press changes the step index or has its default prevented. The fixture does not specify modifier keys; leaving browser and system shortcuts to the browser is eval-owned engineering quality.",
+      "presumes": []
+    },
+    "input-swipe-from-control-ignored": {
+      "owner": "eval",
+      "reason": "Pass only when a predominantly horizontal single-touch swipe that starts on an interactive control inside the presentation, made from a step that is neither the first nor the last in whichever mode exposes such a control, leaves the step index unchanged whether it is delivered as touch events or as pointer events. A control whose activation does not change the step, such as a mode control, is preferred. Fail when the swipe changes the step index under either input path, except that when the only control available is a step control, a resulting step equal to that control's own activation target is not a failure. The fixture does not specify swipes that start on controls; ignoring them is eval-owned engineering quality.",
+      "presumes": []
+    },
+    "engineering-preview-terminated-on-every-exit": {
+      "owner": "eval",
+      "reason": "Pass only when the delivered verify and inspect scripts, in both the repository copies and the skill's bootstrap template copies, terminate and await the preview server process itself on every exit path, including success, a browser launch failure, and an error after the preview started. Killing only an npm or npx wrapper while the server it spawned keeps running fails. A preview started through Vite's preview() API and closed on every exit path passes.",
+      "presumes": []
+    },
+    "engineering-preview-readiness-bounded": {
+      "owner": "eval",
+      "reason": "Pass only when the delivered verify and inspect scripts meet all three of these: every wait for preview readiness has a timeout; verification starts the preview only after the build it verifies has completed; and when readiness relies on the server's printed ready URL, the parsing tolerates ANSI colour codes and output split across chunks. Fail when any of the three is not met. Whether readiness is connected to the scripts' own child process is scored only by verification-preview-process-ownership.",
+      "presumes": []
+    },
+    "engineering-bootstrap-scripts-generic": {
+      "owner": "eval",
+      "reason": "Pass only when the skill's bootstrap template copies of verify and inspect meet all three of these: they take the target presentation from an argument, or verify every registered route; they reject an unregistered slug with a clear non-zero failure, rather than timing out or accepting the landing-page fallback; and they contain no titles, captions, routes, or defaults specific to the repository's reference sample. Fail when any of the three is not met, including a template that checks only a hardcoded sample route or only the first registry entry.",
+      "presumes": []
+    },
+    "engineering-inspect-fails-loudly": {
+      "owner": "eval",
+      "reason": "Pass only when the delivered inspect helper meets all three of these: it rejects a missing, zero, or non-numeric step count or step index; before capturing each step, it confirms that the reported step index equals the step it meant to reach; and it never reports success with zero captures. Fail when any of the three is not met. Verify's detection of a non-advancing step is scored by the existing verification criteria, not here.",
+      "presumes": []
+    },
+    "engineering-checks-read-rendered-page": {
+      "owner": "eval",
+      "reason": "Pass only when the delivered verification checks of the sample's titles, captions, outline order, and registration read the rendered page at each step, rather than matching regular expressions over source text. Fail when any of those checks matches regular expressions over source text. Hardening a source parser against syntax that never occurs earns no credit.",
+      "presumes": []
+    },
+    "engineering-diagnostics-cover-presentation": {
+      "owner": "eval",
+      "reason": "Pass only when the visual inspection diagnostics run on every captured step, not only one, and the captures and diagnostics include the presentation's chrome rather than only a cropped scene. Fail when diagnostics run on a single step, such as the last, or when captures crop out the caption, table of contents, or controls. Whether individual warnings fire, and the scope of intentional-overlap suppression, are scored by the existing visual-helper criteria; the performance of the overlap scan does not affect the verdict.",
+      "presumes": []
+    },
+    "engineering-templates-build-at-destination": {
+      "owner": "eval",
+      "reason": "Pass only when every step, presentation, and inspect template that the skill materializes would type-check and build at the destination the skill documents for it, established either by tracing each template's relative imports, CSS imports, required props, and field names against the bootstrapped project layout and the kit's types, or by a focused test that materializes the templates and builds them. Fail when a template's relative import resolves outside the project's src directory from its documented destination, a CSS import does not resolve, a template omits a prop the kit's types require, or a field name does not match the kit's types. Whether the skill resolves its template paths is scored only by skill-template-path-resolution.",
+      "presumes": []
+    },
+    "engineering-skill-description-triggers": {
+      "owner": "eval",
+      "reason": "Pass only when the delivered SKILL.md frontmatter description is written in the third person, states when to use the skill, and quotes at least two example user phrases that should trigger it. Fail when any of the three is missing, such as a first-person description or one that quotes no trigger phrases.",
+      "presumes": []
+    },
+    "engineering-skill-out-of-scope-redirects": {
+      "owner": "eval",
+      "reason": "Pass only when the delivered SKILL.md has a section listing each of the proposal's exclusions, which are PowerPoint or Keynote output, PDF or image export, a visual editor, and hosting, and gives each a redirect telling the agent what to do or suggest instead. Fail when the section is missing, omits an exclusion, or lists an exclusion without a redirect.",
+      "presumes": []
+    },
+    "engineering-skill-completion-report": {
+      "owner": "eval",
+      "reason": "Pass only when the delivered SKILL.md gives a completion-report template that names the presentation route, the files changed, the build, render, and inspect results, and the advisory warnings that remain. Fail when it tells the agent to report completion without defining the report's contents, or when the template omits any of those items. Whether the checks must run and pass before completion is scored only by skill-checks-run-before-done and skill-failures-fixed-before-success; this criterion scores only the report the skill asks the agent to give.",
+      "presumes": []
+    },
+    "engineering-presentation-css-scoped": {
+      "owner": "eval",
+      "reason": "Pass only when every selector in a stylesheet owned by a presentation is scoped under that presentation's own root class or hook, or comes from a CSS module, including selectors that target the kit's hook classes or attributes such as `.presentation-attribution`. Fail when a presentation-owned stylesheet contains an unscoped rule, because it leaks to other presentations after client-side navigation. A host-owned global stylesheet may style kit hooks without a presentation scope. Readability and narrow-viewport layout are not scored here.",
+      "presumes": []
+    },
+    "engineering-typed-kit-primitives": {
+      "owner": "eval",
+      "reason": "Pass only when the kit's public primitives meet all three of these: they type their props as the rendered element's props rather than an untyped bag such as Record<string, unknown>; they apply the kit's own identity hooks (data-presentation-* attributes, layoutId, entity identifiers) after caller props, so callers cannot override them; and they keep props meant only for the kit off the DOM. Fail when any of the three is not met.",
+      "presumes": []
+    },
+    "engineering-tests-wait-on-state": {
+      "owner": "eval",
+      "reason": "Pass only when the delivered automated tests that drive a browser wait for observable state before asserting on it, using a polling or auto-waiting assertion on, for example, the step index or a settled signal, and use no fixed sleeps. A call that returns immediately but is used as if it waited, such as reading an element count, counts as a fixed sleep. Fail when any browser test sleeps for a fixed time instead of waiting for state.",
+      "presumes": []
+    },
+    "engineering-tests-isolate-resources": {
+      "owner": "eval",
+      "reason": "Pass only when the delivered automated tests that start a preview server or a browser allocate ports dynamically rather than sharing fixed ports, and terminate every process they start. Fail when tests share a hardcoded port, or when a test kills only an npm or npx wrapper and leaves the preview server running.",
+      "presumes": []
+    }
+  },
+  "gates": [
+    {
+      "id": "gate-build-whole-app",
+      "requirement": "The complete application builds successfully.",
+      "inventory": [
+        "INV-073",
+        "INV-066"
+      ],
+      "inputs": []
+    },
+    {
+      "id": "gate-sample-reachable",
+      "requirement": "A sample presentation that explains how to use the skill exists and is reachable.",
+      "inventory": [
+        "INV-074",
+        "INV-076",
+        "INV-075"
+      ],
+      "inputs": [
+        "demo-route-and-registration",
+        "demo-sample-explains-skill"
+      ]
+    },
+    {
+      "id": "gate-every-step-renders",
+      "requirement": "Every step the delivered presentations produce renders without runtime or console errors.",
+      "inventory": [
+        "INV-090",
+        "INV-111"
+      ],
+      "inputs": [
+        "demo-step-and-transition-reliability"
+      ]
+    },
+    {
+      "id": "gate-verifier-clear-outcome",
+      "requirement": "The delivered verification tool reports an unambiguous pass or fail outcome.",
+      "inventory": [
+        "INV-093",
+        "INV-110"
+      ],
+      "inputs": []
+    }
+  ],
+  "fallbacks": {
+    "demo-route-and-registration": {
+      "job": "demo-integration",
+      "requirement": "The committed demo route is registered and reachable.",
+      "guidance": [
+        "Cite delivered source implementing this behavior; treat the browser observation as a lead.",
+        "This criterion awards no points; its verdict is an input to the verification-sample-outline hard gate."
+      ]
+    },
+    "demo-sample-explains-skill": {
+      "job": "demo-integration",
+      "requirement": "The sample presentation explains how to use the skill through a sequence of steps in a followable order, and each step exposes a title.",
+      "guidance": [
+        "Cite delivered source implementing this behavior; treat the browser observation as a lead.",
+        "This criterion awards no points; its verdict is an input to the verification-sample-outline hard gate."
+      ]
+    },
+    "quality-captions-and-navigation": {
+      "job": "demo-integration",
+      "requirement": "Each step has a caption and a navigation control.",
+      "guidance": [
+        "Cite delivered source implementing this behavior; treat the browser observation as a lead.",
+        "Captions are met in browse mode, which the fixture makes reading-focused with a multi-line caption; present mode hiding the caption and the previous/next controls is required by the fixture and is not a missing caption. Count step navigation controls without the previous/next controls."
+      ]
+    },
+    "demo-present-mode-behavior": {
+      "job": "demo-integration",
+      "requirement": "Present mode exposes the active step title.",
+      "guidance": [
+        "Cite delivered source implementing this behavior; treat the browser observation as a lead."
+      ]
+    },
+    "demo-browse-mode-behavior": {
+      "job": "demo-integration",
+      "requirement": "Browse mode exposes the active caption and reaches every step through navigation.",
+      "guidance": [
+        "Cite delivered source implementing this behavior; treat the browser observation as a lead."
+      ]
+    },
+    "demo-mode-position-preservation": {
+      "job": "demo-integration",
+      "requirement": "Changing presentation mode preserves the current step.",
+      "guidance": [
+        "Cite delivered source implementing this behavior; treat the browser observation as a lead."
+      ]
+    },
+    "demo-supported-navigation": {
+      "job": "demo-integration",
+      "requirement": "Keyboard, swipe, and direct navigation reach the intended steps.",
+      "guidance": [
+        "Cite delivered source implementing this behavior; treat the browser observation as a lead."
+      ]
+    },
+    "demo-navigation-boundaries-and-control-keys": {
+      "job": "demo-integration",
+      "requirement": "Navigation respects step boundaries and keyboard controls remain operable.",
+      "guidance": [
+        "Cite delivered source implementing this behavior; treat the browser observation as a lead."
+      ]
+    },
+    "demo-step-and-transition-reliability": {
+      "job": "demo-integration",
+      "requirement": "Every step advances and reverses one step at a time, reaching each expected step index in order, without runtime errors.",
+      "guidance": [
+        "Cite delivered source implementing this behavior; treat the browser observation as a lead."
+      ]
+    },
+    "demo-mode-interaction-reliability": {
+      "job": "demo-integration",
+      "requirement": "Repeated mode changes leave the presentation operable.",
+      "guidance": [
+        "Cite delivered source implementing this behavior; treat the browser observation as a lead."
+      ]
+    },
+    "demo-control-semantics": {
+      "job": "demo-integration",
+      "requirement": "Navigation controls expose roles, names, and the current step.",
+      "guidance": [
+        "Cite delivered source implementing this behavior; treat the browser observation as a lead."
+      ]
+    },
+    "demo-focus-and-keyboard-accessibility": {
+      "job": "demo-integration",
+      "requirement": "Navigation controls accept focus and keyboard navigation works.",
+      "guidance": [
+        "Cite delivered source implementing this behavior; treat the browser observation as a lead."
+      ]
+    },
+    "demo-sample-step-content": {
+      "job": "demo-integration",
+      "requirement": "Every step renders the scene content the fixture requires for it.",
+      "guidance": [
+        "Cite the step definitions that declare each step's scene objects."
+      ]
+    },
+    "demo-evolving-scene-structure": {
+      "job": "demo-integration",
+      "requirement": "The sample's steps are one evolving scene whose objects persist across steps.",
+      "guidance": [
+        "Cite the identity each persisting object carries across steps."
+      ]
+    },
+    "input-modifier-keys-pass-through": {
+      "job": "demo-integration",
+      "requirement": "From a step that is neither the first nor the last, ArrowRight and ArrowLeft pressed while Alt, Control, or Meta is held neither change the step nor have their default prevented.",
+      "guidance": [
+        "Cite the deck's keydown handler and show that it returns before navigating or calling preventDefault when altKey, ctrlKey, or metaKey is set; a handler that navigates or prevents the default regardless of modifiers fails. Treat the browser observation as a lead."
+      ]
+    },
+    "input-swipe-from-control-ignored": {
+      "job": "demo-integration",
+      "requirement": "A predominantly horizontal single-touch swipe that starts on an interactive control inside the presentation does not change the step.",
+      "guidance": [
+        "Cite the swipe handler and show that a touch or pointer gesture whose start target is an interactive control, or inside one, is ignored for navigation; a handler that navigates on any horizontal swipe regardless of where it starts fails. Treat the browser observation as a lead."
+      ]
+    }
+  },
+  "exclusions": [
+    {
+      "id": "INV-112",
+      "reason": "Step-count and step-index page hooks are a reference mechanism; the behavior they expose is judged through the browser criteria without requiring the hooks.",
+      "approved_by": "pending-maintainer-approval (rubric is provisional)"
+    },
+    {
+      "id": "INV-116",
+      "reason": "Generic node primitives are a structural alternative; judged for engineering quality by the eval-owned typed-kit-primitives criterion, which presumes it.",
+      "approved_by": "pending-maintainer-approval (rubric is provisional)"
+    }
+  ]
+}

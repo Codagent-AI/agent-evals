@@ -24,8 +24,9 @@ export function shellWords(line) {
   return words
 }
 const ENV_ALLOWLIST = new Set(['CI', 'HOME', 'AGENT_RUNNER_SOURCE_COMMIT', 'AGENT_RUNNER_SOURCE_DIRTY', 'AGENT_RUNNER_DEV_AUDIT', 'AGENT_RUNNER_AUDIT_SMOKE'])
-export function verifyMountPlan(text, { inputDir, artifactDir, skillsDir, runnerDir, credentialFiles = [], forwardedEnv = [] }) {
-  const allowed = new Map([[canonical(inputDir), { target: '/eval-input', ro: true }], [canonical(artifactDir), { target: '/artifacts', ro: false }], [canonical(skillsDir), { target: '/agent-skills', ro: true }], ...credentialFiles.map(path => [canonical(path), { target: `/host-home/${path.includes('/.claude/') ? 'claude/.credentials.json' : path.includes('/.cursor/') ? 'cursor/auth.json' : 'codex/auth.json'}`, ro: true }])])
+// extraMounts: [{ source, target, ro }] a suite adds beyond the define set (the end-to-end delivery token).
+export function verifyMountPlan(text, { inputDir, artifactDir, skillsDir, runnerDir, credentialFiles = [], forwardedEnv = [], extraMounts = [] }) {
+  const allowed = new Map([...extraMounts.map(mount => [canonical(mount.source), { target: mount.target, ro: mount.ro }]), [canonical(inputDir), { target: '/eval-input', ro: true }], [canonical(artifactDir), { target: '/artifacts', ro: false }], [canonical(skillsDir), { target: '/agent-skills', ro: true }], ...credentialFiles.map(path => [canonical(path), { target: `/host-home/${path.includes('/.claude/') ? 'claude/.credentials.json' : path.includes('/.cursor/') ? 'cursor/auth.json' : 'codex/auth.json'}`, ro: true }])])
   const containers = []
   for (const line of text.split('\n')) {
     const argv = shellWords(line)
