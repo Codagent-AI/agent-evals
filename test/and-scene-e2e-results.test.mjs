@@ -247,3 +247,48 @@ test('INT-010 a rescore refuses a source whose retained inputs no longer match t
   await assert.rejects(rescoreEvaluation({ rescoreFrom: f.runDir, runDir: f.runDir }, rescoreDeps(f).deps), /must be new/)
   assert.ok((await verifyRetained(f.runDir)).delivery.ok)
 })
+
+// ---- human review --------------------------------------------------------------------------------------------------
+import { runHumanReview } from '../evals/agent-runner/and-scene-e2e/human-review.mjs'
+const answers = (ratings, { ready = true } = {}) => { const queue = [...(ready ? ['yes'] : [])]; for (const rating of ratings) queue.push(String(rating), rating <= 3 ? 'because' : ''); return queue }
+const scripted = (queue, { then = 'confirm' } = {}) => { const asked = []; return { asked, write: () => {}, ask: async prompt => { asked.push(prompt); if (!queue.length) return null; return queue.shift() } } }
+async function reviewWorld(t) {
+  const { f, source } = await retainedRun(t)
+  const published = []
+  const common = { runDir: f.runDir, build: async () => f.root, serve: async () => ({ url: 'http://127.0.0.1:1', close: async () => {} }), publish: async args => { published.push(args.result.run_id); return { published: true } }, repoDir: f.root }
+  return { f, source, published, common }
+}
+test('INT-010 a completed review makes the run complete with up to 30 human points, and only then is it published', async t => {
+  const { f, published, common } = await reviewWorld(t)
+  assert.equal(published.length, 0)
+  const outcome = await runHumanReview({ ...common, io: scripted([...answers([5, 5, 5, 5, 5, 5, 5]), 'confirm']) })
+  assert.equal(outcome.status, 'complete'); assert.equal(outcome.result.evaluation_status, 'complete')
+  assert.equal(outcome.result.product_score.human_points, 30); assert.equal(outcome.result.product_score.score, 100); assert.equal(outcome.result.product_score.automated_score, 70)
+  assert.deepEqual(published, [outcome.result.run_id]); assert.equal(JSON.parse(await readFile(join(f.runDir, 'result.json'), 'utf8')).evaluation_status, 'complete')
+  assert.equal((await runHumanReview({ ...common, io: scripted([]) })).status, 'already-complete'); assert.equal(published.length, 1)
+})
+test('INT-010 an interrupted review resumes from the saved answers', async t => {
+  const { f, common } = await reviewWorld(t)
+  const first = await runHumanReview({ ...common, io: scripted(answers([5, 4, 3])) })
+  assert.equal(first.status, 'interrupted'); assert.equal(JSON.parse(await readFile(join(f.runDir, 'human-review/state.json'), 'utf8')).responses.length, 3)
+  const io = scripted([...answers([5, 5, 5, 5], { ready: false }), 'confirm'])
+  const second = await runHumanReview({ ...common, io })
+  assert.equal(second.status, 'complete'); assert.match(io.asked.find(prompt => /Rating/.test(prompt)), /Rating/)
+  assert.equal(JSON.parse(await readFile(join(f.runDir, 'human-review/review.json'), 'utf8')).responses.length, 7)
+})
+test('INT-010 the human floor and the minimum individual rating are reported, never applied: the points still count', async t => {
+  const { common } = await reviewWorld(t)
+  const outcome = await runHumanReview({ ...common, io: scripted([...answers([1, 2, 2, 2, 2, 2, 2]), 'confirm']) })
+  assert.equal(outcome.status, 'complete')
+  const review = JSON.parse(await readFile(join(outcome.result.run_directory ?? common.runDir, 'human-review/review.json'), 'utf8'))
+  assert.equal(review.floor, 15); assert.equal(review.floor_reached, false); assert.equal(review.min_individual_rating_met, false); assert.ok(review.points > 0 && review.points < 15)
+  assert.equal(outcome.result.product_score.human_points, review.points); assert.equal(outcome.result.product_score.score, 70 + review.points)
+})
+test('INT-010 human review refuses a run that is not pending and honors --no-publish', async t => {
+  const { f, published, common } = await reviewWorld(t)
+  const done = await runHumanReview({ ...common, noPublish: true, io: scripted([...answers([4, 4, 4, 4, 4, 4, 4]), 'confirm']) })
+  assert.equal(done.status, 'complete'); assert.equal(published.length, 0)
+  const failed = await lifecycle(t); failed.harness.plans.implement.push({ type: 'failed' }); failed.deps.quota = async () => ({ waited: false }); await runEvaluation(failed.options, failed.deps)
+  await assert.rejects(runHumanReview({ ...common, runDir: failed.runDir, io: scripted([]) }), /applies only to a pending run, not implementation-workflow-failed/)
+  await rm(join(f.runDir, 'human-review'), { recursive: true, force: true })
+})
