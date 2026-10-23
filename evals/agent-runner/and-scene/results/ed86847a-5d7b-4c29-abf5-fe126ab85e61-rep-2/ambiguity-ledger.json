@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-23T05-39-26-815935236Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Visual-helper warning coverage is incomplete, but the evidence does not establish the underlying assumption or context gap.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: pass — Project-local Playwright screenshot helper is present.",
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "attribution-default-link: pass — Default attribution label and target https://github.com/Codagent-AI/and-scene are present."
+      ],
+      "handling": "The delivered helper exists, but three warning checks fail. No implementation explanation is supplied.",
+      "consequence": "The helper fails the listed warning checks. This does not establish that the displayed attribution or active navigation state is defective.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The results establish warning omissions, but no specification, repository context, or agent reasoning is supplied to distinguish an ambiguous requirement from an implementation oversight or assumptio…",
+      "resolution": "unresolved",
+      "id": "f64db60b2fe6c03a"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The swipe-from-control check fails, but its cause and exact delivered behavior are undocumented.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail.",
+        "input-modifier-keys-pass-through: pass.",
+        "demo-focus-and-keyboard-accessibility: pass."
+      ],
+      "handling": "The supplied results record a swipe-specific failure without an implementation explanation or execution trace.",
+      "consequence": "The delivered product fails the swipe-from-control check; the artifacts do not show the precise resulting interaction.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check identifies a product issue but cannot establish whether an assumption, missing context, specification gap, or coding defect caused it. Passing keyboard checks do not resolve that unc…",
+      "resolution": "unresolved",
+      "id": "45a7a992c281e980"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
