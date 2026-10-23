@@ -226,3 +226,40 @@ test('C-2 every run path is guarded against symlinks, and a second controller fo
   const locked = await runEvaluation({ ...g.options, resume: true }, g.deps)
   assert.match(locked.result.observed_error, /controller is active/)
 })
+
+import { checkVersions as checkDefineVersions } from '../evals/agent-runner/and-scene-define/lib/versions.mjs'
+import { materialize, verifySnapshot } from '../evals/agent-runner/and-scene-define/lib/starting-repo.mjs'
+import { DEFINE_ROOT } from '../evals/agent-runner/and-scene-e2e/lib/files.mjs'
+import { filesUnder } from '../evals/agent-runner/and-scene-define/lib/files.mjs'
+test('I-4 a candidate is admitted without any calibration state: preflight never reads the calibration directory', async t => {
+  const w = await preflightWorld(t)
+  const tree = join(w.root, 'evals/agent-runner'); await mkdir(tree, { recursive: true })
+  await cp(E2E, join(tree, 'and-scene-e2e'), { recursive: true }); await symlink(join(E2E, '../and-scene'), join(tree, 'and-scene')); await symlink(join(E2E, '../and-scene-define'), join(tree, 'and-scene-define'))
+  await rm(join(tree, 'and-scene-e2e/calibration'), { recursive: true, force: true })
+  const admitted = await inspectInputs({ ...w.base, suiteRoot: join(tree, 'and-scene-e2e') })
+  assert.ok(admitted.seriesIdentity.product_rubric)
+  for (const file of ['lib/preflight.mjs', 'controller.mjs']) assert.doesNotMatch(await readFile(join(E2E, file), 'utf8'), /calibration/, `${file} does not depend on calibration`)
+})
+test('C-1 the starting prompt, tree, inventory and policies are the pinned define-suite inputs; the materialized repository is one clean commit', async t => {
+  assert.deepEqual(await checkDefineVersions({ suiteRoot: DEFINE_ROOT }), [])
+  const tree = await verifySnapshot({ suiteRoot: DEFINE_ROOT })
+  const root = await temp(t, 'e2e-start-'); const staged = await materialize(join(root, 'stage'), { suiteRoot: DEFINE_ROOT })
+  assert.equal(staged.treeHash, tree)
+  assert.equal(git(staged.repoDir, ['rev-list', '--all', '--count']), '1')
+  const names = git(staged.repoDir, ['ls-files']).split('\n')
+  assert.ok(names.length > 0); assert.ok(!names.some(name => /(^|\/)(hidden|calibration)(\/|$)|contamination-patterns|product-rubric|preference-values|simulated-user-policy|starting-prompt|inventory\.json/.test(name)), 'no evaluator file is in the starting tree')
+  assert.ok(names.includes('.validator/config.yml'))
+  const input = JSON.parse(await readFile(join(DEFINE_ROOT, 'versions.json'), 'utf8')).inputs
+  for (const name of ['starting-prompt', 'inventory', 'simulated-user-policy', 'contamination-patterns']) assert.ok(input[name].hashes[input[name].version])
+})
+test('C-14 definition verdicts never change the product score, and the definition runs on the collected copy with an empty leaked set', async t => {
+  const totals = []
+  for (const verdict of ['met', 'missing']) {
+    const f = await lifecycle(t); const patch = invoke => async req => req.job?.startsWith('coverage') && !req.audit_stage ? JSON.stringify({ results: req.criteria.map(id => ({ id, verdict, rationale: 'r', evidence: ['e'], citations: verdict === 'met' ? [{ path: 'proposal.md', start_line: 1, end_line: 1, gate: null, exchange: null }] : [{ path: 'proposal.md', start_line: null, end_line: null, gate: null, exchange: null }], subject_id: null, added_scope: [] })) }) : invoke(req)
+    f.deps.judges = { panel: f.deps.judges.panel.map(member => ({ ...member, invoke: patch(member.invoke) })), decider: { ...f.deps.judges.decider, invoke: patch(f.deps.judges.decider.invoke) } }
+    const { result } = await runEvaluation(f.options, f.deps)
+    assert.equal(result.evaluation_status, 'pending-human-review', result.observed_error); assert.deepEqual(result.definition_score.leaked_items, [])
+    totals.push({ definition: result.definition_score.components.coverage.score, product: result.product_score.automated_score })
+  }
+  assert.notEqual(totals[0].definition, totals[1].definition); assert.equal(totals[0].product, totals[1].product)
+})

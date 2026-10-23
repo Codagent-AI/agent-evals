@@ -292,3 +292,23 @@ test('INT-010 human review refuses a run that is not pending and honors --no-pub
   await assert.rejects(runHumanReview({ ...common, runDir: failed.runDir, io: scripted([]) }), /applies only to a pending run, not implementation-workflow-failed/)
   await rm(join(f.runDir, 'human-review'), { recursive: true, force: true })
 })
+
+import { ensureBuild } from '../evals/agent-runner/and-scene-e2e/human-review.mjs'
+test('I-51 human review reconstructs the candidate from the bundle and the recorded plan with the remote and runtime deleted', async t => {
+  const world = await (async () => {
+    const root = await temp(t, 'e2e-rebuild-'); const repo = join(root, 'repo'); await mkdir(repo, { recursive: true })
+    execFileSync('git', ['init', '--quiet', '--initial-branch=main', repo]); await writeFile(join(repo, 'README.md'), 'x'); git(repo, ['add', '-A']); git(repo, ['commit', '--quiet', '-m', 'start'])
+    git(repo, ['checkout', '--quiet', '-b', 'add-presentation-skill']); await writeFile(join(repo, 'package.json'), JSON.stringify({ devDependencies: { vite: '1' }, scripts: { build: 'vite build' } })); await writeFile(join(repo, 'index.html'), '<html></html>')
+    git(repo, ['add', '-A']); git(repo, ['commit', '--quiet', '-m', 'work'])
+    const runDir = join(root, 'run'); await mkdir(join(runDir, 'source'), { recursive: true }); git(repo, ['bundle', 'create', join(runDir, 'source/candidate.bundle'), 'main', 'add-presentation-skill'])
+    return { root, runDir }
+  })()
+  const specs = []
+  const { mkdirSync, writeFileSync } = await import('node:fs')
+  const run = spec => { specs.push(spec); if (spec.network === 'none') { const out = join(spec.mounts[0].source, 'dist'); mkdirSync(out, { recursive: true }); writeFileSync(join(out, 'index.html'), '<html>rebuilt</html>') } return { stdout: '' } }
+  const product = { build: { output: 'dist' }, build_plan: { application_root: '.', install: ['npm', 'install'], build: ['npm', 'run', 'build'] } }
+  const output = await ensureBuild({ runDir: world.runDir, product, run })
+  assert.equal(await readFile(join(output, 'index.html'), 'utf8'), '<html>rebuilt</html>')
+  assert.deepEqual(specs.map(spec => spec.network), ['bridge', 'none']); assert.ok(specs.every(spec => spec.mounts.length === 1))
+  assert.equal((await ensureBuild({ runDir: world.runDir, product, run })), output, 'a retained build is served again without rebuilding'); assert.equal(specs.length, 2)
+})

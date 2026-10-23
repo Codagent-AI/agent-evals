@@ -101,6 +101,10 @@ test('INT-009 a root-layout candidate is built, served from its own output and s
   }
   assert.deepEqual(e.container.specs.map(spec => spec.label).slice(0, 2), ['install', 'build'])
   assert.deepEqual(e.container.specs[0].command, ['npm', 'ci'])
+  // C-10: the verifier command the source judge named runs in the same isolated container, and its outcome is kept.
+  const verifier = e.container.specs.find(spec => spec.label === 'verifier')
+  assert.deepEqual(verifier.command, ['npm', 'run', 'verify']); assert.equal(verifier.network, 'none'); assert.equal(verifier.mounts.length, 1); assert.equal(result.verifier.clear, true); assert.equal(result.verifier.exit_code, 0)
+  assert.deepEqual(result.verifier.command, ['npm', 'run', 'verify'])
 })
 
 test('INT-009 a workspace-subdirectory candidate with its own build script and output directory is built and served from there', async t => {

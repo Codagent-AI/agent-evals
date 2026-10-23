@@ -239,3 +239,77 @@ test('INT-005 a controller interrupted during implement reports a resumable fail
   const { result } = await runEvaluation(f.options, f.deps)
   assert.equal(result.evaluation_status, 'implementation-workflow-failed'); assert.equal(result.resumable, true); assert.match(result.observed_error, /interrupted/)
 })
+
+import { scanCanaries } from '../evals/agent-runner/and-scene-define/lib/canary.mjs'
+import { loadJudgingInputs } from '../evals/agent-runner/and-scene-define/lib/judging.mjs'
+import { DEFINE_ROOT } from '../evals/agent-runner/and-scene-e2e/lib/files.mjs'
+import { verifyUnit } from '../evals/agent-runner/and-scene-define/lib/checkpoint.mjs'
+import { readdir } from 'node:fs/promises'
+
+test('INT-007 second-pass contamination ends the run before scoring, the trace, review and publication', async t => {
+  const f = await lifecycle(t, { transcripts: { 'impl-s': '{"type":"response_item","payload":{"type":"function_call","call_id":"c1","name":"shell","arguments":"git clone https://github.com/Codagent-AI/and-scene"}}\n{"type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":"ok"}}\n{"type":"event_msg","payload":{"type":"task_complete"}}\n' } })
+  const { result } = await runEvaluation(f.options, f.deps)
+  assert.equal(result.evaluation_status, 'contaminated'); assert.equal(result.owning_phase, 'contamination-pass-2'); assert.equal(result.resumable, false)
+  assert.equal(result.definition_score, null); assert.equal(result.product_score, null); assert.equal(result.requirement_trace, null); assert.deepEqual(f.harness.published, [])
+  assert.equal(f.judgeCalls.filter(call => call.job === 'discovery' || call.job.startsWith('coverage')).length, 0, 'no definition scoring ran')
+  await assert.rejects(access(join(f.runDir, 'phases/trace.json'))); await assert.rejects(access(join(f.runDir, 'phases/product-result.json')))
+  assert.equal(f.deliveryCalls.length, 1)
+})
+test('L-19 the token refresh interval reaches the refresher, is reported in provenance, and does not touch the series identity', async t => {
+  const intervals = []
+  const f = await lifecycle(t, { depsOverride: {} })
+  f.options.tokenRefreshMinutes = 5; f.deps.setTimer = (fn, ms) => { intervals.push(ms); return { unref() {} } }; f.deps.clearTimer = () => {}
+  const first = await runEvaluation(f.options, f.deps)
+  assert.deepEqual([...new Set(intervals)], [5 * 60 * 1000]); assert.equal(first.result.token_refresh_interval_minutes, 5)
+  const state = await f.read('run-state.json'); assert.equal(state.token_refresh_minutes, 5)
+  const other = await lifecycle(t); other.options.tokenRefreshMinutes = 50; other.deps.setTimer = f.deps.setTimer
+  const second = await runEvaluation(other.options, other.deps)
+  assert.deepEqual(second.result.series_identity, first.result.series_identity); assert.equal(second.result.token_refresh_interval_minutes, 50)
+})
+test('I-17 the sandbox holds only the run token: the mounted directory contains one file, never the provisioning token', async t => {
+  const f = await lifecycle(t); const seen = []
+  const step = { type: 'capped', before: async ({ sandbox }) => { seen.push({ files: await readdir(join(sandbox.runDir, '.github-auth')), token: await readFile(join(sandbox.runDir, '.github-auth/token'), 'utf8') }) } }
+  f.harness.plans.define.push(step); f.harness.plans.implement.push({ ...step })
+  const { result } = await runEvaluation(f.options, f.deps)
+  assert.equal(result.evaluation_status, 'pending-human-review', result.observed_error)
+  assert.equal(seen.length, 2); for (const entry of seen) { assert.deepEqual(entry.files, ['token']); assert.match(entry.token, /^run-token-\d+$/); assert.ok(!entry.token.includes('prov')) }
+  assert.equal(f.sandbox.extraMounts().length, 1)
+  const staged = (await readdir(join(f.runDir, 'sandbox-input'))).sort(); assert.ok(!staged.some(name => /pem|key|token/i.test(name)))
+})
+test('I-34 definition scoring and the disclosure audit read the definition collected at the checkpoint, not later workspace edits', async t => {
+  const f = await lifecycle(t)
+  f.harness.plans.implement.push({ type: 'capped', before: async ({ sandbox }) => { await writeFile(join(sandbox.artifactDir, 'workspace/repo/openspec/changes/add-presentation-skill/proposal.md'), 'EDITED DURING IMPLEMENT') } })
+  const { result } = await runEvaluation(f.options, f.deps)
+  assert.equal(result.evaluation_status, 'pending-human-review', result.observed_error)
+  assert.equal(await readFile(join(f.runDir, 'collected/proposal.md'), 'utf8'), 'a single evolving scene\n')
+  const inputs = await loadJudgingInputs({ runDir: f.runDir, suiteRoot: DEFINE_ROOT })
+  assert.deepEqual(inputs.artifacts, { 'proposal.md': 'a single evolving scene\n' })
+  assert.equal(result.provenance.collection.head, 'b'.repeat(40)); assert.equal(result.provenance.collection.files[0].path, 'proposal.md')
+  assert.equal(result.disclosure_audit.status, 'clean'); assert.deepEqual(result.leaked_items, [])
+})
+test('C-3 a canary in the staged input stops the run during preflight, before the sandbox starts', async t => {
+  const f = await lifecycle(t)
+  f.deps.safetyCheck = async ({ inputDir }) => { const matches = await scanCanaries({ stagedDir: inputDir, patternsPath: join(DEFINE_ROOT, '../and-scene-e2e/contamination-patterns.json') }); if (matches.length) throw new Error(`canary check failed: ${matches.map(match => match.pattern).join(', ')}`) }
+  const materialize = f.deps.materialize
+  f.deps.materialize = async (dir, options) => { const staged = await materialize(dir, options); await writeFile(join(dir, 'leak.txt'), 'x'); return staged }
+  const clean = await runEvaluation(f.options, f.deps)
+  assert.equal(clean.result.evaluation_status, 'pending-human-review', clean.result.observed_error)
+  const dirty = await lifecycle(t)
+  dirty.deps.safetyCheck = async ({ inputDir }) => { await writeFile(join(inputDir, 'sandbox-driver.sh.bak'), 'see hidden/reference/ for details'); const matches = await scanCanaries({ stagedDir: inputDir, patternsPath: join(DEFINE_ROOT, '../and-scene-e2e/contamination-patterns.json') }); if (matches.length) throw new Error(`canary check failed: ${matches.map(match => match.pattern).join(', ')}`) }
+  const refused = await runEvaluation(dirty.options, dirty.deps)
+  assert.equal(refused.result.evaluation_status, 'evaluation-harness-failed'); assert.equal(refused.result.owning_phase, 'preflight'); assert.match(refused.result.observed_error, /canary check failed: hidden-reference-path/)
+  assert.equal(dirty.sandbox.starts.length, 0); assert.equal(dirty.harness.tokens.length, 0)
+})
+test('I-54 a unit is reusable only while its recorded outputs still hash the same; tampering forces the unit to rerun on resume', async t => {
+  const f = await lifecycle(t)
+  f.harness.plans.implement.push({ type: 'failed' }); f.deps.quota = async () => ({ waited: false })
+  await runEvaluation(f.options, f.deps)
+  let state = await f.read('run-state.json')
+  const identity = unitName => state.phases[unitName].units.phase
+  assert.equal((await verifyUnit(state, { phase: 'definition-collection', unit: 'phase', inputs: { ...state.identity, materialization: state.materialization, schema_version: state.schema_version }, dependencies: { materialization: state.materialization } })).reusable, true)
+  await writeFile(join(f.runDir, 'phases/collection.json'), '{"head":"tampered","files":[]}')
+  assert.equal((await verifyUnit(state, { phase: 'definition-collection', unit: 'phase', inputs: { ...state.identity, materialization: state.materialization, schema_version: state.schema_version }, dependencies: { materialization: state.materialization } })).reusable, false)
+  assert.equal(identity('definition-collection').state, 'complete')
+  const changedInputs = await verifyUnit(state, { phase: 'provisioning', unit: 'phase', inputs: { ...state.identity, time_limit_ms: 1 }, dependencies: { materialization: state.materialization } })
+  assert.equal(changedInputs.reusable, false); assert.match(changedInputs.reason, /provenance changed/)
+})

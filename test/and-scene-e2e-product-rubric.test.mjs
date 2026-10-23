@@ -113,3 +113,20 @@ test('INT-008 no judge packet carries preference text or the candidate definitio
   // A weakened candidate specification changes nothing about what a criterion requires.
   assert.equal(criterionRequirement(inputs.rubric, inputs.inventory, 'navigation-keyboard'), criterionRequirement(inputs.rubric, inputs.inventory, 'navigation-keyboard'))
 })
+
+import { requirementDocument as docOf } from '../evals/agent-runner/and-scene-e2e/lib/product-rubric.mjs'
+test('I-75 the requirement bound is exact: the text at the bound passes, one character over is rejected naming the criterion', () => {
+  const rubric = clone(inputs.rubric)
+  const lengths = Object.fromEntries(Object.entries(rubric.criterion_sources).filter(([, source]) => source.owner === 'fixture').map(([id, source]) => [id, source.inventory.map(item => docOf(inputs.inventory.items.find(candidate => candidate.id === item))).join('\n\n').length]))
+  const [longest, length] = Object.entries(lengths).sort((a, b) => b[1] - a[1])[0]
+  rubric.limits.max_requirement_chars = length; assert.deepEqual(errorsOf(rubric), [])
+  rubric.limits.max_requirement_chars = length - 1
+  assert.ok(errorsOf(rubric).some(error => error.includes(`criterion ${longest} requirement text is ${length} characters, over the ${length - 1} limit`)))
+  assert.ok(rubric.limits.max_requirement_chars < AND_SCENE_REQUIREMENT_LIMIT); assert.ok(inputs.rubric.limits.max_requirement_chars < AND_SCENE_REQUIREMENT_LIMIT)
+})
+test('I-77 a browser criterion whose fallback names a missing job, no requirement, or a stray criterion is rejected', () => {
+  const expectError = (mutate, pattern) => { const rubric = clone(inputs.rubric); mutate(rubric); assert.ok(errorsOf(rubric).some(error => pattern.test(error)), errorsOf(rubric).join('|')) }
+  expectError(r => { r.fallbacks['demo-sample-explains-skill'].job = 'no-such-job' }, /fallback demo-sample-explains-skill must name a source-review job/)
+  expectError(r => { r.fallbacks['demo-sample-explains-skill'].requirement = ' ' }, /fallback demo-sample-explains-skill requires a requirement/)
+  expectError(r => { r.fallbacks['navigation-keyboard'] = { job: 'scene-kit', requirement: 'x' } }, /fallback navigation-keyboard must name a browser-judge criterion/)
+})
