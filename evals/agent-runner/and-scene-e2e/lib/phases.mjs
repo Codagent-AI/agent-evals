@@ -1,0 +1,2 @@
+// The ordered lifecycle. A phase starts only after its required predecessor completes.
+export const PHASES = ['preflight', 'provisioning', 'materialization', 'define-workflow', 'definition-collection', 'define-checkpoint', 'implement-workflow', 'delivery-verification', 'contamination-pass-2', 'definition-scoring', 'product-evaluation', 'requirement-trace', 'metrics', 'result-and-report', 'handoff']

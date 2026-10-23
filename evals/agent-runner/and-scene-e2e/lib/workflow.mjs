@@ -52,5 +52,5 @@ export async function checkWorkflow({ runnerDir, reference }) {
   for (const file of files) for (const m of file.text.matchAll(/(?:^\s*agent:|`agent:)\s*([a-z][a-z0-9-]*)/gm)) roles.add(m[1])
   const skills = [...new Set(files.flatMap(file => [...file.text.matchAll(/codagent:([a-z0-9-]+)/g)].map(m => m[1])))].sort()
   const name = text.match(/^name:\s*(\S+)/m)?.[1] ?? null
-  return { reference, name, path, hash: sha256(text), define_hash: sha256(define.text), roles: [...new Set([...DEFAULT_ROLES.filter(role => roles.has(role)), ...roles])], skills }
+  return { reference, name, path, top_steps: steps.map(step => step.id), hash: sha256(text), define_hash: sha256(define.text), roles: [...new Set([...DEFAULT_ROLES.filter(role => roles.has(role)), ...roles])], skills }
 }
