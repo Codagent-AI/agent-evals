@@ -118,7 +118,7 @@ export async function lifecycle(t, { limitMs, stallMs, transcripts = {}, inspect
   const deliveryCalls = []
   const full = scoreProduct({ rubric: productInputs.rubric, verdicts: Object.fromEntries(productInputs.rubric.components.flatMap(c => c.subcomponents.flatMap(s => s.criteria)).map(id => [id, { verdict: 'pass', basis: 'x', rationale: 'ok', citations: [] }])) })
   const deps = {
-    sandbox, inspect: async () => identity, safetyCheck: async () => {}, now: () => clock.t, monitorMs: 5, activity: () => harness.activityAt,
+    sandbox, inspect: async () => identity, provisioningToken: async () => 'prov-token-fresh', safetyCheck: async () => {}, now: () => clock.t, monitorMs: 5, activity: () => harness.activityAt,
     materialize: async dir => { await mkdir(dir, { recursive: false }); return { bundlePath: bundle, commit, treeHash: 'tree' } },
     provisionDelivery: async ({ runId }) => ({ full_name: `Codagent-AI/e2e-run-${runId}`, id: 9001, created_at: '2026-10-23T00:00:00Z', private: true, clone_url: 'x', starting_commit: commit }),
     reuseDelivery: async ({ recorded }) => { harness.reused = recorded; return recorded },

@@ -313,3 +313,27 @@ test('I-54 a unit is reusable only while its recorded outputs still hash the sam
   const changedInputs = await verifyUnit(state, { phase: 'provisioning', unit: 'phase', inputs: { ...state.identity, time_limit_ms: 1 }, dependencies: { materialization: state.materialization } })
   assert.equal(changedInputs.reusable, false); assert.match(changedInputs.reason, /provenance changed/)
 })
+
+import { DeliveryError, HarnessEvidenceError } from '../evals/agent-runner/and-scene-e2e/lib/delivery.mjs'
+test('INT-006 a missing delivery outcome ends implementation-workflow-failed with the prohibited effect, the definition score, and no publication', async t => {
+  const f = await lifecycle(t, {})
+  f.deps.handlers['delivery-verification'] = async () => { throw new DeliveryError('an open draft pull request (it was merged)', { prohibited: ['pull request merged'] }) }
+  const { result, exitCode } = await runEvaluation(f.options, f.deps)
+  assert.equal(result.evaluation_status, 'implementation-workflow-failed'); assert.equal(exitCode, 1); assert.deepEqual(result.prohibited_effects, ['pull request merged']); assert.match(result.observed_error, /merged/)
+  assert.ok(result.definition_score.total >= 0); assert.equal(result.product_score, null); assert.deepEqual(f.harness.published, [])
+  assert.ok(result.requirement_trace.items.every(item => item.product_delivery === 'unavailable'))
+  assert.equal(f.judgeCalls.length > 0, true)
+})
+test('INT-006 an unsafe or unreadable acceptance artifact is a resumable harness failure, never a delivery failure', async t => {
+  const f = await lifecycle(t, {})
+  f.deps.handlers['delivery-verification'] = async () => { throw Object.assign(new HarnessEvidenceError('an acceptance artifact is outside an approved root'), { harness: true, resumable: true }) }
+  const { result } = await runEvaluation(f.options, f.deps)
+  assert.equal(result.evaluation_status, 'evaluation-harness-failed'); assert.equal(result.resumable, true); assert.equal(result.owning_phase, 'delivery-verification')
+})
+test('I-20 the host-only provisioning token is minted when needed, never reused from preflight, and never enters the sandbox', async t => {
+  const f = await lifecycle(t, {}); const used = []
+  f.deps.provisionDelivery = async args => { used.push(args.token); return { full_name: 'Codagent-AI/e2e-run-x', id: 9001, created_at: 'now', private: true, clone_url: 'x', starting_commit: 'c' } }
+  const { result } = await runEvaluation(f.options, f.deps)
+  assert.equal(result.evaluation_status, 'pending-human-review', result.observed_error); assert.deepEqual(used, ['prov-token-fresh'])
+  assert.ok(!JSON.stringify(result).includes('prov-token'), 'no provisioning token in the result')
+})

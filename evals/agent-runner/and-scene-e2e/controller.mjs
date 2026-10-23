@@ -174,8 +174,8 @@ export async function runEvaluation(options, deps = {}) {
     provisioning: async () => {
       const patterns = await readJson(patternsPath)
       const delivery = options.resume && checkpoint.delivery?.full_name
-        ? await (deps.reuseDelivery ?? reuseDelivery)({ app, recorded: checkpoint.delivery, token: inspected.provisioning.token })
-        : await (deps.provisionDelivery ?? provisionDelivery)({ app, runId: checkpoint.run_id, bundlePath: join(inputDir, 'starting-repo.bundle'), commit: checkpoint.materialization.commit, patterns, token: inspected.provisioning.token })
+        ? await (deps.reuseDelivery ?? reuseDelivery)({ app, recorded: checkpoint.delivery, token: await provisioningToken() })
+        : await (deps.provisionDelivery ?? provisionDelivery)({ app, runId: checkpoint.run_id, bundlePath: join(inputDir, 'starting-repo.bundle'), commit: checkpoint.materialization.commit, patterns, token: await provisioningToken() })
       checkpoint.delivery = delivery
       const target = join(runDir, 'phases/delivery-repository.json')
       await writeJsonAtomic(target, delivery); await persist()
@@ -205,13 +205,13 @@ export async function runEvaluation(options, deps = {}) {
     'implement-workflow': () => dispatch('implement', deps.startImplementResponder ?? (({ signal }) => watchForRequests({ exchangeDir: sandbox.exchangeDir, signal }))),
     'delivery-verification': async () => {
       const state = await readRunnerRun({ sandbox, runDir, recordedId: checkpoint.runner_run_id })
-      const github = deps.deliveryApi ?? deliveryApi(app, inspected.provisioning.token, checkpoint.delivery.full_name)
+      const token = await provisioningToken()
+      const github = deps.deliveryApi ?? deliveryApi(app, token, checkpoint.delivery.full_name)
       let verified
       try {
-        verified = await (deps.verifyDelivery ?? verifyDelivery)({ runDir, fullName: checkpoint.delivery.full_name, url: deps.deliveryUrl, token: inspected.provisioning.token, api: github, sessionDir: state.session_dir })
+        verified = await (deps.verifyDelivery ?? verifyDelivery)({ runDir, fullName: checkpoint.delivery.full_name, url: deps.deliveryUrl, token, api: github, sessionDir: state.session_dir })
       } catch (error) {
-        if (error instanceof DeliveryError) { await writeJsonAtomic(join(runDir, 'phases/delivery.json'), { ok: false, missing_outcome: error.outcome, prohibited_effects: error.prohibited }); throw Object.assign(error, { workflow: true, phase: 'delivery-verification', defineCompleted: true }) }
-        if (error instanceof HarnessEvidenceError) throw Object.assign(error, { harness: true, resumable: true })
+        if (error instanceof DeliveryError) await writeJsonAtomic(join(runDir, 'phases/delivery.json'), { ok: false, missing_outcome: error.outcome, prohibited_effects: error.prohibited })
         throw error
       }
       checkpoint.delivered_commit = verified.delivered_commit
@@ -266,6 +266,8 @@ export async function runEvaluation(options, deps = {}) {
     app = found.provisioning.app
     return found
   }
+  // Installation tokens last an hour and a run lasts hours, so the host-only provisioning token is minted when needed.
+  const provisioningToken = async () => deps.provisioningToken ? deps.provisioningToken() : (await app.provisioningToken()).token
   const deliveryApi = (github, token, full) => ({ pulls: () => github.paged(`/repos/${full}/pulls?state=all`, token), refs: () => github.paged(`/repos/${full}/git/matching-refs/heads`, token) })
   const checkpointUnits = async () => {
     // The define checkpoint: reconciliation, contamination pass 1, disclosure audit, stopping at the first failure.
@@ -339,7 +341,13 @@ export async function runEvaluation(options, deps = {}) {
         checkpoint = beginUnit(checkpoint, { phase, unit: 'phase', inputs: provenance(), dependencies: {} }); await persist()
         try { checkpoint = await completeUnit(checkpoint, { phase, unit: 'phase', inputs: provenance(), dependencies: {}, outputs: await handlers['implement-workflow']() }); await persist() }
         catch (error) { throw Object.assign(error, { defineCompleted: true }) }
-        await unit('delivery-verification', handlers['delivery-verification'])
+        try { await unit('delivery-verification', handlers['delivery-verification']) }
+        catch (error) {
+          // A missing delivery outcome is a workflow failure; evidence the harness could not read is the harness's.
+          if (error instanceof DeliveryError) throw Object.assign(error, { workflow: true, phase: 'delivery-verification' })
+          if (error instanceof HarnessEvidenceError) throw Object.assign(error, { harness: true, resumable: true })
+          throw error
+        }
         await unit('contamination-pass-2', handlers['contamination-pass-2'], { dependencies: { patterns: await hashFile(patternsPath) } })
         if ((await readJson(join(runDir, 'phases/contamination-pass-2.json'))).status === 'contaminated') {
           result = { ...(await readJson(join(runDir, 'phases/contamination-pass-2.json'))), evaluation_status: 'contaminated', owning_phase: 'contamination-pass-2', resumable: false }
