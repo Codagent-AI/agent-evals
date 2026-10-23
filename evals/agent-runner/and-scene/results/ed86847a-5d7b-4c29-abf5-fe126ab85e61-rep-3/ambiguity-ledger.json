@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-23T09-29-10-920676893Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Attribution warning coverage is incomplete; the underlying assumption or context gap is unknown.",
+      "evidence": [
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "attribution-default-link: pass — Default attribution label and target https://github.com/Codagent-AI/and-scene are present."
+      ],
+      "handling": "The delivered helper has incomplete attribution warnings. No implementation reasoning or response to this failure is provided.",
+      "consequence": "Attribution warning verification failed, although the default attribution label and target passed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The evidence establishes a validation deficiency but does not identify which warning conditions are missing or distinguish specification ambiguity, unavailable context, an incorrect assumption, or an…",
+      "resolution": "unresolved",
+      "id": "a0eed0939f668028"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Control-origin swipe isolation failed verification; its cause is undocumented.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail —",
+        "input-modifier-keys-pass-through: pass —"
+      ],
+      "handling": "The supplied verification reports failure for ignoring swipes originating from controls. No implementation details or subsequent handling are supplied.",
+      "consequence": "Control-origin swipe isolation did not pass; the exact resulting interaction is not shown.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check shows an interaction requirement was not verified successfully, but provides no basis to attribute this to an assumption or specification gap rather than a coding or verification def…",
+      "resolution": "unresolved",
+      "id": "d2d3271f866e7186"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
