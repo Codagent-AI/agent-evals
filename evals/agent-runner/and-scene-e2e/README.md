@@ -56,6 +56,7 @@ evals/agent-runner/and-scene-e2e/human-review.sh --run-dir DIR [--no-publish]
 node evals/agent-runner/and-scene-e2e/compare.mjs DIR DIR [...]
 ```
 
+* **Checkouts and workflow.** `--runner-dir` and `--skills-dir` (or `AGENT_RUNNER_DIR` and `AGENT_SKILLS_DIR`) name clean Agent Runner and Agent Skills checkouts. `--workflow REF` selects the evaluated workflow (default `openspec:change`); any workflow that declares top-level `create`, `define` and `implement` steps and the five define sub-steps can be compared.
 * **Profiles.** Every role the workflow uses through `implement` needs an explicit
   CLI, model and effort (default workflow: `lead`, `crosscheck`, `implementor`,
   `tester`). `lead` is `claude` or `codex`; `cursor` is accepted only for
