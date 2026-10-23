@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-23T19-41-30-255187069Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The default attribution target differs from the verifier&#39;s expected repository; the basis for the selected target is unavailable.",
+      "evidence": [
+        "attribution-default-link failed: expected https://github.com/Codagent-AI/and-scene; found https://github.com/and-scene/and-scene."
+      ],
+      "handling": "The delivered product used https://github.com/and-scene/and-scene. No explanation or resolution is included in the supplied artifacts.",
+      "consequence": "Default attribution failed verification.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The mismatch is observable, but the supplied evidence contains no implementation instructions, repository context, or agent reasoning establishing whether it resulted from a specification gap, overlo…",
+      "resolution": "unresolved",
+      "id": "a5515e43f91e6432"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The expected project-local screenshot helper and associated visual warnings were reported missing or incomplete.",
+      "evidence": [
+        "quality-project-local-screenshot-helper failed: Project-local Playwright screenshot helper is missing.",
+        "visual-helper-overlap-warning failed: Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning failed: Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning failed: Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "Verification reported these omissions; the supplied workflow artifacts contain no explanation of their handling.",
+      "consequence": "Four helper-related verification checks failed. The evidence does not establish whether visual review occurred through another mechanism.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failures establish missing expected deliverables, but do not establish whether their requirements were specified, discoverable in the repository, or misunderstood by an implementation agent.",
+      "resolution": "unresolved",
+      "id": "c6141b4b19a4e46f"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Verification of ignoring swipes originating from controls failed, without diagnostic details explaining the behavior or implementation decision.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail.",
+        "input-modifier-keys-pass-through and demo-focus-and-keyboard-accessibility both passed."
+      ],
+      "handling": "The supplied evidence records the failed check but provides no reproduction, agent explanation, or subsequent resolution.",
+      "consequence": "Control-origin swipe exclusion did not pass verification; the precise observed interaction is unavailable.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "A failed interaction check alone cannot distinguish an ordinary implementation defect from an assumption or context gap. Passing adjacent input checks does not resolve that uncertainty.",
+      "resolution": "unresolved",
+      "id": "81b178ecef36cfb0"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
