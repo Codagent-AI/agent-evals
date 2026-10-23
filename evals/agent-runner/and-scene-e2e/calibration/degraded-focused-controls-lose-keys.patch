@@ -1,0 +1,19 @@
+diff --git a/src/presentation-kit/usePresentationNav.ts b/src/presentation-kit/usePresentationNav.ts
+index af1130c..3e4117d 100644
+--- a/src/presentation-kit/usePresentationNav.ts
++++ b/src/presentation-kit/usePresentationNav.ts
+@@ -32,14 +32,6 @@ export function usePresentationNav(stepCount: number, initialMode: Mode = 'brows
+       // Don't hijack keys aimed at a focused control: Space/arrows on the
+       // prev/next buttons or a progress dot should drive that control, not also
+       // advance the deck.
+-      const target = e.target
+-      if (
+-        target instanceof HTMLElement &&
+-        (target.closest('button, a, input, textarea, select') ||
+-          target.isContentEditable)
+-      ) {
+-        return
+-      }
+       if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+         e.preventDefault()
+         next()

@@ -70,7 +70,7 @@ export async function evaluateProduct({ runDir, rubric, inventory, bundlePath, c
     const output = join(runDir, '.product/build', build.output)
     const server = await (deps.serve ?? serveOutput)({ root: output })
     try {
-      const session = deps.browserSession ?? createBrowserSession(deps.createDriver)
+      const session = deps.browserSession ?? createBrowserSession(label => deps.createDriver(label, { url: server.url }))
       const browser = await unit('browser-judging', { commit, plan, build: build.output, rubric: rubric.version }, async () => {
         const result = await runBrowserJudging({ rubric, inventory, url: server.url, panel: deps.browserPanel ?? deps.panel, decider: deps.browserDecider ?? deps.decider, invoke: deps.browserInvoke ?? deps.invoke, session, secondOpinion: deps.secondOpinion })
         return { verdicts: result.verdicts, failed_jobs: result.failed_jobs, failures: result.failures, driver_sessions: result.driver_sessions }
@@ -103,7 +103,7 @@ export async function evaluateProduct({ runDir, rubric, inventory, bundlePath, c
       const outcome = await runPanelJob({ job: job.id, criteria: request.criteria, verdicts: ['pass', 'fail'], order: ['pass', 'fail'], panel: deps.panel, decider: deps.decider,
         buildPrompt: () => ({ ...request, panel_line_citations: true, requireSourceCitationsFor: fallbackIds }), schema: request.schema,
         audit: ({ request: next, invoke }) => runJudgeJob({ request: next, invoke }), validateCitations: result => validateSourceCitations(result, request) }).catch(error => ({ ok: false, failure: judgeFailure(error), record: { failure: judgeFailure(error) } }))
-      return outcome.ok ? { ok: true, results: outcome.results.map(({ id, verdict, rationale, citations, basis }) => ({ id, verdict, rationale, citations: citations ?? [], basis })) }
+      return outcome.ok ? { ok: true, results: outcome.results.map(({ id, verdict, rationale, citations, basis, votes }) => ({ id, verdict, rationale, citations: citations ?? [], basis, votes })) }
         : { ok: false, failure: outcome.failure ?? { message: 'judge output exhausted' } }
     }, { cache: value => value.ok !== false })
     return { id: job.id, value }

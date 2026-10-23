@@ -15,7 +15,7 @@ import { createDefinitionJudges } from '../../and-scene-define/lib/judge-invoker
 import { inspectEvaluatorInputs } from '../../and-scene-define/lib/preflight.mjs'
 import { loadProductInputs } from './product-rubric.mjs'
 import { evaluateProduct } from './product-evaluation.mjs'
-import { createProductJudges } from './product-judges.mjs'
+import { createProductionDeps } from './production-deps.mjs'
 import { buildTrace } from './trace.mjs'
 import { ingestWorkflowMetrics } from './metrics.mjs'
 import { assembleResult, writeResultArtifacts } from './result.mjs'
@@ -92,9 +92,9 @@ export async function rescoreEvaluation(options, deps = {}) {
       checkpoint.definition_scored = true
       let evaluated
       await step('product-evaluation', async () => {
-        const judges = deps.productJudges ?? createProductJudges({ runDir, allowedRoots: [join(runDir, 'neutral')] })
+        const production = deps.productDeps ? null : createProductionDeps({ runDir })
         evaluated = await (deps.evaluateProduct ?? evaluateProduct)({ runDir, rubric: product.rubric, inventory: product.inventory, bundlePath: join(runDir, retained.delivery.bundle.path), commit: retained.delivery.delivered_commit, collectedDir: join(runDir, 'collected'), acceptance: retained.delivery.acceptance,
-          plan: retained.product.build_plan, deps: { panel: judges.panel, decider: judges.decider, invoke: judges.invoke, ...deps.productDeps } })
+          plan: retained.product.build_plan, deps: deps.productDeps ?? production })
         const target = join(runDir, 'phases/product-result.json'); await writeJsonAtomic(target, evaluated); return [target]
       })
       await step('requirement-trace', async () => {

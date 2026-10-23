@@ -32,7 +32,7 @@ import { effectiveInvocations, invocationsThrough, ingestWorkflowMetrics } from 
 import { loadProductInputs } from './lib/product-rubric.mjs'
 import { evaluateProduct, ProductHarnessError } from './lib/product-evaluation.mjs'
 import { NotEvaluableError } from './lib/build-plan.mjs'
-import { createProductJudges } from './lib/product-judges.mjs'
+import { createProductionDeps } from './lib/production-deps.mjs'
 import { buildTrace } from './lib/trace.mjs'
 import { assembleResult, writeResultArtifacts } from './lib/result.mjs'
 import { publishRun } from './lib/publication.mjs'
@@ -230,10 +230,10 @@ export async function runEvaluation(options, deps = {}) {
       return [target]
     },
     'product-evaluation': async () => {
-      const judges = deps.productJudges ?? createProductJudges({ runDir, allowedRoots: [join(runDir, 'neutral')] })
+      const production = deps.productDeps ? null : createProductionDeps({ runDir, env })
       const delivery = await readJson(join(runDir, 'phases/delivery.json'))
       const evaluated = await evaluateProduct({ runDir, rubric: product.rubric, inventory: product.inventory, bundlePath: join(runDir, 'source/candidate.bundle'), commit: delivery.delivered_commit, collectedDir: join(runDir, 'collected'), acceptance: delivery.acceptance,
-        plan: checkpoint.build_plan ?? null, deps: { panel: judges.panel, decider: judges.decider, invoke: judges.invoke, ...deps.productDeps } })
+        plan: checkpoint.build_plan ?? null, deps: deps.productDeps ?? production })
       checkpoint.build_plan = evaluated.build_plan
       const target = join(runDir, 'phases/product-result.json')
       await writeJsonAtomic(target, evaluated); await persist()

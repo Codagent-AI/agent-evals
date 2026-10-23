@@ -1,0 +1,114 @@
+diff --git a/src/presentation-kit/chrome/Footer.tsx b/src/presentation-kit/chrome/Footer.tsx
+index 120a358..6f7fc12 100644
+--- a/src/presentation-kit/chrome/Footer.tsx
++++ b/src/presentation-kit/chrome/Footer.tsx
+@@ -79,8 +79,6 @@ export function Footer({
+               space and wrap rather than shoving prev/next off a narrow screen. */}
+           <div
+             data-testid="step-progress"
+-            data-step-count={steps.length}
+-            data-step-index={step}
+             data-presentation-progress
+             style={{
+               display: 'flex',
+diff --git a/src/presentation-kit/constants.ts b/src/presentation-kit/constants.ts
+index d93b5ea..c590939 100644
+--- a/src/presentation-kit/constants.ts
++++ b/src/presentation-kit/constants.ts
+@@ -15,8 +15,8 @@ export const ENTER_T = { duration: 0.45, ease: EASE, delay: ENTER_DELAY }
+ // uniformly to fit the viewport (see useFitScale). A fixed coordinate space
+ // means the composition never reflows and the scale is constant during a
+ // morph — so layoutId transitions stay clean at every viewport size.
+-export const DESIGN_W = 880
+-export const DESIGN_H = 380
++export const DESIGN_W = 960
++export const DESIGN_H = 420
+ export const MIN_SCALE = 0.35
+ 
+ /**
+diff --git a/src/presentations/how-to-make-a-presentation/outline.ts b/src/presentations/how-to-make-a-presentation/outline.ts
+index 4882604..0bb183a 100644
+--- a/src/presentations/how-to-make-a-presentation/outline.ts
++++ b/src/presentations/how-to-make-a-presentation/outline.ts
+@@ -3,49 +3,43 @@ export const REFERENCE_STEP_OUTLINE = [
+   {
+     id: 'you-have-a-topic',
+     era: 'the ask',
+-    title: 'You have a topic',
++    title: 'Part: You have a topic',
+     caption: 'It starts with you, a topic, and mild overconfidence.',
+   },
+   {
+     id: 'skill-interviews-you',
+     era: 'the ask',
+-    title: 'The skill interviews you',
++    title: 'Part: The skill interviews you',
+     caption: 'One question at a time: the topic, the look, then each beat of the story.',
+   },
+   {
+     id: 'answers-become-steps',
+     era: 'the gathering',
+-    title: 'Answers become steps',
++    title: 'Part: Answers become steps',
+     caption: 'Each answer lands as a step card — title, caption, visual — plus what morphs from one step into the next.',
+   },
+   {
+     id: 'the-deck-grows',
+     era: 'the gathering',
+-    title: 'The deck grows',
++    title: 'Part: The deck grows',
+     caption: 'Same shapes, new beats. Every answer extends the story without redrawing it.',
+   },
+-  {
+-    id: 'you-set-the-depth',
+-    era: 'the gathering',
+-    title: 'You set the depth',
+-    caption: 'Spell out every step, or sketch a few and see how it looks. You hold the gate.',
+-  },
+   {
+     id: 'assembles-the-scene',
+     era: 'the build',
+-    title: 'It assembles the scene',
++    title: 'Part: It assembles the scene',
+     caption: 'Your steps are wired into one evolving scene, drawn with a shared scene kit — ready-made boxes, arrows, and motion that make entities morph.',
+   },
+   {
+     id: 'checks-its-work',
+     era: 'the build',
+-    title: 'It checks its own work',
++    title: 'Part: It checks its own work',
+     caption: 'Before saying done, it builds and renders every step — and fixes what breaks.',
+   },
+   {
+     id: 'loop-it',
+     era: 'the loop',
+-    title: 'Changed your mind? Loop it.',
++    title: 'Part: Changed your mind? Loop it.',
+     caption: 'Point at a step and ask. The skill edits the scene in place — nothing is redrawn from scratch.',
+   },
+   {
+diff --git a/src/presentations/how-to-make-a-presentation/steps.ts b/src/presentations/how-to-make-a-presentation/steps.ts
+index ac2c28c..2d87913 100644
+--- a/src/presentations/how-to-make-a-presentation/steps.ts
++++ b/src/presentations/how-to-make-a-presentation/steps.ts
+@@ -14,7 +14,6 @@ const PAYLOADS: Record<(typeof REFERENCE_STEP_OUTLINE)[number]['id'], RefPayload
+   'skill-interviews-you': { skill: true, question: 'what’s it about?' },
+   'answers-become-steps': { skill: true, question: 'and step 1?', cards: 1 },
+   'the-deck-grows': { skill: true, question: 'step 2… step 3?', cards: 3 },
+-  'you-set-the-depth': { skill: true, question: 'how deep?', cards: 3, ghost: true, depth: true },
+   'assembles-the-scene': { skill: true, cards: 3, depth: true, route: true },
+   'checks-its-work': { skill: true, cards: 3, depth: true, route: true, verify: true },
+   'loop-it': {
+diff --git a/src/presentations/index.ts b/src/presentations/index.ts
+index fb50ca8..4278e72 100644
+--- a/src/presentations/index.ts
++++ b/src/presentations/index.ts
+@@ -9,7 +9,7 @@ export interface PresentationEntry {
+ /** Explicit registry — add a folder + one line here for each presentation. */
+ export const presentations: PresentationEntry[] = [
+   {
+-    slug: 'how-to-make-a-presentation',
++    slug: 'tour',
+     title: 'How to Use This Skill to Make a Presentation',
+     load: () => import('./how-to-make-a-presentation/Talk'),
+   },
