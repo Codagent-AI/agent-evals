@@ -94,12 +94,21 @@ Create a GitHub App on `Codagent-AI` with repository permissions Administration
 (read) and Metadata (read), and organization permission to create repositories.
 Do **not** grant Workflows. Install it on `Codagent-AI` with **Only select
 repositories** and none selected, so it reaches only the repositories it creates.
-Store the private key on the host and export:
+Store the private key on the host (mode 0600) and record the App in
+`~/.config/and-scene-e2e/app.json` (mode 0600):
 
-```sh
-export AND_SCENE_E2E_APP_ID=...
-export AND_SCENE_E2E_APP_KEY_FILE=/path/to/private-key.pem
+```json
+{ "id": 5441507, "slug": "codagent-and-scene-e2e", "key_file": "/Users/paul/.config/and-scene-e2e/app-key.pem" }
 ```
+
+The suite reads the App id and key path from that record. `AND_SCENE_E2E_APP_ID`
+and `AND_SCENE_E2E_APP_KEY_FILE` override it when set.
+
+Claude auth for the sandbox comes from `~/.claude/.credentials.json`, or from
+`CLAUDE_CODE_OAUTH_TOKEN`: the environment's, else that one entry of Agent
+Runner's `.sandbox-secrets.env` (or `SANDBOX_SECRETS_FILE`), as for the other
+suites. The sandbox still runs with `--no-default-secrets`, so that file's
+`GITHUB_TOKEN` never reaches the evaluated environment.
 
 `run.sh --dry-run` then proves the reach check: it lists no repository outside the
 `e2e-run-` delivery repositories. If GitHub does not grant the App access to

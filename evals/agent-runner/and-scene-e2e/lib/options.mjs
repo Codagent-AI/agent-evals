@@ -57,7 +57,8 @@ Compare recorded runs (scores are paired only within one series; at least three 
   node evals/agent-runner/and-scene-e2e/compare.mjs RUN_DIR RUN_DIR [...]
 Human review of a pending run: evals/agent-runner/and-scene-e2e/human-review.sh --run-dir RUN_DIR
 Calibration (with --calibrate): --out DIR, --repeats N (>=3, default 3), --calibration-dir DIR, --dry-run.
-Host provisioning credentials: AND_SCENE_E2E_APP_ID and AND_SCENE_E2E_APP_KEY_FILE (a GitHub App installed on Codagent-AI with no repositories selected).
+Host provisioning credentials: AND_SCENE_E2E_APP_ID and AND_SCENE_E2E_APP_KEY_FILE (a GitHub App installed on Codagent-AI with no repositories selected), read from ~/.config/and-scene-e2e/app.json when unset.
+Claude auth for the sandbox: ~/.claude/.credentials.json, or CLAUDE_CODE_OAUTH_TOKEN from the environment or Agent Runner's .sandbox-secrets.env (that entry only).
 `
 const MODES = ['--dry-run', '--run-agent', '--resume', '--calibrate', '--rescore-from']
 export function parseArguments(args, env = process.env) {

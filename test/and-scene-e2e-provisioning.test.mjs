@@ -179,3 +179,23 @@ test('an App key file that is not a PEM private key fails preflight with a clear
   await assert.rejects(loadAppCredentials({ AND_SCENE_E2E_APP_ID: '1', AND_SCENE_E2E_APP_KEY_FILE: bad }), error => error instanceof ProvisioningError && /not a PEM private key/.test(error.message) && !/error:|DECODER|asn1/i.test(error.message))
   assert.equal((await loadAppCredentials({ AND_SCENE_E2E_APP_ID: '1', AND_SCENE_E2E_APP_KEY_FILE: good })).appId, '1')
 })
+
+test('credentials come from the App record and the Runner secrets file when the environment lacks them', async t => {
+  const { resolveCredentialEnv } = await import('../evals/agent-runner/and-scene-e2e/lib/credentials.mjs')
+  const home = await temp(t); const runnerDir = await temp(t)
+  await mkdir(join(home, '.config/and-scene-e2e'), { recursive: true })
+  await writeFile(join(home, '.config/and-scene-e2e/app.json'), JSON.stringify({ id: 42, slug: 's', key_file: '/keys/app.pem' }))
+  await writeFile(join(runnerDir, '.sandbox-secrets.env'), 'GITHUB_TOKEN=broad-token\nexport CLAUDE_CODE_OAUTH_TOKEN="claude-token"\n')
+  const found = await resolveCredentialEnv({ PATH: '/bin' }, { runnerDir, home })
+  assert.equal(found.AND_SCENE_E2E_APP_ID, '42')
+  assert.equal(found.AND_SCENE_E2E_APP_KEY_FILE, '/keys/app.pem')
+  assert.equal(found.CLAUDE_CODE_OAUTH_TOKEN, 'claude-token')
+  // Only the Claude entry is taken: the broad GitHub token never enters the run's environment.
+  assert.equal(found.GITHUB_TOKEN, undefined)
+  // The environment wins over both sources.
+  const explicit = await resolveCredentialEnv({ AND_SCENE_E2E_APP_ID: '7', AND_SCENE_E2E_APP_KEY_FILE: '/k.pem', CLAUDE_CODE_OAUTH_TOKEN: 'env-token' }, { runnerDir, home })
+  assert.deepEqual([explicit.AND_SCENE_E2E_APP_ID, explicit.AND_SCENE_E2E_APP_KEY_FILE, explicit.CLAUDE_CODE_OAUTH_TOKEN], ['7', '/k.pem', 'env-token'])
+  // With neither source, nothing is invented and preflight still reports what is missing.
+  const none = await resolveCredentialEnv({}, { runnerDir: await temp(t), home: await temp(t) })
+  assert.deepEqual([none.AND_SCENE_E2E_APP_ID, none.CLAUDE_CODE_OAUTH_TOKEN], [undefined, undefined])
+})

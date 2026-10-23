@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Host lifecycle for one end-to-end evaluation: provision a delivery repository, run the selected workflow in
 // two capped invocations around a define checkpoint, verify delivery, then audit, score and report.
+import { resolveCredentialEnv } from './lib/credentials.mjs'
 import { mkdir, rm, lstat, open, unlink, readFile, rename, writeFile, copyFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -62,7 +63,7 @@ const shortId = () => randomUUID().replace(/-/g, '').slice(0, 12)
 export async function runEvaluation(options, deps = {}) {
   if (options.rescoreFrom) return rescoreEvaluation(options, deps)
   const runDir = resolve(options.runDir)
-  const env = deps.env ?? process.env
+  const env = deps.env ?? await resolveCredentialEnv(process.env, { runnerDir: options.runnerDir })
   const now = deps.now ?? (() => Date.now())
   const statePath = join(runDir, 'run-state.json')
   const inputDir = join(runDir, 'sandbox-input')
@@ -148,7 +149,7 @@ export async function runEvaluation(options, deps = {}) {
         checkpoint.step_order = inspected.workflow.top_steps
         Object.assign(checkpoint, { stall_window_ms: options.stallWindowMs, token_refresh_minutes: options.tokenRefreshMinutes, active_ms: 0, quota_waits: [] })
       }
-      sandbox = deps.sandbox ?? new E2ESandbox({ ...options, runDir, tokenDir, reviewerClis: inspected.reviewerClis, workflow: options.workflow, deliveryUrl: `https://github.com/${ORGANIZATION}/${deliveryName(checkpoint.run_id)}.git` })
+      sandbox = deps.sandbox ?? new E2ESandbox({ ...options, env, runDir, tokenDir, reviewerClis: inspected.reviewerClis, workflow: options.workflow, deliveryUrl: `https://github.com/${ORGANIZATION}/${deliveryName(checkpoint.run_id)}.git` })
       checkpoint = beginUnit(checkpoint, { phase: 'preflight', unit: 'phase', inputs: identity, dependencies: {} }); await persist()
       const staging = join(runDir, '.materialization'); const runtimeStage = join(runDir, '.sandbox-input-staging')
       await privatePath(staging); await privatePath(runtimeStage)
