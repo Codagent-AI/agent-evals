@@ -187,12 +187,12 @@ If no exact defensible match or sufficient usage can be established, the attempt
 - **THEN** the attempt cost remains unavailable and the overall total-cost completeness reflects the gap
 
 ### Requirement: Implementation-only cost scope
-Only agent invocations executed inside the Agent Runner implementation workflow SHALL contribute to agent-and-model costs and the total estimated API cost. Eval-owned judging, evidence or screenshot repair, pricing lookup or parsing, deterministic checks, human review, scoring, and report generation SHALL NOT be priced or included in that total.
+Only agent invocations executed inside the evaluated Agent Runner workflow run SHALL contribute to agent-and-model costs and the total estimated API cost. Every agent invocation in that run SHALL contribute, whatever part of the workflow made it; the total and active duration SHALL cover the whole evaluated run. Eval-owned judging, evidence or screenshot repair, pricing lookup or parsing, deterministic checks, human review, scoring, and report generation SHALL NOT be priced or included in that total.
 
 The harness SHALL durably capture eval-owned Codex and Claude usage when the CLI reports it, including phase, provider, model, raw token categories, and canonical token totals. Missing eval-owned telemetry SHALL remain explicitly unavailable or partial. Eval-owned usage SHALL stay outside implementation cost aggregation and SHALL NOT be priced. Cost SHALL remain report-only and SHALL NOT affect product points, gates, or pass status.
 
 #### Scenario: Implementation agent incurs cost
-- **WHEN** a lead-agent or task-implementor invocation inside Agent Runner has a resolved cost
+- **WHEN** a lead-agent, crosscheck, task-implementor, or tester invocation inside the evaluated Agent Runner workflow run has a resolved cost
 - **THEN** that cost contributes to its agent-and-model row and the implementation total
 
 #### Scenario: Claude judge incurs usage
@@ -227,7 +227,7 @@ Timing SHALL exclude time while the eval process is stopped, time awaiting a hum
 - **THEN** pending time and reviewer interaction time do not contribute to any reported duration
 
 ### Requirement: Detailed result artifact
-The harness SHALL atomically write a versioned `result.json` containing run kind; evaluation status and candidate product verdict when applicable; score denominator; component applicability; `official_score` when complete candidate scoring produced one; `automated_subtotal` when all applicable automated scoring is complete; a nullable `score.automated_pass` eligibility decision and structured `score.automated_failures`; `available_component_scores` for individually completed components; component, subcomponent, criterion, and gate results; any user-approved technical adjudication with raw scores, revised scores, approver, time, rationale, and findings; automated and human rubric provenance; human responses and rationales; Agent Runner workflow, agent-role provenance, and linked-audit lifecycle states and warnings; candidate repository, branch, draft-PR URL, base, draft state, final local SHA, and final PR SHA; the final Validator's successful or intentional skipped result and candidate-reported CI status when present; verified acceptance-evidence lineage; separate candidate-produced and evaluator-produced evidence summaries; per-agent/model/allocation implementation usage and costs with dispatch counts; pricing evidence and verification state; machine phase timing; checkpoint and resume history; independent history, delivery, usage, identity, per-model-attribution, and pricing completeness fields; artifact references; and the shared-92 reference comparison when applicable.
+The harness SHALL atomically write a versioned `result.json` containing run kind; evaluation status and candidate product verdict when applicable; score denominator; component applicability; `official_score` when complete candidate scoring produced one; `automated_subtotal` when all applicable automated scoring is complete; a nullable `score.automated_pass` eligibility decision and structured `score.automated_failures`; `available_component_scores` for individually completed components; component, subcomponent, criterion, and gate results; any user-approved technical adjudication with raw scores, revised scores, approver, time, rationale, and findings; automated and human rubric provenance; human responses and rationales; Agent Runner workflow, agent-role provenance, and linked-audit lifecycle states and warnings; candidate repository, branch, draft-PR URL, base, draft state, final local SHA, and final PR SHA; the requested Validator mode and candidate-reported CI status when present; verified acceptance-evidence lineage; separate candidate-produced and evaluator-produced evidence summaries; per-agent/model/allocation implementation usage and costs with dispatch counts; pricing evidence and verification state; machine phase timing; checkpoint and resume history; independent history, delivery, usage, identity, per-model-attribution, and pricing completeness fields; artifact references; and the shared-92 reference comparison when applicable.
 
 The harness SHALL NOT rescale `automated_subtotal`, `available_component_scores`, a reference score, or the shared comparison. In human-facing output, provenance SHALL be labeled in plain language as "source and version details."
 
@@ -279,7 +279,7 @@ The harness SHALL NOT rescale `automated_subtotal`, `available_component_scores`
 
 #### Scenario: Candidate delivery identity is recorded
 - **WHEN** a candidate reaches scored judging
-- **THEN** `result.json` records its repository, `eval/and-scene/<run-id>` branch, draft-PR URL and base, draft state, matching final local and PR SHA, mode-consistent final Validator outcome, and any candidate-reported CI status
+- **THEN** `result.json` records its repository, `eval/and-scene/<run-id>` branch, draft-PR URL and base, draft state, matching final local and PR SHA, requested Validator mode, and any candidate-reported CI status
 
 #### Scenario: Technical adjudication is recorded
 - **WHEN** the user approves a post-run technical adjudication

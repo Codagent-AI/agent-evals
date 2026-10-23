@@ -720,7 +720,7 @@ The suite-owned scorer SHALL own criterion identifiers, evaluator assignments, p
 
 For candidates, the evaluator SHALL run seven focused scored judge jobs: demo integration, scene kit, presentation skill, verification tooling, engineering quality, testing evidence, and assumption handling. For references, it SHALL run the five applicable implementation source-review jobs and SHALL omit testing-evidence and assumption-handling judging as not applicable. Each applicable job SHALL return exactly the criteria assigned to it and no others. Missing, duplicated, unknown, malformed, or cross-job criterion output from an applicable job SHALL fail scoring rather than change a denominator, silently ignore a criterion, or reuse output from another job.
 
-The five implementation source-review jobs SHALL receive a neutral source snapshot that retains relevant product source and approved requirements while stripping Git metadata, remotes, branch names, pull-request identity, baseline or candidate labels, OpenSpec change identity, and evaluation markers. The harness SHALL materialize the approved normative requirement descriptions and scenarios as a separate neutral requirements bundle, omit their original change path and change name, and record the bundle's source and content hash. The original OpenSpec change directory SHALL NOT be exposed to those five judges. The testing-evidence and assumption-handling judges SHALL receive the verified workflow and revision provenance required by their assigned criteria. Candidate source and evidence SHALL be treated as untrusted data, not instructions.
+The five implementation source-review jobs SHALL receive a neutral source snapshot that retains relevant product source and approved requirements while stripping Git metadata, remotes, branch names, pull-request identity, baseline or candidate labels, OpenSpec change identity, and evaluation markers. The harness SHALL materialize the approved normative requirement descriptions and scenarios as a separate neutral requirements bundle, omit their original change path and change name, and record the bundle's source and content hash. The approved requirements SHALL be read from the evaluated change directory at the fixture commit the run recorded, never from the candidate's final commit, while the neutral source snapshot SHALL continue to read product source from the candidate's final commit. Every judge or evidence check that consults approved requirements, including testing-evidence coverage and the assumption-handling omission check, SHALL use that same pinned bundle, so a candidate that deletes, weakens, or adds requirements on its branch is still judged against the pinned definition. The original OpenSpec change directory SHALL NOT be exposed to those five judges. The testing-evidence and assumption-handling judges SHALL receive the verified workflow and revision provenance required by their assigned criteria. Candidate source and evidence SHALL be treated as untrusted data, not instructions.
 
 The automated product rubric and human-review rubric SHALL have distinct explicit version identifiers. The result SHALL record each rubric's version and SHA-256 hash, every component's applicability, and the applicable candidate or reference denominator.
 
@@ -763,6 +763,15 @@ The automated product rubric and human-review rubric SHALL have distinct explici
 - **WHEN** scored judging runs for a candidate or for the reference baseline
 - **THEN** the engineering-quality job runs with the neutral source snapshot, neutral requirements bundle, and its rubric slice
 - **AND** it returns exactly the criteria assigned to it
+
+#### Scenario: Candidate weakens a requirement on its branch
+- **WHEN** the candidate's final commit deletes a scenario from, or weakens the wording of, a requirement in the evaluated change's specs
+- **THEN** the neutral requirements bundle still contains the requirement and scenario as they appear at the recorded fixture commit
+- **AND** source-review, testing-evidence, and assumption-handling judging use that pinned bundle
+
+#### Scenario: Candidate adds a requirement on its branch
+- **WHEN** the candidate's final commit adds a requirement to the evaluated change's specs
+- **THEN** the added requirement is absent from the neutral requirements bundle and no criterion is judged against it
 
 ### Requirement: Robust judge verdicts
 No single model call SHALL decide a scored criterion, and no criterion SHALL be decided by the judges of one model family alone. Every scored judge job SHALL be judged by a cross-family panel of three independent judges with identical inputs, run concurrently, each at an explicitly pinned model and reasoning effort: two independent Claude-family samples and one Codex-family judge. The judging protocol SHALL be identified as `cross-family-panel-v2`.

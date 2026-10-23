@@ -75,16 +75,16 @@ A pending candidate SHALL report its automated subtotal out of 70. A pending loc
 - **AND** it does not rerun valid automated scoring
 
 ### Requirement: Implementation-workflow failure outcome
-The evaluation SHALL use `implementation-workflow-failed` when Agent Runner or an implementation-owned workflow step fails before completing the full `implement-change-v1.0` workflow and the harness cannot continue to an evaluable delivered candidate. An evaluable delivery SHALL require the recorded candidate branch, clean committed worktree, draft pull request with non-empty base, matching local and PR heads, an explicit final Validator outcome consistent with `skip_validator`, required acceptance artifacts, final acceptance handoff, and assumptions ledger.
+The evaluation SHALL use `implementation-workflow-failed` when Agent Runner reports the evaluated workflow run as failed, or the run ends without completing and the harness cannot continue to an evaluable delivered candidate. An evaluable delivery SHALL require the recorded candidate branch, clean committed worktree, draft pull request with non-empty base, matching local and PR heads, required acceptance artifacts, final acceptance handoff, and assumptions ledger.
 
-The result SHALL identify the failed workflow step, attempt or session when available, observed error, Agent Runner run identity, missing delivery output or identity, and whether the workflow can be resumed. Product defects, failed acceptance flows, limitations, unresolved assumptions, and candidate-reported CI states contained in a structurally complete handoff SHALL remain judgeable evidence and SHALL NOT by themselves cause this outcome.
+The result SHALL identify the failed workflow step, attempt or session as Agent Runner reports them when available, observed error, Agent Runner run identity, missing delivery output or identity, and whether the workflow can be resumed. Product defects, failed acceptance flows, limitations, unresolved assumptions, and candidate-reported CI states contained in a structurally complete handoff SHALL remain judgeable evidence and SHALL NOT by themselves cause this outcome.
 
 #### Scenario: Agent Runner terminates before delivering a candidate
-- **WHEN** the recorded `implement-change-v2.0` run terminates unsuccessfully before completing the required candidate delivery
+- **WHEN** the recorded evaluated workflow run terminates unsuccessfully before completing the required candidate delivery
 - **THEN** `evaluation_status` is `implementation-workflow-failed` and `product_verdict` is `unavailable`
 
 #### Scenario: Required candidate delivery output is missing
-- **WHEN** Agent Runner finishes without a required branch, draft-PR identity, matching final head, mode-consistent Validator outcome, acceptance artifact, handoff, or assumptions ledger
+- **WHEN** Agent Runner finishes without a required branch, draft-PR identity, matching final head, acceptance artifact, handoff, or assumptions ledger
 - **THEN** `evaluation_status` is `implementation-workflow-failed`
 - **AND** scored product judging does not begin
 

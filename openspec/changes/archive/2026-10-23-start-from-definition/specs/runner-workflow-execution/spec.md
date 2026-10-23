@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Evaluated workflow selection and provenance
-The evaluation harness SHALL accept the evaluated Agent Runner workflow as an input, `--workflow <logical-ref>`, defaulting to `core:plan-and-implement-change`. It SHALL treat the workflow as opaque: beyond its logical reference, its declared parameters, and the `codagent:*` skills its files name, the harness SHALL NOT depend on the workflow's step identifiers, step order, nesting, named sessions, or recorded step paths for preflight, delivery verification, role attribution, or scoring.
+The evaluation harness SHALL accept the evaluated Agent Runner workflow as an input, `--workflow <logical-ref>`, defaulting to the suite's default workflow. It SHALL treat the workflow as opaque: beyond its logical reference, its declared parameters, and the `codagent:*` skills its files name, the harness SHALL NOT depend on the workflow's step identifiers, step order, nesting, named sessions, or recorded step paths for preflight, delivery verification, role attribution, or scoring.
 
 Before starting or resuming an Agent Runner workflow, the harness SHALL require the configured Agent Runner checkout to be a Git worktree with no staged, unstaged, or untracked changes. It SHALL record the checkout's commit SHA, the Agent Runner CLI version, the evaluated workflow reference, and the SHA-256 hash of the definition Agent Runner resolves for that reference (`agent-runner debug --show-workflow <logical-ref>`), but SHALL NOT require the commit SHA to match a predetermined value. The harness SHALL record two workflow identities: the requested logical reference, and the Runner-reported workflow name, which is the `name` declared by the resolved definition. Agent Runner records that name in run state and `run-metrics.json`, so the harness SHALL derive the expected Runner-reported name from the resolved definition. It SHALL use the expected name for source-run discovery, resume classification, and metrics ingestion, and SHALL reject a run or metrics artifact whose reported name differs from it. It SHALL NOT accept a discovered run merely because the run's own reported name is self-consistent.
 
@@ -9,7 +9,7 @@ On resume, the recorded commit, workflow reference, resolved-definition hash, Ru
 
 #### Scenario: Default workflow is evaluated
 - **WHEN** a new evaluation runs without `--workflow`
-- **THEN** the harness evaluates `core:plan-and-implement-change` and records that reference, its resolved-definition hash, the Agent Runner commit, and the CLI version
+- **THEN** the harness evaluates the suite's default workflow and records that reference, its resolved-definition hash, the Agent Runner commit, and the CLI version
 
 #### Scenario: Another workflow is selected
 - **WHEN** a new evaluation runs with `--workflow` naming another logical workflow that resolves and declares the required parameters
@@ -28,9 +28,9 @@ On resume, the recorded commit, workflow reference, resolved-definition hash, Ru
 - **THEN** the harness refuses to reuse the Agent Runner checkpoint and reports a resume-provenance error
 
 #### Scenario: Logical reference maps to the reported name
-- **WHEN** the evaluation requests `core:plan-and-implement-change` and the resolved definition declares `name: plan-and-implement-change`
+- **WHEN** the evaluation requests a workflow whose resolved definition declares a name, such as `name: example`
 - **THEN** the harness records both identities
-- **AND** it accepts run state and `run-metrics.json` only when they report `plan-and-implement-change`
+- **AND** it accepts run state and `run-metrics.json` only when they report that declared name
 
 #### Scenario: Discovered run reports a different workflow
 - **WHEN** source-run discovery or metrics ingestion finds a run whose reported workflow name differs from the name the resolved definition declares
@@ -90,7 +90,7 @@ Results produced from this starting line SHALL form a new series. Earlier result
 - **THEN** product judging still grades the candidate against the pinned fixture definition and rubric
 
 #### Scenario: Earlier repetition is offered to a new baseline
-- **WHEN** a repetition that recorded `core:implement-change` and the earlier fixture commit is added to a baseline defined by a `core:plan-and-implement-change` repetition
+- **WHEN** a repetition that recorded a different workflow reference and the earlier fixture commit is added to a baseline defined by the definition-only starting line
 - **THEN** the baseline command refuses it as an identity mismatch naming the workflow and fixture-commit fields
 
 ### Requirement: Workflow input regression detection

@@ -40,7 +40,7 @@ The acceptance artifacts must be under the Runner session's `output/` directory,
 
 - **Removing step knowledge:**
   - Delete `REQUIRED_FINAL_STEPS`, the verify-change delegation check, `finalStepPrefix`, `lastLeafStep`'s step-name prefix assumption, and the final-Validator outcome check from `lib/workflow.mjs` and `lib/state-machine.mjs`.
-  - Record the requested logical reference, such as `core:plan-and-implement-change`, and separately the expected Runner-reported name: the `name` declared by the resolved definition, such as `plan-and-implement-change`.
+  - Record the requested logical reference, such as `core:example`, and separately the expected Runner-reported name: the `name` declared by the resolved definition, such as `example`.
   - Source-run discovery, `classifyRunnerRun`, resume, and metrics ingestion (`controller.mjs:1703`, `lib/runner-metrics.mjs:1050`) compare against the expected name, never against a run's own reported name.
   - The harness still treats the Runner run as one opaque unit for start, wait, resume, and continue.
   - Keep recording every observed step and outcome as data in provenance and reports. Just don't interpret it.
