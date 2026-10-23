@@ -93,8 +93,8 @@ async function withAskpass(token, run) {
     return await run({ GIT_ASKPASS: script, E2E_GIT_TOKEN: token, GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' })
   } finally { await rm(dir, { recursive: true, force: true }) }
 }
-export function gitCommand(args, { env = {}, cwd } = {}) {
-  return new Promise((resolve, reject) => execFile('git', args, { cwd, env: { PATH: process.env.PATH, HOME: process.env.HOME, ...env }, maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => error ? reject(Object.assign(error, { stderr })) : resolve(stdout)))
+export function gitCommand(args, { env = {}, cwd, encoding = 'utf8' } = {}) {
+  return new Promise((resolve, reject) => execFile('git', args, { cwd, encoding, env: { PATH: process.env.PATH, HOME: process.env.HOME, ...env }, maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => error ? reject(Object.assign(error, { stderr })) : resolve(stdout)))
 }
 export function authenticatedGit(token, args, options = {}) {
   return withAskpass(token, env => gitCommand(args, { ...options, env: { ...env, ...options.env } }))

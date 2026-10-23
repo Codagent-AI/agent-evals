@@ -1,4 +1,74 @@
 {
+  "eval_owned_values": [
+    {
+      "value": "aria-current",
+      "reason": "ARIA standard attribute accepted as an eval-owned implementation spelling."
+    },
+    {
+      "value": "1280×720",
+      "reason": "Eval-owned wide reference viewport for judging uniform fit; the fixture names a wide desktop viewport without a size."
+    },
+    {
+      "value": "390×844",
+      "reason": "Eval-owned narrow reference viewport for judging uniform fit; the fixture names a narrow viewport without a size."
+    },
+    {
+      "value": "aria-label",
+      "reason": "ARIA attribute named only to say that accessible-name text is not the on-screen number the fixture requires."
+    },
+    {
+      "value": "https://github.com/Codagent-AI/and-scene",
+      "reason": "The fixture requires the default attribution to link to the and-scene GitHub repository; this is that repository, the fixture's own origin."
+    },
+    {
+      "value": "PowerPoint",
+      "reason": "Exclusion from the fixture proposal's Out of Scope section, repeated by engineering-skill-out-of-scope-redirects; that criterion is eval-owned, so it names the exclusion rather than citing it."
+    },
+    {
+      "value": "Keynote",
+      "reason": "Exclusion from the fixture proposal's Out of Scope section, repeated by engineering-skill-out-of-scope-redirects; that criterion is eval-owned, so it names the exclusion rather than citing it."
+    },
+    {
+      "value": "PDF or image export",
+      "reason": "Exclusion from the fixture proposal's Out of Scope section, repeated by engineering-skill-out-of-scope-redirects; that criterion is eval-owned, so it names the exclusion rather than citing it."
+    },
+    {
+      "value": "visual editor",
+      "reason": "Exclusion from the fixture proposal's Out of Scope section, repeated by engineering-skill-out-of-scope-redirects; that criterion is eval-owned, so it names the exclusion rather than citing it."
+    },
+    {
+      "value": "hosting",
+      "reason": "Exclusion from the fixture proposal's Out of Scope section, repeated by engineering-skill-out-of-scope-redirects; that criterion is eval-owned, so it names the exclusion rather than citing it."
+    },
+    {
+      "value": "data-presentation",
+      "reason": "Prefix of the kit's own data-presentation-* identity hook attributes, named as an example by the eval-owned engineering-typed-kit-primitives criterion; the fixture requires presentation hooks without naming their spelling."
+    },
+    {
+      "value": ".presentation-attribution",
+      "reason": "Example of a kit attribution hook class named by the eval-owned engineering-presentation-css-scoped criterion; the fixture requires a stable attribution styling hook without naming it."
+    },
+    {
+      "value": "layoutId",
+      "reason": "The motion layout identity prop the fixture design uses for persisting entities, named as a kit identity hook by the eval-owned engineering-typed-kit-primitives criterion, which cannot cite the fixture."
+    },
+    {
+      "value": "AnimatePresence",
+      "reason": "The motion library's exit-tracking wrapper, named by entity-ungrouped-transition-morph as the example step-transition mechanism whose mode decides whether a persisting entity morphs across ungrouped steps; the fixture requires the morph without naming the mechanism."
+    },
+    {
+      "value": "mode=\"wait\"",
+      "reason": "The AnimatePresence mode named by entity-ungrouped-transition-morph as the failing example: it removes the outgoing step before mounting the incoming one, so a persisting entity vanishes and reappears; the fixture states the morph, not this mode."
+    },
+    {
+      "value": "popLayout",
+      "reason": "The AnimatePresence mode named by entity-ungrouped-transition-morph as a passing example that keeps both steps' entities present so the persisting entity animates in place; the fixture states the morph, not this mode."
+    },
+    {
+      "value": "sync",
+      "reason": "The AnimatePresence mode named by entity-ungrouped-transition-morph as a passing example when the outgoing step is taken out of layout flow; the fixture states the morph, not this mode."
+    }
+  ],
   "rubric_id": "and-scene-e2e-product",
   "version": "1.0.0",
   "provisional": true,
@@ -492,7 +562,7 @@
             "Fail verification-preview-process-ownership when readiness comes from HTTP polling of a fixed or reused port and the only ownership check is the child's liveness sampled before each request or after a fixed delay: a stale server already listening there answers before the child's exit is observed. A strict port alone is likewise insufficient.",
             "For verification-console-page-error-fails, the source must fail on both console errors and uncaught page errors and report the step. Executable evidence needs one representative browser-error test, either a console error or a page error, that asserts a non-zero exit and the offending step, as the fixture's end-to-end plan describes; separate tests for each error kind are not required.",
             "For verification-step-error-fails, require a test of a step that fails to render or advance that asserts a non-zero exit and the offending step.",
-            "For verification-step-error-fails, the verifier must not treat a missing, zero, or non-numeric data-step-count or data-step-index as progress. Fail when the transition check converts an absent or non-numeric hook into a number that still satisfies its comparison (for example Number(null) === 0 on the first step). Also fail when an unreadable step count makes the verifier step through no steps and still pass. Cite the comparison. The inspect helper's handling of the same hooks is scored by engineering-inspect-fails-loudly, not here."
+            "For verification-step-error-fails, the verifier must not treat a missing, zero, or non-numeric step count or step position as progress. Fail when the transition check converts an absent or non-numeric value into a number that still satisfies its comparison (for example Number(null) === 0 on the first step). Also fail when an unreadable step count makes the verifier step through no steps and still pass. Cite the comparison. The inspect helper's handling of the same values is scored by engineering-inspect-fails-loudly, not here."
           ]
         },
         {

@@ -1,0 +1,130 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { applyFallbacks, createBrowserSession, runBrowserJudging, browserJobs } from '../evals/agent-runner/and-scene-e2e/lib/browser-judging.mjs'
+import { executeReplay, expectationMet, validReplay } from '../evals/agent-runner/and-scene-e2e/lib/replay.mjs'
+import { loadProductInputs } from '../evals/agent-runner/and-scene-e2e/lib/product-rubric.mjs'
+
+const miniRubric = ids => ({ criterion_sources: Object.fromEntries(ids.map(id => [id, { owner: 'eval', reason: `requirement of ${id}` }])), gates: [] })
+const goodReplay = (text = 'OK') => ({ actions: [{ type: 'navigate', path: '/anything' }, { type: 'click', text: 'Next' }], expect: { type: 'text-present', text } })
+const panel = [{ family: 'claude', model: 'm1', effort: 'high' }, { family: 'claude', model: 'm2', effort: 'high' }, { family: 'codex', model: 'm3', effort: 'high' }]
+const decider = { family: 'claude', model: 'd', effort: 'high' }
+// A fake judge CLI: `script[model]` returns the per-criterion results; concurrency is observed.
+function judgeHarness(script) {
+  const state = { active: 0, max: 0, calls: [], prompts: [] }
+  const invoke = async request => {
+    state.active++; state.max = Math.max(state.max, state.active)
+    state.calls.push(request.authority.model); state.prompts.push(request.prompt)
+    await new Promise(resolve => setTimeout(resolve, 5))
+    state.active--
+    const out = script[request.authority.model](request.criteria, request)
+    return JSON.stringify({ results: out })
+  }
+  return { state, invoke }
+}
+const vote = (id, verdict, replay = null) => ({ id, verdict, rationale: `${verdict} ${id}`, evidence: ['saw it'], replay })
+function driverHarness(behaviour) {
+  const state = { sessions: [], open: 0, overlapped: false }
+  const createDriver = async label => {
+    state.open++; if (state.open > 1) state.overlapped = true
+    const session = { label, start: Date.now() }
+    state.sessions.push(session)
+    return { replayGeneric: async (actions, probes) => { await new Promise(resolve => setTimeout(resolve, 5)); return behaviour(actions, probes, label) }, close: async () => { state.open--; session.end = Date.now() } }
+  }
+  return { state, createDriver }
+}
+const observed = (text, changed = true) => ({ states: [{ dom: 'a', screenshot: 'a', text: '', probes: [] }], final: { dom: changed ? 'b' : 'a', screenshot: changed ? 'b' : 'a', text, probes: [] }, marks: {}, product_failure: null })
+const run = async ({ ids, script, behaviour, secondOpinion }) => {
+  const judges = judgeHarness(script); const drivers = driverHarness(behaviour)
+  const session = createBrowserSession(drivers.createDriver)
+  const result = await runBrowserJudging({ rubric: miniRubric(ids), inventory: { items: [] }, url: 'http://127.0.0.1:1', panel: panel.map(member => ({ ...member })), decider: { ...decider }, invoke: judges.invoke, session, secondOpinion, jobs: [{ id: 'job', criteria: ids }] })
+  return { result, judges, drivers }
+}
+
+test('INT-012 a reproducing pass is counted and marked replay-confirmed, in a fresh driver context', async () => {
+  const same = () => ids => ids.map(id => vote(id, 'pass', goodReplay()))
+  const { result, judges, drivers } = await run({ ids: ['A'], script: { m1: same(), m2: same(), m3: same() }, behaviour: () => observed('OK') })
+  assert.equal(result.verdicts.A.verdict, 'pass'); assert.equal(result.verdicts.A.basis, 'replay-confirmed')
+  assert.equal(drivers.state.sessions.length, 1); assert.match(drivers.state.sessions[0].label, /^replay:A/)
+  assert.equal(judges.state.max, 1, 'judge CLIs ran one at a time')
+  assert.equal(drivers.state.overlapped, false)
+})
+
+test('INT-012 when the first passing judge\'s replay mismatches and the second reproduces, the pass counts', async () => {
+  const seat = text => () => ids => ids.map(id => vote(id, 'pass', goodReplay(text)))
+  const behaviour = actions => observed(actions.length ? 'present' : 'x')
+  const { result, drivers } = await run({ ids: ['A'], script: { m1: seat('WRONG-TEXT')(), m2: seat('present')(), m3: seat('present')() }, behaviour })
+  assert.equal(result.verdicts.A.verdict, 'pass'); assert.equal(result.verdicts.A.basis, 'replay-confirmed')
+  assert.equal(result.verdicts.A.attempts.length, 2); assert.equal(result.verdicts.A.attempts[0].confirmed, false); assert.equal(result.verdicts.A.attempts[1].confirmed, true)
+  assert.equal(drivers.state.sessions.length, 2); assert.equal(drivers.state.overlapped, false)
+  assert.ok(drivers.state.sessions[1].start >= drivers.state.sessions[0].end, 'the next session waited for the previous to close')
+})
+
+test('INT-012 a pass no replay reproduces counts as failed with the mismatch recorded', async () => {
+  const same = () => ids => ids.map(id => vote(id, 'pass', goodReplay('never shown')))
+  const { result } = await run({ ids: ['A'], script: { m1: same(), m2: same(), m3: same() }, behaviour: () => observed('something else') })
+  assert.equal(result.verdicts.A.verdict, 'fail'); assert.equal(result.verdicts.A.basis, 'replay-mismatch')
+  assert.match(result.verdicts.A.mismatch, /was not present/)
+  assert.equal(result.verdicts.A.attempts.length, 3)
+})
+
+test('INT-012 a settled fail goes to the replay-based second opinion; only a reproduced overturn counts', async () => {
+  const failing = () => ids => ids.map(id => vote(id, 'fail'))
+  const calls = []
+  const overturn = async ({ id }) => { calls.push(id); return { decision: 'overturn', rationale: 'I found it', replay: goodReplay('shown') } }
+  const first = await run({ ids: ['A'], script: { m1: failing(), m2: failing(), m3: failing() }, behaviour: () => observed('shown'), secondOpinion: overturn })
+  assert.deepEqual(calls, ['A']); assert.equal(first.result.verdicts.A.verdict, 'pass'); assert.equal(first.result.verdicts.A.basis, 'second-opinion-overturned')
+  assert.ok(first.drivers.state.sessions.some(session => session.label === 'second-opinion:A'))
+  const unreproduced = await run({ ids: ['A'], script: { m1: failing(), m2: failing(), m3: failing() }, behaviour: () => observed('nope'), secondOpinion: overturn })
+  assert.equal(unreproduced.result.verdicts.A.verdict, 'fail'); assert.equal(unreproduced.result.verdicts.A.second_opinion.replay.confirmed, false)
+  const upheld = await run({ ids: ['A'], script: { m1: failing(), m2: failing(), m3: failing() }, behaviour: () => observed('x'), secondOpinion: async () => ({ decision: 'uphold', rationale: 'stands' }) })
+  assert.equal(upheld.result.verdicts.A.basis, 'settled-fail'); assert.equal(upheld.drivers.state.sessions.length, 0)
+})
+
+test('INT-012 when no judge can locate the evidence the fallback decides; an unconfirmed fallback pass fails', async () => {
+  const nowhere = () => ids => ids.map(id => vote(id, 'not-located'))
+  const { result } = await run({ ids: ['A', 'B'], script: { m1: nowhere(), m2: nowhere(), m3: nowhere() }, behaviour: () => observed('x') })
+  assert.equal(result.verdicts.A.verdict, 'fallback'); assert.equal(result.verdicts.A.basis, 'fallback-judged')
+  const merged = applyFallbacks({ verdicts: result.verdicts, fallbackResults: { A: { verdict: 'pass', confirmed: true }, B: { verdict: 'pass', confirmed: false } } })
+  assert.equal(merged.A.verdict, 'pass'); assert.equal(merged.A.basis, 'fallback-judged')
+  assert.equal(merged.B.verdict, 'fail'); assert.equal(merged.B.basis, 'fallback-judged')
+})
+
+test('INT-012 browser packets name the requirement and the URL but no reference route, count, title, era or size', async () => {
+  const same = () => ids => ids.map(id => vote(id, 'fail'))
+  const { judges } = await run({ ids: ['A'], script: { m1: same(), m2: same(), m3: same() }, behaviour: () => observed('x') })
+  const inputs = await loadProductInputs()
+  for (const prompt of judges.state.prompts) {
+    assert.match(prompt, /http:\/\/127\.0\.0\.1:1/); assert.match(prompt, /chrome-devtools-axi/)
+    for (const value of inputs.preferenceValues) assert.ok(!prompt.includes(value), value)
+    assert.doesNotMatch(prompt, /nine|data-step-count|\/demo/i)
+  }
+  // The real rubric's browser jobs each cover only browser-judge criteria.
+  const jobs = browserJobs(inputs.rubric)
+  assert.ok(jobs.length >= 1)
+  const rows = new Map(inputs.rubric.components.flatMap(c => c.subcomponents.filter(s => s.evaluator === 'browser-judge').flatMap(s => s.criteria)).map(id => [id, true]))
+  for (const job of jobs) for (const id of job.criteria) assert.ok(rows.has(id))
+})
+
+test('INT-012 the closed replay schema accepts generic plans and rejects escapes; expectations are judged from the observed state', () => {
+  assert.ok(validReplay({ actions: [{ type: 'navigate', path: '/x' }, { type: 'click', selector: 'button.next' }, { type: 'mark', label: 'a' }, { type: 'press', key: 'ArrowRight', modifiers: ['Alt'] }], expect: { type: 'rendered-state-matches', label: 'a' } }))
+  assert.ok(!validReplay({ actions: [{ type: 'click', text: 'x' }], expect: { type: 'rendered-state-changes' } }), 'must start with navigate')
+  assert.ok(!validReplay({ actions: [{ type: 'navigate', path: '/../x' }], expect: { type: 'rendered-state-changes' } }))
+  assert.ok(!validReplay({ actions: [{ type: 'navigate', path: '/x' }], expect: { type: 'rendered-state-matches', label: 'missing' } }))
+  assert.ok(!validReplay({ actions: [{ type: 'navigate', path: '/x' }], expect: { type: 'step-index-equals', value: 1 } }), 'reference hooks are not expectations')
+  const probes = (visible) => [{ selector: '#a', visible, text: 'hello world' }]
+  const states = [{ dom: '1', screenshot: 's1', probes: probes(true), text: 'first' }]
+  const result = { states, final: { dom: '2', screenshot: 's2', probes: probes(false), text: 'hello world' }, marks: { a: { dom: '2', screenshot: 's2' }, b: { dom: '9', screenshot: 's9' } } }
+  assert.ok(expectationMet({ type: 'rendered-state-changes' }, result).met)
+  assert.ok(expectationMet({ type: 'rendered-state-matches', label: 'a' }, result).met)
+  assert.ok(!expectationMet({ type: 'rendered-state-matches', label: 'b' }, result).met)
+  assert.ok(expectationMet({ type: 'selector-hidden', selector: '#a' }, result).met)
+  assert.ok(!expectationMet({ type: 'selector-visible', selector: '#a' }, result).met)
+  assert.ok(expectationMet({ type: 'text-present', text: 'HELLO' }, result).met)
+  assert.ok(!expectationMet({ type: 'rendered-state-changes' }, { states, final: { ...states[0] } }).met)
+})
+
+test('INT-012 a replay whose browser reports a product failure or an invalid plan is a mismatch, never a pass', async () => {
+  const driver = { replayGeneric: async () => ({ product_failure: 'replay click target was not found', states: [], marks: {} }) }
+  assert.equal((await executeReplay({ driver, replay: goodReplay() })).confirmed, false)
+  assert.equal((await executeReplay({ driver, replay: { actions: [], expect: {} } })).confirmed, false)
+})
