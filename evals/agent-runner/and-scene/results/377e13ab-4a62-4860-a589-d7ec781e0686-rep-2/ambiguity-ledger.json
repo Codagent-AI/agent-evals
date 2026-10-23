@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-23T09-48-53-030973958Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "IPv4 loopback verification failed, but the underlying assumption or context gap is not established.",
+      "evidence": [
+        "verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost.",
+        "The supplied workflow artifact excerpts contain no substantive output."
+      ],
+      "handling": "No agent explanation, verification command, or corrective action is visible.",
+      "consequence": "The loopback verification requirement was reported as failed; the actual address used and operational impact are unknown.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check establishes a verification issue, but cannot distinguish an incorrect assumption, an implementation error, or missing specification or repository context. No agent-reported assumptio…",
+      "resolution": "unresolved",
+      "id": "ebd942272ca8023f"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The control-origin swipe check failed, but its cause is not established.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail —",
+        "demo-supported-navigation and demo-focus-and-keyboard-accessibility are reported as passing."
+      ],
+      "handling": "No implementation details, reproduction trace, or agent discussion of control-origin swipes is supplied.",
+      "consequence": "The delivered product failed the check for ignoring swipes originating from controls; the exact observed interaction is unavailable.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The result identifies a specific interaction failure. It does not establish whether an assumption or context gap caused it, or whether it was an ordinary implementation defect. Passing adjacent check…",
+      "resolution": "unresolved",
+      "id": "5acae8db8eb37862"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
