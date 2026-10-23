@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-23T15-18-38-746838863Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Attribution-warning coverage is incomplete; the underlying assumption or context gap is undetermined.",
+      "evidence": [
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "attribution-default-link: pass — Default attribution label and target https://github.com/Codagent-AI/and-scene are present."
+      ],
+      "handling": "No implementation-agent explanation or response to this failure is supplied.",
+      "consequence": "Verification reports incomplete attribution warnings, without identifying which warning cases failed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure establishes a delivered verification gap. Without the specification, implementation, or agent reasoning, it cannot establish whether an assumption, missing context, or implementation defe…",
+      "resolution": "unresolved",
+      "id": "6188a4b33fd0f57c"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Ignoring swipes originating on controls failed verification; the underlying assumption or context gap is undetermined.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail",
+        "demo-supported-navigation: pass",
+        "demo-control-semantics: pass"
+      ],
+      "handling": "No implementation-agent explanation or response to this failure is supplied.",
+      "consequence": "The control-origin swipe check failed despite broader navigation and control-semantics checks passing; the exact observed interaction is not supplied.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The result identifies a specific interaction failure but supplies no trace, implementation, requirement text, or agent reasoning that distinguishes an incorrect assumption from a specification gap or…",
+      "resolution": "unresolved",
+      "id": "fedde77ea3b6ee89"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
