@@ -5,13 +5,13 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { temp } from './and-scene-e2e-helpers.mjs'
-import { collectEvidence, loadEvidence } from '../evals/agent-runner/and-scene-define/lib/evidence.mjs'
-import { auditContamination } from '../evals/agent-runner/and-scene-define/lib/contamination.mjs'
-import { compilePatterns, scanCanaries } from '../evals/agent-runner/and-scene-define/lib/canary.mjs'
-import { filesUnder } from '../evals/agent-runner/and-scene-define/lib/files.mjs'
+import { collectEvidence, loadEvidence } from '../evals/lib/define-run/evidence.mjs'
+import { auditContamination } from '../evals/lib/define-run/contamination.mjs'
+import { compilePatterns, scanCanaries } from '../evals/lib/define-run/canary.mjs'
+import { filesUnder } from '../evals/lib/define-run/files.mjs'
 import { effectiveInvocations, invocationsThrough } from '../evals/agent-runner/and-scene-e2e/lib/metrics.mjs'
 import { validateProfiles, parseArguments } from '../evals/agent-runner/and-scene-e2e/lib/options.mjs'
-import { materialize } from '../evals/agent-runner/and-scene-define/lib/starting-repo.mjs'
+import { materialize } from '../evals/lib/define-run/starting-repo.mjs'
 
 const patterns = JSON.parse(await readFile(new URL('../evals/agent-runner/and-scene-e2e/contamination-patterns.json', import.meta.url), 'utf8'))
 const STEPS = ['create', 'define', 'implement']

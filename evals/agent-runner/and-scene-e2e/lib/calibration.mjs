@@ -86,6 +86,6 @@ export async function runCalibration({ calibrationDir, rubric, repeats = MIN_REP
     }
   } finally { await rm(work, { recursive: true, force: true }) }
   const summary = summarizeCalibration({ rubric: referenceRubric(rubric), expected, runs })
-  if (outDir) { await mkdir(outDir, { recursive: true }); const { writeJsonAtomic } = await import('../../and-scene-define/lib/persistence.mjs'); await writeJsonAtomic(join(outDir, 'calibration.json'), summary) }
+  if (outDir) { await mkdir(outDir, { recursive: true }); const { writeJsonAtomic } = await import('../../../lib/define-run/persistence.mjs'); await writeJsonAtomic(join(outDir, 'calibration.json'), summary) }
   return summary
 }

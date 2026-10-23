@@ -1,7 +1,7 @@
 import { copyFile, mkdir, readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import { LocalSandbox } from '../../and-scene-define/lib/sandbox.mjs'
-import { writeTextAtomic } from '../../and-scene-define/lib/persistence.mjs'
+import { LocalSandbox } from '../../../lib/define-run/sandbox.mjs'
+import { writeTextAtomic } from '../../../lib/define-run/persistence.mjs'
 import { DEFINE_ROOT, SUITE_ROOT, CHANGE_NAME } from './files.mjs'
 import { DEFAULT_ROLES } from './options.mjs'
 export const STAGED_FILES = ['starting-repo.bundle', 'sandbox-driver.sh', 'bootstrap-agent-skills.sh', 'prepare-agent-session-state.sh', 'runner-config.yaml', 'runner-settings.yaml']

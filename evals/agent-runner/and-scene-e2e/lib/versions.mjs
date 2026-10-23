@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { SUITE_ROOT, readJson, sha256 } from './files.mjs'
-import { validateVersionRecords } from '../../and-scene-define/lib/versions.mjs'
+import { validateVersionRecords } from '../../../lib/define-run/versions.mjs'
 // Every evaluator input the series identity depends on is pinned by content hash under a version.
 // Changing a pinned file without bumping its version, or rewriting history, is an error.
 export async function checkVersions({ suiteRoot = SUITE_ROOT, previous = null } = {}) {

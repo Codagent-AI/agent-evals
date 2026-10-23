@@ -3,11 +3,11 @@ import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { E2ESandbox } from '../evals/agent-runner/and-scene-e2e/lib/sandbox.mjs'
-import { buildRubric } from '../evals/agent-runner/and-scene-define/lib/rubric.mjs'
+import { buildRubric } from '../evals/lib/define-run/rubric.mjs'
 import { git, startingRepo, temp } from './and-scene-e2e-helpers.mjs'
 import { loadProductInputs, criteriaForJob } from '../evals/agent-runner/and-scene-e2e/lib/product-rubric.mjs'
 import { scoreProduct } from '../evals/agent-runner/and-scene-e2e/lib/scoring.mjs'
-import { exchangeIdentity } from '../evals/agent-runner/and-scene-define/lib/judge-jobs.mjs'
+import { exchangeIdentity } from '../evals/lib/define-run/judge-jobs.mjs'
 
 const inventory = JSON.parse(await readFile(new URL('../evals/agent-runner/and-scene-define/hidden/inventory.json', import.meta.url), 'utf8'))
 export const subset = { ...inventory, items: inventory.items.filter(item => item.class !== 'preference').slice(0, 5) }

@@ -7,7 +7,7 @@ import { E2E, ROLE_ARGS, fakeHome, fakeRunner, fakeSkills, git, keyPair, script,
 import { checkWorkflow, resolveWorkflowFile } from '../evals/agent-runner/and-scene-e2e/lib/workflow.mjs'
 import { validateProfiles, DEFAULT_ROLES } from '../evals/agent-runner/and-scene-e2e/lib/options.mjs'
 import { inspectInputs, PreflightError } from '../evals/agent-runner/and-scene-e2e/lib/preflight.mjs'
-import { runTimed } from '../evals/agent-runner/and-scene-define/lib/subprocess.mjs'
+import { runTimed } from '../evals/lib/define-run/subprocess.mjs'
 import { GitHubApp } from '../evals/agent-runner/and-scene-e2e/lib/provisioning.mjs'
 import { ingestWorkflowMetrics, effectiveInvocations, invocationsThrough, topLevelStep } from '../evals/agent-runner/and-scene-e2e/lib/metrics.mjs'
 import { failureOutcome, EVALUATION_STATUSES, publicationEligibility } from '../evals/agent-runner/and-scene-e2e/lib/outcomes.mjs'
@@ -227,10 +227,10 @@ test('C-2 every run path is guarded against symlinks, and a second controller fo
   assert.match(locked.result.observed_error, /controller is active/)
 })
 
-import { checkVersions as checkDefineVersions } from '../evals/agent-runner/and-scene-define/lib/versions.mjs'
-import { materialize, verifySnapshot } from '../evals/agent-runner/and-scene-define/lib/starting-repo.mjs'
+import { checkVersions as checkDefineVersions } from '../evals/lib/define-run/versions.mjs'
+import { materialize, verifySnapshot } from '../evals/lib/define-run/starting-repo.mjs'
 import { DEFINE_ROOT } from '../evals/agent-runner/and-scene-e2e/lib/files.mjs'
-import { filesUnder } from '../evals/agent-runner/and-scene-define/lib/files.mjs'
+import { filesUnder } from '../evals/lib/define-run/files.mjs'
 test('I-4 a candidate is admitted without any calibration state: preflight never reads the calibration directory', async t => {
   const w = await preflightWorld(t)
   const tree = join(w.root, 'evals/agent-runner'); await mkdir(tree, { recursive: true })

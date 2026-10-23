@@ -1,6 +1,6 @@
 import { lstat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
-import { listRunnerStates, readRunnerState, classifyDefineState } from '../../and-scene-define/lib/runner-state.mjs'
+import { listRunnerStates, readRunnerState, classifyDefineState } from '../../../lib/define-run/runner-state.mjs'
 export async function privatePath(path, boundary = dirname(resolve(path))) {
   for (let probe = resolve(path); ; probe = dirname(probe)) {
     const stat = await lstat(probe).catch(error => { if (error.code !== 'ENOENT') throw error; return null })

@@ -240,10 +240,10 @@ test('INT-005 a controller interrupted during implement reports a resumable fail
   assert.equal(result.evaluation_status, 'implementation-workflow-failed'); assert.equal(result.resumable, true); assert.match(result.observed_error, /interrupted/)
 })
 
-import { scanCanaries } from '../evals/agent-runner/and-scene-define/lib/canary.mjs'
-import { loadJudgingInputs } from '../evals/agent-runner/and-scene-define/lib/judging.mjs'
+import { scanCanaries } from '../evals/lib/define-run/canary.mjs'
+import { loadJudgingInputs } from '../evals/lib/define-run/judging.mjs'
 import { DEFINE_ROOT } from '../evals/agent-runner/and-scene-e2e/lib/files.mjs'
-import { verifyUnit } from '../evals/agent-runner/and-scene-define/lib/checkpoint.mjs'
+import { verifyUnit } from '../evals/lib/define-run/checkpoint.mjs'
 import { readdir } from 'node:fs/promises'
 
 test('INT-007 second-pass contamination ends the run before scoring, the trace, review and publication', async t => {

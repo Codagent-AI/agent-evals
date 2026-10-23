@@ -1,4 +1,4 @@
-import { hashJson } from '../../and-scene-define/lib/persistence.mjs'
+import { hashJson } from '../../../lib/define-run/persistence.mjs'
 import { stats } from '../../and-scene/lib/experiment-baseline.mjs'
 import { band as scoreBand } from '../../and-scene/lib/experiment-comparison.mjs'
 import { OUTCOMES } from './trace.mjs'

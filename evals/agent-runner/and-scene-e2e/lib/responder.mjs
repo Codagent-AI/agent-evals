@@ -1,7 +1,7 @@
 // After `define` completed nothing may ask the user anything: any external-user request is refused and ends the run.
 import { readdir, readFile, lstat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { atomicJson, sleep } from '../../and-scene-define/lib/responder-files.mjs'
+import { atomicJson, sleep } from '../../../lib/define-run/responder-files.mjs'
 export async function watchForRequests({ exchangeDir, signal, intervalMs = 100, seen = new Set() }) {
   while (!signal?.aborted) {
     for (const name of (await readdir(exchangeDir).catch(() => [])).filter(file => file.endsWith('.request.json')).sort()) {

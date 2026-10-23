@@ -6,7 +6,7 @@ import { execFile } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ORGANIZATION, REPOSITORY_PREFIX } from './files.mjs'
-import { compilePatterns } from '../../and-scene-define/lib/canary.mjs'
+import { compilePatterns } from '../../../lib/define-run/canary.mjs'
 
 export const RUN_TOKEN_PERMISSIONS = Object.freeze({ contents: 'write', pull_requests: 'write', checks: 'read', statuses: 'read', metadata: 'read' })
 export const APP_PERMISSIONS = Object.freeze({ administration: 'write', ...RUN_TOKEN_PERMISSIONS })

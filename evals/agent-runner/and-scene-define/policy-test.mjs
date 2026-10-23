@@ -4,9 +4,9 @@ import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
-import { createSimulatedUser } from './lib/simulated-user.mjs'
-import { loadSimulatedUserInputs } from './lib/simulated-user-inputs.mjs'
-import { atomicJson } from './lib/responder-files.mjs'
+import { createSimulatedUser } from '../../lib/define-run/simulated-user.mjs'
+import { loadSimulatedUserInputs } from '../../lib/define-run/simulated-user-inputs.mjs'
+import { atomicJson } from '../../lib/define-run/responder-files.mjs'
 export const POLICY_CASES = [
   { id: 'specific', message: 'Should the reusable scene kit supply default colors or fonts?', type: 'answer', matches: [/\b(?:no|zero|without|free|neutral|unstyled)\b/i] },
   { id: 'broad', message: 'List all your requirements. What else should I know?', type: 'answer', matches: [/\b(?:presentation|diagram|scene)\b/i] },

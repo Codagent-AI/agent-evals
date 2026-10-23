@@ -1,4 +1,4 @@
-import { effectiveDefineInvocations, ingestRunnerMetrics } from '../../and-scene-define/lib/runner-metrics.mjs'
+import { effectiveDefineInvocations, ingestRunnerMetrics } from '../../../lib/define-run/runner-metrics.mjs'
 // `prefix` is "define/sub:define-change/proposal"; a top-level step has an empty prefix and its own id.
 export function topLevelStep(entry) {
   const first = String(entry.prefix ?? '').split('/')[0]

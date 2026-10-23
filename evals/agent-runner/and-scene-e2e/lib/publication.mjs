@@ -2,10 +2,10 @@
 // files enter the commit; failed pushes retain the commit for an ordinary retry.
 import { mkdir, copyFile, lstat } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
-import { filesUnder } from '../../and-scene-define/lib/files.mjs'
-import { guardPath } from '../../and-scene-define/lib/evidence.mjs'
-import { readJson, writeJsonAtomic, hashFile } from '../../and-scene-define/lib/persistence.mjs'
-import { runTimed } from '../../and-scene-define/lib/subprocess.mjs'
+import { filesUnder } from '../../../lib/define-run/files.mjs'
+import { guardPath } from '../../../lib/define-run/evidence.mjs'
+import { readJson, writeJsonAtomic, hashFile } from '../../../lib/define-run/persistence.mjs'
+import { runTimed } from '../../../lib/define-run/subprocess.mjs'
 export const RESULTS_RELATIVE_DIR = 'evals/agent-runner/and-scene-e2e/results'
 // Only a complete candidate run is published: a pending run is published by the human-review command when
 // the review completes. Failed, contaminated, rescore and calibration runs never are.

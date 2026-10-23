@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { readJson, writeJsonAtomic, writeTextAtomic } from '../../and-scene-define/lib/persistence.mjs'
-import { RESIDUAL_RISK as DEFINE_RESIDUAL_RISK } from '../../and-scene-define/lib/contamination.mjs'
+import { readJson, writeJsonAtomic, writeTextAtomic } from '../../../lib/define-run/persistence.mjs'
+import { RESIDUAL_RISK as DEFINE_RESIDUAL_RISK } from '../../../lib/define-run/contamination.mjs'
 import { renderReport } from './report.mjs'
 import { EVALUATION_STATUSES, SCORED_STATUSES } from './outcomes.mjs'
 export const RESIDUAL_RISK = `${DEFINE_RESIDUAL_RISK} The evaluated sandbox held a GitHub token that can push to the run's own delivery repository and to no other repository.`

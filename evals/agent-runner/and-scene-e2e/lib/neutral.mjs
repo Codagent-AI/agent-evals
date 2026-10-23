@@ -3,7 +3,7 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { gitCommand } from './provisioning.mjs'
-import { hashJson, writeJsonAtomic } from '../../and-scene-define/lib/persistence.mjs'
+import { hashJson, writeJsonAtomic } from '../../../lib/define-run/persistence.mjs'
 import { sha256 } from './files.mjs'
 import { graded, requirementDocument } from './product-rubric.mjs'
 const HARNESS_GIT = { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' }

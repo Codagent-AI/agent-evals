@@ -12,7 +12,7 @@ import { publicationEligibility as eligible } from '../evals/agent-runner/and-sc
 import { compareResults } from '../evals/agent-runner/and-scene-e2e/lib/comparison.mjs'
 import { rescoreEvaluation, verifyRetained } from '../evals/agent-runner/and-scene-e2e/lib/rescore.mjs'
 import { loadProductInputs } from '../evals/agent-runner/and-scene-e2e/lib/product-rubric.mjs'
-import { runTimed } from '../evals/agent-runner/and-scene-define/lib/subprocess.mjs'
+import { runTimed } from '../evals/lib/define-run/subprocess.mjs'
 import { renderReport } from '../evals/agent-runner/and-scene-e2e/lib/report.mjs'
 
 const product = await loadProductInputs()

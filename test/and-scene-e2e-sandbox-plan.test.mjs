@@ -4,7 +4,7 @@ import { mkdir, writeFile, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { E2E, temp } from './and-scene-e2e-helpers.mjs'
-import { verifyMountPlan } from '../evals/agent-runner/and-scene-define/lib/mount-plan.mjs'
+import { verifyMountPlan } from '../evals/lib/define-run/mount-plan.mjs'
 import { E2ESandbox, readValidatorReviewerClis, validatorReviewerClis, runnerConfig, STAGED_FILES } from '../evals/agent-runner/and-scene-e2e/lib/sandbox.mjs'
 
 // A plan shaped like sandbox-run.sh --dry-run output: one build and one command container.

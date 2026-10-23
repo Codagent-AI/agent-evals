@@ -1,6 +1,6 @@
 // Throwaway containers from Agent Runner's sandbox image: the only place candidate or workspace-derived
 // commands run on this machine. No credentials, auth mounts or host environment variables are ever passed.
-import { runTimed, requireCommand } from '../../and-scene-define/lib/subprocess.mjs'
+import { runTimed, requireCommand } from '../../../lib/define-run/subprocess.mjs'
 export const SANDBOX_IMAGE = 'agent-runner-dev:local'
 const CLEAN_ENV = Object.freeze({ GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', HOME: '/tmp/container-home' })
 // mounts: [{ source, target, readonly }]; network: 'none' | 'bridge'
