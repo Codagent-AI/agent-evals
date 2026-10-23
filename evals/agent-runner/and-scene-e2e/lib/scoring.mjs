@@ -35,7 +35,7 @@ export function evaluateGates({ rubric, verdicts, build, verifier }) {
     gate('gate-build-whole-app', build?.ok === true, buildFailure ?? 'the build was not run'),
     gate('gate-sample-reachable', !buildFailure && byId['gate-sample-reachable'].inputs.every(passed), buildFailure ?? 'no reachable sample presentation that explains the skill was confirmed'),
     gate('gate-every-step-renders', !buildFailure && byId['gate-every-step-renders'].inputs.every(passed), buildFailure ?? 'a produced step did not render cleanly'),
-    gate('gate-verifier-clear-outcome', verifier?.found === true && verifier.clear === true, verifier?.found === false ? 'no verifier exists in the delivered tree' : verifier?.reason ?? 'the verifier did not report a clear outcome'),
+    gate('gate-verifier-clear-outcome', verifier?.found === true && verifier.clear === true, verifier?.found === false ? verifier.reason ?? 'no verifier exists in the delivered tree' : verifier?.reason ?? 'the verifier did not report a clear outcome'),
   ]
 }
 // The criteria a build failure zeroes: those whose evaluator is a browser judge (no fallback judge decides them).

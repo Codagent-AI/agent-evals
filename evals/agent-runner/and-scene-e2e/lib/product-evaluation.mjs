@@ -22,11 +22,14 @@ export class ProductHarnessError extends Error {
 const sha = value => hashJson(value)
 // Persisted, input-hashed work units: completed ones are reused on resume, unfinished ones rerun alone.
 export function fileUnits(runDir, { onComplete = async () => {}, onReuse = () => {} } = {}) {
-  return async function unit(name, inputs, produce) {
+  return async function unit(name, inputs, produce, { cache = () => true } = {}) {
     const target = join(runDir, 'phases/product', `${name.replace(/[^a-zA-Z0-9_.-]/g, '-')}.json`)
     const recorded = await readJson(target, null).catch(() => null)
     if (recorded?.input_hash === sha(inputs)) { onReuse(name); return recorded.value }
     const value = await produce()
+    // An unfinished unit (a judge job that returned nothing usable) is never recorded as complete.
+    if (!cache(value)) return value
+    await mkdir(join(target, '..'), { recursive: true })
     await writeJsonAtomic(target, { input_hash: sha(inputs), value })
     await onComplete(name, target)
     return value
@@ -102,7 +105,7 @@ export async function evaluateProduct({ runDir, rubric, inventory, bundlePath, c
         audit: ({ request: next, invoke }) => runJudgeJob({ request: next, invoke }), validateCitations: result => validateSourceCitations(result, request) }).catch(error => ({ ok: false, failure: judgeFailure(error), record: { failure: judgeFailure(error) } }))
       return outcome.ok ? { ok: true, results: outcome.results.map(({ id, verdict, rationale, citations, basis }) => ({ id, verdict, rationale, citations: citations ?? [], basis })) }
         : { ok: false, failure: outcome.failure ?? { message: 'judge output exhausted' } }
-    })
+    }, { cache: value => value.ok !== false })
     return { id: job.id, value }
   } })
   for (const entry of judged) {
