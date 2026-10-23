@@ -2,8 +2,8 @@
 // generic: nothing here names a route, step count, title, era, hook or canvas size.
 export const PRESS_MODIFIERS = ['Alt', 'Control', 'Meta']
 export const EXPECTATION_TYPES = ['selector-visible', 'selector-hidden', 'text-present', 'rendered-state-changes', 'rendered-state-matches']
-const SHAPES = { navigate: ['path'], press: ['key'], keys: ['text'], swipe: ['direction', 'input'], wait: ['ms'], mark: ['label'] }
-const OPTIONAL = { press: ['modifiers'], swipe: ['selector'] }
+export const SHAPES = { navigate: ['path'], press: ['key'], keys: ['text'], swipe: ['direction', 'input'], wait: ['ms'], mark: ['label'] }
+export const OPTIONAL = { press: ['modifiers'], swipe: ['selector'] }
 const nonEmpty = value => typeof value === 'string' && value.trim().length > 0
 export const REPLAY_SCHEMA = {
   type: 'object', additionalProperties: false, required: ['actions', 'expect'],

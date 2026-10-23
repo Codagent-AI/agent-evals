@@ -224,3 +224,13 @@ test('INT-012 a browser request\'s answer format admits only its own criteria, e
   assert.deepEqual(results.items.properties.id.enum, ids); assert.equal(results.minItems, 2); assert.equal(results.maxItems, 2)
   assert.equal(BROWSER_RESULT_SCHEMA.properties.results.items.properties.id.enum, undefined, 'the shared schema is not changed')
 })
+
+test('INT-012 a judge\'s replay keeps only the fields its actions take, so harmless extras and spellings still validate', async () => {
+  const { normalizeReplay } = await import('../evals/agent-runner/and-scene-e2e/lib/judge-requests.mjs')
+  const full = fields => ({ path: null, selector: null, text: null, key: null, modifiers: null, input: null, direction: null, ms: null, label: null, ...fields })
+  const replay = normalizeReplay({ actions: [full({ type: 'navigate', path: 'http://127.0.0.1:54605/talk?x=1#s' }), full({ type: 'wait', selector: '[data-caption]', ms: 1000 }), full({ type: 'press', key: ' ', modifiers: [] }),
+    full({ type: 'click', selector: '#next', text: 'Next' })], expect: { type: 'text-present', selector: null, text: 'Step 2', label: null } })
+  assert.deepEqual(replay.actions, [{ type: 'navigate', path: '/talk?x=1#s' }, { type: 'wait', ms: 1000 }, { type: 'press', key: 'Space' }, { type: 'click', selector: '#next' }])
+  assert.ok(validReplay(replay))
+  assert.ok(!validReplay(normalizeReplay({ actions: [full({ type: 'navigate', path: 'not a url or path' })], expect: { type: 'rendered-state-changes', selector: null, text: null, label: null } })), 'a malformed path is still refused')
+})

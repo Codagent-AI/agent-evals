@@ -3,6 +3,7 @@
 // evidence jobs, as the approved requirements they judge against.
 import { JUDGE_SCOPE_RULE, REQUIREMENT_QUESTION_RULE, SOURCE_JUDGE_RESULT_SCHEMA, judgeResultSchemaFor, inventoryListing, PacketOverflowError, MAX_EVIDENCE_ITEMS } from '../../../lib/panel-judging/protocol.mjs'
 import { EVIDENCE_JOBS, JUDGE_JOBS, criteriaForJob, criterionRequirement } from './product-rubric.mjs'
+import { OPTIONAL, SHAPES } from './replay.mjs'
 export const JOB_BRIEFS = {
   'demo-integration': 'how the delivered sample presentation integrates with the reusable scene kit',
   'scene-kit': 'the reusable scene kit\'s implementation of its technical contracts',
@@ -70,10 +71,21 @@ export const BROWSER_RESULT_SCHEMA = {
       expect: { type: 'object', additionalProperties: false, required: ['type', 'selector', 'text', 'label'], properties: { type: { type: 'string', enum: ['selector-visible', 'selector-hidden', 'text-present', 'rendered-state-changes', 'rendered-state-matches'] }, selector: { type: ['string', 'null'] }, text: { type: ['string', 'null'] }, label: { type: ['string', 'null'] } } } } }] } } } } },
 }
 // A strict schema carries every field; drop the nulls to recover the closed replay shape.
+// Judges fill the schema's every field; a replay keeps only the fields its actions take, so harmless extras and
+// spellings (a full URL on this origin, the key " ") do not disqualify an otherwise valid plan.
 export function normalizeReplay(replay) {
   if (!replay) return null
   const drop = object => Object.fromEntries(Object.entries(object).filter(([, value]) => value !== null && value !== undefined))
-  return { actions: replay.actions.map(drop), expect: drop(replay.expect) }
+  const action = raw => {
+    const kept = drop(raw)
+    const fields = raw.type === 'click' ? [kept.selector != null ? 'selector' : 'text'] : [...(SHAPES[raw.type] ?? Object.keys(kept)), ...(OPTIONAL[raw.type] ?? [])]
+    const shaped = Object.fromEntries(Object.entries(kept).filter(([key]) => key === 'type' || fields.includes(key)))
+    if (shaped.type === 'navigate' && /^https?:\/\//i.test(shaped.path ?? '')) { try { const url = new URL(shaped.path); shaped.path = `${url.pathname}${url.search}${url.hash}` } catch { /* left for validation to refuse */ } }
+    if (shaped.type === 'press' && shaped.key === ' ') shaped.key = 'Space'
+    if (Array.isArray(shaped.modifiers) && !shaped.modifiers.length) delete shaped.modifiers
+    return shaped
+  }
+  return { actions: replay.actions.map(action), expect: drop(replay.expect) }
 }
 export function buildBrowserRequest({ rubric, inventory, job, url, authority = null }) {
   const slice = job.criteria.map(id => [`- ${id}`, criterionRequirement(rubric, inventory, id)].filter(Boolean).join('\n  ')).join('\n')
