@@ -1,5 +1,6 @@
 // How to build and serve the delivered application, determined from the delivered tree's own manifests.
 // Nothing here assumes npm, `npm ci`, `npm run build` or a `dist/` directory.
+import { createHash } from 'node:crypto'
 import { cp, lstat, mkdir, readFile, readdir, rm } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import { runContainer } from './container.mjs'
@@ -9,7 +10,13 @@ export class NotEvaluableError extends Error {
 const exists = async path => Boolean(await lstat(path).catch(() => null))
 const readManifest = async dir => JSON.parse(await readFile(join(dir, 'package.json'), 'utf8').catch(() => 'null'))
 const dependsOnVite = manifest => Boolean(manifest && ['dependencies', 'devDependencies', 'peerDependencies'].some(key => manifest[key]?.vite))
-const hasBuild = manifest => typeof manifest?.scripts?.build === 'string' && manifest.scripts.build.trim().length > 0
+// The script that builds the app: one named `build`, else the only one whose command runs `vite build`.
+const buildScript = manifest => {
+  const scripts = manifest?.scripts ?? {}
+  if (typeof scripts.build === 'string' && scripts.build.trim()) return 'build'
+  const named = Object.keys(scripts).filter(name => typeof scripts[name] === 'string' && /\bvite\s+build\b/.test(scripts[name]))
+  return named.length === 1 ? named[0] : null
+}
 async function workspaceDirs(root, manifest) {
   const patterns = Array.isArray(manifest?.workspaces) ? manifest.workspaces : manifest?.workspaces?.packages ?? []
   const dirs = []
@@ -36,22 +43,22 @@ export async function resolveBuildPlan({ worktree }) {
   const candidates = []
   for (const dir of ['.', ...await workspaceDirs(worktree, rootManifest)]) {
     const manifest = dir === '.' ? rootManifest : await readManifest(join(worktree, dir))
-    if (dependsOnVite(manifest) && hasBuild(manifest)) candidates.push(dir)
+    if (dependsOnVite(manifest) && buildScript(manifest)) candidates.push({ dir, script: buildScript(manifest) })
   }
   if (!candidates.length) throw new NotEvaluableError('no package that depends on vite and has a build script was found at the root or in a declared workspace')
-  if (candidates.length > 1) throw new NotEvaluableError(`more than one application could be built: ${candidates.join(', ')}`)
-  const [app] = candidates
+  if (candidates.length > 1) throw new NotEvaluableError(`more than one application could be built: ${candidates.map(candidate => candidate.dir).join(', ')}`)
+  const [{ dir: app, script }] = candidates
   const manager = await packageManager([join(worktree, app), worktree])
-  return { schema_version: 1, application_root: app, workspace_root: '.', package_manager: manager.name, install: manager.install, build: manager.run('build'), output: null }
+  return { schema_version: 1, application_root: app, workspace_root: '.', package_manager: manager.name, install: manager.install, build: manager.run(script), output: null }
 }
 async function indexFiles(root) {
-  const found = []
+  const found = new Map()
   async function walk(dir) {
     for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
       if (entry.name === 'node_modules' || entry.name === '.git') continue
       const path = join(dir, entry.name)
       if (entry.isSymbolicLink()) continue
-      if (entry.isDirectory()) await walk(path); else if (entry.name === 'index.html') found.push(relative(root, path).split(sep).join('/'))
+      if (entry.isDirectory()) await walk(path); else if (entry.name === 'index.html') found.set(relative(root, path).split(sep).join('/'), createHash('sha256').update(await readFile(path)).digest('hex'))
     }
   }
   await walk(root)
@@ -62,7 +69,7 @@ export async function buildProduct({ worktree, copyDir, plan, run = runContainer
   await rm(copyDir, { recursive: true, force: true })
   await mkdir(copyDir, { recursive: true })
   await cp(worktree, copyDir, { recursive: true, verbatimSymlinks: true, filter: source => !source.split(sep).includes('.git') })
-  const before = new Set(await indexFiles(copyDir))
+  const before = await indexFiles(copyDir)
   const user = uid !== undefined ? `${uid}:${gid}` : null
   const workdir = plan.application_root === '.' ? '/work' : `/work/${plan.application_root}`
   const mounts = [{ source: copyDir, target: '/work', readonly: false }]
@@ -73,7 +80,9 @@ export async function buildProduct({ worktree, copyDir, plan, run = runContainer
   }
   if (!step('install', plan.install, 'bridge', '/work')) return { ok: false, reason: 'dependency installation failed', log }
   if (!step('build', plan.build, 'none', workdir)) return { ok: false, reason: 'the build command failed', log }
-  const created = (await indexFiles(copyDir)).filter(path => !before.has(path))
+  // A build may create an index.html or overwrite one in place, so compare content, not only paths.
+  const after = await indexFiles(copyDir)
+  const created = [...after].filter(([path, hash]) => before.get(path) !== hash).map(([path]) => path)
   const outputs = [...new Set(created.map(path => path.split('/').slice(0, -1).join('/') || '.'))]
   if (outputs.length === 0) throw new NotEvaluableError('the build wrote no index.html')
   if (outputs.length > 1) throw new NotEvaluableError(`the build wrote index.html in more than one directory: ${outputs.join(', ')}`)

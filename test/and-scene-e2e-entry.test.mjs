@@ -101,5 +101,7 @@ test('E2E-001 the argument parser applies defaults, bounds and mode rules', () =
   assert.throws(() => parseArguments([...base, '--no-such', 'x'], {}), /unknown option/)
   for (const pinned of ['--judge-model', '--judge-cli', '--simulated-user-model', '--judge-effort']) assert.throws(() => parseArguments([...base, pinned, 'x'], {}), /unknown option/, `${pinned} cannot override a pinned evaluator profile`)
   assert.equal(parseArguments([...base, '--workflow', 'openspec:change-v2'], {}).workflow, 'openspec:change-v2')
+  const extra = parseArguments([...base, '--auditor-cli', 'claude', '--auditor-model', 'm', '--auditor-effort', 'e'], {})
+  assert.deepEqual(extra.profiles.auditor, { cli: 'claude', model: 'm', effort: 'e' }, 'a role beyond the four defaults takes the same options')
   assert.equal(TOKEN_REFRESH.max, 50)
 })

@@ -67,6 +67,20 @@ test('I-7 every role the selected workflow uses needs a profile; cursor is cross
   assert.throws(() => validateProfiles({ ...base, crosscheck: profile('gemini') }), /crosscheck must use/)
 })
 
+test('I-7 roles and skills are discovered through every sub-workflow at any depth, and not from steps after implement', async t => {
+  const root = await temp(t, 'e2e-wf-'); const runner = await fakeRunner(root)
+  const file = join(runner, 'workflows/core/implement-change-v2.0.yaml')
+  await writeFile(file, `${await readFile(file, 'utf8')}  - id: deeper\n    workflow: depth-one.yaml\n`)
+  await writeFile(join(runner, 'workflows/core/depth-one.yaml'), 'name: one\nsteps:\n  - id: a\n    workflow: depth-two.yaml\n')
+  await writeFile(join(runner, 'workflows/core/depth-two.yaml'), 'name: two\nsteps:\n  - id: b\n    workflow: depth-three.yaml\n')
+  await writeFile(join(runner, 'workflows/core/depth-three.yaml'), 'name: three\nsteps:\n  - id: c\n    agent: deep-role\n    prompt: "use codagent:deep-skill"\n')
+  const checked = await checkWorkflow({ runnerDir: runner, reference: 'openspec:change' })
+  assert.ok(checked.roles.includes('deep-role')); assert.ok(checked.skills.includes('deep-skill'))
+  const top = join(runner, 'workflows/openspec'); const [change] = (await readdir(top)).filter(name => /^change-v/.test(name)).sort().slice(-1)
+  await writeFile(join(top, change), `${await readFile(join(top, change), 'utf8')}  - id: after\n    agent: after-role\n    prompt: "codagent:after-skill"\n`)
+  const later = await checkWorkflow({ runnerDir: runner, reference: 'openspec:change' })
+  assert.ok(!later.roles.includes('after-role') && !later.skills.includes('after-skill'), 'a step after implement is not part of the evaluated run')
+})
 // ---- preflight ------------------------------------------------------------------------------------------------------------
 async function preflightWorld(t, { suiteRoot = undefined } = {}) {
   const root = await temp(t, 'e2e-pre-')
@@ -78,7 +92,7 @@ async function preflightWorld(t, { suiteRoot = undefined } = {}) {
   const app = new GitHubApp({ appId: '1', privateKey, apiUrl: 'http://127.0.0.1:1', fetch: async (url, init) => {
     const path = new URL(url).pathname
     const json = value => ({ status: 200, text: async () => JSON.stringify(value) })
-    if (path.endsWith('/installation')) return json({ id: 5 })
+    if (path.endsWith('/installation')) return json({ id: 5, permissions: provisioning.permissions ?? { administration: 'write', contents: 'write', pull_requests: 'write', checks: 'read', statuses: 'read', metadata: 'read' } })
     if (path.includes('/access_tokens')) { provisioning.tokens++; return { status: 201, text: async () => JSON.stringify({ token: 't', expires_at: 'x' }) } }
     if (path === '/installation/repositories') return json({ repositories: provisioning.repos })
     return { status: 404, text: async () => '{}' }
@@ -122,6 +136,12 @@ test('I-12 missing Claude authentication for Validator reviews fails preflight e
   await script(join(w.runner, 'scripts/sandbox-run.sh'), 'echo "--auth-only --hide-source --no-default-secrets --input-dir --artifact-dir --docker-run-arg CLAUDE_CODE_OAUTH_TOKEN"'); git(w.runner, ['add', '-A']); git(w.runner, ['commit', '--quiet', '-m', 'token'])
   const ok = await inspectInputs({ ...w.base, env: { ...w.base.env, CLAUDE_CODE_OAUTH_TOKEN: 'set' } })
   assert.deepEqual(ok.forwardedEnv, ['CLAUDE_CODE_OAUTH_TOKEN']); assert.ok(!ok.credentials.some(path => path.endsWith('.claude/.credentials.json')))
+})
+test('I-13 an installation lacking a permission provisioning relies on fails preflight naming it', async t => {
+  const w = await preflightWorld(t); w.provisioning.permissions = { administration: 'read', contents: 'write', pull_requests: 'write', checks: 'read', statuses: 'read', metadata: 'read' }
+  await assert.rejects(inspectInputs(w.base), error => error instanceof PreflightError && error.check === 'provisioning credentials' && /administration:write/.test(error.message))
+  const full = await preflightWorld(t); full.provisioning.permissions = { administration: 'write', contents: 'write', pull_requests: 'write', checks: 'write', statuses: 'read', metadata: 'read' }
+  await inspectInputs(full.base)
 })
 test('I-13 the installation reaching a repository outside the delivery repositories fails preflight naming it', async t => {
   const w = await preflightWorld(t); w.provisioning.repos.push({ name: 'and-scene', full_name: 'Codagent-AI/and-scene' })

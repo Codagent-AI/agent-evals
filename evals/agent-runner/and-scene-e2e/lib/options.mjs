@@ -4,6 +4,8 @@ export const DEFAULT_TIME_LIMIT_MS = 12 * 60 * 60 * 1000
 export const DEFAULT_STALL_WINDOW_MS = 45 * 60 * 1000
 export const TOKEN_REFRESH = { default: 30, min: 1, max: 50 }
 export const DEFAULT_WORKFLOW = 'openspec:change'
+// Evaluator profiles are pinned and cannot be chosen from the command line.
+const PINNED_ROLES = ['judge', 'decider', 'panel', 'simulated-user', 'user', 'validator']
 export const DEFAULT_ROLES = ['lead', 'crosscheck', 'implementor', 'tester']
 export function parseDuration(value, label = 'duration') {
   const match = String(value).match(/^(\d+(?:\.\d+)?)(ms|s|m|h)?$/)
@@ -49,6 +51,7 @@ Options:
   --time-limit DURATION     One whole-run elapsed-time limit counting only running time, default 12h; unchanged on resume.
   --stall-window DURATION   Inactivity window before a stalled invocation is stopped, default 45m; unchanged on resume.
   --token-refresh-interval MINUTES  Delivery-token refresh interval, default ${TOKEN_REFRESH.default}, from ${TOKEN_REFRESH.min} to ${TOKEN_REFRESH.max}; not part of the series identity.
+Any other role the workflow uses through implement takes --ROLE-cli, --ROLE-model and --ROLE-effort the same way.
 Profiles for every role the workflow uses through implement are required; the simulated-user and judge profiles are pinned.
 Compare recorded runs (scores are paired only within one series; at least three scored repetitions per group):
   node evals/agent-runner/and-scene-e2e/compare.mjs RUN_DIR RUN_DIR [...]
@@ -78,8 +81,8 @@ export function parseArguments(args, env = process.env) {
     }
     const value = args[++index]
     if (!value || value.startsWith('--')) throw new Error(`missing value for ${arg}`)
-    const profile = arg.match(/^--(lead|crosscheck|implementor|tester)-(cli|model|effort)$/)
-    if (profile) options.profiles[profile[1]][profile[2]] = value
+    const profile = arg.match(/^--([a-z][a-z0-9-]*)-(cli|model|effort)$/)
+    if (profile && !PINNED_ROLES.includes(profile[1])) (options.profiles[profile[1]] ??= {})[profile[2]] = value
     else if (arg === '--run-dir') options.runDir = resolve(value)
     else if (arg === '--runner-dir') options.runnerDir = resolve(value)
     else if (arg === '--skills-dir') options.skillsDir = resolve(value)

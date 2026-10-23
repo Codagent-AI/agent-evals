@@ -49,6 +49,13 @@ test('INT-012 a reproducing pass is counted and marked replay-confirmed, in a fr
   assert.equal(drivers.state.overlapped, false)
 })
 
+test('INT-012 verdicts carry the judges\' evidence as citations, and every job\'s settled results are returned', async () => {
+  const same = () => ids => ids.map(id => ({ ...vote(id, 'pass', goodReplay()), evidence: ['clicked Next and saw step 2'] }))
+  const { result } = await run({ ids: ['A'], script: { m1: same(), m2: same(), m3: same() }, behaviour: () => observed('OK') })
+  assert.deepEqual(result.verdicts.A.citations, ['clicked Next and saw step 2'])
+  assert.ok(Object.keys(result.judged).some(key => key.startsWith('browser:')), 'the settled results are kept for the judge records')
+})
+
 test('INT-012 when the first passing judge\'s replay mismatches and the second reproduces, the pass counts', async () => {
   const seat = text => () => ids => ids.map(id => vote(id, 'pass', goodReplay(text)))
   const behaviour = actions => observed(actions.length ? 'present' : 'x')
@@ -127,4 +134,15 @@ test('INT-012 a replay whose browser reports a product failure or an invalid pla
   const driver = { replayGeneric: async () => ({ product_failure: 'replay click target was not found', states: [], marks: {} }) }
   assert.equal((await executeReplay({ driver, replay: goodReplay() })).confirmed, false)
   assert.equal((await executeReplay({ driver, replay: { actions: [], expect: {} } })).confirmed, false)
+})
+
+test('INT-012 a failed browser judge call is still recorded in the usage ledger', async t => {
+  const { createBrowserJudgeInvoker } = await import('../evals/agent-runner/and-scene-e2e/lib/browser-judge-invokers.mjs')
+  const { temp } = await import('./and-scene-e2e-helpers.mjs'); const { readFile } = await import('node:fs/promises'); const { EventEmitter } = await import('node:events')
+  const runDir = await temp(t, 'e2e-usage-')
+  const spawnImpl = () => { const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); child.stdin = { end() { setImmediate(() => { child.stdout.emit('data', JSON.stringify({ type: 'result', usage: { input_tokens: 5 }, total_cost_usd: 0.25 }) + '\n'); child.stderr.emit('data', 'boom'); child.emit('close', 1) }) } }; child.kill = () => {}; return child }
+  const invoke = createBrowserJudgeInvoker({ runDir, spawnImpl })
+  await assert.rejects(invoke({ job: 'j', authority: { cli: 'claude', model: 'm', effort: 'high' }, schema: {}, prompt: 'p' }), /claude exited 1/)
+  const [entry] = (await readFile(`${runDir}/phases/eval-owned-usage.jsonl`, 'utf8')).trim().split('\n').map(JSON.parse)
+  assert.equal(entry.ok, false); assert.equal(entry.usage.cost_usd, 0.25); assert.equal(entry.job, 'j')
 })

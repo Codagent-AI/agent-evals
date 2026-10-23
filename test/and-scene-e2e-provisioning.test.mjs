@@ -104,6 +104,23 @@ test('INT-004 the run token names exactly one repository and the designed permis
   assert.match(token, /^run-token-/)
 })
 
+test('INT-004 stopping the refresher waits for a refresh in flight, and no write follows the stop', async t => {
+  const { root } = await setup(t)
+  const dir = join(root, '.github-auth-inflight')
+  await writeTokenFile(dir, 'first')
+  let tick; let release
+  const gate = new Promise(resolve => { release = resolve })
+  const refresher = startTokenRefresher({ mint: async () => { await gate; return { token: 'late', expires_at: 'x' } }, dir, intervalMs: 1000, setTimer: fn => { tick = fn; return { unref() {} } }, clearTimer() {} })
+  const refreshing = tick()
+  let stopped = false
+  const stopping = refresher.stop().then(() => { stopped = true })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(stopped, false, 'stop waits for the refresh in flight')
+  release(); await stopping; await refreshing
+  assert.notEqual(await readFile(join(dir, 'token'), 'utf8'), 'late', 'a refresh that finishes after stop writes nothing')
+  await removeTokenFile(dir)
+  await assert.rejects(stat(dir))
+})
 test('INT-004 the refresher atomically replaces the token file and nothing outlives the invocation', async t => {
   const { app, root, server } = await setup(t)
   const dir = join(root, '.github-auth')
@@ -116,7 +133,7 @@ test('INT-004 the refresher atomically replaces the token file and nothing outli
   const second = await readFile(join(dir, 'token'), 'utf8')
   assert.notEqual(first, second); assert.deepEqual(timers, [1800000])
   assert.deepEqual((await readdir(dir)).sort(), ['token'])
-  refresher.stop(); assert.equal(timers.at(-1), 'cleared')
+  await refresher.stop(); assert.equal(timers.at(-1), 'cleared')
   // A refresh error is reported without leaving a partial or stale temporary file.
   server.handler = request => request.path.endsWith('/access_tokens') ? (request.body = request.body, true) && false : false
   const errors = []

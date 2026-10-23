@@ -17,6 +17,7 @@ import { runContainer } from './lib/container.mjs'
 import { assembleResult, writeResultArtifacts } from './lib/result.mjs'
 import { publishRun, publicationEligibility } from './lib/publication.mjs'
 import { loadProductInputs } from './lib/product-rubric.mjs'
+import { productSeriesParts } from './lib/preflight.mjs'
 export const HUMAN_RUBRIC_PATH = join(SCENE_ROOT, 'human-rubric.json')
 export async function loadHumanRubric(path = HUMAN_RUBRIC_PATH) {
   const text = await readFile(path)
@@ -39,6 +40,12 @@ export async function runHumanReview({ runDir, io, serve = serveOutput, build = 
   if (saved.evaluation_status === 'complete') return { status: 'already-complete', result: saved }
   if (saved.evaluation_status !== 'pending-human-review') throw new Error(`human review applies only to a pending run, not ${saved.evaluation_status}`)
   const rubric = await loadHumanRubric(humanRubricPath)
+  // The rubrics in front of the reviewer must be the ones the run was scored under.
+  const pinned = (await readJson(join(runDir, 'evidence/define/identity.json'), null))?.series_identity
+  if (!pinned) throw new Error('the run holds no hash-protected series identity to check the rubrics against')
+  const parts = await productSeriesParts()
+  if (rubric.sha256 !== pinned.human_rubric?.sha256) throw new Error('the human rubric differs from the one this run was pinned to')
+  if (parts.product_rubric.sha256 !== pinned.product_rubric?.sha256) throw new Error('the product rubric differs from the one this run was pinned to')
   const product = await readJson(join(runDir, 'phases/product-result.json'))
   const delivery = await readJson(join(runDir, 'phases/delivery.json'))
   const candidate = { candidate_identity: `${saved.run_id}@${delivery.delivered_commit}` }

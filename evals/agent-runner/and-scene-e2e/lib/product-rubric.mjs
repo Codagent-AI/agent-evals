@@ -129,6 +129,10 @@ export function validateProductRubric(rubric, inventory, { preferenceValues = []
         else if (item.class === 'preference') errors.push(`eval-owned criterion ${id} presumes preference item ${itemId}`)
       }
       if ((source.inventory ?? []).length) errors.push(`eval-owned criterion ${id} must cite no inventory item`)
+      if (limit && typeof source.reason === 'string') {
+        const text = `Requirement (eval-owned): ${source.reason}`
+        if (text.length > limit) errors.push(`${kind} ${id} requirement text is ${text.length} characters, over the ${limit} limit`)
+      }
     } else errors.push(`${kind} ${id} has an invalid requirement source`)
   }
   if ((rubric.gates ?? []).map(gate => gate.id).join() !== GATE_IDS.join()) errors.push(`rubric must declare exactly the gates ${GATE_IDS.join(', ')}`)
@@ -159,7 +163,7 @@ export function validateProductRubric(rubric, inventory, { preferenceValues = []
   for (const id of Object.keys(rubric.fallbacks ?? {})) if (!browser.has(id)) errors.push(`fallback ${id} must name a browser-judge criterion`)
   // Wording: no preference value unless a cited graded item's quote also contains it; traceability of concrete values.
   const evalOwned = new Set((rubric.eval_owned_values ?? []).filter(entry => entry.value && entry.reason?.trim()).map(entry => compact(entry.value)))
-  const quotesOf = ids => ids.flatMap(id => (sources[id]?.inventory ?? rubric.gates?.find(gate => gate.id === id)?.inventory ?? [])).map(itemId => items.get(itemId)).filter(Boolean).flatMap(item => [item.statement, ...item.sources.map(source => source.quote)]).map(compact)
+  const quotesOf = ids => ids.flatMap(id => (sources[id]?.inventory ?? rubric.gates?.find(gate => gate.id === id)?.inventory ?? [])).map(itemId => items.get(itemId)).filter(Boolean).flatMap(item => item.sources.map(source => source.quote)).map(compact)
   const checkText = (label, text, ids) => {
     const quotes = quotesOf(ids)
     for (const value of preferenceValues) if (normalizeTraceabilityText(text).includes(normalizeTraceabilityText(value)) && !quotes.some(quote => quote.includes(compact(value)))) errors.push(`${label} contains the preference value ${value}`)
@@ -183,7 +187,7 @@ export async function loadProductInputs({ suiteRoot = SUITE_ROOT, defineRoot = D
 }
 // Every preference value must occur in some preference item's quote; otherwise the list is not grounded in the inventory.
 export function checkPreferenceValues({ values, inventory }) {
-  const quotes = inventory.items.filter(item => item.class === 'preference').flatMap(item => [item.statement, ...item.sources.map(source => source.quote)]).join('\n')
+  const quotes = inventory.items.filter(item => item.class === 'preference').flatMap(item => item.sources.map(source => source.quote)).join('\n')
   return values.filter(value => !quotes.includes(value)).map(value => `preference value ${value} occurs in no preference item's quote`)
 }
 export async function checkProductInputs(options = {}) {

@@ -204,7 +204,7 @@ test('INT-005 resume reuses the recorded delivery repository and provisions no o
   assert.equal(first.result.resumable, true)
   const resumed = await runEvaluation({ ...f.options, resume: true }, f.deps)
   assert.equal(resumed.result.evaluation_status, 'pending-human-review', resumed.result.observed_error)
-  assert.equal(provisioned, 1); assert.equal(f.harness.reused, undefined, 'a completed provisioning unit is reused, not re-verified or re-created')
+  assert.equal(provisioned, 1); assert.equal(f.harness.reused?.full_name, resumed.result.delivery_repository.full_name, 'the recorded repository is verified and reused, not re-created')
   assert.equal(resumed.result.delivery_repository.id, 9001)
 })
 
@@ -281,6 +281,17 @@ test('I-17 the sandbox holds only the run token: the mounted directory contains 
   assert.equal(f.sandbox.extraMounts().length, 1)
   const staged = (await readdir(join(f.runDir, 'sandbox-input'))).sort(); assert.ok(!staged.some(name => /pem|key|token/i.test(name)))
 })
+test('I-34 a resume after implementation started never collects the definition again from the edited workspace', async t => {
+  const f = await lifecycle(t)
+  f.harness.plans.implement.push({ type: 'failed' }); f.deps.quota = async () => ({ waited: false })
+  assert.equal((await runEvaluation(f.options, f.deps)).result.resumable, true)
+  await writeFile(join(f.runDir, 'collected/proposal.md'), 'damaged after the checkpoint')
+  const dispatched = f.sandbox.starts.length
+  const resumed = await runEvaluation({ ...f.options, resume: true }, f.deps)
+  assert.equal(resumed.result.evaluation_status, 'evaluation-harness-failed'); assert.equal(resumed.result.resumable, false)
+  assert.match(resumed.result.observed_error, /cannot be collected again/); assert.equal(f.sandbox.starts.length, dispatched, 'nothing was dispatched')
+})
+
 test('I-34 definition scoring and the disclosure audit read the definition collected at the checkpoint, not later workspace edits', async t => {
   const f = await lifecycle(t)
   f.harness.plans.implement.push({ type: 'capped', before: async ({ sandbox }) => { await writeFile(join(sandbox.artifactDir, 'workspace/repo/openspec/changes/add-presentation-skill/proposal.md'), 'EDITED DURING IMPLEMENT') } })

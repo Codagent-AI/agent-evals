@@ -17,6 +17,12 @@ function run(command, args, { input, env, cwd, timeoutMs, spawnImpl = spawn }) {
     child.stdin.end(input ?? '')
   })
 }
+// Usage and cost from the final result record of Claude's stream, when it reported them.
+export function claudeUsage(stdout) {
+  let final = null
+  for (const line of stdout.split('\n')) { try { const event = JSON.parse(line); if (event.type === 'result') final = event } catch { /* not a record */ } }
+  return final ? { ...(final.usage ? { tokens: final.usage } : {}), ...(final.total_cost_usd !== undefined ? { cost_usd: final.total_cost_usd } : {}) } : null
+}
 export function structuredOutput(stdout) {
   let final = null
   for (const line of stdout.split('\n')) { try { const event = JSON.parse(line); if (event.type === 'result') final = event } catch { /* not a record */ } }
@@ -29,6 +35,12 @@ export function createBrowserJudgeInvoker({ runDir, env = process.env, claudeCom
   return async request => {
     const started = Date.now()
     const { cli, model, effort } = request.authority
+    // A failed call still spent quota, so it is recorded like a successful one.
+    let usage = null
+    const record = async (ok, error = null) => {
+      await mkdir(join(runDir, 'phases'), { recursive: true })
+      await appendFile(ledger, `${JSON.stringify({ kind: 'browser-judge', job: request.job, cli, model, effort, ok, duration_ms: Date.now() - started, usage, ...(error ? { error: String(error.message).slice(0, 300) } : {}) })}\n`)
+    }
     const scratch = await mkdtemp(join(tmpdir(), 'e2e-browser-judge-'))
     try {
       const environment = allowedEnvironment(env, { CHROME_DEVTOOLS_AXI_SESSION: request.browser_session ?? env.CHROME_DEVTOOLS_AXI_SESSION })
@@ -36,6 +48,7 @@ export function createBrowserJudgeInvoker({ runDir, env = process.env, claudeCom
       if (cli === 'claude') {
         const args = ['-p', '--model', model, '--effort', effort, '--tools', 'Bash', '--allowedTools', 'Bash(chrome-devtools-axi:*)', '--setting-sources', '', '--strict-mcp-config', '--disable-slash-commands', '--no-session-persistence', '--json-schema', JSON.stringify(request.schema), '--output-format', 'stream-json', '--verbose']
         const result = await run(claudeCommand, args, { input: request.prompt, env: environment, cwd: scratch, timeoutMs, spawnImpl })
+        usage = claudeUsage(result.stdout)
         if (result.code !== 0) throw Object.assign(new Error(`claude exited ${result.code}: ${result.stderr.slice(-300)}`), { retryable: true })
         text = structuredOutput(result.stdout)
       } else {
@@ -46,9 +59,8 @@ export function createBrowserJudgeInvoker({ runDir, env = process.env, claudeCom
         if (result.code !== 0) throw Object.assign(new Error(`codex exited ${result.code}: ${result.stderr.slice(-300)}`), { retryable: true })
         text = await readFile(outPath, 'utf8')
       }
-      await mkdir(join(runDir, 'phases'), { recursive: true })
-      await appendFile(ledger, `${JSON.stringify({ kind: 'browser-judge', job: request.job, cli, model, effort, duration_ms: Date.now() - started, usage: null })}\n`)
+      await record(true)
       return text
-    } finally { await rm(scratch, { recursive: true, force: true }) }
+    } catch (error) { await record(false, error); throw error } finally { await rm(scratch, { recursive: true, force: true }) }
   }
 }

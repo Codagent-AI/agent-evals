@@ -2,7 +2,7 @@
 // the delivered commit is whatever the delivery repository holds, fetched into a repository the harness made.
 import { cp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
-import { dirname, join, relative } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import { CHANGE_NAME } from './files.mjs'
 import { authenticatedGit, gitCommand } from './provisioning.mjs'
 import { writeJsonAtomic } from '../../../lib/define-run/persistence.mjs'
@@ -115,7 +115,7 @@ export async function retainAcceptance({ runDir, bare, head, sessionDir }) {
       let bytes
       try { await guardPath(await realpath(runDir), artifact.path); bytes = await readFile(artifact.path) }
       catch (error) { throw new HarnessEvidenceError(`acceptance artifact is unreadable: ${error.message}`) }
-      const file = `${String(index).padStart(3, '0')}-${artifact.role}`
+      const file = `${String(index).padStart(3, '0')}-${artifact.role}-${basename(artifact.path)}`
       await writeFile(join(root, file), bytes)
       artifacts.push({ role: artifact.role, file: `evidence/final/acceptance/${file}`, sha256: sha256(bytes) })
     }

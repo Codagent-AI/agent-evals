@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Host lifecycle for one end-to-end evaluation: provision a delivery repository, run the selected workflow in
 // two capped invocations around a define checkpoint, verify delivery, then audit, score and report.
-import { mkdir, rm, lstat, open, unlink, readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, rm, lstat, open, unlink, readFile, rename, writeFile, copyFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
@@ -15,7 +15,7 @@ import { hashJson, hashFile, writeJsonAtomic } from '../../lib/define-run/persis
 import { materialize } from '../../lib/define-run/starting-repo.mjs'
 import { scanCanaries } from '../../lib/define-run/canary.mjs'
 import { verifyMountPlan } from '../../lib/define-run/mount-plan.mjs'
-import { collectEvidence, loadEvidence } from '../../lib/define-run/evidence.mjs'
+import { collectEvidence, loadEvidence, guardPath } from '../../lib/define-run/evidence.mjs'
 import { reconcileConversation } from '../../lib/define-run/reconciliation.mjs'
 import { auditContamination } from '../../lib/define-run/contamination.mjs'
 import { createJudgingPhases } from '../../lib/define-run/judging.mjs'
@@ -96,19 +96,25 @@ export async function runEvaluation(options, deps = {}) {
       return await runInvocation({ sandbox, profiles: options.profiles, mode, until, state: checkpoint, limitMs: options.timeLimitMs ?? checkpoint.identity.time_limit_ms, stallWindowMs: checkpoint.stall_window_ms,
         activity: deps.activity ?? (() => latestActivityMs({ roots: [join(sandbox.artifactDir, '.runtime'), join(sandbox.artifactDir, 'workspace/repo')] })), now, monitorMs: deps.monitorMs ?? 1000, signal: deps.signal, quota: deps.quota, sleep: deps.sleep,
         persist, readOutcome: async () => { const runnerState = await readRunnerRun({ sandbox, runDir, recordedId: checkpoint.runner_run_id }); return { runnerState, outcome: classifyRun(runnerState, until) } }, startResponder })
-    } finally { refresher.stop(); await removeTokenFile(tokenDir) }
+    } finally { await refresher.stop(); await removeTokenFile(tokenDir) }
   }
+  // Each phase keeps its own copy: the Runner rewrites these files during the next invocation, and an earlier unit's
+  // recorded output hashes must keep matching.
   async function saveWorkflow(state, name) {
     checkpoint.runner_run_id = state.run_id
-    const evidence = []
+    const directory = join(runDir, `phases/workflow-${name}`)
+    await mkdir(directory, { recursive: true })
+    const copies = []
     for (const file of ['state.json', 'audit.log', 'run-metrics.json']) {
-      const path = join(state.session_dir, file)
-      if (await hashFile(path)) evidence.push(...await sandbox.retrieve([path.slice(sandbox.artifactDir.length + 1)]))
+      const source = join(state.session_dir, file)
+      if (!await hashFile(source)) continue
+      await guardPath(runDir, source)
+      await copyFile(source, join(directory, file)); copies.push(join(directory, file))
     }
     const target = join(runDir, `phases/workflow-${name}.json`)
-    await writeJsonAtomic(target, { runner_run_id: state.run_id, phase: name, configured_profiles: options.profiles, evidence })
+    await writeJsonAtomic(target, { runner_run_id: state.run_id, phase: name, configured_profiles: options.profiles, evidence: copies.map(path => path.slice(runDir.length + 1)) })
     await persist()
-    return [target, ...evidence]
+    return [target, ...copies]
   }
   async function dispatch(until, startResponder) {
     let state = await readRunnerRun({ sandbox, runDir, recordedId: checkpoint.runner_run_id, workflowName: inspected?.workflow.name })
@@ -171,9 +177,12 @@ export async function runEvaluation(options, deps = {}) {
     },
     provisioning: async () => {
       const patterns = await readJson(patternsPath)
-      const delivery = options.resume && checkpoint.delivery?.full_name
-        ? await (deps.reuseDelivery ?? reuseDelivery)({ app, recorded: checkpoint.delivery, token: await provisioningToken() })
-        : await (deps.provisionDelivery ?? provisionDelivery)({ app, runId: checkpoint.run_id, bundlePath: join(inputDir, 'starting-repo.bundle'), commit: checkpoint.materialization.commit, patterns, token: await provisioningToken() })
+      const token = await provisioningToken()
+      const recorded = checkpoint.delivery?.full_name ? checkpoint.delivery : null
+      const delivery = recorded && !recorded.pending
+        ? await (deps.reuseDelivery ?? reuseDelivery)({ app, recorded, token })
+        : await (deps.provisionDelivery ?? provisionDelivery)({ app, runId: checkpoint.run_id, bundlePath: join(inputDir, 'starting-repo.bundle'), commit: checkpoint.materialization.commit, patterns, token,
+          existing: recorded, onCreated: async identity => { checkpoint.delivery = { ...identity, pending: true }; await persist() } })
       checkpoint.delivery = delivery
       const target = join(runDir, 'phases/delivery-repository.json')
       await writeJsonAtomic(target, delivery); await persist()
@@ -188,6 +197,8 @@ export async function runEvaluation(options, deps = {}) {
       onExchangeDurable: async exchange => { if (checkpoint.runner_run_id && checkpoint.runner_run_id !== exchange.run_id) throw new Error('Runner exchange run identity mismatch'); checkpoint.runner_run_id = exchange.run_id; checkpoint.last_active_step = exchange.step; await persist() } })
       .catch(error => ({ status: 'evaluation-harness-failed', reason: error.message })))),
     'definition-collection': async () => {
+      // The frozen definition is never rebuilt from a workspace implementation may have edited.
+      if (checkpoint.implement_started) throw Object.assign(new Error('the definition was collected before implementation started and cannot be collected again from the edited workspace'), { resumable: false })
       const state = await readRunnerRun({ sandbox, runDir, recordedId: checkpoint.runner_run_id })
       await privatePath(join(sandbox.artifactDir, 'workspace/repo'), runDir)
       const manifest = await (deps.collectDefinition ?? collectDefinition)({ workspaceRepo: join(sandbox.artifactDir, 'workspace/repo'), runDir, readHead: deps.readHead })
@@ -199,7 +210,7 @@ export async function runEvaluation(options, deps = {}) {
       await persist()
       return [join(runDir, 'phases/collection.json'), join(runDir, DEFINE_MANIFEST), ...evidence.files.map(file => join(runDir, file.path))]
     },
-    'implement-workflow': () => dispatch('implement', deps.startImplementResponder ?? (({ signal }) => watchForRequests({ exchangeDir: sandbox.exchangeDir, signal }))),
+    'implement-workflow': async () => { checkpoint.implement_started = true; await persist(); return dispatch('implement', deps.startImplementResponder ?? (({ signal }) => watchForRequests({ exchangeDir: sandbox.exchangeDir, signal }))) },
     'delivery-verification': async () => {
       const state = await readRunnerRun({ sandbox, runDir, recordedId: checkpoint.runner_run_id })
       const token = await provisioningToken()
@@ -239,24 +250,27 @@ export async function runEvaluation(options, deps = {}) {
     'requirement-trace': async () => {
       const productResult = await readJson(join(runDir, 'phases/product-result.json'), null)
       const target = join(runDir, 'phases/trace.json')
-      await writeJsonAtomic(target, await traceFor(productResult?.score ?? null, productResult?.gates ?? []))
+      await writeJsonAtomic(target, await traceFor(productResult?.score ?? null))
       return [target]
     },
     metrics: async () => {
       const target = join(runDir, 'phases/workflow-metrics.json')
-      const path = join(runDir, 'evidence/final/runner/run-metrics.json')
-      const text = await readFile(path, 'utf8').catch(() => readFile(join(runDir, 'evidence/define/runner/run-metrics.json'), 'utf8').catch(() => null))
-      await writeJsonAtomic(target, text ? ingestWorkflowMetrics({ text, runId: checkpoint.runner_run_id, workflow: inspected?.workflow?.name ?? 'change', stepOrder: checkpoint.step_order?.filter(step => ['define', 'implement'].includes(step)) ?? ['define', 'implement'] }) : { state: 'unavailable', complete: false, by_step: {}, by_role: {}, total: null })
+      // The whole run through implement: the latest Runner copy, whichever phase last saved one.
+      let text = null
+      for (const source of ['phases/workflow-implement/run-metrics.json', 'phases/workflow-define/run-metrics.json']) { text = await readFile(join(runDir, source), 'utf8').catch(() => null); if (text) break }
+      const order = checkpoint.step_order ?? ['define', 'implement']
+      const through = order.slice(0, order.indexOf('implement') + 1)
+      await writeJsonAtomic(target, text ? ingestWorkflowMetrics({ text, runId: checkpoint.runner_run_id, workflow: inspected?.workflow?.name ?? 'change', stepOrder: through }) : { state: 'unavailable', complete: false, by_step: {}, by_role: {}, total: null })
       return [target]
     },
     ...deps.handlers,
   }
   // Definition-side judging reuses the define suite's phases over the collected copy and the define-only evidence.
   const judging = () => createJudgingPhases({ runDir, suiteRoot: DEFINE_ROOT, getCheckpoint: () => checkpoint, setCheckpoint: value => { checkpoint = value }, persist, judges: deps.judges ?? createDefinitionJudges({ runDir }), gateCommand: deps.gateCommand, loadInputs: deps.loadInputs })
-  async function traceFor(productScore, gates = []) {
+  async function traceFor(productScore) {
     const asked = (await readJson(join(runDir, 'discovery/asked.json'))).results
     const coverage = (await readJson(join(runDir, 'judges/score.json'))).coverage
-    return buildTrace({ inventory: product.inventory, rubric: product.rubric, asked, coverage, product: productScore, gates })
+    return buildTrace({ inventory: product.inventory, rubric: product.rubric, asked, coverage, product: productScore })
   }
   async function inspect() {
     const found = await (deps.inspect ?? inspectInputs)({ profiles: options.profiles, workflow: options.workflow, runnerDir: options.runnerDir, skillsDir: options.skillsDir, dryRun: options.dryRun ?? false, env, home: deps.home, command: deps.command, app: deps.app })
@@ -327,6 +341,8 @@ export async function runEvaluation(options, deps = {}) {
     } else {
       phase = 'preflight'; await handlers.preflight()
       checkpoint = await completeUnit(checkpoint, { phase, unit: 'phase', inputs: provenance(), dependencies: {}, outputs: [join(runDir, 'phases/preflight.json')] }); await persist()
+      // A resumed run verifies its recorded repository even when provisioning was already complete.
+      if (options.resume && checkpoint.delivery?.full_name && !checkpoint.delivery.pending) await (deps.reuseDelivery ?? reuseDelivery)({ app, recorded: checkpoint.delivery, token: await provisioningToken() })
       for (const name of ['provisioning', 'materialization', 'define-workflow', 'definition-collection']) await unit(name, handlers[name], { dependencies: name === 'materialization' ? {} : { materialization: checkpoint.materialization } })
       if (await checkpointUnits() === 'stop') {
         // contamination and leaks end the run before implementation

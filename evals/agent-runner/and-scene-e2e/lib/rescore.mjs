@@ -25,7 +25,7 @@ import { PRODUCT_JUDGE_PROFILE } from '../../and-scene/lib/judge-profile.mjs'
 import { PANEL_PROTOCOL } from '../../../lib/panel-judging/panel.mjs'
 const SNAP = { define: { evidenceRoot: 'evidence/define', manifestPath: 'evidence/define-manifest.json' }, final: { evidenceRoot: 'evidence/final', manifestPath: 'evidence/final-manifest.json' } }
 const usage = message => Object.assign(new Error(message), { usage: true })
-const RETAINED = ['conversation.jsonl', 'phases/collection.json', 'phases/delivery.json', 'phases/product-result.json', 'evidence', 'collected', 'source']
+const RETAINED = ['conversation.jsonl', 'phases/collection.json', 'phases/delivery.json', 'evidence', 'collected', 'source']
 // Current series identity from evaluator inputs alone: no Runner, Docker, credentials or network.
 export async function evaluatorIdentity({ dryRun = false } = {}) {
   const { seriesIdentity: define } = await inspectEvaluatorInputs({ suiteRoot: DEFINE_ROOT, dryRun })
@@ -46,7 +46,17 @@ export async function verifyRetained(source) {
   for (const file of collection.files) if (await hashFile(join(source, 'collected', file.path)) !== file.sha256) throw usage(`the collected definition differs from its record: ${file.path}`)
   const product = await read('phases/product-result.json')
   if (!product.build_plan) throw usage('the source run never got a build plan; resume it instead of rescoring it')
-  return { delivery, collection, product }
+  // The delivery record and the product result are only as good as the hashes the source run recorded for them.
+  const state = await readJson(join(source, 'run-state.json'), null)
+  const recorded = Object.values(state?.phases ?? {}).flatMap(phase => Object.values(phase.units ?? {})).flatMap(unit => unit.outputs ?? [])
+  for (const name of ['phases/delivery.json', 'phases/product-result.json']) {
+    const entry = recorded.find(output => output.path.endsWith(`/${name}`))
+    if (!entry) throw usage(`the source run state records no hash for ${name}`)
+    if (await hashFile(join(source, name)) !== entry.sha256) throw usage(`${name} differs from the hash the source run recorded`)
+  }
+  // Attribution comes from hash-protected evidence, not from the mutable result or state files.
+  const identity = await readJson(join(source, 'evidence/define/identity.json'), null)
+  return { delivery, collection, product, identity }
 }
 export async function rescoreEvaluation(options, deps = {}) {
   const source = resolve(options.rescoreFrom); const runDir = resolve(options.runDir)
@@ -60,8 +70,8 @@ export async function rescoreEvaluation(options, deps = {}) {
   for (const path of ['phases', 'judges', 'audits', 'discovery', 'logs', '.runtime/definition-job-inputs', '.runtime/judge', '.runtime/judge-claude', 'human-review']) await mkdir(join(runDir, path), { recursive: true })
   const product = deps.productInputs ?? await loadProductInputs()
   const identity = deps.evaluatorIdentity ? await deps.evaluatorIdentity() : await evaluatorIdentity({ dryRun: deps.dryRun })
-  let checkpoint = createCheckpoint({ run_id: `rescore-${randomUUID().slice(0, 8)}`, kind: 'rescore', identity: { series_identity: identity, candidate: sourceState?.identity?.candidate ?? sourceResult?.candidate ?? null, run_directory: runDir, time_limit_ms: null } })
-  checkpoint.original = { run_id: sourceResult?.run_id ?? sourceState?.run_id ?? null, series_identity: sourceResult?.series_identity ?? sourceState?.identity?.series_identity ?? null, candidate: sourceResult?.candidate ?? sourceState?.identity?.candidate ?? null, run_directory: source }
+  let checkpoint = createCheckpoint({ run_id: `rescore-${randomUUID().slice(0, 8)}`, kind: 'rescore', identity: { series_identity: identity, candidate: retained.identity?.candidate ?? null, run_directory: runDir, time_limit_ms: null } })
+  checkpoint.original = { run_id: retained.identity?.run_id ?? null, series_identity: retained.identity?.series_identity ?? null, candidate: retained.identity?.candidate ?? null, run_directory: source }
   checkpoint.delivery = sourceState?.delivery ?? sourceResult?.delivery_repository ?? null
   checkpoint.runner_run_id = sourceState?.runner_run_id ?? null
   const statePath = join(runDir, 'run-state.json')
@@ -99,7 +109,7 @@ export async function rescoreEvaluation(options, deps = {}) {
       })
       await step('requirement-trace', async () => {
         const asked = (await readJson(join(runDir, 'discovery/asked.json'))).results; const coverage = (await readJson(join(runDir, 'judges/score.json'))).coverage
-        const target = join(runDir, 'phases/trace.json'); await writeJsonAtomic(target, buildTrace({ inventory: product.inventory, rubric: product.rubric, asked, coverage, product: evaluated.score, gates: evaluated.gates })); return [target]
+        const target = join(runDir, 'phases/trace.json'); await writeJsonAtomic(target, buildTrace({ inventory: product.inventory, rubric: product.rubric, asked, coverage, product: evaluated.score })); return [target]
       })
       await step('metrics', async () => {
         const text = await readFile(join(runDir, 'evidence/final/runner/run-metrics.json'), 'utf8').catch(() => null)

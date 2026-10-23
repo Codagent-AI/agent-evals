@@ -38,7 +38,7 @@ export async function fakeGitHub(t, state = {}) {
       const page = list => { const n = Number(url.searchParams.get('page') ?? 1); return list.slice((n - 1) * 100, n * 100) }
       if (s.handler) { const handled = s.handler(record, send); if (handled) return }
       let m
-      if (path === '/orgs/Codagent-AI/installation') return send(200, { id: 77 })
+      if (path === '/orgs/Codagent-AI/installation') return send(200, { id: 77, permissions: s.permissions ?? { administration: 'write', contents: 'write', pull_requests: 'write', checks: 'read', statuses: 'read', metadata: 'read' } })
       if (path === '/app/installations/77/access_tokens') { s.minted = (s.minted ?? 0) + 1; return send(201, { token: `${record.body?.repositories ? 'run' : 'prov'}-token-${s.minted}`, expires_at: new Date(Date.now() + 3600e3).toISOString() }) }
       if (path === '/installation/repositories') return send(200, { repositories: page(s.repos) })
       if (path === '/orgs/Codagent-AI/repos' && req.method === 'POST') { const repo = { name: record.body.name, full_name: `Codagent-AI/${record.body.name}`, id: 9001, created_at: '2026-10-23T00:00:00Z', private: record.body.private }; s.created = repo; return send(201, repo) }

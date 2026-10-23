@@ -15,7 +15,7 @@ import { checkVersions, loadVersions } from './versions.mjs'
 import { checkWorkflow } from './workflow.mjs'
 import { validateProfiles } from './options.mjs'
 import { readValidatorReviewerClis } from './sandbox.mjs'
-import { GitHubApp, checkReach, loadAppCredentials } from './provisioning.mjs'
+import { GitHubApp, checkInstallationPermissions, checkReach, loadAppCredentials } from './provisioning.mjs'
 export class PreflightError extends Error {
   constructor(check, message) { super(`preflight ${check}: ${message}`); this.check = check; this.owner = 'evaluation-harness' }
 }
@@ -83,6 +83,7 @@ export async function inspectInputs({ profiles, workflow, runnerDir, skillsDir, 
     const { token } = await github.provisioningToken()
     return { app: github, token }
   })
+  await guard('provisioning credentials', () => checkInstallationPermissions(provisioning.app))
   await checkReach(provisioning.app, provisioning.token).catch(error => { throw error.check ? new PreflightError(error.check, error.message.replace(/^[^:]+: /, '')) : error })
   const { seriesIdentity: defineIdentity } = await guard('hidden inputs', () => inspectEvaluatorInputs({ suiteRoot: defineRoot, dryRun }))
   const parts = await productSeriesParts({ suiteRoot })

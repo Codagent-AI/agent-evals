@@ -1,6 +1,6 @@
 // The identity-neutral judge inputs: the delivered source (from the retained bundle, never the candidate's
 // own change directory) and one requirement document per graded inventory item.
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { gitCommand } from './provisioning.mjs'
 import { hashJson, writeJsonAtomic } from '../../../lib/define-run/persistence.mjs'
@@ -9,6 +9,15 @@ import { graded, requirementDocument } from './product-rubric.mjs'
 const HARNESS_GIT = { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' }
 const MAX_SOURCE_BYTES = 1024 * 1024
 const excluded = path => /(^|\/)(node_modules|\.git)(\/|$)/.test(path) || path.startsWith('.agent-runner/') || path.startsWith('openspec/changes/')
+// A recorded neutral input is reused only while every file still hashes as recorded.
+export async function verifyNeutral({ runDir, value }) {
+  try {
+    const manifest = JSON.parse(await readFile(join(runDir, 'neutral/provenance/manifest.json'), 'utf8'))
+    if (manifest.manifest_sha256 !== value?.manifest?.manifest_sha256) return false
+    for (const entry of manifest.entries) if (sha256(await readFile(join(runDir, 'neutral/judge', entry.path))) !== entry.sha256) return false
+    return true
+  } catch { return false }
+}
 export async function materializeNeutral({ runDir, repo, commit, inventory }) {
   const root = join(runDir, 'neutral/judge')
   await rm(join(runDir, 'neutral'), { recursive: true, force: true })

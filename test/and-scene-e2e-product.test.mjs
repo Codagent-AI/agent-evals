@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
@@ -10,6 +10,7 @@ import { NotEvaluableError, resolveBuildPlan } from '../evals/agent-runner/and-s
 import { containerArgs } from '../evals/agent-runner/and-scene-e2e/lib/container.mjs'
 import { loadProductInputs, EVIDENCE_JOBS, criteriaForJob } from '../evals/agent-runner/and-scene-e2e/lib/product-rubric.mjs'
 import { PRODUCT_JUDGE_PROFILE } from '../evals/agent-runner/and-scene/lib/judge-profile.mjs'
+import { createProductionDeps } from '../evals/agent-runner/and-scene-e2e/lib/production-deps.mjs'
 import { serveOutput } from '../evals/agent-runner/and-scene-e2e/lib/serve.mjs'
 import { scoreProduct, evaluateGates } from '../evals/agent-runner/and-scene-e2e/lib/scoring.mjs'
 
@@ -125,6 +126,57 @@ test('INT-009 an unresolvable build plan is a resumable not-evaluable failure wi
   assert.deepEqual(await resolveBuildPlan({ worktree: join(e.world.root, 'repo') }).catch(error => error.code), 'product-not-evaluable')
 })
 
+test('INT-009 a build script not named build, and an index.html the build overwrites in place, are still found', async t => {
+  const files = { ...ROOT_APP, 'package.json': viteManifest({ scripts: { 'build:app': 'vite build', test: 'node --test' } }), 'dist/index.html': '<html>stale</html>' }
+  const e = await evaluate(t, files)
+  const result = await e.run()
+  assert.deepEqual(result.build_plan.build, ['npm', 'run', 'build:app']); assert.equal(result.build.output, 'dist'); assert.equal(result.build_plan.output, 'dist')
+  assert.equal(result.build.ok, true); assert.equal(result.score.automated_score, 70)
+})
+
+test('INT-009 a reused build or neutral unit is trusted only while its recorded output and files still match', async t => {
+  const world = await deliver(t, ROOT_APP)
+  const first = await evaluate(t, ROOT_APP, { runDirOverride: world }); await first.run()
+  const second = await evaluate(t, ROOT_APP, { runDirOverride: world }); await second.run()
+  assert.ok(!second.container.specs.some(spec => spec.label === 'build'), 'an intact build is reused')
+  // The recorded value no longer matches its own hash.
+  const unitPath = join(world.runDir, 'phases/product/build.json')
+  const unit = JSON.parse(await readFile(unitPath, 'utf8')); unit.value.output = 'elsewhere'; await writeFile(unitPath, JSON.stringify(unit))
+  const third = await evaluate(t, ROOT_APP, { runDirOverride: world }); await third.run()
+  assert.ok(third.container.specs.some(spec => spec.label === 'build'), 'a tampered record forces a rebuild')
+  // The built files are gone.
+  await rm(join(world.runDir, '.product/build/dist'), { recursive: true, force: true })
+  const fourth = await evaluate(t, ROOT_APP, { runDirOverride: world }); await fourth.run()
+  assert.ok(fourth.container.specs.some(spec => spec.label === 'build'), 'a missing output forces a rebuild')
+})
+
+test('INT-009 a failed browser judging, or an unusable verifier answer, is never cached', async t => {
+  const world = await deliver(t, ROOT_APP)
+  let failures = 1
+  const flaky = await evaluate(t, ROOT_APP, { runDirOverride: world, deps: { browserInvoke: async () => { if (failures-- > 0) throw Object.assign(new Error('browser judge crashed'), { retryable: false }); throw new Error('unreachable') } } })
+  await assert.rejects(flaky.run(), error => error.resumable === true)
+  const retried = await evaluate(t, ROOT_APP, { runDirOverride: world })
+  const result = await retried.run()
+  assert.ok(retried.browser.calls.browserJobs > 0, 'the failed browser jobs ran again')
+  assert.equal(result.score.automated_score, 70)
+  const verifierWorld = await deliver(t, ROOT_APP)
+  const bad = await evaluate(t, ROOT_APP, { runDirOverride: verifierWorld, deps: { verifierJudge: async () => ({ found: true, rationale: 'no command' }) } })
+  await assert.rejects(bad.run(), /verifier judge/)
+  const good = await evaluate(t, ROOT_APP, { runDirOverride: verifierWorld })
+  assert.equal((await good.run()).verifier.clear, true)
+})
+
+test('INT-009 the verifier judge receives the delivered files it must read, bounded', async t => {
+  const root = await temp(t, 'e2e-verifier-'); const worktree = join(root, 'wt'); await mkdir(join(worktree, 'scripts'), { recursive: true })
+  await writeFile(join(worktree, 'package.json'), JSON.stringify({ scripts: { verify: 'node scripts/check.mjs' } })); await writeFile(join(worktree, 'scripts/check.mjs'), 'x'.repeat(50_000))
+  let prompt
+  const judges = { profile: PRODUCT_JUDGE_PROFILE, panel: [], decider: {}, invoke: async request => { prompt = request.prompt; return JSON.stringify({ found: true, command: ['npm', 'run', 'verify'], rationale: 'script' }) } }
+  const deps = createProductionDeps({ runDir: root, judges })
+  await deps.verifierJudge({ worktree, plan: { application_root: '.' }, neutral: { source_paths: ['package.json', 'scripts/check.mjs', 'src/other.ts'] } })
+  assert.match(prompt, /"verify":"node scripts\/check\.mjs"/, 'package.json contents travel in the prompt')
+  assert.ok(prompt.length < 80_000, 'the contents are bounded'); assert.ok(!/src\/other\.ts/.test(prompt))
+})
+
 test('INT-009 a build failure zeroes browser criteria with no fallback, fails the gates and skips human review', async t => {
   const e = await evaluate(t, ROOT_APP, { containerOptions: { failBuild: true } })
   const result = await e.run()
@@ -196,4 +248,26 @@ test('INT-009 after a not-evaluable failure the retained candidate is evaluated 
   const result = await evaluateProduct({ runDir: world.runDir, rubric: inputs.rubric, inventory: inputs.inventory, bundlePath: world.bundlePath, commit: world.commit, collectedDir: world.collectedDir, acceptance,
     plan: { application_root: '.', install: ['npm', 'ci'], build: ['npm', 'run', 'build'], package_manager: 'npm' }, deps: { containerRun: corrected.container.run, panel: corrected.judges.panel, decider: corrected.judges.decider, invoke: corrected.judges.invoke, ...corrected.browser, serve: async () => ({ url: 'http://127.0.0.1:1', close: async () => {} }), verifierJudge: async () => ({ found: false, rationale: 'none' }) } })
   assert.equal(result.build.ok, true); assert.equal(result.score.automated_score, 70, 'a supplied plan bypasses resolution and the candidate is evaluated normally')
+})
+
+test('C-2 a symlink in the build output never serves a file outside it, directly or as the index fallback', async t => {
+  const root = await temp(t, 'e2e-serve-'); const out = join(root, 'out'); await mkdir(out, { recursive: true })
+  await writeFile(join(root, 'secret.txt'), 'secret'); await writeFile(join(out, 'index.html'), '<html>ok</html>')
+  await symlink(join(root, 'secret.txt'), join(out, 'leak.txt')); await symlink(join(root, 'secret.txt'), join(out, 'linked.html'))
+  const server = await serveOutput({ root: out })
+  try {
+    assert.equal((await fetch(`${server.url}/leak.txt`)).status, 403); assert.equal((await fetch(`${server.url}/linked.html`)).status, 403)
+    assert.equal(await (await fetch(`${server.url}/anything/else`)).text(), '<html>ok</html>')
+  } finally { await server.close() }
+  await rm(join(out, 'index.html')); await symlink(join(root, 'secret.txt'), join(out, 'index.html'))
+  const evil = await serveOutput({ root: out })
+  try { assert.equal((await fetch(`${evil.url}/`)).status, 403); assert.equal((await fetch(`${evil.url}/missing`)).status, 403) } finally { await evil.close() }
+})
+
+test('INT-009 the result keeps every judge job\'s panel record, browser jobs included, and a non-scoring ambiguity ledger', async t => {
+  const result = await (await evaluate(t, ROOT_APP)).run()
+  assert.ok(Object.keys(result.panel_records).some(key => key.startsWith('browser:')), 'browser panel records are retained')
+  assert.ok(Object.keys(result.panel_records).some(key => !key.startsWith('browser:')), 'source and evidence panel records are retained')
+  assert.ok(Object.keys(result.judge_records).some(key => key.startsWith('browser:')))
+  assert.ok('ambiguity_ledger' in result); assert.equal(result.score.automated_score, 70, 'diagnostics do not score')
 })

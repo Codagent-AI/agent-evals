@@ -130,3 +130,20 @@ test('I-77 a browser criterion whose fallback names a missing job, no requiremen
   expectError(r => { r.fallbacks['demo-sample-explains-skill'].requirement = ' ' }, /fallback demo-sample-explains-skill requires a requirement/)
   expectError(r => { r.fallbacks['navigation-keyboard'] = { job: 'scene-kit', requirement: 'x' } }, /fallback navigation-keyboard must name a browser-judge criterion/)
 })
+
+test('I-75 an eval-owned criterion\'s requirement text is bounded too', () => {
+  const rubric = clone(inputs.rubric)
+  const [id] = Object.entries(rubric.criterion_sources).find(([, source]) => source.owner === 'eval')
+  rubric.criterion_sources[id].reason = 'r'.repeat(rubric.limits.max_requirement_chars + 1)
+  assert.ok(errorsOf(rubric).some(error => error.includes(`criterion ${id} requirement text is`) && error.includes('over the')))
+})
+
+test('I-72 a value found only in an item statement, not in any quote, is neither grounded nor allowed in wording', () => {
+  const item = { id: 'P-1', class: 'preference', title: 'p', statement: 'uses 777 ms', sources: [{ heading: 'h', quote: 'no numbers here' }] }
+  assert.deepEqual(checkPreferenceValues({ values: ['777 ms'], inventory: { items: [item] } }), ["preference value 777 ms occurs in no preference item's quote"])
+  const rubric = clone(inputs.rubric); const sub = subOf(rubric, 'canvas-uniform-scaling')
+  const graded = inputs.inventory.items.find(candidate => candidate.id === rubric.criterion_sources['canvas-uniform-scaling'].inventory[0])
+  const inventory = { ...inputs.inventory, items: inputs.inventory.items.map(candidate => candidate === graded ? { ...candidate, statement: `${candidate.statement} It lasts 4242 ms.` } : candidate) }
+  sub.review_guidance.push('A step lasting 4242 ms is fine.')
+  assert.ok(validateProductRubric(rubric, inventory, { preferenceValues: inputs.preferenceValues }).some(error => /uncited concrete value 4242 ms/.test(error)))
+})

@@ -1,6 +1,7 @@
 // Product evaluation on the host: build plan, build in a throwaway container, serving, browser judging with
 // replay confirmation, source and evidence judging on the shared panel, gates and the automated score.
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { collectAmbiguityArtifacts, runAmbiguityDiagnostics } from '../../and-scene/lib/ambiguity.mjs'
 import { join } from 'node:path'
 import { runPanelJob } from '../../../lib/panel-judging/panel.mjs'
 import { runJobPool } from '../../../lib/panel-judging/job-pool.mjs'
@@ -8,7 +9,7 @@ import { PacketOverflowError, citationTarget, judgeFailure, runJudgeJob } from '
 import { hashJson, readJson, writeJsonAtomic } from '../../../lib/define-run/persistence.mjs'
 import { buildProduct, resolveBuildPlan } from './build-plan.mjs'
 import { cloneFromBundle } from './delivery.mjs'
-import { materializeNeutral } from './neutral.mjs'
+import { materializeNeutral, verifyNeutral } from './neutral.mjs'
 import { buildJudgeRequest, judgeJobs } from './judge-requests.mjs'
 import { applyFallbacks, createBrowserSession, runBrowserJudging } from './browser-judging.mjs'
 import { browserCriteria } from './product-rubric.mjs'
@@ -22,15 +23,16 @@ export class ProductHarnessError extends Error {
 const sha = value => hashJson(value)
 // Persisted, input-hashed work units: completed ones are reused on resume, unfinished ones rerun alone.
 export function fileUnits(runDir, { onComplete = async () => {}, onReuse = () => {} } = {}) {
-  return async function unit(name, inputs, produce, { cache = () => true } = {}) {
+  return async function unit(name, inputs, produce, { cache = () => true, verify = null } = {}) {
     const target = join(runDir, 'phases/product', `${name.replace(/[^a-zA-Z0-9_.-]/g, '-')}.json`)
     const recorded = await readJson(target, null).catch(() => null)
-    if (recorded?.input_hash === sha(inputs)) { onReuse(name); return recorded.value }
+    // Reuse needs the inputs, the recorded output's own hash and, where the output points at files, those files to still match.
+    if (recorded?.input_hash === sha(inputs) && recorded.output_hash === sha(recorded.value ?? null) && (!verify || await verify(recorded.value))) { onReuse(name); return recorded.value }
     const value = await produce()
     // An unfinished unit (a judge job that returned nothing usable) is never recorded as complete.
     if (!cache(value)) return value
     await mkdir(join(target, '..'), { recursive: true })
-    await writeJsonAtomic(target, { input_hash: sha(inputs), value })
+    await writeJsonAtomic(target, { input_hash: sha(inputs), output_hash: sha(value ?? null), value })
     await onComplete(name, target)
     return value
   }
@@ -60,8 +62,11 @@ export async function evaluateProduct({ runDir, rubric, inventory, bundlePath, c
   const run = deps.containerRun ?? runContainer
   const worktree = await cloneFromBundle({ runDir, target: join(runDir, '.product/worktree'), bundlePath })
   const plan = recordedPlan ?? await unit('build-plan', { commit }, () => resolveBuildPlan({ worktree }))
-  const build = await unit('build', { commit, plan }, () => buildProduct({ worktree, copyDir: join(runDir, '.product/build'), plan, run }).then(({ output_dir, ...rest }) => ({ ...rest, output_dir: output_dir ?? null })))
-  const neutral = await unit('neutral', { commit }, () => materializeNeutral({ runDir, repo: worktree, commit, inventory }))
+  const build = await unit('build', { commit, plan }, () => buildProduct({ worktree, copyDir: join(runDir, '.product/build'), plan, run }).then(({ output_dir, ...rest }) => ({ ...rest, output_dir: output_dir ?? null })),
+    { verify: value => value.ok === false || access(join(runDir, '.product/build', value.output, 'index.html')).then(() => true, () => false) })
+  // The plan carries the output the build resolved, so a rebuild must produce it again.
+  const resolvedPlan = build.ok ? { ...plan, output: build.output } : plan
+  const neutral = await unit('neutral', { commit }, () => materializeNeutral({ runDir, repo: worktree, commit, inventory }), { verify: value => verifyNeutral({ runDir, value }) })
   const verdicts = {}
   const browserIds = browserCriteria(rubric)
   const notes = { browser: null }
@@ -72,9 +77,9 @@ export async function evaluateProduct({ runDir, rubric, inventory, bundlePath, c
     try {
       const session = deps.browserSession ?? createBrowserSession(label => deps.createDriver(label, { url: server.url }))
       const browser = await unit('browser-judging', { commit, plan, build: build.output, rubric: rubric.version }, async () => {
-        const result = await runBrowserJudging({ rubric, inventory, url: server.url, panel: deps.browserPanel ?? deps.panel, decider: deps.browserDecider ?? deps.decider, invoke: deps.browserInvoke ?? deps.invoke, session, secondOpinion: deps.secondOpinion })
-        return { verdicts: result.verdicts, failed_jobs: result.failed_jobs, failures: result.failures, driver_sessions: result.driver_sessions }
-      })
+        const result = await runBrowserJudging({ rubric, inventory, url: server.url, panel: deps.browserPanel ?? deps.panel, decider: deps.browserDecider ?? deps.decider, invoke: deps.browserInvoke ?? deps.invoke, session, browserSession: deps.browserSessionName, secondOpinion: deps.secondOpinion })
+        return { verdicts: result.verdicts, failed_jobs: result.failed_jobs, failures: result.failures, driver_sessions: result.driver_sessions, records: result.records, judged: result.judged }
+      }, { cache: value => value.failed_jobs.length === 0 })
       if (browser.failed_jobs.length) throw new ProductHarnessError(`browser judge jobs never returned usable output: ${browser.failed_jobs.join(', ')}`, { failures: browser.failures })
       notes.browser = browser
       Object.assign(verdicts, browser.verdicts)
@@ -90,6 +95,7 @@ export async function evaluateProduct({ runDir, rubric, inventory, bundlePath, c
   const incomplete = {}
   const failures = {}
   const records = {}
+  const panelRecords = {}
   const judged = await runJobPool({ jobs, concurrency: deps.concurrency ?? PRODUCT_JUDGE_CONCURRENCY, run: async job => {
     const facts = [`build: ${build.ok ? `succeeded (output ${build.output})` : `failed (${build.reason})`}`]
     let request
@@ -103,15 +109,19 @@ export async function evaluateProduct({ runDir, rubric, inventory, bundlePath, c
       const outcome = await runPanelJob({ job: job.id, criteria: request.criteria, verdicts: ['pass', 'fail'], order: ['pass', 'fail'], panel: deps.panel, decider: deps.decider,
         buildPrompt: () => ({ ...request, panel_line_citations: true, requireSourceCitationsFor: fallbackIds }), schema: request.schema,
         audit: ({ request: next, invoke }) => runJudgeJob({ request: next, invoke }), validateCitations: result => validateSourceCitations(result, request) }).catch(error => ({ ok: false, failure: judgeFailure(error), record: { failure: judgeFailure(error) } }))
-      return outcome.ok ? { ok: true, results: outcome.results.map(({ id, verdict, rationale, citations, basis, votes }) => ({ id, verdict, rationale, citations: citations ?? [], basis, votes })) }
-        : { ok: false, failure: outcome.failure ?? { message: 'judge output exhausted' } }
-    }, { cache: value => value.ok !== false })
+      if (outcome.ok) return { ok: true, results: outcome.results.map(({ id, verdict, rationale, citations, basis, votes }) => ({ id, verdict, rationale, citations: citations ?? [], basis, votes })), panel: outcome.record }
+      // An overflow raised by an audit or check inside the shared engine leaves only this job's component incomplete.
+      if (outcome.failure?.code === 'packet-overflow') return { ok: false, overflow: outcome.failure.message, panel: outcome.record }
+      return { ok: false, failure: outcome.failure ?? { message: 'judge output exhausted' } }
+    }, { cache: value => value.ok !== false || Boolean(value.overflow) })
     return { id: job.id, value }
   } })
   for (const entry of judged) {
-    if (entry.overflow) { for (const component of rubric.components) if (component.subcomponents.some(subcomponent => subcomponent.job === entry.id)) incomplete[component.id] = `the ${entry.id} judge packet overflowed: ${entry.overflow}`; continue }
+    const overflow = entry.overflow ?? entry.value?.overflow
+    if (overflow) { for (const component of rubric.components) if (component.subcomponents.some(subcomponent => subcomponent.job === entry.id)) incomplete[component.id] = `the ${entry.id} judge packet overflowed: ${overflow}`; continue }
     if (!entry.value.ok) { failures[entry.id] = entry.value.failure; continue }
     records[entry.id] = entry.value.results
+    panelRecords[entry.id] = entry.value.panel
   }
   // An exhausted job is unobserved evidence: the run is a resumable harness failure, never a lower score.
   if (Object.keys(failures).length) throw new ProductHarnessError(`judge jobs never returned usable output: ${Object.keys(failures).join(', ')}`, { failures })
@@ -124,16 +134,26 @@ export async function evaluateProduct({ runDir, rubric, inventory, bundlePath, c
   // Verifier gate: a source judge names the command from the delivered tree; it runs in the same container.
   let verifier = { found: false, clear: false, reason: 'the product did not build' }
   if (build.ok && deps.verifierJudge) {
-    const named = await unit('verifier-discovery', { commit }, () => deps.verifierJudge({ worktree, plan, neutral }))
-    if (!named || typeof named.found !== 'boolean') throw new ProductHarnessError('the verifier judge returned no usable output')
+    const named = await unit('verifier-discovery', { commit }, async () => {
+      const found = await deps.verifierJudge({ worktree, plan, neutral })
+      if (!found || typeof found.found !== 'boolean' || (found.found && !(Array.isArray(found.command) && found.command.length && found.command.every(part => typeof part === 'string' && part)))) throw new ProductHarnessError('the verifier judge returned no usable output')
+      return found
+    })
     if (!named.found) verifier = { found: false, clear: false, reason: named.rationale ?? 'no verifier exists in the delivered tree' }
     else verifier = await unit('verifier-run', { commit, command: named.command }, async () => {
       try { const out = run({ mounts: [{ source: join(runDir, '.product/build'), target: '/work', readonly: false }], workdir: plan.application_root === '.' ? '/work' : `/work/${plan.application_root}`, network: 'none', command: named.command }, { label: 'verifier' }); return { found: true, command: named.command, clear: true, exit_code: 0, stdout_tail: String(out.stdout ?? '').slice(-2000) } }
       catch (error) { return { found: true, command: named.command, clear: Number.isInteger(error.status) && error.status > 0, exit_code: error.status ?? null, reason: Number.isInteger(error.status) ? null : 'the verifier did not finish with an exit status', stderr_tail: String(error.stderr ?? error.message).slice(-2000) } }
     })
   }
+  // Ambiguity diagnostics: non-scoring, from the retained acceptance records and the verdicts just reached.
+  const ambiguity = await unit('ambiguity', { commit, rubric: rubric.version, artifacts: (acceptance?.artifacts ?? []).map(artifact => artifact.sha256) }, async () => {
+    const artifacts = await collectAmbiguityArtifacts({ sessionDir: join(runDir, 'evidence/final/acceptance') })
+    const productEvidence = Object.values(verdicts).map(entry => ({ id: entry.id, verdict: entry.verdict, note: entry.rationale ?? entry.reason ?? '' }))
+    return (await runAmbiguityDiagnostics({ runId: deps.runId ?? 'unknown', artifacts, productEvidence, authority: deps.ambiguityAuthority, invoke: deps.ambiguityInvoke })).ledger
+  })
   const gates = evaluateGates({ rubric, verdicts, build, verifier })
   const score = scoreProduct({ rubric, verdicts, incomplete })
-  return { build_plan: plan, build: { ok: build.ok, output: build.output ?? null, reason: build.reason ?? null, log: build.log }, serve: { output: build.output ?? null }, gates, verifier, score, verdicts, browser: notes.browser, not_located: notObserved.map(entry => entry.id), judge_records: records,
+  const judgeRecords = { ...records, ...(notes.browser?.judged ?? {}) }
+  return { build_plan: resolvedPlan, ambiguity_ledger: ambiguity, judge_records: judgeRecords, panel_records: { ...panelRecords, ...Object.fromEntries(Object.entries(notes.browser?.records ?? {}).map(([id, record]) => [`browser:${id}`, record])) }, build: { ok: build.ok, output: build.output ?? null, reason: build.reason ?? null, log: build.log }, serve: { output: build.output ?? null }, gates, verifier, score, verdicts, browser: notes.browser, not_located: notObserved.map(entry => entry.id), 
     human_review: build.ok ? { eligible: true } : { eligible: false, reason: `the product could not be built: ${build.reason}` }, neutral_manifest_sha256: neutral.manifest.manifest_sha256 }
 }

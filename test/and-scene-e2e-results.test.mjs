@@ -54,6 +54,11 @@ test('INT-010 without a product, covered items are delivery-unavailable and none
   assert.equal(trace.items.find(item => item.id === 'G').outcome, 'delivery-unavailable')
   assert.equal(trace.items.find(item => item.id === 'C').outcome, 'not-discovered')
 })
+test('INT-010 a mapped criterion without a verdict leaves the item delivery-unavailable, not delivered', () => {
+  const trace = buildTrace({ ...mini, asked: decisions(['A']), coverage: cover({ A: 'met' }), product: productScore({}) })
+  assert.equal(trace.items.find(item => item.id === 'A').product_delivery, 'unavailable')
+  assert.equal(trace.items.find(item => item.id === 'A').outcome, 'delivery-unavailable')
+})
 test('INT-010 an empty mapping never counts as a vacuous pass, and the trace calls no judge', () => {
   const trace = buildTrace({ ...mini, asked: decisions([]), coverage: cover({ G: 'met' }), product: productScore({ c1: 'pass' }) })
   assert.equal(trace.items.find(item => item.id === 'G').product_delivery, 'not-graded')
@@ -224,6 +229,7 @@ test('INT-010 a rescore reruns audits, scoring and the trace from retained evide
   assert.equal(result.series_identity.product_rubric.version, '2.0.0'); assert.equal(result.original.series_identity.version, 1); assert.deepEqual(result.original.candidate, source.candidate); assert.deepEqual(result.candidate, source.candidate)
   assert.equal(result.product.rubric.version, '2.0.0'); assert.equal(seen.product.length, 1)
   for (const pattern of RISK) assert.ok(pattern.test(result.residual_risk), `a rescore keeps the residual-risk statement: ${pattern}`)
+  assert.equal(await readFile(join(target, 'phases/product-result.json'), 'utf8').then(() => true, () => false), true, 'the rescored product result is the new evaluation')
   const [call] = seen.product; assert.deepEqual(call.plan, {}); assert.equal(call.bundlePath, join(target, 'source/candidate.bundle')); assert.equal(call.commit, 'c'.repeat(40)); assert.equal(call.rubric.version, '2.0.0')
   assert.ok(f.judgeCalls.length > judged, 'the disclosure audit and definition scoring were rerun')
   for (const name of ['phases/contamination-pass-1.json', 'phases/contamination-pass-2.json']) assert.deepEqual(JSON.parse(await readFile(join(target, name), 'utf8')), JSON.parse(await readFile(join(f.runDir, name), 'utf8')), `${name} reproduces`)
@@ -243,6 +249,11 @@ test('INT-010 a rescore refuses a source whose retained inputs no longer match t
     const copy = await mutate(path, text => `${text}tampered`)
     await assert.rejects(rescoreEvaluation({ rescoreFrom: copy, runDir: join(f.root, `out-${Math.random().toString(16).slice(2, 8)}`) }, rescoreDeps(f).deps), error => error.usage === true, path)
   }
+  // The delivery record and the product result are valid JSON a hostile edit could keep: only their recorded hashes catch it.
+  const edited = await mutate('phases/delivery.json', text => JSON.stringify({ ...JSON.parse(text), delivered_commit: 'd'.repeat(40) }))
+  await assert.rejects(rescoreEvaluation({ rescoreFrom: edited, runDir: join(f.root, 'out-delivery') }, rescoreDeps(f).deps), /phases\/delivery\.json differs from the hash/)
+  const planChanged = await mutate('phases/product-result.json', text => JSON.stringify({ ...JSON.parse(text), build_plan: { application_root: 'evil' } }))
+  await assert.rejects(rescoreEvaluation({ rescoreFrom: planChanged, runDir: join(f.root, 'out-plan') }, rescoreDeps(f).deps), /phases\/product-result\.json differs from the hash/)
   const noPlan = await mutate('phases/product-result.json', text => JSON.stringify({ ...JSON.parse(text), build_plan: null }))
   await assert.rejects(rescoreEvaluation({ rescoreFrom: noPlan, runDir: join(f.root, 'out-noplan') }, rescoreDeps(f).deps), /never got a build plan; resume it instead/)
   await assert.rejects(rescoreEvaluation({ rescoreFrom: f.runDir, runDir: f.runDir }, rescoreDeps(f).deps), /must be new/)
@@ -250,11 +261,20 @@ test('INT-010 a rescore refuses a source whose retained inputs no longer match t
 })
 
 // ---- human review --------------------------------------------------------------------------------------------------
+import { productSeriesParts } from '../evals/agent-runner/and-scene-e2e/lib/preflight.mjs'
 import { runHumanReview } from '../evals/agent-runner/and-scene-e2e/human-review.mjs'
 const answers = (ratings, { ready = true } = {}) => { const queue = [...(ready ? ['yes'] : [])]; for (const rating of ratings) queue.push(String(rating), rating <= 3 ? 'because' : ''); return queue }
 const scripted = (queue, { then = 'confirm' } = {}) => { const asked = []; return { asked, write: () => {}, ask: async prompt => { asked.push(prompt); if (!queue.length) return null; return queue.shift() } } }
+// The run was scored under the current rubrics, so its pinned identity names them.
+async function pinRubrics(runDir) {
+  const identityPath = join(runDir, 'evidence/define/identity.json')
+  const identity = JSON.parse(await readFile(identityPath, 'utf8')); const parts = await productSeriesParts()
+  identity.series_identity = { ...identity.series_identity, human_rubric: parts.human_rubric, product_rubric: parts.product_rubric }
+  await writeFile(identityPath, JSON.stringify(identity))
+}
 async function reviewWorld(t) {
   const { f, source } = await retainedRun(t)
+  await pinRubrics(f.runDir)
   const published = []
   const common = { runDir: f.runDir, build: async () => f.root, serve: async () => ({ url: 'http://127.0.0.1:1', close: async () => {} }), publish: async args => { published.push(args.result.run_id); return { published: true } }, repoDir: f.root }
   return { f, source, published, common }
@@ -267,6 +287,16 @@ test('INT-010 a completed review makes the run complete with up to 30 human poin
   assert.equal(outcome.result.product_score.human_points, 30); assert.equal(outcome.result.product_score.score, 100); assert.equal(outcome.result.product_score.automated_score, 70)
   assert.deepEqual(published, [outcome.result.run_id]); assert.equal(JSON.parse(await readFile(join(f.runDir, 'result.json'), 'utf8')).evaluation_status, 'complete')
   assert.equal((await runHumanReview({ ...common, io: scripted([]) })).status, 'already-complete'); assert.equal(published.length, 1)
+})
+test('INT-010 human review refuses a run pinned to a different human or product rubric', async t => {
+  for (const field of ['human_rubric', 'product_rubric']) {
+    const { f, common } = await reviewWorld(t)
+    const identityPath = join(f.runDir, 'evidence/define/identity.json')
+    const identity = JSON.parse(await readFile(identityPath, 'utf8'))
+    identity.series_identity[field] = { ...identity.series_identity[field], sha256: 'f'.repeat(64) }
+    await writeFile(identityPath, JSON.stringify(identity))
+    await assert.rejects(runHumanReview({ ...common, io: scripted([]) }), /differs from the one this run was pinned to/, field)
+  }
 })
 test('INT-010 an interrupted review resumes from the saved answers', async t => {
   const { f, common } = await reviewWorld(t)
@@ -323,6 +353,7 @@ test('INT-010 an incomplete product score still goes to review and publication, 
   assert.equal(result.evaluation_status, 'pending-human-review'); assert.equal(result.product_score.incomplete, true); assert.equal(result.product_score.automated_score, null)
   assert.deepEqual(result.product.score.incomplete_components.map(entry => entry.id), ['testing-evidence-quality'])
   assert.equal(result.product.score.complete_components_score, 66, 'complete components are reported unscaled')
+  await pinRubrics(f.runDir)
   const published = []
   const reviewed = await runHumanReview({ runDir: f.runDir, build: async () => f.root, serve: async () => ({ url: 'http://127.0.0.1:1', close: async () => {} }), publish: async args => { published.push(args.result.run_id) }, repoDir: f.root, io: scripted([...answers([5, 5, 5, 5, 5, 5, 5]), 'confirm']) })
   assert.equal(reviewed.status, 'complete'); assert.equal(reviewed.result.product_score.score, null, 'no total hides the gap'); assert.equal(reviewed.result.product_score.incomplete, true); assert.equal(reviewed.result.product_score.human_points, 30)

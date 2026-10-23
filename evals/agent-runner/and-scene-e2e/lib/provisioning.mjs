@@ -42,10 +42,8 @@ export class GitHubApp {
     }
   }
   jwt() { return signAppJwt({ appId: this.appId, privateKey: this.privateKey, now: this.now() }) }
-  async installationId() {
-    const found = await this.request('GET', `/orgs/${this.organization}/installation`, { token: this.jwt() })
-    return found.id
-  }
+  installation() { return this.request('GET', `/orgs/${this.organization}/installation`, { token: this.jwt() }) }
+  async installationId() { return (await this.installation()).id }
   async mint({ repositories, permissions } = {}) {
     const id = await this.installationId()
     const body = repositories ? { repositories, permissions } : undefined
@@ -68,6 +66,15 @@ export async function checkReach(app, token) {
   const foreign = repositories.find(repository => !repository.name.startsWith(REPOSITORY_PREFIX))
   if (foreign) throw new ProvisioningError('provisioning reach', `the installation can reach ${foreign.full_name}, which is not a delivery repository`)
   return repositories.map(repository => repository.full_name)
+}
+// The installation must grant every permission provisioning and the run token rely on, at least at the level asked.
+const LEVELS = { read: 1, write: 2, admin: 3 }
+export async function checkInstallationPermissions(app) {
+  let granted
+  try { granted = (await app.installation()).permissions ?? {} }
+  catch (error) { throw new ProvisioningError('provisioning credentials', `cannot read the installation's permissions: ${error.message}`) }
+  const short = Object.entries(APP_PERMISSIONS).filter(([name, level]) => (LEVELS[granted[name]] ?? 0) < LEVELS[level]).map(([name, level]) => `${name}:${level}`)
+  if (short.length) throw new ProvisioningError('provisioning credentials', `the installation lacks permissions: ${short.join(', ')}`)
 }
 export const deliveryName = runId => `${REPOSITORY_PREFIX}${runId}`
 export function checkRepositoryName({ patterns, fullName, url }) {
@@ -129,20 +136,26 @@ export async function writeTokenFile(dir, token) {
 }
 export async function removeTokenFile(dir) { await rm(dir, { recursive: true, force: true }) }
 export function startTokenRefresher({ mint, dir, intervalMs, onError = () => {}, setTimer = setInterval, clearTimer = clearInterval }) {
-  const timer = setTimer(async () => {
-    try { await writeTokenFile(dir, (await mint()).token) } catch (error) { onError(error) }
-  }, intervalMs)
+  let stopped = false
+  let inflight = Promise.resolve()
+  const refresh = async () => {
+    if (stopped) return
+    try { const { token } = await mint(); if (!stopped) await writeTokenFile(dir, token) } catch (error) { onError(error) }
+  }
+  const timer = setTimer(() => (inflight = refresh()), intervalMs)
   timer.unref?.()
-  return { stop: () => clearTimer(timer) }
+  // Stopping waits for a refresh already running, so nothing can recreate the directory after its removal.
+  return { stop: async () => { stopped = true; clearTimer(timer); await inflight } }
 }
 // Create, seed and verify a run's delivery repository. `seed` is injectable so tests can push to a local bare remote.
-export async function provisionDelivery({ app, runId, bundlePath, commit, patterns, seed = seedRepository, token = null }) {
+// `existing` resumes a repository that was created but not yet verified; `onCreated` records its identity at once.
+export async function provisionDelivery({ app, runId, bundlePath, commit, patterns, seed = seedRepository, token = null, existing = null, onCreated = async () => {} }) {
   const provisioning = token ?? (await app.provisioningToken()).token
   const name = deliveryName(runId)
   checkRepositoryName({ patterns, fullName: `${app.organization}/${name}`, url: `https://github.com/${app.organization}/${name}.git` })
-  const identity = await createRepository(app, provisioning, runId)
-  const url = identity.clone_url
-  await seed({ url, token: provisioning, bundlePath, commit })
+  let identity = existing
+  if (!identity) { identity = await createRepository(app, provisioning, runId); await onCreated(identity) }
+  await seed({ url: identity.clone_url, token: provisioning, bundlePath, commit })
   await verifyRepository(app, provisioning, { fullName: identity.full_name, commit })
   return { ...identity, starting_commit: commit }
 }
