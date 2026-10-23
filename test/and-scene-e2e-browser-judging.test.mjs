@@ -215,3 +215,12 @@ test('INT-012 a split browser panel is settled by the decider from its observed 
   assert.deepEqual(result.failed_jobs, []); assert.ok(judges.state.calls.includes('d'), 'the decider settled the split')
   assert.equal(result.verdicts.c1.verdict, 'pass'); assert.equal(result.verdicts.c1.basis, 'replay-confirmed')
 })
+
+test('INT-012 a browser request\'s answer format admits only its own criteria, each exactly once', async () => {
+  const { buildBrowserRequest, BROWSER_RESULT_SCHEMA } = await import('../evals/agent-runner/and-scene-e2e/lib/judge-requests.mjs')
+  const ids = ['c1', 'c2']
+  const { schema } = buildBrowserRequest({ rubric: miniRubric(ids), inventory: { items: [] }, job: { id: 'job', criteria: ids }, url: 'http://127.0.0.1:1' })
+  const results = schema.properties.results
+  assert.deepEqual(results.items.properties.id.enum, ids); assert.equal(results.minItems, 2); assert.equal(results.maxItems, 2)
+  assert.equal(BROWSER_RESULT_SCHEMA.properties.results.items.properties.id.enum, undefined, 'the shared schema is not changed')
+})

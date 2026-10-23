@@ -77,7 +77,10 @@ export function normalizeReplay(replay) {
 }
 export function buildBrowserRequest({ rubric, inventory, job, url, authority = null }) {
   const slice = job.criteria.map(id => [`- ${id}`, criterionRequirement(rubric, inventory, id)].filter(Boolean).join('\n  ')).join('\n')
-  const schema = { ...BROWSER_RESULT_SCHEMA }
+  // The requirement text cites inventory items, which judges otherwise return as ids; only this job's criteria, each once, are allowed.
+  const results = BROWSER_RESULT_SCHEMA.properties.results
+  const item = { ...results.items, properties: { ...results.items.properties, id: { type: 'string', enum: [...job.criteria] } } }
+  const schema = { ...BROWSER_RESULT_SCHEMA, properties: { results: { ...results, minItems: job.criteria.length, maxItems: job.criteria.length, items: item } } }
   const body = [
     'You are evaluating a delivered web product by operating it in a real browser as a person would.',
     `Open ${url} with the chrome-devtools-axi command-line browser (your browser session is already selected in your environment, so run chrome-devtools-axi commands as they are, with no environment-variable prefix). Find the presentations, the sample presentation and their steps from what the product shows and how it responds, and step through them with the product's own controls (keys, buttons, swipes).`,
