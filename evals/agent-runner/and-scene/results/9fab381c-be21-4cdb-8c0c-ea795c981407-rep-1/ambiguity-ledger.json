@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-23T02-25-08-873415293Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err",
+      "output/_resolve-findings_.out",
+      "output/_session-report_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Verification did not satisfy the reported IPv4-loopback requirement.",
+      "evidence": [
+        "Product evidence: &#39;verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost.&#39;",
+        "The supplied workflow output is truncated and does not expose the verification commands or an explanation for the host selection."
+      ],
+      "handling": "The available record reports the failed check but does not show how the verification host was chosen.",
+      "consequence": "The IPv4-loopback check failed, although the whole-app build and other listed behavioral checks passed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure establishes an unmet verification condition, but cannot distinguish an incorrect assumption, overlooked repository guidance, an execution mistake, or an unavailable specification detail. …",
+      "resolution": "unresolved",
+      "id": "0e7f912f2eb6a765"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered screenshot helper did not satisfy three reported visual-warning requirements.",
+      "evidence": [
+        "Product evidence: &#39;quality-project-local-screenshot-helper: pass — Project-local Playwright screenshot helper is present.&#39;",
+        "Product evidence: &#39;visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.&#39;",
+        "Product evidence: &#39;visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.&#39;",
+        "Product evidence: &#39;visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.&#39;"
+      ],
+      "handling": "A project-local helper was delivered. The available summaries report missing or incomplete warnings, without exposing its implementation or the agents&#39; reasoning.",
+      "consequence": "Three visual-helper checks failed. Separate attribution and navigation active-state checks passed, so these failures alone do not establish corresponding defects in the demo.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The omissions materially affected the delivered verification tooling. However, the supplied evidence contains neither the governing requirement text nor an agent explanation, so it cannot establish w…",
+      "resolution": "unresolved",
+      "id": "8c3015c7866990cf"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
