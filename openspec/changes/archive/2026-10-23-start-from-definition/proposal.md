@@ -23,7 +23,7 @@ Changes in this repository:
   - Preflight requires the proposal, design, test plan, and specs, and rejects any `tasks.md` or `tasks/`.
   - Refresh the fixture snapshot without `tasks.md`.
 - **Selectable, opaque workflow:**
-  - The evaluated workflow is a harness input, `--workflow <logical-ref>`, defaulting to `core:plan-and-implement-change`.
+  - The evaluated workflow is a harness input, `--workflow <logical-ref>`, defaulting to the suite's default workflow.
   - The harness knows only three things about it: its logical reference, its declared parameters, and the `codagent:*` skills its files name.
   - It records the Agent Runner commit, the CLI version, the workflow reference, and the hash of the definition Agent Runner resolves for it.
 - **Outcome-based delivery:** delivery is verified from four things: Agent Runner's completion status, the candidate branch, draft pull-request metadata, and the produced acceptance artifacts. No named step, step path, or step outcome is required.
@@ -78,6 +78,6 @@ None.
 - **Tests:** tests that pin the workflow name, final steps, step paths, fixture SHA, task fixtures, or three roles.
 - **Callers:** `run.sh` gains required `--crosscheck-*` options and an optional `--workflow`.
   - Callers passing only three roles break until Agent Factory is updated.
-  - The default workflow requires an Agent Runner checkout that contains `core:plan-and-implement-change`.
+  - The default workflow requires an Agent Runner checkout that contains the default workflow.
 - **Fixture:** requires a new `Codagent-AI/and-scene` commit (see design).
 - **Coordination:** open PR #93 also edits `run.sh`, `controller.mjs`, `lib/evidence.mjs`, and `lib/rescore.mjs`. Expect merge conflicts. It does not modify the requirements this change modifies.

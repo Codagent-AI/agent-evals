@@ -16,7 +16,7 @@ import { loadFallbackRates, resolveAttemptCost } from '../evals/agent-runner/and
 import { reconcileRoleAttempts, validateRoleProfiles } from '../evals/agent-runner/and-scene/lib/profiles.mjs'
 
 const RUN_ID = 'run-7f3a'
-const WORKFLOW = 'plan-and-implement-change'
+const WORKFLOW = 'example-workflow'
 
 function step(overrides = {}) {
   return {
@@ -392,12 +392,12 @@ test('metrics naming another run are rejected as implementation metrics input', 
 })
 
 test('metrics naming another workflow are rejected', () => {
-  const text = JSON.stringify(metrics({ workflow: 'legacy-implement-change' }))
+  const text = JSON.stringify(metrics({ workflow: 'legacy-example-workflow' }))
 
   const ingested = ingestRunnerMetrics({ text, runId: RUN_ID, workflow: WORKFLOW })
 
   assert.equal(ingested.state, 'rejected')
-  assert.match(ingested.reason, /implement-change/)
+  assert.match(ingested.reason, /example-workflow/)
 })
 
 test('schema-v2 metrics use Runner role, tool, and effective invocation identity', () => {

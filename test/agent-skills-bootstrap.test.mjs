@@ -7,7 +7,7 @@ import { test } from 'node:test'
 import { spawnSync } from 'node:child_process'
 
 import { resolveAgentRunnerDir } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
-import { DEFAULT_WORKFLOW, resolveWorkflowFile } from '../evals/agent-runner/and-scene/lib/workflow.mjs'
+import { resolveWorkflowFile } from '../evals/agent-runner/and-scene/lib/workflow.mjs'
 
 const script = resolve('evals/agent-runner/and-scene/bootstrap-agent-skills.sh')
 
@@ -253,15 +253,14 @@ test('a builtin reference outside workflows fails even if a same-named local fil
   await assert.rejects(readFile(context.calls, 'utf8'), { code: 'ENOENT' })
 })
 
-// The default evaluated workflow composes plan-change and implement-change as
-// file-relative sub-workflows; skills named only inside task review must still
-// be required.
-test('the default workflow requires skills its nested planning sub-workflows name', async (t) => {
+// A workflow that composes file-relative sub-workflows, here core:plan-change;
+// skills named only inside task review must still be required.
+test('a workflow requires skills its nested planning sub-workflows name', async (t) => {
   const evalsRoot = resolve('.')
   const agentRunnerDir = resolveAgentRunnerDir({ env: process.env, evalsRoot })
-  const relativePath = await resolveWorkflowFile({ agentRunnerDir, workflow: DEFAULT_WORKFLOW }).catch(() => null)
+  const relativePath = await resolveWorkflowFile({ agentRunnerDir, workflow: 'core:plan-change' }).catch(() => null)
   if (!relativePath) {
-    t.skip(`no ${DEFAULT_WORKFLOW} definition in ${agentRunnerDir}`)
+    t.skip(`no core:plan-change definition in ${agentRunnerDir}`)
     return
   }
   const named = new Set()

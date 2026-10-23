@@ -29,20 +29,20 @@ async function projects(runs) {
 
 test('a recorded run is selected by its session-directory identifier and current Agent Runner schema', async () => {
   const dir = await projects({
-    'run-a': { workflowName: 'implement-change', currentStep: { stepId: 'simplify', completed: true } },
-    'run-b': { workflowName: 'implement-change', currentStep: { stepId: 'implement-tasks' } },
+    'run-a': { workflowName: 'example-workflow', currentStep: { stepId: 'simplify', completed: true } },
+    'run-b': { workflowName: 'example-workflow', currentStep: { stepId: 'implement-tasks' } },
   })
 
   const state = await readRunnerState(dir, 'run-a')
 
   assert.equal(state.run_id, 'run-a')
-  assert.equal(state.workflow_name, 'implement-change')
+  assert.equal(state.workflow_name, 'example-workflow')
   assert.equal(state.last_step, 'simplify')
   assert.equal(state.step_completed, true)
 })
 
 test('the session directory is reported alongside the state', async () => {
-  const dir = await projects({ 'run-a': { workflowName: 'implement-change', currentStep: 'plan' } })
+  const dir = await projects({ 'run-a': { workflowName: 'example-workflow', currentStep: 'plan' } })
 
   const state = await readRunnerState(dir, 'run-a')
 
@@ -57,8 +57,8 @@ test('a recorded run that is absent reports null rather than an unrelated run', 
 
 test('discovery without a recorded identifier selects the newest session by filesystem timestamp', async () => {
   const dir = await projects({
-    'run-old': { workflowName: 'implement-change', currentStep: 'plan' },
-    'run-new': { workflowName: 'implement-change', currentStep: 'simplify' },
+    'run-old': { workflowName: 'example-workflow', currentStep: 'plan' },
+    'run-new': { workflowName: 'example-workflow', currentStep: 'simplify' },
   })
   await utimes(join(dir, 'encoded-project/runs/run-old/state.json'), new Date('2026-07-01'), new Date('2026-07-01'))
   await utimes(join(dir, 'encoded-project/runs/run-new/state.json'), new Date('2026-07-05'), new Date('2026-07-05'))
@@ -70,7 +70,7 @@ test('discovery without a recorded identifier selects the newest session by file
 
 test('discovery without a recorded identifier ignores newer linked audit runs', async () => {
   const dir = await projects({
-    'run-source': { workflowName: 'implement-change', currentStep: 'simplify' },
+    'run-source': { workflowName: 'example-workflow', currentStep: 'simplify' },
     'audit-child': {
       workflowName: 'run-audit',
       runKind: 'audit',
@@ -88,7 +88,7 @@ test('discovery without a recorded identifier ignores newer linked audit runs', 
 
 test('the separate Agent Runner lock file is normalized onto discovered state', async () => {
   const dir = await projects({
-    'run-active': { workflowName: 'implement-change', currentStep: { stepId: 'implement-tasks' } },
+    'run-active': { workflowName: 'example-workflow', currentStep: { stepId: 'implement-tasks' } },
   })
   await writeFile(join(dir, 'encoded-project/runs/run-active/lock'), '4321\n')
 
@@ -209,7 +209,7 @@ test('a missing projects directory reports null rather than throwing', async () 
 })
 
 test('malformed run state is skipped rather than failing discovery', async () => {
-  const dir = await projects({ 'run-good': { workflowName: 'implement-change', currentStep: 'plan' } })
+  const dir = await projects({ 'run-good': { workflowName: 'example-workflow', currentStep: 'plan' } })
   const broken = join(dir, 'encoded-project', 'runs', 'run-broken')
   await mkdir(broken, { recursive: true })
   await writeFile(join(broken, 'state.json'), '{not json')
@@ -279,7 +279,7 @@ test('an unknown home falls back to the run directory store', async () => {
 test('Runner state includes complete ordered step outcomes from the durable audit log', async () => {
   const dir = await projects({
     'run-a': {
-      workflowName: 'implement-change',
+      workflowName: 'example-workflow',
       currentStep: { stepId: 'verify-acceptance-handoff', completed: true },
       completed: true,
     },
@@ -308,7 +308,7 @@ test('Runner state includes complete ordered step outcomes from the durable audi
 test('Runner state keeps the full path of steps inside the verify-change sub-workflow', async () => {
   const dir = await projects({
     'run-v': {
-      workflowName: 'implement-change',
+      workflowName: 'example-workflow',
       currentStep: { stepId: 'verify-change', completed: true },
       completed: true,
     },

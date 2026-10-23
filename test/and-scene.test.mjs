@@ -8,10 +8,12 @@ import { test } from 'node:test'
 import { spawnSync } from 'node:child_process'
 
 import { validateRoleProfiles } from '../evals/agent-runner/and-scene/lib/profiles.mjs'
+import { DEFAULT_WORKFLOW, parseLogicalWorkflowRef } from '../evals/agent-runner/and-scene/lib/workflow.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const runScript = join(root, 'evals/agent-runner/and-scene/run.sh')
 const shotsScript = join(root, 'evals/agent-runner/and-scene/scene-shots.mjs')
+const { namespace: workflowNamespace, name: workflowName } = parseLogicalWorkflowRef(DEFAULT_WORKFLOW)
 const fixtureSha = 'ba19a6ac3d6eca4034571cd23c87ce44f884b2e8'
 const referenceSha = '171c7def1e12aca2a5f605a5e5feafb20d4e4d19'
 
@@ -31,7 +33,7 @@ function git(cwd, ...args) {
 
 // The scored path requires a clean Agent Runner worktree containing the
 // selected workflow, so the fixture runner directory is a real Git checkout.
-async function setup({ workflow = 'name: plan-and-implement-change\n', dirty = false, extraWorkflows = {} } = {}) {
+async function setup({ workflow = `name: ${workflowName}\n`, dirty = false, extraWorkflows = {} } = {}) {
   const dir = await makeTempDir(join(tmpdir(), 'agent-evals-'))
   const runner = join(dir, 'agent-runner')
   const agentSkills = join(dir, 'agent-skills')
@@ -48,7 +50,7 @@ async function setup({ workflow = 'name: plan-and-implement-change\n', dirty = f
   await chmod(sandbox, 0o755)
   if (workflow !== null) {
     await mkdir(join(runner, 'workflows/core'), { recursive: true })
-    await writeFile(join(runner, 'workflows/core/plan-and-implement-change-v1.0.yaml'), workflow)
+    await writeFile(join(runner, `workflows/${workflowNamespace}/${workflowName}-v1.0.yaml`), workflow)
   }
   for (const [file, text] of Object.entries(extraWorkflows)) {
     await mkdir(dirname(join(runner, file)), { recursive: true })
@@ -251,15 +253,15 @@ test('scored mode validates provenance from the mounted Agent Runner checkout', 
   )
 })
 
-test('scored mode evaluates core:plan-and-implement-change by default', async () => {
+test('scored mode evaluates the suite default workflow by default', async () => {
   const context = await setup()
 
   const result = await scored(context, ['--skip-validator', ...profileArgs])
 
   assert.equal(result.status, 0, result.output)
-  assert.match(result.output, /--workflow core:plan-and-implement-change/)
-  assert.match(result.output, /IMPLEMENTATION_WORKFLOW=core:plan-and-implement-change/)
-  assert.match(result.output, /IMPLEMENTATION_WORKFLOW_PATH=workflows\/core\/plan-and-implement-change-v1\.0\.yaml/)
+  assert.ok(result.output.includes(`--workflow ${DEFAULT_WORKFLOW}`), result.output)
+  assert.ok(result.output.includes(`IMPLEMENTATION_WORKFLOW=${DEFAULT_WORKFLOW}`), result.output)
+  assert.ok(result.output.includes(`IMPLEMENTATION_WORKFLOW_PATH=workflows/${workflowNamespace}/${workflowName}-v1.0.yaml`), result.output)
 })
 
 test('scored mode passes a selected logical workflow to the controller and skills bootstrap', async () => {
@@ -288,7 +290,7 @@ test('an exported WORKFLOW variable never selects the evaluated workflow', async
   const result = await scored(withStrayWorkflow, ['--skip-validator', ...profileArgs])
 
   assert.equal(result.status, 0, result.output)
-  assert.match(result.output, /--workflow core:plan-and-implement-change/)
+  assert.ok(result.output.includes(`--workflow ${DEFAULT_WORKFLOW}`), result.output)
   assert.ok(!result.output.includes('orchestrated-implement-change'), result.output)
 
   const source = join(context.dir, 'completed-candidate')
@@ -525,7 +527,7 @@ test('an evaluator-only rescore rejects modes that could mutate or replace its r
     ['--resume'],
     ['--reference-baseline'],
     ['--candidate-ref', referenceSha],
-    ['--workflow', 'core:plan-and-implement-change'],
+    ['--workflow', DEFAULT_WORKFLOW],
   ]) {
     const result = await scored(context, ['--rescore-from', source, ...conflicting])
     assert.notEqual(result.status, 0)
@@ -549,7 +551,7 @@ test('an Agent Runner checkout without the selected workflow is rejected on the 
   const result = await scored(context, ['--skip-validator', ...profileArgs])
 
   assert.notEqual(result.status, 0)
-  assert.match(result.output, /core:plan-and-implement-change/)
+  assert.ok(result.output.includes(DEFAULT_WORKFLOW), result.output)
   assert.ok(!result.output.includes('/eval-input/controller.mjs'), result.output)
 })
 
@@ -713,7 +715,7 @@ test('help documents the exact fixture pin, role profiles, and validator option'
   assert.match(result.stdout, /which owns its meaning/)
   assert.match(result.stdout, /requested Validator mode/)
   assert.ok(result.stdout.includes('--workflow REF'))
-  assert.ok(result.stdout.includes('Default: core:plan-and-implement-change'))
+  assert.ok(result.stdout.includes(`Default: ${DEFAULT_WORKFLOW}`))
   assert.ok(result.stdout.includes('--lead-cli'))
   assert.ok(result.stdout.includes('--crosscheck-cli'))
   assert.ok(result.stdout.includes('--crosscheck-model'))
@@ -896,7 +898,7 @@ test('a diagnostic is refused without its pair of flags, a source, the host, or 
     [['--host', '--rescore-from', source, '--judge-jobs', 'scene-kit', '--expected', join(context.dir, 'missing.json')],
       /Expected-verdict file does not exist/],
     [['--host', '--reference-baseline', '--judge-jobs', 'scene-kit', '--expected', expected], /cannot be combined/],
-    [['--host', '--resume', '--workflow', 'core:plan-and-implement-change', '--judge-jobs', 'scene-kit', '--expected', expected],
+    [['--host', '--resume', '--workflow', DEFAULT_WORKFLOW, '--judge-jobs', 'scene-kit', '--expected', expected],
       /--judge-jobs cannot be combined with --workflow/],
   ]) {
     const result = await scored(context, args)
