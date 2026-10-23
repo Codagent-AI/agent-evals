@@ -9,9 +9,9 @@ import { runEvaluation } from '../evals/agent-runner/and-scene/controller.mjs'
 import { loadCheckpoint } from '../evals/agent-runner/and-scene/lib/checkpoint.mjs'
 import { readJson } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
 
-const WORKFLOW_RELATIVE_PATH = 'workflows/core/plan-and-implement-change-v1.0.yaml'
+const WORKFLOW_RELATIVE_PATH = 'workflows/core/implement-change-v1.0.yaml'
 
-const workflowYaml = `name: plan-and-implement-change
+const workflowYaml = `name: implement-change
 params:
   - name: change_name
     required: true
@@ -187,7 +187,7 @@ async function evaluate(context, extra = {}) {
     readRunnerState: () => ({
       run_id: 'run-7',
       session_dir: '/sessions/run-7',
-      workflow_name: 'plan-and-implement-change',
+      workflow_name: 'implement-change',
       workflow_completed: true,
       audit: { links: [{ auditRunId: 'audit-fixture', state: 'completed' }] },
     }),

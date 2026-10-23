@@ -26,7 +26,7 @@ CHANGE_NAME="${CHANGE_NAME:-create-and-scene}"
 # rather than pinning a commit. Only --workflow selects it: an inherited
 # WORKFLOW variable is ignored, so it can neither change the evaluated workflow
 # nor slip past the --rescore-from guard.
-WORKFLOW="core:plan-and-implement-change"
+WORKFLOW="core:implement-change"
 WORKFLOW_PROVIDED=0
 WORKFLOW_RELATIVE_PATH=""
 RUNNER_STALL_MINUTES=""
@@ -95,14 +95,14 @@ Options:
                           containing the selected workflow's definition.
                           Default: sibling ../agent-runner.
   --workflow REF         Logical Agent Runner workflow to evaluate, such as
-                          core:plan-and-implement-change. It must declare the
+                          core:implement-change. It must declare the
                           change_name, change_dir, change_label, change_kind,
                           artifact_validation_instruction, and skip_validator
                           parameters. Not allowed with --rescore-from.
                           A workflow with a step that requests the interactive
                           backend needs a claude lead; Agent Runner always runs
                           under a pseudo-terminal.
-                          Default: core:plan-and-implement-change
+                          Default: core:implement-change
   --runner-stall-minutes N
                           End and report a stalled Agent Runner run when its run
                           store, CLI transcripts, and candidate worktree show no
@@ -431,7 +431,7 @@ if [[ "$DIAGNOSTIC" == 1 && "$WORKFLOW_PROVIDED" == 1 ]]; then
   exit 2
 fi
 if [[ ! "$WORKFLOW" =~ ^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9-]*$ ]]; then
-  echo "--workflow must be a logical workflow reference such as core:plan-and-implement-change: $WORKFLOW" >&2
+  echo "--workflow must be a logical workflow reference such as core:implement-change: $WORKFLOW" >&2
   exit 2
 fi
 if [[ "$HOST" == 1 && ( "$RUN_AGENT" != 1 || ( -z "$RESCORE_FROM" && "$DIAGNOSTIC" != 1 ) ) ]]; then

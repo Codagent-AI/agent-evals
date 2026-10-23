@@ -14,7 +14,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 
-export const DEFAULT_WORKFLOW = 'core:plan-and-implement-change'
+export const DEFAULT_WORKFLOW = 'core:implement-change'
 
 export const REQUIRED_WORKFLOW_PARAMETERS = [
   'change_name',

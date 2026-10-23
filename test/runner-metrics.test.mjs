@@ -16,7 +16,7 @@ import { loadFallbackRates, resolveAttemptCost } from '../evals/agent-runner/and
 import { reconcileRoleAttempts, validateRoleProfiles } from '../evals/agent-runner/and-scene/lib/profiles.mjs'
 
 const RUN_ID = 'run-7f3a'
-const WORKFLOW = 'plan-and-implement-change'
+const WORKFLOW = 'implement-change'
 
 function step(overrides = {}) {
   return {

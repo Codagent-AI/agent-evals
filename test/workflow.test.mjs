@@ -26,7 +26,7 @@ const params = REQUIRED_WORKFLOW_PARAMETERS
 
 // Step names here are deliberately foreign to the harness: nothing about them
 // may affect whether the workflow is accepted.
-const compositeYaml = `name: plan-and-implement-change
+const compositeYaml = `name: implement-change
 description: "Plan and implement."
 hidden: true
 
@@ -42,16 +42,16 @@ steps:
 `
 
 const resolved = {
-  workflow: 'core:plan-and-implement-change',
+  workflow: 'core:implement-change',
   definitionSha256: 'a'.repeat(64),
-  reportedName: 'plan-and-implement-change',
+  reportedName: 'implement-change',
 }
 
-test('the default evaluated workflow is core:plan-and-implement-change', () => {
-  assert.equal(DEFAULT_WORKFLOW, 'core:plan-and-implement-change')
+test('the default evaluated workflow is core:implement-change', () => {
+  assert.equal(DEFAULT_WORKFLOW, 'core:implement-change')
   const boundary = resolveBoundary({ changeName: 'create-and-scene', ...resolved })
-  assert.equal(boundary.workflow, 'core:plan-and-implement-change')
-  assert.equal(boundary.runner_workflow_name, 'plan-and-implement-change')
+  assert.equal(boundary.workflow, 'core:implement-change')
+  assert.equal(boundary.runner_workflow_name, 'implement-change')
   assert.equal(boundary.workflow_sha256, 'a'.repeat(64))
 })
 
@@ -109,18 +109,18 @@ test('the requested Validator mode is recorded and derives the baseline identity
 })
 
 test('logical workflow references name a namespace and workflow', () => {
-  assert.deepEqual(parseLogicalWorkflowRef('core:plan-and-implement-change'), {
+  assert.deepEqual(parseLogicalWorkflowRef('core:implement-change'), {
     namespace: 'core',
-    name: 'plan-and-implement-change',
+    name: 'implement-change',
   })
-  for (const invalid of ['plan-and-implement-change', 'core:', ':x', 'core:../x', 'core:x/y', '', null]) {
+  for (const invalid of ['implement-change', 'core:', ':x', 'core:../x', 'core:x/y', '', null]) {
     assert.throws(() => parseLogicalWorkflowRef(invalid), /logical workflow reference/i, String(invalid))
   }
 })
 
 test('a workflow definition exposes its declared name and top-level parameters only', () => {
   const definition = parseWorkflowDefinition(compositeYaml)
-  assert.equal(definition.name, 'plan-and-implement-change')
+  assert.equal(definition.name, 'implement-change')
   assert.deepEqual(definition.parameters, REQUIRED_WORKFLOW_PARAMETERS)
   assert.deepEqual(
     parseWorkflowDefinition('name: "x"\nparameters:\n  change_name:\n  skip_validator:\nsteps:\n  - id: a\n').parameters,
@@ -134,7 +134,7 @@ test('a workflow definition exposes its declared name and top-level parameters o
 test('workflow input verification checks parameters and nothing about steps', () => {
   const verified = verifyWorkflowInputs(compositeYaml)
   assert.equal(verified.ok, true, verified.errors.join('\n'))
-  assert.equal(verified.name, 'plan-and-implement-change')
+  assert.equal(verified.name, 'implement-change')
 
   for (const parameter of REQUIRED_WORKFLOW_PARAMETERS) {
     const missing = verifyWorkflowInputs(compositeYaml.replace(`  - name: ${parameter}\n    required: true\n`, ''))
@@ -144,7 +144,7 @@ test('workflow input verification checks parameters and nothing about steps', ()
 })
 
 test('a workflow definition without a declared name cannot establish its reported identity', () => {
-  const unnamed = verifyWorkflowInputs(compositeYaml.replace('name: plan-and-implement-change\n', ''))
+  const unnamed = verifyWorkflowInputs(compositeYaml.replace('name: implement-change\n', ''))
   assert.equal(unnamed.ok, false)
   assert.match(unnamed.errors.join('\n'), /declares no name/)
 })
@@ -153,16 +153,16 @@ test('a logical reference resolves to its latest versioned definition in a check
   const root = await makeTempDir(join(tmpdir(), 'agent-evals-workflow-'))
   await mkdir(join(root, 'workflows/core'), { recursive: true })
   for (const file of [
-    'plan-and-implement-change-v1.0.yaml',
-    'plan-and-implement-change-v1.10.yaml',
-    'plan-and-implement-change-v1.2.yaml',
+    'implement-change-v1.0.yaml',
+    'implement-change-v1.10.yaml',
+    'implement-change-v1.2.yaml',
     'plan-change-v9.0.yaml',
   ]) {
     await writeFile(join(root, 'workflows/core', file), `name: ${file}\n`)
   }
   assert.equal(
-    await resolveWorkflowFile({ agentRunnerDir: root, workflow: 'core:plan-and-implement-change' }),
-    'workflows/core/plan-and-implement-change-v1.10.yaml',
+    await resolveWorkflowFile({ agentRunnerDir: root, workflow: 'core:implement-change' }),
+    'workflows/core/implement-change-v1.10.yaml',
   )
   assert.equal(await resolveWorkflowFile({ agentRunnerDir: root, workflow: 'core:missing' }), null)
   assert.equal(await resolveWorkflowFile({ agentRunnerDir: root, workflow: 'other:plan-change' }), null)
@@ -199,7 +199,7 @@ test('available Agent Runner checkout provides the default workflow and its para
   assert.equal(verified.ok, true, verified.errors.join('\n'))
 })
 
-const NAME = 'plan-and-implement-change'
+const NAME = 'implement-change'
 
 test('no persisted run starts a fresh complete workflow', () => {
   assert.equal(classifyRunnerRun({
@@ -234,7 +234,7 @@ test('an unrecorded persisted run of the expected workflow is adopted instead of
 
 test('a discovered run reporting another workflow is rejected, however self-consistent', () => {
   for (const discovered of [
-    { run_id: 'run-7', workflow_name: 'implement-change', workflow_completed: true },
+    { run_id: 'run-7', workflow_name: 'plan-change', workflow_completed: true },
     { run_id: 'run-7', workflow_name: null, workflow_completed: true },
   ]) {
     const decision = classifyRunnerRun({
@@ -245,7 +245,7 @@ test('a discovered run reporting another workflow is rejected, however self-cons
     })
     assert.equal(decision.action, 'error')
     assert.equal(decision.code, 'workflow-identity')
-    assert.match(decision.reason, /plan-and-implement-change/)
+    assert.match(decision.reason, /implement-change/)
   }
 })
 

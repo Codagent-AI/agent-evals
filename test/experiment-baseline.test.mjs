@@ -508,7 +508,7 @@ test('a repetition differing from the baseline only in its crosscheck model is a
 test('an earlier implement-change repetition is refused by a plan-and-implement baseline', () => {
   const current = extracted({
     run_id: 'new-1',
-    workflow: { workflow: 'core:plan-and-implement-change', workflow_path: 'a'.repeat(64) },
+    workflow: { workflow: 'core:implement-change', workflow_path: 'a'.repeat(64) },
     candidate_source: { fixture_commit: 'fixture-definition-only' },
   })
   const initial = set(baseline.emptyRecord(), [current]).record

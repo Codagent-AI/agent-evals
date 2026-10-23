@@ -356,7 +356,9 @@ evals/agent-runner/and-scene/run.sh --calibrate
 Run the evaluation. All four role profiles (lead, crosscheck, implementor, and
 tester) are required and each independently selects a CLI adapter, model, and
 effort. `--workflow` selects the Agent Runner workflow to evaluate and defaults
-to `core:plan-and-implement-change`:
+to `core:implement-change`. Against a Runner commit that predates the audited
+`core:implement-change` v2.0, that name resolves to the older task-based v1.0, so
+a request with no `workflow` line there now runs v1.0. For example:
 
 ```bash
 evals/agent-runner/and-scene/run.sh \
@@ -373,8 +375,8 @@ not rewrite either form. `grok-4.6` works; a bare family such as `grok` does
 not. A new run rejects a `cursor` lead before any model call: the lead makes
 agent calls, and nothing has yet shown that Cursor can make them in the
 sandbox. `--proof-browser` and `--dry-run` launch no lead, so neither can prove
-it. A workflow with any step that sets `autonomous_backend: interactive`, such as
-`core:orchestrated-implement-change`, additionally requires a `claude` lead:
+it. A workflow with any step that sets `autonomous_backend: interactive`
+additionally requires a `claude` lead:
 Agent Runner hands that step the terminal, and only Claude has been shown to
 finish one unattended. `run.sh` and the controller both reject another lead as
 `unverified-interactive-lead` before any model call. Cursor remains available
@@ -778,7 +780,7 @@ earlier results, so the experiment baseline refuses to mix them without an
 explicit identity-mismatch override.
 
 `--workflow <logical-ref>` selects the evaluated workflow and defaults to
-`core:plan-and-implement-change`. The suite treats it as opaque. It depends only
+`core:implement-change`. The suite treats it as opaque. It depends only
 on the logical reference, the workflow's declared parameters, and the
 `codagent:*` skills its files name, never on step identifiers, step order,
 nesting, named sessions, or recorded step paths. The workflow must declare
@@ -789,7 +791,7 @@ workflow lacks. The workflow runs to completion with no `--until` boundary.
 
 The suite records two workflow identities: the requested logical reference and
 the Runner-reported name, which is the `name` the resolved definition declares
-(`plan-and-implement-change` for the default). It records the SHA-256 of the
+(`implement-change` for the default). It records the SHA-256 of the
 definition `agent-runner debug --show-workflow <ref>` resolves, and accepts run
 state, discovered runs, and `run-metrics.json` only when they report the
 expected name. The Agent Runner checkout must be a clean Git worktree; the
@@ -1323,8 +1325,9 @@ refusal; 2 means a usage, invalid-record, or I/O error. Refusals are JSON lines
 on stderr. Writes are atomic and the record is intended for git review.
 
 The current baseline (`experiments/baseline.json`) is the audited
-implement-change workflow v2.3: the three Fly repetitions of factory eval
-agent-evals#133, set with `--source accepted-candidate`. Rep 2, the median, is
+implement-change workflow v2.3 (recorded as `core:audited-implement-change` at
+its pinned Runner commit; that workflow is now `core:implement-change` v2.0):
+the three Fly repetitions of factory eval agent-evals#133, set with `--source accepted-candidate`. Rep 2, the median, is
 human-reviewed 20.75/30. Automated mean 63.75/70 (sd 1.09). Its cost and active
 time are incomplete: those runs predate the eval's support for the
 `agent_session_context` run-metrics field, so their metrics were rejected. The
@@ -1566,7 +1569,7 @@ does not depend on retaining calibration artifacts.
 ### Workflow input regression detection
 
 `npm run check` includes a workflow input check in `test/workflow.test.mjs`. It
-verifies that the default evaluated workflow, `core:plan-and-implement-change`,
+verifies that the default evaluated workflow, `core:implement-change`,
 exists in a real Agent Runner checkout and declares every required workflow
 parameter, with no network access, built Runner, or workflow run. It reads the
 checkout named by `AGENT_RUNNER_DIR`, or else the sibling `agent-runner`

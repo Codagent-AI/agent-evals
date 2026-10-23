@@ -31,7 +31,7 @@ function git(cwd, ...args) {
 
 // The scored path requires a clean Agent Runner worktree containing the
 // selected workflow, so the fixture runner directory is a real Git checkout.
-async function setup({ workflow = 'name: plan-and-implement-change\n', dirty = false, extraWorkflows = {} } = {}) {
+async function setup({ workflow = 'name: implement-change\n', dirty = false, extraWorkflows = {} } = {}) {
   const dir = await makeTempDir(join(tmpdir(), 'agent-evals-'))
   const runner = join(dir, 'agent-runner')
   const agentSkills = join(dir, 'agent-skills')
@@ -48,7 +48,7 @@ async function setup({ workflow = 'name: plan-and-implement-change\n', dirty = f
   await chmod(sandbox, 0o755)
   if (workflow !== null) {
     await mkdir(join(runner, 'workflows/core'), { recursive: true })
-    await writeFile(join(runner, 'workflows/core/plan-and-implement-change-v1.0.yaml'), workflow)
+    await writeFile(join(runner, 'workflows/core/implement-change-v1.0.yaml'), workflow)
   }
   for (const [file, text] of Object.entries(extraWorkflows)) {
     await mkdir(dirname(join(runner, file)), { recursive: true })
@@ -251,15 +251,15 @@ test('scored mode validates provenance from the mounted Agent Runner checkout', 
   )
 })
 
-test('scored mode evaluates core:plan-and-implement-change by default', async () => {
+test('scored mode evaluates core:implement-change by default', async () => {
   const context = await setup()
 
   const result = await scored(context, ['--skip-validator', ...profileArgs])
 
   assert.equal(result.status, 0, result.output)
-  assert.match(result.output, /--workflow core:plan-and-implement-change/)
-  assert.match(result.output, /IMPLEMENTATION_WORKFLOW=core:plan-and-implement-change/)
-  assert.match(result.output, /IMPLEMENTATION_WORKFLOW_PATH=workflows\/core\/plan-and-implement-change-v1\.0\.yaml/)
+  assert.match(result.output, /--workflow core:implement-change/)
+  assert.match(result.output, /IMPLEMENTATION_WORKFLOW=core:implement-change/)
+  assert.match(result.output, /IMPLEMENTATION_WORKFLOW_PATH=workflows\/core\/implement-change-v1\.0\.yaml/)
 })
 
 test('scored mode passes a selected logical workflow to the controller and skills bootstrap', async () => {
@@ -288,7 +288,7 @@ test('an exported WORKFLOW variable never selects the evaluated workflow', async
   const result = await scored(withStrayWorkflow, ['--skip-validator', ...profileArgs])
 
   assert.equal(result.status, 0, result.output)
-  assert.match(result.output, /--workflow core:plan-and-implement-change/)
+  assert.match(result.output, /--workflow core:implement-change/)
   assert.ok(!result.output.includes('orchestrated-implement-change'), result.output)
 
   const source = join(context.dir, 'completed-candidate')
@@ -525,7 +525,7 @@ test('an evaluator-only rescore rejects modes that could mutate or replace its r
     ['--resume'],
     ['--reference-baseline'],
     ['--candidate-ref', referenceSha],
-    ['--workflow', 'core:plan-and-implement-change'],
+    ['--workflow', 'core:implement-change'],
   ]) {
     const result = await scored(context, ['--rescore-from', source, ...conflicting])
     assert.notEqual(result.status, 0)
@@ -549,7 +549,7 @@ test('an Agent Runner checkout without the selected workflow is rejected on the 
   const result = await scored(context, ['--skip-validator', ...profileArgs])
 
   assert.notEqual(result.status, 0)
-  assert.match(result.output, /core:plan-and-implement-change/)
+  assert.match(result.output, /core:implement-change/)
   assert.ok(!result.output.includes('/eval-input/controller.mjs'), result.output)
 })
 
@@ -713,7 +713,7 @@ test('help documents the exact fixture pin, role profiles, and validator option'
   assert.match(result.stdout, /which owns its meaning/)
   assert.match(result.stdout, /requested Validator mode/)
   assert.ok(result.stdout.includes('--workflow REF'))
-  assert.ok(result.stdout.includes('Default: core:plan-and-implement-change'))
+  assert.ok(result.stdout.includes('Default: core:implement-change'))
   assert.ok(result.stdout.includes('--lead-cli'))
   assert.ok(result.stdout.includes('--crosscheck-cli'))
   assert.ok(result.stdout.includes('--crosscheck-model'))
@@ -896,7 +896,7 @@ test('a diagnostic is refused without its pair of flags, a source, the host, or 
     [['--host', '--rescore-from', source, '--judge-jobs', 'scene-kit', '--expected', join(context.dir, 'missing.json')],
       /Expected-verdict file does not exist/],
     [['--host', '--reference-baseline', '--judge-jobs', 'scene-kit', '--expected', expected], /cannot be combined/],
-    [['--host', '--resume', '--workflow', 'core:plan-and-implement-change', '--judge-jobs', 'scene-kit', '--expected', expected],
+    [['--host', '--resume', '--workflow', 'core:implement-change', '--judge-jobs', 'scene-kit', '--expected', expected],
       /--judge-jobs cannot be combined with --workflow/],
   ]) {
     const result = await scored(context, args)

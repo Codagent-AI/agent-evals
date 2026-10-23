@@ -15,8 +15,8 @@ import {
   resolveAgentRunnerDir,
 } from '../evals/agent-runner/and-scene/lib/provenance.mjs'
 
-const WORKFLOW_RELATIVE_PATH = 'workflows/core/plan-and-implement-change-v1.0.yaml'
-const workflowYaml = 'name: plan-and-implement-change\nsteps:\n  - id: anything\n'
+const WORKFLOW_RELATIVE_PATH = 'workflows/core/implement-change-v1.0.yaml'
+const workflowYaml = 'name: implement-change\nsteps:\n  - id: anything\n'
 
 // A scripted `git`/`agent-runner` stub keeps provenance reading testable without
 // building a real Agent Runner checkout for every case.
@@ -49,7 +49,7 @@ async function checkout({ workflow = workflowYaml } = {}) {
 
 test('the evaluated workflow defaults to the core plan-and-implement composite', async () => {
   const provenance = await readWorkflowProvenance({ agentRunnerDir: await checkout(), exec: execStub() })
-  assert.equal(provenance.workflow, 'core:plan-and-implement-change')
+  assert.equal(provenance.workflow, 'core:implement-change')
   assert.equal(provenance.workflow_relative_path, WORKFLOW_RELATIVE_PATH)
 })
 
@@ -124,7 +124,7 @@ test('a clean checkout records commit, workflow hash, and CLI version', async ()
   assert.equal(provenance.workflow_sha256, hashString(workflowYaml))
   assert.equal(provenance.cli_version, 'agent-runner 2.4.0')
   assert.equal(provenance.workflow_path, join(dir, WORKFLOW_RELATIVE_PATH))
-  assert.equal(provenance.runner_workflow_name, 'plan-and-implement-change')
+  assert.equal(provenance.runner_workflow_name, 'implement-change')
   assert.equal(provenance.complete, true)
   assert.equal(Object.hasOwn(provenance, 'verification_workflow_sha256'), false)
 })
@@ -148,11 +148,11 @@ test('an unstaged change stops the evaluation before Agent Runner', async () => 
   await assert.rejects(
     () => readWorkflowProvenance({
       agentRunnerDir: dir,
-      exec: execStub({ 'git status --porcelain': { status: 0, stdout: ' M workflows/core/plan-and-implement-change-v1.0.yaml\n' } }),
+      exec: execStub({ 'git status --porcelain': { status: 0, stdout: ' M workflows/core/implement-change-v1.0.yaml\n' } }),
     }),
     (error) => {
       assert.equal(error.code, 'dirty-agent-runner-checkout')
-      assert.match(error.message, /plan-and-implement-change-v1\.0\.yaml/)
+      assert.match(error.message, /implement-change-v1\.0\.yaml/)
       return true
     },
   )
@@ -207,7 +207,7 @@ test('a workflow that does not resolve stops the evaluation before Agent Runner'
     () => readWorkflowProvenance({ agentRunnerDir: dir, exec: execStub() }),
     (error) => {
       assert.equal(error.code, 'workflow-resolution')
-      assert.match(error.message, /core:plan-and-implement-change/)
+      assert.match(error.message, /core:implement-change/)
       return true
     },
   )

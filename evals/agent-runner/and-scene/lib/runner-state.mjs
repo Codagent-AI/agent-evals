@@ -230,9 +230,10 @@ export function hasLinkedAudits(state) {
   return Array.isArray(state?.audit?.links) && state.audit.links.length > 0
 }
 
-// core:implement-change never auto-launches an audit. Replay needs the
-// finalized top-level execution: the only sessions[] entry, or the last
-// closed session after resume.
+// The controller starts an explicit audit replay only when the finished run
+// recorded no linked audit; this depends on the run's state, not on the
+// workflow's name. Replay needs the finalized top-level execution: the only
+// sessions[] entry, or the last closed session after resume.
 export function selectFinalizedExecutionSession(sessions) {
   if (!Array.isArray(sessions) || sessions.length === 0) return null
   const pick = (session) => {
