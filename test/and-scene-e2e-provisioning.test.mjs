@@ -5,7 +5,7 @@ import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fakeGitHub, git, keyPair, startingRepo, temp } from './and-scene-e2e-helpers.mjs'
 import { filesUnder } from '../evals/agent-runner/and-scene-e2e/lib/files.mjs'
-import { GitHubApp, RUN_TOKEN_PERMISSIONS, checkReach, checkRepositoryName, provisionDelivery, reuseDelivery, signAppJwt, startTokenRefresher, writeTokenFile, removeTokenFile, plannedProvisioning, APP_PERMISSIONS, ProvisioningError } from '../evals/agent-runner/and-scene-e2e/lib/provisioning.mjs'
+import { GitHubApp, RUN_TOKEN_PERMISSIONS, checkReach, checkRepositoryName, provisionDelivery, reuseDelivery, signAppJwt, loadAppCredentials, startTokenRefresher, writeTokenFile, removeTokenFile, plannedProvisioning, APP_PERMISSIONS, ProvisioningError } from '../evals/agent-runner/and-scene-e2e/lib/provisioning.mjs'
 import { readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 
@@ -170,4 +170,12 @@ test('INT-004 a fake token authority reaches only the repository the run token n
   const { token } = await app.runToken('e2e-run-mine')
   assert.deepEqual((await app.request('GET', '/repos/Codagent-AI/e2e-run-mine', { token })).message, 'allowed')
   for (const other of ['and-scene', 'agent-evals', 'e2e-run-other']) await assert.rejects(app.request('GET', `/repos/Codagent-AI/${other}`, { token }), error => error.status === 403, other)
+})
+
+test('an App key file that is not a PEM private key fails preflight with a clear message', async t => {
+  const dir = await temp(t)
+  const bad = join(dir, 'not-a-key.pem'); await writeFile(bad, 'this is not a key\n')
+  const good = join(dir, 'app.pem'); await writeFile(good, keyPair().privateKey)
+  await assert.rejects(loadAppCredentials({ AND_SCENE_E2E_APP_ID: '1', AND_SCENE_E2E_APP_KEY_FILE: bad }), error => error instanceof ProvisioningError && /not a PEM private key/.test(error.message) && !/error:|DECODER|asn1/i.test(error.message))
+  assert.equal((await loadAppCredentials({ AND_SCENE_E2E_APP_ID: '1', AND_SCENE_E2E_APP_KEY_FILE: good })).appId, '1')
 })

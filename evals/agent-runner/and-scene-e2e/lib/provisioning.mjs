@@ -1,6 +1,6 @@
 // Delivery-repository provisioning on the host through a GitHub App. Nothing here runs in the sandbox,
 // and the provisioning token and App key never leave the host.
-import { createSign } from 'node:crypto'
+import { createPrivateKey, createSign } from 'node:crypto'
 import { chmod, mkdtemp, readFile, rename, rm, writeFile, mkdir } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { tmpdir } from 'node:os'
@@ -56,6 +56,8 @@ export class GitHubApp {
 export async function loadAppCredentials(env = process.env) {
   if (!env.AND_SCENE_E2E_APP_ID || !env.AND_SCENE_E2E_APP_KEY_FILE) throw new ProvisioningError('provisioning credentials', 'set AND_SCENE_E2E_APP_ID and AND_SCENE_E2E_APP_KEY_FILE')
   const privateKey = await readFile(env.AND_SCENE_E2E_APP_KEY_FILE, 'utf8').catch(() => { throw new ProvisioningError('provisioning credentials', 'the App private-key file is unreadable') })
+  // Reject a file that is not a private key here, before OpenSSL's own error reaches the result.
+  try { createPrivateKey(privateKey) } catch { throw new ProvisioningError('provisioning credentials', 'the App private-key file is not a PEM private key; download a new key from the App settings') }
   return { appId: env.AND_SCENE_E2E_APP_ID, privateKey }
 }
 // The installation may reach only the suite's own delivery repositories.
