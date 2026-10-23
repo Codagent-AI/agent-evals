@@ -1,4 +1,3 @@
-import { detectClaudeQuotaReset } from '../../and-scene/lib/claude-quota.mjs'
 // Whole-run active time: only time during which an Agent Runner invocation is running counts, summed across
 // resumes; downtime between an interruption and its resume never does.
 export class ActiveClock {
@@ -22,9 +21,4 @@ export class StallDetector {
   }
   // Time spent waiting for a quota reset is not inactivity.
   credit(ms) { this.quietSince += ms }
-}
-// A wait is taken only for an identified Claude usage-limit event with an explicit UTC reset within six hours.
-export function quotaWait({ audit, now = new Date() }) {
-  const detected = detectClaudeQuotaReset({ audit, now })
-  return detected?.reset_at ? detected : null
 }

@@ -3,7 +3,7 @@
 // (and-scene REFERENCE_REF). The bundle is a single synthetic commit of the reference's source tree without its
 // documentation assets or its change directory; every patch is produced by a deterministic edit of that tree.
 import { execFileSync } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, rm, writeFile, copyFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'

@@ -1,6 +1,6 @@
 // How to build and serve the delivered application, determined from the delivered tree's own manifests.
 // Nothing here assumes npm, `npm ci`, `npm run build` or a `dist/` directory.
-import { cp, lstat, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { cp, lstat, mkdir, readFile, readdir, rm } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import { runContainer } from './container.mjs'
 export class NotEvaluableError extends Error {

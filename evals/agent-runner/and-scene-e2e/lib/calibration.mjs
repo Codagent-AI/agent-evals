@@ -1,7 +1,7 @@
 // Product-rubric calibration: judge a pinned set of inputs several times and report accuracy, spread, flip rates and
 // decider reversals. A maintainer diagnostic: nothing here publishes anything or gates a candidate run.
 import { execFileSync } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { readJson } from './files.mjs'

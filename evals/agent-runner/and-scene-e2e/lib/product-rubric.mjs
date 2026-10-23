@@ -1,6 +1,5 @@
 // The from-prompt product rubric: validation against the hidden inventory, and requirement documents built
 // per inventory item (never per reference section) for judges.
-import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { SUITE_ROOT, DEFINE_ROOT, readJson } from './files.mjs'
 import { normalizeTraceabilityText } from '../../and-scene/lib/traceability.mjs'

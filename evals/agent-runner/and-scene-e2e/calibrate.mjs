@@ -3,7 +3,7 @@
 import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { SUITE_ROOT, DEFINE_ROOT, readJson } from './lib/files.mjs'
+import { SUITE_ROOT, readJson } from './lib/files.mjs'
 import { MIN_REPEATS, referenceRubric, runCalibration } from './lib/calibration.mjs'
 import { loadProductInputs } from './lib/product-rubric.mjs'
 import { evaluateProduct } from './lib/product-evaluation.mjs'

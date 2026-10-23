@@ -1,31 +1,30 @@
 #!/usr/bin/env node
 // Host lifecycle for one end-to-end evaluation: provision a delivery repository, run the selected workflow in
 // two capped invocations around a define checkpoint, verify delivery, then audit, score and report.
-import { mkdir, rm, lstat, open, unlink, readFile, rename, copyFile, writeFile } from 'node:fs/promises'
+import { mkdir, rm, lstat, open, unlink, readFile, rename, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
-import { DEFINE_ROOT, SUITE_ROOT, CHANGE_NAME, ORGANIZATION, REPO_ROOT, filesUnder, readJson, sha256 } from './lib/files.mjs'
-import { HELP, parseArguments, DEFAULT_ROLES } from './lib/options.mjs'
+import { DEFINE_ROOT, SUITE_ROOT, ORGANIZATION, REPO_ROOT, filesUnder, readJson } from './lib/files.mjs'
+import { HELP, parseArguments } from './lib/options.mjs'
 import { failureOutcome, publicationEligibility } from './lib/outcomes.mjs'
-import { inspectInputs, PreflightError } from './lib/preflight.mjs'
-import { E2ESandbox, stageRuntime, readValidatorReviewerClis } from './lib/sandbox.mjs'
+import { inspectInputs } from './lib/preflight.mjs'
+import { E2ESandbox, stageRuntime } from './lib/sandbox.mjs'
 import { createCheckpoint, beginUnit, completeUnit, failUnit, verifyUnit, loadCheckpoint, saveCheckpoint } from '../../lib/define-run/checkpoint.mjs'
 import { hashJson, hashFile, writeJsonAtomic } from '../../lib/define-run/persistence.mjs'
-import { materialize, verifySnapshot } from '../../lib/define-run/starting-repo.mjs'
+import { materialize } from '../../lib/define-run/starting-repo.mjs'
 import { scanCanaries } from '../../lib/define-run/canary.mjs'
 import { verifyMountPlan } from '../../lib/define-run/mount-plan.mjs'
-import { collectEvidence, loadEvidence, guardPath } from '../../lib/define-run/evidence.mjs'
+import { collectEvidence, loadEvidence } from '../../lib/define-run/evidence.mjs'
 import { reconcileConversation } from '../../lib/define-run/reconciliation.mjs'
 import { auditContamination } from '../../lib/define-run/contamination.mjs'
 import { createJudgingPhases } from '../../lib/define-run/judging.mjs'
 import { runResponder } from '../../lib/define-run/responder.mjs'
 import { createDefinitionJudges } from '../../lib/define-run/judge-invoker.mjs'
 import { latestActivityMs } from '../and-scene/lib/runner-activity.mjs'
-import { GitHubApp, loadAppCredentials, plannedProvisioning, provisionDelivery, reuseDelivery, startTokenRefresher, writeTokenFile, removeTokenFile, deliveryName } from './lib/provisioning.mjs'
-import { checkWorkflow } from './lib/workflow.mjs'
+import { plannedProvisioning, provisionDelivery, reuseDelivery, startTokenRefresher, writeTokenFile, removeTokenFile, deliveryName } from './lib/provisioning.mjs'
 import { readRunnerRun, classifyRun, privatePath } from './lib/runner.mjs'
-import { runInvocation, InvocationError } from './lib/invocation.mjs'
+import { runInvocation } from './lib/invocation.mjs'
 import { watchForRequests } from './lib/responder.mjs'
 import { collectDefinition, verifyDelivery, DeliveryError, HarnessEvidenceError } from './lib/delivery.mjs'
 import { effectiveInvocations, invocationsThrough, ingestWorkflowMetrics } from './lib/metrics.mjs'
@@ -37,7 +36,6 @@ import { buildTrace } from './lib/trace.mjs'
 import { assembleResult, writeResultArtifacts } from './lib/result.mjs'
 import { publishRun } from './lib/publication.mjs'
 import { rescoreEvaluation } from './lib/rescore.mjs'
-import { PHASES } from './lib/phases.mjs'
 export { HELP, parseArguments }
 const DEFINE_MANIFEST = 'evidence/define-manifest.json'
 const FINAL_MANIFEST = 'evidence/final-manifest.json'
@@ -201,7 +199,6 @@ export async function runEvaluation(options, deps = {}) {
       await persist()
       return [join(runDir, 'phases/collection.json'), join(runDir, DEFINE_MANIFEST), ...evidence.files.map(file => join(runDir, file.path))]
     },
-    'define-checkpoint': null,
     'implement-workflow': () => dispatch('implement', deps.startImplementResponder ?? (({ signal }) => watchForRequests({ exchangeDir: sandbox.exchangeDir, signal }))),
     'delivery-verification': async () => {
       const state = await readRunnerRun({ sandbox, runDir, recordedId: checkpoint.runner_run_id })
@@ -328,12 +325,9 @@ export async function runEvaluation(options, deps = {}) {
       checkpoint = await completeUnit(checkpoint, { phase: 'preflight', unit: 'phase', inputs: provenance(), dependencies: {}, outputs: [join(runDir, 'phases/preflight.json')] }); await persist()
       result = { ...failureOutcome({ phase: 'define-workflow', reason: 'dry-run: workflow was not started' }), dry_run: true, planned_provisioning: plannedProvisioning(checkpoint.run_id) }
     } else {
-      const ordered = [['preflight'], ['provisioning'], ['materialization'], ['define-workflow'], ['definition-collection']]
-      for (const [name] of ordered) {
-        if (name === 'preflight') { phase = name; await handlers.preflight(); checkpoint = await completeUnit(checkpoint, { phase: name, unit: 'phase', inputs: provenance(), dependencies: {}, outputs: [join(runDir, 'phases/preflight.json')] }); await persist(); continue }
-        const dependencies = name === 'materialization' ? {} : { materialization: checkpoint.materialization }
-        await unit(name, handlers[name], { dependencies })
-      }
+      phase = 'preflight'; await handlers.preflight()
+      checkpoint = await completeUnit(checkpoint, { phase, unit: 'phase', inputs: provenance(), dependencies: {}, outputs: [join(runDir, 'phases/preflight.json')] }); await persist()
+      for (const name of ['provisioning', 'materialization', 'define-workflow', 'definition-collection']) await unit(name, handlers[name], { dependencies: name === 'materialization' ? {} : { materialization: checkpoint.materialization } })
       if (await checkpointUnits() === 'stop') {
         // contamination and leaks end the run before implementation
       } else {
