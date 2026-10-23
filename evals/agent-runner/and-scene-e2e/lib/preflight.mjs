@@ -79,8 +79,7 @@ export async function inspectInputs({ profiles, workflow, runnerDir, skillsDir, 
   })
   // Provisioning credentials and their reach: the installation may reach delivery repositories only.
   const provisioning = await guard('provisioning credentials', async () => {
-    const credentials_ = await loadAppCredentials(env)
-    const github = app ?? (appFactory ?? (options => new GitHubApp(options)))({ ...credentials_, apiUrl: env.AND_SCENE_E2E_GITHUB_API ?? 'https://api.github.com' })
+    const github = app ?? (appFactory ?? (options => new GitHubApp(options)))({ ...await loadAppCredentials(env), apiUrl: env.AND_SCENE_E2E_GITHUB_API ?? 'https://api.github.com' })
     const { token } = await github.provisioningToken()
     return { app: github, token }
   })
