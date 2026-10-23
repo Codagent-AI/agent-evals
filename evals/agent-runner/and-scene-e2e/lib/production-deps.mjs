@@ -1,5 +1,5 @@
 // The real dependencies of product evaluation: host judges, browser judges and fresh browser contexts.
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createAxiBrowserDriver } from '../../and-scene/lib/axi-browser-driver.mjs'
@@ -17,6 +17,18 @@ export function startAxiBridge(env = process.env, run = spawnSync) {
   const result = run('chrome-devtools-axi', ['start'], { encoding: 'utf8', timeout: 60_000, env: { ...env, CHROME_DEVTOOLS_AXI_SESSION: EVALUATOR_AXI_SESSION, ...(mcp ? { CHROME_DEVTOOLS_AXI_MCP_PATH: mcp } : {}) } })
   if (result.error || result.status !== 0) throw Object.assign(new Error(`could not start the evaluator AXI bridge: ${result.error?.message || String(result.stderr || result.stdout || '').trim().slice(-300)}`), { owner: 'evaluation-harness', resumable: true })
 }
+// The replay driver's AXI commands run without blocking this process, which also serves the product: the shared driver's
+// synchronous default would stall the server until every navigation timed out.
+export function axiCommand(env = process.env) {
+  return (args, input = '') => new Promise(resolve => {
+    const child = spawn('chrome-devtools-axi', args, { env, stdio: ['pipe', 'pipe', 'pipe'] })
+    let stdout = ''; let stderr = ''
+    child.stdout.setEncoding('utf8').on('data', chunk => { stdout += chunk }); child.stderr.setEncoding('utf8').on('data', chunk => { stderr += chunk })
+    child.on('error', error => resolve({ error, status: null, stdout, stderr }))
+    child.on('close', (status, signal) => resolve({ status, signal, stdout, stderr }))
+    child.stdin.end(input)
+  })
+}
 export function createProductionDeps({ runDir, env = process.env, chromePath = findHostChrome(env), port = hostDevtoolsPort(env), startBridge = startAxiBridge, judges = createProductJudges({ runDir, allowedRoots: [join(runDir, 'neutral')], env }) } = {}) {
   const rawBrowserInvoke = createBrowserJudgeInvoker({ runDir, env })
   const decider = judges.profile.decider
@@ -30,7 +42,8 @@ export function createProductionDeps({ runDir, env = process.env, chromePath = f
   }
   const createDriver = async (label, { url }) => {
     const browser = await startBrowser()
-    return Object.assign(createAxiBrowserDriver({ baseUrl: url }), { close: () => browser.release() })
+    try { startBridge(env) } catch (error) { await browser.release(); throw error }
+    return Object.assign(createAxiBrowserDriver({ baseUrl: url, command: axiCommand(env) }), { close: () => browser.release() })
   }
   // A judge CLI drives the same evaluator browser the replays use, so it gets it for the length of the call.
   const browserInvoke = async request => {

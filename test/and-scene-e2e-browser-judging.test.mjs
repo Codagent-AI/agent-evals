@@ -193,3 +193,17 @@ test('INT-012 the AXI MCP is found beside the installed chrome-devtools-axi, and
   await rm(join(root, 'lib/node_modules/chrome-devtools-mcp'), { recursive: true })
   assert.equal(findAxiMcp(env), null)
 })
+
+test('INT-012 the replay driver\'s AXI commands leave this process free to serve the product while they run', async t => {
+  const { axiCommand } = await import('../evals/agent-runner/and-scene-e2e/lib/production-deps.mjs')
+  const { temp } = await import('./and-scene-e2e-helpers.mjs'); const { writeFile } = await import('node:fs/promises'); const { join } = await import('node:path')
+  const bin = await temp(t, 'e2e-axi-cmd-')
+  await writeFile(join(bin, 'chrome-devtools-axi'), '#!/bin/sh\nsleep 0.3\necho "args:$*"\ncat\n', { mode: 0o755 })
+  let ticks = 0; const timer = setInterval(() => { ticks++ }, 20)
+  const result = await axiCommand({ PATH: `${bin}:${process.env.PATH}` })(['run'], 'script-body')
+  clearInterval(timer)
+  assert.equal(result.status, 0); assert.equal(result.stdout, 'args:run\nscript-body')
+  assert.ok(ticks >= 5, `the event loop kept running (${ticks} ticks)`)
+  const missing = await axiCommand({ PATH: '/nonexistent' })(['run'])
+  assert.ok(missing.error, 'a missing axi is reported, not thrown')
+})
