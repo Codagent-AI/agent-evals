@@ -25,10 +25,12 @@ async function tree(runDir, root) {
   if (!await lstat(root).catch(error => { if (error.code !== 'ENOENT') throw error; return null })) return []
   return filesUnder(root)
 }
-export async function collectEvidence({ runDir, runnerDir, identity = null, runtime = join(runDir, 'sandbox/.runtime') }) {
+// A suite that audits in passes (end-to-end) supplies the invocations to collect and where
+// the snapshot lives; the defaults are the define suite's single snapshot.
+export async function collectEvidence({ runDir, runnerDir, identity = null, runtime = join(runDir, 'sandbox/.runtime'), invocations: selected = null, evidenceRoot = 'evidence', manifestPath = 'evidence-manifest.json' }) {
   await guardPath(runDir, runtime); await guardPath(runDir, runnerDir)
   const metricsPath = join(runnerDir, 'run-metrics.json'); await guardPath(runDir, metricsPath)
-  const invocations = effectiveDefineInvocations(await readJson(metricsPath))
+  const invocations = selected ?? effectiveDefineInvocations(await readJson(metricsPath))
   if (!invocations.length) throw new Error('run-metrics.json has no evaluated invocations')
   const retained = []
   async function copy(source, targetPath) {
@@ -38,7 +40,7 @@ export async function collectEvidence({ runDir, runnerDir, identity = null, runt
     await mkdir(dirname(target), { recursive: true }); await writeTextAtomic(target, content)
     retained.push(targetPath); return targetPath
   }
-  for (const path of ['run-metrics.json', 'state.json', 'audit.log', 'external-user/exchanges.jsonl']) await copy(join(runnerDir, path), `evidence/runner/${path}`)
+  for (const path of ['run-metrics.json', 'state.json', 'audit.log', 'external-user/exchanges.jsonl']) await copy(join(runnerDir, path), `${evidenceRoot}/runner/${path}`)
   const nativeFiles = {
     claude: await tree(runDir, join(runtime, 'claude/projects')),
     codex: await tree(runDir, join(runtime, 'codex/sessions')),
@@ -54,7 +56,7 @@ export async function collectEvidence({ runDir, runnerDir, identity = null, runt
       if (candidates.length !== 1) throw new Error(`missing or ambiguous transcript ${key}`)
       const source = candidates[0]
       // Use a host-generated filename: session IDs are untrusted, never paths.
-      const targetPath = `evidence/transcripts/${sha256(key)}.${cli === 'cursor' ? 'db' : 'jsonl'}`
+      const targetPath = `${evidenceRoot}/transcripts/${sha256(key)}.${cli === 'cursor' ? 'db' : 'jsonl'}`
       if (cli === 'cursor') {
         for (const suffix of ['', '-wal', '-shm']) await guardPath(runDir, source + suffix)
         const target = contained(runDir, targetPath); await guardPath(runDir, target); await mkdir(dirname(target), { recursive: true })
@@ -84,15 +86,16 @@ export async function collectEvidence({ runDir, runnerDir, identity = null, runt
   const outputs = []
   for (const source of await tree(runDir, join(runnerDir, 'output'))) {
     if (!/\.attempt-\d+\.turn-\d+\.(out|err)$/.test(source)) continue
-    outputs.push(await copy(source, `evidence/runner/output/${basename(source)}`))
+    outputs.push(await copy(source, `${evidenceRoot}/runner/output/${basename(source)}`))
   }
   if (!outputs.some(path => path.endsWith('.out'))) throw new Error('missing per-turn output copies')
   // The original identity is retained as hashed evidence, so a rescore never
   // trusts an unprotected manifest field for the run it attributes.
   if (identity !== null) {
-    const target = contained(runDir, IDENTITY_EVIDENCE); await guardPath(runDir, target)
+    const identityPath = evidenceRoot === 'evidence' ? IDENTITY_EVIDENCE : `${evidenceRoot}/identity.json`
+    const target = contained(runDir, identityPath); await guardPath(runDir, target)
     await mkdir(dirname(target), { recursive: true }); await writeJsonAtomic(target, identity)
-    retained.push(IDENTITY_EVIDENCE)
+    retained.push(identityPath)
   }
   // Collected content and the host write-ahead record are part of the same
   // rescore manifest. No runtime-only file is required after this point.
@@ -104,13 +107,13 @@ export async function collectEvidence({ runDir, runnerDir, identity = null, runt
     files.push({ path, sha256: sha256(await readFile(join(runDir, path))) })
   }
   const manifest = { schema_version: 1, identity, files, invocations, outputs }
-  await guardPath(runDir, join(runDir, 'evidence-manifest.json'))
-  await writeJsonAtomic(join(runDir, 'evidence-manifest.json'), manifest)
+  await guardPath(runDir, join(runDir, manifestPath))
+  await writeJsonAtomic(join(runDir, manifestPath), manifest)
   return manifest
 }
-export async function loadEvidence(runDir) {
-  await guardPath(runDir, join(runDir, 'evidence-manifest.json'))
-  const manifest = await readJson(join(runDir, 'evidence-manifest.json')).catch(error => {
+export async function loadEvidence(runDir, { evidenceRoot = 'evidence', manifestPath = 'evidence-manifest.json' } = {}) {
+  await guardPath(runDir, join(runDir, manifestPath))
+  const manifest = await readJson(join(runDir, manifestPath)).catch(error => {
     // usage: the CLI prints this without a stack; the cause keeps the original errno and path.
     if (error.code === 'ENOENT') throw Object.assign(new Error(`evidence manifest not found in ${runDir}: it is not a collected define run, or its collection did not finish`, { cause: error }), { usage: true })
     throw error
@@ -127,8 +130,9 @@ export async function loadEvidence(runDir) {
   const text = path => { if (!retained.has(path)) throw new Error(`missing retained evidence ${path}`); return retained.get(path) }
   if (manifest.identity != null) {
     let recorded
-    try { recorded = JSON.parse(text(IDENTITY_EVIDENCE)) } catch (error) { throw new Error(`evidence manifest identity is not hash-protected: ${error.message}`) }
-    if (hashJson(recorded) !== hashJson(manifest.identity)) throw new Error(`evidence manifest identity differs from hash-protected ${IDENTITY_EVIDENCE}`)
+    const identityPath = evidenceRoot === 'evidence' ? IDENTITY_EVIDENCE : `${evidenceRoot}/identity.json`
+    try { recorded = JSON.parse(text(identityPath)) } catch (error) { throw new Error(`evidence manifest identity is not hash-protected: ${error.message}`) }
+    if (hashJson(recorded) !== hashJson(manifest.identity)) throw new Error(`evidence manifest identity differs from hash-protected ${identityPath}`)
   }
   const transcripts = []
   const seen = new Set()
@@ -153,5 +157,5 @@ export async function loadEvidence(runDir) {
     if (!invocation) throw new Error(`per-turn output has no evaluated session: ${path}`)
     return { source: path, session_id: invocation?.session_id ?? null, cli: invocation?.cli, records }
   })
-  return { manifest, bytesByPath, transcripts, outputs, conversation: jsonl(text('conversation.jsonl')), exchanges: jsonl(text('evidence/runner/external-user/exchanges.jsonl')), audit: text('evidence/runner/audit.log') }
+  return { manifest, bytesByPath, transcripts, outputs, conversation: jsonl(text('conversation.jsonl')), exchanges: jsonl(text(`${evidenceRoot}/runner/external-user/exchanges.jsonl`)), audit: text(`${evidenceRoot}/runner/audit.log`) }
 }
