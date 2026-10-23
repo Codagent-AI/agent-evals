@@ -1,6 +1,6 @@
 // Remote-only delivery verification and retention. Host Git never runs against the agent-written workspace:
 // the delivered commit is whatever the delivery repository holds, fetched into a repository the harness made.
-import { cp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { cp, lstat, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { basename, dirname, join, relative } from 'node:path'
 import { CHANGE_NAME } from './files.mjs'
@@ -40,9 +40,13 @@ export async function collectDefinition({ workspaceRepo, runDir, name = CHANGE_N
     // Copy the repository metadata out and read it in a container: its configuration is controlled by the evaluated agents.
     const copy = join(runDir, '.head-copy')
     await rm(copy, { recursive: true, force: true }); await mkdir(copy, { recursive: true })
+    let head
     try {
-      await cp(join(workspaceRepo, '.git'), join(copy, '.git'), { recursive: true, verbatimSymlinks: true })
-      var head = await readHead({ copyDir: copy })
+      // The metadata is written by the evaluated agents: a symlink anywhere in it could lead the copy outside the workspace.
+      await guardPath(runDir, join(workspaceRepo, '.git'))
+      await cp(join(workspaceRepo, '.git'), join(copy, '.git'), { recursive: true, verbatimSymlinks: true,
+        filter: async entry => { if ((await lstat(entry)).isSymbolicLink()) throw new HarnessEvidenceError(`repository metadata holds a symlink: ${entry}`); return true } })
+      head = await readHead({ copyDir: copy })
     } finally { await rm(copy, { recursive: true, force: true }) }
     await rm(join(runDir, 'collected'), { recursive: true, force: true })
     await cp(staged, join(runDir, 'collected'), { recursive: true })

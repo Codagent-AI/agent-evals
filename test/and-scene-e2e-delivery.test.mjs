@@ -144,7 +144,7 @@ test('INT-006 delivery is fetched from the explicit delivery URL into a harness-
   const wrongBase = await world(t); await acceptance(wrongBase)
   await assert.rejects(verify(wrongBase, { pulls: [{ ...wrongBase.pull, base: { ref: 'develop' } }] }), /base is main/)
 })
-test('INT-006 an unreadable acceptance artifact is a harness failure', async t => {
+test('INT-006 an unreadable acceptance artifact is a harness failure', { skip: process.getuid?.() === 0 && 'root reads files regardless of mode' }, async t => {
   const w = await world(t); await acceptance(w)
   const { chmod } = await import('node:fs/promises')
   await chmod(join(w.session, 'output/acceptance-handoff.md'), 0o000)

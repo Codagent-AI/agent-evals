@@ -140,7 +140,7 @@ export async function evaluateProduct({ runDir, rubric, inventory, bundlePath, c
       return found
     })
     if (!named.found) verifier = { found: false, clear: false, reason: named.rationale ?? 'no verifier exists in the delivered tree' }
-    else verifier = await unit('verifier-run', { commit, command: named.command }, async () => {
+    else verifier = await unit('verifier-run', { commit, command: named.command, plan: resolvedPlan, rubric: rubric.version }, async () => {
       try { const out = run({ mounts: [{ source: join(runDir, '.product/build'), target: '/work', readonly: false }], workdir: plan.application_root === '.' ? '/work' : `/work/${plan.application_root}`, network: 'none', command: named.command }, { label: 'verifier' }); return { found: true, command: named.command, clear: true, exit_code: 0, stdout_tail: String(out.stdout ?? '').slice(-2000) } }
       catch (error) { return { found: true, command: named.command, clear: Number.isInteger(error.status) && error.status > 0, exit_code: error.status ?? null, reason: Number.isInteger(error.status) ? null : 'the verifier did not finish with an exit status', stderr_tail: String(error.stderr ?? error.message).slice(-2000) } }
     })

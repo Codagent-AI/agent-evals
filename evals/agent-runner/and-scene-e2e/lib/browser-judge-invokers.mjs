@@ -1,7 +1,7 @@
 // Judge CLIs that operate the served product through chrome-devtools-axi. The shared source judges are
 // deliberately tool-less; these seats are allowed one tool, the AXI command line, on the evaluator's browser.
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, rm, writeFile, appendFile } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile, appendFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 const ENV_KEYS = ['PATH', 'HOME', 'TMPDIR', 'CLAUDE_CODE_OAUTH_TOKEN', 'CHROME_DEVTOOLS_AXI_BROWSER_URL', 'CHROME_DEVTOOLS_AXI_SESSION', 'CHROME_DEVTOOLS_AXI_PORT']
@@ -55,7 +55,10 @@ export function createBrowserJudgeInvoker({ runDir, env = process.env, claudeCom
         const schemaPath = join(scratch, 'schema.json'); const outPath = join(scratch, 'last-message.json')
         await writeFile(schemaPath, JSON.stringify(request.schema))
         const args = ['exec', '--model', model, '-c', `model_reasoning_effort="${effort}"`, '--sandbox', 'workspace-write', '--skip-git-repo-check', '--output-schema', schemaPath, '--output-last-message', outPath, '-']
-        const result = await run(codexCommand, args, { input: request.prompt, env: allowedEnvironment(env, { ...environment, CODEX_HOME: env.CODEX_HOME ?? join(env.HOME ?? '', '.codex') }), cwd: scratch, timeoutMs, spawnImpl })
+        // A private Codex home holds only the login the call needs, not the host's configuration, history or other state.
+        const codexHome = join(scratch, 'codex-home'); await mkdir(codexHome, { recursive: true })
+        await copyFile(join(env.CODEX_HOME ?? join(env.HOME ?? '', '.codex'), 'auth.json'), join(codexHome, 'auth.json')).catch(() => {})
+        const result = await run(codexCommand, args, { input: request.prompt, env: allowedEnvironment(env, { ...environment, CODEX_HOME: codexHome }), cwd: scratch, timeoutMs, spawnImpl })
         if (result.code !== 0) throw Object.assign(new Error(`codex exited ${result.code}: ${result.stderr.slice(-300)}`), { retryable: true })
         text = await readFile(outPath, 'utf8')
       }

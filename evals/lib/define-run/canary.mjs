@@ -86,7 +86,7 @@ export async function scanCanaries({ stagedDir, skillsDir, credentialFiles = [],
       if (!['100644', '100755'].includes(mode)) throw new Error(`unsupported tracked skill input: ${path}`)
       const file = join(skillsDir, path)
       scan(file, repoGit(skillsDir, ['cat-file', 'blob', oid], { maxBuffer: MAX_BLOB_BYTES }))
-      if ((await lstat(file)).isSymbolicLink()) throw new Error(`refusing forwarded symlink: ${file}`)
+      if ((await lstat(file).catch(error => { if (error.code === 'ENOENT') throw new Error(`tracked skill input missing from working tree: ${file}`); throw error })).isSymbolicLink()) throw new Error(`refusing forwarded symlink: ${file}`)
       scan(file, await readFile(file))
     }
   }

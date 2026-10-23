@@ -101,7 +101,14 @@ async function withAskpass(token, run) {
   } finally { await rm(dir, { recursive: true, force: true }) }
 }
 export function gitCommand(args, { env = {}, cwd, encoding = 'utf8' } = {}) {
-  return new Promise((resolve, reject) => execFile('git', args, { cwd, encoding, env: { PATH: process.env.PATH, HOME: process.env.HOME, ...env }, maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => error ? reject(Object.assign(error, { stderr })) : resolve(stdout)))
+  return new Promise((resolve, reject) => execFile('git', args, { cwd, encoding, env: { PATH: process.env.PATH, HOME: process.env.HOME, ...env }, maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
+    if (!error) return resolve(stdout)
+    // Errors reach result.json and the published report, so no credential may travel in them.
+    const secret = env.E2E_GIT_TOKEN
+    const redact = text => { let out = String(text ?? '').replace(/x-access-token(:[^@\s]*)?/g, 'x-access-token:***').replace(/(https?:\/\/)[^@\s/]+@/g, '$1***@'); if (secret) out = out.split(secret).join('***'); return out }
+    error.message = redact(error.message)
+    reject(Object.assign(error, { stderr: redact(stderr) }))
+  }))
 }
 export function authenticatedGit(token, args, options = {}) {
   return withAskpass(token, env => gitCommand(args, { ...options, env: { ...env, ...options.env } }))

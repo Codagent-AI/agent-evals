@@ -145,7 +145,9 @@ test('INT-009 a reused build or neutral unit is trusted only while its recorded 
   const third = await evaluate(t, ROOT_APP, { runDirOverride: world }); await third.run()
   assert.ok(third.container.specs.some(spec => spec.label === 'build'), 'a tampered record forces a rebuild')
   // The built files are gone.
-  await rm(join(world.runDir, '.product/build/dist'), { recursive: true, force: true })
+  const builtDir = join(world.runDir, '.product/build', JSON.parse(await readFile(unitPath, 'utf8')).value.output)
+  await readFile(join(builtDir, 'index.html'))
+  await rm(builtDir, { recursive: true, force: true })
   const fourth = await evaluate(t, ROOT_APP, { runDirOverride: world }); await fourth.run()
   assert.ok(fourth.container.specs.some(spec => spec.label === 'build'), 'a missing output forces a rebuild')
 })

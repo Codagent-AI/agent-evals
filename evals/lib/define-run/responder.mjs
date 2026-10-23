@@ -70,6 +70,7 @@ export async function runResponder({ runDir, exchangeDir, deadline, invoke, inpu
             const controller = new AbortController()
             let cancel
             const cancelled = new Promise((_, reject) => { cancel = reject })
+            cancelled.catch(() => {})
             const abort = () => { controller.abort(); cancel(new Error('responder stopped')) }
             signal?.addEventListener('abort', abort, { once: true })
             if (signal?.aborted) abort()
