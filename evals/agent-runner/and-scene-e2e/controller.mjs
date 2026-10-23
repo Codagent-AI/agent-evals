@@ -338,7 +338,7 @@ export async function runEvaluation(options, deps = {}) {
     if (options.dryRun) {
       await handlers.preflight()
       checkpoint = await completeUnit(checkpoint, { phase: 'preflight', unit: 'phase', inputs: provenance(), dependencies: {}, outputs: [join(runDir, 'phases/preflight.json')] }); await persist()
-      result = { ...failureOutcome({ phase: 'define-workflow', reason: 'dry-run: workflow was not started' }), dry_run: true, planned_provisioning: plannedProvisioning(checkpoint.run_id) }
+      result = { evaluation_status: 'dry-run', owning_phase: 'preflight', resumable: false, dry_run: true, planned_provisioning: plannedProvisioning(checkpoint.run_id) }
     } else {
       phase = 'preflight'; await handlers.preflight()
       checkpoint = await completeUnit(checkpoint, { phase, unit: 'phase', inputs: provenance(), dependencies: {}, outputs: [join(runDir, 'phases/preflight.json')] }); await persist()

@@ -55,7 +55,7 @@ test('E2E-001 a dry run prints the planned provisioning and sandbox invocation a
   await assert.rejects(access(w.log))
   for (const secret of ['SENTINEL-OAUTH-SECRET', 'prov-token', 'BEGIN PRIVATE KEY']) { assert.ok(!stdout.includes(secret) && !stderr.includes(secret), secret) }
   const saved = JSON.parse(await readFile(join(w.runDir, 'result.json'), 'utf8'))
-  assert.equal(saved.dry_run, true); assert.notEqual(saved.evaluation_status, 'complete')
+  assert.equal(saved.dry_run, true); assert.equal(saved.evaluation_status, 'dry-run'); assert.equal(saved.observed_error, undefined)
 })
 
 test('E2E-001 preflight fails with the missing profile field or CLI rule, before any provisioning or model call', async t => {

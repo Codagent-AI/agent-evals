@@ -202,8 +202,8 @@ test('I-57 workflow metrics span both invocations, split per top-level step and 
   const invocations = effectiveInvocations(JSON.parse(text)); assert.deepEqual(invocationsThrough(invocations, ['create', 'define', 'implement'], 'define').map(i => i.phase), invocationsThrough(invocations, ['create', 'define', 'implement'], 'define').map(() => 'define'))
   assert.ok(invocations.some(i => i.phase === 'implement' && i.role === 'implementor'))
 })
-test('I-53 the status table: exactly the six statuses, workflow failures named by stage, and a harness failure is never a score', async t => {
-  assert.deepEqual(EVALUATION_STATUSES, ['complete', 'pending-human-review', 'definition-workflow-failed', 'implementation-workflow-failed', 'contaminated', 'evaluation-harness-failed'])
+test('I-53 the status table: exactly the six run statuses plus dry-run, workflow failures named by stage, and a harness failure is never a score', async t => {
+  assert.deepEqual(EVALUATION_STATUSES, ['complete', 'pending-human-review', 'definition-workflow-failed', 'implementation-workflow-failed', 'contaminated', 'evaluation-harness-failed', 'dry-run'])
   assert.equal(failureOutcome({ phase: 'p', reason: 'r', workflow: true, defineCompleted: false }).evaluation_status, 'definition-workflow-failed')
   assert.equal(failureOutcome({ phase: 'p', reason: 'r', workflow: true, defineCompleted: true }).evaluation_status, 'implementation-workflow-failed')
   assert.equal(failureOutcome({ phase: 'p', reason: 'r' }).evaluation_status, 'evaluation-harness-failed')

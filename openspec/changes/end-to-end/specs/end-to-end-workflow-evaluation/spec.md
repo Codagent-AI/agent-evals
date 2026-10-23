@@ -7,6 +7,7 @@ The end-to-end evaluation SHALL be run through `evals/agent-runner/and-scene-e2e
 - **WHEN** the suite is invoked with `--dry-run` and valid candidate options
 - **THEN** it prints the planned delivery-repository provisioning and sandbox invocation
 - **AND** it creates no repository, starts no Docker container, and makes no model call
+- **AND** its result reports `evaluation_status=dry-run`, not a failure
 
 #### Scenario: Rescore does not run the workflow
 - **WHEN** the suite is invoked with `--rescore-from` naming a run directory that holds retained evidence
@@ -202,7 +203,7 @@ A candidate run SHALL execute phases in this order: preflight; delivery-reposito
 - **THEN** no scoring, trace, human-review, or publication phase runs for it
 
 ### Requirement: Evaluation status and scores
-The result SHALL report `evaluation_status` as exactly one of `complete`, `pending-human-review`, `definition-workflow-failed`, `implementation-workflow-failed`, `contaminated`, or `evaluation-harness-failed`. A run SHALL report a definition score and a product score, and SHALL report no pass/fail verdict. When `define` completed and a later workflow phase failed, the run SHALL still score the collected definition and report it in that run's result, and SHALL report no product score. A contaminated run SHALL have no score. A workflow or harness failure SHALL never be reported as a low score.
+The result SHALL report `evaluation_status` as exactly one of `complete`, `pending-human-review`, `definition-workflow-failed`, `implementation-workflow-failed`, `contaminated`, `evaluation-harness-failed`, or, for a dry run only, `dry-run`. A run SHALL report a definition score and a product score, and SHALL report no pass/fail verdict. When `define` completed and a later workflow phase failed, the run SHALL still score the collected definition and report it in that run's result, and SHALL report no product score. A contaminated run SHALL have no score. A workflow or harness failure SHALL never be reported as a low score.
 
 #### Scenario: Implementation fails after define
 - **WHEN** `define` completed and the implement step fails

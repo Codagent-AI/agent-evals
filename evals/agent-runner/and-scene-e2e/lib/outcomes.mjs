@@ -1,4 +1,4 @@
-export const EVALUATION_STATUSES = ['complete', 'pending-human-review', 'definition-workflow-failed', 'implementation-workflow-failed', 'contaminated', 'evaluation-harness-failed']
+export const EVALUATION_STATUSES = ['complete', 'pending-human-review', 'definition-workflow-failed', 'implementation-workflow-failed', 'contaminated', 'evaluation-harness-failed', 'dry-run']
 // A workflow failure belongs to the stage that was running; anything else is a harness failure.
 export function failureOutcome({ phase, reason, workflow = false, defineCompleted = false, resumable = false, step = null, limit = null, window = null, prohibited = [], leaked = null, definition_scored = undefined }) {
   return {
