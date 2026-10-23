@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-23T03-40-58-793834351Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The verification host check failed; the underlying host choice and its rationale are unavailable.",
+      "evidence": [
+        "verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost.",
+        "The supplied workflow outputs contain no explanation of verification host selection."
+      ],
+      "handling": "No handling or resolution is visible in the supplied artifacts.",
+      "consequence": "The product evidence reports an unmet verification requirement.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The check establishes a verification failure, but does not reveal the actual invocation, agent reasoning, original instructions, or discoverable repository context. It cannot establish whether an ass…",
+      "resolution": "unresolved",
+      "id": "945364a168e1c577"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The screenshot helper passed its presence check but failed three warning-related checks; the reason for those omissions is unknown.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: pass — Project-local Playwright screenshot helper is present.",
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "A helper was delivered. No explanation or subsequent handling of the warning failures is supplied.",
+      "consequence": "The helper did not satisfy the reported overlap, active-state, and attribution warning checks.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The results identify missing or incomplete checks, but no source code, requirement text, or implementation discussion establishes whether their scope was ambiguous, overlooked, or deliberately interp…",
+      "resolution": "unresolved",
+      "id": "9e4e894903d94a64"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The check for ignoring swipes originating from controls failed, without evidence explaining the interaction policy implemented.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail",
+        "demo-supported-navigation: pass",
+        "demo-control-semantics: pass",
+        "demo-focus-and-keyboard-accessibility: pass"
+      ],
+      "handling": "No implementation explanation, failure trace, or resolution is provided.",
+      "consequence": "The delivered interaction behavior failed the reported control-origin swipe check; the exact observed behavior is unavailable.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The isolated failure cannot distinguish an assumed interaction policy from an implementation defect or an unclear requirement. The other navigation passes do not resolve that uncertainty.",
+      "resolution": "unresolved",
+      "id": "7917736fbbcfe7e8"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
