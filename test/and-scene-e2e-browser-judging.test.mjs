@@ -146,3 +146,14 @@ test('INT-012 a failed browser judge call is still recorded in the usage ledger'
   const [entry] = (await readFile(`${runDir}/phases/eval-owned-usage.jsonl`, 'utf8')).trim().split('\n').map(JSON.parse)
   assert.equal(entry.ok, false); assert.equal(entry.usage.cost_usd, 0.25); assert.equal(entry.job, 'j')
 })
+
+test('INT-012 a Claude browser judge gets the user identity its Keychain login needs, and a login failure names itself', async t => {
+  const { createBrowserJudgeInvoker } = await import('../evals/agent-runner/and-scene-e2e/lib/browser-judge-invokers.mjs')
+  const { temp } = await import('./and-scene-e2e-helpers.mjs'); const { EventEmitter } = await import('node:events')
+  const runDir = await temp(t, 'e2e-identity-')
+  let seen = null
+  const spawnImpl = (command, args, options) => { seen = options.env; const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); child.stdin = { end() { setImmediate(() => { child.stdout.emit('data', JSON.stringify({ type: 'result', is_error: true, result: 'Not logged in · Please run /login' }) + '\n'); child.emit('close', 1) }) } }; child.kill = () => {}; return child }
+  const invoke = createBrowserJudgeInvoker({ runDir, spawnImpl, env: { PATH: '/bin', HOME: '/home/u', USER: 'u', LOGNAME: 'u', SECRET_THING: 'x' } })
+  await assert.rejects(invoke({ job: 'j', authority: { cli: 'claude', model: 'm', effort: 'high' }, schema: {}, prompt: 'p' }), /claude exited 1: Not logged in/)
+  assert.equal(seen.USER, 'u'); assert.equal(seen.LOGNAME, 'u'); assert.equal(seen.SECRET_THING, undefined)
+})

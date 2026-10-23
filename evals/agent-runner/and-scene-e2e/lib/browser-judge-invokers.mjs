@@ -4,7 +4,8 @@ import { spawn } from 'node:child_process'
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile, appendFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-const ENV_KEYS = ['PATH', 'HOME', 'TMPDIR', 'CLAUDE_CODE_OAUTH_TOKEN', 'CHROME_DEVTOOLS_AXI_BROWSER_URL', 'CHROME_DEVTOOLS_AXI_SESSION', 'CHROME_DEVTOOLS_AXI_PORT']
+// USER and LOGNAME let the Claude CLI find its macOS Keychain login, as the shared source judges do.
+const ENV_KEYS = ['PATH', 'HOME', 'USER', 'LOGNAME', 'TMPDIR', 'CLAUDE_CODE_OAUTH_TOKEN', 'CHROME_DEVTOOLS_AXI_BROWSER_URL', 'CHROME_DEVTOOLS_AXI_SESSION', 'CHROME_DEVTOOLS_AXI_PORT']
 const allowedEnvironment = (env, extra = {}) => ({ ...Object.fromEntries(ENV_KEYS.filter(key => env[key] !== undefined).map(key => [key, env[key]])), ...extra })
 function run(command, args, { input, env, cwd, timeoutMs, spawnImpl = spawn }) {
   return new Promise((resolve, reject) => {
@@ -23,6 +24,7 @@ export function claudeUsage(stdout) {
   for (const line of stdout.split('\n')) { try { const event = JSON.parse(line); if (event.type === 'result') final = event } catch { /* not a record */ } }
   return final ? { ...(final.usage ? { tokens: final.usage } : {}), ...(final.total_cost_usd !== undefined ? { cost_usd: final.total_cost_usd } : {}) } : null
 }
+const claudeResultText = stdout => { let text = ''; for (const line of stdout.split('\n')) { try { const event = JSON.parse(line); if (event.type === 'result') text = String(event.result ?? '') } catch { /* not a record */ } } return text }
 export function structuredOutput(stdout) {
   let final = null
   for (const line of stdout.split('\n')) { try { const event = JSON.parse(line); if (event.type === 'result') final = event } catch { /* not a record */ } }
@@ -49,7 +51,8 @@ export function createBrowserJudgeInvoker({ runDir, env = process.env, claudeCom
         const args = ['-p', '--model', model, '--effort', effort, '--tools', 'Bash', '--allowedTools', 'Bash(chrome-devtools-axi:*)', '--setting-sources', '', '--strict-mcp-config', '--disable-slash-commands', '--no-session-persistence', '--json-schema', JSON.stringify(request.schema), '--output-format', 'stream-json', '--verbose']
         const result = await run(claudeCommand, args, { input: request.prompt, env: environment, cwd: scratch, timeoutMs, spawnImpl })
         usage = claudeUsage(result.stdout)
-        if (result.code !== 0) throw Object.assign(new Error(`claude exited ${result.code}: ${result.stderr.slice(-300)}`), { retryable: true })
+        // Claude reports some failures, such as a missing login, only in its result record.
+        if (result.code !== 0) throw Object.assign(new Error(`claude exited ${result.code}: ${(result.stderr.trim() || claudeResultText(result.stdout)).slice(-300)}`), { retryable: true })
         text = structuredOutput(result.stdout)
       } else {
         const schemaPath = join(scratch, 'schema.json'); const outPath = join(scratch, 'last-message.json')
