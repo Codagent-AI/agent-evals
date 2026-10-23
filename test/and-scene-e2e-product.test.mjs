@@ -159,6 +159,8 @@ test('INT-009 a failed browser judging, or an unusable verifier answer, is never
   let failures = 1
   const flaky = await evaluate(t, ROOT_APP, { runDirOverride: world, deps: { browserInvoke: async () => { if (failures-- > 0) throw Object.assign(new Error('browser judge crashed'), { retryable: false }); throw new Error('unreachable') } } })
   await assert.rejects(flaky.run(), error => error.resumable === true)
+  const kept = JSON.parse(await readFile(join(world.runDir, 'phases/product/browser-judging-failed.json'), 'utf8'))
+  assert.ok(kept.failed_jobs.length > 0); assert.match(JSON.stringify(kept.failures), /browser judge crashed/); assert.ok(kept.records, 'the failed jobs\' panel records are kept for diagnosis')
   const retried = await evaluate(t, ROOT_APP, { runDirOverride: world })
   const result = await retried.run()
   assert.ok(retried.browser.calls.browserJobs > 0, 'the failed browser jobs ran again')

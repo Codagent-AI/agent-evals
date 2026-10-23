@@ -80,6 +80,8 @@ export async function evaluateProduct({ runDir, rubric, inventory, bundlePath, c
         const result = await runBrowserJudging({ rubric, inventory, url: server.url, panel: deps.browserPanel ?? deps.panel, decider: deps.browserDecider ?? deps.decider, invoke: deps.browserInvoke ?? deps.invoke, session, browserSession: deps.browserSessionName, secondOpinion: deps.secondOpinion })
         return { verdicts: result.verdicts, failed_jobs: result.failed_jobs, failures: result.failures, driver_sessions: result.driver_sessions, records: result.records, judged: result.judged }
       }, { cache: value => value.failed_jobs.length === 0 })
+      // A failed job is not cached, so its panel records are kept here for diagnosis.
+      if (browser.failed_jobs.length) await writeJsonAtomic(join(runDir, 'phases/product/browser-judging-failed.json'), { failed_jobs: browser.failed_jobs, failures: browser.failures, records: browser.records })
       if (browser.failed_jobs.length) throw new ProductHarnessError(`browser judge jobs never returned usable output: ${browser.failed_jobs.join(', ')}`, { failures: browser.failures })
       notes.browser = browser
       Object.assign(verdicts, browser.verdicts)

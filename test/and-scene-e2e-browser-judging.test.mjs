@@ -207,3 +207,11 @@ test('INT-012 the replay driver\'s AXI commands leave this process free to serve
   const missing = await axiCommand({ PATH: '/nonexistent' })(['run'])
   assert.ok(missing.error, 'a missing axi is reported, not thrown')
 })
+
+test('INT-012 a split browser panel is settled by the decider from its observed evidence', async () => {
+  const ids = ['c1']
+  const script = { m1: () => [vote('c1', 'pass', goodReplay())], m2: () => [vote('c1', 'fail')], m3: () => [vote('c1', 'not-located')], d: () => [vote('c1', 'pass', goodReplay())] }
+  const { result, judges } = await run({ ids, script, behaviour: () => observed('OK') })
+  assert.deepEqual(result.failed_jobs, []); assert.ok(judges.state.calls.includes('d'), 'the decider settled the split')
+  assert.equal(result.verdicts.c1.verdict, 'pass'); assert.equal(result.verdicts.c1.basis, 'replay-confirmed')
+})

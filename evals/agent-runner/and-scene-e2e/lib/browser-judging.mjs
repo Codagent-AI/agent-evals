@@ -39,7 +39,9 @@ export async function runBrowserJudging({ rubric, inventory, url, panel, decider
       // Judge CLIs touch the browser, so seats run one after another even though the panel starts them together.
       const guarded = member => ({ ...member, invoke: req => session.exclusive(() => invoke({ ...req, browser_session: browserSession })) })
       const outcome = await runPanelJob({ job: request.job, criteria: request.criteria, verdicts: BROWSER_VERDICTS, order: BROWSER_VERDICTS, panel: panel.map(guarded), decider: guarded(decider),
-        buildPrompt: () => ({ ...request, authority: undefined }), schema: request.schema })
+        buildPrompt: () => ({ ...request, authority: undefined }), schema: request.schema,
+        // Browser evidence is what the judge observed, not file citations; a pass still has to replay before it counts.
+        validateCitations: async result => Array.isArray(result.evidence) && result.evidence.some(item => typeof item === 'string' && item.trim()) })
       records[job.id] = outcome.record
       judged[`browser:${job.id}`] = outcome.results ?? []
       if (!outcome.ok) { failures[job.id] = outcome.failure ?? { message: outcome.record?.error ?? 'browser judge job failed', code: 'judge-output' }; return }
