@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-23T16-17-30-649565896Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings__call_ea6724ed-e30a-4b05-9952-775560b08ec2_.err",
+      "output/_resolve-findings__call_ea6724ed-e30a-4b05-9952-775560b08ec2_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The default attribution links to a different repository than the verification expectation.",
+      "evidence": [
+        "attribution-default-link: fail — expected https://github.com/Codagent-AI/and-scene; found https://github.com/and-scene/and-scene."
+      ],
+      "handling": "The delivered default attribution uses https://github.com/and-scene/and-scene.",
+      "consequence": "The attribution points to the wrong repository according to the supplied verification result.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The mismatch is observable, but the original specification, repository context, and implementation reasoning are unavailable. The evidence cannot establish whether this arose from an incorrect assump…",
+      "resolution": "unresolved",
+      "id": "02c8281bb2775490"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The screenshot helper&#39;s attribution warning coverage is incomplete.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: pass — Project-local Playwright screenshot helper is present.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "A screenshot helper was delivered, but its attribution warnings failed verification.",
+      "consequence": "The helper does not fully cover the attribution conditions expected by verification; the evidence does not identify which conditions are missing.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The result establishes incomplete warning coverage but supplies neither the warning requirements nor the implementation or agent explanation needed to classify its cause.",
+      "resolution": "unresolved",
+      "id": "cba79e82db479dc9"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Ignoring swipe gestures originating from controls failed verification.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail."
+      ],
+      "handling": "The delivered input behavior failed the control-origin swipe check.",
+      "consequence": "Control-origin swipe handling does not satisfy the supplied verification expectation; the exact observed interaction is not documented.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "Only the failing check name is available. It cannot establish whether the behavior reflects a specification gap, overlooked repository context, an incorrect assumption, or an implementation defect un…",
+      "resolution": "unresolved",
+      "id": "a6b9046886601ae0"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
