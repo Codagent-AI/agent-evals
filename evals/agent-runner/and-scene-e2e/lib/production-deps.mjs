@@ -6,9 +6,10 @@ import { createAxiBrowserDriver } from '../../and-scene/lib/axi-browser-driver.m
 import { createHostBrowser, EVALUATOR_AXI_SESSION } from '../../and-scene/lib/host-browser.mjs'
 import { createProductJudges } from './product-judges.mjs'
 import { createBrowserJudgeInvoker } from './browser-judge-invokers.mjs'
-import { normalizeReplay } from './judge-requests.mjs'
+import { BROWSER_RESULT_SCHEMA, normalizeReplay } from './judge-requests.mjs'
 import { findAxiMcp, findHostChrome, hostDevtoolsPort } from './host-chrome.mjs'
-const SECOND_OPINION_SCHEMA = { type: 'object', additionalProperties: false, required: ['decision', 'rationale', 'replay'], properties: { decision: { type: 'string', enum: ['uphold', 'overturn'] }, rationale: { type: 'string', minLength: 1 }, replay: { anyOf: [{ type: 'null' }, { type: 'object' }] } } }
+// The second opinion's replay takes the same shape as a browser judge's, so the decider is told what the harness can replay.
+const SECOND_OPINION_SCHEMA = { type: 'object', additionalProperties: false, required: ['decision', 'rationale', 'replay'], properties: { decision: { type: 'string', enum: ['uphold', 'overturn'] }, rationale: { type: 'string', minLength: 1 }, replay: BROWSER_RESULT_SCHEMA.properties.results.items.properties.replay } }
 const VERIFIER_SCHEMA = { type: 'object', additionalProperties: false, required: ['found', 'command', 'rationale'], properties: { found: { type: 'boolean' }, command: { type: ['array', 'null'], items: { type: 'string' } }, rationale: { type: 'string', minLength: 1 } } }
 // A sandboxed judge's commands end the background processes they start, so the AXI bridge starts here, outside the
 // judge, and lives across its commands until the browser is released.

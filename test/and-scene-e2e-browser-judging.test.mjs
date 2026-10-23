@@ -233,4 +233,5 @@ test('INT-012 a judge\'s replay keeps only the fields its actions take, so harml
   assert.deepEqual(replay.actions, [{ type: 'navigate', path: '/talk?x=1#s' }, { type: 'wait', ms: 1000 }, { type: 'press', key: 'Space' }, { type: 'click', selector: '#next' }])
   assert.ok(validReplay(replay))
   assert.ok(!validReplay(normalizeReplay({ actions: [full({ type: 'navigate', path: 'not a url or path' })], expect: { type: 'rendered-state-changes', selector: null, text: null, label: null } })), 'a malformed path is still refused')
+  for (const malformed of [{ steps: [] }, { actions: 'navigate', expect: null }, { actions: [null], expect: {} }, { actions: [full({ type: 'navigate', path: '/' })], expect: 'shown' }]) assert.ok(!validReplay(normalizeReplay(malformed)), `refused, not thrown: ${JSON.stringify(malformed)}`)
 })

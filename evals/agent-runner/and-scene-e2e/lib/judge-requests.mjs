@@ -75,6 +75,8 @@ export const BROWSER_RESULT_SCHEMA = {
 // spellings (a full URL on this origin, the key " ") do not disqualify an otherwise valid plan.
 export function normalizeReplay(replay) {
   if (!replay) return null
+  // A replay without an action list is left as given, for validation to refuse.
+  if (!Array.isArray(replay.actions) || replay.actions.some(raw => !raw || typeof raw !== 'object')) return replay
   const drop = object => Object.fromEntries(Object.entries(object).filter(([, value]) => value !== null && value !== undefined))
   const action = raw => {
     const kept = drop(raw)
@@ -85,7 +87,7 @@ export function normalizeReplay(replay) {
     if (Array.isArray(shaped.modifiers) && !shaped.modifiers.length) delete shaped.modifiers
     return shaped
   }
-  return { actions: replay.actions.map(action), expect: drop(replay.expect) }
+  return { actions: replay.actions.map(action), expect: replay.expect && typeof replay.expect === 'object' ? drop(replay.expect) : replay.expect }
 }
 export function buildBrowserRequest({ rubric, inventory, job, url, authority = null }) {
   const slice = job.criteria.map(id => [`- ${id}`, criterionRequirement(rubric, inventory, id)].filter(Boolean).join('\n  ')).join('\n')
