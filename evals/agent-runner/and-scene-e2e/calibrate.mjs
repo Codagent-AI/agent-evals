@@ -34,9 +34,9 @@ export async function calibrate(options, deps = {}) {
     const runDir = join(options.out, 'runs', `${inputId}-${repeat}`)
     await mkdir(join(runDir, 'collected'), { recursive: true })
     const evaluated = await evaluateProduct({ runDir, rubric, inventory: product.inventory, bundlePath: input.bundlePath, commit: input.commit, collectedDir: join(runDir, 'collected'), acceptance: null, deps: createProductionDeps({ runDir }) })
-    return { score: evaluated.score, verdicts: evaluated.verdicts, judge_records: evaluated.judge_records }
+    return { score: evaluated.score, verdicts: evaluated.verdicts, judge_records: evaluated.judge_records, build: { ok: evaluated.build.ok, reason: evaluated.build.reason, record: join(runDir, 'phases/product/build.json') } }
   })
-  return runCalibration({ calibrationDir: options.calibrationDir, rubric: product.rubric, repeats: options.repeats, evaluate, outDir: options.out })
+  return runCalibration({ calibrationDir: options.calibrationDir, rubric: product.rubric, repeats: options.repeats, evaluate, outDir: options.out, log: deps.log ?? (line => console.error(line)) })
 }
 async function main() {
   try {

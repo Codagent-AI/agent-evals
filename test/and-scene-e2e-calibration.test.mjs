@@ -100,3 +100,17 @@ test('INT-011 a run produces no publication; the diagnostic never imports public
   for (const file of ['calibrate.mjs', 'lib/calibration.mjs']) assert.doesNotMatch(await readFile(join(E2E, file), 'utf8'), /publication|controller\.mjs/, file)
   assert.equal(JSON.parse(await readFile(join(E2E, 'versions.json'), 'utf8')).inputs['product-rubric'].version >= 1, true)
 })
+
+test('INT-011 each pass prints its score and misses; a pass whose input did not build stops calibration without a report', async t => {
+  const lines = []
+  await runCalibration({ calibrationDir: dir, rubric: product.rubric, repeats: 3, log: line => lines.push(line), evaluate: async ({ inputId }) => run(62, pass(inputId === 'degraded-captions-missing' ? { 'quality-captions-and-navigation': 'fail' } : {})) })
+  assert.equal(lines.length, Object.keys(expected.inputs).length * 3)
+  assert.ok(lines.includes('calibration reference repeat 1: score 62; no misses'))
+  assert.ok(lines.includes('calibration degraded-captions-missing repeat 2: score 62; no misses'))
+  assert.match(lines.find(line => line.startsWith('calibration degraded-verifier-ignores-errors repeat 1')), /missed verification-console-page-error-fails \(expected fail\)/)
+  const out = await temp(t, 'e2e-cal-stop-')
+  let passes = 0
+  await assert.rejects(runCalibration({ calibrationDir: dir, rubric: product.rubric, repeats: 3, outDir: out, evaluate: async () => { passes++; return { ...run(0, pass()), build: { ok: false, reason: 'dependency installation failed', record: '/runs/reference-1/phases/product/build.json' } } } }),
+    /calibration stopped: reference repeat 1 did not build \(dependency installation failed\); see \/runs\/reference-1/)
+  assert.equal(passes, 1); assert.deepEqual(await readdir(out), [])
+})

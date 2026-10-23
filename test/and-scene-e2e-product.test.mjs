@@ -99,6 +99,8 @@ test('INT-009 a root-layout candidate is built, served from its own output and s
     assert.equal(spec.mounts.length, 1); assert.equal(spec.mounts[0].target, '/work'); assert.ok(!('env' in spec)); assert.equal(spec.network, spec.label === 'install' ? 'bridge' : 'none')
     const args = containerArgs(spec).join(' ')
     assert.ok(!/(GH_|GITHUB|TOKEN|\.claude|\.codex|credentials)/i.test(args), args)
+    // The image's own npm cache belongs to another user, so npm must cache in the container's throwaway home.
+    assert.match(args, /-e npm_config_cache=\/tmp\/container-home\//)
   }
   assert.deepEqual(e.container.specs.map(spec => spec.label).slice(0, 2), ['install', 'build'])
   assert.deepEqual(e.container.specs[0].command, ['npm', 'ci'])

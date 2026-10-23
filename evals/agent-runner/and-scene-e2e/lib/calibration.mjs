@@ -15,6 +15,12 @@ export function referenceRubric(rubric) {
 }
 const majority = verdicts => { const pass = verdicts.filter(verdict => verdict === 'pass').length; return pass * 2 > verdicts.length ? 'pass' : 'fail' }
 const criteriaOf = rubric => rubric.components.flatMap(component => component.subcomponents.flatMap(subcomponent => subcomponent.criteria))
+const checksOf = (ids, spec = {}) => [...(spec.pass === 'all' ? ids.map(id => ({ id, expect: 'pass' })) : (spec.pass ?? []).map(id => ({ id, expect: 'pass' }))), ...(spec.fail ?? []).map(id => ({ id, expect: 'fail' }))]
+// One pass's line for watching a long calibration: its score and the criteria that missed their expected verdict.
+export function passLine({ rubric, inputId, repeat, spec, run }) {
+  const misses = checksOf(criteriaOf(rubric), spec?.expect).filter(check => (run.verdicts[check.id]?.verdict ?? 'fail') !== check.expect)
+  return `calibration ${inputId} repeat ${repeat}: score ${run.score.automated_score}; ${misses.length ? `missed ${misses.map(miss => `${miss.id} (expected ${miss.expect})`).join(', ')}` : 'no misses'}`
+}
 // Pure summary of repeated runs: runs[inputId] = [{ score: { automated_score }, verdicts: { id: { verdict } }, judge_records }]
 export function summarizeCalibration({ rubric, expected, runs }) {
   const limits = rubric.limits
@@ -26,8 +32,7 @@ export function summarizeCalibration({ rubric, expected, runs }) {
     const perCriterion = Object.fromEntries(ids.map(id => [id, repeats.map(run => run.verdicts[id]?.verdict ?? 'fail')]))
     const verdict = Object.fromEntries(ids.map(id => [id, majority(perCriterion[id])]))
     const flips = Object.fromEntries(ids.map(id => { const pass = perCriterion[id].filter(v => v === 'pass').length; return [id, Math.min(pass, repeats.length - pass) / repeats.length] }))
-    const spec = expected.inputs[inputId]?.expect ?? {}
-    const checks = [...(spec.pass === 'all' ? ids.map(id => ({ id, expect: 'pass' })) : (spec.pass ?? []).map(id => ({ id, expect: 'pass' }))), ...(spec.fail ?? []).map(id => ({ id, expect: 'fail' }))]
+    const checks = checksOf(ids, expected.inputs[inputId]?.expect)
     const misses = checks.filter(check => verdict[check.id] !== check.expect)
     let reversals = 0
     for (const run of repeats) for (const results of Object.values(run.judge_records ?? {})) for (const result of results) {
@@ -73,7 +78,7 @@ async function clone(bundle, workDir, name) {
   git(checkout, ['checkout', '--quiet', '-B', 'add-presentation-skill', 'origin/add-presentation-skill'])
   return checkout
 }
-export async function runCalibration({ calibrationDir, rubric, repeats = MIN_REPEATS, evaluate, outDir = null }) {
+export async function runCalibration({ calibrationDir, rubric, repeats = MIN_REPEATS, evaluate, outDir = null, log = () => {} }) {
   if (!Number.isInteger(repeats) || repeats < MIN_REPEATS) throw Object.assign(new Error(`calibration needs at least ${MIN_REPEATS} repeats per input, got ${repeats}`), { usage: true })
   const expected = await readJson(join(calibrationDir, 'expected-verdicts.json'))
   const work = await mkdtemp(join(tmpdir(), 'e2e-calibrate-'))
@@ -82,7 +87,13 @@ export async function runCalibration({ calibrationDir, rubric, repeats = MIN_REP
     for (const [inputId, spec] of Object.entries(expected.inputs)) {
       const input = await prepareInput({ calibrationDir, inputId, spec, workDir: work })
       runs[inputId] = []
-      for (let repeat = 1; repeat <= repeats; repeat++) runs[inputId].push(await evaluate({ inputId, repeat, input, spec }))
+      for (let repeat = 1; repeat <= repeats; repeat++) {
+        const run = await evaluate({ inputId, repeat, input, spec })
+        // Every calibration input builds, so a failed build is a harness problem; judging on would score nothing real.
+        if (run.build?.ok === false) throw new Error(`calibration stopped: ${inputId} repeat ${repeat} did not build (${run.build.reason})${run.build.record ? `; see ${run.build.record}` : ''}`)
+        runs[inputId].push(run)
+        log(passLine({ rubric: referenceRubric(rubric), inputId, repeat, spec, run }))
+      }
     }
   } finally { await rm(work, { recursive: true, force: true }) }
   const summary = summarizeCalibration({ rubric: referenceRubric(rubric), expected, runs })
