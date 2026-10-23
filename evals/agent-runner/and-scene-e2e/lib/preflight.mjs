@@ -1,6 +1,6 @@
 // Preflight: every check runs before any model call or repository creation, and a failure names its check.
-import { lstat, mkdtemp, readFile, rm } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { access, lstat, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { constants, existsSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { repoGit } from '../../../lib/define-run/starting-repo.mjs'
@@ -15,6 +15,7 @@ import { checkVersions, loadVersions } from './versions.mjs'
 import { checkWorkflow } from './workflow.mjs'
 import { validateProfiles } from './options.mjs'
 import { readValidatorReviewerClis } from './sandbox.mjs'
+import { findHostChrome, onPath } from './host-chrome.mjs'
 import { GitHubApp, checkInstallationPermissions, checkReach, loadAppCredentials } from './provisioning.mjs'
 export class PreflightError extends Error {
   constructor(check, message) { super(`preflight ${check}: ${message}`); this.check = check; this.owner = 'evaluation-harness' }
@@ -61,6 +62,12 @@ export async function inspectInputs({ profiles, workflow, runnerDir, skillsDir, 
   const sandboxHelp = await guard('sandbox capability', async () => requireCommand(command('bash', [join(runnerDir, 'scripts/sandbox-run.sh'), '--help'], { env }), 'sandbox help').stdout)
   const help = await guard('Agent Runner capability', () => runnerHelp({ runnerDir, command, env }))
   await guard('Agent Runner capability', async () => verifyCapabilities(help, sandboxHelp))
+  await guard('host browser', async () => {
+    const chrome = findHostChrome(env)
+    if (!chrome) throw new Error('no Chrome or Chromium found for browser judging: set AND_SCENE_HOST_CHROME or CHROME_PATH')
+    await access(chrome, constants.X_OK).catch(() => { throw new Error(`the browser-judging Chrome is not executable: ${chrome}`) })
+    if (!onPath('chrome-devtools-axi', env)) throw new Error('chrome-devtools-axi is not on PATH; browser judging drives Chrome through it')
+  })
   if (!dryRun) await guard('Docker', async () => requireCommand(command('docker', ['info'], { env }), 'Docker availability'))
   const all = { ...profiles, validator: { cli: reviewerClis[0] } }
   const claudeFile = join(home, '.claude/.credentials.json')

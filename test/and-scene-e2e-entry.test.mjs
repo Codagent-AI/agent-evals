@@ -14,7 +14,8 @@ async function world(t) {
   const bin = join(root, 'bin'); const log = join(root, 'cli.log')
   // Container and model CLIs are traps: a dry run must never reach them.
   for (const name of ['docker', 'claude', 'codex', 'cursor']) await script(join(bin, name), `echo "${name} $*" >> "${log}"; exit 1`)
-  const env = { PATH: `${bin}:${process.env.PATH}`, HOME: await fakeHome(root), AND_SCENE_E2E_APP_ID: '123', AND_SCENE_E2E_APP_KEY_FILE: join(root, 'app.pem'), AND_SCENE_E2E_GITHUB_API: github.url, CLAUDE_CODE_OAUTH_TOKEN: 'SENTINEL-OAUTH-SECRET' }
+  for (const name of ['chrome', 'chrome-devtools-axi']) await script(join(bin, name), `echo "${name} $*" >> "${log}"; exit 1`)
+  const env = { PATH: `${bin}:${process.env.PATH}`, AND_SCENE_HOST_CHROME: join(bin, 'chrome'), HOME: await fakeHome(root), AND_SCENE_E2E_APP_ID: '123', AND_SCENE_E2E_APP_KEY_FILE: join(root, 'app.pem'), AND_SCENE_E2E_GITHUB_API: github.url, CLAUDE_CODE_OAUTH_TOKEN: 'SENTINEL-OAUTH-SECRET' }
   return { root, github, env, log, runner: await fakeRunner(root), skills: await fakeSkills(root), runDir: join(root, 'run') }
 }
 // Asynchronous: the in-process fake GitHub server must answer while the CLI runs.
@@ -70,6 +71,11 @@ test('E2E-001 preflight fails with the missing profile field or CLI rule, before
   assert.match(cursorTester.stdout + cursorTester.stderr, /cursor is accepted only for crosscheck/)
   assert.equal(w.github.requests.length, 0); await assert.rejects(access(w.log))
   const occupied = await run(w, candidate(w, [], cursorTesterDir)); assert.match(occupied.stdout + occupied.stderr, /run directory is already used; use --resume/)
+  // A launcher may create the directory for its own log first; that alone does not make it used.
+  const launched = join(w.root, 'launched'); await mkdir(join(launched, '.factory'), { recursive: true }); await writeFile(join(launched, 'factory-suite.log'), '')
+  const fresh = await run(w, candidate(w, [], launched)); assert.equal(fresh.status, 0, fresh.stdout + fresh.stderr)
+  const stale = join(w.root, 'stale'); await mkdir(stale); await writeFile(join(stale, 'factory-suite.log'), ''); await writeFile(join(stale, 'notes.txt'), '')
+  const refused = await run(w, candidate(w, [], stale)); assert.match(refused.stdout + refused.stderr, /run directory is already used; use --resume/)
 })
 
 test('E2E-001 preflight names a dirty checkout, a missing skill, a missing option and missing credentials', async t => {

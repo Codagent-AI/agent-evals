@@ -2,7 +2,7 @@
 // Host lifecycle for one end-to-end evaluation: provision a delivery repository, run the selected workflow in
 // two capped invocations around a define checkpoint, verify delivery, then audit, score and report.
 import { resolveCredentialEnv } from './lib/credentials.mjs'
-import { mkdir, rm, lstat, open, unlink, readFile, rename, writeFile, copyFile } from 'node:fs/promises'
+import { mkdir, rm, lstat, open, unlink, readFile, readdir, rename, writeFile, copyFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
@@ -60,6 +60,9 @@ async function acquireLock(runDir) {
   return () => unlink(path)
 }
 const shortId = () => randomUUID().replace(/-/g, '').slice(0, 12)
+// A launcher may create the run directory first for its own output (Agent Factory writes factory-suite.log and .factory/); anything else means it was used.
+const LAUNCHER_ENTRIES = ['factory-suite.log', '.factory']
+const usedRunDir = async dir => { const entries = await readdir(dir).catch(error => { if (error.code === 'ENOENT') return null; throw error }); return entries !== null && entries.some(name => !LAUNCHER_ENTRIES.includes(name)) }
 export async function runEvaluation(options, deps = {}) {
   if (options.rescoreFrom) return rescoreEvaluation(options, deps)
   const runDir = resolve(options.runDir)
@@ -321,13 +324,14 @@ export async function runEvaluation(options, deps = {}) {
   const publish = async () => { await (deps.publish ?? publishRun)({ runDir, repoDir: options.repoDir ?? REPO_ROOT, result }); return (await hashFile(join(runDir, 'publication.json'))) ? [join(runDir, 'publication.json')] : [] }
   try {
     await privatePath(runDir)
-    if (!options.resume && await lstat(runDir).catch(() => null)) throw new Error('run directory is already used; use --resume with its exact path')
+    if (!options.resume && await usedRunDir(runDir)) throw new Error('run directory is already used; use --resume with its exact path')
     if (options.resume && !await lstat(runDir).catch(() => null)) throw new Error('resume run directory does not exist')
     await mkdir(runDir, { recursive: true }); release = await acquireLock(runDir); writable = true
     for (const path of ['phases', 'logs', 'sandbox-input', 'sandbox/exchange', 'sandbox/workspace/repo', 'sandbox/.runtime', 'evidence', 'collected', 'judges', 'audits', 'discovery', 'source', 'human-review', '.runtime', '.runtime/definition-job-inputs', '.runtime/judge', '.runtime/judge-claude', 'human-review']) await privatePath(join(runDir, path), runDir)
     for (const dir of ['phases', 'logs', 'human-review', 'source', 'judges', 'audits', 'discovery']) await mkdir(join(runDir, dir), { recursive: true })
     const saved = options.resume ? await readJson(join(runDir, 'result.json'), null) : null
     if (saved && saved.evaluation_status !== 'complete' && saved.resumable === false) throw Object.assign(new Error(`this run ended ${saved.evaluation_status} (${saved.owning_phase ?? 'unknown phase'}) and cannot be resumed${saved.leaked_items?.length || saved.owning_phase === 'disclosure-audit' ? '; a new run is required' : ''}`), { resumable: false, refused: true })
+    if (publicationEligibility(saved) && options.noPublish) return { result: saved, exitCode: 0 }
     if (publicationEligibility(saved)) {
       checkpoint = await loadCheckpoint(statePath)
       if (!checkpoint || saved.run_id !== checkpoint.run_id) throw new Error('publication resume run identity mismatch')
@@ -372,7 +376,7 @@ export async function runEvaluation(options, deps = {}) {
           if (!eligible) await writeJsonAtomic(join(runDir, 'human-review/review.json'), { skipped: true, points: 0, reason: evaluated.human_review.reason, complete: false })
           phase = 'result-and-report'
           await finalizeResult({ evaluation_status: eligible ? 'pending-human-review' : 'complete', resumable: false })
-          if (publicationEligibility(result)) { phase = 'publication'; await publish() }
+          if (publicationEligibility(result) && !options.noPublish) { phase = 'publication'; await publish() }
         }
       }
     }

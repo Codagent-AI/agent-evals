@@ -50,13 +50,15 @@ Options:
   --tester-cli CLI          claude or codex.                --tester-model MODEL   --tester-effort EFFORT
   --time-limit DURATION     One whole-run elapsed-time limit counting only running time, default 12h; unchanged on resume.
   --stall-window DURATION   Inactivity window before a stalled invocation is stopped, default 45m; unchanged on resume.
+  --no-publish              Keep a complete result in the run directory only, for a launcher that publishes it; resume does not publish it either.
   --token-refresh-interval MINUTES  Delivery-token refresh interval, default ${TOKEN_REFRESH.default}, from ${TOKEN_REFRESH.min} to ${TOKEN_REFRESH.max}; not part of the series identity.
 Any other role the workflow uses through implement takes --ROLE-cli, --ROLE-model and --ROLE-effort the same way.
 Profiles for every role the workflow uses through implement are required; the simulated-user and judge profiles are pinned.
 Compare recorded runs (scores are paired only within one series; at least three scored repetitions per group):
   node evals/agent-runner/and-scene-e2e/compare.mjs RUN_DIR RUN_DIR [...]
-Human review of a pending run: evals/agent-runner/and-scene-e2e/human-review.sh --run-dir RUN_DIR
+Human review of a pending run: evals/agent-runner/and-scene-e2e/human-review.sh [--no-publish] --run-dir RUN_DIR
 Calibration (with --calibrate): --out DIR, --repeats N (>=3, default 3), --calibration-dir DIR, --dry-run.
+Browser judging: Chrome from AND_SCENE_HOST_CHROME, CHROME_PATH, or the usual install, on AND_SCENE_HOST_DEVTOOLS_PORT (default 9333); chrome-devtools-axi on PATH.
 Host provisioning credentials: AND_SCENE_E2E_APP_ID and AND_SCENE_E2E_APP_KEY_FILE (a GitHub App installed on Codagent-AI with no repositories selected), read from ~/.config/and-scene-e2e/app.json when unset.
 Claude auth for the sandbox: ~/.claude/.credentials.json, or CLAUDE_CODE_OAUTH_TOKEN from the environment or Agent Runner's .sandbox-secrets.env (that entry only).
 `
@@ -80,6 +82,7 @@ export function parseArguments(args, env = process.env) {
       }
       continue
     }
+    if (arg === '--no-publish') { options.noPublish = true; continue }
     const value = args[++index]
     if (!value || value.startsWith('--')) throw new Error(`missing value for ${arg}`)
     const profile = arg.match(/^--([a-z][a-z0-9-]*)-(cli|model|effort)$/)
@@ -100,5 +103,5 @@ export function parseArguments(args, env = process.env) {
   return { ...options, dryRun: mode === '--dry-run', resume: mode === '--resume' }
 }
 // Every parser option, for help-coverage checks.
-export const OPTION_INVENTORY = ['--help', ...MODES, '--run-dir', '--runner-dir', '--skills-dir', '--workflow', '--time-limit', '--stall-window', '--token-refresh-interval',
+export const OPTION_INVENTORY = ['--help', ...MODES, '--run-dir', '--runner-dir', '--skills-dir', '--workflow', '--time-limit', '--stall-window', '--token-refresh-interval', '--no-publish',
   ...DEFAULT_ROLES.flatMap(role => ['cli', 'model', 'effort'].map(field => `--${role}-${field}`))]

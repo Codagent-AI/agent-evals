@@ -6,15 +6,16 @@ import { createHostBrowser, EVALUATOR_AXI_SESSION } from '../../and-scene/lib/ho
 import { createProductJudges } from './product-judges.mjs'
 import { createBrowserJudgeInvoker } from './browser-judge-invokers.mjs'
 import { normalizeReplay } from './judge-requests.mjs'
+import { findHostChrome, hostDevtoolsPort } from './host-chrome.mjs'
 const SECOND_OPINION_SCHEMA = { type: 'object', additionalProperties: false, required: ['decision', 'rationale', 'replay'], properties: { decision: { type: 'string', enum: ['uphold', 'overturn'] }, rationale: { type: 'string', minLength: 1 }, replay: { anyOf: [{ type: 'null' }, { type: 'object' }] } } }
 const VERIFIER_SCHEMA = { type: 'object', additionalProperties: false, required: ['found', 'command', 'rationale'], properties: { found: { type: 'boolean' }, command: { type: ['array', 'null'], items: { type: 'string' } }, rationale: { type: 'string', minLength: 1 } } }
-export function createProductionDeps({ runDir, env = process.env, chromePath = env.AND_SCENE_HOST_CHROME, port = 9333, judges = createProductJudges({ runDir, allowedRoots: [join(runDir, 'neutral')], env }) } = {}) {
+export function createProductionDeps({ runDir, env = process.env, chromePath = findHostChrome(env), port = hostDevtoolsPort(env), judges = createProductJudges({ runDir, allowedRoots: [join(runDir, 'neutral')], env }) } = {}) {
   const rawBrowserInvoke = createBrowserJudgeInvoker({ runDir, env })
   const decider = judges.profile.decider
   const deciderAuthority = { cli: decider.family, model: decider.model, effort: decider.effort }
   // Each driver is a fresh Chrome on the evaluator's own port and AXI session, released when its use ends.
   const startBrowser = async () => {
-    if (!chromePath) throw Object.assign(new Error('set AND_SCENE_HOST_CHROME to the Chrome executable browser judging uses'), { owner: 'evaluation-harness', resumable: true })
+    if (!chromePath) throw Object.assign(new Error('no Chrome found for browser judging: set AND_SCENE_HOST_CHROME or CHROME_PATH'), { owner: 'evaluation-harness', resumable: true })
     const browser = createHostBrowser({ chromePath, port, runDir, env })
     await browser.ensure()
     return browser

@@ -152,8 +152,11 @@ test('INT-005 a near-reset Claude limit is waited out of active time, in define 
     const f = await lifecycle(t)
     f.harness.plans[until].push({ type: 'failed', error: 'You have hit your limit' })
     const waits = []
-    f.deps.quota = async ({ audit }) => { waits.push(audit.includes('hit your limit')); if (waits.length > 1) return { waited: false }; f.clock.t += 2 * H; return { waited: true, role: 'implementor', reset_at: new Date(f.clock.t).toISOString(), wait_ms: 2 * H } }
+    f.deps.quota = async ({ audit, log }) => { waits.push(audit.includes('hit your limit')); if (waits.length > 1) return { waited: false }; f.clock.t += 2 * H; log(`Claude implementor quota reached; waiting until ${new Date(f.clock.t).toISOString()} before resuming Agent Runner`); return { waited: true, role: 'implementor', reset_at: new Date(f.clock.t).toISOString(), wait_ms: 2 * H } }
+    const printed = t.mock.method(console, 'error', () => {})
     const { result } = await runEvaluation(f.options, f.deps)
+    assert.ok(printed.mock.calls.some(call => /^Claude implementor quota reached; waiting until \S+ before resuming Agent Runner$/.test(call.arguments[0])), 'the quota wait is announced')
+    printed.mock.restore()
     assert.equal(result.evaluation_status, 'pending-human-review', result.observed_error)
     assert.equal(result.quota_waits.length, 1); assert.equal(result.quota_waits[0].phase, until); assert.equal(result.quota_waits[0].wait_ms, 2 * H)
     const state = await f.read('run-state.json'); assert.ok(state.active_ms < 60e3, `the wait was counted as active time: ${state.active_ms}`)

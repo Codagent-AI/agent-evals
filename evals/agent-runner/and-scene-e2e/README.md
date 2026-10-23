@@ -48,7 +48,7 @@ verdict. All commands run from the repository root.
 evals/agent-runner/and-scene-e2e/run.sh --help
 evals/agent-runner/and-scene-e2e/run.sh --dry-run --lead-cli claude --lead-model MODEL --lead-effort high \
   --crosscheck-cli codex ... --implementor-cli codex ... --tester-cli claude ...
-evals/agent-runner/and-scene-e2e/run.sh --run-agent <the same four profiles> [--run-dir DIR]
+evals/agent-runner/and-scene-e2e/run.sh --run-agent <the same four profiles> [--run-dir DIR] [--no-publish]
 evals/agent-runner/and-scene-e2e/run.sh --resume --run-dir DIR <the same profiles>
 evals/agent-runner/and-scene-e2e/run.sh --rescore-from OLD_DIR --run-dir NEW_DIR
 evals/agent-runner/and-scene-e2e/run.sh --calibrate [--repeats 3]
@@ -117,8 +117,16 @@ installation-repositories API after creation and keep the same check.
 
 The App key and the unrestricted provisioning token stay on the host. The run token
 is written to `<run-dir>/.github-auth/token` (mode 0600) while an invocation runs and
-removed after it. Host Chrome for browser judging and human review is
-`AND_SCENE_HOST_CHROME`.
+removed after it. Browser judging and human review start host Chrome from
+`AND_SCENE_HOST_CHROME`, `CHROME_PATH`, or the standard install, on
+`AND_SCENE_HOST_DEVTOOLS_PORT` (default 9333), and drive it with
+`chrome-devtools-axi`; preflight fails when either is missing.
+
+`--no-publish` keeps a complete result in the run directory, for a launcher that
+publishes results itself. A run directory holding only a launcher's own output
+(`factory-suite.log`, `.factory/`) counts as unused, so a launcher may create it first.
+A Claude quota wait prints `Claude <role> quota reached; waiting until <time> before
+resuming Agent Runner` to stderr.
 
 ## Delivery repositories
 

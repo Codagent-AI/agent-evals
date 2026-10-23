@@ -97,6 +97,15 @@ test('INT-010 a complete run is published once: only results/<run-id>/, the requ
   assert.ok(!calls.flat().some(arg => /^--?(f|force|force-with-lease)\b/.test(arg)))
   assert.equal(await publicationEligibility(result), true)
 })
+test('INT-010 --no-publish leaves a complete run unpublished, including on resume', async t => {
+  const { f, repo, calls } = await publicationWorld(t)
+  const head = git(repo, ['rev-parse', 'HEAD'])
+  const { result, exitCode } = await runEvaluation({ ...f.options, noPublish: true }, f.deps)
+  assert.equal(result.evaluation_status, 'complete', result.observed_error); assert.equal(exitCode, 0)
+  const resumed = await runEvaluation({ ...f.options, noPublish: true, resume: true }, f.deps)
+  assert.equal(resumed.exitCode, 0); assert.equal(resumed.result.run_id, result.run_id)
+  assert.equal(git(repo, ['rev-parse', 'HEAD']), head); assert.ok(!calls.some(argv => argv[0] === 'push' || argv[0] === 'commit'))
+})
 test('INT-010 a rejected push preserves the result and a resume retries only publication with the same commit and no force', async t => {
   const { f, origin, repo, calls } = await publicationWorld(t)
   await mkdir(join(origin, 'hooks'), { recursive: true }); await script(join(origin, 'hooks/pre-receive'), `if [[ ! -e "${origin}/rejected-once" ]]; then touch "${origin}/rejected-once"; echo rejected >&2; exit 1; fi`)

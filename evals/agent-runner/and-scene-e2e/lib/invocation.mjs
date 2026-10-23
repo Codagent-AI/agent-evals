@@ -54,7 +54,7 @@ export async function runInvocation({ sandbox, profiles, mode, until, readOutcom
       if (outcome.kind === 'capped' && exit.code === 0) return { runnerState, outcome, exit, response }
       // A failed invocation may be a Claude usage limit with an explicit near reset: wait it out, outside active time and stall accounting.
       const audit = runnerState?.session_dir ? await readFile(join(runnerState.session_dir, 'audit.log'), 'utf8').catch(() => '') : ''
-      const waited = await quota({ audit, now: () => new Date(now()), sleep, log: () => {} })
+      const waited = await quota({ audit, now: () => new Date(now()), sleep, log: line => console.error(line) })
       if (waited.waited && runnerState) {
         state.quota_waits = [...(state.quota_waits ?? []), { role: waited.role ?? null, reset_at: waited.reset_at, wait_ms: waited.wait_ms, phase: until }]
         await persist()
