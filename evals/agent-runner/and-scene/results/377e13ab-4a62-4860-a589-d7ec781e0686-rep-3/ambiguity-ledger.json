@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-23T12-39-03-571980709Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The screenshot helper lacks diagnostic coverage identified by three verification checks; the underlying assumption or context gap is unknown.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: pass — Project-local Playwright screenshot helper is present.",
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "A helper was delivered, but its warnings did not satisfy these checks. No implementation rationale is supplied.",
+      "consequence": "The delivered verification workflow lacks the warning coverage identified by these checks. The evidence does not establish corresponding visual defects.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The check summaries establish omissions but provide no specification, repository context, or agent reasoning that distinguishes a specification gap from an implementation choice or incorrect assumpti…",
+      "resolution": "unresolved",
+      "id": "ba0e5b079a6c5319"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Control-origin swipe handling failed verification; any underlying assumption about gesture eligibility is unestablished.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail",
+        "demo-supported-navigation: pass",
+        "input-modifier-keys-pass-through: pass"
+      ],
+      "handling": "Navigation was delivered, but the control-origin swipe check failed. No interaction trace or implementation explanation is supplied.",
+      "consequence": "The delivered input behavior did not satisfy the control-origin swipe check; the precise observed behavior is unavailable.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure identifies a specific verification concern but cannot distinguish a requirement ambiguity, missing repository context, incorrect assumption, or implementation defect.",
+      "resolution": "unresolved",
+      "id": "5079369c43aa0119"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
