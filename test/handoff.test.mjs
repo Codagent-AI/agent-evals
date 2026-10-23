@@ -8,10 +8,12 @@ import { test } from 'node:test'
 import { runEvaluation } from '../evals/agent-runner/and-scene/controller.mjs'
 import { loadCheckpoint } from '../evals/agent-runner/and-scene/lib/checkpoint.mjs'
 import { readJson } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
+import { DEFAULT_WORKFLOW, parseLogicalWorkflowRef } from '../evals/agent-runner/and-scene/lib/workflow.mjs'
 
-const WORKFLOW_RELATIVE_PATH = 'workflows/core/implement-change-v1.0.yaml'
+const { namespace: WORKFLOW_NAMESPACE, name: WORKFLOW_NAME } = parseLogicalWorkflowRef(DEFAULT_WORKFLOW)
+const WORKFLOW_RELATIVE_PATH = `workflows/${WORKFLOW_NAMESPACE}/${WORKFLOW_NAME}-v1.0.yaml`
 
-const workflowYaml = `name: implement-change
+const workflowYaml = `name: ${WORKFLOW_NAME}
 params:
   - name: change_name
     required: true
@@ -187,7 +189,7 @@ async function evaluate(context, extra = {}) {
     readRunnerState: () => ({
       run_id: 'run-7',
       session_dir: '/sessions/run-7',
-      workflow_name: 'implement-change',
+      workflow_name: WORKFLOW_NAME,
       workflow_completed: true,
       audit: { links: [{ auditRunId: 'audit-fixture', state: 'completed' }] },
     }),

@@ -26,7 +26,7 @@ CHANGE_NAME="${CHANGE_NAME:-create-and-scene}"
 # rather than pinning a commit. Only --workflow selects it: an inherited
 # WORKFLOW variable is ignored, so it can neither change the evaluated workflow
 # nor slip past the --rescore-from guard.
-WORKFLOW="core:implement-change"
+WORKFLOW=""
 WORKFLOW_PROVIDED=0
 WORKFLOW_RELATIVE_PATH=""
 RUNNER_STALL_MINUTES=""
@@ -55,6 +55,13 @@ RUN_AGENT=0
 CALIBRATE=0
 HOST=0
 SUITE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# The default evaluated workflow lives in lib/workflow.mjs alone.
+DEFAULT_WORKFLOW="$(node --input-type=module -e "
+  import { pathToFileURL } from 'node:url'
+  const { DEFAULT_WORKFLOW } = await import(pathToFileURL(process.argv[1]).href)
+  process.stdout.write(DEFAULT_WORKFLOW)
+" "$SUITE_DIR/lib/workflow.mjs")" || { echo "Could not read the default workflow from $SUITE_DIR/lib/workflow.mjs (is node installed?)." >&2; exit 2; }
+WORKFLOW="$DEFAULT_WORKFLOW"
 EVALS_ROOT="$(cd -- "$SUITE_DIR/../../.." && pwd)"
 AGENT_RUNNER_DIR="${AGENT_RUNNER_DIR:-$EVALS_ROOT/../agent-runner}"
 AGENT_SKILLS_DIR="${AGENT_SKILLS_DIR:-$EVALS_ROOT/../agent-skills}"
@@ -67,7 +74,7 @@ MOUNT_CLAUDE_AUTH=0
 MOUNT_CURSOR_AUTH=0
 
 usage() {
-  cat <<'USAGE'
+  cat <<'USAGE' | sed "s|@DEFAULT_WORKFLOW@|$DEFAULT_WORKFLOW|g"
 Usage: evals/agent-runner/and-scene/run.sh (--proof-browser | --run-agent | --calibrate) [options]
 
 Runs the and-scene evaluation through Agent Runner's sandbox adapter.
@@ -95,14 +102,14 @@ Options:
                           containing the selected workflow's definition.
                           Default: sibling ../agent-runner.
   --workflow REF         Logical Agent Runner workflow to evaluate, such as
-                          core:implement-change. It must declare the
+                          namespace:name. It must declare the
                           change_name, change_dir, change_label, change_kind,
                           artifact_validation_instruction, and skip_validator
                           parameters. Not allowed with --rescore-from.
                           A workflow with a step that requests the interactive
                           backend needs a claude lead; Agent Runner always runs
                           under a pseudo-terminal.
-                          Default: core:implement-change
+                          Default: @DEFAULT_WORKFLOW@
   --runner-stall-minutes N
                           End and report a stalled Agent Runner run when its run
                           store, CLI transcripts, and candidate worktree show no
@@ -431,7 +438,7 @@ if [[ "$DIAGNOSTIC" == 1 && "$WORKFLOW_PROVIDED" == 1 ]]; then
   exit 2
 fi
 if [[ ! "$WORKFLOW" =~ ^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9-]*$ ]]; then
-  echo "--workflow must be a logical workflow reference such as core:implement-change: $WORKFLOW" >&2
+  echo "--workflow must be a logical workflow reference such as namespace:name: $WORKFLOW" >&2
   exit 2
 fi
 if [[ "$HOST" == 1 && ( "$RUN_AGENT" != 1 || ( -z "$RESCORE_FROM" && "$DIAGNOSTIC" != 1 ) ) ]]; then

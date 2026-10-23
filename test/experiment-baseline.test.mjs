@@ -21,7 +21,7 @@ function merge(target, patch) {
 function makeResult(patch = {}) {
   return merge({
     schema_version: 8, run_id: 'rep-1', run_kind: 'candidate', mode: 'agent-runner',
-    workflow: { provenance: { commit: 'runner-a' }, agent_skills_provenance: { commit: 'skills-a' }, workflow: 'implement-change', workflow_path: 'workflow.yaml', task_level_compliance: 'required', final_validator: 'required', skip_validator: 'false', events: [] },
+    workflow: { provenance: { commit: 'runner-a' }, agent_skills_provenance: { commit: 'skills-a' }, workflow: 'example-workflow', workflow_path: 'workflow.yaml', task_level_compliance: 'required', final_validator: 'required', skip_validator: 'false', events: [] },
     candidate_source: { fixture_commit: 'fixture-a' },
     role_configuration: { roles: { implementor: { configured: { cli: 'codex', model: 'model-a', effort: 'high', agent: 'implementor' }, attempts: [{ observed: { model: 'model-a' } }] } } },
     rubrics: { automated: { rubric_id: 'auto', version: '1', sha256: 'hash-a' }, human: { rubric_id: 'human', version: '1', sha256: 'hash-h' } },
@@ -505,10 +505,10 @@ test('a repetition differing from the baseline only in its crosscheck model is a
   assert.deepEqual(waived.current.reps[1].mismatch, { fields: ['roles.crosscheck.configured.model'], reason: 'crosscheck change' })
 })
 
-test('an earlier implement-change repetition is refused by a plan-and-implement baseline', () => {
+test('a repetition of another workflow is refused by a baseline of the current one', () => {
   const current = extracted({
     run_id: 'new-1',
-    workflow: { workflow: 'core:implement-change', workflow_path: 'a'.repeat(64) },
+    workflow: { workflow: 'core:other-workflow', workflow_path: 'a'.repeat(64) },
     candidate_source: { fixture_commit: 'fixture-definition-only' },
   })
   const initial = set(baseline.emptyRecord(), [current]).record

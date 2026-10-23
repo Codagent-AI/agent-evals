@@ -12,10 +12,13 @@ import { loadCheckpoint } from '../evals/agent-runner/and-scene/lib/checkpoint.m
 import { hashJson, hashString, readJson } from '../evals/agent-runner/and-scene/lib/persistence.mjs'
 import { verifyCandidateDelivery } from '../evals/agent-runner/and-scene/lib/candidate.mjs'
 import { DEMO_CONTRACT } from '../evals/agent-runner/and-scene/lib/demo-contract.mjs'
+import { DEFAULT_WORKFLOW, parseLogicalWorkflowRef } from '../evals/agent-runner/and-scene/lib/workflow.mjs'
 
-const WORKFLOW_RELATIVE_PATH = 'workflows/core/implement-change-v1.0.yaml'
+const { namespace: WORKFLOW_NAMESPACE, name: WORKFLOW_NAME } = parseLogicalWorkflowRef(DEFAULT_WORKFLOW)
 
-const workflowYaml = `name: implement-change
+const WORKFLOW_RELATIVE_PATH = `workflows/${WORKFLOW_NAMESPACE}/${WORKFLOW_NAME}-v1.0.yaml`
+
+const workflowYaml = `name: ${WORKFLOW_NAME}
 params:
   - name: change_name
     required: true
@@ -181,7 +184,7 @@ async function environment({
     if (command === 'agent-runner' && args[0] === 'debug') {
       const extra = extraWorkflows[args.at(-1)]
       if (extra) return { status: 0, stdout: extra.text }
-      if (args.at(-1) !== 'core:implement-change') {
+      if (args.at(-1) !== DEFAULT_WORKFLOW) {
         return { status: 1, stderr: `workflow ref ${args.at(-1)} not found` }
       }
       return { status: 0, stdout: resolvedWorkflow }
@@ -227,7 +230,7 @@ function completedReader(context) {
     : {
         run_id: 'runner-7',
         session_dir: context.sessionDir,
-        workflow_name: 'implement-change',
+        workflow_name: WORKFLOW_NAME,
         workflow_completed: true,
         history,
       }
@@ -513,7 +516,7 @@ test('--skip-validator launches the verified workflow by logical name without --
       : {
           run_id: 'runner-7',
           session_dir: '/sessions/runner-7',
-          workflow_name: 'implement-change',
+          workflow_name: WORKFLOW_NAME,
           workflow_completed: true,
           history: skippedHistory,
         },
@@ -524,7 +527,7 @@ test('--skip-validator launches the verified workflow by logical name without --
   const [invocation] = runnerInvocations(context)
   assert.deepEqual(invocation.args, [
     'run',
-    'core:implement-change',
+    DEFAULT_WORKFLOW,
     'change_name=create-and-scene',
     'change_dir=openspec/changes/create-and-scene',
     'change_label=OpenSpec change',
@@ -555,7 +558,7 @@ test('--skip-validator hides Agent Validator from every Runner-launched agent', 
       : {
           run_id: 'runner-7',
           session_dir: context.sessionDir,
-          workflow_name: 'implement-change',
+          workflow_name: WORKFLOW_NAME,
           workflow_completed: true,
           history: skippedHistory,
         },
@@ -705,7 +708,7 @@ test('a selected workflow that does not resolve stops before Runner starts', asy
 test('a malformed workflow reference is rejected as an invalid argument', async () => {
   const context = await environment()
 
-  const result = await evaluate(context, ['--workflow', 'implement-change', ...profiles])
+  const result = await evaluate(context, ['--workflow', WORKFLOW_NAME, ...profiles])
 
   assert.equal(result.exitCode, 2)
   assert.equal(result.errors[0].code, 'invalid-arguments')
@@ -742,7 +745,7 @@ test('a discovered run reporting another workflow is not adopted', async () => {
   assert.deepEqual(runnerInvocations(context), [])
   const written = await readJson(join(context.runDir, 'result.json'))
   assert.equal(written.failure.code, 'workflow-identity')
-  assert.match(written.failure.message ?? written.failure.error ?? JSON.stringify(written.failure), /implement-change/)
+  assert.match(written.failure.message ?? written.failure.error ?? JSON.stringify(written.failure), new RegExp(WORKFLOW_NAME))
 })
 
 test('a resume that selects a different workflow is a resume-provenance error', async () => {
@@ -775,8 +778,8 @@ test('task-level and final validation are included by default', async () => {
   assert.equal(written.workflow.final_validator, 'required')
   assert.equal(written.workflow.validator_mode, 'required')
   assert.equal(written.workflow.full_workflow, true)
-  assert.equal(written.workflow.workflow, 'core:implement-change')
-  assert.equal(written.workflow.runner_workflow_name, 'implement-change')
+  assert.equal(written.workflow.workflow, DEFAULT_WORKFLOW)
+  assert.equal(written.workflow.runner_workflow_name, WORKFLOW_NAME)
   assert.equal(written.workflow.workflow_sha256, hashString(workflowYaml))
   assert.equal(written.workflow.run_completed, true)
   assert.equal(written.workflow.provenance.commit, context.commit)
@@ -1024,7 +1027,7 @@ test('an active recorded Runner process is waited for rather than duplicated', a
     readRunnerState: () => ({
       run_id: 'runner-7',
       session_dir: '/sessions/runner-7',
-      workflow_name: 'implement-change',
+      workflow_name: WORKFLOW_NAME,
       lock: { pid: 99, run_id: 'runner-7' },
     }),
     waitForRun: async (runId) => {
@@ -1032,7 +1035,7 @@ test('an active recorded Runner process is waited for rather than duplicated', a
       return {
         run_id: runId,
         session_dir: '/sessions/runner-7',
-        workflow_name: 'implement-change',
+        workflow_name: WORKFLOW_NAME,
         workflow_completed: true,
         history,
       }
@@ -1055,7 +1058,7 @@ test('a fresh Runner execution waits for its linked audit before delivery verifi
       : {
           run_id: 'runner-7',
           session_dir: '/sessions/runner-7',
-          workflow_name: 'implement-change',
+          workflow_name: WORKFLOW_NAME,
           workflow_completed: true,
           history,
           audit: {
@@ -1068,7 +1071,7 @@ test('a fresh Runner execution waits for its linked audit before delivery verifi
       return {
         run_id: runId,
         session_dir: '/sessions/runner-7',
-        workflow_name: 'implement-change',
+        workflow_name: WORKFLOW_NAME,
         workflow_completed: true,
         history,
         audit: { links: [{ auditRunId: 'audit-child', state: 'completed' }] },
@@ -1114,7 +1117,7 @@ test('a completed evaluated-workflow run without a linked audit starts replay an
       : {
           run_id: 'runner-7',
           session_dir: context.sessionDir,
-          workflow_name: 'implement-change',
+          workflow_name: WORKFLOW_NAME,
           workflow_completed: true,
           history,
           audit: auditReplayInvocations(context).length === 0
@@ -1133,7 +1136,7 @@ test('a completed evaluated-workflow run without a linked audit starts replay an
       return {
         run_id: runId,
         session_dir: context.sessionDir,
-        workflow_name: 'implement-change',
+        workflow_name: WORKFLOW_NAME,
         workflow_completed: true,
         history,
         audit: {
@@ -1196,7 +1199,7 @@ test('an unreadable linked audit report is recorded as a failed audit with its e
       : {
           run_id: 'runner-7',
           session_dir: context.sessionDir,
-          workflow_name: 'implement-change',
+          workflow_name: WORKFLOW_NAME,
           workflow_completed: true,
           history,
           audit: auditReplayInvocations(context).length === 0
@@ -1215,7 +1218,7 @@ test('an unreadable linked audit report is recorded as a failed audit with its e
       return {
         run_id: runId,
         session_dir: context.sessionDir,
-        workflow_name: 'implement-change',
+        workflow_name: WORKFLOW_NAME,
         workflow_completed: true,
         history,
         audit: {
@@ -1253,7 +1256,7 @@ test('a completed run with multiple execution sessions replays the last closed s
       : {
           run_id: 'runner-7',
           session_dir: context.sessionDir,
-          workflow_name: 'implement-change',
+          workflow_name: WORKFLOW_NAME,
           workflow_completed: true,
           history,
           audit: {
@@ -1285,7 +1288,7 @@ test('a completed Runner run with an existing audit link does not start a second
       : {
           run_id: 'runner-7',
           session_dir: context.sessionDir,
-          workflow_name: 'implement-change',
+          workflow_name: WORKFLOW_NAME,
           workflow_completed: true,
           history,
           audit: {
@@ -1297,7 +1300,7 @@ test('a completed Runner run with an existing audit link does not start a second
       return {
         run_id: runId,
         session_dir: context.sessionDir,
-        workflow_name: 'implement-change',
+        workflow_name: WORKFLOW_NAME,
         workflow_completed: true,
         history,
         audit: { links: [{ auditRunId: 'audit-child', state: 'completed' }] },
@@ -1329,7 +1332,7 @@ test('a failed explicit audit replay is a harness error', async () => {
       : {
           run_id: 'runner-7',
           session_dir: context.sessionDir,
-          workflow_name: 'implement-change',
+          workflow_name: WORKFLOW_NAME,
           workflow_completed: true,
           history,
         },
@@ -1349,7 +1352,7 @@ test('an already-terminal linked audit warning is recorded without changing sour
       : {
           run_id: 'runner-7',
           session_dir: '/sessions/runner-7',
-          workflow_name: 'implement-change',
+          workflow_name: WORKFLOW_NAME,
           workflow_completed: true,
           history,
           audit: {
@@ -1389,13 +1392,13 @@ test('an inactive unfinished Runner resumes only its exact recorded run', async 
         ? {
             run_id: 'runner-7',
             session_dir: '/sessions/runner-7',
-            workflow_name: 'implement-change',
+            workflow_name: WORKFLOW_NAME,
             workflow_completed: false,
           }
         : {
             run_id: 'runner-7',
             session_dir: '/sessions/runner-7',
-            workflow_name: 'implement-change',
+            workflow_name: WORKFLOW_NAME,
             workflow_completed: true,
             history,
           }
@@ -1423,7 +1426,7 @@ test('a Claude quota exit waits for reset and resumes the exact Runner run', asy
       return {
         run_id: 'runner-7',
         session_dir: '/sessions/runner-7',
-        workflow_name: 'implement-change',
+        workflow_name: WORKFLOW_NAME,
         workflow_completed: runnerCalls >= 2,
         history: runnerCalls >= 2 ? history : [],
       }
@@ -1457,7 +1460,7 @@ test('a Claude tester quota during an outer resume waits and retries that same r
       return {
         run_id: 'runner-7',
         session_dir: '/sessions/runner-7',
-        workflow_name: 'implement-change',
+        workflow_name: WORKFLOW_NAME,
         workflow_completed: calls >= 3,
         history: calls >= 3 ? history : [],
       }
@@ -1501,7 +1504,7 @@ test('completed judge units are rehashed and reused while identity-sensitive pha
     readRunnerState: () => ({
       run_id: 'runner-7',
       session_dir: '/sessions/runner-7',
-      workflow_name: 'implement-change',
+      workflow_name: WORKFLOW_NAME,
       workflow_completed: true,
       history,
     }),
@@ -1784,13 +1787,13 @@ test('a rescore re-ingests retained metrics that an earlier parser rejected', as
     unattributed_attempts: 0,
   }
   const text = JSON.stringify({
-    schema_version: 4, run_id: 'runner-complete', workflow: 'implement-change', history_complete: true,
+    schema_version: 4, run_id: 'runner-complete', workflow: 'legacy-implement', history_complete: true,
     aggregate_version: 1, native_measurements: [], measurement_heads: [], validator_contexts: [],
     measurement_totals: {}, sessions: [], steps: [], session_rollups: [], totals: { active_duration_ms: 1234 },
     agent_session_context: agentSessionContext,
   })
   const imported = importedRescore(context)
-  imported.workflow = { ...imported.workflow, runner_workflow_name: 'implement-change' }
+  imported.workflow = { ...imported.workflow, runner_workflow_name: 'legacy-implement' }
   imported.implementation_metrics = {
     state: 'rejected',
     reason: 'run-metrics.json is malformed: unsupported field agent_session_context',
@@ -1913,7 +1916,7 @@ test('rescore starts the candidate server and confirms a browser overturn by rep
   assert.ok(lifecycle.lastIndexOf('release') > lifecycle.lastIndexOf('replay'), lifecycle.join(' '))
 })
 
-// A source recorded by the implement-only workflow: `core:implement-change`
+// A source recorded by the implement-only workflow: a legacy workflow
 // against the hand-written-tasks fixture f0695b9, with lead, implementor, and
 // tester profiles only and the history-verdict completion record of its time.
 const LEGACY_FIXTURE = 'f0695b96c0c23b2d17ecc6cfbaf8be1fcdedd6f8'
@@ -1981,8 +1984,8 @@ async function legacyImplementOnlySource(context, { retainSession = true } = {})
     mode: 'agent-runner',
     candidate_source: candidateSource,
     workflow: {
-      workflow: 'implement-change',
-      workflow_path: 'workflows/core/implement-change-v1.0.yaml',
+      workflow: 'legacy-implement',
+      workflow_path: 'workflows/core/legacy-implement-v1.0.yaml',
       arguments: arguments_,
       full_workflow: true,
       history_complete: true,
@@ -2074,9 +2077,9 @@ function assertLegacyRescore({ context, calls, result }) {
 
 async function assertLegacyRecord(context, source) {
   const written = await readJson(join(context.runDir, 'result.json'))
-  assert.equal(written.workflow.workflow, 'implement-change')
-  assert.equal(written.workflow.runner_workflow_name, 'implement-change')
-  assert.equal(written.workflow.workflow_path, 'workflows/core/implement-change-v1.0.yaml')
+  assert.equal(written.workflow.workflow, 'legacy-implement')
+  assert.equal(written.workflow.runner_workflow_name, 'legacy-implement')
+  assert.equal(written.workflow.workflow_path, 'workflows/core/legacy-implement-v1.0.yaml')
   assert.deepEqual(written.workflow.arguments, [
     'change_name=create-and-scene',
     'change_dir=openspec/changes/create-and-scene',
@@ -2587,7 +2590,7 @@ test('published result records the last observed leaf as Runner reports it', asy
       : {
           run_id: 'runner-7',
           session_dir: context.sessionDir,
-          workflow_name: 'implement-change',
+          workflow_name: WORKFLOW_NAME,
           workflow_completed: true,
           history: nestedHistory,
         }),
@@ -2810,7 +2813,7 @@ test('an ordinary rescore cannot be resumed, and diagnostic flags need each othe
   const notDiagnostic = await diagnose(context, inputs, ['--resume', '--judge-jobs', 'scene-kit'])
   assert.ok(notDiagnostic.errors.some(({ code }) => code === 'diagnostic-state-missing'), JSON.stringify(notDiagnostic.errors))
   // A resumed diagnostic restores its source's workflow, so it never selects one.
-  const selecting = await diagnose(context, inputs, ['--resume', '--workflow', 'core:implement-change', '--judge-jobs', 'scene-kit'])
+  const selecting = await diagnose(context, inputs, ['--resume', '--workflow', DEFAULT_WORKFLOW, '--judge-jobs', 'scene-kit'])
   assert.equal(selecting.exitCode, 2)
   assert.match(selecting.errors[0].message, /--judge-jobs cannot be combined with --workflow/)
 })
@@ -2901,7 +2904,7 @@ function runningThenCompleted(context, completeAfter) {
     return {
       run_id: 'runner-7',
       session_dir: context.sessionDir,
-      workflow_name: 'implement-change',
+      workflow_name: WORKFLOW_NAME,
       workflow_completed: calls >= completeAfter,
       history: calls >= completeAfter ? history : [],
     }

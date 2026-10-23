@@ -26,7 +26,7 @@ function merge(target, patch) {
 function makeResult(patch = {}) {
   return merge({
     schema_version: 8, run_id: 'rep-1', run_kind: 'candidate', mode: 'agent-runner',
-    workflow: { provenance: { commit: 'runner-a' }, agent_skills_provenance: { commit: 'skills-a' }, workflow: 'implement-change', workflow_path: 'workflow.yaml', task_level_compliance: 'required', final_validator: 'required', skip_validator: 'false', events: [] },
+    workflow: { provenance: { commit: 'runner-a' }, agent_skills_provenance: { commit: 'skills-a' }, workflow: 'example-workflow', workflow_path: 'workflow.yaml', task_level_compliance: 'required', final_validator: 'required', skip_validator: 'false', events: [] },
     candidate_source: { fixture_commit: 'fixture-a' },
     role_configuration: { roles: { implementor: { configured: { cli: 'codex', model: 'model-a', effort: 'high', agent: 'implementor' }, attempts: [{ observed: { model: 'model-a' } }] } } },
     rubrics: { automated: { rubric_id: 'auto', version: '1', sha256: 'hash-a' }, human: { rubric_id: 'human', version: '1', sha256: 'hash-h' } },

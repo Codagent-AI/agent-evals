@@ -61,8 +61,8 @@ function result(overrides = {}) {
       score: { total: 24, possible: 30, gate_passed: true, subtotals: [{ id: 'text-appearance', title: 'Text appearance, hierarchy, and wording', points: 3, points_possible: 4 }] },
     },
     workflow: {
-      workflow: 'implement-change',
-      workflow_path: 'workflows/core/implement-change-v1.0.yaml',
+      workflow: 'example-workflow',
+      workflow_path: 'workflows/core/example-workflow-v1.0.yaml',
       configured_stop_step: null,
       observed_steps: ['plan'],
       events: [],

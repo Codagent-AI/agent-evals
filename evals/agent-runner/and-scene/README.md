@@ -356,9 +356,7 @@ evals/agent-runner/and-scene/run.sh --calibrate
 Run the evaluation. All four role profiles (lead, crosscheck, implementor, and
 tester) are required and each independently selects a CLI adapter, model, and
 effort. `--workflow` selects the Agent Runner workflow to evaluate and defaults
-to `core:implement-change`. Against a Runner commit that predates the audited
-`core:implement-change` v2.0, that name resolves to the older task-based v1.0, so
-a request with no `workflow` line there now runs v1.0. For example:
+to the suite default, named once in the `--workflow` paragraph below. For example:
 
 ```bash
 evals/agent-runner/and-scene/run.sh \
@@ -489,7 +487,7 @@ the candidate.
 
 The rescore keeps the source's recorded workflow, arguments, fixture commit,
 and role profiles. A source recorded before the crosscheck role, such as a
-`core:implement-change` run at `f0695b9`, needs no crosscheck profile, and the
+legacy implement-only run at `f0695b9`, needs no crosscheck profile, and the
 definition-only fixture preflight does not apply. Delivery goes through the
 same outcome checks as a new run, with the source's retained completion status
 in place of live Runner state, and must still match the recorded draft PR and
@@ -779,8 +777,10 @@ form a new series: their recorded workflow and fixture commit differ from
 earlier results, so the experiment baseline refuses to mix them without an
 explicit identity-mismatch override.
 
-`--workflow <logical-ref>` selects the evaluated workflow and defaults to
-`core:implement-change`. The suite treats it as opaque. It depends only
+`--workflow <logical-ref>` selects the evaluated workflow. The suite default is
+`core:implement-change` (`DEFAULT_WORKFLOW` in `lib/workflow.mjs` holds it; `run.sh` reads it from there); against a Runner commit that predates its audited v2.0,
+that name resolves to the older task-based v1.0, so a request with no `workflow`
+line there now runs v1.0. The suite treats it as opaque. It depends only
 on the logical reference, the workflow's declared parameters, and the
 `codagent:*` skills its files name, never on step identifiers, step order,
 nesting, named sessions, or recorded step paths. The workflow must declare
@@ -791,7 +791,7 @@ workflow lacks. The workflow runs to completion with no `--until` boundary.
 
 The suite records two workflow identities: the requested logical reference and
 the Runner-reported name, which is the `name` the resolved definition declares
-(`implement-change` for the default). It records the SHA-256 of the
+(the final segment of the reference for the default). It records the SHA-256 of the
 definition `agent-runner debug --show-workflow <ref>` resolves, and accepts run
 state, discovered runs, and `run-metrics.json` only when they report the
 expected name. The Agent Runner checkout must be a clean Git worktree; the
@@ -1306,7 +1306,7 @@ have the same runner commit; `--allow-mismatch <reason>` cannot waive this rule.
 It can waive differences in the skills commit, workflow settings (including the
 evaluated workflow reference and requested Validator mode), fixture commit,
 configured role profiles, or rubrics. Results from the definition-only starting
-line therefore start a new series; adding an earlier `core:implement-change`
+line therefore start a new series; adding an earlier implement-only
 repetition is refused as a workflow and fixture-commit mismatch unless waived. The waived fields and reason are saved on
 the repetition. Observed models are recorded but do not affect identity.
 Infrastructure failures must be rerun. Product failures, including those without
@@ -1569,7 +1569,7 @@ does not depend on retaining calibration artifacts.
 ### Workflow input regression detection
 
 `npm run check` includes a workflow input check in `test/workflow.test.mjs`. It
-verifies that the default evaluated workflow, `core:implement-change`,
+verifies that the suite default workflow,
 exists in a real Agent Runner checkout and declares every required workflow
 parameter, with no network access, built Runner, or workflow run. It reads the
 checkout named by `AGENT_RUNNER_DIR`, or else the sibling `agent-runner`
