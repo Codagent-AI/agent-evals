@@ -2,7 +2,8 @@
 // per inventory item (never per reference section) for judges.
 import { join } from 'node:path'
 import { SUITE_ROOT, DEFINE_ROOT, readJson } from './files.mjs'
-import { normalizeTraceabilityText } from '../../and-scene/lib/traceability.mjs'
+// Same normalization and-scene's traceability rules use, kept local so this suite does not import and-scene's rubric code.
+const normalizeTraceabilityText = value => String(value).normalize('NFKC').replace(/[‘’‛]/g, "'").replace(/[“”„]/g, '"').replace(/[–—]/g, '-').replace(/×/g, 'x').replace(/\s+/g, ' ').trim().toLowerCase()
 
 export const EVALUATORS = ['browser-judge', 'llm-source-review', 'llm-evidence-review']
 export const JUDGE_JOBS = ['demo-integration', 'scene-kit', 'presentation-skill', 'verification-tooling', 'engineering-quality', 'testing-evidence', 'assumption-handling']
