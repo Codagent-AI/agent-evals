@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-24T00-47-41-082535051Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Loopback verification failed the required host check.",
+      "evidence": [
+        "verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost."
+      ],
+      "handling": "The supplied evidence records a failed check but contains no verification command or agent explanation.",
+      "consequence": "The workflow did not satisfy the reported loopback verification requirement.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The check establishes a verification failure, but does not reveal whether the cause was an assumption, an overlooked instruction, unavailable context, or another implementation issue.",
+      "resolution": "unresolved",
+      "id": "9b0ac4dd3b04279e"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Project-local screenshot tooling and associated visual warnings were reported missing or incomplete.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: fail — Project-local Playwright screenshot helper is missing.",
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "attribution-default-link: pass — Default attribution label and target https://github.com/Codagent-AI/and-scene are present.",
+        "navigation-active-state: pass — Semantic current state and stable active hook are present."
+      ],
+      "handling": "The supplied checks identify tooling omissions; no implementation trace explains their origin or handling.",
+      "consequence": "The reported visual verification tooling lacked the helper and warning coverage. These failures do not establish actual overlap, attribution, or active-state visual defects.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "No fixture instructions, repository contents, or agent reasoning are supplied to distinguish a specification gap from missed discoverable requirements or an implementation omission.",
+      "resolution": "unresolved",
+      "id": "e82afe3c3f89ce8e"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The check for ignoring swipes originating from controls failed.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail —",
+        "demo-supported-navigation: pass —",
+        "demo-control-semantics: pass —"
+      ],
+      "handling": "The failure is listed without reproduction details, implementation code, or an agent explanation.",
+      "consequence": "A control-origin swipe interaction failed verification despite the broader navigation and control-semantics checks passing.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The result identifies an interaction failure but cannot establish its precise behavior or whether an assumption or context gap caused it.",
+      "resolution": "unresolved",
+      "id": "e064c578c28c5628"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
