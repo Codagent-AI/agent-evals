@@ -179,6 +179,13 @@ test('primary records over the budget grow the packet to the hard limit, and sup
     buildEvidenceJudgePacket({ index, primary: small, supporting, maxChars: 4_000, primaryMaxChars: 4_000 }).packet)
   assert.throws(() => buildEvidenceJudgePacket({ index, primary, supporting, maxChars: 2_000, primaryMaxChars: 2_400 }),
     (error) => error.code === 'packet-overflow' && /2400-character judge packet limit/.test(error.message))
+  // A verified index over the budget grows the packet too, and overflows only past the hard limit.
+  const wide = { entries: Array.from({ length: 100 }, (_, n) => `entry-${n}`) }
+  const indexed = buildEvidenceJudgePacket({ index: wide, primary: small, supporting, maxChars: 1_500, primaryMaxChars: 6_000 })
+  assert.ok(indexed.packet.includes('"entry-99"') && indexed.packet.includes('p'.repeat(900)))
+  assert.ok(indexed.packet.length > 1_500 && indexed.packet.length <= 6_000)
+  assert.throws(() => buildEvidenceJudgePacket({ index: wide, primary: small, supporting, maxChars: 1_000, primaryMaxChars: 1_500 }),
+    (error) => error.code === 'packet-overflow' && /verified evidence index needs \d+ characters, over the 1500-character/.test(error.message))
 })
 
 test('a cut marker matches in full or by its bare prefix, never by paraphrase or an unknown id', () => {
