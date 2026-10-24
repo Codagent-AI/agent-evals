@@ -245,7 +245,7 @@ Specifications remain the source of unit-test requirements. This plan records on
   - fake judges programmed to drift between repeats, have deciders reverse panels, penalize the preference-shifted copy beyond tolerance, and pass a removed mandatory behavior.
 - Action: run calibration with 0 repeats (refused), with 1 repeat and named inputs, then with the default 3 repeats.
 - Assertions:
-  - Every patch applies cleanly, and the preference-shifted copy contains none of the reference-only page hooks such as `data-step-count`.
+  - Every patch applies cleanly, and the preference-shifted copies keep the page hooks the reference's verification reads, such as `data-step-count`.
   - Zero repeats is refused; one is accepted; `--inputs` judges only the named inputs and refuses an unknown one.
   - A degraded variant is judged only on the subcomponents holding its expected failures and their fallback job.
   - The report shows per-input scores, spread, accuracy, per-criterion flip rates and decider reversals.
