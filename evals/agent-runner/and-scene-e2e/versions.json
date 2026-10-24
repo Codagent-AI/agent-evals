@@ -23,9 +23,10 @@
     },
     "define-inputs": {
       "path": "../and-scene-define/versions.json",
-      "version": 1,
+      "version": 2,
       "hashes": {
-        "1": "1f9b527f4a1762acf8c4092261aa12760c63a96a12d9e110c855fd86d81e3676"
+        "1": "1f9b527f4a1762acf8c4092261aa12760c63a96a12d9e110c855fd86d81e3676",
+        "2": "b012fa001f1dc9661c68fc1410cc0ad1ab97b9b14e215b8d19da9c28fe8e35a6"
       }
     },
     "define-rubric": {

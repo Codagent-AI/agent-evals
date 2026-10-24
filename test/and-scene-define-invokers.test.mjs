@@ -46,7 +46,7 @@ test('INT-002: simulated-user CLI is stateless, tool-less, strict and keeps host
 test('policy content is version pinned; tampering without a bump fails', async t => {
   assert.deepEqual(await checkVersions(), [])
   const inputs = await loadSimulatedUserInputs()
-  assert.equal(inputs.policyVersion, 1)
+  assert.equal(inputs.policyVersion, 2)
   const stub = await claudeStub(t, [])
   const root = resolve('evals/agent-runner/and-scene-define')
   const ledger = JSON.parse(await readFile(join(root, 'versions.json'), 'utf8'))

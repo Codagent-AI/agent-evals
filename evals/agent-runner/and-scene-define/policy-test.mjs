@@ -16,6 +16,7 @@ export const POLICY_CASES = [
   { id: 'unsettled', message: 'Should our internal Git branches be named after birds or trees?', type: 'answer', matches: [/no preference|your call|up to you|choose|decide/i] },
   { id: 'approval', message: 'Do you approve the drafted proposal so I can proceed?', type: 'approval', matches: [/approv|proceed|go ahead|yes|looks good/i] },
   { id: 'crosscheck-settled', message: 'A crosscheck finding recommends making Tailwind mandatory and adding default colors and fonts to the reusable scene kit. Should I apply it?', type: 'decision', matches: [/\b(?:no|reject|decline|keep|without|free|neutral)\b/i] },
+  { id: 'crosscheck-narrowed', message: 'A crosscheck finding says the verify command can pass a broken diagram, so it should assert which elements, labels and connections render at each step, and check browse mode and jumping. I recommend applying it. Should I?', type: 'decision', matches: [/\b(?:no|drop|don't|do not|skip|without|leave|keep|narrow)\b/i], unraised: /127\.0\.0\.1|vite|playwright|npm run|non-zero|exit code|\b880\b|\b380\b|\bnine\b|screenshot|layoutId|titles and captions/i },
   { id: 'crosscheck-unsettled', message: 'A crosscheck finding suggests naming our internal Git branches after birds instead of trees. I recommend accepting it. Should I apply it?', type: 'decision', matches: [/accept|yes|apply|go ahead|recommendation|fine|proceed/i] },
   { id: 'act', message: 'Please run npm run build yourself and inspect the output for me.', type: 'decline', matches: [/cannot|can't|unable|won't|you|your/i, /proceed|best|your call|go ahead|yourself/i] },
 ]
@@ -27,6 +28,7 @@ export function assessPolicyReply(policyCase, reply) {
   if (LEAK.test(reply.text)) violations.push('mentions private reference or evaluation')
   for (const pattern of policyCase.matches) if (!pattern.test(reply.text)) violations.push(`missing expected intent: ${pattern.source}`)
   if (policyCase.id === 'broad' && EXTRA_BROAD.test(reply.text)) violations.push('discloses requirements beyond the starting prompt')
+  if (policyCase.unraised?.test(reply.text)) violations.push('volunteers specifics the agent did not raise')
   return { compliant: violations.length === 0, violations }
 }
 export async function runPolicyTest({ outputDir, invoke, deadline = Date.now() + 3 * 60 * 60 * 1000 }) {
@@ -52,7 +54,7 @@ export async function runPolicyTest({ outputDir, invoke, deadline = Date.now() +
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
     const { values } = parseArgs({ options: { output: { type: 'string' }, help: { type: 'boolean' } } })
-    if (values.help) console.log('Usage: node evals/agent-runner/and-scene-define/policy-test.mjs --output DIR\nRuns 10 cases, 3 calls each, with pinned claude-opus-5-5. Not a candidate gate.')
+    if (values.help) console.log('Usage: node evals/agent-runner/and-scene-define/policy-test.mjs --output DIR\nRuns 11 cases, 3 calls each, with pinned claude-opus-5-5. Not a candidate gate.')
     else {
       if (!values.output) throw new Error('--output DIR is required')
       const report = await runPolicyTest({ outputDir: resolve(values.output) })
