@@ -1503,9 +1503,9 @@ async function copyViewArtifacts({ runDir, root, artifacts }) {
 }
 
 export const JUDGE_PACKET_MAX_CHARS = 220_000
-// The primary records are never cut, so when they and the omission markers
-// outgrow the budget the packet grows to this hard limit, and supporting
-// artifacts fill the room left beside the primary records.
+// The verified index and the primary records are never cut, so when they and
+// the omission markers outgrow the budget the packet grows to this hard limit,
+// and supporting artifacts fill the room left beside the primary records.
 export const JUDGE_PACKET_PRIMARY_MAX_CHARS = 400_000
 const JUDGE_PACKET_ARTIFACT_MAX_CHARS = 50_000
 // An approved requirement document the assumption judge receives as reference
@@ -1598,10 +1598,11 @@ const MAX_LINE_NUMBER = JUDGE_PACKET_PRIMARY_MAX_CHARS
 // budget. A supporting artifact longer than the per-artifact cap, or than the
 // budget left, is cut and marked after the cut; one with no room left is
 // replaced by an omission marker. Every marker is listed in the cut index, so
-// nothing is cut or dropped silently. The primary records are never cut. When
-// the budget would cut or drop a supporting artifact that the per-artifact cap
-// alone would not, the packet grows to the hard limit, and it overflows only
-// when the primary records and the omission markers cannot fit that.
+// nothing is cut or dropped silently. The index and primary records are never
+// cut. When they outgrow the budget, or the budget would cut or drop a
+// supporting artifact that the per-artifact cap alone would not, the packet
+// grows to the hard limit, and it overflows only when the index, the primary
+// records and the omission markers cannot fit that.
 export function buildEvidenceJudgePacket({ index, primary, supporting,
   maxChars = JUDGE_PACKET_MAX_CHARS, artifactMaxChars = JUDGE_PACKET_ARTIFACT_MAX_CHARS,
   primaryMaxChars = Math.max(maxChars, JUDGE_PACKET_PRIMARY_MAX_CHARS) }) {
@@ -1619,8 +1620,8 @@ export function buildEvidenceJudgePacket({ index, primary, supporting,
   }
   const frameCost = linesCost(packetFrame({ cuts: [], entries: [] }))
   let used = frameCost + linesCost(indexLines) - 1
-  if (used > maxChars) {
-    throw new PacketOverflowError(`the verified evidence index needs ${used} characters, over the ${maxChars}-character judge packet budget`, [])
+  if (used > primaryMaxChars) {
+    throw new PacketOverflowError(`the verified evidence index needs ${used} characters, over the ${primaryMaxChars}-character judge packet limit`, [])
   }
   for (const artifact of primary) used += blockCost(artifact, artifact.text.length)
   if (used > primaryMaxChars) {
