@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-24T00-22-45-671131947Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The verification workflow failed the IPv4 loopback requirement.",
+      "evidence": [
+        "verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost.",
+        "The supplied workflow artifact excerpts contain no verification commands or agent explanations."
+      ],
+      "handling": "No handling is visible in the supplied evidence.",
+      "consequence": "The verification requirement was reported as unmet; the specific offending command is unavailable.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The checker establishes a workflow failure, but the available evidence cannot distinguish an incorrect assumption from missing context or another execution error.",
+      "resolution": "unresolved",
+      "id": "16ca8f6adb2205bd"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered default attribution link targets a different repository from the expected one.",
+      "evidence": [
+        "attribution-default-link: fail — expected https://github.com/Codagent-AI/and-scene; GitHub targets found: https://github.com/and-scene/and-scene.",
+        "No implementation rationale or repository context is supplied."
+      ],
+      "handling": "The observed attribution target remained different from the expected target.",
+      "consequence": "The product contains an attribution link to the wrong repository according to the supplied check.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The mismatch is observable, but the artifacts do not establish whether the expected URL was specified, discoverable in the repository, or unavailable to the implementation agents.",
+      "resolution": "unresolved",
+      "id": "6aa03e3d75dc39c0"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
