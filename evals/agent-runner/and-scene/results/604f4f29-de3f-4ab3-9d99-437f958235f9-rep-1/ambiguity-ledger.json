@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-24T14-07-35-795430777Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err",
+      "output/_resolve-findings_.out",
+      "output/_session-report_.err",
+      "output/_session-report_.out",
+      "output/_verify-change__sub_verify-change__verify-acceptance-handoff_.err",
+      "output/_verify-change__sub_verify-change__verify-acceptance-handoff_.out",
+      "output/_verify-change__sub_verify-change__verify-assumptions-handoff_.err",
+      "output/_verify-change__sub_verify-change__verify-assumptions-handoff_.out"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Verification failed the IPv4 loopback requirement; the underlying assumption or context gap is not observable.",
+      "evidence": [
+        "Product evidence: verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost.",
+        "The supplied workflow excerpts contain empty outputs or truncated initialization records, with no visible explanation of the verification host choice."
+      ],
+      "handling": "No rationale or corrective action is visible in the supplied artifacts.",
+      "consequence": "The host requirement failed verification. Its effect on application behavior is not established.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check establishes noncompliance, but the available evidence cannot distinguish an incorrect assumption, missing context, or an execution error. The original requirement and implementation …",
+      "resolution": "unresolved",
+      "id": "78d60363d81d73dc"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The check for ignoring swipes originating from controls failed; the underlying interaction assumption is not observable.",
+      "evidence": [
+        "Product evidence: input-swipe-from-control-ignored: fail.",
+        "Product evidence separately reports demo-supported-navigation and input-modifier-keys-pass-through as passing.",
+        "No supplied workflow excerpt explains how swipe handling treats gestures originating from controls."
+      ],
+      "handling": "No discussion, implementation rationale, or remediation is visible.",
+      "consequence": "The delivered interaction failed the control-origin swipe check; the precise observed behavior is not supplied.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure identifies a material interaction issue, but does not establish whether it arose from an assumption, a specification gap, overlooked repository context, or an implementation defect. Passi…",
+      "resolution": "unresolved",
+      "id": "b4e7527085663639"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
