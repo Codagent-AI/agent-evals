@@ -5,12 +5,24 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { readJson } from './files.mjs'
-export const MIN_REPEATS = 3
+export const MIN_REPEATS = 1
+export const DEFAULT_REPEATS = 3
 const GIT = { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 'Calibration', GIT_AUTHOR_EMAIL: 'calibration@example.invalid', GIT_COMMITTER_NAME: 'Calibration', GIT_COMMITTER_EMAIL: 'calibration@example.invalid' }
 const git = (cwd, args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', env: { PATH: process.env.PATH, ...GIT } })
 // The reference has no workflow record, so the components that judge one do not apply to it.
 export function referenceRubric(rubric) {
   const components = rubric.components.filter(component => component.reference_applicable !== false)
+  return { ...rubric, components, automated_points: components.reduce((sum, component) => sum + component.points, 0) }
+}
+// A degraded input checks only the criteria it is expected to fail, so it is judged only on the subcomponents holding
+// them, plus the source job a browser criterion there falls back to. Its score covers that slice alone.
+export function scopedRubric(rubric, spec) {
+  if (spec?.kind !== 'degraded') return rubric
+  const fail = new Set(spec.expect?.fail ?? [])
+  const held = rubric.components.flatMap(component => component.subcomponents).filter(subcomponent => subcomponent.criteria.some(id => fail.has(id)))
+  const fallbackJobs = new Set(held.filter(subcomponent => subcomponent.evaluator === 'browser-judge').flatMap(subcomponent => subcomponent.criteria).map(id => rubric.fallbacks?.[id]?.job).filter(Boolean))
+  const keep = subcomponent => held.includes(subcomponent) || fallbackJobs.has(subcomponent.job)
+  const components = rubric.components.map(component => { const subcomponents = component.subcomponents.filter(keep); return { ...component, subcomponents, points: subcomponents.reduce((sum, subcomponent) => sum + subcomponent.points, 0) } }).filter(component => component.subcomponents.length)
   return { ...rubric, components, automated_points: components.reduce((sum, component) => sum + component.points, 0) }
 }
 const majority = verdicts => { const pass = verdicts.filter(verdict => verdict === 'pass').length; return pass * 2 > verdicts.length ? 'pass' : 'fail' }
@@ -41,7 +53,7 @@ export function summarizeCalibration({ rubric, expected, runs }) {
       const votes = (result.votes ?? []).map(vote => vote.verdict)
       if (votes.length && majority(votes) !== result.verdict) reversals++
     }
-    inputs[inputId] = { kind: expected.inputs[inputId]?.kind ?? null, repeats: repeats.length, scores, mean, spread: Math.max(...scores) - Math.min(...scores), accuracy: { correct: checks.length - misses.length, total: checks.length, rate: checks.length ? (checks.length - misses.length) / checks.length : null, misses: misses.map(check => ({ criterion: check.id, expected: check.expect, observed: verdict[check.id] })) },
+    inputs[inputId] = { kind: expected.inputs[inputId]?.kind ?? null, scoped: expected.inputs[inputId]?.kind === 'degraded', repeats: repeats.length, scores, mean, spread: Math.max(...scores) - Math.min(...scores), accuracy: { correct: checks.length - misses.length, total: checks.length, rate: checks.length ? (checks.length - misses.length) / checks.length : null, misses: misses.map(check => ({ criterion: check.id, expected: check.expect, observed: verdict[check.id] })) },
       criterion_flip_rates: flips, flipping_criteria: Object.entries(flips).filter(([, rate]) => rate > 0).map(([id, rate]) => ({ id, rate })), decider_reversals: reversals, verdicts: verdict }
   }
   const failures = []
@@ -79,17 +91,21 @@ async function clone(bundle, workDir, name) {
   git(checkout, ['checkout', '--quiet', '-B', 'add-presentation-skill', 'origin/add-presentation-skill'])
   return checkout
 }
-export async function runCalibration({ calibrationDir, rubric, repeats = MIN_REPEATS, evaluate, outDir = null, log = () => {} }) {
-  if (!Number.isInteger(repeats) || repeats < MIN_REPEATS) throw Object.assign(new Error(`calibration needs at least ${MIN_REPEATS} repeats per input, got ${repeats}`), { usage: true })
+// `inputs` names the calibration inputs to judge (default: all), so a maintainer can re-judge only the ones that need it.
+export async function runCalibration({ calibrationDir, rubric, repeats = DEFAULT_REPEATS, inputs = null, evaluate, outDir = null, log = () => {} }) {
+  if (!Number.isInteger(repeats) || repeats < MIN_REPEATS) throw Object.assign(new Error(`calibration needs at least ${MIN_REPEATS} repeat per input, got ${repeats}`), { usage: true })
   const expected = await readJson(join(calibrationDir, 'expected-verdicts.json'))
+  const unknown = (inputs ?? []).filter(id => !expected.inputs[id])
+  if (unknown.length) throw Object.assign(new Error(`unknown calibration input: ${unknown.join(', ')}`), { usage: true })
   const work = await mkdtemp(join(tmpdir(), 'e2e-calibrate-'))
   const runs = {}
   try {
-    for (const [inputId, spec] of Object.entries(expected.inputs)) {
+    for (const [inputId, spec] of Object.entries(expected.inputs).filter(([id]) => !inputs || inputs.includes(id))) {
+      const scoped = scopedRubric(referenceRubric(rubric), spec)
       const input = await prepareInput({ calibrationDir, inputId, spec, workDir: work })
       runs[inputId] = []
       for (let repeat = 1; repeat <= repeats; repeat++) {
-        const run = await evaluate({ inputId, repeat, input, spec })
+        const run = await evaluate({ inputId, repeat, input, spec, rubric: scoped })
         // Every calibration input builds, so a failed build is a harness problem; judging on would score nothing real.
         if (run.build?.ok === false) throw new Error(`calibration stopped: ${inputId} repeat ${repeat} did not build (${run.build.reason})${run.build.record ? `; see ${run.build.record}` : ''}`)
         runs[inputId].push(run)

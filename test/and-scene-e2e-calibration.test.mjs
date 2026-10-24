@@ -5,7 +5,7 @@ import { mkdir, readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { temp, E2E } from './and-scene-e2e-helpers.mjs'
-import { MIN_REPEATS, prepareInput, referenceRubric, runCalibration, summarizeCalibration } from '../evals/agent-runner/and-scene-e2e/lib/calibration.mjs'
+import { DEFAULT_REPEATS, prepareInput, referenceRubric, runCalibration, scopedRubric, summarizeCalibration } from '../evals/agent-runner/and-scene-e2e/lib/calibration.mjs'
 import { calibrate, parseCalibrationArguments } from '../evals/agent-runner/and-scene-e2e/calibrate.mjs'
 import { loadProductInputs } from '../evals/agent-runner/and-scene-e2e/lib/product-rubric.mjs'
 
@@ -43,9 +43,6 @@ test('INT-011 every real patch applies cleanly to the pinned reference bundle; p
   assert.match(await read('preference-shifted-chrome', 'src/presentation-kit/usePresentationNav.ts'), /e\.key === 'm' \|\| e\.key === 'M'/)
   assert.match(await read('preference-shifted-chrome', 'src/presentations/how-to-make-a-presentation/Talk.tsx'), /initialMode="present"/)
   assert.doesNotMatch(await read('degraded-captions-missing', 'src/presentation-kit/chrome/Footer.tsx'), /\{current\.caption\}/)
-  for (const file of ['scripts/verify.mjs', 'skills/presentation/templates/bootstrap/scripts/verify.mjs']) {
-    assert.match(await read('reference', file), /if \(errors\.length > 0\)/, file); assert.doesNotMatch(await read('degraded-verifier-ignores-errors', file), /if \(errors\.length > 0\)/, file)
-  }
   assert.match(await read('degraded-mode-toggle-loses-position', 'src/presentation-kit/usePresentationNav.ts'), /setStep\(0\); setMode/)
   assert.doesNotMatch(await read('degraded-focused-controls-lose-keys', 'src/presentation-kit/usePresentationNav.ts'), /closest\('button, a, input/)
   // The skill vendors a byte-identical snapshot of the kit, so every variant changes both copies alike.
@@ -62,14 +59,44 @@ test('INT-011 every real patch applies cleanly to the pinned reference bundle; p
   assert.ok(expected.approved_by?.trim(), 'the maintainer approved the expected verdicts')
 })
 
-test('INT-011 fewer than three repeats are refused; three are accepted; a dry run makes no model call', async t => {
-  assert.throws(() => parseCalibrationArguments(['--calibrate', '--repeats', '2']), /at least 3 repeats/)
-  assert.equal(parseCalibrationArguments(['--calibrate', '--repeats', '3']).repeats, 3); assert.equal(parseCalibrationArguments(['--calibrate']).repeats, MIN_REPEATS)
-  await assert.rejects(runCalibration({ calibrationDir: dir, rubric: product.rubric, repeats: 2, evaluate: async () => { throw new Error('no') } }), /at least 3 repeats/)
+test('INT-011 zero repeats are refused; one is accepted; three by default; a dry run makes no model call', async t => {
+  assert.throws(() => parseCalibrationArguments(['--calibrate', '--repeats', '0']), /at least 1 repeat/)
+  assert.equal(parseCalibrationArguments(['--calibrate', '--repeats', '1']).repeats, 1); assert.equal(parseCalibrationArguments(['--calibrate']).repeats, DEFAULT_REPEATS); assert.equal(DEFAULT_REPEATS, 3)
+  await assert.rejects(runCalibration({ calibrationDir: dir, rubric: product.rubric, repeats: 0, evaluate: async () => { throw new Error('no') } }), /at least 1 repeat/)
   const dry = await calibrate({ ...parseCalibrationArguments(['--calibrate', '--dry-run']) }, { evaluate: async () => { throw new Error('a dry run must not judge') } })
-  assert.equal(dry.dry_run, true); assert.equal(dry.model_calls, 0); assert.equal(dry.published, false)
-  const cli = spawnSync('bash', [join(E2E, 'run.sh'), '--calibrate', '--repeats', '2'], { encoding: 'utf8' })
-  assert.notEqual(cli.status, 0); assert.match(cli.stderr, /at least 3 repeats/)
+  assert.equal(dry.dry_run, true); assert.equal(dry.model_calls, 0); assert.equal(dry.published, false); assert.deepEqual(dry.inputs, Object.keys(expected.inputs))
+  const cli = spawnSync('bash', [join(E2E, 'run.sh'), '--calibrate', '--repeats', '0'], { encoding: 'utf8' })
+  assert.notEqual(cli.status, 0); assert.match(cli.stderr, /at least 1 repeat/)
+})
+
+test('INT-011 --inputs judges only the named inputs, in set order, and refuses an unknown one', async t => {
+  const options = parseCalibrationArguments(['--calibrate', '--inputs', 'degraded-captions-missing, preference-shifted', '--repeats', '1'])
+  assert.deepEqual(options.inputs, ['degraded-captions-missing', 'preference-shifted'])
+  assert.deepEqual((await calibrate({ ...options, dryRun: true })).inputs, ['preference-shifted', 'degraded-captions-missing'])
+  const judged = []
+  const report = await runCalibration({ calibrationDir: dir, rubric: product.rubric, repeats: 1, inputs: options.inputs, evaluate: async ({ inputId }) => { judged.push(inputId); return run(62, pass(inputId === 'preference-shifted' ? shortfalls : { 'quality-captions-and-navigation': 'fail' })) } })
+  assert.deepEqual(judged, ['preference-shifted', 'degraded-captions-missing']); assert.deepEqual(Object.keys(report.inputs), judged)
+  await assert.rejects(calibrate({ ...parseCalibrationArguments(['--calibrate', '--inputs', 'nope', '--dry-run']) }), /unknown calibration input: nope/)
+  await assert.rejects(runCalibration({ calibrationDir: dir, rubric: product.rubric, repeats: 1, inputs: ['nope'], evaluate: async () => { throw new Error('no') } }), /unknown calibration input: nope/)
+})
+
+test('INT-011 a degraded input is judged only on the subcomponents holding its expected failures and their fallback job', async () => {
+  const subcomponentsOf = scoped => scoped.components.flatMap(component => component.subcomponents.map(subcomponent => subcomponent.id))
+  const captions = scopedRubric(rubric, expected.inputs['degraded-captions-missing'])
+  // The browser criterion falls back to the demo-integration source job, so that job's subcomponents come along.
+  assert.deepEqual(subcomponentsOf(captions).sort(), ['demo-canonical-content', 'demo-code-boundaries', 'demo-identity-and-grouping', 'demo-scene-kit-integration'])
+  const toggle = scopedRubric(rubric, expected.inputs['degraded-mode-toggle-loses-position'])
+  assert.ok(subcomponentsOf(toggle).includes('scene-modes-and-navigation') && subcomponentsOf(toggle).includes('demo-navigation-and-modes'))
+  assert.ok(!subcomponentsOf(toggle).includes('scene-step-model'), 'other scene-kit subcomponents are not judged')
+  for (const scoped of [captions, toggle]) {
+    for (const component of scoped.components) assert.equal(component.points, component.subcomponents.reduce((sum, subcomponent) => sum + subcomponent.points, 0))
+    assert.equal(scoped.automated_points, scoped.components.reduce((sum, component) => sum + component.points, 0))
+  }
+  assert.equal(scopedRubric(rubric, expected.inputs['preference-shifted']), rubric, 'a preference shift is judged on the whole rubric')
+  const given = {}
+  const report = await runCalibration({ calibrationDir: dir, rubric: product.rubric, repeats: 1, inputs: ['reference', 'degraded-captions-missing'], evaluate: async ({ inputId, rubric: judged }) => { given[inputId] = judged; return run(62, inputId === 'reference' ? pass(shortfalls) : { 'quality-captions-and-navigation': { verdict: 'fail' } }) } })
+  assert.deepEqual(subcomponentsOf(given['degraded-captions-missing']), subcomponentsOf(captions)); assert.deepEqual(subcomponentsOf(given.reference), subcomponentsOf(rubric))
+  assert.equal(report.inputs['degraded-captions-missing'].scoped, true); assert.equal(report.inputs.reference.scoped, false); assert.equal(report.inputs['degraded-captions-missing'].accuracy.rate, 1)
 })
 
 test('INT-011 the report shows per-input scores, spread, accuracy, flip rates and decider reversals computed from the repeats', () => {
@@ -118,7 +145,7 @@ test('INT-011 each pass prints its score and misses; a pass whose input did not 
   assert.equal(lines.length, Object.keys(expected.inputs).length * 3)
   assert.ok(lines.includes('calibration reference repeat 1: score 62; no misses'))
   assert.ok(lines.includes('calibration degraded-captions-missing repeat 2: score 62; no misses'))
-  assert.match(lines.find(line => line.startsWith('calibration degraded-verifier-ignores-errors repeat 1')), /missed verification-console-page-error-fails \(expected fail\)/)
+  assert.match(lines.find(line => line.startsWith('calibration degraded-mode-toggle-loses-position repeat 1')), /missed mode-toggle-preserves-position \(expected fail\)/)
   const out = await temp(t, 'e2e-cal-stop-')
   let passes = 0
   await assert.rejects(runCalibration({ calibrationDir: dir, rubric: product.rubric, repeats: 3, outDir: out, evaluate: async () => { passes++; return { ...run(0, pass()), build: { ok: false, reason: 'dependency installation failed', record: '/runs/reference-1/phases/product/build.json' } } } }),

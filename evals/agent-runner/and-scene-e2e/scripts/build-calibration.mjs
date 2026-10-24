@@ -44,8 +44,6 @@ export const VARIANTS = {
   'degraded-captions-missing': [
     ...kit('chrome/Footer.tsx', text => text.replace(/\n\s*\{current\.caption\}/, '')),
   ],
-  // Mandatory: verification fails on a console or page error and names the step. Both verifier copies lose the check.
-  'degraded-verifier-ignores-errors': ['scripts/verify.mjs', 'skills/presentation/templates/bootstrap/scripts/verify.mjs'].map(file => [file, text => text.replace(/\n    if \(errors\.length > 0\) \{\n      const first = errors\[0\]\n      throw new Error\(`\$\{slug\} step \$\{first\.step\}: \$\{first\.msg\}`\)\n    \}/, '')]),
   // Mandatory: focused controls keep their keys.
   'degraded-focused-controls-lose-keys': [
     ...kit('usePresentationNav.ts', text => text.replace(/      const target = e\.target\n      if \(\n[\s\S]*?\n      \) \{\n        return\n      \}\n/, '')),

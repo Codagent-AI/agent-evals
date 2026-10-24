@@ -51,7 +51,7 @@ evals/agent-runner/and-scene-e2e/run.sh --dry-run --lead-cli claude --lead-model
 evals/agent-runner/and-scene-e2e/run.sh --run-agent <the same four profiles> [--run-dir DIR] [--no-publish]
 evals/agent-runner/and-scene-e2e/run.sh --resume --run-dir DIR <the same profiles>
 evals/agent-runner/and-scene-e2e/run.sh --rescore-from OLD_DIR --run-dir NEW_DIR
-evals/agent-runner/and-scene-e2e/run.sh --calibrate [--repeats 3]
+evals/agent-runner/and-scene-e2e/run.sh --calibrate [--repeats N] [--inputs ID,...]
 evals/agent-runner/and-scene-e2e/human-review.sh --run-dir DIR [--no-publish]
 node evals/agent-runner/and-scene-e2e/compare.mjs DIR DIR [...]
 ```
@@ -157,12 +157,15 @@ reviewer. The rubric declares no threshold and no floor, and is **provisional**:
 every result scored under it says so.
 
 `--calibrate` judges the pinned reference (`calibration/reference.bundle`), two
-preference-shifted copies (layout and content; chrome and controls) and four degraded
-copies (mode toggle loses position, focused controls lose keys, captions missing,
-verifier ignores errors) at least three times each and reports
+preference-shifted copies (layout and content; chrome and controls) and three degraded
+copies (mode toggle loses position, focused controls lose keys, captions missing)
+`--repeats` times each (default 3) and reports
 per-input scores and spread, accuracy against `calibration/expected-verdicts.json`,
-per-criterion flip rates and decider reversals. It is never published and never
-required. Calibration alone does not clear the provisional flag: a maintainer must
+per-criterion flip rates and decider reversals. A degraded copy is judged only on the
+subcomponents holding the criteria it is expected to fail, plus the source job its
+browser criteria fall back to, so its score covers that slice. A full pass takes about
+an hour of judging; `--inputs` re-judges only the named inputs, and flip rates need at
+least two repeats. It is never published and never required. Calibration alone does not clear the provisional flag: a maintainer must
 approve the expected verdicts and the rubric after a passing calibration **and** a
 rescore of the first live candidate run with identical inputs, with differences
 attributed per criterion by

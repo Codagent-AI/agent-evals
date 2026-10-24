@@ -128,7 +128,7 @@ Human review SHALL use `and-scene`'s versioned human-review questions, rating sc
 - **THEN** no human review runs, the human component is 0 with the build failure as its reason, and the run is `complete`
 
 ### Requirement: Calibration
-`--calibrate` SHALL be a maintainer diagnostic that judges a pinned calibration set under the current rubric with at least three repeats per input: the reference implementation; preference-shifted copies of it that change reference preferences such as routes, step count, step titles, canvas size, attribution placement, the mode-toggle key, and the opening mode, while keeping every `mandatory` and `acceptable-alternative` behavior and every page hook the reference's own verification reads; and degraded variants that each remove known `mandatory` behavior. It SHALL report per-input scores and spread, accuracy against each input's expected verdicts, each criterion's verdict flip rate across repeats, and how often deciders reversed panel verdicts. It SHALL print each pass's score and the criteria that missed their expected verdicts as that pass finishes, and SHALL stop without a report when an input fails to build. It SHALL report a failure when a preference-shifted copy loses more than the rubric's tolerance against the reference, when a removed `mandatory` behavior is judged met, or when an input's score spread exceeds the rubric's limit. The rubric SHALL be marked provisional until a maintainer approves it from calibration evidence and from a rescore of the first live candidate run with identical inputs, and every result scored under a provisional rubric SHALL say so. Calibration output SHALL NOT be published.
+`--calibrate` SHALL be a maintainer diagnostic that judges a pinned calibration set under the current rubric, each input as many times as the maintainer asks (three by default, at least one), optionally only the inputs the maintainer names: the reference implementation; preference-shifted copies of it that change reference preferences such as routes, step count, step titles, canvas size, attribution placement, the mode-toggle key, and the opening mode, while keeping every `mandatory` and `acceptable-alternative` behavior and every page hook the reference's own verification reads; and degraded variants that each remove known `mandatory` behavior. A degraded variant SHALL be judged only on the subcomponents holding the criteria it is expected to fail, plus the source job its browser criteria fall back to, and its score SHALL cover only that slice. It SHALL report per-input scores and spread, accuracy against each input's expected verdicts, each criterion's verdict flip rate across repeats, and how often deciders reversed panel verdicts. It SHALL print each pass's score and the criteria that missed their expected verdicts as that pass finishes, and SHALL stop without a report when an input fails to build. It SHALL report a failure when a preference-shifted copy loses more than the rubric's tolerance against the reference, when a removed `mandatory` behavior is judged met, or when an input's score spread exceeds the rubric's limit. The rubric SHALL be marked provisional until a maintainer approves it from calibration evidence and from a rescore of the first live candidate run with identical inputs, and every result scored under a provisional rubric SHALL say so. Calibration output SHALL NOT be published.
 
 #### Scenario: A calibration input fails to build
 - **WHEN** a calibration input's build fails during a pass
@@ -137,6 +137,14 @@ Human review SHALL use `and-scene`'s versioned human-review questions, rating sc
 #### Scenario: Preference shift is penalized
 - **WHEN** calibration judges a preference-shifted copy more than the tolerance below the reference
 - **THEN** calibration reports a failure naming the criteria that lost points
+
+#### Scenario: Calibration limited to named inputs
+- **WHEN** a maintainer runs calibration naming some inputs and one repeat
+- **THEN** only the named inputs are judged, once each, and an unknown input name is refused before any judging
+
+#### Scenario: Degraded variant judged on its slice
+- **WHEN** calibration judges a degraded variant
+- **THEN** only the subcomponents holding the criteria it is expected to fail, and the source job those criteria fall back to, are judged
 
 #### Scenario: Criterion verdict flips
 - **WHEN** a criterion's verdict differs across the repeats of the same calibration input

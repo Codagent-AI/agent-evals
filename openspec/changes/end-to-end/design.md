@@ -307,10 +307,10 @@ It assigns each item exactly one outcome, following the spec's table, names any 
 
 ### Calibration
 
-`calibrate.mjs` judges, three or more times each:
+`calibrate.mjs` judges, `--repeats` times each (three by default, at least one), all inputs or only those `--inputs` names:
 - the pinned reference (and-scene `REFERENCE_REF`, read from a retained bundle under `calibration/`);
 - the reference with `calibration/preference-shifted.patch`, which changes the route, step count, step titles and canvas size, and removes page hooks only the reference uses (such as `data-step-count`), while keeping mandatory and alternative behavior;
-- degraded variants, each a patch removing named mandatory behavior.
+- degraded variants, each a patch removing named mandatory behavior. Each is judged only on the subcomponents holding the criteria it is expected to fail, plus the source job its browser criteria fall back to, since a full pass costs about an hour of judging.
 
 It reports per-input scores and spread, accuracy against expected verdicts, each criterion's verdict flip rate across repeats, decider reversals, tolerance failures, and the provisional status. It is never published.
 

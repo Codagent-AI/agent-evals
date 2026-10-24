@@ -243,10 +243,11 @@ Specifications remain the source of unit-test requirements. This plan records on
   - the preference-shifted and degraded patches;
   - the expected-verdicts file;
   - fake judges programmed to drift between repeats, have deciders reverse panels, penalize the preference-shifted copy beyond tolerance, and pass a removed mandatory behavior.
-- Action: run calibration with 2 repeats (refused), then with 3 repeats.
+- Action: run calibration with 0 repeats (refused), with 1 repeat and named inputs, then with the default 3 repeats.
 - Assertions:
   - Every patch applies cleanly, and the preference-shifted copy contains none of the reference-only page hooks such as `data-step-count`.
-  - Fewer than 3 repeats is refused.
+  - Zero repeats is refused; one is accepted; `--inputs` judges only the named inputs and refuses an unknown one.
+  - A degraded variant is judged only on the subcomponents holding its expected failures and their fallback job.
   - The report shows per-input scores, spread, accuracy, per-criterion flip rates and decider reversals.
   - The tolerance, removed-mandatory and spread failures are reported, naming the criteria.
   - No output is published.
