@@ -1,3 +1,48 @@
+diff --git a/scripts/verify-lib.mjs b/scripts/verify-lib.mjs
+index 1a7bdad..e7ddfdd 100644
+--- a/scripts/verify-lib.mjs
++++ b/scripts/verify-lib.mjs
+@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
+ import { join } from 'node:path'
+ import { pathToFileURL } from 'node:url'
+ 
+-export const REFERENCE_SLUG = 'how-to-make-a-presentation'
++export const REFERENCE_SLUG = 'tour'
+ export const REFERENCE_TITLE = 'How to Use This Skill to Make a Presentation'
+ 
+ /** @param {string} registryPath */
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/constants.ts b/skills/presentation/templates/bootstrap/src/presentation-kit/constants.ts
+index d93b5ea..c590939 100644
+--- a/skills/presentation/templates/bootstrap/src/presentation-kit/constants.ts
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/constants.ts
+@@ -15,8 +15,8 @@ export const ENTER_T = { duration: 0.45, ease: EASE, delay: ENTER_DELAY }
+ // uniformly to fit the viewport (see useFitScale). A fixed coordinate space
+ // means the composition never reflows and the scale is constant during a
+ // morph — so layoutId transitions stay clean at every viewport size.
+-export const DESIGN_W = 880
+-export const DESIGN_H = 380
++export const DESIGN_W = 960
++export const DESIGN_H = 420
+ export const MIN_SCALE = 0.35
+ 
+ /**
+diff --git a/src/presentation-kit/constants.test.ts b/src/presentation-kit/constants.test.ts
+index f5187ff..c7f8683 100644
+--- a/src/presentation-kit/constants.test.ts
++++ b/src/presentation-kit/constants.test.ts
+@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
+ import { DESIGN_H, DESIGN_W, STAGE_LAYOUT } from './constants'
+ 
+ describe('constants', () => {
+-  it('uses the reference design canvas dimensions of 880 × 380', () => {
+-    expect(DESIGN_W).toBe(880)
+-    expect(DESIGN_H).toBe(380)
++  it('uses the reference design canvas dimensions of 960 × 420', () => {
++    expect(DESIGN_W).toBe(960)
++    expect(DESIGN_H).toBe(420)
+   })
+ 
+   it('defines browse and present stage layout geometry', () => {
 diff --git a/src/presentation-kit/constants.ts b/src/presentation-kit/constants.ts
 index d93b5ea..c590939 100644
 --- a/src/presentation-kit/constants.ts
@@ -13,6 +58,32 @@ index d93b5ea..c590939 100644
  export const MIN_SCALE = 0.35
  
  /**
+diff --git a/src/presentations/how-to-make-a-presentation/outline.test.ts b/src/presentations/how-to-make-a-presentation/outline.test.ts
+index 6895c99..f8549ab 100644
+--- a/src/presentations/how-to-make-a-presentation/outline.test.ts
++++ b/src/presentations/how-to-make-a-presentation/outline.test.ts
+@@ -6,9 +6,9 @@ import { REFERENCE_STEP_OUTLINE } from './outline'
+ import { STEPS } from './steps'
+ 
+ describe('reference sample outline', () => {
+-  it('Scenario: Sample exists and matches the outline — nine normative steps', () => {
+-    expect(REFERENCE_STEP_OUTLINE).toHaveLength(9)
+-    expect(STEPS).toHaveLength(9)
++  it('Scenario: Sample exists and matches the outline — eight normative steps', () => {
++    expect(REFERENCE_STEP_OUTLINE).toHaveLength(8)
++    expect(STEPS).toHaveLength(8)
+   })
+ 
+   it('implements steps in order with normative era, title, and caption', () => {
+@@ -23,7 +23,7 @@ describe('reference sample outline', () => {
+ 
+   it('each step has a stable id, payload, and Scene component', () => {
+     const ids = STEPS.map((s) => s.id)
+-    expect(new Set(ids).size).toBe(9)
++    expect(new Set(ids).size).toBe(8)
+     for (const step of STEPS) {
+       expect(step.Scene).toBeTypeOf('function')
+       expect(step.payload).toBeTypeOf('object')
 diff --git a/src/presentations/how-to-make-a-presentation/outline.ts b/src/presentations/how-to-make-a-presentation/outline.ts
 index 4882604..0bb183a 100644
 --- a/src/presentations/how-to-make-a-presentation/outline.ts

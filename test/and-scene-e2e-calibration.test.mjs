@@ -48,6 +48,15 @@ test('INT-011 every real patch applies cleanly to the pinned reference bundle; p
   }
   assert.match(await read('degraded-mode-toggle-loses-position', 'src/presentation-kit/usePresentationNav.ts'), /setStep\(0\); setMode/)
   assert.doesNotMatch(await read('degraded-focused-controls-lose-keys', 'src/presentation-kit/usePresentationNav.ts'), /closest\('button, a, input/)
+  // The skill vendors a byte-identical snapshot of the kit, so every variant changes both copies alike.
+  for (const id of Object.keys(trees)) {
+    const kit = execFileSync('git', ['-C', trees[id], 'ls-files', 'src/presentation-kit'], { encoding: 'utf8' }).split('\n').filter(path => path && !/\.test\./.test(path))
+    for (const path of kit) assert.equal(await read(id, path.replace('src/', 'skills/presentation/templates/bootstrap/src/')), await read(id, path), `${id}: ${path} matches its skill snapshot`)
+  }
+  // The reference's verifier requires its sample's slug, so a slug shift renames it there too.
+  assert.match(await read('preference-shifted', 'scripts/verify-lib.mjs'), /REFERENCE_SLUG = 'tour'/)
+  assert.match(await read('preference-shifted', 'src/presentation-kit/constants.test.ts'), /toBe\(960\)/); assert.match(await read('preference-shifted', 'src/presentations/how-to-make-a-presentation/outline.test.ts'), /toHaveLength\(8\)/)
+  assert.match(await read('preference-shifted-chrome', 'src/presentation-kit/usePresentationNav.test.ts'), /key: 'm'/)
   assert.deepEqual(JSON.parse(await readFile(join(dir, 'reference.json'), 'utf8')).reference_ref, '171c7def1e12aca2a5f605a5e5feafb20d4e4d19')
   for (const entry of Object.values(expected.inputs)) for (const id of [...(entry.expect.fail ?? []), ...(Array.isArray(entry.expect.pass) ? entry.expect.pass : [])]) assert.ok(ids.includes(id), id)
   assert.ok(expected.approved_by?.trim(), 'the maintainer approved the expected verdicts')
