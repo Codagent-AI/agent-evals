@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-24T15-52-47-731664418Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err",
+      "output/_resolve-findings_.out",
+      "output/_session-report_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered default attribution URL differs from the verification expectation; the basis for selecting it is unavailable.",
+      "evidence": [
+        "attribution-default-link failed: expected https://github.com/Codagent-AI/and-scene; found https://github.com/and-scene/and-scene.",
+        "The supplied workflow excerpt is truncated during session initialization and contains no visible attribution decision."
+      ],
+      "handling": "The delivered artifact uses https://github.com/and-scene/and-scene. No explanation or correction is visible.",
+      "consequence": "The default attribution check failed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The mismatch is observable, but the available evidence cannot distinguish an incorrect assumption from missing repository context, an unspecified requirement, or an implementation error unrelated to …",
+      "resolution": "unresolved",
+      "id": "f38cb2ba3cb5f3e3"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Verification found no project-local screenshot helper and missing visual warnings; the requirement context and reasons for these omissions are unavailable.",
+      "evidence": [
+        "quality-project-local-screenshot-helper failed: Project-local Playwright screenshot helper is missing.",
+        "visual-helper-overlap-warning failed: Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning failed: Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning failed: Attribution missing/default/size warning is incomplete.",
+        "The supplied workflow excerpt contains no visible discussion of these requirements or omissions."
+      ],
+      "handling": "The delivered artifacts did not satisfy these four checks. No rationale or subsequent remediation is visible.",
+      "consequence": "The expected screenshot helper and visual warning coverage were absent or incomplete according to product verification.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "These omissions materially affected verification, but neither the fixture instructions nor implementation decisions are available. The evidence does not establish whether they arose from a specificat…",
+      "resolution": "unresolved",
+      "id": "e8b26195d4ac6006"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
