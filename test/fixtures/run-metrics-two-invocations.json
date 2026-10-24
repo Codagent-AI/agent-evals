@@ -1,0 +1,5438 @@
+{
+  "agent_session_context": {
+    "sessions": [
+      {
+        "cli": "codex",
+        "session_id": "01a1667f-2029-76e1-987b-e9b0ecf6a8c8",
+        "high_water_mark_tokens": 111190,
+        "max_last_request_input_tokens": 111190,
+        "context_window_limit_tokens": 475000,
+        "attempt_count": 1,
+        "coverage": "complete"
+      },
+      {
+        "cli": "claude",
+        "session_id": "0fad505c-f78d-439c-a8eb-a953d1eb4102",
+        "high_water_mark_tokens": 185734,
+        "max_last_request_input_tokens": 185734,
+        "context_window_limit_tokens": 1000000,
+        "attempt_count": 8,
+        "coverage": "partial"
+      },
+      {
+        "cli": "codex",
+        "session_id": "01a166cf-4784-7d00-887e-9b36218fa676",
+        "high_water_mark_tokens": 166706,
+        "max_last_request_input_tokens": 166706,
+        "context_window_limit_tokens": 258400,
+        "attempt_count": 1,
+        "coverage": "complete"
+      },
+      {
+        "cli": "claude",
+        "session_id": "4683344a-ccb2-41a8-9c9e-4cfe9cee32a9",
+        "high_water_mark_tokens": 103127,
+        "max_last_request_input_tokens": 103127,
+        "context_window_limit_tokens": 1000000,
+        "attempt_count": 1,
+        "coverage": "complete"
+      },
+      {
+        "cli": "codex",
+        "session_id": "01a166ee-99b2-77e3-887b-545277fcc0df",
+        "high_water_mark_tokens": 101872,
+        "max_last_request_input_tokens": 101872,
+        "context_window_limit_tokens": 258400,
+        "attempt_count": 1,
+        "coverage": "complete"
+      }
+    ],
+    "unattributed_attempts": 0
+  },
+  "native_measurements": [
+    {
+      "native_measurement_schema_version": 1,
+      "key": "define%2Fsub%3Adefine-change%2Fproposal/b8e79d25-f464-4283-aab7-a13d0537cc1a#1",
+      "attribution": {
+        "run_id": "audited-change-2026-10-16T20-17-16-598194Z",
+        "execution_session_id": "e695a951-3deb-4252-98d5-1afd0e2f5a6e",
+        "parent_attempt_id": "5bc5eb54-def4-476b-a479-4d52e4019405",
+        "step_id": "b8e79d25-f464-4283-aab7-a13d0537cc1a",
+        "prefix": "define/sub:define-change/proposal"
+      },
+      "producer": "agent-runner",
+      "provenance": "native",
+      "source_format": "codex:turn.completed",
+      "requested_identity": {
+        "adapter": "codex",
+        "model": "gpt-6.1-sol",
+        "provider": null,
+        "effort": "high",
+        "provenance": "configuration"
+      },
+      "resolved_identity": {
+        "adapter": "codex",
+        "model": "gpt-6.1-sol",
+        "provider": "openai",
+        "effort": "high",
+        "provenance": "launch_resolution"
+      },
+      "observed_identities": [],
+      "tokens": {
+        "cache_read": {
+          "availability": "available",
+          "value": 856064,
+          "reason": null,
+          "source": "provider_usage",
+          "origin": "observed",
+          "precision": "exact",
+          "derivation": null,
+          "included_in": null
+        },
+        "cache_write": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "input_total": {
+          "availability": "available",
+          "value": 952248,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "adapter_normalization",
+          "included_in": [
+            "normalized_total"
+          ]
+        },
+        "input_uncached": {
+          "availability": "available",
+          "value": 96184,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "codex_input_total_minus_cache_read",
+          "included_in": null
+        },
+        "normalized_total": {
+          "availability": "available",
+          "value": 958488,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "adapter_normalization",
+          "included_in": null
+        },
+        "output": {
+          "availability": "available",
+          "value": 6240,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "adapter_normalization",
+          "included_in": [
+            "normalized_total"
+          ]
+        },
+        "provider_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "reasoning": {
+          "availability": "available",
+          "value": 2717,
+          "reason": null,
+          "source": "provider_usage",
+          "origin": "observed",
+          "precision": "exact",
+          "derivation": null,
+          "included_in": null
+        }
+      },
+      "unallocated_usage": {
+        "availability": "available",
+        "value": 958488,
+        "reason": null,
+        "source": "runner_derivation",
+        "origin": "derived",
+        "precision": "exact",
+        "derivation": "adapter_normalization",
+        "included_in": null
+      },
+      "provider_reported_costs": [
+        {
+          "cost_evidence_id": "estimated-cost",
+          "amount": {
+            "availability": "available",
+            "value": 0.3403744,
+            "reason": null,
+            "source": "provider_usage",
+            "origin": "derived",
+            "precision": "approximate",
+            "derivation": "openai-standard-request-level@2026-10-20.1",
+            "included_in": null
+          },
+          "currency": {
+            "availability": "available",
+            "value": "USD",
+            "reason": null
+          },
+          "scope": "attempt",
+          "coverage": "full",
+          "overlap": "established",
+          "source": "provider_usage"
+        }
+      ],
+      "limitations": [
+        "model_allocation_unavailable"
+      ]
+    },
+    {
+      "native_measurement_schema_version": 1,
+      "key": "define%2Fsub%3Adefine-change/proposal#1",
+      "attribution": {
+        "run_id": "audited-change-2026-10-16T20-17-16-598194Z",
+        "execution_session_id": "e695a951-3deb-4252-98d5-1afd0e2f5a6e",
+        "parent_attempt_id": "",
+        "step_id": "proposal",
+        "prefix": "define/sub:define-change"
+      },
+      "producer": "agent-runner",
+      "provenance": "native",
+      "source_format": "agent-runner",
+      "requested_identity": {
+        "adapter": "claude",
+        "model": "opus",
+        "provider": null,
+        "effort": "high",
+        "provenance": "configuration"
+      },
+      "resolved_identity": {
+        "adapter": "claude",
+        "model": "opus",
+        "provider": "anthropic",
+        "effort": "high",
+        "provenance": "launch_resolution"
+      },
+      "observed_identities": [],
+      "tokens": {
+        "cache_read": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "cache_write": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "input_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "input_uncached": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "normalized_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "output": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "provider_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "reasoning": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        }
+      },
+      "unallocated_usage": {
+        "availability": "unavailable",
+        "value": null,
+        "reason": "not_reported",
+        "source": null,
+        "origin": null,
+        "precision": null,
+        "derivation": null,
+        "included_in": null
+      },
+      "provider_reported_costs": [],
+      "limitations": [
+        "model_allocation_unavailable"
+      ]
+    },
+    {
+      "native_measurement_schema_version": 1,
+      "key": "define%2Fsub%3Adefine-change/specs#1",
+      "attribution": {
+        "run_id": "audited-change-2026-10-16T20-17-16-598194Z",
+        "execution_session_id": "e695a951-3deb-4252-98d5-1afd0e2f5a6e",
+        "parent_attempt_id": "",
+        "step_id": "specs",
+        "prefix": "define/sub:define-change"
+      },
+      "producer": "agent-runner",
+      "provenance": "native",
+      "source_format": "agent-runner",
+      "requested_identity": {
+        "adapter": "claude",
+        "model": "opus",
+        "provider": null,
+        "effort": "high",
+        "provenance": "configuration"
+      },
+      "resolved_identity": {
+        "adapter": "claude",
+        "model": "opus",
+        "provider": "anthropic",
+        "effort": "high",
+        "provenance": "launch_resolution"
+      },
+      "observed_identities": [],
+      "tokens": {
+        "cache_read": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "cache_write": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "input_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "input_uncached": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "normalized_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "output": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "provider_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "reasoning": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        }
+      },
+      "unallocated_usage": {
+        "availability": "unavailable",
+        "value": null,
+        "reason": "not_reported",
+        "source": null,
+        "origin": null,
+        "precision": null,
+        "derivation": null,
+        "included_in": null
+      },
+      "provider_reported_costs": [],
+      "limitations": [
+        "model_allocation_unavailable"
+      ]
+    },
+    {
+      "native_measurement_schema_version": 1,
+      "key": "define%2Fsub%3Adefine-change/specs#2",
+      "attribution": {
+        "run_id": "audited-change-2026-10-16T20-17-16-598194Z",
+        "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+        "parent_attempt_id": "",
+        "step_id": "specs",
+        "prefix": "define/sub:define-change"
+      },
+      "producer": "agent-runner",
+      "provenance": "native",
+      "source_format": "agent-runner",
+      "requested_identity": {
+        "adapter": "claude",
+        "model": "opus",
+        "provider": null,
+        "effort": "high",
+        "provenance": "configuration"
+      },
+      "resolved_identity": {
+        "adapter": "claude",
+        "model": "opus",
+        "provider": "anthropic",
+        "effort": "high",
+        "provenance": "launch_resolution"
+      },
+      "observed_identities": [],
+      "tokens": {
+        "cache_read": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "cache_write": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "input_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "input_uncached": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "normalized_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "output": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "provider_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "reasoning": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        }
+      },
+      "unallocated_usage": {
+        "availability": "unavailable",
+        "value": null,
+        "reason": "not_reported",
+        "source": null,
+        "origin": null,
+        "precision": null,
+        "derivation": null,
+        "included_in": null
+      },
+      "provider_reported_costs": [],
+      "limitations": [
+        "model_allocation_unavailable"
+      ]
+    },
+    {
+      "native_measurement_schema_version": 1,
+      "key": "define%2Fsub%3Adefine-change/design#1",
+      "attribution": {
+        "run_id": "audited-change-2026-10-16T20-17-16-598194Z",
+        "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+        "parent_attempt_id": "",
+        "step_id": "design",
+        "prefix": "define/sub:define-change"
+      },
+      "producer": "agent-runner",
+      "provenance": "native",
+      "source_format": "agent-runner",
+      "requested_identity": {
+        "adapter": "claude",
+        "model": "opus",
+        "provider": null,
+        "effort": "high",
+        "provenance": "configuration"
+      },
+      "resolved_identity": {
+        "adapter": "claude",
+        "model": "opus",
+        "provider": "anthropic",
+        "effort": "high",
+        "provenance": "launch_resolution"
+      },
+      "observed_identities": [],
+      "tokens": {
+        "cache_read": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "cache_write": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "input_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "input_uncached": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "normalized_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "output": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "provider_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "reasoning": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        }
+      },
+      "unallocated_usage": {
+        "availability": "unavailable",
+        "value": null,
+        "reason": "not_reported",
+        "source": null,
+        "origin": null,
+        "precision": null,
+        "derivation": null,
+        "included_in": null
+      },
+      "provider_reported_costs": [],
+      "limitations": [
+        "model_allocation_unavailable"
+      ]
+    },
+    {
+      "native_measurement_schema_version": 1,
+      "key": "define%2Fsub%3Adefine-change/test-plan#1",
+      "attribution": {
+        "run_id": "audited-change-2026-10-16T20-17-16-598194Z",
+        "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+        "parent_attempt_id": "",
+        "step_id": "test-plan",
+        "prefix": "define/sub:define-change"
+      },
+      "producer": "agent-runner",
+      "provenance": "native",
+      "source_format": "agent-runner",
+      "requested_identity": {
+        "adapter": "claude",
+        "model": "opus",
+        "provider": null,
+        "effort": "high",
+        "provenance": "configuration"
+      },
+      "resolved_identity": {
+        "adapter": "claude",
+        "model": "opus",
+        "provider": "anthropic",
+        "effort": "high",
+        "provenance": "launch_resolution"
+      },
+      "observed_identities": [],
+      "tokens": {
+        "cache_read": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "cache_write": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "input_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "input_uncached": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "normalized_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "output": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "provider_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "reasoning": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        }
+      },
+      "unallocated_usage": {
+        "availability": "unavailable",
+        "value": null,
+        "reason": "not_reported",
+        "source": null,
+        "origin": null,
+        "precision": null,
+        "derivation": null,
+        "included_in": null
+      },
+      "provider_reported_costs": [],
+      "limitations": [
+        "model_allocation_unavailable"
+      ]
+    },
+    {
+      "native_measurement_schema_version": 1,
+      "key": "define%2Fsub%3Adefine-change%2Fapproach-review/f1b4f58a-8aca-4d65-9178-921a70d2cd58#1",
+      "attribution": {
+        "run_id": "audited-change-2026-10-16T20-17-16-598194Z",
+        "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+        "parent_attempt_id": "f33fdfc6-99ca-41ec-a4ae-fd8e1e1f9b19",
+        "step_id": "f1b4f58a-8aca-4d65-9178-921a70d2cd58",
+        "prefix": "define/sub:define-change/approach-review"
+      },
+      "producer": "agent-runner",
+      "provenance": "native",
+      "source_format": "codex:turn.completed",
+      "requested_identity": {
+        "adapter": "codex",
+        "model": "gpt-6-astra",
+        "provider": null,
+        "effort": "high",
+        "provenance": "configuration"
+      },
+      "resolved_identity": {
+        "adapter": "codex",
+        "model": "gpt-6-astra",
+        "provider": "openai",
+        "effort": "high",
+        "provenance": "launch_resolution"
+      },
+      "observed_identities": [],
+      "tokens": {
+        "cache_read": {
+          "availability": "available",
+          "value": 1592320,
+          "reason": null,
+          "source": "provider_usage",
+          "origin": "observed",
+          "precision": "exact",
+          "derivation": null,
+          "included_in": null
+        },
+        "cache_write": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "input_total": {
+          "availability": "available",
+          "value": 1749235,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "adapter_normalization",
+          "included_in": [
+            "normalized_total"
+          ]
+        },
+        "input_uncached": {
+          "availability": "available",
+          "value": 156915,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "codex_input_total_minus_cache_read",
+          "included_in": null
+        },
+        "normalized_total": {
+          "availability": "available",
+          "value": 1760306,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "adapter_normalization",
+          "included_in": null
+        },
+        "output": {
+          "availability": "available",
+          "value": 11071,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "adapter_normalization",
+          "included_in": [
+            "normalized_total"
+          ]
+        },
+        "provider_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "reasoning": {
+          "availability": "available",
+          "value": 4144,
+          "reason": null,
+          "source": "provider_usage",
+          "origin": "observed",
+          "precision": "exact",
+          "derivation": null,
+          "included_in": null
+        }
+      },
+      "unallocated_usage": {
+        "availability": "available",
+        "value": 1760306,
+        "reason": null,
+        "source": "runner_derivation",
+        "origin": "derived",
+        "precision": "exact",
+        "derivation": "adapter_normalization",
+        "included_in": null
+      },
+      "provider_reported_costs": [
+        {
+          "cost_evidence_id": "estimated-cost",
+          "amount": {
+            "availability": "available",
+            "value": 3.71502,
+            "reason": null,
+            "source": "provider_usage",
+            "origin": "derived",
+            "precision": "approximate",
+            "derivation": "openai-standard-request-level@2026-10-20.1",
+            "included_in": null
+          },
+          "currency": {
+            "availability": "available",
+            "value": "USD",
+            "reason": null
+          },
+          "scope": "attempt",
+          "coverage": "full",
+          "overlap": "established",
+          "source": "provider_usage"
+        }
+      ],
+      "limitations": [
+        "model_allocation_unavailable"
+      ]
+    },
+    {
+      "native_measurement_schema_version": 1,
+      "key": "define%2Fsub%3Adefine-change/approach-review#1",
+      "attribution": {
+        "run_id": "audited-change-2026-10-16T20-17-16-598194Z",
+        "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+        "parent_attempt_id": "",
+        "step_id": "approach-review",
+        "prefix": "define/sub:define-change"
+      },
+      "producer": "agent-runner",
+      "provenance": "native",
+      "source_format": "agent-runner",
+      "requested_identity": {
+        "adapter": "claude",
+        "model": "opus",
+        "provider": null,
+        "effort": "high",
+        "provenance": "configuration"
+      },
+      "resolved_identity": {
+        "adapter": "claude",
+        "model": "opus",
+        "provider": "anthropic",
+        "effort": "high",
+        "provenance": "launch_resolution"
+      },
+      "observed_identities": [],
+      "tokens": {
+        "cache_read": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "cache_write": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "input_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "input_uncached": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "normalized_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "output": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "provider_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "reasoning": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        }
+      },
+      "unallocated_usage": {
+        "availability": "unavailable",
+        "value": null,
+        "reason": "not_reported",
+        "source": null,
+        "origin": null,
+        "precision": null,
+        "derivation": null,
+        "included_in": null
+      },
+      "provider_reported_costs": [],
+      "limitations": [
+        "model_allocation_unavailable"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocation_id": "main",
+          "kind": "main",
+          "observed_identity_ref": "observed-main",
+          "availability": "available",
+          "reason": null,
+          "tokens": {
+            "cache_read": {
+              "availability": "available",
+              "value": 959388,
+              "reason": null,
+              "source": "provider_usage",
+              "origin": "observed",
+              "precision": "exact",
+              "derivation": null,
+              "included_in": null
+            },
+            "cache_write": {
+              "availability": "available",
+              "value": 167572,
+              "reason": null,
+              "source": "provider_usage",
+              "origin": "observed",
+              "precision": "exact",
+              "derivation": null,
+              "included_in": null
+            },
+            "input_total": {
+              "availability": "available",
+              "value": 1126974,
+              "reason": null,
+              "source": "runner_derivation",
+              "origin": "derived",
+              "precision": "exact",
+              "derivation": "adapter_normalization",
+              "included_in": [
+                "normalized_total"
+              ]
+            },
+            "input_uncached": {
+              "availability": "available",
+              "value": 14,
+              "reason": null,
+              "source": "provider_usage",
+              "origin": "observed",
+              "precision": "exact",
+              "derivation": null,
+              "included_in": null
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 1146491,
+              "reason": null,
+              "source": "runner_derivation",
+              "origin": "derived",
+              "precision": "exact",
+              "derivation": "adapter_normalization",
+              "included_in": null
+            },
+            "output": {
+              "availability": "available",
+              "value": 19517,
+              "reason": null,
+              "source": "runner_derivation",
+              "origin": "derived",
+              "precision": "exact",
+              "derivation": "adapter_normalization",
+              "included_in": [
+                "normalized_total"
+              ]
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported",
+              "source": null,
+              "origin": null,
+              "precision": null,
+              "derivation": null,
+              "included_in": null
+            },
+            "reasoning": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported",
+              "source": null,
+              "origin": null,
+              "precision": null,
+              "derivation": null,
+              "included_in": null
+            }
+          },
+          "cost": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "allocation_cost_not_reported",
+            "source": null,
+            "origin": null,
+            "precision": null,
+            "derivation": null,
+            "included_in": null
+          }
+        }
+      ],
+      "subagent_collection": {
+        "completeness": "complete"
+      },
+      "native_measurement_schema_version": 2,
+      "key": "implement%2Fsub%3Aimplement-change/lead-checklist#1",
+      "attribution": {
+        "run_id": "audited-change-2026-10-16T20-17-16-598194Z",
+        "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+        "parent_attempt_id": "",
+        "step_id": "lead-checklist",
+        "prefix": "implement/sub:implement-change"
+      },
+      "producer": "agent-runner",
+      "provenance": "native",
+      "source_format": "claude:result-event",
+      "requested_identity": {
+        "adapter": "claude",
+        "model": "opus",
+        "provider": null,
+        "effort": "high",
+        "provenance": "configuration"
+      },
+      "resolved_identity": {
+        "adapter": "claude",
+        "model": "claude-opus-5-5",
+        "provider": "anthropic",
+        "effort": "high",
+        "provenance": "launch_resolution"
+      },
+      "observed_identities": [
+        {
+          "identity_id": "observed-main",
+          "model": "claude-opus-5-5",
+          "provider": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "effort": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "provenance": "telemetry"
+        }
+      ],
+      "tokens": {
+        "cache_read": {
+          "availability": "available",
+          "value": 959388,
+          "reason": null,
+          "source": "provider_usage",
+          "origin": "observed",
+          "precision": "exact",
+          "derivation": null,
+          "included_in": null
+        },
+        "cache_write": {
+          "availability": "available",
+          "value": 167572,
+          "reason": null,
+          "source": "provider_usage",
+          "origin": "observed",
+          "precision": "exact",
+          "derivation": null,
+          "included_in": null
+        },
+        "input_total": {
+          "availability": "available",
+          "value": 1126974,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "adapter_normalization",
+          "included_in": [
+            "normalized_total"
+          ]
+        },
+        "input_uncached": {
+          "availability": "available",
+          "value": 14,
+          "reason": null,
+          "source": "provider_usage",
+          "origin": "observed",
+          "precision": "exact",
+          "derivation": null,
+          "included_in": null
+        },
+        "normalized_total": {
+          "availability": "available",
+          "value": 1146491,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "adapter_normalization",
+          "included_in": null
+        },
+        "output": {
+          "availability": "available",
+          "value": 19517,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "adapter_normalization",
+          "included_in": [
+            "normalized_total"
+          ]
+        },
+        "provider_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "reasoning": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        }
+      },
+      "unallocated_usage": null,
+      "provider_reported_costs": [],
+      "limitations": []
+    },
+    {
+      "allocations": [
+        {
+          "allocation_id": "main",
+          "kind": "main",
+          "observed_identity_ref": "observed-main",
+          "availability": "available",
+          "reason": null,
+          "tokens": {
+            "cache_read": {
+              "availability": "available",
+              "value": 285998,
+              "reason": null,
+              "source": "provider_usage",
+              "origin": "observed",
+              "precision": "exact",
+              "derivation": null,
+              "included_in": null
+            },
+            "cache_write": {
+              "availability": "available",
+              "value": 92203,
+              "reason": null,
+              "source": "provider_usage",
+              "origin": "observed",
+              "precision": "exact",
+              "derivation": null,
+              "included_in": null
+            },
+            "input_total": {
+              "availability": "available",
+              "value": 378213,
+              "reason": null,
+              "source": "runner_derivation",
+              "origin": "derived",
+              "precision": "exact",
+              "derivation": "adapter_normalization",
+              "included_in": [
+                "normalized_total"
+              ]
+            },
+            "input_uncached": {
+              "availability": "available",
+              "value": 12,
+              "reason": null,
+              "source": "provider_usage",
+              "origin": "observed",
+              "precision": "exact",
+              "derivation": null,
+              "included_in": null
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 389988,
+              "reason": null,
+              "source": "runner_derivation",
+              "origin": "derived",
+              "precision": "exact",
+              "derivation": "adapter_normalization",
+              "included_in": null
+            },
+            "output": {
+              "availability": "available",
+              "value": 11775,
+              "reason": null,
+              "source": "runner_derivation",
+              "origin": "derived",
+              "precision": "exact",
+              "derivation": "adapter_normalization",
+              "included_in": [
+                "normalized_total"
+              ]
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported",
+              "source": null,
+              "origin": null,
+              "precision": null,
+              "derivation": null,
+              "included_in": null
+            },
+            "reasoning": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported",
+              "source": null,
+              "origin": null,
+              "precision": null,
+              "derivation": null,
+              "included_in": null
+            }
+          },
+          "cost": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "allocation_cost_not_reported",
+            "source": null,
+            "origin": null,
+            "precision": null,
+            "derivation": null,
+            "included_in": null
+          }
+        }
+      ],
+      "subagent_collection": {
+        "completeness": "complete"
+      },
+      "native_measurement_schema_version": 2,
+      "key": "implement%2Fsub%3Aimplement-change/implementor-checklist#1",
+      "attribution": {
+        "run_id": "audited-change-2026-10-16T20-17-16-598194Z",
+        "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+        "parent_attempt_id": "",
+        "step_id": "implementor-checklist",
+        "prefix": "implement/sub:implement-change"
+      },
+      "producer": "agent-runner",
+      "provenance": "native",
+      "source_format": "claude:result-event",
+      "requested_identity": {
+        "adapter": "claude",
+        "model": "sonnet",
+        "provider": null,
+        "effort": "medium",
+        "provenance": "configuration"
+      },
+      "resolved_identity": {
+        "adapter": "claude",
+        "model": "claude-sonnet-5-5",
+        "provider": "anthropic",
+        "effort": "medium",
+        "provenance": "launch_resolution"
+      },
+      "observed_identities": [
+        {
+          "identity_id": "observed-main",
+          "model": "claude-sonnet-5-5",
+          "provider": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "effort": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "provenance": "telemetry"
+        }
+      ],
+      "tokens": {
+        "cache_read": {
+          "availability": "available",
+          "value": 285998,
+          "reason": null,
+          "source": "provider_usage",
+          "origin": "observed",
+          "precision": "exact",
+          "derivation": null,
+          "included_in": null
+        },
+        "cache_write": {
+          "availability": "available",
+          "value": 92203,
+          "reason": null,
+          "source": "provider_usage",
+          "origin": "observed",
+          "precision": "exact",
+          "derivation": null,
+          "included_in": null
+        },
+        "input_total": {
+          "availability": "available",
+          "value": 378213,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "adapter_normalization",
+          "included_in": [
+            "normalized_total"
+          ]
+        },
+        "input_uncached": {
+          "availability": "available",
+          "value": 12,
+          "reason": null,
+          "source": "provider_usage",
+          "origin": "observed",
+          "precision": "exact",
+          "derivation": null,
+          "included_in": null
+        },
+        "normalized_total": {
+          "availability": "available",
+          "value": 389988,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "adapter_normalization",
+          "included_in": null
+        },
+        "output": {
+          "availability": "available",
+          "value": 11775,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "adapter_normalization",
+          "included_in": [
+            "normalized_total"
+          ]
+        },
+        "provider_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "reasoning": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        }
+      },
+      "unallocated_usage": null,
+      "provider_reported_costs": [
+        {
+          "cost_evidence_id": "reported-cost",
+          "amount": {
+            "availability": "available",
+            "value": 0.5151858,
+            "reason": null,
+            "source": "provider_usage",
+            "origin": "observed",
+            "precision": "exact",
+            "derivation": null,
+            "included_in": null
+          },
+          "currency": {
+            "availability": "available",
+            "value": "USD",
+            "reason": null
+          },
+          "scope": "attempt",
+          "coverage": "full",
+          "overlap": "established",
+          "source": "provider_usage"
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "allocations": [
+        {
+          "allocation_id": "main",
+          "kind": "main",
+          "observed_identity_ref": "observed-main",
+          "availability": "available",
+          "reason": null,
+          "tokens": {
+            "cache_read": {
+              "availability": "available",
+              "value": 718650,
+              "reason": null,
+              "source": "provider_usage",
+              "origin": "observed",
+              "precision": "exact",
+              "derivation": null,
+              "included_in": null
+            },
+            "cache_write": {
+              "availability": "available",
+              "value": 18160,
+              "reason": null,
+              "source": "provider_usage",
+              "origin": "observed",
+              "precision": "exact",
+              "derivation": null,
+              "included_in": null
+            },
+            "input_total": {
+              "availability": "available",
+              "value": 736818,
+              "reason": null,
+              "source": "runner_derivation",
+              "origin": "derived",
+              "precision": "exact",
+              "derivation": "adapter_normalization",
+              "included_in": [
+                "normalized_total"
+              ]
+            },
+            "input_uncached": {
+              "availability": "available",
+              "value": 8,
+              "reason": null,
+              "source": "provider_usage",
+              "origin": "observed",
+              "precision": "exact",
+              "derivation": null,
+              "included_in": null
+            },
+            "normalized_total": {
+              "availability": "available",
+              "value": 739716,
+              "reason": null,
+              "source": "runner_derivation",
+              "origin": "derived",
+              "precision": "exact",
+              "derivation": "adapter_normalization",
+              "included_in": null
+            },
+            "output": {
+              "availability": "available",
+              "value": 2898,
+              "reason": null,
+              "source": "runner_derivation",
+              "origin": "derived",
+              "precision": "exact",
+              "derivation": "adapter_normalization",
+              "included_in": [
+                "normalized_total"
+              ]
+            },
+            "provider_total": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported",
+              "source": null,
+              "origin": null,
+              "precision": null,
+              "derivation": null,
+              "included_in": null
+            },
+            "reasoning": {
+              "availability": "unavailable",
+              "value": null,
+              "reason": "not_reported",
+              "source": null,
+              "origin": null,
+              "precision": null,
+              "derivation": null,
+              "included_in": null
+            }
+          },
+          "cost": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "allocation_cost_not_reported",
+            "source": null,
+            "origin": null,
+            "precision": null,
+            "derivation": null,
+            "included_in": null
+          }
+        }
+      ],
+      "subagent_collection": {
+        "completeness": "complete"
+      },
+      "native_measurement_schema_version": 2,
+      "key": "implement%2Fsub%3Aimplement-change%2Fmerge-checklists/3c56c1cd-69a6-40e8-863b-41fb5e429e14#1",
+      "attribution": {
+        "run_id": "audited-change-2026-10-16T20-17-16-598194Z",
+        "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+        "parent_attempt_id": "7a2c9679-0bc6-47db-a182-f6ca11751db1",
+        "step_id": "3c56c1cd-69a6-40e8-863b-41fb5e429e14",
+        "prefix": "implement/sub:implement-change/merge-checklists"
+      },
+      "producer": "agent-runner",
+      "provenance": "native",
+      "source_format": "claude:result-event",
+      "requested_identity": {
+        "adapter": "claude",
+        "model": "opus",
+        "provider": null,
+        "effort": "high",
+        "provenance": "configuration"
+      },
+      "resolved_identity": {
+        "adapter": "claude",
+        "model": "claude-opus-5-5",
+        "provider": "anthropic",
+        "effort": "high",
+        "provenance": "launch_resolution"
+      },
+      "observed_identities": [
+        {
+          "identity_id": "observed-main",
+          "model": "claude-opus-5-5",
+          "provider": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "effort": {
+            "availability": "unavailable",
+            "value": null,
+            "reason": "not_reported"
+          },
+          "provenance": "telemetry"
+        }
+      ],
+      "tokens": {
+        "cache_read": {
+          "availability": "available",
+          "value": 718650,
+          "reason": null,
+          "source": "provider_usage",
+          "origin": "observed",
+          "precision": "exact",
+          "derivation": null,
+          "included_in": null
+        },
+        "cache_write": {
+          "availability": "available",
+          "value": 18160,
+          "reason": null,
+          "source": "provider_usage",
+          "origin": "observed",
+          "precision": "exact",
+          "derivation": null,
+          "included_in": null
+        },
+        "input_total": {
+          "availability": "available",
+          "value": 736818,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "adapter_normalization",
+          "included_in": [
+            "normalized_total"
+          ]
+        },
+        "input_uncached": {
+          "availability": "available",
+          "value": 8,
+          "reason": null,
+          "source": "provider_usage",
+          "origin": "observed",
+          "precision": "exact",
+          "derivation": null,
+          "included_in": null
+        },
+        "normalized_total": {
+          "availability": "available",
+          "value": 739716,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "adapter_normalization",
+          "included_in": null
+        },
+        "output": {
+          "availability": "available",
+          "value": 2898,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "adapter_normalization",
+          "included_in": [
+            "normalized_total"
+          ]
+        },
+        "provider_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "reasoning": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        }
+      },
+      "unallocated_usage": null,
+      "provider_reported_costs": [
+        {
+          "cost_evidence_id": "reported-cost",
+          "amount": {
+            "availability": "available",
+            "value": 0.3470019999999998,
+            "reason": null,
+            "source": "provider_usage",
+            "origin": "observed",
+            "precision": "exact",
+            "derivation": null,
+            "included_in": null
+          },
+          "currency": {
+            "availability": "available",
+            "value": "USD",
+            "reason": null
+          },
+          "scope": "attempt",
+          "coverage": "full",
+          "overlap": "established",
+          "source": "provider_usage"
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "native_measurement_schema_version": 1,
+      "key": "implement%2Fsub%3Aimplement-change/merge-checklists#1",
+      "attribution": {
+        "run_id": "audited-change-2026-10-16T20-17-16-598194Z",
+        "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+        "parent_attempt_id": "",
+        "step_id": "merge-checklists",
+        "prefix": "implement/sub:implement-change"
+      },
+      "producer": "agent-runner",
+      "provenance": "native",
+      "source_format": "codex:turn.completed",
+      "requested_identity": {
+        "adapter": "codex",
+        "model": "gpt-6-astra",
+        "provider": null,
+        "effort": "high",
+        "provenance": "configuration"
+      },
+      "resolved_identity": {
+        "adapter": "codex",
+        "model": "gpt-6-astra",
+        "provider": "openai",
+        "effort": "high",
+        "provenance": "launch_resolution"
+      },
+      "observed_identities": [],
+      "tokens": {
+        "cache_read": {
+          "availability": "available",
+          "value": 1538816,
+          "reason": null,
+          "source": "provider_usage",
+          "origin": "observed",
+          "precision": "exact",
+          "derivation": null,
+          "included_in": null
+        },
+        "cache_write": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "input_total": {
+          "availability": "available",
+          "value": 1632202,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "adapter_normalization",
+          "included_in": [
+            "normalized_total"
+          ]
+        },
+        "input_uncached": {
+          "availability": "available",
+          "value": 93386,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "codex_input_total_minus_cache_read",
+          "included_in": null
+        },
+        "normalized_total": {
+          "availability": "available",
+          "value": 1650604,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "adapter_normalization",
+          "included_in": null
+        },
+        "output": {
+          "availability": "available",
+          "value": 18402,
+          "reason": null,
+          "source": "runner_derivation",
+          "origin": "derived",
+          "precision": "exact",
+          "derivation": "adapter_normalization",
+          "included_in": [
+            "normalized_total"
+          ]
+        },
+        "provider_total": {
+          "availability": "unavailable",
+          "value": null,
+          "reason": "not_reported",
+          "source": null,
+          "origin": null,
+          "precision": null,
+          "derivation": null,
+          "included_in": null
+        },
+        "reasoning": {
+          "availability": "available",
+          "value": 3137,
+          "reason": null,
+          "source": "provider_usage",
+          "origin": "observed",
+          "precision": "exact",
+          "derivation": null,
+          "included_in": null
+        }
+      },
+      "unallocated_usage": {
+        "availability": "available",
+        "value": 1650604,
+        "reason": null,
+        "source": "runner_derivation",
+        "origin": "derived",
+        "precision": "exact",
+        "derivation": "adapter_normalization",
+        "included_in": null
+      },
+      "provider_reported_costs": [
+        {
+          "cost_evidence_id": "estimated-cost",
+          "amount": {
+            "availability": "available",
+            "value": 3.392776,
+            "reason": null,
+            "source": "provider_usage",
+            "origin": "derived",
+            "precision": "approximate",
+            "derivation": "openai-standard-request-level@2026-10-20.1",
+            "included_in": null
+          },
+          "currency": {
+            "availability": "available",
+            "value": "USD",
+            "reason": null
+          },
+          "scope": "attempt",
+          "coverage": "full",
+          "overlap": "established",
+          "source": "provider_usage"
+        }
+      ],
+      "limitations": [
+        "model_allocation_unavailable"
+      ]
+    }
+  ],
+  "measurement_heads": null,
+  "validator_contexts": null,
+  "measurement_totals": {
+    "cache_read": {
+      "known_subtotal": 5951236,
+      "availability": "partial",
+      "precision": "exact",
+      "contributing_attempts": 6,
+      "partial_attempts": 0,
+      "missing_attempts": 6
+    },
+    "cache_write": {
+      "known_subtotal": 277935,
+      "availability": "partial",
+      "precision": "exact",
+      "contributing_attempts": 3,
+      "partial_attempts": 0,
+      "missing_attempts": 9
+    },
+    "input_total": {
+      "known_subtotal": 6575690,
+      "availability": "partial",
+      "precision": "exact",
+      "contributing_attempts": 6,
+      "partial_attempts": 0,
+      "missing_attempts": 6
+    },
+    "input_uncached": {
+      "known_subtotal": 346519,
+      "availability": "partial",
+      "precision": "exact",
+      "contributing_attempts": 6,
+      "partial_attempts": 0,
+      "missing_attempts": 6
+    },
+    "normalized_total": {
+      "known_subtotal": 6645593,
+      "availability": "partial",
+      "precision": "exact",
+      "contributing_attempts": 6,
+      "partial_attempts": 0,
+      "missing_attempts": 6
+    },
+    "output": {
+      "known_subtotal": 69903,
+      "availability": "partial",
+      "precision": "exact",
+      "contributing_attempts": 6,
+      "partial_attempts": 0,
+      "missing_attempts": 6
+    },
+    "provider_total": {
+      "known_subtotal": 0,
+      "availability": "unavailable",
+      "precision": "exact",
+      "contributing_attempts": 0,
+      "partial_attempts": 0,
+      "missing_attempts": 12
+    },
+    "reasoning": {
+      "known_subtotal": 9998,
+      "availability": "partial",
+      "precision": "exact",
+      "contributing_attempts": 3,
+      "partial_attempts": 0,
+      "missing_attempts": 9
+    }
+  },
+  "aggregate_version": 1,
+  "schema_version": 4,
+  "run_id": "audited-change-2026-10-16T20-17-16-598194Z",
+  "workflow": "change",
+  "history_complete": false,
+  "sessions": [
+    {
+      "execution_session_id": "e695a951-3deb-4252-98d5-1afd0e2f5a6e",
+      "outcome": "stopped",
+      "started_at": "2026-10-23T01:59:18.074033Z",
+      "last_observed_at": "2026-10-23T03:06:49.348223Z",
+      "ended_at": "2026-10-23T03:06:49.348223Z",
+      "duration_ms": 4051274,
+      "status": "closed"
+    },
+    {
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "started_at": "2026-10-23T03:06:51.228995Z",
+      "last_observed_at": "2026-10-23T04:15:43.905031Z",
+      "duration_ms": 4132676,
+      "status": "open"
+    }
+  ],
+  "steps": [
+    {
+      "cost_basis": "estimated",
+      "price_table_version": "2026-10-20.1",
+      "cost_estimate": {
+        "policy": "openai-standard-request-level",
+        "model": "gpt-6.1-sol",
+        "requests": 13,
+        "long_context_requests": 0
+      },
+      "record_id": "define%2Fsub%3Adefine-change%2Fproposal/b8e79d25-f464-4283-aab7-a13d0537cc1a#1",
+      "prefix": "define/sub:define-change/proposal",
+      "id": "b8e79d25-f464-4283-aab7-a13d0537cc1a",
+      "kind": "agent-call",
+      "type": "agent",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 252525,
+      "session_id": "01a1667f-2029-76e1-987b-e9b0ecf6a8c8",
+      "agent_invoked": true,
+      "role": "crosscheck",
+      "tool": "agent-runner",
+      "usage": {
+        "context": {
+          "status": "available",
+          "source": "codex:rollout",
+          "last_request_input_tokens": 111190,
+          "peak_context_tokens": 111190,
+          "context_window_limit_tokens": 475000
+        },
+        "status": "collected",
+        "cli": "codex",
+        "provider": "openai",
+        "model": "gpt-6.1-sol",
+        "identity": {
+          "requested_cli": "codex",
+          "requested_model": "gpt-6.1-sol",
+          "requested_effort": "high",
+          "effective_cli": "codex",
+          "effective_provider": "openai",
+          "effective_model": "gpt-6.1-sol",
+          "effective_effort": "high",
+          "provider_source": "adapter",
+          "model_source": "invocation",
+          "effort_source": "invocation"
+        },
+        "tokens": {
+          "cached_input": 856064,
+          "input": 952248,
+          "other:cache_write_input_tokens": 0,
+          "output": 6240,
+          "reasoning": 2717
+        },
+        "raw_cumulative": {
+          "cached_input": 856064,
+          "input": 952248,
+          "other:cache_write_input_tokens": 0,
+          "output": 6240,
+          "reasoning": 2717
+        },
+        "token_totals": {
+          "input": 952248,
+          "output": 6240,
+          "total": 958488
+        },
+        "raw_cumulative_token_totals": {
+          "input": 952248,
+          "output": 6240,
+          "total": 958488
+        },
+        "source": "codex:turn.completed",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": 0.3403744,
+      "call_id": "b8e79d25-f464-4283-aab7-a13d0537cc1a",
+      "parent_attempt_id": "5bc5eb54-def4-476b-a479-4d52e4019405",
+      "target_kind": "agent",
+      "target_name": "crosscheck",
+      "timeout": "60m",
+      "exit": "exited",
+      "git_state": "captured",
+      "execution_session_id": "e695a951-3deb-4252-98d5-1afd0e2f5a6e"
+    },
+    {
+      "record_id": "define%2Fsub%3Adefine-change/proposal#1",
+      "prefix": "define/sub:define-change",
+      "id": "proposal",
+      "kind": "step",
+      "type": "agent",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 1995431,
+      "session_id": "0fad505c-f78d-439c-a8eb-a953d1eb4102",
+      "agent_invoked": true,
+      "role": "lead",
+      "tool": "agent-runner",
+      "usage": {
+        "context": {
+          "status": "unavailable",
+          "reason": "interactive-context",
+          "source": "agent-runner",
+          "last_request_input_tokens": null,
+          "peak_context_tokens": null,
+          "context_window_limit_tokens": null
+        },
+        "status": "unavailable",
+        "reason": "interactive-context",
+        "cli": "claude",
+        "provider": "anthropic",
+        "model": "opus",
+        "identity": {
+          "requested_cli": "claude",
+          "requested_model": "opus",
+          "requested_effort": "high",
+          "effective_cli": "claude",
+          "effective_provider": "anthropic",
+          "effective_model": "opus",
+          "effective_effort": "high",
+          "provider_source": "invocation",
+          "model_source": "invocation",
+          "effort_source": "invocation"
+        },
+        "source": "agent-runner"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "e695a951-3deb-4252-98d5-1afd0e2f5a6e",
+      "git_start": {
+        "available": true,
+        "head": "b70022a8c427479e75ad42f01ff22498498b9758",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/.openspec.yaml",
+            "added": 2,
+            "deleted": 0,
+            "fingerprint": "9cfa2ab963a8c9b58eecdb9fd5b55544e988fee8de8b887226ffc32d27744459"
+          }
+        ]
+      },
+      "git_end": {
+        "available": true,
+        "head": "b70022a8c427479e75ad42f01ff22498498b9758",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/.openspec.yaml",
+            "added": 2,
+            "deleted": 0,
+            "fingerprint": "9cfa2ab963a8c9b58eecdb9fd5b55544e988fee8de8b887226ffc32d27744459"
+          },
+          {
+            "path": "openspec/changes/end-to-end/proposal.md",
+            "added": 83,
+            "deleted": 0,
+            "fingerprint": "d670ed5e065350e2c51fed34568934c3414fc89e71ec8fb3fa3880979fb3581f"
+          }
+        ]
+      },
+      "git_changes": {
+        "available": true,
+        "files_changed": 1,
+        "lines_added": 83
+      }
+    },
+    {
+      "record_id": "define%2Fsub%3Adefine-change/specs#1",
+      "prefix": "define/sub:define-change",
+      "id": "specs",
+      "kind": "step",
+      "type": "agent",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "aborted",
+      "duration_ms": 2055052,
+      "session_id": "0fad505c-f78d-439c-a8eb-a953d1eb4102",
+      "agent_invoked": true,
+      "role": "lead",
+      "tool": "agent-runner",
+      "usage": {
+        "context": {
+          "status": "unavailable",
+          "reason": "interactive-context",
+          "source": "agent-runner",
+          "last_request_input_tokens": null,
+          "peak_context_tokens": null,
+          "context_window_limit_tokens": null
+        },
+        "status": "unavailable",
+        "reason": "interactive-context",
+        "cli": "claude",
+        "provider": "anthropic",
+        "model": "opus",
+        "identity": {
+          "requested_cli": "claude",
+          "requested_model": "opus",
+          "requested_effort": "high",
+          "effective_cli": "claude",
+          "effective_provider": "anthropic",
+          "effective_model": "opus",
+          "effective_effort": "high",
+          "provider_source": "invocation",
+          "model_source": "invocation",
+          "effort_source": "invocation"
+        },
+        "source": "agent-runner"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "e695a951-3deb-4252-98d5-1afd0e2f5a6e",
+      "git_start": {
+        "available": true,
+        "head": "b70022a8c427479e75ad42f01ff22498498b9758",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/.openspec.yaml",
+            "added": 2,
+            "deleted": 0,
+            "fingerprint": "9cfa2ab963a8c9b58eecdb9fd5b55544e988fee8de8b887226ffc32d27744459"
+          },
+          {
+            "path": "openspec/changes/end-to-end/proposal.md",
+            "added": 83,
+            "deleted": 0,
+            "fingerprint": "d670ed5e065350e2c51fed34568934c3414fc89e71ec8fb3fa3880979fb3581f"
+          }
+        ]
+      },
+      "git_end": {
+        "available": true,
+        "head": "b70022a8c427479e75ad42f01ff22498498b9758",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/.openspec.yaml",
+            "added": 2,
+            "deleted": 0,
+            "fingerprint": "9cfa2ab963a8c9b58eecdb9fd5b55544e988fee8de8b887226ffc32d27744459"
+          },
+          {
+            "path": "openspec/changes/end-to-end/proposal.md",
+            "added": 83,
+            "deleted": 0,
+            "fingerprint": "d670ed5e065350e2c51fed34568934c3414fc89e71ec8fb3fa3880979fb3581f"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/end-to-end-workflow-evaluation/spec.md",
+            "added": 215,
+            "deleted": 0,
+            "fingerprint": "81bea230d3b3928a4bdf1b30a21bd22a9a36cf29e21ea45306c570e4a861a48a"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/from-prompt-product-scoring/spec.md",
+            "added": 93,
+            "deleted": 0,
+            "fingerprint": "f5f24d333eec4f672d98b07a56646c306e632277acbc1df55da66438b727bccd"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/requirement-delivery-trace/spec.md",
+            "added": 54,
+            "deleted": 0,
+            "fingerprint": "60d318094b5c0f5b974e8f884ff03444ecb4604dceb9ecce76758588102efbae"
+          }
+        ]
+      },
+      "git_changes": {
+        "available": true,
+        "files_changed": 3,
+        "lines_added": 362
+      }
+    },
+    {
+      "record_id": "define#1",
+      "prefix": "",
+      "id": "define",
+      "kind": "step",
+      "type": "sub-workflow",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "aborted",
+      "duration_ms": 4051314,
+      "agent_invoked": false,
+      "usage": {
+        "status": "collected",
+        "cli": "",
+        "identity": {},
+        "source": "agent-runner",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "e695a951-3deb-4252-98d5-1afd0e2f5a6e"
+    },
+    {
+      "record_id": "define%2Fsub%3Adefine-change/specs#2",
+      "prefix": "define/sub:define-change",
+      "id": "specs",
+      "kind": "step",
+      "type": "agent",
+      "attempt": 2,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 148307,
+      "session_id": "0fad505c-f78d-439c-a8eb-a953d1eb4102",
+      "agent_invoked": true,
+      "role": "lead",
+      "tool": "agent-runner",
+      "usage": {
+        "context": {
+          "status": "unavailable",
+          "reason": "interactive-context",
+          "source": "agent-runner",
+          "last_request_input_tokens": null,
+          "peak_context_tokens": null,
+          "context_window_limit_tokens": null
+        },
+        "status": "unavailable",
+        "reason": "interactive-context",
+        "cli": "claude",
+        "provider": "anthropic",
+        "model": "opus",
+        "identity": {
+          "requested_cli": "claude",
+          "requested_model": "opus",
+          "requested_effort": "high",
+          "effective_cli": "claude",
+          "effective_provider": "anthropic",
+          "effective_model": "opus",
+          "effective_effort": "high",
+          "provider_source": "invocation",
+          "model_source": "invocation",
+          "effort_source": "invocation"
+        },
+        "source": "agent-runner"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "git_start": {
+        "available": true,
+        "head": "b70022a8c427479e75ad42f01ff22498498b9758",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/.openspec.yaml",
+            "added": 2,
+            "deleted": 0,
+            "fingerprint": "9cfa2ab963a8c9b58eecdb9fd5b55544e988fee8de8b887226ffc32d27744459"
+          },
+          {
+            "path": "openspec/changes/end-to-end/proposal.md",
+            "added": 83,
+            "deleted": 0,
+            "fingerprint": "d670ed5e065350e2c51fed34568934c3414fc89e71ec8fb3fa3880979fb3581f"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/end-to-end-workflow-evaluation/spec.md",
+            "added": 215,
+            "deleted": 0,
+            "fingerprint": "81bea230d3b3928a4bdf1b30a21bd22a9a36cf29e21ea45306c570e4a861a48a"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/from-prompt-product-scoring/spec.md",
+            "added": 93,
+            "deleted": 0,
+            "fingerprint": "f5f24d333eec4f672d98b07a56646c306e632277acbc1df55da66438b727bccd"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/requirement-delivery-trace/spec.md",
+            "added": 54,
+            "deleted": 0,
+            "fingerprint": "60d318094b5c0f5b974e8f884ff03444ecb4604dceb9ecce76758588102efbae"
+          }
+        ]
+      },
+      "git_end": {
+        "available": true,
+        "head": "b70022a8c427479e75ad42f01ff22498498b9758",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/.openspec.yaml",
+            "added": 2,
+            "deleted": 0,
+            "fingerprint": "9cfa2ab963a8c9b58eecdb9fd5b55544e988fee8de8b887226ffc32d27744459"
+          },
+          {
+            "path": "openspec/changes/end-to-end/proposal.md",
+            "added": 83,
+            "deleted": 0,
+            "fingerprint": "ee68c80e1fc62c3957b4c0d9353ad6423e1dc21c8d31d4c8b344d05b7ef34735"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/end-to-end-workflow-evaluation/spec.md",
+            "added": 215,
+            "deleted": 0,
+            "fingerprint": "81bea230d3b3928a4bdf1b30a21bd22a9a36cf29e21ea45306c570e4a861a48a"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/evaluation-isolation/spec.md",
+            "added": 92,
+            "deleted": 0,
+            "fingerprint": "95dfcc19b8b6db3670b028d2933ff1fdbb631cd84c76880d98499e3130bdaa03"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/from-prompt-product-scoring/spec.md",
+            "added": 86,
+            "deleted": 0,
+            "fingerprint": "1e4f50dfca8fb88b9f6c3005fc9f8b97b148a8b373477179f52140894afccdf3"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/requirement-delivery-trace/spec.md",
+            "added": 54,
+            "deleted": 0,
+            "fingerprint": "60d318094b5c0f5b974e8f884ff03444ecb4604dceb9ecce76758588102efbae"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/simulated-user/spec.md",
+            "added": 46,
+            "deleted": 0,
+            "fingerprint": "4b38e322e2cb59d54a02307019507a25619d30f14162cf0a9260938a44dfa6ee"
+          }
+        ]
+      },
+      "git_changes": {
+        "available": false,
+        "reason": "repository change cannot be derived conservatively"
+      }
+    },
+    {
+      "record_id": "define%2Fsub%3Adefine-change/design#1",
+      "prefix": "define/sub:define-change",
+      "id": "design",
+      "kind": "step",
+      "type": "agent",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 982355,
+      "session_id": "0fad505c-f78d-439c-a8eb-a953d1eb4102",
+      "agent_invoked": true,
+      "role": "lead",
+      "tool": "agent-runner",
+      "usage": {
+        "context": {
+          "status": "unavailable",
+          "reason": "interactive-context",
+          "source": "agent-runner",
+          "last_request_input_tokens": null,
+          "peak_context_tokens": null,
+          "context_window_limit_tokens": null
+        },
+        "status": "unavailable",
+        "reason": "interactive-context",
+        "cli": "claude",
+        "provider": "anthropic",
+        "model": "opus",
+        "identity": {
+          "requested_cli": "claude",
+          "requested_model": "opus",
+          "requested_effort": "high",
+          "effective_cli": "claude",
+          "effective_provider": "anthropic",
+          "effective_model": "opus",
+          "effective_effort": "high",
+          "provider_source": "invocation",
+          "model_source": "invocation",
+          "effort_source": "invocation"
+        },
+        "source": "agent-runner"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "git_start": {
+        "available": true,
+        "head": "b70022a8c427479e75ad42f01ff22498498b9758",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/.openspec.yaml",
+            "added": 2,
+            "deleted": 0,
+            "fingerprint": "9cfa2ab963a8c9b58eecdb9fd5b55544e988fee8de8b887226ffc32d27744459"
+          },
+          {
+            "path": "openspec/changes/end-to-end/proposal.md",
+            "added": 83,
+            "deleted": 0,
+            "fingerprint": "ee68c80e1fc62c3957b4c0d9353ad6423e1dc21c8d31d4c8b344d05b7ef34735"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/end-to-end-workflow-evaluation/spec.md",
+            "added": 215,
+            "deleted": 0,
+            "fingerprint": "81bea230d3b3928a4bdf1b30a21bd22a9a36cf29e21ea45306c570e4a861a48a"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/evaluation-isolation/spec.md",
+            "added": 92,
+            "deleted": 0,
+            "fingerprint": "95dfcc19b8b6db3670b028d2933ff1fdbb631cd84c76880d98499e3130bdaa03"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/from-prompt-product-scoring/spec.md",
+            "added": 86,
+            "deleted": 0,
+            "fingerprint": "1e4f50dfca8fb88b9f6c3005fc9f8b97b148a8b373477179f52140894afccdf3"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/requirement-delivery-trace/spec.md",
+            "added": 54,
+            "deleted": 0,
+            "fingerprint": "60d318094b5c0f5b974e8f884ff03444ecb4604dceb9ecce76758588102efbae"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/simulated-user/spec.md",
+            "added": 46,
+            "deleted": 0,
+            "fingerprint": "4b38e322e2cb59d54a02307019507a25619d30f14162cf0a9260938a44dfa6ee"
+          }
+        ]
+      },
+      "git_end": {
+        "available": true,
+        "head": "f51898af976354a0453b7ff90b19dbcbb5ede443",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/.openspec.yaml",
+            "added": 2,
+            "deleted": 0,
+            "fingerprint": "9cfa2ab963a8c9b58eecdb9fd5b55544e988fee8de8b887226ffc32d27744459"
+          },
+          {
+            "path": "openspec/changes/end-to-end/design.md",
+            "added": 351,
+            "deleted": 0,
+            "fingerprint": "2915df9e8e47b539eb132a858f51b6a2e57548218b3d9408ada85c9582ba17d1"
+          },
+          {
+            "path": "openspec/changes/end-to-end/proposal.md",
+            "added": 81,
+            "deleted": 0,
+            "fingerprint": "a85d2b59a123c07af2159fb6085e93f0f5eae878f0521915a1c51d07e953b6e9"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/end-to-end-workflow-evaluation/spec.md",
+            "added": 233,
+            "deleted": 0,
+            "fingerprint": "1b8ec9d218356cf7d766b4508353dc9cee862582c602ba8a207f56d1c04b358b"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/evaluation-isolation/spec.md",
+            "added": 92,
+            "deleted": 0,
+            "fingerprint": "918e4cf5a44dff51373902cd9cc1fcc040f05a3038438e294b75b99393194f48"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/from-prompt-product-scoring/spec.md",
+            "added": 86,
+            "deleted": 0,
+            "fingerprint": "1e4f50dfca8fb88b9f6c3005fc9f8b97b148a8b373477179f52140894afccdf3"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/requirement-delivery-trace/spec.md",
+            "added": 54,
+            "deleted": 0,
+            "fingerprint": "60d318094b5c0f5b974e8f884ff03444ecb4604dceb9ecce76758588102efbae"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/simulated-user/spec.md",
+            "added": 46,
+            "deleted": 0,
+            "fingerprint": "4b38e322e2cb59d54a02307019507a25619d30f14162cf0a9260938a44dfa6ee"
+          }
+        ],
+        "committed": [
+          {
+            "path": ".github/workflows/factory-routing.yml",
+            "added": 2,
+            "deleted": 2
+          },
+          {
+            "path": "AGENTS.md",
+            "added": 1,
+            "deleted": 1
+          },
+          {
+            "path": "evals/agent-runner/and-scene-define/lib/runner-metrics.mjs",
+            "added": 41,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene-define/lib/runner-state.mjs",
+            "added": 4,
+            "deleted": 3
+          },
+          {
+            "path": "evals/agent-runner/and-scene/README.md",
+            "added": 27,
+            "deleted": 18
+          },
+          {
+            "path": "evals/agent-runner/and-scene/controller.mjs",
+            "added": 5,
+            "deleted": 1
+          },
+          {
+            "path": "evals/agent-runner/and-scene/experiments/baseline.json",
+            "added": 698,
+            "deleted": 213
+          },
+          {
+            "path": "evals/agent-runner/and-scene/lib/evidence.mjs",
+            "added": 28,
+            "deleted": 12
+          },
+          {
+            "path": "evals/agent-runner/and-scene/lib/report.mjs",
+            "added": 1,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/lib/runner-metrics.mjs",
+            "added": 51,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/lib/runner-state.mjs",
+            "added": 4,
+            "deleted": 3
+          },
+          {
+            "path": "evals/agent-runner/and-scene/lib/workflow.mjs",
+            "added": 1,
+            "deleted": 1
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/318e4984-f7c4-4e1b-9e51-ca6cfaa9836d-rep-1/ambiguity-ledger.json",
+            "added": 88,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/318e4984-f7c4-4e1b-9e51-ca6cfaa9836d-rep-1/artifact-manifest.json",
+            "added": 1456,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/318e4984-f7c4-4e1b-9e51-ca6cfaa9836d-rep-1/implementation.diff",
+            "added": 13719,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/318e4984-f7c4-4e1b-9e51-ca6cfaa9836d-rep-1/report.html",
+            "added": 934,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/318e4984-f7c4-4e1b-9e51-ca6cfaa9836d-rep-1/result.json",
+            "added": 140230,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/373c3f24-0ca7-47c2-9f7a-953944f87662-rep-1/ambiguity-ledger.json",
+            "added": 33,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/373c3f24-0ca7-47c2-9f7a-953944f87662-rep-1/artifact-manifest.json",
+            "added": 1691,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/373c3f24-0ca7-47c2-9f7a-953944f87662-rep-1/implementation.diff",
+            "added": 13617,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/373c3f24-0ca7-47c2-9f7a-953944f87662-rep-1/report.html",
+            "added": 998,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/373c3f24-0ca7-47c2-9f7a-953944f87662-rep-1/result.json",
+            "added": 159148,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-1/ambiguity-ledger.json",
+            "added": 88,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-1/artifact-manifest.json",
+            "added": 1351,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-1/implementation.diff",
+            "added": 12229,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-1/report.html",
+            "added": 849,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-1/result.json",
+            "added": 125993,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-2/ambiguity-ledger.json",
+            "added": 71,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-2/artifact-manifest.json",
+            "added": 1682,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-2/human-review.json",
+            "added": 147,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-2/implementation.diff",
+            "added": 10840,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-2/report.html",
+            "added": 959,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-2/result.json",
+            "added": 115055,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-3/ambiguity-ledger.json",
+            "added": 90,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-3/artifact-manifest.json",
+            "added": 1601,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-3/implementation.diff",
+            "added": 13845,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-3/report.html",
+            "added": 912,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-3/result.json",
+            "added": 129875,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/45d04da4-baae-4f80-a125-a4aa541de311-rep-1/ambiguity-ledger.json",
+            "added": 86,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/45d04da4-baae-4f80-a125-a4aa541de311-rep-1/artifact-manifest.json",
+            "added": 1546,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/45d04da4-baae-4f80-a125-a4aa541de311-rep-1/implementation.diff",
+            "added": 15621,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/45d04da4-baae-4f80-a125-a4aa541de311-rep-1/report.html",
+            "added": 903,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/45d04da4-baae-4f80-a125-a4aa541de311-rep-1/result.json",
+            "added": 129153,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/55a681d9-9040-40d3-b0a6-207690b4e0bd-rep-1/ambiguity-ledger.json",
+            "added": 67,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/55a681d9-9040-40d3-b0a6-207690b4e0bd-rep-1/artifact-manifest.json",
+            "added": 1291,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/55a681d9-9040-40d3-b0a6-207690b4e0bd-rep-1/implementation.diff",
+            "added": 12094,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/55a681d9-9040-40d3-b0a6-207690b4e0bd-rep-1/report.html",
+            "added": 868,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/55a681d9-9040-40d3-b0a6-207690b4e0bd-rep-1/result.json",
+            "added": 140238,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/55a681d9-9040-40d3-b0a6-207690b4e0bd-rep-2/ambiguity-ledger.json",
+            "added": 35,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/55a681d9-9040-40d3-b0a6-207690b4e0bd-rep-2/artifact-manifest.json",
+            "added": 1281,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/55a681d9-9040-40d3-b0a6-207690b4e0bd-rep-2/implementation.diff",
+            "added": 12435,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/55a681d9-9040-40d3-b0a6-207690b4e0bd-rep-2/report.html",
+            "added": 863,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/55a681d9-9040-40d3-b0a6-207690b4e0bd-rep-2/result.json",
+            "added": 148900,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/6f0556a2-8f4f-48bb-a780-f8d46d186240-rep-1/ambiguity-ledger.json",
+            "added": 116,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/6f0556a2-8f4f-48bb-a780-f8d46d186240-rep-1/artifact-manifest.json",
+            "added": 1666,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/6f0556a2-8f4f-48bb-a780-f8d46d186240-rep-1/implementation.diff",
+            "added": 12366,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/6f0556a2-8f4f-48bb-a780-f8d46d186240-rep-1/report.html",
+            "added": 972,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/6f0556a2-8f4f-48bb-a780-f8d46d186240-rep-1/result.json",
+            "added": 146407,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/80f82047-836d-4d96-8158-26ed74e7d609-rep-1/ambiguity-ledger.json",
+            "added": 52,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/80f82047-836d-4d96-8158-26ed74e7d609-rep-1/artifact-manifest.json",
+            "added": 1676,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/80f82047-836d-4d96-8158-26ed74e7d609-rep-1/implementation.diff",
+            "added": 12642,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/80f82047-836d-4d96-8158-26ed74e7d609-rep-1/report.html",
+            "added": 978,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/80f82047-836d-4d96-8158-26ed74e7d609-rep-1/result.json",
+            "added": 149238,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/80f82047-836d-4d96-8158-26ed74e7d609-rep-2/ambiguity-ledger.json",
+            "added": 47,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/80f82047-836d-4d96-8158-26ed74e7d609-rep-2/artifact-manifest.json",
+            "added": 1876,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/80f82047-836d-4d96-8158-26ed74e7d609-rep-2/implementation.diff",
+            "added": 14113,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/80f82047-836d-4d96-8158-26ed74e7d609-rep-2/report.html",
+            "added": 1043,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/80f82047-836d-4d96-8158-26ed74e7d609-rep-2/result.json",
+            "added": 153057,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/850886c3-bb73-4e20-989d-35e7888daa9e-rep-1/ambiguity-ledger.json",
+            "added": 91,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/850886c3-bb73-4e20-989d-35e7888daa9e-rep-1/artifact-manifest.json",
+            "added": 1411,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/850886c3-bb73-4e20-989d-35e7888daa9e-rep-1/implementation.diff",
+            "added": 10845,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/850886c3-bb73-4e20-989d-35e7888daa9e-rep-1/report.html",
+            "added": 912,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/850886c3-bb73-4e20-989d-35e7888daa9e-rep-1/result.json",
+            "added": 134821,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/850886c3-bb73-4e20-989d-35e7888daa9e-rep-2/ambiguity-ledger.json",
+            "added": 68,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/850886c3-bb73-4e20-989d-35e7888daa9e-rep-2/artifact-manifest.json",
+            "added": 1321,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/850886c3-bb73-4e20-989d-35e7888daa9e-rep-2/implementation.diff",
+            "added": 9928,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/850886c3-bb73-4e20-989d-35e7888daa9e-rep-2/report.html",
+            "added": 895,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/850886c3-bb73-4e20-989d-35e7888daa9e-rep-2/result.json",
+            "added": 134151,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/850886c3-bb73-4e20-989d-35e7888daa9e-rep-3/ambiguity-ledger.json",
+            "added": 69,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/850886c3-bb73-4e20-989d-35e7888daa9e-rep-3/artifact-manifest.json",
+            "added": 1556,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/850886c3-bb73-4e20-989d-35e7888daa9e-rep-3/implementation.diff",
+            "added": 10733,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/850886c3-bb73-4e20-989d-35e7888daa9e-rep-3/report.html",
+            "added": 954,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/850886c3-bb73-4e20-989d-35e7888daa9e-rep-3/result.json",
+            "added": 120021,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/865d30e5-1384-4b9b-8ed3-9d6406b0d43e-rep-1/ambiguity-ledger.json",
+            "added": 47,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/865d30e5-1384-4b9b-8ed3-9d6406b0d43e-rep-1/artifact-manifest.json",
+            "added": 1641,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/865d30e5-1384-4b9b-8ed3-9d6406b0d43e-rep-1/implementation.diff",
+            "added": 16065,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/865d30e5-1384-4b9b-8ed3-9d6406b0d43e-rep-1/report.html",
+            "added": 939,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/865d30e5-1384-4b9b-8ed3-9d6406b0d43e-rep-1/result.json",
+            "added": 141051,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/91c43f20-9084-4a2b-9adc-f022131fde02-rep-1/ambiguity-ledger.json",
+            "added": 70,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/91c43f20-9084-4a2b-9adc-f022131fde02-rep-1/artifact-manifest.json",
+            "added": 1851,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/91c43f20-9084-4a2b-9adc-f022131fde02-rep-1/implementation.diff",
+            "added": 13316,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/91c43f20-9084-4a2b-9adc-f022131fde02-rep-1/report.html",
+            "added": 998,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/91c43f20-9084-4a2b-9adc-f022131fde02-rep-1/result.json",
+            "added": 128009,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/9f867980-aade-46e7-b524-12e84d866f83-rep-1/ambiguity-ledger.json",
+            "added": 112,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/9f867980-aade-46e7-b524-12e84d866f83-rep-1/artifact-manifest.json",
+            "added": 1381,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/9f867980-aade-46e7-b524-12e84d866f83-rep-1/implementation.diff",
+            "added": 13152,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/9f867980-aade-46e7-b524-12e84d866f83-rep-1/report.html",
+            "added": 894,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/9f867980-aade-46e7-b524-12e84d866f83-rep-1/result.json",
+            "added": 138927,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/ba02d4c8-23a0-4587-a30d-518ae1cc4a84-rep-1/ambiguity-ledger.json",
+            "added": 28,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/ba02d4c8-23a0-4587-a30d-518ae1cc4a84-rep-1/artifact-manifest.json",
+            "added": 1771,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/ba02d4c8-23a0-4587-a30d-518ae1cc4a84-rep-1/implementation.diff",
+            "added": 11582,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/ba02d4c8-23a0-4587-a30d-518ae1cc4a84-rep-1/report.html",
+            "added": 1028,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/ba02d4c8-23a0-4587-a30d-518ae1cc4a84-rep-1/result.json",
+            "added": 127089,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/ba02d4c8-23a0-4587-a30d-518ae1cc4a84-rep-2/ambiguity-ledger.json",
+            "added": 108,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/ba02d4c8-23a0-4587-a30d-518ae1cc4a84-rep-2/artifact-manifest.json",
+            "added": 1711,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/ba02d4c8-23a0-4587-a30d-518ae1cc4a84-rep-2/implementation.diff",
+            "added": 10673,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/ba02d4c8-23a0-4587-a30d-518ae1cc4a84-rep-2/report.html",
+            "added": 1026,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/results/ba02d4c8-23a0-4587-a30d-518ae1cc4a84-rep-2/result.json",
+            "added": 147325,
+            "deleted": 0
+          },
+          {
+            "path": "evals/agent-runner/and-scene/run.sh",
+            "added": 15,
+            "deleted": 5
+          },
+          {
+            "path": "evals/lib/panel-judging/protocol.mjs",
+            "added": 7,
+            "deleted": 3
+          },
+          {
+            "path": "openspec/changes/archive/2026-10-23-eval-end-to-end-workflow/.openspec.yaml",
+            "added": 2,
+            "deleted": 0
+          },
+          {
+            "path": "openspec/changes/archive/2026-10-23-eval-end-to-end-workflow/proposal.md",
+            "added": 93,
+            "deleted": 0
+          },
+          {
+            "path": "openspec/changes/archive/2026-10-23-start-from-definition/.openspec.yaml",
+            "added": 2,
+            "deleted": 0
+          },
+          {
+            "path": "openspec/changes/archive/2026-10-23-start-from-definition/design.md",
+            "added": 117,
+            "deleted": 0
+          },
+          {
+            "path": "openspec/changes/archive/2026-10-23-start-from-definition/proposal.md",
+            "added": 83,
+            "deleted": 0
+          },
+          {
+            "path": "openspec/changes/archive/2026-10-23-start-from-definition/specs/agent-role-configuration/spec.md",
+            "added": 149,
+            "deleted": 0
+          },
+          {
+            "path": "openspec/changes/archive/2026-10-23-start-from-definition/specs/evaluation-metrics-reporting/spec.md",
+            "added": 84,
+            "deleted": 0
+          },
+          {
+            "path": "openspec/changes/archive/2026-10-23-start-from-definition/specs/evaluation-outcomes/spec.md",
+            "added": 28,
+            "deleted": 0
+          },
+          {
+            "path": "openspec/changes/archive/2026-10-23-start-from-definition/specs/product-quality-scoring/spec.md",
+            "added": 59,
+            "deleted": 0
+          },
+          {
+            "path": "openspec/changes/archive/2026-10-23-start-from-definition/specs/runner-workflow-execution/spec.md",
+            "added": 313,
+            "deleted": 0
+          },
+          {
+            "path": "openspec/changes/archive/2026-10-23-start-from-definition/tasks.md",
+            "added": 8,
+            "deleted": 0
+          },
+          {
+            "path": "openspec/changes/eval-end-to-end-workflow/.openspec.yaml",
+            "added": 0,
+            "deleted": 2
+          },
+          {
+            "path": "openspec/changes/eval-end-to-end-workflow/proposal.md",
+            "added": 0,
+            "deleted": 93
+          },
+          {
+            "path": "openspec/changes/start-from-definition/.openspec.yaml",
+            "added": 0,
+            "deleted": 2
+          },
+          {
+            "path": "openspec/changes/start-from-definition/design.md",
+            "added": 0,
+            "deleted": 117
+          },
+          {
+            "path": "openspec/changes/start-from-definition/proposal.md",
+            "added": 0,
+            "deleted": 83
+          },
+          {
+            "path": "openspec/changes/start-from-definition/specs/agent-role-configuration/spec.md",
+            "added": 0,
+            "deleted": 149
+          },
+          {
+            "path": "openspec/changes/start-from-definition/specs/evaluation-metrics-reporting/spec.md",
+            "added": 0,
+            "deleted": 84
+          },
+          {
+            "path": "openspec/changes/start-from-definition/specs/evaluation-outcomes/spec.md",
+            "added": 0,
+            "deleted": 28
+          },
+          {
+            "path": "openspec/changes/start-from-definition/specs/product-quality-scoring/spec.md",
+            "added": 0,
+            "deleted": 59
+          },
+          {
+            "path": "openspec/changes/start-from-definition/specs/runner-workflow-execution/spec.md",
+            "added": 0,
+            "deleted": 313
+          },
+          {
+            "path": "openspec/changes/start-from-definition/tasks.md",
+            "added": 0,
+            "deleted": 8
+          },
+          {
+            "path": "openspec/specs/agent-role-configuration/spec.md",
+            "added": 54,
+            "deleted": 17
+          },
+          {
+            "path": "openspec/specs/ambiguity-evaluation/spec.md",
+            "added": 2,
+            "deleted": 2
+          },
+          {
+            "path": "openspec/specs/evaluation-metrics-reporting/spec.md",
+            "added": 4,
+            "deleted": 4
+          },
+          {
+            "path": "openspec/specs/evaluation-outcomes/spec.md",
+            "added": 4,
+            "deleted": 4
+          },
+          {
+            "path": "openspec/specs/product-quality-scoring/spec.md",
+            "added": 10,
+            "deleted": 1
+          },
+          {
+            "path": "openspec/specs/runner-workflow-execution/spec.md",
+            "added": 164,
+            "deleted": 142
+          },
+          {
+            "path": "openspec/specs/testing-evidence-evaluation/spec.md",
+            "added": 2,
+            "deleted": 2
+          },
+          {
+            "path": "test/agent-skills-bootstrap.test.mjs",
+            "added": 6,
+            "deleted": 7
+          },
+          {
+            "path": "test/and-scene-define-workflow.test.mjs",
+            "added": 8,
+            "deleted": 0
+          },
+          {
+            "path": "test/and-scene.test.mjs",
+            "added": 16,
+            "deleted": 11
+          },
+          {
+            "path": "test/controller.test.mjs",
+            "added": 79,
+            "deleted": 40
+          },
+          {
+            "path": "test/diagnostics-phases.test.mjs",
+            "added": 6,
+            "deleted": 4
+          },
+          {
+            "path": "test/evidence-provenance.test.mjs",
+            "added": 65,
+            "deleted": 1
+          },
+          {
+            "path": "test/experiment-baseline.test.mjs",
+            "added": 3,
+            "deleted": 3
+          },
+          {
+            "path": "test/experiment-comparison.test.mjs",
+            "added": 1,
+            "deleted": 1
+          },
+          {
+            "path": "test/handoff.test.mjs",
+            "added": 5,
+            "deleted": 3
+          },
+          {
+            "path": "test/panel-judging-packets.test.mjs",
+            "added": 4,
+            "deleted": 4
+          },
+          {
+            "path": "test/provenance.test.mjs",
+            "added": 9,
+            "deleted": 7
+          },
+          {
+            "path": "test/report.test.mjs",
+            "added": 2,
+            "deleted": 2
+          },
+          {
+            "path": "test/runner-metrics.test.mjs",
+            "added": 67,
+            "deleted": 3
+          },
+          {
+            "path": "test/runner-state.test.mjs",
+            "added": 11,
+            "deleted": 11
+          },
+          {
+            "path": "test/testing-evidence-claim-map.test.mjs",
+            "added": 39,
+            "deleted": 13
+          },
+          {
+            "path": "test/workflow.test.mjs",
+            "added": 29,
+            "deleted": 26
+          }
+        ],
+        "committed_observed": true,
+        "commits": [
+          "f51898af976354a0453b7ff90b19dbcbb5ede443",
+          "504262b5bd478b9329f926b5c965db79a716776a",
+          "917e0f256c087aec291b8251434419914162c785",
+          "51c9608ac9497c10ec09daf91b608a06e39132d9",
+          "1a76ccdaacc9cf244fa9e252076a175dacf20177",
+          "fe3872a143df19b3f6f5a75919f1b4751f53555a",
+          "303925923ca2a2bf5b7a4aa0a101b85c8c7de116",
+          "effcc9d0998329f6bf0a78286792ba1ced27d5b6",
+          "e558630d2a8aa28c3edcee80d30c1f2d14445bf3",
+          "dee76d4fb8e09e1646771caf6eb40637a049c1c1",
+          "84054321a1abca5962373adda6222608a3f07d31",
+          "4f166bdf8f1c932fc8864307de0a18c7d4fa55ca",
+          "330914051627bc0cd861cebbab8a4b792c27bf25",
+          "1efba56407ff556956168629bb86667e8fc1487e",
+          "94773400f5250d6c80cb876793fe9798bdbf20bb",
+          "91d133227c8d5fb449d1235f13c69b37b19cd4a3",
+          "5362812639ccfec775753163a555551af7fa667a",
+          "3d323afd0336b0375a06410f77c1d5392076d3f9",
+          "5cf6f6a2575c4156eb80bf84e49afa5c7f53fac9",
+          "5fb477b816b8ae55c004fbe632fd8abd49060257",
+          "a1c35da8989171d721343242adb45cf61f8011cf",
+          "4196aa33f620aeceded1c6bfd4e5ac4edeae6a2f",
+          "18e5ea65447d75b09849a52d87c4389b046a633a",
+          "23427e1b75f18a46ed21e9ec9be3c993938a1ceb",
+          "6b05b2054bc7b1142fd3cba63e05a4555c0c4d73",
+          "09034857e00e16603658ae0969d6af609039cb39",
+          "621b2f810550078fcba7a06b4af47df6a22df3d1",
+          "690fab79b2d1e5780266551612d42b2e8babd39d",
+          "7df2496bfe4fd604e5f2d2acdd148eefadd53805",
+          "240b7804bed96a9069b971eddf0a0632342a3929",
+          "5790da936c9a06a173f7e392bd6ae66b519811c5",
+          "cc20c215fe87aa20ef6a3f3fcc0bd4e4f1a81fb5",
+          "9f4db0172511d8d02dacd7b16c57657a1293164a",
+          "ce8fb6f9740d3a58d91387c4ad2e0570bb21241f",
+          "f056e39960412095e30f4e2b139b6fbc4552718c",
+          "9289e3ec0eecf71049354e13a06558d1903f6572",
+          "e65f61253916e7821c310980d1d726c83014024e",
+          "ac77f7eef20d512ec093a2b11a4967e118fee96b",
+          "4fb339d2e41cc9445a6e66806bd1c2c1bd070c98",
+          "5d103db6354776d4336cbf5d602c5b3f40a5d6f3",
+          "2a93009eb1a36d80214dda3cebba663869bc205f",
+          "fdd5b990900ffeb7c39c8d8e6239287bbceddb70",
+          "f5b1f177e3ffbdd03d239f081325658d6537ed53"
+        ]
+      },
+      "git_changes": {
+        "available": false,
+        "reason": "preexisting dirty state prevents conservative commit attribution"
+      }
+    },
+    {
+      "record_id": "define%2Fsub%3Adefine-change/test-plan#1",
+      "prefix": "define/sub:define-change",
+      "id": "test-plan",
+      "kind": "step",
+      "type": "agent",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 259088,
+      "session_id": "0fad505c-f78d-439c-a8eb-a953d1eb4102",
+      "agent_invoked": true,
+      "role": "lead",
+      "tool": "agent-runner",
+      "usage": {
+        "context": {
+          "status": "unavailable",
+          "reason": "interactive-context",
+          "source": "agent-runner",
+          "last_request_input_tokens": null,
+          "peak_context_tokens": null,
+          "context_window_limit_tokens": null
+        },
+        "status": "unavailable",
+        "reason": "interactive-context",
+        "cli": "claude",
+        "provider": "anthropic",
+        "model": "opus",
+        "identity": {
+          "requested_cli": "claude",
+          "requested_model": "opus",
+          "requested_effort": "high",
+          "effective_cli": "claude",
+          "effective_provider": "anthropic",
+          "effective_model": "opus",
+          "effective_effort": "high",
+          "provider_source": "invocation",
+          "model_source": "invocation",
+          "effort_source": "invocation"
+        },
+        "source": "agent-runner"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "git_start": {
+        "available": true,
+        "head": "f51898af976354a0453b7ff90b19dbcbb5ede443",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/.openspec.yaml",
+            "added": 2,
+            "deleted": 0,
+            "fingerprint": "9cfa2ab963a8c9b58eecdb9fd5b55544e988fee8de8b887226ffc32d27744459"
+          },
+          {
+            "path": "openspec/changes/end-to-end/design.md",
+            "added": 351,
+            "deleted": 0,
+            "fingerprint": "2915df9e8e47b539eb132a858f51b6a2e57548218b3d9408ada85c9582ba17d1"
+          },
+          {
+            "path": "openspec/changes/end-to-end/proposal.md",
+            "added": 81,
+            "deleted": 0,
+            "fingerprint": "a85d2b59a123c07af2159fb6085e93f0f5eae878f0521915a1c51d07e953b6e9"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/end-to-end-workflow-evaluation/spec.md",
+            "added": 233,
+            "deleted": 0,
+            "fingerprint": "1b8ec9d218356cf7d766b4508353dc9cee862582c602ba8a207f56d1c04b358b"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/evaluation-isolation/spec.md",
+            "added": 92,
+            "deleted": 0,
+            "fingerprint": "918e4cf5a44dff51373902cd9cc1fcc040f05a3038438e294b75b99393194f48"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/from-prompt-product-scoring/spec.md",
+            "added": 86,
+            "deleted": 0,
+            "fingerprint": "1e4f50dfca8fb88b9f6c3005fc9f8b97b148a8b373477179f52140894afccdf3"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/requirement-delivery-trace/spec.md",
+            "added": 54,
+            "deleted": 0,
+            "fingerprint": "60d318094b5c0f5b974e8f884ff03444ecb4604dceb9ecce76758588102efbae"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/simulated-user/spec.md",
+            "added": 46,
+            "deleted": 0,
+            "fingerprint": "4b38e322e2cb59d54a02307019507a25619d30f14162cf0a9260938a44dfa6ee"
+          }
+        ]
+      },
+      "git_end": {
+        "available": true,
+        "head": "f51898af976354a0453b7ff90b19dbcbb5ede443",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/.openspec.yaml",
+            "added": 2,
+            "deleted": 0,
+            "fingerprint": "9cfa2ab963a8c9b58eecdb9fd5b55544e988fee8de8b887226ffc32d27744459"
+          },
+          {
+            "path": "openspec/changes/end-to-end/design.md",
+            "added": 351,
+            "deleted": 0,
+            "fingerprint": "2915df9e8e47b539eb132a858f51b6a2e57548218b3d9408ada85c9582ba17d1"
+          },
+          {
+            "path": "openspec/changes/end-to-end/proposal.md",
+            "added": 81,
+            "deleted": 0,
+            "fingerprint": "a85d2b59a123c07af2159fb6085e93f0f5eae878f0521915a1c51d07e953b6e9"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/end-to-end-workflow-evaluation/spec.md",
+            "added": 233,
+            "deleted": 0,
+            "fingerprint": "1b8ec9d218356cf7d766b4508353dc9cee862582c602ba8a207f56d1c04b358b"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/evaluation-isolation/spec.md",
+            "added": 92,
+            "deleted": 0,
+            "fingerprint": "918e4cf5a44dff51373902cd9cc1fcc040f05a3038438e294b75b99393194f48"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/from-prompt-product-scoring/spec.md",
+            "added": 86,
+            "deleted": 0,
+            "fingerprint": "1e4f50dfca8fb88b9f6c3005fc9f8b97b148a8b373477179f52140894afccdf3"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/requirement-delivery-trace/spec.md",
+            "added": 54,
+            "deleted": 0,
+            "fingerprint": "60d318094b5c0f5b974e8f884ff03444ecb4604dceb9ecce76758588102efbae"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/simulated-user/spec.md",
+            "added": 46,
+            "deleted": 0,
+            "fingerprint": "4b38e322e2cb59d54a02307019507a25619d30f14162cf0a9260938a44dfa6ee"
+          },
+          {
+            "path": "openspec/changes/end-to-end/test-plan.md",
+            "added": 363,
+            "deleted": 0,
+            "fingerprint": "3e8547db494d7678a513510c854df2ef57e943963482dca331bb4ea6203ba1ec"
+          }
+        ]
+      },
+      "git_changes": {
+        "available": true,
+        "files_changed": 1,
+        "lines_added": 363
+      }
+    },
+    {
+      "cost_basis": "estimated",
+      "price_table_version": "2026-10-20.1",
+      "cost_estimate": {
+        "policy": "openai-standard-request-level",
+        "model": "gpt-6-astra",
+        "requests": 19,
+        "long_context_requests": 0
+      },
+      "record_id": "define%2Fsub%3Adefine-change%2Fapproach-review/f1b4f58a-8aca-4d65-9178-921a70d2cd58#1",
+      "prefix": "define/sub:define-change/approach-review",
+      "id": "f1b4f58a-8aca-4d65-9178-921a70d2cd58",
+      "kind": "agent-call",
+      "type": "agent",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 475934,
+      "session_id": "01a166cf-4784-7d00-887e-9b36218fa676",
+      "agent_invoked": true,
+      "role": "crosscheck",
+      "tool": "agent-runner",
+      "usage": {
+        "context": {
+          "status": "available",
+          "source": "codex:rollout",
+          "last_request_input_tokens": 166706,
+          "peak_context_tokens": 166706,
+          "context_window_limit_tokens": 258400
+        },
+        "status": "collected",
+        "cli": "codex",
+        "provider": "openai",
+        "model": "gpt-6-astra",
+        "identity": {
+          "requested_cli": "codex",
+          "requested_model": "gpt-6-astra",
+          "requested_effort": "high",
+          "effective_cli": "codex",
+          "effective_provider": "openai",
+          "effective_model": "gpt-6-astra",
+          "effective_effort": "high",
+          "provider_source": "adapter",
+          "model_source": "invocation",
+          "effort_source": "invocation"
+        },
+        "tokens": {
+          "cached_input": 1592320,
+          "input": 1749235,
+          "other:cache_write_input_tokens": 0,
+          "output": 11071,
+          "reasoning": 4144
+        },
+        "raw_cumulative": {
+          "cached_input": 1592320,
+          "input": 1749235,
+          "other:cache_write_input_tokens": 0,
+          "output": 11071,
+          "reasoning": 4144
+        },
+        "token_totals": {
+          "input": 1749235,
+          "output": 11071,
+          "total": 1760306
+        },
+        "raw_cumulative_token_totals": {
+          "input": 1749235,
+          "output": 11071,
+          "total": 1760306
+        },
+        "source": "codex:turn.completed",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": 3.71502,
+      "call_id": "f1b4f58a-8aca-4d65-9178-921a70d2cd58",
+      "parent_attempt_id": "f33fdfc6-99ca-41ec-a4ae-fd8e1e1f9b19",
+      "target_kind": "agent",
+      "target_name": "crosscheck",
+      "timeout": "2h",
+      "exit": "exited",
+      "git_state": "captured",
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68"
+    },
+    {
+      "record_id": "define%2Fsub%3Adefine-change/approach-review#1",
+      "prefix": "define/sub:define-change",
+      "id": "approach-review",
+      "kind": "step",
+      "type": "agent",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 1807722,
+      "session_id": "0fad505c-f78d-439c-a8eb-a953d1eb4102",
+      "agent_invoked": true,
+      "role": "lead",
+      "tool": "agent-runner",
+      "usage": {
+        "context": {
+          "status": "unavailable",
+          "reason": "interactive-context",
+          "source": "agent-runner",
+          "last_request_input_tokens": null,
+          "peak_context_tokens": null,
+          "context_window_limit_tokens": null
+        },
+        "status": "unavailable",
+        "reason": "interactive-context",
+        "cli": "claude",
+        "provider": "anthropic",
+        "model": "opus",
+        "identity": {
+          "requested_cli": "claude",
+          "requested_model": "opus",
+          "requested_effort": "high",
+          "effective_cli": "claude",
+          "effective_provider": "anthropic",
+          "effective_model": "opus",
+          "effective_effort": "high",
+          "provider_source": "invocation",
+          "model_source": "invocation",
+          "effort_source": "invocation"
+        },
+        "source": "agent-runner"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "git_start": {
+        "available": true,
+        "head": "f51898af976354a0453b7ff90b19dbcbb5ede443",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/.openspec.yaml",
+            "added": 2,
+            "deleted": 0,
+            "fingerprint": "9cfa2ab963a8c9b58eecdb9fd5b55544e988fee8de8b887226ffc32d27744459"
+          },
+          {
+            "path": "openspec/changes/end-to-end/design.md",
+            "added": 351,
+            "deleted": 0,
+            "fingerprint": "2915df9e8e47b539eb132a858f51b6a2e57548218b3d9408ada85c9582ba17d1"
+          },
+          {
+            "path": "openspec/changes/end-to-end/proposal.md",
+            "added": 81,
+            "deleted": 0,
+            "fingerprint": "a85d2b59a123c07af2159fb6085e93f0f5eae878f0521915a1c51d07e953b6e9"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/end-to-end-workflow-evaluation/spec.md",
+            "added": 233,
+            "deleted": 0,
+            "fingerprint": "1b8ec9d218356cf7d766b4508353dc9cee862582c602ba8a207f56d1c04b358b"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/evaluation-isolation/spec.md",
+            "added": 92,
+            "deleted": 0,
+            "fingerprint": "918e4cf5a44dff51373902cd9cc1fcc040f05a3038438e294b75b99393194f48"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/from-prompt-product-scoring/spec.md",
+            "added": 86,
+            "deleted": 0,
+            "fingerprint": "1e4f50dfca8fb88b9f6c3005fc9f8b97b148a8b373477179f52140894afccdf3"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/requirement-delivery-trace/spec.md",
+            "added": 54,
+            "deleted": 0,
+            "fingerprint": "60d318094b5c0f5b974e8f884ff03444ecb4604dceb9ecce76758588102efbae"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/simulated-user/spec.md",
+            "added": 46,
+            "deleted": 0,
+            "fingerprint": "4b38e322e2cb59d54a02307019507a25619d30f14162cf0a9260938a44dfa6ee"
+          },
+          {
+            "path": "openspec/changes/end-to-end/test-plan.md",
+            "added": 363,
+            "deleted": 0,
+            "fingerprint": "3e8547db494d7678a513510c854df2ef57e943963482dca331bb4ea6203ba1ec"
+          }
+        ]
+      },
+      "git_end": {
+        "available": true,
+        "head": "f51898af976354a0453b7ff90b19dbcbb5ede443",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/.openspec.yaml",
+            "added": 2,
+            "deleted": 0,
+            "fingerprint": "9cfa2ab963a8c9b58eecdb9fd5b55544e988fee8de8b887226ffc32d27744459"
+          },
+          {
+            "path": "openspec/changes/end-to-end/design.md",
+            "added": 368,
+            "deleted": 0,
+            "fingerprint": "2941e7be4de150c8f459c6f16e6910bd71ce8b3fc5b1763fa0a6cca2649a8991"
+          },
+          {
+            "path": "openspec/changes/end-to-end/proposal.md",
+            "added": 82,
+            "deleted": 0,
+            "fingerprint": "547222e8ac03c7adeaca167ae4d762e5c72943e297f86736e7397d4c75850cb7"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/end-to-end-workflow-evaluation/spec.md",
+            "added": 268,
+            "deleted": 0,
+            "fingerprint": "15535c34cbdcc888bd0267a582492c5c6b33c18b304fd7474f0ff311761d34ff"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/evaluation-isolation/spec.md",
+            "added": 92,
+            "deleted": 0,
+            "fingerprint": "918e4cf5a44dff51373902cd9cc1fcc040f05a3038438e294b75b99393194f48"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/from-prompt-product-scoring/spec.md",
+            "added": 143,
+            "deleted": 0,
+            "fingerprint": "2590b8736c1e9045d1c3ea014911b728f235d81ac50fa54fac370cf4d85a3cf3"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/requirement-delivery-trace/spec.md",
+            "added": 65,
+            "deleted": 0,
+            "fingerprint": "25e0f964fd11c8569f8955084d09c2c032c73f2ff24172a089591f14a984de19"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/simulated-user/spec.md",
+            "added": 46,
+            "deleted": 0,
+            "fingerprint": "7f6f2bc4744e801870201f10b5acd48eaab453892b820c040dd20a4b3fcb1df0"
+          },
+          {
+            "path": "openspec/changes/end-to-end/test-plan.md",
+            "added": 415,
+            "deleted": 0,
+            "fingerprint": "25e68b0de61b9771cb14a4762b3453ea8996b2af750a49bfbb9d48df11f94f42"
+          }
+        ]
+      },
+      "git_changes": {
+        "available": true,
+        "files_changed": 7,
+        "lines_added": 173
+      }
+    },
+    {
+      "record_id": "define#2",
+      "prefix": "",
+      "id": "define",
+      "kind": "step",
+      "type": "sub-workflow",
+      "attempt": 2,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 3198258,
+      "agent_invoked": false,
+      "usage": {
+        "status": "collected",
+        "cli": "",
+        "identity": {},
+        "source": "agent-runner",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68"
+    },
+    {
+      "record_id": "implement%2Fsub%3Aimplement-change/validate-change-name#1",
+      "prefix": "implement/sub:implement-change",
+      "id": "validate-change-name",
+      "kind": "step",
+      "type": "script",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 322,
+      "agent_invoked": false,
+      "usage": {
+        "status": "collected",
+        "cli": "",
+        "identity": {},
+        "source": "agent-runner",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "git_start": {
+        "available": true,
+        "head": "f51898af976354a0453b7ff90b19dbcbb5ede443",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/.openspec.yaml",
+            "added": 2,
+            "deleted": 0,
+            "fingerprint": "9cfa2ab963a8c9b58eecdb9fd5b55544e988fee8de8b887226ffc32d27744459"
+          },
+          {
+            "path": "openspec/changes/end-to-end/design.md",
+            "added": 368,
+            "deleted": 0,
+            "fingerprint": "2941e7be4de150c8f459c6f16e6910bd71ce8b3fc5b1763fa0a6cca2649a8991"
+          },
+          {
+            "path": "openspec/changes/end-to-end/proposal.md",
+            "added": 82,
+            "deleted": 0,
+            "fingerprint": "547222e8ac03c7adeaca167ae4d762e5c72943e297f86736e7397d4c75850cb7"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/end-to-end-workflow-evaluation/spec.md",
+            "added": 268,
+            "deleted": 0,
+            "fingerprint": "15535c34cbdcc888bd0267a582492c5c6b33c18b304fd7474f0ff311761d34ff"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/evaluation-isolation/spec.md",
+            "added": 92,
+            "deleted": 0,
+            "fingerprint": "918e4cf5a44dff51373902cd9cc1fcc040f05a3038438e294b75b99393194f48"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/from-prompt-product-scoring/spec.md",
+            "added": 143,
+            "deleted": 0,
+            "fingerprint": "2590b8736c1e9045d1c3ea014911b728f235d81ac50fa54fac370cf4d85a3cf3"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/requirement-delivery-trace/spec.md",
+            "added": 65,
+            "deleted": 0,
+            "fingerprint": "25e0f964fd11c8569f8955084d09c2c032c73f2ff24172a089591f14a984de19"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/simulated-user/spec.md",
+            "added": 46,
+            "deleted": 0,
+            "fingerprint": "7f6f2bc4744e801870201f10b5acd48eaab453892b820c040dd20a4b3fcb1df0"
+          },
+          {
+            "path": "openspec/changes/end-to-end/test-plan.md",
+            "added": 415,
+            "deleted": 0,
+            "fingerprint": "25e68b0de61b9771cb14a4762b3453ea8996b2af750a49bfbb9d48df11f94f42"
+          }
+        ]
+      },
+      "git_end": {
+        "available": true,
+        "head": "f51898af976354a0453b7ff90b19dbcbb5ede443",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/.openspec.yaml",
+            "added": 2,
+            "deleted": 0,
+            "fingerprint": "9cfa2ab963a8c9b58eecdb9fd5b55544e988fee8de8b887226ffc32d27744459"
+          },
+          {
+            "path": "openspec/changes/end-to-end/design.md",
+            "added": 368,
+            "deleted": 0,
+            "fingerprint": "2941e7be4de150c8f459c6f16e6910bd71ce8b3fc5b1763fa0a6cca2649a8991"
+          },
+          {
+            "path": "openspec/changes/end-to-end/proposal.md",
+            "added": 82,
+            "deleted": 0,
+            "fingerprint": "547222e8ac03c7adeaca167ae4d762e5c72943e297f86736e7397d4c75850cb7"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/end-to-end-workflow-evaluation/spec.md",
+            "added": 268,
+            "deleted": 0,
+            "fingerprint": "15535c34cbdcc888bd0267a582492c5c6b33c18b304fd7474f0ff311761d34ff"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/evaluation-isolation/spec.md",
+            "added": 92,
+            "deleted": 0,
+            "fingerprint": "918e4cf5a44dff51373902cd9cc1fcc040f05a3038438e294b75b99393194f48"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/from-prompt-product-scoring/spec.md",
+            "added": 143,
+            "deleted": 0,
+            "fingerprint": "2590b8736c1e9045d1c3ea014911b728f235d81ac50fa54fac370cf4d85a3cf3"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/requirement-delivery-trace/spec.md",
+            "added": 65,
+            "deleted": 0,
+            "fingerprint": "25e0f964fd11c8569f8955084d09c2c032c73f2ff24172a089591f14a984de19"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/simulated-user/spec.md",
+            "added": 46,
+            "deleted": 0,
+            "fingerprint": "7f6f2bc4744e801870201f10b5acd48eaab453892b820c040dd20a4b3fcb1df0"
+          },
+          {
+            "path": "openspec/changes/end-to-end/test-plan.md",
+            "added": 415,
+            "deleted": 0,
+            "fingerprint": "25e68b0de61b9771cb14a4762b3453ea8996b2af750a49bfbb9d48df11f94f42"
+          }
+        ]
+      },
+      "git_changes": {
+        "available": true
+      }
+    },
+    {
+      "record_id": "implement%2Fsub%3Aimplement-change/validate-skip-validator#1",
+      "prefix": "implement/sub:implement-change",
+      "id": "validate-skip-validator",
+      "kind": "step",
+      "type": "script",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 245,
+      "agent_invoked": false,
+      "usage": {
+        "status": "collected",
+        "cli": "",
+        "identity": {},
+        "source": "agent-runner",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "git_start": {
+        "available": true,
+        "head": "f51898af976354a0453b7ff90b19dbcbb5ede443",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/.openspec.yaml",
+            "added": 2,
+            "deleted": 0,
+            "fingerprint": "9cfa2ab963a8c9b58eecdb9fd5b55544e988fee8de8b887226ffc32d27744459"
+          },
+          {
+            "path": "openspec/changes/end-to-end/design.md",
+            "added": 368,
+            "deleted": 0,
+            "fingerprint": "2941e7be4de150c8f459c6f16e6910bd71ce8b3fc5b1763fa0a6cca2649a8991"
+          },
+          {
+            "path": "openspec/changes/end-to-end/proposal.md",
+            "added": 82,
+            "deleted": 0,
+            "fingerprint": "547222e8ac03c7adeaca167ae4d762e5c72943e297f86736e7397d4c75850cb7"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/end-to-end-workflow-evaluation/spec.md",
+            "added": 268,
+            "deleted": 0,
+            "fingerprint": "15535c34cbdcc888bd0267a582492c5c6b33c18b304fd7474f0ff311761d34ff"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/evaluation-isolation/spec.md",
+            "added": 92,
+            "deleted": 0,
+            "fingerprint": "918e4cf5a44dff51373902cd9cc1fcc040f05a3038438e294b75b99393194f48"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/from-prompt-product-scoring/spec.md",
+            "added": 143,
+            "deleted": 0,
+            "fingerprint": "2590b8736c1e9045d1c3ea014911b728f235d81ac50fa54fac370cf4d85a3cf3"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/requirement-delivery-trace/spec.md",
+            "added": 65,
+            "deleted": 0,
+            "fingerprint": "25e0f964fd11c8569f8955084d09c2c032c73f2ff24172a089591f14a984de19"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/simulated-user/spec.md",
+            "added": 46,
+            "deleted": 0,
+            "fingerprint": "7f6f2bc4744e801870201f10b5acd48eaab453892b820c040dd20a4b3fcb1df0"
+          },
+          {
+            "path": "openspec/changes/end-to-end/test-plan.md",
+            "added": 415,
+            "deleted": 0,
+            "fingerprint": "25e68b0de61b9771cb14a4762b3453ea8996b2af750a49bfbb9d48df11f94f42"
+          }
+        ]
+      },
+      "git_end": {
+        "available": true,
+        "head": "f51898af976354a0453b7ff90b19dbcbb5ede443",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/.openspec.yaml",
+            "added": 2,
+            "deleted": 0,
+            "fingerprint": "9cfa2ab963a8c9b58eecdb9fd5b55544e988fee8de8b887226ffc32d27744459"
+          },
+          {
+            "path": "openspec/changes/end-to-end/design.md",
+            "added": 368,
+            "deleted": 0,
+            "fingerprint": "2941e7be4de150c8f459c6f16e6910bd71ce8b3fc5b1763fa0a6cca2649a8991"
+          },
+          {
+            "path": "openspec/changes/end-to-end/proposal.md",
+            "added": 82,
+            "deleted": 0,
+            "fingerprint": "547222e8ac03c7adeaca167ae4d762e5c72943e297f86736e7397d4c75850cb7"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/end-to-end-workflow-evaluation/spec.md",
+            "added": 268,
+            "deleted": 0,
+            "fingerprint": "15535c34cbdcc888bd0267a582492c5c6b33c18b304fd7474f0ff311761d34ff"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/evaluation-isolation/spec.md",
+            "added": 92,
+            "deleted": 0,
+            "fingerprint": "918e4cf5a44dff51373902cd9cc1fcc040f05a3038438e294b75b99393194f48"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/from-prompt-product-scoring/spec.md",
+            "added": 143,
+            "deleted": 0,
+            "fingerprint": "2590b8736c1e9045d1c3ea014911b728f235d81ac50fa54fac370cf4d85a3cf3"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/requirement-delivery-trace/spec.md",
+            "added": 65,
+            "deleted": 0,
+            "fingerprint": "25e0f964fd11c8569f8955084d09c2c032c73f2ff24172a089591f14a984de19"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/simulated-user/spec.md",
+            "added": 46,
+            "deleted": 0,
+            "fingerprint": "7f6f2bc4744e801870201f10b5acd48eaab453892b820c040dd20a4b3fcb1df0"
+          },
+          {
+            "path": "openspec/changes/end-to-end/test-plan.md",
+            "added": 415,
+            "deleted": 0,
+            "fingerprint": "25e68b0de61b9771cb14a4762b3453ea8996b2af750a49bfbb9d48df11f94f42"
+          }
+        ]
+      },
+      "git_changes": {
+        "available": true
+      }
+    },
+    {
+      "record_id": "implement%2Fsub%3Aimplement-change%2Fcheck-definition%2Fsub%3Acheck-definition%2Fcheck-definition%3A0/validate-definition#1",
+      "prefix": "implement/sub:implement-change/check-definition/sub:check-definition/check-definition:0",
+      "id": "validate-definition",
+      "kind": "step",
+      "type": "script",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 640,
+      "agent_invoked": false,
+      "usage": {
+        "status": "collected",
+        "cli": "",
+        "identity": {},
+        "source": "agent-runner",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "git_start": {
+        "available": true,
+        "head": "f51898af976354a0453b7ff90b19dbcbb5ede443",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/.openspec.yaml",
+            "added": 2,
+            "deleted": 0,
+            "fingerprint": "9cfa2ab963a8c9b58eecdb9fd5b55544e988fee8de8b887226ffc32d27744459"
+          },
+          {
+            "path": "openspec/changes/end-to-end/design.md",
+            "added": 368,
+            "deleted": 0,
+            "fingerprint": "2941e7be4de150c8f459c6f16e6910bd71ce8b3fc5b1763fa0a6cca2649a8991"
+          },
+          {
+            "path": "openspec/changes/end-to-end/proposal.md",
+            "added": 82,
+            "deleted": 0,
+            "fingerprint": "547222e8ac03c7adeaca167ae4d762e5c72943e297f86736e7397d4c75850cb7"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/end-to-end-workflow-evaluation/spec.md",
+            "added": 268,
+            "deleted": 0,
+            "fingerprint": "15535c34cbdcc888bd0267a582492c5c6b33c18b304fd7474f0ff311761d34ff"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/evaluation-isolation/spec.md",
+            "added": 92,
+            "deleted": 0,
+            "fingerprint": "918e4cf5a44dff51373902cd9cc1fcc040f05a3038438e294b75b99393194f48"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/from-prompt-product-scoring/spec.md",
+            "added": 143,
+            "deleted": 0,
+            "fingerprint": "2590b8736c1e9045d1c3ea014911b728f235d81ac50fa54fac370cf4d85a3cf3"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/requirement-delivery-trace/spec.md",
+            "added": 65,
+            "deleted": 0,
+            "fingerprint": "25e0f964fd11c8569f8955084d09c2c032c73f2ff24172a089591f14a984de19"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/simulated-user/spec.md",
+            "added": 46,
+            "deleted": 0,
+            "fingerprint": "7f6f2bc4744e801870201f10b5acd48eaab453892b820c040dd20a4b3fcb1df0"
+          },
+          {
+            "path": "openspec/changes/end-to-end/test-plan.md",
+            "added": 415,
+            "deleted": 0,
+            "fingerprint": "25e68b0de61b9771cb14a4762b3453ea8996b2af750a49bfbb9d48df11f94f42"
+          }
+        ]
+      },
+      "git_end": {
+        "available": true,
+        "head": "f51898af976354a0453b7ff90b19dbcbb5ede443",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/.openspec.yaml",
+            "added": 2,
+            "deleted": 0,
+            "fingerprint": "9cfa2ab963a8c9b58eecdb9fd5b55544e988fee8de8b887226ffc32d27744459"
+          },
+          {
+            "path": "openspec/changes/end-to-end/design.md",
+            "added": 368,
+            "deleted": 0,
+            "fingerprint": "2941e7be4de150c8f459c6f16e6910bd71ce8b3fc5b1763fa0a6cca2649a8991"
+          },
+          {
+            "path": "openspec/changes/end-to-end/proposal.md",
+            "added": 82,
+            "deleted": 0,
+            "fingerprint": "547222e8ac03c7adeaca167ae4d762e5c72943e297f86736e7397d4c75850cb7"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/end-to-end-workflow-evaluation/spec.md",
+            "added": 268,
+            "deleted": 0,
+            "fingerprint": "15535c34cbdcc888bd0267a582492c5c6b33c18b304fd7474f0ff311761d34ff"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/evaluation-isolation/spec.md",
+            "added": 92,
+            "deleted": 0,
+            "fingerprint": "918e4cf5a44dff51373902cd9cc1fcc040f05a3038438e294b75b99393194f48"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/from-prompt-product-scoring/spec.md",
+            "added": 143,
+            "deleted": 0,
+            "fingerprint": "2590b8736c1e9045d1c3ea014911b728f235d81ac50fa54fac370cf4d85a3cf3"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/requirement-delivery-trace/spec.md",
+            "added": 65,
+            "deleted": 0,
+            "fingerprint": "25e0f964fd11c8569f8955084d09c2c032c73f2ff24172a089591f14a984de19"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/simulated-user/spec.md",
+            "added": 46,
+            "deleted": 0,
+            "fingerprint": "7f6f2bc4744e801870201f10b5acd48eaab453892b820c040dd20a4b3fcb1df0"
+          },
+          {
+            "path": "openspec/changes/end-to-end/test-plan.md",
+            "added": 415,
+            "deleted": 0,
+            "fingerprint": "25e68b0de61b9771cb14a4762b3453ea8996b2af750a49bfbb9d48df11f94f42"
+          }
+        ]
+      },
+      "git_changes": {
+        "available": true
+      }
+    },
+    {
+      "record_id": "@iteration/implement%2Fsub%3Aimplement-change%2Fcheck-definition%2Fsub%3Acheck-definition/check-definition/0#1",
+      "prefix": "implement/sub:implement-change/check-definition/sub:check-definition",
+      "id": "check-definition",
+      "kind": "iteration",
+      "type": "loop",
+      "attempt": 1,
+      "iteration": 0,
+      "outcome": "success",
+      "duration_ms": 705,
+      "agent_invoked": false,
+      "usage": null,
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68"
+    },
+    {
+      "record_id": "implement%2Fsub%3Aimplement-change%2Fcheck-definition%2Fsub%3Acheck-definition/check-definition#1",
+      "prefix": "implement/sub:implement-change/check-definition/sub:check-definition",
+      "id": "check-definition",
+      "kind": "step",
+      "type": "loop",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 706,
+      "agent_invoked": false,
+      "usage": {
+        "status": "collected",
+        "cli": "",
+        "identity": {},
+        "source": "agent-runner",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68"
+    },
+    {
+      "record_id": "implement%2Fsub%3Aimplement-change%2Fcheck-definition%2Fsub%3Acheck-definition/verify-definition#1",
+      "prefix": "implement/sub:implement-change/check-definition/sub:check-definition",
+      "id": "verify-definition",
+      "kind": "step",
+      "type": "script",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "skipped",
+      "duration_ms": 0,
+      "agent_invoked": false,
+      "usage": {
+        "status": "collected",
+        "cli": "",
+        "identity": {},
+        "source": "agent-runner",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68"
+    },
+    {
+      "record_id": "implement%2Fsub%3Aimplement-change/check-definition#1",
+      "prefix": "implement/sub:implement-change",
+      "id": "check-definition",
+      "kind": "step",
+      "type": "sub-workflow",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 708,
+      "agent_invoked": false,
+      "usage": {
+        "status": "collected",
+        "cli": "",
+        "identity": {},
+        "source": "agent-runner",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68"
+    },
+    {
+      "record_id": "implement%2Fsub%3Aimplement-change%2Fcommit-definition%2Fsub%3Acommit-definition/commit-definition#1",
+      "prefix": "implement/sub:implement-change/commit-definition/sub:commit-definition",
+      "id": "commit-definition",
+      "kind": "step",
+      "type": "script",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 662,
+      "agent_invoked": false,
+      "usage": {
+        "status": "collected",
+        "cli": "",
+        "identity": {},
+        "source": "agent-runner",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "git_start": {
+        "available": true,
+        "head": "f51898af976354a0453b7ff90b19dbcbb5ede443",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/.openspec.yaml",
+            "added": 2,
+            "deleted": 0,
+            "fingerprint": "9cfa2ab963a8c9b58eecdb9fd5b55544e988fee8de8b887226ffc32d27744459"
+          },
+          {
+            "path": "openspec/changes/end-to-end/design.md",
+            "added": 368,
+            "deleted": 0,
+            "fingerprint": "2941e7be4de150c8f459c6f16e6910bd71ce8b3fc5b1763fa0a6cca2649a8991"
+          },
+          {
+            "path": "openspec/changes/end-to-end/proposal.md",
+            "added": 82,
+            "deleted": 0,
+            "fingerprint": "547222e8ac03c7adeaca167ae4d762e5c72943e297f86736e7397d4c75850cb7"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/end-to-end-workflow-evaluation/spec.md",
+            "added": 268,
+            "deleted": 0,
+            "fingerprint": "15535c34cbdcc888bd0267a582492c5c6b33c18b304fd7474f0ff311761d34ff"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/evaluation-isolation/spec.md",
+            "added": 92,
+            "deleted": 0,
+            "fingerprint": "918e4cf5a44dff51373902cd9cc1fcc040f05a3038438e294b75b99393194f48"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/from-prompt-product-scoring/spec.md",
+            "added": 143,
+            "deleted": 0,
+            "fingerprint": "2590b8736c1e9045d1c3ea014911b728f235d81ac50fa54fac370cf4d85a3cf3"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/requirement-delivery-trace/spec.md",
+            "added": 65,
+            "deleted": 0,
+            "fingerprint": "25e0f964fd11c8569f8955084d09c2c032c73f2ff24172a089591f14a984de19"
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/simulated-user/spec.md",
+            "added": 46,
+            "deleted": 0,
+            "fingerprint": "7f6f2bc4744e801870201f10b5acd48eaab453892b820c040dd20a4b3fcb1df0"
+          },
+          {
+            "path": "openspec/changes/end-to-end/test-plan.md",
+            "added": 415,
+            "deleted": 0,
+            "fingerprint": "25e68b0de61b9771cb14a4762b3453ea8996b2af750a49bfbb9d48df11f94f42"
+          }
+        ]
+      },
+      "git_end": {
+        "available": true,
+        "head": "cb8d92c07ed2f9236cd7b1f68ba301db82907bf8",
+        "committed": [
+          {
+            "path": "openspec/changes/end-to-end/.openspec.yaml",
+            "added": 2,
+            "deleted": 0
+          },
+          {
+            "path": "openspec/changes/end-to-end/design.md",
+            "added": 368,
+            "deleted": 0
+          },
+          {
+            "path": "openspec/changes/end-to-end/proposal.md",
+            "added": 82,
+            "deleted": 0
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/end-to-end-workflow-evaluation/spec.md",
+            "added": 268,
+            "deleted": 0
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/evaluation-isolation/spec.md",
+            "added": 92,
+            "deleted": 0
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/from-prompt-product-scoring/spec.md",
+            "added": 143,
+            "deleted": 0
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/requirement-delivery-trace/spec.md",
+            "added": 65,
+            "deleted": 0
+          },
+          {
+            "path": "openspec/changes/end-to-end/specs/simulated-user/spec.md",
+            "added": 46,
+            "deleted": 0
+          },
+          {
+            "path": "openspec/changes/end-to-end/test-plan.md",
+            "added": 415,
+            "deleted": 0
+          }
+        ],
+        "committed_observed": true,
+        "commits": [
+          "cb8d92c07ed2f9236cd7b1f68ba301db82907bf8"
+        ]
+      },
+      "git_changes": {
+        "available": false,
+        "reason": "preexisting dirty state prevents conservative commit attribution"
+      }
+    },
+    {
+      "record_id": "implement%2Fsub%3Aimplement-change%2Fcommit-definition%2Fsub%3Acommit-definition/check-clean-before-implementation#1",
+      "prefix": "implement/sub:implement-change/commit-definition/sub:commit-definition",
+      "id": "check-clean-before-implementation",
+      "kind": "step",
+      "type": "shell",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 71,
+      "agent_invoked": false,
+      "usage": {
+        "status": "collected",
+        "cli": "",
+        "identity": {},
+        "source": "agent-runner",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "git_start": {
+        "available": true,
+        "head": "cb8d92c07ed2f9236cd7b1f68ba301db82907bf8"
+      },
+      "git_end": {
+        "available": true,
+        "head": "cb8d92c07ed2f9236cd7b1f68ba301db82907bf8"
+      },
+      "git_changes": {
+        "available": true
+      }
+    },
+    {
+      "record_id": "implement%2Fsub%3Aimplement-change/commit-definition#1",
+      "prefix": "implement/sub:implement-change",
+      "id": "commit-definition",
+      "kind": "step",
+      "type": "sub-workflow",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 881,
+      "agent_invoked": false,
+      "usage": {
+        "status": "collected",
+        "cli": "",
+        "identity": {},
+        "source": "agent-runner",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68"
+    },
+    {
+      "record_id": "implement%2Fsub%3Aimplement-change/record-definition-head#1",
+      "prefix": "implement/sub:implement-change",
+      "id": "record-definition-head",
+      "kind": "step",
+      "type": "shell",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 83,
+      "agent_invoked": false,
+      "usage": {
+        "status": "collected",
+        "cli": "",
+        "identity": {},
+        "source": "agent-runner",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "git_start": {
+        "available": true,
+        "head": "cb8d92c07ed2f9236cd7b1f68ba301db82907bf8"
+      },
+      "git_end": {
+        "available": true,
+        "head": "cb8d92c07ed2f9236cd7b1f68ba301db82907bf8"
+      },
+      "git_changes": {
+        "available": true
+      }
+    },
+    {
+      "record_id": "implement%2Fsub%3Aimplement-change/lead-checklist#1",
+      "prefix": "implement/sub:implement-change",
+      "id": "lead-checklist",
+      "kind": "step",
+      "type": "agent",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 185834,
+      "session_id": "0fad505c-f78d-439c-a8eb-a953d1eb4102",
+      "agent_invoked": true,
+      "role": "lead",
+      "tool": "agent-runner",
+      "usage": {
+        "context": {
+          "status": "available",
+          "source": "claude:stream-json",
+          "last_request_input_tokens": 167574,
+          "peak_context_tokens": 167574,
+          "context_window_limit_tokens": 1000000
+        },
+        "allocations": [
+          {
+            "allocation_id": "main",
+            "kind": "main",
+            "status": "collected",
+            "model": "claude-opus-5-5",
+            "tokens": {
+              "cache_write": 167572,
+              "cached_input": 959388,
+              "input": 14,
+              "other:fallback_credit": 0,
+              "output": 19517
+            },
+            "token_totals": {
+              "input": 1126974,
+              "output": 19517,
+              "total": 1146491
+            },
+            "completeness": "complete"
+          }
+        ],
+        "subagent_collection": "complete",
+        "status": "collected",
+        "cli": "claude",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "identity": {
+          "requested_cli": "claude",
+          "requested_model": "opus",
+          "requested_effort": "high",
+          "effective_cli": "claude",
+          "effective_provider": "anthropic",
+          "effective_model": "claude-opus-5-5",
+          "effective_effort": "high",
+          "provider_source": "adapter",
+          "model_source": "telemetry",
+          "effort_source": "invocation"
+        },
+        "tokens": {
+          "cache_write": 167572,
+          "cached_input": 959388,
+          "input": 14,
+          "other:fallback_credit": 0,
+          "output": 19517
+        },
+        "token_totals": {
+          "input": 1126974,
+          "output": 19517,
+          "total": 1146491
+        },
+        "raw_cumulative_cost_usd": 22.78194590000001,
+        "source": "claude:result-event",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "git_start": {
+        "available": true,
+        "head": "cb8d92c07ed2f9236cd7b1f68ba301db82907bf8"
+      },
+      "git_end": {
+        "available": true,
+        "head": "cb8d92c07ed2f9236cd7b1f68ba301db82907bf8"
+      },
+      "git_changes": {
+        "available": true
+      }
+    },
+    {
+      "record_id": "implement%2Fsub%3Aimplement-change/check-lead-checklist-not-blocked#1",
+      "prefix": "implement/sub:implement-change",
+      "id": "check-lead-checklist-not-blocked",
+      "kind": "step",
+      "type": "script",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 341,
+      "agent_invoked": false,
+      "usage": {
+        "status": "collected",
+        "cli": "",
+        "identity": {},
+        "source": "agent-runner",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "git_start": {
+        "available": true,
+        "head": "cb8d92c07ed2f9236cd7b1f68ba301db82907bf8"
+      },
+      "git_end": {
+        "available": true,
+        "head": "cb8d92c07ed2f9236cd7b1f68ba301db82907bf8"
+      },
+      "git_changes": {
+        "available": true
+      }
+    },
+    {
+      "cost_basis": "reported",
+      "record_id": "implement%2Fsub%3Aimplement-change/implementor-checklist#1",
+      "prefix": "implement/sub:implement-change",
+      "id": "implementor-checklist",
+      "kind": "step",
+      "type": "agent",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 75854,
+      "session_id": "4683344a-ccb2-41a8-9c9e-4cfe9cee32a9",
+      "agent_invoked": true,
+      "role": "implementor",
+      "tool": "agent-runner",
+      "usage": {
+        "context": {
+          "status": "available",
+          "source": "claude:stream-json",
+          "last_request_input_tokens": 103127,
+          "peak_context_tokens": 103127,
+          "context_window_limit_tokens": 1000000
+        },
+        "allocations": [
+          {
+            "allocation_id": "main",
+            "kind": "main",
+            "status": "collected",
+            "model": "claude-sonnet-5-5",
+            "tokens": {
+              "cache_write": 92203,
+              "cached_input": 285998,
+              "input": 12,
+              "other:fallback_credit": 0,
+              "output": 11775
+            },
+            "token_totals": {
+              "input": 378213,
+              "output": 11775,
+              "total": 389988
+            },
+            "completeness": "complete"
+          }
+        ],
+        "subagent_collection": "complete",
+        "status": "collected",
+        "cli": "claude",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "identity": {
+          "requested_cli": "claude",
+          "requested_model": "sonnet",
+          "requested_effort": "medium",
+          "effective_cli": "claude",
+          "effective_provider": "anthropic",
+          "effective_model": "claude-sonnet-5-5",
+          "effective_effort": "medium",
+          "provider_source": "adapter",
+          "model_source": "telemetry",
+          "effort_source": "invocation"
+        },
+        "tokens": {
+          "cache_write": 92203,
+          "cached_input": 285998,
+          "input": 12,
+          "other:fallback_credit": 0,
+          "output": 11775
+        },
+        "token_totals": {
+          "input": 378213,
+          "output": 11775,
+          "total": 389988
+        },
+        "raw_cumulative_cost_usd": 0.5151858,
+        "source": "claude:result-event",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": 0.5151858,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "git_start": {
+        "available": true,
+        "head": "cb8d92c07ed2f9236cd7b1f68ba301db82907bf8"
+      },
+      "git_end": {
+        "available": true,
+        "head": "cb8d92c07ed2f9236cd7b1f68ba301db82907bf8",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/checklist.md",
+            "added": 105,
+            "deleted": 0,
+            "fingerprint": "be52cd81429178f570139e7010ee322ed1cc127189cc221e5cfc5af61afc22a8"
+          }
+        ]
+      },
+      "git_changes": {
+        "available": true,
+        "files_changed": 1,
+        "lines_added": 105
+      }
+    },
+    {
+      "record_id": "implement%2Fsub%3Aimplement-change/check-implementor-checklist-not-blocked#1",
+      "prefix": "implement/sub:implement-change",
+      "id": "check-implementor-checklist-not-blocked",
+      "kind": "step",
+      "type": "script",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 68,
+      "agent_invoked": false,
+      "usage": {
+        "status": "collected",
+        "cli": "",
+        "identity": {},
+        "source": "agent-runner",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "git_start": {
+        "available": true,
+        "head": "cb8d92c07ed2f9236cd7b1f68ba301db82907bf8",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/checklist.md",
+            "added": 105,
+            "deleted": 0,
+            "fingerprint": "be52cd81429178f570139e7010ee322ed1cc127189cc221e5cfc5af61afc22a8"
+          }
+        ]
+      },
+      "git_end": {
+        "available": true,
+        "head": "cb8d92c07ed2f9236cd7b1f68ba301db82907bf8",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/checklist.md",
+            "added": 105,
+            "deleted": 0,
+            "fingerprint": "be52cd81429178f570139e7010ee322ed1cc127189cc221e5cfc5af61afc22a8"
+          }
+        ]
+      },
+      "git_changes": {
+        "available": true
+      }
+    },
+    {
+      "record_id": "implement%2Fsub%3Aimplement-change/check-implementor-checklist#1",
+      "prefix": "implement/sub:implement-change",
+      "id": "check-implementor-checklist",
+      "kind": "step",
+      "type": "shell",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 134,
+      "agent_invoked": false,
+      "usage": {
+        "status": "collected",
+        "cli": "",
+        "identity": {},
+        "source": "agent-runner",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "git_start": {
+        "available": true,
+        "head": "cb8d92c07ed2f9236cd7b1f68ba301db82907bf8",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/checklist.md",
+            "added": 105,
+            "deleted": 0,
+            "fingerprint": "be52cd81429178f570139e7010ee322ed1cc127189cc221e5cfc5af61afc22a8"
+          }
+        ]
+      },
+      "git_end": {
+        "available": true,
+        "head": "cb8d92c07ed2f9236cd7b1f68ba301db82907bf8",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/checklist.md",
+            "added": 105,
+            "deleted": 0,
+            "fingerprint": "be52cd81429178f570139e7010ee322ed1cc127189cc221e5cfc5af61afc22a8"
+          }
+        ]
+      },
+      "git_changes": {
+        "available": true
+      }
+    },
+    {
+      "cost_basis": "reported",
+      "record_id": "implement%2Fsub%3Aimplement-change%2Fmerge-checklists/3c56c1cd-69a6-40e8-863b-41fb5e429e14#1",
+      "prefix": "implement/sub:implement-change/merge-checklists",
+      "id": "3c56c1cd-69a6-40e8-863b-41fb5e429e14",
+      "kind": "agent-call",
+      "type": "agent",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 27758,
+      "session_id": "0fad505c-f78d-439c-a8eb-a953d1eb4102",
+      "agent_invoked": true,
+      "role": "lead",
+      "tool": "agent-runner",
+      "usage": {
+        "context": {
+          "status": "available",
+          "source": "claude:stream-json",
+          "last_request_input_tokens": 185734,
+          "peak_context_tokens": 185734,
+          "context_window_limit_tokens": 1000000
+        },
+        "allocations": [
+          {
+            "allocation_id": "main",
+            "kind": "main",
+            "status": "collected",
+            "model": "claude-opus-5-5",
+            "tokens": {
+              "cache_write": 18160,
+              "cached_input": 718650,
+              "input": 8,
+              "other:fallback_credit": 0,
+              "output": 2898
+            },
+            "token_totals": {
+              "input": 736818,
+              "output": 2898,
+              "total": 739716
+            },
+            "completeness": "complete"
+          }
+        ],
+        "subagent_collection": "complete",
+        "status": "collected",
+        "cli": "claude",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "identity": {
+          "requested_cli": "claude",
+          "requested_model": "opus",
+          "requested_effort": "high",
+          "effective_cli": "claude",
+          "effective_provider": "anthropic",
+          "effective_model": "claude-opus-5-5",
+          "effective_effort": "high",
+          "provider_source": "adapter",
+          "model_source": "telemetry",
+          "effort_source": "invocation"
+        },
+        "tokens": {
+          "cache_write": 18160,
+          "cached_input": 718650,
+          "input": 8,
+          "other:fallback_credit": 0,
+          "output": 2898
+        },
+        "token_totals": {
+          "input": 736818,
+          "output": 2898,
+          "total": 739716
+        },
+        "raw_cumulative_cost_usd": 23.12894790000001,
+        "source": "claude:result-event",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": 0.3470019999999998,
+      "call_id": "3c56c1cd-69a6-40e8-863b-41fb5e429e14",
+      "parent_attempt_id": "7a2c9679-0bc6-47db-a182-f6ca11751db1",
+      "target_kind": "session",
+      "target_name": "lead-agent",
+      "exit": "exited",
+      "git_state": "captured",
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68"
+    },
+    {
+      "cost_basis": "estimated",
+      "price_table_version": "2026-10-20.1",
+      "cost_estimate": {
+        "policy": "openai-standard-request-level",
+        "model": "gpt-6-astra",
+        "requests": 21,
+        "long_context_requests": 0
+      },
+      "record_id": "implement%2Fsub%3Aimplement-change/merge-checklists#1",
+      "prefix": "implement/sub:implement-change",
+      "id": "merge-checklists",
+      "kind": "step",
+      "type": "agent",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 668447,
+      "session_id": "01a166ee-99b2-77e3-887b-545277fcc0df",
+      "agent_invoked": true,
+      "role": "crosscheck",
+      "tool": "agent-runner",
+      "usage": {
+        "context": {
+          "status": "available",
+          "source": "codex:rollout",
+          "last_request_input_tokens": 101872,
+          "peak_context_tokens": 101872,
+          "context_window_limit_tokens": 258400
+        },
+        "status": "collected",
+        "cli": "codex",
+        "provider": "openai",
+        "model": "gpt-6-astra",
+        "identity": {
+          "requested_cli": "codex",
+          "requested_model": "gpt-6-astra",
+          "requested_effort": "high",
+          "effective_cli": "codex",
+          "effective_provider": "openai",
+          "effective_model": "gpt-6-astra",
+          "effective_effort": "high",
+          "provider_source": "adapter",
+          "model_source": "invocation",
+          "effort_source": "invocation"
+        },
+        "tokens": {
+          "cached_input": 1538816,
+          "input": 1632202,
+          "other:cache_write_input_tokens": 0,
+          "output": 18402,
+          "reasoning": 3137
+        },
+        "raw_cumulative": {
+          "cached_input": 1538816,
+          "input": 1632202,
+          "other:cache_write_input_tokens": 0,
+          "output": 18402,
+          "reasoning": 3137
+        },
+        "token_totals": {
+          "input": 1632202,
+          "output": 18402,
+          "total": 1650604
+        },
+        "raw_cumulative_token_totals": {
+          "input": 1632202,
+          "output": 18402,
+          "total": 1650604
+        },
+        "source": "codex:turn.completed",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": 3.392776,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "git_start": {
+        "available": true,
+        "head": "cb8d92c07ed2f9236cd7b1f68ba301db82907bf8",
+        "untracked": [
+          {
+            "path": "openspec/changes/end-to-end/checklist.md",
+            "added": 105,
+            "deleted": 0,
+            "fingerprint": "be52cd81429178f570139e7010ee322ed1cc127189cc221e5cfc5af61afc22a8"
+          }
+        ]
+      },
+      "git_end": {
+        "available": true,
+        "head": "0ee5c7315c85711a9002e7d5499c0fbf51fa9cd7",
+        "committed": [
+          {
+            "path": "openspec/changes/end-to-end/checklist.md",
+            "added": 122,
+            "deleted": 0
+          }
+        ],
+        "committed_observed": true,
+        "commits": [
+          "0ee5c7315c85711a9002e7d5499c0fbf51fa9cd7"
+        ]
+      },
+      "git_changes": {
+        "available": false,
+        "reason": "preexisting dirty state prevents conservative commit attribution"
+      }
+    },
+    {
+      "record_id": "implement%2Fsub%3Aimplement-change/check-merge-not-blocked#1",
+      "prefix": "implement/sub:implement-change",
+      "id": "check-merge-not-blocked",
+      "kind": "step",
+      "type": "script",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 74,
+      "agent_invoked": false,
+      "usage": {
+        "status": "collected",
+        "cli": "",
+        "identity": {},
+        "source": "agent-runner",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "git_start": {
+        "available": true,
+        "head": "0ee5c7315c85711a9002e7d5499c0fbf51fa9cd7"
+      },
+      "git_end": {
+        "available": true,
+        "head": "0ee5c7315c85711a9002e7d5499c0fbf51fa9cd7"
+      },
+      "git_changes": {
+        "available": true
+      }
+    },
+    {
+      "record_id": "implement%2Fsub%3Aimplement-change/check-merged-ids#1",
+      "prefix": "implement/sub:implement-change",
+      "id": "check-merged-ids",
+      "kind": "step",
+      "type": "script",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 268,
+      "agent_invoked": false,
+      "usage": {
+        "status": "collected",
+        "cli": "",
+        "identity": {},
+        "source": "agent-runner",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "git_start": {
+        "available": true,
+        "head": "0ee5c7315c85711a9002e7d5499c0fbf51fa9cd7"
+      },
+      "git_end": {
+        "available": true,
+        "head": "0ee5c7315c85711a9002e7d5499c0fbf51fa9cd7"
+      },
+      "git_changes": {
+        "available": true
+      }
+    },
+    {
+      "record_id": "implement%2Fsub%3Aimplement-change/verify-checklist#1",
+      "prefix": "implement/sub:implement-change",
+      "id": "verify-checklist",
+      "kind": "step",
+      "type": "shell",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 70,
+      "agent_invoked": false,
+      "usage": {
+        "status": "collected",
+        "cli": "",
+        "identity": {},
+        "source": "agent-runner",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "git_start": {
+        "available": true,
+        "head": "0ee5c7315c85711a9002e7d5499c0fbf51fa9cd7"
+      },
+      "git_end": {
+        "available": true,
+        "head": "0ee5c7315c85711a9002e7d5499c0fbf51fa9cd7"
+      },
+      "git_changes": {
+        "available": true
+      }
+    },
+    {
+      "record_id": "implement%2Fsub%3Aimplement-change/record-implementation-start#1",
+      "prefix": "implement/sub:implement-change",
+      "id": "record-implementation-start",
+      "kind": "step",
+      "type": "shell",
+      "attempt": 1,
+      "iteration": null,
+      "outcome": "success",
+      "duration_ms": 67,
+      "agent_invoked": false,
+      "usage": {
+        "status": "collected",
+        "cli": "",
+        "identity": {},
+        "source": "agent-runner",
+        "completeness": "complete"
+      },
+      "estimated_api_cost_usd": null,
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "git_start": {
+        "available": true,
+        "head": "0ee5c7315c85711a9002e7d5499c0fbf51fa9cd7"
+      },
+      "git_end": {
+        "available": true,
+        "head": "0ee5c7315c85711a9002e7d5499c0fbf51fa9cd7"
+      },
+      "git_changes": {
+        "available": true
+      }
+    }
+  ],
+  "session_rollups": [
+    {
+      "execution_session_id": "e695a951-3deb-4252-98d5-1afd0e2f5a6e",
+      "duration_ms": 4051274,
+      "step_count": 4,
+      "totals": {
+        "cost_basis": "estimated",
+        "cost_by_basis": {
+          "estimated": 0.3403744
+        },
+        "active_duration_ms": 4051274,
+        "tokens": {
+          "cached_input": 856064,
+          "input": 952248,
+          "other:cache_write_input_tokens": 0,
+          "output": 6240,
+          "reasoning": 2717
+        },
+        "usage_coverage": "partial",
+        "token_totals": {
+          "input": 952248,
+          "output": 6240,
+          "total": 958488
+        },
+        "token_total_coverage": "partial",
+        "estimated_api_cost_usd": 0.3403744,
+        "cost_coverage": "partial"
+      },
+      "repository_changes": {
+        "available": true,
+        "files_changed": 4,
+        "lines_added": 445
+      }
+    },
+    {
+      "execution_session_id": "23066c1a-ecf6-47b4-9274-f5f82058ca68",
+      "duration_ms": 4132676,
+      "step_count": 28,
+      "totals": {
+        "cost_basis": "mixed",
+        "cost_by_basis": {
+          "estimated": 7.1077960000000004,
+          "reported": 0.8621877999999998
+        },
+        "active_duration_ms": 4132676,
+        "tokens": {
+          "cache_write": 277935,
+          "cached_input": 5095172,
+          "input": 3381471,
+          "other:cache_write_input_tokens": 0,
+          "other:fallback_credit": 0,
+          "output": 63663,
+          "reasoning": 7281
+        },
+        "usage_coverage": "partial",
+        "token_totals": {
+          "input": 5623442,
+          "output": 63663,
+          "total": 5687105
+        },
+        "token_total_coverage": "partial",
+        "estimated_api_cost_usd": 7.9699838,
+        "cost_coverage": "partial"
+      },
+      "repository_changes": {
+        "available": false,
+        "reason": "one or more step checkpoints unavailable"
+      }
+    }
+  ],
+  "repository_changes": {
+    "available": false,
+    "reason": "one or more step checkpoints unavailable"
+  },
+  "totals": {
+    "cost_basis": "mixed",
+    "cost_by_basis": {
+      "estimated": 7.4481704,
+      "reported": 0.8621877999999998
+    },
+    "active_duration_ms": 8183950,
+    "tokens": {
+      "cache_write": 277935,
+      "cached_input": 5951236,
+      "input": 4333719,
+      "other:cache_write_input_tokens": 0,
+      "other:fallback_credit": 0,
+      "output": 69903,
+      "reasoning": 9998
+    },
+    "usage_coverage": "partial",
+    "token_totals": {
+      "input": 6575690,
+      "output": 69903,
+      "total": 6645593
+    },
+    "token_total_coverage": "partial",
+    "estimated_api_cost_usd": 8.3103582,
+    "cost_coverage": "partial"
+  },
+  "validator_delivery": {
+    "history_coverage": "complete",
+    "collection": "unavailable",
+    "delivery": "unavailable"
+  }
+}

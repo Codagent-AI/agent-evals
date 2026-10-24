@@ -1,0 +1,49 @@
+{
+  "inputs": {
+    "product-rubric": {
+      "path": "product-rubric.json",
+      "version": 1,
+      "hashes": {
+        "1": "f81680fd917a7807c94cebc330ea488905a7e7d44285bff444e757bf27b87943"
+      }
+    },
+    "preference-values": {
+      "path": "preference-values.json",
+      "version": 1,
+      "hashes": {
+        "1": "f5e9b987de9c8002eda62a9f1adf699d918770a2542b4fdbf7b15095967dac1b"
+      }
+    },
+    "contamination-patterns": {
+      "path": "contamination-patterns.json",
+      "version": 1,
+      "hashes": {
+        "1": "96278b218f82527f98fb6b51dcf5338fa01877e29ea01148e29a805714efc242"
+      }
+    },
+    "define-inputs": {
+      "path": "../and-scene-define/versions.json",
+      "version": 4,
+      "hashes": {
+        "1": "1f9b527f4a1762acf8c4092261aa12760c63a96a12d9e110c855fd86d81e3676",
+        "2": "b012fa001f1dc9661c68fc1410cc0ad1ab97b9b14e215b8d19da9c28fe8e35a6",
+        "3": "2495f5173de417bd38a3e11aaf3ccefe1292cc49f6769e40cd7a5d9ac99cf9f0",
+        "4": "74114b05a1df3b9bd1bcfacca76d62b27567c7faaa904a8558e37e55092cc40b"
+      }
+    },
+    "define-rubric": {
+      "path": "../and-scene-define/rubric.json",
+      "version": 1,
+      "hashes": {
+        "1": "402664141c6a9bf7dfd57927a22447b8d809abd211c405af85e4d6c56d0faca9"
+      }
+    },
+    "human-rubric": {
+      "path": "../and-scene/human-rubric.json",
+      "version": 1,
+      "hashes": {
+        "1": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
+      }
+    }
+  }
+}

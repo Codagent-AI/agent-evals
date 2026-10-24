@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { readJson, writeJsonAtomic, writeTextAtomic } from './persistence.mjs'
-import { RESIDUAL_RISK } from './contamination.mjs'
+import { readJson, writeJsonAtomic, writeTextAtomic } from '../../../lib/define-run/persistence.mjs'
+import { RESIDUAL_RISK } from '../../../lib/define-run/contamination.mjs'
 import { renderReport } from './report.mjs'
 export async function assembleResult({ runDir, outcome, checkpoint }) {
   const read = async path => {

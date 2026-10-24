@@ -138,6 +138,30 @@ and contamination patterns on the host. Materialize only the allowlisted
 starting tree; the starting repository has no remote and needs no GitHub credential.
 
 
+## Running the Agent Runner `and-scene-e2e` suite
+
+Run from the repository root; the runbook is
+[`evals/agent-runner/and-scene-e2e/README.md`](evals/agent-runner/and-scene-e2e/README.md)
+and `run.sh --help` lists every mode and option.
+
+- The suite evaluates a whole workflow (default `openspec:change`) from the short
+  prompt to a draft pull request in a fresh private repository, `Codagent-AI/e2e-run-<run-id>`,
+  and reports a definition score and a product score separately. A paid run needs
+  `--run-agent`, a profile for every role the workflow uses through `implement`
+  (`lead`, `crosscheck`, `implementor`, `tester`), clean Agent Runner and Agent Skills
+  checkouts, Docker, valid CLI auth (including the CLI the starting tree's Validator
+  reviews with), and the host GitHub App credentials `AND_SCENE_E2E_APP_ID` and
+  `AND_SCENE_E2E_APP_KEY_FILE`. Start with `--dry-run`.
+- Resume with `--resume --run-dir <dir>`; rescore with `--rescore-from <dir> --run-dir <new>`
+  (never published); finish a pending run with `human-review.sh --run-dir <dir>`;
+  `--calibrate` is a maintainer diagnostic. Delivery repositories are retained; delete
+  them by hand when finished with them.
+- Product evaluation builds delivered code only in a throwaway container. Browser
+  judging and human review use host Chrome (`AND_SCENE_HOST_CHROME`); run one browser
+  job at a time.
+- Results under `evals/agent-runner/and-scene-e2e/results/**` are historical output
+  excluded from Validator reviews; never edit them to change a past result.
+
 ## Running the Agent Runner `and-scene-define` suite
 
 Run from the repository root; consult
