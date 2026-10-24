@@ -21,6 +21,8 @@ export function parseTranscript(records, { cli, session, requireComplete = true 
   }
   const add = (id, name, field, value) => { const call = ensure(id, name); call[field] = stringify(value); call[field === 'input' ? 'hasInput' : 'hasOutput'] = true }
   for (const [index, record] of records.entries()) {
+    // Claude Code also records each raw API request, which repeats earlier turns and its own system reminders; none is a conversation turn.
+    if (record.type === 'api-request-blob') continue
     const p = record.payload ?? record; const message = record.message ?? p
     const blocks = Array.isArray(message.content) ? message.content : []
     const role = message.role ?? record.type

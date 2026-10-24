@@ -201,6 +201,19 @@ test('Codex native web_search events retain their input and results', async () =
   assert.ok(audit.matches.some(m => m.tool_call === 'search-event' && m.field === 'output'))
 })
 
+test('Claude raw API request records are not user turns, tool calls or open turns', async () => {
+  const { parseTranscript } = await import('../evals/agent-runner/and-scene-define/lib/transcripts.mjs')
+  const blob = (role, content) => ({ type: 'api-request-blob', sessionId: 's', hash: 'h', message: { role, content } })
+  const transcript = parseTranscript([
+    { type: 'user', message: { role: 'user', content: 'Start the step' } },
+    blob('user', [{ type: 'text', text: '<system-reminder>instructions</system-reminder>' }, { type: 'text', text: 'Start the step' }]),
+    blob('assistant', [{ type: 'tool_use', id: 'blob-call', name: 'Read', input: {} }]),
+    { type: 'assistant', message: { role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: 'Done.' }] } },
+    blob('user', [{ type: 'text', text: 'a later request' }]),
+  ], { cli: 'claude', session: 's' })
+  assert.deepEqual(transcript.users.map(user => user.text), ['Start the step']); assert.deepEqual(transcript.calls, []); assert.equal(transcript.finals, 1)
+})
+
 test('literal and multiline regex audit excerpts locate the matching text with compiled flags', async () => {
   const { compilePatterns } = await import('../evals/agent-runner/and-scene-define/lib/canary.mjs')
   const data = { version: 1, patterns: [
