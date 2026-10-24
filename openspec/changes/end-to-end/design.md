@@ -203,7 +203,7 @@ When the workflow fails after `define` completed, definition scoring still runs,
 - **Preflight reach check:** it lists the installation's repositories and fails if any name lacks the `e2e-run-` prefix.
 - **Creation:** `POST /orgs/Codagent-AI/repos` creates `e2e-run-<run-id>`, private, with issues, projects and wiki disabled. The name matches no contamination pattern, and preflight asserts this against the pinned list.
 - **Seeding:** the host pushes the materialized starting commit to `main` using a `GIT_ASKPASS` helper that reads the provisioning token from the process environment.
-- **Verification:** all refs equal `refs/heads/main` at the starting commit, with zero pull requests and zero issues. The repository's full name, id and creation time are recorded in `run-state.json` and the result.
+- **Verification:** all refs equal `refs/heads/main` at the starting commit, with zero pull requests and issues still disabled (the App holds no issues permission, so issues cannot be listed; none can exist while disabled). The repository's full name, id and creation time are recorded in `run-state.json` and the result.
 - **Refresh:** while a sandbox invocation runs, the controller re-mints the run token every 30 minutes and atomically replaces `.github-auth/token`. A bind-mounted directory sees the rename.
 
 ### Delivery verification and retention

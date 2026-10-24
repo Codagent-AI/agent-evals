@@ -74,7 +74,8 @@ test('INT-004 each bad repository state fails before any evaluated work and name
     'history': s => { s.commits = { [s.commit]: { sha: s.commit, parents: [{ sha: 'a'.repeat(40) }] } } },
     'an open pull request': s => { s.pulls['Codagent-AI/e2e-run-bad'] = [{ number: 1, state: 'open' }] },
     'a closed pull request on a later page': s => { s.pulls['Codagent-AI/e2e-run-bad'] = [...Array.from({ length: 100 }, (_, i) => ({ number: i + 1 })), { number: 101, state: 'closed' }] },
-    'an issue': s => { s.issues['Codagent-AI/e2e-run-bad'] = [{ number: 3 }] },
+    // An issue can exist only while issues are enabled.
+    'issues enabled': s => { s.hasIssues = true },
   }
   for (const [label, mutate] of Object.entries(states)) {
     const { app, server, root } = await setup(t); const { bundle, commit } = await startingRepo(root); const bare = await remote(root, commit)

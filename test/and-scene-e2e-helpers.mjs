@@ -26,7 +26,7 @@ export async function startingRepo(root) {
 export const keyPair = () => generateKeyPairSync('rsa', { modulusLength: 2048, publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' } })
 // A programmable local GitHub REST server for the App, repository, token, ref, pull and issue routes.
 export async function fakeGitHub(t, state = {}) {
-  const s = { requests: [], repos: [{ name: 'e2e-run-old', full_name: 'Codagent-AI/e2e-run-old' }], refs: {}, pulls: {}, issues: {}, commits: {}, ...state }
+  const s = { requests: [], repos: [{ name: 'e2e-run-old', full_name: 'Codagent-AI/e2e-run-old' }], refs: {}, pulls: {}, commits: {}, ...state }
   const server = http.createServer((req, res) => {
     let body = ''
     req.on('data', chunk => { body += chunk })
@@ -45,7 +45,9 @@ export async function fakeGitHub(t, state = {}) {
       if ((m = path.match(/^\/repos\/([^/]+\/[^/]+)\/git\/matching-refs\/?$/))) return send(200, page(s.refs[m[1]] ?? []))
       if ((m = path.match(/^\/repos\/([^/]+\/[^/]+)\/commits\/(\w+)$/))) return send(200, s.commits[m[2]] ?? { sha: m[2], parents: [] })
       if ((m = path.match(/^\/repos\/([^/]+\/[^/]+)\/pulls$/))) return send(200, page(s.pulls[m[1]] ?? []))
-      if ((m = path.match(/^\/repos\/([^/]+\/[^/]+)\/issues$/))) return send(200, page(s.issues[m[1]] ?? []))
+      // Like the real App, which holds no issues permission: issues cannot be listed, only the repository's setting read.
+      if ((m = path.match(/^\/repos\/([^/]+\/[^/]+)\/issues$/))) return send(403, { message: 'Resource not accessible by integration' })
+      if ((m = path.match(/^\/repos\/([^/]+\/[^/]+)$/)) && s.created?.full_name === m[1]) return send(200, { ...s.created, has_issues: s.hasIssues ?? false })
       send(404, { message: 'not found' })
     })
   })

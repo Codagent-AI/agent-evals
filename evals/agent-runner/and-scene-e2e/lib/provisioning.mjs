@@ -132,8 +132,9 @@ export async function verifyRepository(app, token, { fullName, commit }) {
   if ((head.parents ?? []).length) throw new ProvisioningError('delivery repository content', `${fullName} has history beyond the starting commit`)
   const pulls = await app.paged(`/repos/${fullName}/pulls?state=all`, token)
   if (pulls.length) throw new ProvisioningError('delivery repository content', `${fullName} already has pull request #${pulls[0].number}`)
-  const issues = await app.request('GET', `/repos/${fullName}/issues?state=all&per_page=100`, { token, accept: [200, 410] }).catch(error => { throw error })
-  if (Array.isArray(issues) && issues.length) throw new ProvisioningError('delivery repository content', `${fullName} already has issue #${issues[0].number}`)
+  // The App holds no issues permission, so no issue can be listed; one cannot exist while issues stay disabled, as created.
+  const repository = await app.request('GET', `/repos/${fullName}`, { token })
+  if (repository.has_issues !== false) throw new ProvisioningError('delivery repository content', `${fullName} has issues enabled`)
 }
 // Host side of the run token: one atomic file in a directory the sandbox mounts read-only.
 export async function writeTokenFile(dir, token) {
