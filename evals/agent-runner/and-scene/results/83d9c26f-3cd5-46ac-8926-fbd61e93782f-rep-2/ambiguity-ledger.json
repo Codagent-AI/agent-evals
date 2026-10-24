@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-23T22-06-56-338653739Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Verification failed the IPv4-loopback requirement; the underlying assumption or context gap is unknown.",
+      "evidence": [
+        "verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost.",
+        "The supplied workflow outputs contain no explanatory text, and the accessible workspace contains no implementation artifacts."
+      ],
+      "handling": "No agent explanation or corrective action is observable.",
+      "consequence": "The verification workflow failed the required host check.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The result establishes noncompliance but does not reveal the actual verification command, the instructions available to the agents, or their reasoning. It cannot distinguish an incorrect assumption f…",
+      "resolution": "unresolved",
+      "id": "f08fc61a64ac4188"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The default attribution uses a different repository owner from the expected target.",
+      "evidence": [
+        "attribution-default-link: fail — Expected https://github.com/Codagent-AI/and-scene; GitHub targets found: https://github.com/and-scene/and-scene."
+      ],
+      "handling": "The observed product contains the alternative target; no explanation or correction is supplied.",
+      "consequence": "Default attribution directs users to a repository URL different from the required one.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The URL mismatch is explicit, but its origin is not. The evidence does not establish whether the agents inferred the owner, inherited an existing default, or overlooked an available requirement.",
+      "resolution": "unresolved",
+      "id": "2d91e88a0cd5522b"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The screenshot helper&#39;s attribution warning coverage is incomplete.",
+      "evidence": [
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "quality-project-local-screenshot-helper: pass — Project-local Playwright screenshot helper is present."
+      ],
+      "handling": "A helper was delivered, but the evidence identifies incomplete attribution checks without showing their implementation.",
+      "consequence": "The helper failed the required attribution-warning check.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The result does not identify which warning condition is incomplete or why. No observable evidence distinguishes a specification gap, missing repository context, an assumption, or an implementation de…",
+      "resolution": "unresolved",
+      "id": "cba79e82db479dc9"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered interaction failed the check for ignoring swipes originating from controls.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail — No additional diagnostic detail supplied."
+      ],
+      "handling": "No agent discussion, event-handling code, or corrective action is available.",
+      "consequence": "The product failed the control-origin swipe check; the exact interaction and resulting behavior are unspecified.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure establishes an interaction issue but does not demonstrate the assumption or context gap responsible. Assigning a more specific classification would require evidence absent from the suppli…",
+      "resolution": "unresolved",
+      "id": "7f8746554f900f12"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
