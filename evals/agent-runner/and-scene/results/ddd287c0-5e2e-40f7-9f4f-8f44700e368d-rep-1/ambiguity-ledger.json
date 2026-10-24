@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-24T21-48-47-196129299Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The completeness of the canonical sample verification is unresolved.",
+      "evidence": [
+        "verification-sample-outline: fail — Canonical nine-step sample or nine-frame evidence is incomplete.",
+        "verification-sample-outline: pass —",
+        "verification-every-produced-step-renders: pass —"
+      ],
+      "handling": "The supplied results contain both a failure and a pass for the same check label, without chronology or supporting verification artifacts.",
+      "consequence": "The evidence does not establish whether canonical sample verification remained incomplete or was subsequently completed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The summaries cannot distinguish different check scopes, a later resolution, or inconsistent reporting. No implementation-agent explanation, original requirements, or underlying verification evidence…",
+      "resolution": "unresolved",
+      "id": "0aae32e1630cd535"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Verification did not satisfy the reported IPv4 loopback requirement.",
+      "evidence": [
+        "verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost."
+      ],
+      "handling": "No verification commands, endpoint records, or agent explanation are supplied.",
+      "consequence": "The address-specific verification check failed; the actual address used is not established by the supplied evidence.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure establishes an unmet check but does not show whether its cause was an assumption, unavailable context, an overlooked instruction, or missing verification evidence.",
+      "resolution": "unresolved",
+      "id": "1913b795260dd783"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The reported project-local screenshot helper and associated visual warnings were missing or incomplete.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: fail — Project-local Playwright screenshot helper is missing.",
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "attribution-default-link: pass — Default attribution label and target https://github.com/Codagent-AI/and-scene are present.",
+        "navigation-active-state: pass — Semantic current state and stable active hook are present."
+      ],
+      "handling": "The results report missing verification tooling and warnings, but no implementation decisions or repository inspection records are supplied.",
+      "consequence": "Four tooling and visual-warning checks failed despite passing checks for the attribution link and navigation active state.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "These results establish verification omissions, not their cause. Without the fixture instructions, repository context, or agent reasoning, the omissions cannot be attributed to a specification gap, u…",
+      "resolution": "unresolved",
+      "id": "8241d698af053abc"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
