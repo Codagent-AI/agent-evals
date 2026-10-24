@@ -225,7 +225,7 @@
       "title": "Scene kit correctness",
       "points": 20,
       "tier_weights": {
-        "critical": 1.5625,
+        "critical": 1.625,
         "major": 0.75,
         "minor": 0.25
       },
@@ -233,7 +233,7 @@
         {
           "id": "scene-step-model",
           "title": "Step model, stable identity, and typed boundary",
-          "points": 2.5625,
+          "points": 2.625,
           "evaluator": "llm-source-review",
           "job": "scene-kit",
           "criteria": [
@@ -254,7 +254,7 @@
         {
           "id": "scene-entity-transitions",
           "title": "Entity transitions and persistent grouped scenes",
-          "points": 6.375,
+          "points": 6.5,
           "evaluator": "llm-source-review",
           "job": "scene-kit",
           "criteria": [
@@ -292,7 +292,7 @@
         {
           "id": "scene-modes-and-navigation",
           "title": "Present/browse modes, navigation, controls, and boundaries",
-          "points": 7.3125,
+          "points": 7.375,
           "evaluator": "llm-source-review",
           "job": "scene-kit",
           "criteria": [
@@ -364,14 +364,13 @@
         },
         {
           "id": "scene-style-and-attribution",
-          "title": "Style ownership, hooks, framework neutrality, and attribution",
-          "points": 2.75,
+          "title": "Style ownership, hooks, and attribution",
+          "points": 2.5,
           "evaluator": "llm-source-review",
           "job": "scene-kit",
           "criteria": [
             "style-kit-hooks",
             "style-unstyled-kit-output",
-            "style-framework-optional",
             "style-coordinate-heavy-diagrams",
             "attribution-default-link",
             "attribution-styling-hook",
@@ -380,7 +379,6 @@
           "tiers": {
             "style-kit-hooks": "major",
             "style-unstyled-kit-output": "major",
-            "style-framework-optional": "minor",
             "style-coordinate-heavy-diagrams": "minor",
             "attribution-default-link": "minor",
             "attribution-styling-hook": "minor",
@@ -1075,12 +1073,6 @@
       ]
     },
     "style-unstyled-kit-output": {
-      "owner": "fixture",
-      "inventory": [
-        "INV-013"
-      ]
-    },
-    "style-framework-optional": {
       "owner": "fixture",
       "inventory": [
         "INV-013"
