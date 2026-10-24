@@ -1554,7 +1554,9 @@
       "job": "demo-integration",
       "requirement": "Every step renders the scene content the fixture requires for it.",
       "guidance": [
-        "Cite the step definitions that declare each step's scene objects."
+        "Cite the step definitions that declare each step's scene objects.",
+        "Delivered code cannot show how it was produced. Count the sample as the skill's own output (INV-075) when it follows the skill's own templates and registration convention; do not require a separate generation record.",
+        "The fixture fixes no step count, step titles or route; do not fail the sample for differing from a count or title the browser lead mentions."
       ]
     },
     "demo-evolving-scene-structure": {
