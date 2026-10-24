@@ -255,7 +255,8 @@ test('candidate rescore rejects a missing or malformed workflow change name', as
 
 // Factory runs keep the acceptance evidence under evidence/candidate/artifacts
 // but drop .runtime/agent-runner-projects, where the recorded session lived.
-async function retainEvidenceOnly(context, { corruptRetained = false, staleManifest = false, worktreeFile = null } = {}) {
+async function retainEvidenceOnly(context, { corruptRetained = false, staleManifest = false, worktreeFile = null,
+  referencedPath = 'output/reports/session-report.md' } = {}) {
   const artifacts = []
   if (worktreeFile) {
     const retained = 'evidence/candidate/artifacts/candidate-w-SKILL.md'
@@ -286,7 +287,7 @@ async function retainEvidenceOnly(context, { corruptRetained = false, staleManif
   artifacts.push({
     id: 'candidate-x',
     role: 'session-audit',
-    origin: { namespace: 'runner-session', relative_path: 'output/reports/session-report.md' },
+    origin: { namespace: 'runner-session', relative_path: referencedPath },
     path: 'evidence/candidate/artifacts/candidate-x-session-report.md',
     sha256: hashString(referenced),
   })
@@ -319,6 +320,25 @@ test('a source whose runner session is gone is rescored from hash-matching retai
     hashJson(imported.delivery.acceptance.artifacts.map(({ role, sha256 }) => ({ role, sha256 }))),
     hashJson(original.delivery.acceptance.artifacts.map(({ role, sha256 }) => ({ role, sha256 }))),
   )
+})
+
+test('retained session evidence outside output/, such as tester scratch captures, is restored in place', async () => {
+  const context = await sourceRun()
+  const scratch = 'scratch/acceptance-test/round1/inspection-output/session-report.md'
+  await retainEvidenceOnly(context, { referencedPath: scratch })
+  const stagingDir = join(await makeTempDir(join(tmpdir(), 'and-scene-rescore-staging-')), 'session')
+
+  await loadCandidateRescoreSource({ sourceDir: context.sourceDir, stagingDir })
+
+  assert.equal(await readFile(join(stagingDir, scratch), 'utf8'), 'Referenced session report.\n')
+  for (const unsafe of ['../outside.md', 'scratch/../../outside.md', '/abs/outside.md', '']) {
+    const escaping = await sourceRun()
+    await retainEvidenceOnly(escaping, { referencedPath: unsafe })
+    await assert.rejects(
+      () => loadCandidateRescoreSource({ sourceDir: escaping.sourceDir, stagingDir }),
+      /unsafe path/,
+    )
+  }
 })
 
 test('retained evidence whose bytes do not match the recorded hash is refused', async () => {
