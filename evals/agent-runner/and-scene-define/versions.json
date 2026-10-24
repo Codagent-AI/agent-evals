@@ -28,11 +28,12 @@
     },
     "simulated-user-policy": {
       "path": "hidden/simulated-user-policy.md",
-      "version": 3,
+      "version": 4,
       "hashes": {
         "1": "dd144b83082dd1fc27c619aafbb412aec233b159bc2cbbfef26a5ecd64bf8d50",
         "2": "2eff2853ac4eda3cfbc1fb67ac972f7e50812c4919dd7ecaee573de020696548",
-        "3": "80c5a2dbb111093da43397517e836cdc3be2024235e3ce9f4d0f6e0276a58c1e"
+        "3": "80c5a2dbb111093da43397517e836cdc3be2024235e3ce9f4d0f6e0276a58c1e",
+        "4": "058968d5dc9d11d81282d213d70a077957d88b01eaf0678a102742afc959ef3a"
       }
     },
     "rubric": {

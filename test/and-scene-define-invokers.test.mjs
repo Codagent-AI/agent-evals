@@ -3,22 +3,24 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import { createSimulatedUser, REPLY_SCHEMA } from '../evals/agent-runner/and-scene-define/lib/simulated-user.mjs'
+import { createSimulatedUser, CHECK_SCHEMA, REPLY_SCHEMA } from '../evals/agent-runner/and-scene-define/lib/simulated-user.mjs'
 import { loadSimulatedUserInputs } from '../evals/agent-runner/and-scene-define/lib/simulated-user-inputs.mjs'
 import { checkVersions } from '../evals/agent-runner/and-scene-define/lib/versions.mjs'
 
 import { assertStrictSchema, claudeStub, stream } from './and-scene-define-helpers.mjs'
 
-test('INT-002: simulated-user CLI is stateless, tool-less, strict and keeps host auth', async t => {
-  const stub = await claudeStub(t, [stream()])
+test('INT-002: simulated-user CLI is tool-less, strict and keeps host auth', async t => {
+  const stub = await claudeStub(t, [stream(), stream()])
   const inputs = await loadSimulatedUserInputs()
   const invoke = createSimulatedUser({ runDir: stub.runDir, inputs, env: { ...process.env, PATH: `${stub.runDir}:${process.env.PATH}`, CLAUDECODE: 'nested', CLAUDE_CODE_OAUTH_TOKEN: 'test-oauth-secret', ANTHROPIC_API_KEY: 'test-api-secret', CLAUDE_CODE_API_KEY: 'test-claude-api-secret', CLAUDE_CONFIG_DIR: '/unwanted/config', CLAUDE_CODE_USE_BEDROCK: '1' } })
   await invoke({ conversation: [{ step: 'define.proposal', agent_message: 'Earlier?', text: 'Earlier answer' }], request: { agent_message: 'Later?' }, deadline: Date.now() + 10000 })
   const [call] = await stub.calls()
   for (const flag of ['--tools', '--setting-sources']) assert.equal(call.argv[call.argv.indexOf(flag) + 1], '')
-  for (const flag of ['--strict-mcp-config', '--disable-slash-commands', '--no-session-persistence']) assert.ok(call.argv.includes(flag))
+  for (const flag of ['--strict-mcp-config', '--disable-slash-commands']) assert.ok(call.argv.includes(flag))
   assert.equal(call.argv[call.argv.indexOf('--model') + 1], 'claude-opus-5-5')
-  assert.deepEqual(call.files, ['system-prompt.md'])
+  // The session's working directory is stable and holds nothing; the prompt file lives elsewhere.
+  assert.deepEqual(call.files, [])
+  assert.match(call.cwd, /\.runtime\/simulated-user$/)
   assert.equal(call.promptMode, 0o600)
   assert.equal(call.scratchMode, 0o700)
   assert.equal(call.oauth, true)
@@ -41,12 +43,75 @@ test('INT-002: simulated-user CLI is stateless, tool-less, strict and keeps host
   assert.match(call.argv.at(-1), /Later\?/)
   assertStrictSchema(JSON.parse(call.argv[call.argv.indexOf('--json-schema') + 1]))
   assertStrictSchema(REPLY_SCHEMA)
+  assertStrictSchema(CHECK_SCHEMA)
+})
+
+const argAfter = (call, flag) => call.argv.includes(flag) ? call.argv[call.argv.indexOf(flag) + 1] : undefined
+const exchange = (turn, agent_message, reply) => ({ step: 'define.proposal', step_id: 'proposal', attempt: 1, turn, agent_message, ...reply })
+
+test('the reply check runs in a fork of the draft session and its reply replaces the draft', async t => {
+  const stub = await claudeStub(t, [
+    stream({ reply_type: 'answer', text: 'Yes. Also keep styling with each presentation.' }),
+    stream({ removed: ['Also keep styling with each presentation.'], reply_type: 'answer', text: 'Yes.' }),
+  ])
+  const reply = await createSimulatedUser(stub)({ conversation: [exchange(1, 'What?', { text: 'Build it.', reply_type: 'answer' })], request: { step: 'define.proposal', step_id: 'proposal', attempt: 1, turn: 2, agent_message: 'Approve?' }, deadline: Date.now() + 10000 })
+  assert.deepEqual({ reply_type: reply.reply_type, text: reply.text }, { reply_type: 'answer', text: 'Yes.' })
+  const [draft, check] = await stub.calls()
+  assert.equal(argAfter(draft, '--resume'), undefined)
+  assert.equal(argAfter(check, '--resume'), argAfter(draft, '--session-id'))
+  assert.ok(check.argv.includes('--fork-session'))
+  assert.notEqual(argAfter(check, '--session-id'), argAfter(draft, '--session-id'))
+  assert.deepEqual(JSON.parse(argAfter(check, '--json-schema')), CHECK_SCHEMA)
+  assert.match(check.argv.at(-1), /reply check/)
+  const usage = (await readFile(join(stub.runDir, 'phases/eval-owned-usage.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse)
+  assert.deepEqual(usage.map(x => [x.stage, x.session]), [['draft', 'new'], ['check', 'continued']])
+  // What the check removed can quote the hidden reference, so only private runtime state keeps it.
+  assert.ok(!JSON.stringify(usage).includes('styling'))
+  const [record] = (await readFile(join(stub.runDir, '.runtime/simulated-user-checks.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse)
+  assert.deepEqual(record.removed, ['Also keep styling with each presentation.'])
+})
+
+test('later turns continue the run session with only the new agent turn; a different conversation starts a new session', async t => {
+  const stub = await claudeStub(t, Array.from({ length: 8 }, () => stream()))
+  const opening = exchange(1, 'What?', { text: 'Build it.', reply_type: 'answer' })
+  const second = { step: 'define.proposal', step_id: 'proposal', attempt: 1, turn: 2, agent_message: 'Second?' }
+  const options = { ...stub, inputs: await loadSimulatedUserInputs() }
+  const invoke = createSimulatedUser(options)
+  const first = await invoke({ conversation: [opening], request: second, deadline: Date.now() + 10000 })
+  const grown = [opening, { ...second, text: first.text, reply_type: first.reply_type }]
+  await invoke({ conversation: grown, request: { ...second, turn: 3, agent_message: 'Third?' }, deadline: Date.now() + 10000 })
+  let calls = await stub.calls()
+  assert.equal(argAfter(calls[2], '--resume'), argAfter(calls[1], '--session-id'))
+  assert.deepEqual(JSON.parse(calls[2].argv.at(-1)), { current_agent_turn: 'Third?' })
+  // A restarted harness continues from the recorded session.
+  const restarted = createSimulatedUser(options)
+  const third = [...grown, { ...second, turn: 3, agent_message: 'Third?', text: 'No preference, your call.', reply_type: 'answer' }]
+  await restarted({ conversation: third, request: { ...second, turn: 4, agent_message: 'Fourth?' }, deadline: Date.now() + 10000 })
+  calls = await stub.calls()
+  assert.equal(argAfter(calls[4], '--resume'), argAfter(calls[3], '--session-id'))
+  await restarted({ conversation: [opening], request: { ...second, agent_message: 'Other?' }, deadline: Date.now() + 10000 })
+  calls = await stub.calls()
+  assert.equal(argAfter(calls[6], '--resume'), undefined)
+  assert.equal(JSON.parse(calls[6].argv.at(-1)).conversation.length, 1)
+})
+
+test('a failed session continuation retries in a new session from the full conversation', async t => {
+  const stub = await claudeStub(t, [stream(), stream(), { stdout: '', stderr: 'No conversation found', code: 1 }, stream(), stream()])
+  const opening = exchange(1, 'What?', { text: 'Build it.', reply_type: 'answer' })
+  const second = { step: 'define.proposal', step_id: 'proposal', attempt: 1, turn: 2, agent_message: 'Second?' }
+  const invoke = createSimulatedUser({ ...stub, sleep: async () => {} })
+  const first = await invoke({ conversation: [opening], request: second, deadline: Date.now() + 10000 })
+  await invoke({ conversation: [opening, { ...second, text: first.text, reply_type: first.reply_type }], request: { ...second, turn: 3, agent_message: 'Third?' }, deadline: Date.now() + 10000 })
+  const calls = await stub.calls()
+  assert.ok(argAfter(calls[2], '--resume'))
+  assert.equal(argAfter(calls[3], '--resume'), undefined)
+  assert.equal(JSON.parse(calls[3].argv.at(-1)).conversation.length, 2)
 })
 
 test('policy content is version pinned; tampering without a bump fails', async t => {
   assert.deepEqual(await checkVersions(), [])
   const inputs = await loadSimulatedUserInputs()
-  assert.equal(inputs.policyVersion, 3)
+  assert.equal(inputs.policyVersion, 4)
   const stub = await claudeStub(t, [])
   const root = resolve('evals/agent-runner/and-scene-define')
   const ledger = JSON.parse(await readFile(join(root, 'versions.json'), 'utf8'))
@@ -71,10 +136,10 @@ test('invalid_json_schema is non-retryable; capacity does not consume a retry', 
   const invalid = await claudeStub(t, [{ stdout: '', stderr: 'invalid_json_schema', code: 1 }])
   await assert.rejects(createSimulatedUser(invalid)({ request: { agent_message: '?' }, deadline: Date.now() + 10000 }), /invalid_json_schema/)
   assert.equal((await invalid.calls()).length, 1)
-  const capacity = await claudeStub(t, [{ stdout: '', stderr: '429 rate_limit_error', code: 1 }, { stdout: 'bad' }, { stdout: 'bad' }, stream()])
+  const capacity = await claudeStub(t, [{ stdout: '', stderr: '429 rate_limit_error', code: 1 }, { stdout: 'bad' }, { stdout: 'bad' }, stream(), stream()])
   const reply = await createSimulatedUser({ ...capacity, sleep: async () => {} })({ request: { agent_message: '?' }, deadline: Date.now() + 10000 })
   assert.equal(reply.text, 'No preference, your call.')
-  assert.equal((await capacity.calls()).length, 4)
+  assert.equal((await capacity.calls()).length, 5)
 })
 
 // Eval-owned judge invocation cases belong here when its later task lands.
@@ -92,9 +157,10 @@ test('init capabilities are required; all nested tool uses are checked', async t
 })
 
 test('successful answer text mentioning a rate limit does not trigger capacity recovery', async t => {
-  const stub = await claudeStub(t, [stream({ text: 'No preference on rate limits, your call.', reply_type: 'answer' })])
+  const limits = stream({ text: 'No preference on rate limits, your call.', reply_type: 'answer' })
+  const stub = await claudeStub(t, [limits, limits])
   assert.match((await createSimulatedUser(stub)({ request: { agent_message: '?' }, deadline: Date.now() + 10000 })).text, /rate limits/)
-  assert.equal((await stub.calls()).length, 1)
+  assert.equal((await stub.calls()).length, 2)
 })
 
 test('capacity backoff is bounded by the deadline and records each rejected call', async t => {

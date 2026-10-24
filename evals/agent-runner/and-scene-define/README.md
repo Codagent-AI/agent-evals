@@ -95,17 +95,30 @@ decision policy is `hidden/simulated-user-policy.md`. `loadSimulatedUserInputs()
 checks the pins and constructs a system prompt from an explicit allowlist of
 proposal, specs, design and test plan; citation supplements, task files, inventory
 classes and rubric never enter the prompt. Only the system prompt hash is retained
-in usage evidence. Each call starts in a private temporary directory (0700), writes
-the system prompt to a file (0600), and passes its path with `--system-prompt-file`
-so the reference text never enters process arguments. The directory and prompt
-are removed after the call. Host auth is retained, including
+in usage evidence. Each call writes the system prompt to a file (0600) in a private
+temporary directory (0700) and passes its path with `--system-prompt-file`, so the
+reference text never enters process arguments; the directory and prompt are removed
+after the call. Host auth is retained, including
 `CLAUDE_CODE_OAUTH_TOKEN` and `CLAUDE_CODE_API_KEY`; other `CLAUDE*` behaviour
-overrides are removed. Calls use no settings sources, no MCP servers, no real
-tools and no session persistence. Combined stdout and stderr buffering is capped
+overrides are removed. Calls use no settings sources, no MCP servers and no real
+tools. Combined stdout and stderr buffering is capped
 at 10 MiB; overflow terminates the child and records a rejected call.
-Every call appends to `phases/eval-owned-usage.jsonl`; rejected calls record zero
+
+The simulated user keeps one Claude session for the whole run, run from the empty
+working directory `.runtime/simulated-user`, so later turns send only the new agent
+turn. Every call forks the last good session (`--resume <id> --fork-session`), so a
+failed call leaves the session untouched. `.runtime/simulated-user-session.json`
+records the session and the conversation it covers; when that no longer matches the
+conversation, or continuing fails, a new session starts from the full conversation.
+Each turn takes two calls: a draft, then the policy's reply check in a fork of the
+draft session, whose output is the reply sent. The draft and what the check removed
+can quote the reference, so they stay in `.runtime/simulated-user-checks.jsonl` and
+are never published. Claude keeps the session transcripts, which hold the reference,
+under `~/.claude/projects/` on the host.
+Every call appends to `phases/eval-owned-usage.jsonl` with its `stage` (draft or
+check) and `session` (new or continued); rejected calls record zero
 tokens and a rejection reason, with a bounded, credential-redacted stderr excerpt
-for ordinary failures. Ordinary failures allow three attempts; schema
+for ordinary failures. Each stage allows three attempts at ordinary failures; schema
 errors fail immediately and capacity errors back off until the caller's deadline.
 
 The controller can call `runResponder({ runDir, exchangeDir, deadline, signal,

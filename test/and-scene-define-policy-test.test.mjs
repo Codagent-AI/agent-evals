@@ -7,13 +7,13 @@ import { join } from 'node:path'
 import { POLICY_CASES, runPolicyTest, assessPolicyReply } from '../evals/agent-runner/and-scene-define/policy-test.mjs'
 test('policy diagnostic has all disclosure and decision cases and three trials', async t => {
   const outputDir = await makeTempDir(join(tmpdir(), 'policy-test-')); t.after(() => rm(outputDir, { recursive: true, force: true }))
-  assert.equal(POLICY_CASES.length, 11)
+  assert.equal(POLICY_CASES.length, 12)
   let calls = 0
   const report = await runPolicyTest({ outputDir, invoke: async ({ request }) => {
     calls++; return { reply_type: 'answer', text: request.agent_message, usage: {} }
   } })
-  assert.equal(calls, 33)
-  assert.equal(report.cases.length, 11)
+  assert.equal(calls, 36)
+  assert.equal(report.cases.length, 12)
   assert.ok(report.cases.every(c => c.trials.length === 3 && typeof c.consistent === 'boolean' && typeof c.compliant === 'boolean'))
   assert.deepEqual(JSON.parse(await readFile(join(outputDir, 'policy-test.json'), 'utf8')), report)
 })
@@ -28,12 +28,18 @@ test('narrowed-finding diagnostic reports volunteered specifics as violations', 
   assert.equal(assessPolicyReply(narrowed, { reply_type: 'decision', text: "Don't add the per-step element assertions or the browse and jump checks." }).compliant, true)
 })
 
+test('drafted-approval diagnostic reports a review that adds requirements as a violation', () => {
+  const drafted = POLICY_CASES.find(c => c.id === 'approval-drafted')
+  assert.equal(assessPolicyReply(drafted, { reply_type: 'answer', text: 'Not approved yet. A presentation\'s own visual styling must live with that presentation or the host app.' }).compliant, false)
+  assert.equal(assessPolicyReply(drafted, { reply_type: 'approval', text: 'Approved, go ahead.' }).compliant, true)
+})
+
 test('policy diagnostic uses its own CLI usage ledger and reports inconsistent trials', async t => {
   const { claudeStub, stream } = await import('./and-scene-define-helpers.mjs')
   const { createSimulatedUser } = await import('../evals/agent-runner/and-scene-define/lib/simulated-user.mjs')
-  const stub = await claudeStub(t, Array.from({ length: 33 }, (_, index) => stream({ reply_type: index === 1 ? 'decision' : 'answer', text: 'No, keep the scene kit free of default colors and fonts.' })))
+  const stub = await claudeStub(t, Array.from({ length: 72 }, (_, index) => stream({ reply_type: index === 3 ? 'decision' : 'answer', text: 'No, keep the scene kit free of default colors and fonts.' })))
   const report = await runPolicyTest({ outputDir: stub.runDir, invoke: createSimulatedUser(stub) })
   assert.equal(report.cases[0].consistent, false)
   assert.equal(report.cases[0].compliant, false)
-  assert.equal((await readFile(join(stub.runDir, 'phases/eval-owned-usage.jsonl'), 'utf8')).trim().split('\n').length, 33)
+  assert.equal((await readFile(join(stub.runDir, 'phases/eval-owned-usage.jsonl'), 'utf8')).trim().split('\n').length, 72)
 })

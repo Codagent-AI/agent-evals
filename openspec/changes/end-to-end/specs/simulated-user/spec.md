@@ -1,5 +1,20 @@
 ## MODIFIED Requirements
 
+### Requirement: Whole-run conversation memory
+The simulated user SHALL receive the full conversation of the run across every define step when producing each reply, so its answers remain consistent between steps. It SHALL keep one model session for the whole run and send each new agent turn into that session. Each call SHALL continue from the last successful call, so a failed call leaves no partial turn in the session. When the session cannot be continued, including after a harness restart that lost it, the simulated user SHALL start a new session from the full recorded conversation.
+
+#### Scenario: Earlier answer is reused in a later step
+- **WHEN** the agent in the design step asks a question the simulated user answered during the proposal step
+- **THEN** the simulated user gives an answer consistent with its earlier answer
+
+#### Scenario: Later turn continues the run session
+- **WHEN** the agent sends a new turn after an earlier reply in the same run
+- **THEN** the simulated user continues its run session and receives only the new agent turn
+
+#### Scenario: Session cannot be continued
+- **WHEN** continuing the run session fails
+- **THEN** the simulated user starts a new session from the full recorded conversation and replies normally
+
 ### Requirement: Disclosure policy
 The simulated user SHALL follow a pinned, versioned disclosure policy:
 
@@ -93,7 +108,7 @@ After the define workflow, eval-owned judges SHALL audit every simulated-user re
 - **THEN** implementation does not start and the run ends `evaluation-harness-failed`, not resumable, with no score and no publication
 
 ### Requirement: Decision policy
-The simulated user SHALL follow a pinned, versioned decision policy. It SHALL approve every request to approve an artifact or proceed, and each approval SHALL be recorded as simulated. For a decision about a crosscheck finding, it SHALL decide according to the hidden reference where the reference applies and otherwise accept the agent's recommendation. When it rejects or narrows a finding or proposal, it SHALL say only which part to drop or keep, and SHALL NOT state a command, path, number, tool, pass/fail rule, or other requirement the agent did not propose or ask about. For a request to run, test, inspect, or otherwise act on something, it SHALL decline and tell the agent to proceed as it thinks best.
+The simulated user SHALL follow a pinned, versioned decision policy. It SHALL approve every request to approve an artifact, a draft, or a list of drafted requirements, or to proceed, as written, and each approval SHALL be recorded as simulated. In such a turn it SHALL answer only the questions, decisions, offered options, and labelled defaults the turn puts to it, and SHALL NOT add, remove, or rewrite drafted items, even where they differ from the hidden reference. For a decision about a crosscheck finding, it SHALL decide according to the hidden reference where the reference applies and otherwise accept the agent's recommendation. When it rejects or narrows a finding or proposal, it SHALL say only which part to drop or keep, and SHALL NOT state a command, path, number, tool, pass/fail rule, or other requirement the agent did not propose or ask about. For a request to run, test, inspect, or otherwise act on something, it SHALL decline and tell the agent to proceed as it thinks best.
 
 #### Scenario: Approval is requested
 - **WHEN** the agent asks the simulated user to approve a drafted artifact
@@ -115,8 +130,12 @@ The simulated user SHALL follow a pinned, versioned decision policy. It SHALL ap
 - **WHEN** the simulated user narrows a crosscheck finding that goes beyond the hidden reference
 - **THEN** its reply names the part to drop and states no command, number, tool, or pass/fail rule the agent did not raise
 
+#### Scenario: Approval request lists drafted requirements
+- **WHEN** the agent asks the simulated user to approve a list of drafted requirements, some of which differ from the hidden reference
+- **THEN** the simulated user approves the list as written and adds no requirement the list does not contain
+
 ### Requirement: Simulated-user policy tests
-The suite SHALL provide a maintainer diagnostic that sends a fixed set of scripted agent turns to the pinned simulated user, covering at least a specific question, a broad question, a compound question, an ambiguous question, a repeated question, a question the reference does not settle, an approval request, a crosscheck-finding decision, a crosscheck finding the reference narrows, and a request to act, and SHALL report for each whether the reply met the policy. The diagnostic SHALL NOT be a prerequisite or runtime gate for a candidate run.
+The suite SHALL provide a maintainer diagnostic that sends a fixed set of scripted agent turns to the pinned simulated user, covering at least a specific question, a broad question, a compound question, an ambiguous question, a repeated question, a question the reference does not settle, an approval request, an approval request listing drafted requirements that differ from the reference, a crosscheck-finding decision, a crosscheck finding the reference narrows, and a request to act, and SHALL report for each whether the reply met the policy. The diagnostic SHALL NOT be a prerequisite or runtime gate for a candidate run.
 
 #### Scenario: Policy test reports a violation
 - **WHEN** the scripted broad question receives a reply that enumerates requirements beyond the starting prompt
@@ -129,3 +148,20 @@ The suite SHALL provide a maintainer diagnostic that sends a fixed set of script
 #### Scenario: Narrowing reply that volunteers specifics
 - **WHEN** the scripted narrowing finding receives a reply that states a command, number, or tool the finding did not raise
 - **THEN** the diagnostic reports that case as a policy violation
+
+#### Scenario: Approval reply that adds a requirement
+- **WHEN** the scripted approval request listing drafted requirements receives a reply that adds a requirement the list does not contain
+- **THEN** the diagnostic reports that case as a policy violation
+
+## ADDED Requirements
+
+### Requirement: Reply check
+Before a reply is sent, the simulated user SHALL check its draft against its pinned policy in the same session and send the checked reply instead of the draft. The check SHALL remove every statement that answers nothing the agent asked or put to it, every detail the agent did not raise, and, in reply to an approval request, every change to drafted items; it SHALL add nothing. The draft and the removed statements SHALL be retained only in private runtime state, since they can quote the hidden reference. The usage of both calls SHALL be recorded as eval-owned usage.
+
+#### Scenario: Check removes a volunteered requirement
+- **WHEN** the simulated user's draft adds a requirement the agent's turn did not raise
+- **THEN** the reply sent to the agent omits that requirement
+
+#### Scenario: Removed statements stay private
+- **WHEN** the reply check removes a statement from a draft
+- **THEN** the removed statement appears in private runtime state and in no published evidence
