@@ -112,7 +112,9 @@ const RETAINED_EVIDENCE = 'evidence/candidate/artifacts'
 const CANDIDATE_WORKTREE = '.runtime/candidate-worktree'
 
 // Factory runs retain every acceptance artifact under evidence/candidate/ but
-// may drop the recorded Runner session under .runtime/. The retained manifest
+// may drop the recorded Runner session under .runtime/. Collection takes
+// session files from anywhere in the session, such as the tester's scratch/
+// captures, so any relative path inside it is restored. The retained manifest
 // is accepted only when it reproduces the manifest hash the source recorded,
 // and each retained copy only when its bytes match both the manifest and the
 // recorded acceptance hash.
@@ -132,9 +134,8 @@ async function retainedSessionEvidence(root, state) {
     const namespace = artifact?.origin?.namespace
     if (!['runner-session', 'candidate-worktree'].includes(namespace)) continue
     const relativePath = artifact.origin.relative_path
-    if (typeof relativePath !== 'string' || isAbsolute(relativePath)
-      || relativePath.split('/').includes('..')
-      || (namespace === 'runner-session' && !relativePath.startsWith('output/'))) {
+    if (typeof relativePath !== 'string' || relativePath === '' || isAbsolute(relativePath)
+      || relativePath.split('/').includes('..')) {
       throw new Error(`rescore source retained evidence has an unsafe path: ${relativePath ?? null}`)
     }
     if (typeof artifact.path !== 'string' || !artifact.path.startsWith(`${RETAINED_EVIDENCE}/`)) {
