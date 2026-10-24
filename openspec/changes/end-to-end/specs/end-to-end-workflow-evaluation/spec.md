@@ -214,7 +214,7 @@ The result SHALL report `evaluation_status` as exactly one of `complete`, `pendi
 - **THEN** `evaluation_status` is `definition-workflow-failed` and no score is reported
 
 ### Requirement: Durable checkpoints and resume
-The harness SHALL checkpoint every phase and every independently verifiable unit, including each judge job and audit, with its input provenance and output hashes. On resume in the same run directory it SHALL verify the recorded run identity, series identity, candidate, profiles, and delivery repository; reuse every unit it can prove complete; resume an inactive unfinished Agent Runner run with its recorded run identifier and the `--until` of the workflow phase it was in, so that a run interrupted during `define` resumes with `--until define` and then passes through definition collection and the define checkpoint; and SHALL NOT start a duplicate Agent Runner run. A provenance mismatch SHALL stop the resume with an explicit error. A run that failed the define checkpoint for a leak SHALL NOT be resumed.
+The harness SHALL checkpoint every phase and every independently verifiable unit, including each judge job and audit, with its input provenance and output hashes. On resume in the same run directory it SHALL verify the recorded run identity, series identity, candidate other than its Agent Runner commit, profiles, and delivery repository; reuse every unit it can prove complete; resume an inactive unfinished Agent Runner run with its recorded run identifier and the `--until` of the workflow phase it was in, so that a run interrupted during `define` resumes with `--until define` and then passes through definition collection and the define checkpoint; and SHALL NOT start a duplicate Agent Runner run. A provenance mismatch SHALL stop the resume with an explicit error. A run that failed the define checkpoint for a leak SHALL NOT be resumed. A resume MAY run on a different Agent Runner commit, so a Runner fix can finish the run it failed; the run SHALL keep its starting commit as the candidate and record, in `result.json` and the report, every Agent Runner commit it used with the first unfinished phase each took over.
 
 #### Scenario: Interrupted workflow resumes
 - **WHEN** the recorded Agent Runner run is inactive and unfinished after the define checkpoint passed
@@ -227,6 +227,10 @@ The harness SHALL checkpoint every phase and every independently verifiable unit
 #### Scenario: Resume after a judge failure
 - **WHEN** a run stopped after some judge jobs completed
 - **THEN** resume reruns only the unfinished judge jobs and reuses the completed ones
+
+#### Scenario: Resume on a fixed Agent Runner
+- **WHEN** a run whose implement phase failed is resumed with a different Agent Runner commit
+- **THEN** the harness reuses the completed phases, resumes the recorded Agent Runner run with `--until implement`, and the result lists both commits, the new one from the implement phase
 
 ### Requirement: Workflow metrics and eval-owned usage
 Workflow time and cost SHALL come from Agent Runner's `run-metrics.json`, covering the whole run through `implement`, attributed per top-level step and per evaluated role, and retaining its completeness and provenance without inventing totals. Simulated-user, judge, and audit usage SHALL be recorded separately as eval-owned usage and SHALL NOT be counted as workflow cost.

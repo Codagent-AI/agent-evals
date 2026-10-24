@@ -13,6 +13,8 @@ function headline(result) {
     outcome.push(row('Owning phase', escape(result.owning_phase ?? 'unknown')), row('Error', escape(result.observed_error ?? 'none recorded')), row('Resumable', escape(result.resumable === true ? 'yes' : 'no')))
     if (result.last_active_step) outcome.push(row('Last active step', escape(result.last_active_step)))
   }
+  // A resume that switched Agent Runner commits ran its phases on more than one Runner build.
+  if (result.agent_runner_commits) outcome.push(row('Agent Runner commits', result.agent_runner_commits.map(entry => `${escape(entry.commit)} from ${escape(entry.from_phase ?? 'unknown phase')}`).join('; ')))
   if (result.provisional_rubric) outcome.push(row('Product rubric', 'provisional: not yet approved from calibration evidence'))
   const definition = result.definition_score
   const product = result.product_score

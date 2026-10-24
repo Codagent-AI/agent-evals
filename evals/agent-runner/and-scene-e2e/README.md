@@ -74,6 +74,10 @@ node evals/agent-runner/and-scene-e2e/compare.mjs DIR DIR [...]
 * **Resume** reuses every proven unit and never starts a second Runner run. A run
   that ended `contaminated`, leak-failed or out of time cannot be resumed; a leak
   needs a new run. A publication failure resumes publication only.
+  A resume may use a different Agent Runner checkout, for example one with a fix
+  for the failure it resumes from; every other candidate input must match. The
+  candidate keeps the starting commit, and `result.json` (`agent_runner_commits`)
+  and the report list each commit with the first unfinished phase it took over.
 * **Rescore** reruns reconciliation, both contamination passes, the disclosure
   audit, definition scoring, product evaluation from the retained bundle with the
   source run's recorded build plan, and the trace, under the current evaluator

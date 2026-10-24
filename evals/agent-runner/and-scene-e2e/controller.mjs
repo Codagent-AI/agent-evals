@@ -41,6 +41,17 @@ export { HELP, parseArguments }
 const DEFINE_MANIFEST = 'evidence/define-manifest.json'
 const FINAL_MANIFEST = 'evidence/final-manifest.json'
 const SNAPSHOT = { define: { evidenceRoot: 'evidence/define', manifestPath: DEFINE_MANIFEST }, final: { evidenceRoot: 'evidence/final', manifestPath: FINAL_MANIFEST } }
+// A resume may run on a different Agent Runner commit (for example one that fixes the failure it resumes
+// from). The recorded identity keeps the starting commit, so completed units stay reusable; the run records
+// every commit it switched to and the first unfinished phase it took over from.
+const RUNNER_COMMIT_PATH = 'candidate.agent_runner_commit'
+export function recordRunnerCommit(checkpoint, commit) {
+  const used = checkpoint.agent_runner_commits ?? null
+  const current = used?.at(-1).commit ?? checkpoint.identity.candidate?.agent_runner_commit ?? null
+  if (commit === current) return used
+  const from = Object.entries(checkpoint.phases ?? {}).find(([name, value]) => name !== 'preflight' && value.units?.phase && value.units.phase.state !== 'complete')?.[0] ?? null
+  return [...used ?? [{ commit: current, from_phase: 'preflight', resumed_at: null }], { commit, from_phase: from, resumed_at: new Date().toISOString() }]
+}
 export function identityMismatches(recorded, current, path = '') {
   if (hashJson(recorded) === hashJson(current)) return []
   if (!recorded || !current || typeof recorded !== 'object' || typeof current !== 'object') return [path]
@@ -144,9 +155,10 @@ export async function runEvaluation(options, deps = {}) {
       if (options.resume) {
         checkpoint = await loadCheckpoint(statePath)
         if (!checkpoint) throw new Error('resume requires run-state.json in the exact existing run directory')
-        const mismatch = identityMismatches(checkpoint.identity, identity)
+        const mismatch = identityMismatches(checkpoint.identity, identity).filter(path => path !== RUNNER_COMMIT_PATH)
         if (mismatch.length) throw new Error(`resume identity mismatch: ${mismatch.join(', ')}`)
         if (checkpoint.stall_window_ms !== options.stallWindowMs) throw new Error(`resume stall window differs from the recorded ${checkpoint.stall_window_ms}ms`)
+        checkpoint.agent_runner_commits = recordRunnerCommit(checkpoint, identity.candidate.agent_runner_commit)
       } else {
         checkpoint = createCheckpoint({ run_id: shortId(), identity })
         checkpoint.step_order = inspected.workflow.top_steps

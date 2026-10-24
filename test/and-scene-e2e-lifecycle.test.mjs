@@ -401,6 +401,18 @@ test('I-54 a resume with a changed series identity, candidate commit or time lim
   const ok = await runEvaluation({ ...f.options, resume: true }, f.deps)
   assert.equal(ok.result.evaluation_status, 'pending-human-review', ok.result.observed_error)
 })
+test('a resume on a different Agent Runner commit reuses completed phases and records each commit with the phase it took over', async t => {
+  const f = await lifecycle(t)
+  f.harness.plans.implement.push({ type: 'failed' }); f.deps.quota = async () => ({ waited: false })
+  assert.equal((await runEvaluation(f.options, f.deps)).result.resumable, true)
+  const original = await f.deps.inspect()
+  const fixed = { ...original, candidate: { ...original.candidate, agent_runner_commit: 'fixed-runner' } }
+  const resumed = await runEvaluation({ ...f.options, resume: true }, { ...f.deps, inspect: async () => fixed })
+  assert.equal(resumed.result.evaluation_status, 'pending-human-review', resumed.result.observed_error)
+  assert.deepEqual(f.sandbox.starts.map(start => [start.mode.kind, start.until]), [['fresh', 'define'], ['resume', 'implement'], ['resume', 'implement']])
+  assert.deepEqual(resumed.result.agent_runner_commits.map(entry => [entry.commit, entry.from_phase]), [[original.candidate.agent_runner_commit ?? null, 'preflight'], ['fixed-runner', 'implement-workflow']])
+  assert.equal(resumed.result.candidate.agent_runner_commit, original.candidate.agent_runner_commit, 'the candidate keeps the commit the run started on')
+})
 test('I-19 the token directory is removed after a failed invocation as well', async t => {
   const f = await lifecycle(t, { limitMs: 3600e3 })
   f.harness.plans.implement.push({ type: 'hang', during: ({ harness }) => setTimeout(() => { harness.clock.t += 2 * 3600e3 }, 20) })
