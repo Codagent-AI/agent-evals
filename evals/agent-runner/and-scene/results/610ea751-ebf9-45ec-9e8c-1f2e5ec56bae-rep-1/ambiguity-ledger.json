@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-24T20-56-44-594309806Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": false,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err",
+      "output/_resolve-findings_.out",
+      "output/_session-report_.err",
+      "output/_session-report_.out",
+      "output/_verify-change__sub_verify-change__verify-acceptance-handoff_.err",
+      "output/_verify-change__sub_verify-change__verify-acceptance-handoff_.out",
+      "output/_verify-change__sub_verify-change__verify-assumptions-handoff_.err",
+      "output/_verify-change__sub_verify-change__verify-assumptions-handoff_.out",
+      "output/acceptance-assumptions.md",
+      "output/acceptance-findings.md",
+      "output/acceptance-handoff.md"
+    ],
+    "reasons": [
+      "ambiguity artifact scan stopped after 1000 entries",
+      "fixture proposal references unknown finding \"F-03\""
+    ]
+  },
+  "findings": [],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
