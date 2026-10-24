@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-24T03-54-48-771907246Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Verification failed the IPv4 loopback requirement; the underlying assumption or context gap is unknown.",
+      "evidence": [
+        "verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost."
+      ],
+      "handling": "No implementation decision or explanation is supplied.",
+      "consequence": "The delivered verification workflow failed the loopback check.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The result establishes noncompliance but does not reveal the verification command, instructions available to the agents, or their reasoning. It cannot distinguish an assumption from an implementation…",
+      "resolution": "unresolved",
+      "id": "ee7044256329dab7"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The screenshot helper&#39;s attribution warning coverage was incomplete.",
+      "evidence": [
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "quality-project-local-screenshot-helper: pass — Project-local Playwright screenshot helper is present.",
+        "attribution-default-link: pass — Default attribution label and target https://github.com/Codagent-AI/and-scene are present."
+      ],
+      "handling": "A screenshot helper was delivered, but no explanation of its attribution warning coverage is supplied.",
+      "consequence": "The helper failed the attribution warning check despite the default attribution itself passing.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The evidence does not identify which warning condition was incomplete or whether its omission arose from ambiguous requirements, undiscovered context, or an implementation defect.",
+      "resolution": "unresolved",
+      "id": "6ba4848403e56c0a"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered interaction behavior failed the check for ignoring swipes originating from controls.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail —"
+      ],
+      "handling": "No implementation explanation or failure trace is supplied.",
+      "consequence": "The product failed the control-origin swipe check; the exact observed interaction is unavailable.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The check name and failure establish an interaction mismatch, but provide no evidence of the agents&#39; assumptions, available requirements, or implementation mechanism.",
+      "resolution": "unresolved",
+      "id": "895803f206c3e675"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
