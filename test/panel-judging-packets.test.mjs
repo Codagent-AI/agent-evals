@@ -203,7 +203,8 @@ test('a decider request too large in total runs in batches of whole criteria and
   const request = { job: 'job', criteria: ['x', 'y'], prompt: 'context', prompt_body: 'context', schema: {},
     line_citations: 'evidence-view', panel_line_citations: true, input_roots: { evidence: root } }
   const seen = []
-  const rationale = id => id.toUpperCase().repeat(60_000)
+  // Three votes per criterion: one criterion's batch fits the decider limit, both together do not.
+  const rationale = id => id.toUpperCase().repeat(MAX_DECIDER_PACKET_CHARS / 8)
   const outcome = await runPanelJob({ job: 'job', criteria: ['x', 'y'], verdicts: ['pass', 'fail'], order: ['pass', 'fail'], schema: {},
     buildPrompt: () => request, validateCitations: async () => true,
     panel: panel(['fail', 'pass', 'pass']).map(member => ({ ...member, invoke: async () => JSON.stringify({ results: ['x', 'y']
