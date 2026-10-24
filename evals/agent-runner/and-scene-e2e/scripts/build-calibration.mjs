@@ -42,7 +42,8 @@ export const VARIANTS = {
   ],
   // Mandatory: browse mode shows each step's caption.
   'degraded-captions-missing': [
-    ...kit('chrome/Footer.tsx', text => text.replace(/\n\s*\{current\.caption\}/, '')),
+    // The step lookup only fed the caption; left unused it fails the reference's noUnusedLocals type check.
+    ...kit('chrome/Footer.tsx', text => text.replace(/\n\s*\{current\.caption\}/, '').replace(/\n\s*const current = steps\[step\]/, '')),
   ],
   // Mandatory: focused controls keep their keys.
   'degraded-focused-controls-lose-keys': [

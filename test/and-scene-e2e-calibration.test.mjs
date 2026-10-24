@@ -43,6 +43,8 @@ test('INT-011 every real patch applies cleanly to the pinned reference bundle; p
   assert.match(await read('preference-shifted-chrome', 'src/presentation-kit/usePresentationNav.ts'), /e\.key === 'm' \|\| e\.key === 'M'/)
   assert.match(await read('preference-shifted-chrome', 'src/presentations/how-to-make-a-presentation/Talk.tsx'), /initialMode="present"/)
   assert.doesNotMatch(await read('degraded-captions-missing', 'src/presentation-kit/chrome/Footer.tsx'), /\{current\.caption\}/)
+  // Left behind, the caption's step lookup is an unused local and the reference's type check fails the build.
+  assert.doesNotMatch(await read('degraded-captions-missing', 'src/presentation-kit/chrome/Footer.tsx'), /const current = /)
   assert.match(await read('degraded-mode-toggle-loses-position', 'src/presentation-kit/usePresentationNav.ts'), /setStep\(0\); setMode/)
   assert.doesNotMatch(await read('degraded-focused-controls-lose-keys', 'src/presentation-kit/usePresentationNav.ts'), /closest\('button, a, input/)
   // The skill vendors a byte-identical snapshot of the kit, so every variant changes both copies alike.
