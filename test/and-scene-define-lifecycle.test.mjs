@@ -78,13 +78,27 @@ test('INT-008 failed audit reports the owning step and unavailable verdict', asy
   const f = await fixture(t, 'failed'); const { result } = await runEvaluation(f.options, f.deps)
   assert.equal(result.evaluation_status, 'definition-workflow-failed'); assert.equal(result.last_active_step, 'define.design'); assert.match(result.observed_error, /CLI failed/)
 })
-test('INT-008 whole-run deadline stops a mid-turn sandbox and persists across resume', async t => {
-  const f = await fixture(t, 'hanging'); f.options.timeLimitMs = 30
-  const { result } = await runEvaluation(f.options, f.deps)
-  assert.equal(f.stopCount(), 1); assert.equal(result.evaluation_status, 'definition-workflow-failed'); assert.equal(result.last_active_step, 'define.specs'); assert.equal(result.time_limit_ms, 30)
-  const resumed = await runEvaluation({ ...f.options, resume: true }, f.deps)
-  assert.match(resumed.result.observed_error, /elapsed-time limit/); assert.equal(f.modes.length, 1)
-})
+for (const checkpointLatencyMs of [0, 50]) {
+  test(`INT-008 whole-run deadline stops a mid-turn sandbox and persists across resume${checkpointLatencyMs ? ' with slow checkpoint persistence' : ''}`, async t => {
+    const f = await fixture(t, 'hanging'); f.options.timeLimitMs = 60_000
+    const realNow = Date.now
+    if (checkpointLatencyMs) {
+      // The first clock read sets the deadline; the next follows persistence.
+      let clockReads = 0
+      t.mock.method(Date, 'now', () => realNow() + (clockReads++ ? checkpointLatencyMs : 0))
+    }
+    const start = f.deps.sandbox.start.bind(f.deps.sandbox)
+    f.deps.sandbox.start = async (...args) => {
+      await start(...args)
+      // Expire only after the sandbox is running, regardless of setup latency.
+      t.mock.method(Date, 'now', () => realNow() + f.options.timeLimitMs)
+    }
+    const { result } = await runEvaluation(f.options, f.deps)
+    assert.equal(f.stopCount(), 1); assert.equal(result.evaluation_status, 'definition-workflow-failed'); assert.equal(result.last_active_step, 'define.specs'); assert.equal(result.time_limit_ms, f.options.timeLimitMs)
+    const resumed = await runEvaluation({ ...f.options, resume: true }, f.deps)
+    assert.match(resumed.result.observed_error, /elapsed-time limit/); assert.equal(f.modes.length, 1)
+  })
+}
 test('later registered phases wait for every predecessor, including on contamination', async () => {
   const called = []
   const handlers = Object.fromEntries(['preflight', 'materialization', 'define-workflow', 'artifact-collection', 'metrics', 'publication'].map(name => [name, () => called.push(name)]))
