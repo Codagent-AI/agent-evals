@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "patterns": [
     {
       "id": "fixture-repository",
@@ -112,8 +112,8 @@
     {
       "id": "artifacts-runtime",
       "kind": "locator",
-      "type": "literal",
-      "value": "/artifacts/.runtime"
+      "type": "regex",
+      "value": "^.*/artifacts/\\.runtime/(?:claude|codex|cursor)(?:/|\\b).*$"
     },
     {
       "id": "relative-runtime",
@@ -160,8 +160,8 @@
     {
       "id": "e2e-suite-name",
       "kind": "locator",
-      "type": "literal",
-      "value": "and-scene-e2e"
+      "type": "regex",
+      "value": "^.*(?<!codagent-)and-scene-e2e.*$"
     },
     {
       "id": "e2e-hidden-product-rubric",

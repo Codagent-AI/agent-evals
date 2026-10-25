@@ -135,12 +135,16 @@ test('INT-007 the engine keeps its matrix: inputs and outputs of every tool, dis
 test('INT-007 the pinned list is qualified, versioned, covers define and e2e locations, and has no override option', () => {
   const ids = patterns.patterns.map(pattern => pattern.id)
   for (const id of ['fixture-repository', 'fixture-url', 'eval-repository', 'hidden-reference-path', 'exchange-file', 'staged-input', 'e2e-suite-name', 'e2e-hidden-product-rubric', 'e2e-hidden-preference-values', 'e2e-hidden-calibration']) assert.ok(ids.includes(id), id)
-  assert.equal(patterns.version, 1)
+  assert.equal(patterns.version, 2)
   const compiled = compilePatterns(patterns)
   const matches = text => compiled.filter(pattern => pattern.matches(text)).map(pattern => pattern.id)
   for (const spelling of ['cat ../../exchange/abc.reply.json', 'cat /artifacts/exchange/abc.request.json', 'ls ../exchange/z.request.json']) assert.ok(matches(spelling).includes('exchange-file'), spelling)
   for (const ordinary of ['the exchange of ideas', 'an inventory of items', 'rubric tuning is hard']) assert.deepEqual(matches(ordinary), [], ordinary)
   assert.ok(matches('open evals/agent-runner/and-scene-e2e/product-rubric.json').includes('e2e-hidden-product-rubric'))
+  // The workflow's own run scratch and the delivery app's bot login are ordinary; session stores and the suite path are not.
+  for (const ordinary of ['ls /artifacts/.runtime/agent-runner-projects/-artifacts-workspace-repo/runs/change-1/scratch/acceptance-test', '"login":"codagent-and-scene-e2e[bot]"']) assert.deepEqual(matches(ordinary), [], ordinary)
+  assert.ok(matches('cat /artifacts/.runtime/codex/sessions/rollout-x.jsonl').includes('artifacts-runtime'))
+  assert.ok(matches('ls evals/agent-runner/and-scene-e2e').includes('e2e-suite-name'))
   assert.throws(() => parseArguments(['--run-agent', '--ignore-contamination', 'yes'], {}), /unknown option/)
 })
 
