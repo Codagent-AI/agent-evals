@@ -4,10 +4,13 @@ export function topLevelStep(entry) {
   const first = String(entry.prefix ?? '').split('/')[0]
   return (first || entry.step || entry.id || '').replace(/^sub:/, '')
 }
+// The Validator's own reviewer attempts are workflow-tool internals with no retained transcript, not evaluated agents.
+const validatorAttempt = step => step.tool === 'agent-validator'
 // Every evaluated invocation with the role the Runner recorded (lead, crosscheck, implementor, tester, ...).
 export function effectiveInvocations(payload) {
   const invoked = (payload?.steps ?? []).filter(step => step.agent_invoked)
   return effectiveDefineInvocations(payload).map((invocation, index) => ({ ...invocation, role: invoked[index].role ?? invoked[index].target_name ?? invocation.role, phase: topLevelStep(invoked[index]) }))
+    .filter((_, index) => !validatorAttempt(invoked[index]))
 }
 export function invocationsThrough(invocations, stepOrder, last) {
   const limit = stepOrder.indexOf(last)

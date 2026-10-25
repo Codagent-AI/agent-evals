@@ -70,6 +70,14 @@ test('INT-007 pass 1 audits only the define invocations and pass 2 all of them, 
   assert.ok(!two.transcripts.some(transcript => transcript.session_id === 'validator-s'))
 })
 
+test('pass 2 skips the Validator reviewer attempts the Runner reports as invoked steps', async t => {
+  const validatorStep = { ...STEP('run-validator', 'implement/sub:implement-change/verify-change/run-validator', 'implementation-validator', 'agent-validator', 'validator-run-s'), kind: 'nested-agent', tool: 'agent-validator' }
+  const w = await world(t, { invocations: [STEP('proposal', 'define/sub:define-change', 'lead', 'codex', 'lead-s'), STEP('implementor-checklist', 'implement/sub:implement-change', 'implementor', 'claude', 'impl-s'), validatorStep], omit: ['validator-run-s'] })
+  assert.deepEqual(w.all.map(invocation => invocation.role), ['lead', 'implementor'])
+  const two = await w.pass('final', w.all)
+  assert.equal(w.audit(two).status, 'clean')
+})
+
 test('INT-007 a missing or truncated transcript for any evaluated role fails collection, including a workflow-added role', async t => {
   for (const session of ['lead-s', 'cursor-s', 'impl-s', 'test-s', 'extra-s']) {
     const w = await world(t, { omit: [session] })
