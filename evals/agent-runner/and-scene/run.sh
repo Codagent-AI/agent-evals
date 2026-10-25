@@ -960,6 +960,22 @@ if [[ -z "\$AXI_CHROMIUM" ]]; then
   echo "Could not find a runnable Chromium for chrome-devtools-axi." >&2
   exit 1
 fi
+# Preserve the evaluator's install before candidate Playwright installs can
+# garbage-collect the image browsers. Hardlinks survive removal of the source.
+AXI_CHROMIUM_DIR="\$(dirname "\$AXI_CHROMIUM")"
+if ! HOST_CHROMIUM_DIR="\$(mktemp -d /tmp/and-scene-host-chromium.XXXXXX)"; then
+  echo "Could not create a private evaluator Chromium directory." >&2
+  exit 1
+fi
+if ! cp -al "\$AXI_CHROMIUM_DIR/." "\$HOST_CHROMIUM_DIR/"; then
+  # Discard any partial hardlink copy before falling back across filesystems.
+  if ! { rm -rf "\$HOST_CHROMIUM_DIR" && mkdir -p "\$HOST_CHROMIUM_DIR" && cp -a "\$AXI_CHROMIUM_DIR/." "\$HOST_CHROMIUM_DIR/"; }; then
+    echo "Could not copy Chromium to the private evaluator directory: \$HOST_CHROMIUM_DIR" >&2
+    exit 1
+  fi
+fi
+export AND_SCENE_HOST_CHROME="\$HOST_CHROMIUM_DIR/chrome"
+export PLAYWRIGHT_SKIP_BROWSER_GC=1
 AXI_PROFILE_DIR="\$(mktemp -d /tmp/and-scene-axi-profile.XXXXXX)"
 "\$AXI_CHROMIUM" \
   --headless=new \
@@ -979,9 +995,8 @@ if ! curl -fsS "\$CHROME_DEVTOOLS_AXI_BROWSER_URL/json/version" >/dev/null; then
   exit 1
 fi
 # That Chromium is for the implementation agents, who can stop or replace it.
-# The evaluator scores with a Chromium of its own, started from the same
-# binary for each browser phase on another port (lib/host-browser.mjs).
-export AND_SCENE_HOST_CHROME="\$AXI_CHROMIUM"
+# The evaluator starts its private Chromium copy for each browser phase on
+# another port (lib/host-browser.mjs).
 export AND_SCENE_HOST_DEVTOOLS_PORT=9334
 export AND_SCENE_HOST_CHROME_ARGS="--no-sandbox"
 
