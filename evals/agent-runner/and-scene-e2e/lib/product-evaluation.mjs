@@ -164,6 +164,7 @@ export async function evaluateProduct({ runDir, rubric, inventory, bundlePath, c
   const gates = evaluateGates({ rubric, verdicts, build, verifier })
   const score = scoreProduct({ rubric, verdicts, incomplete })
   const judgeRecords = { ...records, ...(notes.browser?.judged ?? {}) }
-  return { build_plan: resolvedPlan, ambiguity_ledger: ambiguity, judge_records: judgeRecords, panel_records: { ...panelRecords, ...Object.fromEntries(Object.entries(notes.browser?.records ?? {}).map(([id, record]) => [`browser:${id}`, record])) }, build: { ok: build.ok, output: build.output ?? null, reason: build.reason ?? null, log: build.log }, serve: { output: build.output ?? null }, gates, verifier, score, verdicts, browser: notes.browser, not_located: notObserved.map(entry => entry.id), 
+  // unit_plan is the plan this evaluation keyed its cached units by; a resume passes it back so those units are reused.
+  return { build_plan: resolvedPlan, unit_plan: plan, ambiguity_ledger: ambiguity, judge_records: judgeRecords, panel_records: { ...panelRecords, ...Object.fromEntries(Object.entries(notes.browser?.records ?? {}).map(([id, record]) => [`browser:${id}`, record])) }, build: { ok: build.ok, output: build.output ?? null, reason: build.reason ?? null, log: build.log }, serve: { output: build.output ?? null }, gates, verifier, score, verdicts, browser: notes.browser, not_located: notObserved.map(entry => entry.id), 
     human_review: build.ok ? { eligible: true } : { eligible: false, reason: `the product could not be built: ${build.reason}` }, neutral_manifest_sha256: neutral.manifest.manifest_sha256 }
 }

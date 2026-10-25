@@ -305,3 +305,17 @@ test('a failed command keeps its exit status, so a verifier that exits non-zero 
   assert.throws(() => requireCommand({ ok: false, status: 1, stdout: 'checks failed', stderr: '' }, 'verifier'), error => error.message === 'verifier: exit 1' && error.status === 1 && error.stdout === 'checks failed')
   assert.throws(() => requireCommand({ ok: false, status: null, signal: 'SIGKILL', stderr: '' }, 'verifier'), error => error.status === null && error.signal === 'SIGKILL')
 })
+
+test('a resumed evaluation given the plan the first one reports reuses its build, browser judging and judge jobs', async t => {
+  const e = await evaluate(t, ROOT_APP)
+  const first = await e.run()
+  assert.equal(first.build_plan.output, 'dist'); assert.equal(first.unit_plan.output, null, 'the units were keyed before the build resolved its output')
+  const builds = e.container.specs.filter(spec => spec.label === 'build').length
+  const browserJobs = e.browser.calls.browserJobs; const judged = e.judges.seen.length
+  const again = await evaluateProduct({ runDir: e.world.runDir, rubric: inputs.rubric, inventory: inputs.inventory, bundlePath: e.world.bundlePath, commit: e.world.commit, collectedDir: e.world.collectedDir, acceptance, plan: first.unit_plan,
+    deps: { containerRun: e.container.run, panel: e.judges.panel, decider: e.judges.decider, invoke: e.judges.invoke, ...e.browser, verifierJudge: async () => ({ found: true, command: ['npm', 'run', 'verify'], rationale: 'package script' }) } })
+  assert.equal(e.container.specs.filter(spec => spec.label === 'build').length, builds, 'no rebuild')
+  assert.equal(e.browser.calls.browserJobs, browserJobs, 'no browser judge reran')
+  assert.equal(e.judges.seen.length, judged, 'no source or evidence judge reran')
+  assert.equal(again.score.automated_score, first.score.automated_score)
+})

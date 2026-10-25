@@ -271,7 +271,8 @@ export async function runEvaluation(options, deps = {}) {
       const delivery = await readJson(join(runDir, 'phases/delivery.json'))
       const evaluated = await evaluateProduct({ runDir, rubric: product.rubric, inventory: product.inventory, bundlePath: join(runDir, 'source/candidate.bundle'), commit: delivery.delivered_commit, collectedDir: join(runDir, 'collected'), acceptance: delivery.acceptance,
         plan: checkpoint.build_plan ?? null, deps: deps.productDeps ?? production })
-      checkpoint.build_plan = evaluated.build_plan
+      // A resume keys its cached product units by this plan; the built output only reaches the result's build_plan.
+      checkpoint.build_plan = evaluated.unit_plan ?? evaluated.build_plan
       const target = join(runDir, 'phases/product-result.json')
       await writeJsonAtomic(target, evaluated); await persist()
       return [target]
