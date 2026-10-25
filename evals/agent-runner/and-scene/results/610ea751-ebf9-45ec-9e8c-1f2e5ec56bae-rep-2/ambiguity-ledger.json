@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-24T23-04-10-683995312Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Attribution-warning coverage is incomplete; the underlying assumption or context gap is unknown.",
+      "evidence": [
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "attribution-default-link: pass — Default attribution label and target https://github.com/Codagent-AI/and-scene are present.",
+        "The supplied workflow artifact excerpts contain no substantive text."
+      ],
+      "handling": "The delivered helper failed the attribution-warning check. No related implementation reasoning or remediation is supplied.",
+      "consequence": "Verification reports incomplete attribution-warning behavior, although the default attribution link passes.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The results establish a verification failure but do not identify which warning condition is incomplete or why. Without requirements, implementation details, or agent reasoning, they cannot distinguis…",
+      "resolution": "unresolved",
+      "id": "c3f7e63939f5e8b8"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The control-origin swipe check failed; the underlying assumption or context gap is unknown.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail.",
+        "demo-supported-navigation: pass.",
+        "demo-control-semantics: pass.",
+        "The supplied workflow artifact excerpts contain no substantive text."
+      ],
+      "handling": "The delivered implementation failed the control-origin swipe check. No related decision, failure trace, or remediation is supplied.",
+      "consequence": "Verification did not confirm that swipes originating from controls are ignored; the exact observed interaction is not described.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The check name and failure identify an affected interaction but provide no evidence of its cause. The supplied artifacts cannot distinguish ambiguous requirements or missing context from an implement…",
+      "resolution": "unresolved",
+      "id": "137a3a14f4d81fc0"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
