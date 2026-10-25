@@ -78,6 +78,9 @@ node evals/agent-runner/and-scene-e2e/compare.mjs DIR DIR [...]
   for the failure it resumes from; every other candidate input must match. The
   candidate keeps the starting commit, and `result.json` (`agent_runner_commits`)
   and the report list each commit with the first unfinished phase it took over.
+  A `contaminated` run can be resumed after a contamination-pattern fix with a
+  version bump: both passes rerun under the new patterns, and the run continues
+  only if they are clean (`contamination_pattern_versions` records each version).
 * **Rescore** reruns reconciliation, both contamination passes, the disclosure
   audit, definition scoring, product evaluation from the retained bundle with the
   source run's recorded build plan, and the trace, under the current evaluator

@@ -15,6 +15,7 @@ function headline(result) {
   }
   // A resume that switched Agent Runner commits ran its phases on more than one Runner build.
   if (result.agent_runner_commits) outcome.push(row('Agent Runner commits', result.agent_runner_commits.map(entry => `${escape(entry.commit)} from ${escape(entry.from_phase ?? 'unknown phase')}`).join('; ')))
+  if (result.contamination_pattern_versions) outcome.push(row('Contamination pattern versions', result.contamination_pattern_versions.map(entry => escape(entry.version)).join(', then ')))
   if (result.provisional_rubric) outcome.push(row('Product rubric', 'provisional: not yet approved from calibration evidence'))
   const definition = result.definition_score
   const product = result.product_score

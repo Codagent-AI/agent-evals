@@ -52,6 +52,18 @@ export function recordRunnerCommit(checkpoint, commit) {
   const from = Object.entries(checkpoint.phases ?? {}).find(([name, value]) => name !== 'preflight' && value.units?.phase && value.units.phase.state !== 'complete')?.[0] ?? null
   return [...used ?? [{ commit: current, from_phase: 'preflight', resumed_at: null }], { commit, from_phase: from, resumed_at: new Date().toISOString() }]
 }
+// A resume may also run under corrected contamination patterns. Both contamination passes depend on the
+// patterns file, so they rerun; the run records each pattern version it was audited under.
+const PATTERN_PATHS = ['series_identity.contamination_patterns', 'series_identity.e2e_input_versions.contamination-patterns']
+const resumeMayChange = path => path === RUNNER_COMMIT_PATH || PATTERN_PATHS.some(prefix => path === prefix || path.startsWith(`${prefix}.`))
+export function recordPatternVersion(checkpoint, version) {
+  const used = checkpoint.contamination_pattern_versions ?? null
+  const current = used?.at(-1).version ?? checkpoint.identity.series_identity?.contamination_patterns ?? null
+  if (version === current) return used
+  return [...used ?? [{ version: current, resumed_at: null }], { version, resumed_at: new Date().toISOString() }]
+}
+// A contamination verdict reached under older patterns is re-audited on resume rather than final.
+export const contaminationSuperseded = (saved, version) => saved?.evaluation_status === 'contaminated' && [saved.contamination_audit?.pass_2?.pattern_version, saved.contamination_audit?.pass_1?.pattern_version, saved.pattern_version].some(recorded => recorded != null && recorded !== version)
 export function identityMismatches(recorded, current, path = '') {
   if (hashJson(recorded) === hashJson(current)) return []
   if (!recorded || !current || typeof recorded !== 'object' || typeof current !== 'object') return [path]
@@ -82,7 +94,7 @@ export async function runEvaluation(options, deps = {}) {
   const statePath = join(runDir, 'run-state.json')
   const inputDir = join(runDir, 'sandbox-input')
   const tokenDir = join(runDir, '.github-auth')
-  const patternsPath = join(SUITE_ROOT, 'contamination-patterns.json')
+  const patternsPath = deps.patternsPath ?? join(SUITE_ROOT, 'contamination-patterns.json')
   const product = await loadProductInputs()
   let checkpoint; let phase = 'preflight'; let result = null; let release; let writable = false; let artifactsWritten = false; let publicationFailed = false; let refused = false
   let sandbox; let inspected; let app
@@ -155,10 +167,11 @@ export async function runEvaluation(options, deps = {}) {
       if (options.resume) {
         checkpoint = await loadCheckpoint(statePath)
         if (!checkpoint) throw new Error('resume requires run-state.json in the exact existing run directory')
-        const mismatch = identityMismatches(checkpoint.identity, identity).filter(path => path !== RUNNER_COMMIT_PATH)
+        const mismatch = identityMismatches(checkpoint.identity, identity).filter(path => !resumeMayChange(path))
         if (mismatch.length) throw new Error(`resume identity mismatch: ${mismatch.join(', ')}`)
         if (checkpoint.stall_window_ms !== options.stallWindowMs) throw new Error(`resume stall window differs from the recorded ${checkpoint.stall_window_ms}ms`)
         checkpoint.agent_runner_commits = recordRunnerCommit(checkpoint, identity.candidate.agent_runner_commit)
+        checkpoint.contamination_pattern_versions = recordPatternVersion(checkpoint, identity.series_identity.contamination_patterns)
       } else {
         checkpoint = createCheckpoint({ run_id: shortId(), identity })
         checkpoint.step_order = inspected.workflow.top_steps
@@ -342,7 +355,8 @@ export async function runEvaluation(options, deps = {}) {
     for (const path of ['phases', 'logs', 'sandbox-input', 'sandbox/exchange', 'sandbox/workspace/repo', 'sandbox/.runtime', 'evidence', 'collected', 'judges', 'audits', 'discovery', 'source', 'human-review', '.runtime', '.runtime/definition-job-inputs', '.runtime/judge', '.runtime/judge-claude', 'human-review']) await privatePath(join(runDir, path), runDir)
     for (const dir of ['phases', 'logs', 'human-review', 'source', 'judges', 'audits', 'discovery']) await mkdir(join(runDir, dir), { recursive: true })
     const saved = options.resume ? await readJson(join(runDir, 'result.json'), null) : null
-    if (saved && saved.evaluation_status !== 'complete' && saved.resumable === false) throw Object.assign(new Error(`this run ended ${saved.evaluation_status} (${saved.owning_phase ?? 'unknown phase'}) and cannot be resumed${saved.leaked_items?.length || saved.owning_phase === 'disclosure-audit' ? '; a new run is required' : ''}`), { resumable: false, refused: true })
+    const superseded = contaminationSuperseded(saved, (await readJson(patternsPath)).version)
+    if (saved && saved.evaluation_status !== 'complete' && saved.resumable === false && !superseded) throw Object.assign(new Error(`this run ended ${saved.evaluation_status} (${saved.owning_phase ?? 'unknown phase'}) and cannot be resumed${saved.leaked_items?.length || saved.owning_phase === 'disclosure-audit' ? '; a new run is required' : ''}`), { resumable: false, refused: true })
     if (publicationEligibility(saved) && options.noPublish) return { result: saved, exitCode: 0 }
     if (publicationEligibility(saved)) {
       checkpoint = await loadCheckpoint(statePath)

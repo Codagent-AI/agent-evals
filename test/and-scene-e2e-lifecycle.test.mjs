@@ -263,6 +263,25 @@ test('INT-007 second-pass contamination ends the run before scoring, the trace, 
   await assert.rejects(access(join(f.runDir, 'phases/trace.json'))); await assert.rejects(access(join(f.runDir, 'phases/product-result.json')))
   assert.equal(f.deliveryCalls.length, 1)
 })
+test('a contamination verdict from older patterns is re-audited on resume under corrected patterns, and the run finishes', async t => {
+  const f = await lifecycle(t, { transcripts: { 'impl-s': '{"type":"response_item","payload":{"type":"function_call","call_id":"c1","name":"shell","arguments":"git clone https://github.com/Codagent-AI/and-scene"}}\n{"type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":"ok"}}\n{"type":"event_msg","payload":{"type":"task_complete"}}\n' } })
+  const patternsPath = join(f.runDir, '..', `patterns-${Date.now()}.json`)
+  const shipped = JSON.parse(await readFile(new URL('../evals/agent-runner/and-scene-e2e/contamination-patterns.json', import.meta.url), 'utf8'))
+  await writeFile(patternsPath, JSON.stringify(shipped)); t.after(() => import('node:fs/promises').then(fs => fs.rm(patternsPath, { force: true })))
+  const original = await f.deps.inspect()
+  const first = await runEvaluation(f.options, { ...f.deps, patternsPath })
+  assert.equal(first.result.evaluation_status, 'contaminated')
+  // Unchanged patterns keep the verdict final.
+  assert.match((await runEvaluation({ ...f.options, resume: true }, { ...f.deps, patternsPath })).result.observed_error, /cannot be resumed/)
+  const corrected = { ...shipped, version: shipped.version + 1, patterns: shipped.patterns.filter(pattern => !pattern.id.startsWith('fixture-')) }
+  await writeFile(patternsPath, JSON.stringify(corrected))
+  const inspect = async () => ({ ...original, seriesIdentity: { ...original.seriesIdentity, contamination_patterns: corrected.version } })
+  const resumed = await runEvaluation({ ...f.options, resume: true }, { ...f.deps, patternsPath, inspect })
+  assert.equal(resumed.result.evaluation_status, 'pending-human-review', resumed.result.observed_error)
+  assert.equal(resumed.result.contamination_audit.pass_2.pattern_version, corrected.version)
+  assert.deepEqual(resumed.result.contamination_pattern_versions.map(entry => entry.version), [original.seriesIdentity.contamination_patterns ?? null, corrected.version])
+  assert.equal(f.deliveryCalls.length, 1, 'the delivered work is reused, not redone')
+})
 test('L-19 the token refresh interval reaches the refresher, is reported in provenance, and does not touch the series identity', async t => {
   const intervals = []
   const f = await lifecycle(t, { depsOverride: {} })

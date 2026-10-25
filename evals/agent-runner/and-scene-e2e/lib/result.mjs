@@ -37,7 +37,7 @@ export async function assembleResult({ runDir, outcome, checkpoint, rubric = nul
     run_id: checkpoint?.run_id ?? outcome.run_id ?? null, series_identity: checkpoint?.series_identity ?? null, candidate: checkpoint?.candidate ?? null,
     ...(checkpoint?.original ? { original: checkpoint.original } : {}),
     configured_profiles: checkpoint?.candidate?.profiles ?? null, effective_invocations: checkpoint?.effective_invocations ?? manifest?.invocations ?? [],
-    runner_run_id: checkpoint?.runner_run_id ?? null, agent_runner_commits: checkpoint?.agent_runner_commits ?? null, workflow: checkpoint?.candidate?.workflow ?? null,
+    runner_run_id: checkpoint?.runner_run_id ?? null, agent_runner_commits: checkpoint?.agent_runner_commits ?? null, contamination_pattern_versions: checkpoint?.contamination_pattern_versions ?? null, workflow: checkpoint?.candidate?.workflow ?? null,
     delivery_repository: checkpoint?.delivery ?? null, delivery: delivery ?? null, prohibited_effects: outcome.prohibited_effects ?? delivery?.prohibited_effects ?? [],
     token_refresh_interval_minutes: checkpoint?.token_refresh_minutes ?? null, quota_waits: checkpoint?.quota_waits ?? [],
     definition_score: scored ? definitionScore : null, definition_discovery: scored ? ledger : null,
