@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-25T01-02-58-681072901Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Attribution warning coverage is incomplete, but the evidence does not establish an underlying assumption or context gap.",
+      "evidence": [
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "quality-project-local-screenshot-helper: pass — Project-local Playwright screenshot helper is present.",
+        "attribution-default-link: pass — Default attribution label and target https://github.com/Codagent-AI/and-scene are present."
+      ],
+      "handling": "The helper was delivered. No implementation rationale or subsequent resolution is available in the supplied artifacts.",
+      "consequence": "The delivered helper failed the attribution warning check. The evidence does not identify which warning behavior is incomplete.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check establishes a product deficiency, but cannot distinguish specification ambiguity, missing repository context, an incorrect assumption, or an implementation defect. No agent reports, …",
+      "resolution": "unresolved",
+      "id": "45e1ec01838ff910"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
