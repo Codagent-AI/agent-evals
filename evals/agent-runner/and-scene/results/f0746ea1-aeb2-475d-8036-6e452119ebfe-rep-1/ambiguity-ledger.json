@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-25T18-36-57-650652771Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Verification failed the IPv4 loopback requirement; the underlying assumption or context gap is unknown.",
+      "evidence": [
+        "verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost."
+      ],
+      "handling": "No verification commands or agent explanation were supplied.",
+      "consequence": "The IPv4 loopback verification criterion failed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The check establishes a verification failure but does not reveal the host used, the instructions available to agents, or their reasoning. It cannot distinguish an assumption from an execution error o…",
+      "resolution": "unresolved",
+      "id": "ee7044256329dab7"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The project-local screenshot helper and required visual diagnostics were missing or incomplete.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: fail — Project-local Playwright screenshot helper is missing.",
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "The supplied results report the omissions; no implementation rationale or discovery history is available.",
+      "consequence": "The delivered workflow failed the helper and three visual-diagnostic criteria.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "These failures establish missing workflow capabilities. Without the fixture instructions, repository context, or agent records, they do not establish whether the cause was specification ambiguity, ov…",
+      "resolution": "unresolved",
+      "id": "caa813e4f2cd9fb2"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Navigation boundaries or control-key behavior failed, but the specific behavior and underlying interpretation are unavailable.",
+      "evidence": [
+        "demo-navigation-boundaries-and-control-keys: fail —",
+        "demo-supported-navigation: pass —",
+        "demo-focus-and-keyboard-accessibility: pass —",
+        "input-modifier-keys-pass-through: pass —"
+      ],
+      "handling": "No failing interaction, implementation detail, or agent explanation was supplied.",
+      "consequence": "The delivered demo failed the combined navigation-boundary and control-key criterion.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The combined failure does not identify which behavior failed. Related passing checks do not distinguish a specification interpretation from a localized defect.",
+      "resolution": "unresolved",
+      "id": "6dfce918eb8b55cc"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
