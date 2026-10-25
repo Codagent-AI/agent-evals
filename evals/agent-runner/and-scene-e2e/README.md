@@ -81,6 +81,9 @@ node evals/agent-runner/and-scene-e2e/compare.mjs DIR DIR [...]
   A `contaminated` run can be resumed after a contamination-pattern fix with a
   version bump: both passes rerun under the new patterns, and the run continues
   only if they are clean (`contamination_pattern_versions` records each version).
+  A `pending-human-review` run can be resumed before its review to recompute
+  units a harness fix invalidated; product evaluation reuses its cached judge jobs
+  and the workflow is not dispatched again.
 * **Rescore** reruns reconciliation, both contamination passes, the disclosure
   audit, definition scoring, product evaluation from the retained bundle with the
   source run's recorded build plan, and the trace, under the current evaluator

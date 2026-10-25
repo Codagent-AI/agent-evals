@@ -30,7 +30,7 @@ import { watchForRequests } from './lib/responder.mjs'
 import { collectDefinition, verifyDelivery, DeliveryError, HarnessEvidenceError } from './lib/delivery.mjs'
 import { effectiveInvocations, invocationsThrough, ingestWorkflowMetrics } from './lib/metrics.mjs'
 import { loadProductInputs } from './lib/product-rubric.mjs'
-import { evaluateProduct, ProductHarnessError } from './lib/product-evaluation.mjs'
+import { evaluateProduct, ProductHarnessError, PRODUCT_EVALUATION_VERSION } from './lib/product-evaluation.mjs'
 import { NotEvaluableError } from './lib/build-plan.mjs'
 import { createProductionDeps } from './lib/production-deps.mjs'
 import { buildTrace } from './lib/trace.mjs'
@@ -356,7 +356,9 @@ export async function runEvaluation(options, deps = {}) {
     for (const dir of ['phases', 'logs', 'human-review', 'source', 'judges', 'audits', 'discovery']) await mkdir(join(runDir, dir), { recursive: true })
     const saved = options.resume ? await readJson(join(runDir, 'result.json'), null) : null
     const superseded = contaminationSuperseded(saved, (await readJson(patternsPath)).version)
-    if (saved && saved.evaluation_status !== 'complete' && saved.resumable === false && !superseded) throw Object.assign(new Error(`this run ended ${saved.evaluation_status} (${saved.owning_phase ?? 'unknown phase'}) and cannot be resumed${saved.leaked_items?.length || saved.owning_phase === 'disclosure-audit' ? '; a new run is required' : ''}`), { resumable: false, refused: true })
+    // A run awaiting human review may be resumed to recompute units a harness fix invalidated; review has not started.
+    const reopenable = saved?.evaluation_status === 'pending-human-review'
+    if (saved && saved.evaluation_status !== 'complete' && saved.resumable === false && !superseded && !reopenable) throw Object.assign(new Error(`this run ended ${saved.evaluation_status} (${saved.owning_phase ?? 'unknown phase'}) and cannot be resumed${saved.leaked_items?.length || saved.owning_phase === 'disclosure-audit' ? '; a new run is required' : ''}`), { resumable: false, refused: true })
     if (publicationEligibility(saved) && options.noPublish) return { result: saved, exitCode: 0 }
     if (publicationEligibility(saved)) {
       checkpoint = await loadCheckpoint(statePath)
@@ -394,8 +396,8 @@ export async function runEvaluation(options, deps = {}) {
           result = { ...(await readJson(join(runDir, 'phases/contamination-pass-2.json'))), evaluation_status: 'contaminated', owning_phase: 'contamination-pass-2', resumable: false }
         } else {
           await definitionScoring()
-          await unit('product-evaluation', handlers['product-evaluation'])
-          await unit('requirement-trace', handlers['requirement-trace'])
+          await unit('product-evaluation', handlers['product-evaluation'], { dependencies: { evaluator: PRODUCT_EVALUATION_VERSION } })
+          await unit('requirement-trace', handlers['requirement-trace'], { dependencies: { product: await hashFile(join(runDir, 'phases/product-result.json')) } })
           await unit('metrics', handlers.metrics)
           const evaluated = await readJson(join(runDir, 'phases/product-result.json'))
           const eligible = evaluated.human_review.eligible

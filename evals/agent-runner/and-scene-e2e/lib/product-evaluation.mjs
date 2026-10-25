@@ -17,6 +17,11 @@ import { browserDependentCriteria, evaluateGates, scoreProduct } from './scoring
 import { serveOutput } from './serve.mjs'
 import { runContainer } from './container.mjs'
 export const PRODUCT_JUDGE_CONCURRENCY = 3
+// Bumped when a harness fix changes what product evaluation records, so a retained result from before the fix is
+// recomputed on resume (cached judge jobs whose inputs are unchanged are still reused). 2: verifier exit status kept,
+// and evidence images copied as bytes and left out of the text budget.
+export const PRODUCT_EVALUATION_VERSION = 2
+const IMAGE = /\.(?:png|jpe?g|gif|webp)$/i
 export class ProductHarnessError extends Error {
   constructor(message, { failures = {}, resumable = true } = {}) { super(message); Object.assign(this, { failures, resumable, owner: 'evaluation-harness', code: 'product-judging-failed' }) }
 }
@@ -37,16 +42,18 @@ export function fileUnits(runDir, { onComplete = async () => {}, onReuse = () =>
     return value
   }
 }
-async function evidenceView({ runDir, collectedDir, acceptance }) {
+export async function evidenceView({ runDir, collectedDir, acceptance }) {
   const root = join(runDir, 'neutral/evidence')
   await mkdir(root, { recursive: true })
   const paths = []; let chars = 0
-  const add = async (path, text) => { const target = join(root, path); await mkdir(join(target, '..'), { recursive: true }); await writeFile(target, text); paths.push(path); chars += text.length }
+  // Images are copied byte for byte for judges that can view them; only text counts toward the packet budget.
+  const add = async (path, content) => { const target = join(root, path); await mkdir(join(target, '..'), { recursive: true }); await writeFile(target, content); paths.push(path); if (typeof content === 'string') chars += content.length }
+  const read = path => readFile(path).then(bytes => IMAGE.test(path) ? bytes : bytes.toString('utf8'))
   for (const file of await readdir(collectedDir, { recursive: true }).catch(() => [])) {
-    const text = await readFile(join(collectedDir, file), 'utf8').catch(() => null)
-    if (text !== null) await add(`definition/${file}`, text)
+    const content = await read(join(collectedDir, file)).catch(() => null)
+    if (content !== null) await add(`definition/${file}`, content)
   }
-  for (const artifact of acceptance?.artifacts ?? []) await add(`acceptance/${artifact.file.split('/').at(-1)}`, await readFile(join(runDir, artifact.file), 'utf8').catch(() => ''))
+  for (const artifact of acceptance?.artifacts ?? []) await add(`acceptance/${artifact.file.split('/').at(-1)}`, await read(join(runDir, artifact.file)).catch(() => ''))
   await add('acceptance/readiness.json', JSON.stringify({ delivered_commit: acceptance?.delivered_commit ?? null, missing_roles: acceptance?.missing_roles ?? [], findings: acceptance?.findings ?? [] }, null, 2))
   return { root, paths: paths.sort(), chars }
 }
@@ -143,7 +150,7 @@ export async function evaluateProduct({ runDir, rubric, inventory, bundlePath, c
       return found
     })
     if (!named.found) verifier = { found: false, clear: false, reason: named.rationale ?? 'no verifier exists in the delivered tree' }
-    else verifier = await unit('verifier-run', { commit, command: named.command, plan: resolvedPlan, rubric: rubric.version }, async () => {
+    else verifier = await unit('verifier-run', { commit, command: named.command, plan: resolvedPlan, rubric: rubric.version, evaluator: PRODUCT_EVALUATION_VERSION }, async () => {
       try { const out = run({ mounts: [{ source: join(runDir, '.product/build'), target: '/work', readonly: false }], workdir: plan.application_root === '.' ? '/work' : `/work/${plan.application_root}`, network: 'none', command: named.command }, { label: 'verifier' }); return { found: true, command: named.command, clear: true, exit_code: 0, stdout_tail: String(out.stdout ?? '').slice(-2000) } }
       catch (error) { return { found: true, command: named.command, clear: Number.isInteger(error.status) && error.status > 0, exit_code: error.status ?? null, reason: Number.isInteger(error.status) ? null : 'the verifier did not finish with an exit status', stderr_tail: String(error.stderr ?? error.message).slice(-2000) } }
     })

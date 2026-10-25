@@ -78,7 +78,8 @@ export function summarizeTimings(timings) {
 export function requireCommand(result, label = result.label) {
   if (!result.ok) {
     const reason = result.error || result.stderr?.trim() || (result.signal ? `signal ${result.signal}` : `exit ${result.status}`)
-    throw new Error(`${label}: ${reason}`)
+    // Callers that treat a non-zero exit as an outcome (a verifier's failing run) need the status, not just the text.
+    throw Object.assign(new Error(`${label}: ${reason}`), { status: result.status ?? null, signal: result.signal ?? null, stdout: result.stdout, stderr: result.stderr })
   }
   return result
 }

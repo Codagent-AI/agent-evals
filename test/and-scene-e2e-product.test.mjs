@@ -287,3 +287,21 @@ test('a fresh evaluator browser selects its own blank tab, so a product that rew
   await assert.rejects(selectStartingPage(async () => ({ status: 0, stdout: 'pages[0]{id,url,selected}:\n' })), error => /no blank tab/.test(error.message) && error.resumable === true)
   await assert.rejects(selectStartingPage(async args => args[0] === 'pages' ? { status: 0, stdout: '  1,about:blank,false\n' } : { status: 1, stderr: 'boom' }), /boom/)
 })
+
+test('the evidence view copies acceptance screenshots byte for byte and counts only text toward the packet budget', async t => {
+  const { evidenceView } = await import('../evals/agent-runner/and-scene-e2e/lib/product-evaluation.mjs')
+  const root = await temp(t, 'e2e-evidence-view-')
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xff, 0xfe, 0x00, 0x80, ...Array(2000).fill(0xc3)])
+  await mkdir(join(root, 'collected'), { recursive: true }); await writeFile(join(root, 'collected/proposal.md'), 'why')
+  await mkdir(join(root, 'acc'), { recursive: true }); await writeFile(join(root, 'acc/shot.png'), png); await writeFile(join(root, 'acc/log.md'), 'tested')
+  const view = await evidenceView({ runDir: root, collectedDir: join(root, 'collected'), acceptance: { artifacts: [{ file: 'acc/shot.png' }, { file: 'acc/log.md' }] } })
+  assert.deepEqual(await readFile(join(view.root, 'acceptance/shot.png')), png)
+  const readiness = await readFile(join(view.root, 'acceptance/readiness.json'), 'utf8')
+  assert.equal(view.chars, 'why'.length + 'tested'.length + readiness.length)
+})
+
+test('a failed command keeps its exit status, so a verifier that exits non-zero is a clear outcome', async () => {
+  const { requireCommand } = await import('../evals/lib/define-run/subprocess.mjs')
+  assert.throws(() => requireCommand({ ok: false, status: 1, stdout: 'checks failed', stderr: '' }, 'verifier'), error => error.message === 'verifier: exit 1' && error.status === 1 && error.stdout === 'checks failed')
+  assert.throws(() => requireCommand({ ok: false, status: null, signal: 'SIGKILL', stderr: '' }, 'verifier'), error => error.status === null && error.signal === 'SIGKILL')
+})

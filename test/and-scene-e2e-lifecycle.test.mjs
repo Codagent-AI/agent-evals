@@ -5,6 +5,21 @@ import { join } from 'node:path'
 import { runEvaluation } from '../evals/agent-runner/and-scene-e2e/controller.mjs'
 import { lifecycle } from './and-scene-e2e-lifecycle-helpers.mjs'
 
+test('a pending run can be resumed to recompute a product result a harness fix invalidated, without rerunning the workflow', async t => {
+  const f = await lifecycle(t)
+  assert.equal((await runEvaluation(f.options, f.deps)).result.evaluation_status, 'pending-human-review')
+  const starts = f.sandbox.starts.length
+  const state = await f.read('run-state.json')
+  const recordedAt = state.phases['product-evaluation'].units.phase.completed_at
+  // A unit recorded before the evaluator version existed (or under an older one) is redone.
+  state.phases['product-evaluation'].units.phase.dependency_fingerprint = 'stale'
+  await writeFile(join(f.runDir, 'run-state.json'), JSON.stringify(state))
+  const resumed = await runEvaluation({ ...f.options, resume: true }, f.deps)
+  assert.equal(resumed.result.evaluation_status, 'pending-human-review', resumed.result.observed_error)
+  const after = await f.read('run-state.json')
+  assert.notEqual(after.phases['product-evaluation'].units.phase.completed_at, recordedAt, 'product evaluation ran again')
+  assert.equal(f.sandbox.starts.length, starts, 'the workflow is not dispatched again')
+})
 test('INT-005 happy path: define, checkpoint, implement, delivery, scoring, trace and the pending result in order', async t => {
   const f = await lifecycle(t)
   const { result, exitCode } = await runEvaluation(f.options, f.deps)
