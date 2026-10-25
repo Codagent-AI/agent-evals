@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "run_id": "audited-implement-change-2026-10-25T00-28-59-692354204Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err",
+      "output/_resolve-findings_.out",
+      "output/_session-report_.err",
+      "output/_session-report_.out",
+      "output/_verify-change__sub_verify-change__verify-acceptance-handoff_.err",
+      "output/_verify-change__sub_verify-change__verify-acceptance-handoff_.out",
+      "output/_verify-change__sub_verify-change__verify-assumptions-handoff_.err",
+      "output/_verify-change__sub_verify-change__verify-assumptions-handoff_.out"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": "Verification"
+      },
+      "source": "judge-discovered",
+      "concern": "Delivered verification failed the IPv4 loopback requirement.",
+      "evidence": [
+        "Product evidence: verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost.",
+        "The supplied workflow excerpts do not expose the relevant verification code, original requirement, or an agent explanation for the address choice."
+      ],
+      "handling": "No handling of this specific failure is visible in the supplied excerpts.",
+      "consequence": "The delivered verification did not satisfy the reported address requirement, although other verification checks passed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check establishes a delivery mismatch. It does not establish whether the requirement was missing from the implementation context, overlooked, or interpreted incorrectly. The truncated sess…",
+      "resolution": "unresolved",
+      "id": "7dbcccf758c70521"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": "Project-local screenshot helper and visual checks"
+      },
+      "source": "judge-discovered",
+      "concern": "The delivered product lacked the project-local screenshot helper and failed its associated visual-warning checks.",
+      "evidence": [
+        "Product evidence: quality-project-local-screenshot-helper: fail — Project-local Playwright screenshot helper is missing.",
+        "Product evidence: visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "Product evidence: visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "Product evidence: visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete."
+      ],
+      "handling": "The supplied excerpts show no explanation or remediation for these failures.",
+      "consequence": "The delivered tooling did not provide the helper and warning coverage expected by these checks. The evidence does not establish an actual overlap, active-state appearance defect, or attribution defec…",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "These related failures establish missing expected tooling, but the original task, implementation decisions, and substantive session-report findings are unavailable. The artifacts cannot distinguish a…",
+      "resolution": "unresolved",
+      "id": "8eb9620c462a9404"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
