@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-10-25T20-39-51-105359614Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err",
+      "output/_resolve-findings_.out",
+      "output/_session-report_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": "_resolve-findings_",
+        "agent_role": null,
+        "task": "Resolve four findings and run affected tests"
+      },
+      "source": "judge-discovered",
+      "concern": "The reported IPv4 verification failure conflicts with the visible preview implementation.",
+      "evidence": [
+        "Product evidence: verification-ipv4-loopback failed with “Verification must use 127.0.0.1 and must not use localhost.”",
+        "The displayed scripts/browser.mjs exports HOST = &#39;127.0.0.1&#39; and uses HOST for port allocation, preview binding, and the readiness URL.",
+        "The resolver transcript is truncated before its edits and final test results."
+      ],
+      "handling": "The resolver announced a targeted repair and test run. The visible code already uses the required address, but the remaining verification paths and completed repair are unavailable.",
+      "consequence": "The product evidence records a failed verification requirement; its specific cause cannot be located in the supplied excerpt.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The artifacts cannot distinguish another verification path using localhost, a later code change, or a mismatch between the inspected code and evaluated artifact. They do not establish an implementati…",
+      "resolution": "unresolved",
+      "id": "92ceef83ec90e6b0"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The evaluated delivery lacked the recognized screenshot helper and required visual diagnostic coverage.",
+      "evidence": [
+        "quality-project-local-screenshot-helper failed: “Project-local Playwright screenshot helper is missing.”",
+        "visual-helper-overlap-warning failed because an overlap warning or explicit allow-overlap marker was missing.",
+        "visual-helper-active-state-warning failed because the active-state visual comparison warning was missing.",
+        "visual-helper-attribution-warning failed because attribution missing/default/size warning coverage was incomplete.",
+        "The resolver requested scripts/diagnostics.mjs and scripts/inspect-presentation.mjs, but their contents are not visible in the truncated output."
+      ],
+      "handling": "Diagnostic-related files were included in the resolver&#39;s inspection command. No completed implementation or validation of these capabilities is shown.",
+      "consequence": "Four tooling and diagnostic checks failed in the supplied product evidence.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failures establish missing or unrecognized capabilities, but the supplied evidence does not expose the governing instructions or relevant implementation. It cannot distinguish omitted requirement…",
+      "resolution": "unresolved",
+      "id": "3859929aa7f0565c"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The required exclusion of swipes originating on controls was not satisfied.",
+      "evidence": [
+        "Product evidence marks input-swipe-from-control-ignored as fail.",
+        "Related checks for supported navigation, control semantics, focus and keyboard accessibility, and modifier-key pass-through passed.",
+        "No gesture-handler implementation or detailed failure trace is supplied."
+      ],
+      "handling": "The available artifacts do not show how control-origin gestures were interpreted or whether this failure was addressed.",
+      "consequence": "The delivered product failed the control-origin swipe check; the exact observed interaction is not documented.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check identifies a specific interaction boundary, but does not establish whether its cause was an assumption, an implementation defect, or missing context. The neighboring passing checks d…",
+      "resolution": "unresolved",
+      "id": "c7c0d6e4270a8b9e"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
