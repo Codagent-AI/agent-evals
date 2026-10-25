@@ -30,7 +30,19 @@ export function axiCommand(env = process.env) {
     child.stdin.end(input)
   })
 }
-export function createProductionDeps({ runDir, env = process.env, chromePath = findHostChrome(env), port = hostDevtoolsPort(env), startBridge = startAxiBridge, judges = createProductJudges({ runDir, allowedRoots: [join(runDir, 'neutral')], env }) } = {}) {
+// AXI keeps a page selected only once one is chosen. Opening a URL with none chosen makes a new tab that stays
+// selected only if it ends on the requested URL, so a product that rewrites its URL (adding query parameters,
+// say) left no page selected. Selecting the fresh browser's own blank tab first makes navigation reuse it.
+export async function selectStartingPage(command) {
+  const fault = message => Object.assign(new Error(`could not select the evaluator browser's starting tab: ${message}`), { owner: 'evaluation-harness', resumable: true })
+  const listed = await command(['pages'])
+  if (listed.error || listed.status !== 0) throw fault(String(listed.error?.message ?? listed.stderr ?? listed.stdout ?? '').trim().slice(-300))
+  const id = String(listed.stdout ?? '').split('\n').map(line => line.trim().match(/^(\d+),about:blank,/)?.[1]).find(Boolean)
+  if (!id) throw fault('the fresh browser has no blank tab')
+  const selected = await command(['selectpage', id])
+  if (selected.error || selected.status !== 0) throw fault(String(selected.error?.message ?? selected.stderr ?? selected.stdout ?? '').trim().slice(-300))
+}
+export function createProductionDeps({ runDir, env = process.env, chromePath = findHostChrome(env), port = hostDevtoolsPort(env), startBridge = startAxiBridge, selectPage = selectStartingPage, judges = createProductJudges({ runDir, allowedRoots: [join(runDir, 'neutral')], env }) } = {}) {
   const rawBrowserInvoke = createBrowserJudgeInvoker({ runDir, env })
   const decider = judges.profile.decider
   const deciderAuthority = { cli: decider.family, model: decider.model, effort: decider.effort }
@@ -43,8 +55,9 @@ export function createProductionDeps({ runDir, env = process.env, chromePath = f
   }
   const createDriver = async (label, { url }) => {
     const browser = await startBrowser()
-    try { startBridge(env) } catch (error) { await browser.release(); throw error }
-    return Object.assign(createAxiBrowserDriver({ baseUrl: url, command: axiCommand(env) }), { close: () => browser.release() })
+    const command = axiCommand(env)
+    try { startBridge(env); await selectPage(command) } catch (error) { await browser.release(); throw error }
+    return Object.assign(createAxiBrowserDriver({ baseUrl: url, command }), { close: () => browser.release() })
   }
   // A judge CLI drives the same evaluator browser the replays use, so it gets it for the length of the call.
   const browserInvoke = async request => {

@@ -277,3 +277,13 @@ test('INT-009 the result keeps every judge job\'s panel record, browser jobs inc
   assert.ok(Object.keys(result.judge_records).some(key => key.startsWith('browser:')))
   assert.ok('ambiguity_ledger' in result); assert.equal(result.score.automated_score, 70, 'diagnostics do not score')
 })
+
+test('a fresh evaluator browser selects its own blank tab, so a product that rewrites its URL keeps a selected page', async () => {
+  const { selectStartingPage } = await import('../evals/agent-runner/and-scene-e2e/lib/production-deps.mjs')
+  const calls = []
+  const command = async args => { calls.push(args); return args[0] === 'pages' ? { status: 0, stdout: 'pages[1]{id,url,selected}:\n  3,about:blank,false\nhelp[1]:\n  Run `chrome-devtools-axi selectpage <id>` to switch tabs\n' } : { status: 0, stdout: '' } }
+  await selectStartingPage(command)
+  assert.deepEqual(calls, [['pages'], ['selectpage', '3']])
+  await assert.rejects(selectStartingPage(async () => ({ status: 0, stdout: 'pages[0]{id,url,selected}:\n' })), error => /no blank tab/.test(error.message) && error.resumable === true)
+  await assert.rejects(selectStartingPage(async args => args[0] === 'pages' ? { status: 0, stdout: '  1,about:blank,false\n' } : { status: 1, stderr: 'boom' }), /boom/)
+})
