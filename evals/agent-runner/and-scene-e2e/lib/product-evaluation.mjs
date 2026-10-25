@@ -77,7 +77,8 @@ export async function evaluateProduct({ runDir, rubric, inventory, bundlePath, c
     try {
       const session = deps.browserSession ?? createBrowserSession(label => deps.createDriver(label, { url: server.url }))
       const browser = await unit('browser-judging', { commit, plan, build: build.output, rubric: rubric.version }, async () => {
-        const result = await runBrowserJudging({ rubric, inventory, url: server.url, panel: deps.browserPanel ?? deps.panel, decider: deps.browserDecider ?? deps.decider, invoke: deps.browserInvoke ?? deps.invoke, session, browserSession: deps.browserSessionName, secondOpinion: deps.secondOpinion })
+        const result = await runBrowserJudging({ rubric, inventory, url: server.url, panel: deps.browserPanel ?? deps.panel, decider: deps.browserDecider ?? deps.decider, invoke: deps.browserInvoke ?? deps.invoke, session, browserSession: deps.browserSessionName, secondOpinion: deps.secondOpinion,
+          onAdapterFailure: failure => writeJsonAtomic(join(runDir, 'phases/product/browser-replay-failures.json'), failure) })
         return { verdicts: result.verdicts, failed_jobs: result.failed_jobs, failures: result.failures, driver_sessions: result.driver_sessions, records: result.records, judged: result.judged }
       }, { cache: value => value.failed_jobs.length === 0 })
       // A failed job is not cached, so its panel records are kept here for diagnosis.

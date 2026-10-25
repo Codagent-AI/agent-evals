@@ -235,3 +235,22 @@ test('INT-012 a judge\'s replay keeps only the fields its actions take, so harml
   assert.ok(!validReplay(normalizeReplay({ actions: [full({ type: 'navigate', path: 'not a url or path' })], expect: { type: 'rendered-state-changes', selector: null, text: null, label: null } })), 'a malformed path is still refused')
   for (const malformed of [{ steps: [] }, { actions: 'navigate', expect: null }, { actions: [null], expect: {} }, { actions: [full({ type: 'navigate', path: '/' })], expect: 'shown' }]) assert.ok(!validReplay(normalizeReplay(malformed)), `refused, not thrown: ${JSON.stringify(malformed)}`)
 })
+
+test('a replay whose browser adapter fails is retried once in a fresh browser, and a repeat is reported with its replay', async () => {
+  const { replayInFreshBrowser } = await import('../evals/agent-runner/and-scene-e2e/lib/browser-judging.mjs')
+  const { BrowserDriverError } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
+  let calls = 0
+  const flaky = driverHarness(() => { if (calls++ === 0) throw new BrowserDriverError('browser adapter failed: No page is currently selected'); return observed('OK') })
+  const replayed = await replayInFreshBrowser({ session: createBrowserSession(flaky.createDriver), label: 'replay:x', replay: goodReplay() })
+  assert.equal(replayed.confirmed, true)
+  assert.equal(flaky.state.sessions.length, 2, 'the retry gets a fresh browser')
+  const reported = []
+  const broken = driverHarness(() => { throw new BrowserDriverError('browser adapter failed: No page is currently selected') })
+  await assert.rejects(replayInFreshBrowser({ session: createBrowserSession(broken.createDriver), label: 'replay:y', replay: goodReplay(), onAdapterFailure: async failure => { reported.push(failure) } }), BrowserDriverError)
+  assert.equal(broken.state.sessions.length, 2)
+  assert.deepEqual(reported.map(failure => [failure.label, failure.replay.actions.length, /No page/.test(failure.error)]), [['replay:y', 2, true]])
+  // Any other error is not retried.
+  const plain = driverHarness(() => { throw new Error('not an adapter fault') })
+  await assert.rejects(replayInFreshBrowser({ session: createBrowserSession(plain.createDriver), label: 'replay:z', replay: goodReplay() }), /not an adapter fault/)
+  assert.equal(plain.state.sessions.length, 1)
+})

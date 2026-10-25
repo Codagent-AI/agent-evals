@@ -4,6 +4,7 @@ import { serial } from '../../../lib/panel-judging/job-pool.mjs'
 import { buildBrowserRequest, normalizeReplay } from './judge-requests.mjs'
 import { browserCriteria, criterionRequirement, rubricRows } from './product-rubric.mjs'
 import { executeReplay, validReplay } from './replay.mjs'
+import { BrowserDriverError } from '../../and-scene/lib/axi-browser-driver.mjs'
 export const BROWSER_VERDICTS = ['pass', 'not-located', 'fail']
 export function browserJobs(rubric) {
   const browser = new Set(browserCriteria(rubric))
@@ -24,11 +25,22 @@ export function createBrowserSession(createDriver) {
   })
   return { exclusive: fn => queue(fn), withDriver, intervals }
 }
+// A browser-adapter fault is retried once in a fresh browser. A repeat is the harness's own fault, not the product's:
+// it is reported with the replay that hit it, for diagnosis, and ends browser judging.
+export async function replayInFreshBrowser({ session, label, replay, onAdapterFailure = async () => {} }) {
+  for (let attempt = 1; ; attempt++) {
+    try { return await session.withDriver(label, driver => executeReplay({ driver, replay })) }
+    catch (error) {
+      if (!(error instanceof BrowserDriverError)) throw error
+      if (attempt >= 2) { await onAdapterFailure({ label, replay, error: error.message }); throw error }
+    }
+  }
+}
 const votesFor = (record, id) => (record.votes ?? []).filter(vote => vote.id === id)
 // The judges' own observations, kept as the verdict's citations.
 const evidenceOf = (votes, verdict) => [...new Set(votes.filter(vote => vote.verdict === verdict).flatMap(vote => vote.evidence ?? []))]
 // Settled verdicts become scored verdicts only after replay (passes), second opinion (fails) or fallback review (not located).
-export async function runBrowserJudging({ rubric, inventory, url, panel, decider, invoke, session, browserSession = 'e2e-browser-judge', secondOpinion, jobs = browserJobs(rubric), onJob = async (job, run) => run(), notLocatedLeads = {} }) {
+export async function runBrowserJudging({ rubric, inventory, url, panel, decider, invoke, session, browserSession = 'e2e-browser-judge', secondOpinion, jobs = browserJobs(rubric), onJob = async (job, run) => run(), notLocatedLeads = {}, onAdapterFailure }) {
   const verdicts = {}
   const records = {}
   const failures = {}
@@ -54,7 +66,7 @@ export async function runBrowserJudging({ rubric, inventory, url, panel, decider
           let confirmedEvidence = []
           for (const { replay, evidence } of candidates) {
             // A fresh browser context per replay, never the judge's own.
-            const replayed = await session.withDriver(`replay:${result.id}`, driver => executeReplay({ driver, replay }))
+            const replayed = await replayInFreshBrowser({ session, label: `replay:${result.id}`, replay, onAdapterFailure })
             tried.push({ replay, confirmed: replayed.confirmed, mismatch: replayed.mismatch })
             if (replayed.confirmed) { confirmed = replay; confirmedEvidence = evidence; break }
           }
@@ -76,7 +88,7 @@ export async function runBrowserJudging({ rubric, inventory, url, panel, decider
     entry.second_opinion = { decision: answer.decision, rationale: answer.rationale }
     if (answer.decision === 'overturn') {
       const replay = normalizeReplay(answer.replay)
-      const replayed = validReplay(replay) ? await session.withDriver(`second-opinion:${id}`, driver => executeReplay({ driver, replay })) : { confirmed: false, mismatch: 'the second opinion supplied no valid replay' }
+      const replayed = validReplay(replay) ? await replayInFreshBrowser({ session, label: `second-opinion:${id}`, replay, onAdapterFailure }) : { confirmed: false, mismatch: 'the second opinion supplied no valid replay' }
       entry.second_opinion.replay = { confirmed: replayed.confirmed, mismatch: replayed.mismatch }
       if (replayed.confirmed) { entry.verdict = 'pass'; entry.basis = 'second-opinion-overturned'; entry.replay = replay }
     }
