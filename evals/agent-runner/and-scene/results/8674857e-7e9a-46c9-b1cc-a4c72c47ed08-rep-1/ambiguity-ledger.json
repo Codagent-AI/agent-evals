@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-10-26T01-47-16-976948955Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Verification failed the IPv4 loopback requirement.",
+      "evidence": [
+        "verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost.",
+        "verification-build-whole-app and verification-every-produced-step-renders passed."
+      ],
+      "handling": "The supplied artifacts contain no explanation of verification host selection.",
+      "consequence": "Verification did not satisfy the reported host requirement, despite passing build and rendering checks.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check establishes noncompliance but does not reveal the host used, the instructions available to the agents, or their reasoning. It cannot distinguish a specification gap, missed context, …",
+      "resolution": "unresolved",
+      "id": "63c22d02ffa2521d"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The project-local screenshot helper was missing.",
+      "evidence": [
+        "quality-project-local-screenshot-helper: fail — Project-local Playwright screenshot helper is missing."
+      ],
+      "handling": "The reported delivery lacked the helper; no implementation explanation is supplied.",
+      "consequence": "The required project-local screenshot tooling was unavailable.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The absence is observable, but the supplied evidence does not establish whether the requirement was explicit, discoverable in repository context, or misunderstood.",
+      "resolution": "unresolved",
+      "id": "144c4a2c5deab518"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Visual-helper warnings were absent or incomplete.",
+      "evidence": [
+        "visual-helper-overlap-warning: fail — Overlap warning or explicit allow-overlap marker is missing.",
+        "visual-helper-active-state-warning: fail — Active-state visual comparison warning is missing.",
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "navigation-active-state and attribution-default-link passed."
+      ],
+      "handling": "The warning checks failed without an accompanying agent explanation.",
+      "consequence": "The reported visual-review safeguards were incomplete. These failures do not establish defects in the application&#39;s active state or default attribution, whose checks passed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The evidence establishes missing safeguards but does not identify the underlying assumption or context gap. It also does not establish whether these failures follow entirely from the missing screensh…",
+      "resolution": "unresolved",
+      "id": "bd81a07d287aa854"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
