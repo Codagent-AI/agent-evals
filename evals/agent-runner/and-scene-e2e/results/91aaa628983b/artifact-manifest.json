@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "run_id": "91aaa628983b",
+  "files": [
+    {
+      "path": "result.json",
+      "sha256": "cba765558c543f5ecce0918fb26d8380848863e483864c8373d332753df4ee1a"
+    },
+    {
+      "path": "report.html",
+      "sha256": "ab8fe20d4e48571e2f1cea77b5c099bd84b894d6a185cf4f5ffa74eab939eb69"
+    },
+    {
+      "path": "conversation.jsonl",
+      "sha256": "fa9040ff2cf7a25bd847c3898ee396b82bc22402fb6c1aeec781791a9d252799"
+    },
+    {
+      "path": "phases/trace.json",
+      "sha256": "edcacfa265d6b80790c334dd0dd57eea51f413f6b232b365d82f3c32e058c53d"
+    },
+    {
+      "path": "collected/.openspec.yaml",
+      "sha256": "e2ebaebee255ccc1e09b64ba38d9b09c360a7392fc110a48ca2525e1ea49fa46"
+    },
+    {
+      "path": "collected/design.md",
+      "sha256": "d5bb69210d6b571b7eca1969b347e525d54cf1fef4acef3c8ccf412930a98862"
+    },
+    {
+      "path": "collected/proposal.md",
+      "sha256": "59dfdfa36fbf13e3d04839cc74bebe66798deed4b5aed4b439213bd526e0e255"
+    },
+    {
+      "path": "collected/specs/presentation-authoring-skill/spec.md",
+      "sha256": "86932e405a210bbee2de56fe1e9b5abb3644816c3795c6fc5051df73094297f3"
+    },
+    {
+      "path": "collected/specs/presentation-scene-kit/spec.md",
+      "sha256": "b73cb12eaf75a6958898ded62f1ec6152dfbbf23ea85143eeb4a08a8486616d8"
+    },
+    {
+      "path": "collected/specs/presentation-verification/spec.md",
+      "sha256": "09d4cffb45ffb4559a4730312021bcfb162a46713b5628c3eb76b49cbcf341d4"
+    },
+    {
+      "path": "collected/test-plan.md",
+      "sha256": "d48bfe644f183f500a8fd4cb702ad8ac0db659e5c2dcedcb27fd1ceb7251a3e2"
+    }
+  ]
+}
