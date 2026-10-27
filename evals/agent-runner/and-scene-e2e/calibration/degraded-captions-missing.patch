@@ -1,0 +1,40 @@
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/chrome/Footer.tsx b/skills/presentation/templates/bootstrap/src/presentation-kit/chrome/Footer.tsx
+index 120a358..bcd59cf 100644
+--- a/skills/presentation/templates/bootstrap/src/presentation-kit/chrome/Footer.tsx
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/chrome/Footer.tsx
+@@ -27,7 +27,6 @@ export function Footer({
+   onNext,
+   onSelect,
+ }: FooterProps) {
+-  const current = steps[step]
+   const browsing = mode === 'browse'
+ 
+   return (
+@@ -58,7 +57,6 @@ export function Footer({
+                 data-presentation-caption
+                 style={{ textAlign: 'center' }}
+               >
+-                {current.caption}
+               </motion.p>
+             </AnimatePresence>
+           </div>
+diff --git a/src/presentation-kit/chrome/Footer.tsx b/src/presentation-kit/chrome/Footer.tsx
+index 120a358..bcd59cf 100644
+--- a/src/presentation-kit/chrome/Footer.tsx
++++ b/src/presentation-kit/chrome/Footer.tsx
+@@ -27,7 +27,6 @@ export function Footer({
+   onNext,
+   onSelect,
+ }: FooterProps) {
+-  const current = steps[step]
+   const browsing = mode === 'browse'
+ 
+   return (
+@@ -58,7 +57,6 @@ export function Footer({
+                 data-presentation-caption
+                 style={{ textAlign: 'center' }}
+               >
+-                {current.caption}
+               </motion.p>
+             </AnimatePresence>
+           </div>

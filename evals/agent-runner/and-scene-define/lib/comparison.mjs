@@ -1,4 +1,4 @@
-import { hashJson } from './persistence.mjs'
+import { hashJson } from '../../../lib/define-run/persistence.mjs'
 function differences(a, b, path = '') {
   if (hashJson(a ?? null) === hashJson(b ?? null)) return []
   if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) || Array.isArray(b)) return [{ component: path, left: a ?? null, right: b ?? null }]

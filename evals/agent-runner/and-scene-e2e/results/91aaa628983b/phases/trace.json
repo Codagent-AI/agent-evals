@@ -1,0 +1,1985 @@
+{
+  "scoring": false,
+  "counts": {
+    "delivered": 29,
+    "partially-delivered": 8,
+    "not-discovered": 6,
+    "discovered-not-defined": 2,
+    "defined-not-delivered": 22,
+    "not-graded-in-product": 5,
+    "delivery-unavailable": 0
+  },
+  "items": [
+    {
+      "id": "INV-001",
+      "class": "mandatory",
+      "title": "One evolving scene, not slides",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "demo-evolving-scene-structure"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "demo-evolving-scene-structure",
+          "shared_with": [
+            "INV-077",
+            "INV-069"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-002",
+      "class": "acceptable-alternative",
+      "title": "Step identity, section label, and diagram state",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/1"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "product_delivery": "partly-delivered",
+      "mapped_criteria": [
+        "scene-step-narration-and-identity",
+        "scene-order-derived-numbering",
+        "scene-typed-payload-boundary"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "scene-step-narration-and-identity",
+          "shared_with": [
+            "INV-003"
+          ]
+        }
+      ],
+      "outcome": "partially-delivered"
+    },
+    {
+      "id": "INV-003",
+      "class": "acceptable-alternative",
+      "title": "Two narration texts per step",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "scene-step-narration-and-identity"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "scene-step-narration-and-identity",
+          "shared_with": [
+            "INV-002"
+          ]
+        }
+      ],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-006",
+      "class": "mandatory",
+      "title": "Persisting entities morph in place",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/2"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "demo-stable-identity-and-grouping",
+        "entity-persisting-morph",
+        "entity-ungrouped-transition-morph"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "demo-stable-identity-and-grouping",
+          "shared_with": [
+            "INV-009"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-007",
+      "class": "acceptable-alternative",
+      "title": "Newcomers enter after persisting entities settle",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/2"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "entity-newcomer-after-settle"
+      ],
+      "shared_criteria": [],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-008",
+      "class": "acceptable-alternative",
+      "title": "Departing entities animate out",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "entity-departing-exit"
+      ],
+      "shared_criteria": [],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-009",
+      "class": "acceptable-alternative",
+      "title": "Grouped steps update one persistent scene",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "demo-stable-identity-and-grouping",
+        "grouped-scene-updates-in-place"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "demo-stable-identity-and-grouping",
+          "shared_with": [
+            "INV-006"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-010",
+      "class": "acceptable-alternative",
+      "title": "Continuing grouped entities are not faded in",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "grouped-continuing-entities-not-newcomers"
+      ],
+      "shared_criteria": [],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-013",
+      "class": "acceptable-alternative",
+      "title": "Kit exposes stable styling hooks",
+      "asked": false,
+      "exchange_citations": [],
+      "coverage_verdict": "missing",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "style-kit-hooks",
+        "style-unstyled-kit-output"
+      ],
+      "shared_criteria": [],
+      "outcome": "not-discovered"
+    },
+    {
+      "id": "INV-015",
+      "class": "acceptable-alternative",
+      "title": "Coordinate-heavy diagrams supported",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/1"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "grouped-intentional-composition",
+        "style-coordinate-heavy-diagrams"
+      ],
+      "shared_criteria": [],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-020",
+      "class": "mandatory",
+      "title": "Present and browse modes switchable at runtime",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "mode-toggle-preserves-position"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "mode-toggle-preserves-position",
+          "shared_with": [
+            "INV-024"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-022",
+      "class": "acceptable-alternative",
+      "title": "Present mode is title-focused",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "demo-present-mode-behavior",
+        "mode-present-title-focused"
+      ],
+      "shared_criteria": [],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-023",
+      "class": "acceptable-alternative",
+      "title": "Browse mode is reading-focused",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/1"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "partly-delivered",
+      "mapped_criteria": [
+        "demo-browse-mode-behavior",
+        "mode-browse-reading-focused"
+      ],
+      "shared_criteria": [],
+      "outcome": "partially-delivered"
+    },
+    {
+      "id": "INV-024",
+      "class": "mandatory",
+      "title": "Mode toggle keeps the current step",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "demo-mode-position-preservation",
+        "mode-toggle-preserves-position"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "mode-toggle-preserves-position",
+          "shared_with": [
+            "INV-020"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-025",
+      "class": "acceptable-alternative",
+      "title": "Keyboard navigation keys",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/1"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "demo-supported-navigation",
+        "demo-focus-and-keyboard-accessibility",
+        "navigation-keyboard",
+        "navigation-touch-swipe",
+        "navigation-direct-jump"
+      ],
+      "shared_criteria": [],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-029",
+      "class": "acceptable-alternative",
+      "title": "Active navigation state exposed",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/2"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "demo-control-semantics",
+        "navigation-active-state"
+      ],
+      "shared_criteria": [],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-030",
+      "class": "mandatory",
+      "title": "Focused controls keep their keys",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.design/design/1/1"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "product_delivery": "partly-delivered",
+      "mapped_criteria": [
+        "demo-navigation-boundaries-and-control-keys",
+        "navigation-controls-keep-keys"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "demo-navigation-boundaries-and-control-keys",
+          "shared_with": [
+            "INV-031"
+          ]
+        }
+      ],
+      "outcome": "partially-delivered"
+    },
+    {
+      "id": "INV-031",
+      "class": "acceptable-alternative",
+      "title": "Navigation clamps at both ends",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/1"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "demo-navigation-boundaries-and-control-keys",
+        "navigation-clamp-start",
+        "navigation-clamp-end"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "demo-navigation-boundaries-and-control-keys",
+          "shared_with": [
+            "INV-030"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-032",
+      "class": "acceptable-alternative",
+      "title": "Fixed canvas scaled uniformly to fit",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.design/design/1/1"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.design/design/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "canvas-uniform-scaling",
+        "canvas-default-composition-area"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "canvas-uniform-scaling",
+          "shared_with": [
+            "INV-034"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-034",
+      "class": "acceptable-alternative",
+      "title": "Per-mode fit geometry",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/3"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.approach-review/approach-review/1/1"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "canvas-uniform-scaling"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "canvas-uniform-scaling",
+          "shared_with": [
+            "INV-032"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-036",
+      "class": "acceptable-alternative",
+      "title": "Gathering covers topic, style, and each step",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/3"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "skill-missing-details-one-at-a-time"
+      ],
+      "shared_criteria": [],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-038",
+      "class": "acceptable-alternative",
+      "title": "User may proceed with partial detail",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/3"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "product_delivery": "partly-delivered",
+      "mapped_criteria": [
+        "skill-partial-detail-proceeds",
+        "skill-complete-prompt-proceeds"
+      ],
+      "shared_criteria": [],
+      "outcome": "partially-delivered"
+    },
+    {
+      "id": "INV-041",
+      "class": "mandatory",
+      "title": "Self-bootstrapping before create/modify",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/3"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/3"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "skill-already-scaffolded"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "skill-already-scaffolded",
+          "shared_with": [
+            "INV-050",
+            "INV-045"
+          ]
+        }
+      ],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-042",
+      "class": "acceptable-alternative",
+      "title": "Anchor: build setup",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/3"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "skill-partial-scaffold"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "skill-partial-scaffold",
+          "shared_with": [
+            "INV-051",
+            "INV-043",
+            "INV-044"
+          ]
+        }
+      ],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-043",
+      "class": "acceptable-alternative",
+      "title": "Anchor: scene kit",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "skill-partial-scaffold"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "skill-partial-scaffold",
+          "shared_with": [
+            "INV-051",
+            "INV-042",
+            "INV-044"
+          ]
+        }
+      ],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-044",
+      "class": "acceptable-alternative",
+      "title": "Anchor: presentation index",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.design/design/1/1"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "skill-partial-scaffold"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "skill-partial-scaffold",
+          "shared_with": [
+            "INV-051",
+            "INV-042",
+            "INV-043"
+          ]
+        }
+      ],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-045",
+      "class": "acceptable-alternative",
+      "title": "Contract-level anchor detection",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/3"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "skill-already-scaffolded"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "skill-already-scaffolded",
+          "shared_with": [
+            "INV-050",
+            "INV-041"
+          ]
+        }
+      ],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-046",
+      "class": "acceptable-alternative",
+      "title": "Scaffold installs the full dependency set",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/3"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.design/design/1/1"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "skill-empty-directory-scaffold",
+        "skill-scaffold-style-neutral"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "skill-empty-directory-scaffold",
+          "shared_with": [
+            "INV-049",
+            "INV-103"
+          ]
+        }
+      ],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-048",
+      "class": "acceptable-alternative",
+      "title": "Templates resolve from the skill directory",
+      "asked": false,
+      "exchange_citations": [],
+      "coverage_verdict": "partial",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "skill-template-path-resolution"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "skill-template-path-resolution",
+          "shared_with": [
+            "INV-118",
+            "INV-109"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-049",
+      "class": "acceptable-alternative",
+      "title": "Full scaffold when nothing is present",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/3"
+        }
+      ],
+      "coverage_verdict": "missing",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "skill-empty-directory-scaffold"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "skill-empty-directory-scaffold",
+          "shared_with": [
+            "INV-046",
+            "INV-103"
+          ]
+        }
+      ],
+      "outcome": "discovered-not-defined"
+    },
+    {
+      "id": "INV-050",
+      "class": "mandatory",
+      "title": "Skip scaffolding when fully scaffolded",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/3"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "skill-already-scaffolded"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "skill-already-scaffolded",
+          "shared_with": [
+            "INV-041",
+            "INV-045"
+          ]
+        }
+      ],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-051",
+      "class": "mandatory",
+      "title": "Scaffold only missing anchors",
+      "asked": false,
+      "exchange_citations": [],
+      "coverage_verdict": "partial",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "skill-partial-scaffold"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "skill-partial-scaffold",
+          "shared_with": [
+            "INV-042",
+            "INV-043",
+            "INV-044"
+          ]
+        }
+      ],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-054",
+      "class": "acceptable-alternative",
+      "title": "Confirm target before writing into a non-empty project",
+      "asked": false,
+      "exchange_citations": [],
+      "coverage_verdict": "missing",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "skill-monorepo-target",
+        "skill-standalone-target",
+        "skill-nonempty-confirmation"
+      ],
+      "shared_criteria": [],
+      "outcome": "not-discovered"
+    },
+    {
+      "id": "INV-055",
+      "class": "acceptable-alternative",
+      "title": "New presentation is self-contained, routed, registered",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/3"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "skill-new-presentation-routed"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "skill-new-presentation-routed",
+          "shared_with": [
+            "INV-102"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-056",
+      "class": "acceptable-alternative",
+      "title": "Presentation-owned visual style",
+      "asked": false,
+      "exchange_citations": [],
+      "coverage_verdict": "missing",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "skill-presentation-owns-style"
+      ],
+      "shared_criteria": [],
+      "outcome": "not-discovered"
+    },
+    {
+      "id": "INV-058",
+      "class": "mandatory",
+      "title": "Existing presentations preserved",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/3"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "partly-delivered",
+      "mapped_criteria": [
+        "skill-existing-presentations-preserved",
+        "skill-modify-ambiguous-target",
+        "skill-scoped-modification"
+      ],
+      "shared_criteria": [],
+      "outcome": "partially-delivered"
+    },
+    {
+      "id": "INV-062",
+      "class": "mandatory",
+      "title": "Self-verification before reporting completion",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/3"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "skill-checks-run-before-done"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "skill-checks-run-before-done",
+          "shared_with": [
+            "INV-104"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-063",
+      "class": "acceptable-alternative",
+      "title": "Which views the visual check inspects",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/3"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "visual-helper-captures-steps"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "visual-helper-captures-steps",
+          "shared_with": [
+            "INV-095"
+          ]
+        }
+      ],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-064",
+      "class": "mandatory",
+      "title": "Failures fixed and re-checked",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/3"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "skill-failures-fixed-before-success"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "skill-failures-fixed-before-success",
+          "shared_with": [
+            "INV-066"
+          ]
+        }
+      ],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-066",
+      "class": "acceptable-alternative",
+      "title": "Generated presentation builds clean",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/3"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "skill-failures-fixed-before-success"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "skill-failures-fixed-before-success",
+          "shared_with": [
+            "INV-064"
+          ]
+        }
+      ],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-067",
+      "class": "mandatory",
+      "title": "Generated presentation renders its first step cleanly",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "demo-mode-interaction-reliability"
+      ],
+      "shared_criteria": [],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-068",
+      "class": "mandatory",
+      "title": "Captions and next/previous navigation in every generated presentation",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "quality-captions-and-navigation"
+      ],
+      "shared_criteria": [],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-069",
+      "class": "mandatory",
+      "title": "Generated presentations follow the evolving-scene model",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/3"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "demo-evolving-scene-structure"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "demo-evolving-scene-structure",
+          "shared_with": [
+            "INV-077",
+            "INV-001"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-070",
+      "class": "acceptable-alternative",
+      "title": "Visual composition criteria",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/3"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/2"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "visual-helper-overlap-warning"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "visual-helper-overlap-warning",
+          "shared_with": [
+            "INV-071"
+          ]
+        }
+      ],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-071",
+      "class": "acceptable-alternative",
+      "title": "Visual warnings are reviewed and resolved",
+      "asked": false,
+      "exchange_citations": [],
+      "coverage_verdict": "met",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "visual-helper-overlap-warning",
+        "visual-helper-allow-overlap",
+        "visual-helper-active-state-warning",
+        "visual-helper-attribution-warning"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "visual-helper-overlap-warning",
+          "shared_with": [
+            "INV-070"
+          ]
+        }
+      ],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-072",
+      "class": "acceptable-alternative",
+      "title": "Active chrome and attribution styled by the presentation",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "partly-delivered",
+      "mapped_criteria": [
+        "quality-active-chrome-and-attribution-local",
+        "attribution-default-link",
+        "attribution-styling-hook",
+        "attribution-no-unrequested-brand"
+      ],
+      "shared_criteria": [],
+      "outcome": "partially-delivered"
+    },
+    {
+      "id": "INV-073",
+      "class": "acceptable-alternative",
+      "title": "Whole-app build verification",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "not-graded",
+      "mapped_criteria": [],
+      "shared_criteria": [],
+      "outcome": "not-graded-in-product"
+    },
+    {
+      "id": "INV-074",
+      "class": "acceptable-alternative",
+      "title": "Committed reference sample",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "partly-delivered",
+      "mapped_criteria": [
+        "demo-route-and-registration",
+        "demo-sample-step-content"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "demo-sample-step-content",
+          "shared_with": [
+            "INV-076",
+            "INV-075"
+          ]
+        }
+      ],
+      "outcome": "partially-delivered"
+    },
+    {
+      "id": "INV-075",
+      "class": "mandatory",
+      "title": "Sample is produced by the skill",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/3"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "demo-sample-step-content"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "demo-sample-step-content",
+          "shared_with": [
+            "INV-074",
+            "INV-076"
+          ]
+        }
+      ],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-076",
+      "class": "acceptable-alternative",
+      "title": "Sample topic and self-referential reveal",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "demo-sample-explains-skill",
+        "demo-sample-step-content"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "demo-sample-explains-skill",
+          "shared_with": [
+            "INV-088"
+          ]
+        },
+        {
+          "criterion": "demo-sample-step-content",
+          "shared_with": [
+            "INV-074",
+            "INV-075"
+          ]
+        }
+      ],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-077",
+      "class": "acceptable-alternative",
+      "title": "Sample is one accumulating scene",
+      "asked": false,
+      "exchange_citations": [],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "demo-evolving-scene-structure"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "demo-evolving-scene-structure",
+          "shared_with": [
+            "INV-001",
+            "INV-069"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-088",
+      "class": "acceptable-alternative",
+      "title": "Verification checks the sample against the outline",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        }
+      ],
+      "coverage_verdict": "partial",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "demo-sample-explains-skill"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "demo-sample-explains-skill",
+          "shared_with": [
+            "INV-076"
+          ]
+        }
+      ],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-089",
+      "class": "acceptable-alternative",
+      "title": "Missing sample fails verification",
+      "asked": false,
+      "exchange_citations": [],
+      "coverage_verdict": "missing",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "verification-missing-sample-fails"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "verification-missing-sample-fails",
+          "shared_with": [
+            "INV-092"
+          ]
+        }
+      ],
+      "outcome": "not-discovered"
+    },
+    {
+      "id": "INV-090",
+      "class": "acceptable-alternative",
+      "title": "Every sample step rendered in a real browser",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        },
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.design/design/1/1"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "demo-step-and-transition-reliability",
+        "verification-loopback-reachability"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "demo-step-and-transition-reliability",
+          "shared_with": [
+            "INV-111"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-092",
+      "class": "mandatory",
+      "title": "Browser errors fail verification and name the step",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "partly-delivered",
+      "mapped_criteria": [
+        "verification-missing-sample-fails",
+        "verification-console-page-error-fails",
+        "verification-step-error-fails"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "verification-missing-sample-fails",
+          "shared_with": [
+            "INV-089"
+          ]
+        }
+      ],
+      "outcome": "partially-delivered"
+    },
+    {
+      "id": "INV-093",
+      "class": "mandatory",
+      "title": "Unambiguous pass/fail outcome",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/4"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "not-graded",
+      "mapped_criteria": [],
+      "shared_criteria": [],
+      "outcome": "not-graded-in-product"
+    },
+    {
+      "id": "INV-094",
+      "class": "mandatory",
+      "title": "Preview processes cleaned up",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.approach-review/approach-review/1/1"
+        }
+      ],
+      "coverage_verdict": "missing",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "verification-preview-process-ownership"
+      ],
+      "shared_criteria": [],
+      "outcome": "discovered-not-defined"
+    },
+    {
+      "id": "INV-095",
+      "class": "acceptable-alternative",
+      "title": "Project-local per-step screenshot helper",
+      "asked": false,
+      "exchange_citations": [],
+      "coverage_verdict": "missing",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "quality-project-local-screenshot-helper",
+        "visual-helper-captures-steps"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "visual-helper-captures-steps",
+          "shared_with": [
+            "INV-063"
+          ]
+        }
+      ],
+      "outcome": "not-discovered"
+    },
+    {
+      "id": "INV-096",
+      "class": "acceptable-alternative",
+      "title": "Screenshots taken after transitions settle",
+      "asked": false,
+      "exchange_citations": [],
+      "coverage_verdict": "missing",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "visual-helper-settled-screenshots"
+      ],
+      "shared_criteria": [],
+      "outcome": "not-discovered"
+    },
+    {
+      "id": "INV-102",
+      "class": "mandatory",
+      "title": "Agent skill that creates presentations from a topic",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/1"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "skill-new-presentation-routed"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "skill-new-presentation-routed",
+          "shared_with": [
+            "INV-055"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-103",
+      "class": "acceptable-alternative",
+      "title": "Reusable components, templates, and scripts",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "not-delivered",
+      "mapped_criteria": [
+        "skill-empty-directory-scaffold"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "skill-empty-directory-scaffold",
+          "shared_with": [
+            "INV-049",
+            "INV-046"
+          ]
+        }
+      ],
+      "outcome": "defined-not-delivered"
+    },
+    {
+      "id": "INV-104",
+      "class": "mandatory",
+      "title": "Verification flow",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "skill-checks-run-before-done"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "skill-checks-run-before-done",
+          "shared_with": [
+            "INV-062"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-105",
+      "class": "mandatory",
+      "title": "No export formats",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "demo-scope-discipline"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "demo-scope-discipline",
+          "shared_with": [
+            "INV-106",
+            "INV-107",
+            "INV-108"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-106",
+      "class": "mandatory",
+      "title": "No visual editor",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "demo-scope-discipline"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "demo-scope-discipline",
+          "shared_with": [
+            "INV-105",
+            "INV-107",
+            "INV-108"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-107",
+      "class": "mandatory",
+      "title": "No hosting or publishing workflow",
+      "asked": false,
+      "exchange_citations": [],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "demo-scope-discipline"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "demo-scope-discipline",
+          "shared_with": [
+            "INV-105",
+            "INV-106",
+            "INV-108"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-108",
+      "class": "mandatory",
+      "title": "No subjective taste scoring as primary verification",
+      "asked": false,
+      "exchange_citations": [],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "demo-scope-discipline"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "demo-scope-discipline",
+          "shared_with": [
+            "INV-105",
+            "INV-106",
+            "INV-107"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-109",
+      "class": "acceptable-alternative",
+      "title": "Hybrid skill rather than prompt-only",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "skill-template-path-resolution"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "skill-template-path-resolution",
+          "shared_with": [
+            "INV-048",
+            "INV-118"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-110",
+      "class": "acceptable-alternative",
+      "title": "Single verify command",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "not-graded",
+      "mapped_criteria": [],
+      "shared_criteria": [],
+      "outcome": "not-graded-in-product"
+    },
+    {
+      "id": "INV-111",
+      "class": "acceptable-alternative",
+      "title": "Real-browser render check via Playwright",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "demo-step-and-transition-reliability"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "demo-step-and-transition-reliability",
+          "shared_with": [
+            "INV-090"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    },
+    {
+      "id": "INV-112",
+      "class": "acceptable-alternative",
+      "title": "Step-count and step-index hooks",
+      "asked": false,
+      "exchange_citations": [],
+      "coverage_verdict": "partial",
+      "product_delivery": "not-graded",
+      "mapped_criteria": [],
+      "shared_criteria": [],
+      "outcome": "not-graded-in-product"
+    },
+    {
+      "id": "INV-116",
+      "class": "acceptable-alternative",
+      "title": "Generic, topic-agnostic node primitives",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.specs/specs/1/1"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "not-graded",
+      "mapped_criteria": [],
+      "shared_criteria": [],
+      "outcome": "not-graded-in-product"
+    },
+    {
+      "id": "INV-118",
+      "class": "acceptable-alternative",
+      "title": "Bootstrap templates snapshot the canonical kit",
+      "asked": true,
+      "exchange_citations": [
+        {
+          "path": null,
+          "start_line": null,
+          "end_line": null,
+          "gate": null,
+          "exchange": "define.proposal/proposal/1/2"
+        }
+      ],
+      "coverage_verdict": "met",
+      "product_delivery": "delivered",
+      "mapped_criteria": [
+        "skill-template-path-resolution"
+      ],
+      "shared_criteria": [
+        {
+          "criterion": "skill-template-path-resolution",
+          "shared_with": [
+            "INV-048",
+            "INV-109"
+          ]
+        }
+      ],
+      "outcome": "delivered"
+    }
+  ]
+}

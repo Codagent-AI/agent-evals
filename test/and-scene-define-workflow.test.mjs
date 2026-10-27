@@ -194,3 +194,39 @@ test('active-container lookup tolerates absent artifact directories and still de
   source = join(await realpath(root), 'sandbox')
   assert.equal(await sandbox.isActive(), true)
 })
+
+for (const launcher of ['absent', 'exited', 'running']) test(`sandbox stop kills only containers bound to its artifact directory (launcher=${launcher})`, async t => {
+  const { LocalSandbox } = await import('../evals/agent-runner/and-scene-define/lib/sandbox.mjs')
+  const { realpath } = await import('node:fs/promises')
+  const root = await makeTempDir(join(tmpdir(), 'define-stop-')); t.after(() => rm(root, { recursive: true, force: true }))
+  const source = join(await realpath(root), 'sandbox')
+  let running = true; const calls = []
+  const command = (binary, args) => {
+    calls.push([binary, args])
+    if (args[0] === 'ps') return { ok: true, stdout: running ? 'own\nother\n' : 'other\n' }
+    if (args[0] === 'inspect') return { ok: true, stdout: JSON.stringify(args.slice(1).map(Id => ({ Id, Mounts: [{ Source: Id === 'own' ? source : '/other/artifacts' }] }))) }
+    assert.deepEqual(args, ['kill', 'own']); running = false
+    return { ok: true, stdout: 'own\n' }
+  }
+  const sandbox = new LocalSandbox({ runDir: root, runnerDir: root, skillsDir: root, command })
+  if (launcher === 'exited') sandbox.child = { exitCode: 0, signalCode: null }
+  if (launcher === 'running') {
+    const { spawn } = await import('node:child_process')
+    const { once } = await import('node:events')
+    sandbox.child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' })
+    sandbox.completion = new Promise((resolve, reject) => { sandbox.child.once('exit', (code, signal) => resolve({ code, signal })); sandbox.child.once('error', reject) })
+    t.after(() => { if (sandbox.child.exitCode === null && sandbox.child.signalCode === null) sandbox.child.kill('SIGKILL') })
+    await once(sandbox.child, 'spawn')
+  }
+  await sandbox.stop()
+  if (launcher === 'running') assert.equal((await sandbox.completion).signal, 'SIGTERM')
+  assert.equal(await sandbox.isActive(), false)
+  assert.equal(calls.filter(([, args]) => args[0] === 'kill').length, 1)
+})
+test('sandbox stop reports a container that remains active after termination fails', async t => {
+  const { LocalSandbox } = await import('../evals/agent-runner/and-scene-define/lib/sandbox.mjs')
+  const root = await makeTempDir(join(tmpdir(), 'define-stop-failed-')); t.after(() => rm(root, { recursive: true, force: true }))
+  const command = (_, args) => args[0] === 'ps' ? { ok: true, stdout: 'own' } : args[0] === 'inspect' ? { ok: true, stdout: JSON.stringify([{ Id: 'own', Mounts: [{ Source: join(root, 'sandbox') }] }]) } : { ok: false, status: 1, stderr: 'permission denied' }
+  const sandbox = new LocalSandbox({ runDir: root, runnerDir: root, skillsDir: root, command })
+  await assert.rejects(sandbox.stop(), /permission denied/)
+})

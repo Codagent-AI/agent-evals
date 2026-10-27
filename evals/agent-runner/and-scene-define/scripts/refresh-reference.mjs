@@ -3,9 +3,9 @@ import { mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { FIXTURE, withFixture, git, fixtureFile, cliOptions } from '../lib/fixture.mjs'
-import { SUITE_ROOT, sha256, writeJson, readJson } from '../lib/files.mjs'
-import { checkInventory } from '../lib/inventory.mjs'
+import { FIXTURE, withFixture, git, fixtureFile, cliOptions } from '../../../lib/define-run/fixture.mjs'
+import { SUITE_ROOT, sha256, writeJson, readJson } from '../../../lib/define-run/files.mjs'
+import { checkInventory } from '../../../lib/define-run/inventory.mjs'
 
 export async function refreshReference({ checkout, ref = FIXTURE.commit, output = join(SUITE_ROOT, 'hidden') } = {}) {
   return withFixture({ checkout, ref }, async (clone, commit) => {
