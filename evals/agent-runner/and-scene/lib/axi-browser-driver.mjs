@@ -4,7 +4,11 @@
 // adapter translates that API into the deliberately tiny driver consumed by
 // browser-eval.mjs, keeping browser mechanics out of scoring logic.
 import { spawnSync } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import { isBrowserInfrastructureDiagnostic } from './browser-diagnostics.mjs'
 import { validReplay } from './second-opinion.mjs'
@@ -694,6 +698,110 @@ console.log(JSON.stringify({ observations, trace, product_failure: productFailur
         'text-present': () => last.visible === true && last.text.includes(expect.text),
       }[expect.type]()
       return { passed, observations: result.observations, trace: result.trace, errors }
+    },
+    // Generic replay for products whose routes, controls and step counts are unknown in advance.
+    // Actions: navigate, click (selector or visible text), press, keys, swipe, wait, mark (save the rendered
+    // state under a label). A rendered state is a fingerprint of the settled DOM geometry and a screenshot.
+    async replayGeneric(actions, probes = []) {
+      const marks = {}
+      const trace = []
+      const states = []
+      const observeSource = `page.eval(async () => {
+        const read = () => {
+          const parts = [document.body.innerText];
+          for (const element of document.querySelectorAll('body *')) {
+            const box = element.getBoundingClientRect();
+            if (!box.width && !box.height) continue;
+            parts.push(element.tagName + ':' + Math.round(box.x) + ',' + Math.round(box.y) + ',' + Math.round(box.width) + ',' + Math.round(box.height));
+          }
+          return parts.join('|');
+        };
+        let previous = read();
+        for (let attempt = 0; attempt < 10; attempt++) {
+          await new Promise((resolve) => setTimeout(resolve, 150));
+          const next = read();
+          if (next === previous) break;
+          previous = next;
+        }
+        let hash = 5381;
+        for (let index = 0; index < previous.length; index++) hash = ((hash * 33) ^ previous.charCodeAt(index)) >>> 0;
+        const probed = ${JSON.stringify(probes)}.map((selector) => {
+          let node = null;
+          try { node = document.querySelector(selector); } catch { node = null; }
+          const visible = Boolean(node && node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden');
+          return { selector, visible, text: (node?.textContent ?? '').slice(0, 1000) };
+        });
+        return { dom: hash.toString(16) + ':' + previous.length, text: document.body.innerText.slice(0, 4000), url: location.pathname, probes: probed };
+      })`
+      const shotDir = await mkdtemp(join(tmpdir(), 'axi-state-'))
+      let shots = 0
+      const observe = async (label) => {
+        const dom = await run(`console.log(JSON.stringify(await ${observeSource}));`)
+        const path = join(shotDir, `shot-${shots++}.png`)
+        await invoke(['screenshot', path])
+        const screenshot = createHash('sha256').update(readFileSync(path)).digest('hex')
+        const state = { label, dom: dom.dom, screenshot, text: dom.text, url: dom.url, probes: dom.probes }
+        states.push(state)
+        return state
+      }
+      const checks = (action) => {
+        switch (action.type) {
+          case 'navigate': return `await page.open(${JSON.stringify(routeUrl(action.path))});`
+          case 'click': return `if (!(await page.eval(() => {
+            const wanted = ${JSON.stringify(action.text ?? null)};
+            const node = wanted === null ? document.querySelector(${JSON.stringify(action.selector ?? null)})
+              : [...document.querySelectorAll('button, a[href], [role="button"], summary, input[type="button"]')]
+                .find((element) => (element.getAttribute('aria-label') || element.textContent || element.value || '').replace(/\\s+/g, ' ').trim().toLowerCase().includes(wanted.toLowerCase()));
+            if (!node) return false;
+            // A person's click also focuses the control, which changes where later keys go.
+            node.focus?.({ preventScroll: true }); node.click(); return true;
+          }))) { productFailure = 'replay click target was not found'; break replay; }`
+          case 'press': return `await page.press(${JSON.stringify([...PRESS_MODIFIERS.filter((modifier) => action.modifiers?.includes(modifier)), action.key].join('+'))});`
+          case 'keys': return `await page.type(${JSON.stringify(action.text)});`
+          case 'wait': return sleepSource(action.ms)
+          case 'swipe': {
+            const sign = action.direction === 'left' ? -1 : 1
+            const selector = action.selector ?? null
+            const source = action.input === 'pointer' ? pointerSwipeEventSource : swipeEventSource
+            const names = action.input === 'pointer' ? ['pointerdown', 'pointermove', 'pointerup'] : ['touchstart', 'touchmove', 'touchend']
+            return [source(names[0], sign, 0, selector), ...Array.from({ length: SWIPE_MOVES }, (_, index) => source(names[1], sign, (index + 1) / (SWIPE_MOVES + 1))), source(names[2], sign, 1)]
+              .map((phase) => `await page.eval(${phase});`).join(`\n${swipeFrameWaitSource()}\n`)
+          }
+          default: return ''
+        }
+      }
+      for (const action of actions) {
+        if (action.type === 'navigate' && new URL(routeUrl(action.path)).origin !== base.origin) throw new Error('replay navigation leaves the candidate origin')
+      }
+      let productFailure = null
+      let pending = []
+      const flush = async () => {
+        if (!pending.length) return
+        const script = `let productFailure = null;\nreplay: {\n${pending.map((action) => `${checks(action)}\n${sleepSource(50)}`).join('\n')}\n}\nconsole.log(JSON.stringify({ product_failure: productFailure }));`
+        const result = await run(script)
+        trace.push(...pending)
+        pending = []
+        if (typeof result?.product_failure === 'string' && result.product_failure) productFailure = result.product_failure
+      }
+      for (const action of actions) {
+        if (productFailure) break
+        if (action.type === 'mark') {
+          await flush()
+          if (productFailure) break
+          marks[action.label] = await observe(action.label)
+          trace.push(action)
+        } else {
+          pending.push(action)
+          if (action.type === 'navigate' && states.length === 0) { await flush(); if (!productFailure) await observe('after-navigate') }
+        }
+      }
+      if (!productFailure) { await flush() }
+      let final = null
+      if (!productFailure) final = await observe('final')
+      const errors = await readFailures()
+      await rm(shotDir, { recursive: true, force: true })
+      const left = final && !/^\//.test(final.url)
+      return { product_failure: productFailure ?? (left ? 'replay left the candidate origin' : null), states, marks, trace, errors, final }
     },
     async resize(width, height) {
       if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) {

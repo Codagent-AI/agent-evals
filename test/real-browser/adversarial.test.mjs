@@ -339,3 +339,58 @@ test('(t) a hidden labelledby title is present by accessible-name basis', { time
   assert.ok(result.probes.some(({ probe_observations }) => probe_observations.some(({ text_presence }) =>
     text_presence && Object.values(text_presence).some(({ accessibleNames, complete }) => complete && accessibleNames > 0))))
 })
+
+// ---- generic replay (the end-to-end suite's browser judges) -----------------------------------------------------------
+// Products whose routes, controls and step counts no reference describes; the real replay executor must confirm what a
+// person would see and refuse what does not reproduce.
+import { executeReplay } from '../../evals/agent-runner/and-scene-e2e/lib/replay.mjs'
+import { createBrowserSession, runBrowserJudging } from '../../evals/agent-runner/and-scene-e2e/lib/browser-judging.mjs'
+
+async function genericReplay(variant, replay) {
+  const { baseUrl, close } = await serve(variant)
+  try { return await executeReplay({ driver: createAxiBrowserDriver({ baseUrl }), replay }) } finally { await close() }
+}
+const NAV = path => ({ type: 'navigate', path })
+test('(g1) a presentation on a route the reference does not use is replayed and its state change is observed', { timeout: 600_000 }, async () => {
+  const outcome = await genericReplay('generic-route', { actions: [NAV('/tour'), { type: 'press', key: 'ArrowRight' }], expect: { type: 'rendered-state-changes' } })
+  assert.equal(outcome.confirmed, true, outcome.mismatch)
+  const nested = await genericReplay('generic-route', { actions: [NAV('/nested/deck'), { type: 'click', text: 'next' }], expect: { type: 'text-present', text: 'Step 2 of 7' } })
+  assert.equal(nested.confirmed, true, nested.mismatch)
+})
+test('(g2) a deck advanced only by an on-screen Next button: the button replay confirms and the keyboard replay does not', { timeout: 600_000 }, async () => {
+  const button = await genericReplay('generic-next-button', { actions: [NAV('/'), { type: 'click', text: 'Next' }, { type: 'click', text: 'Next' }], expect: { type: 'text-present', text: 'Step 3 of 7' } })
+  assert.equal(button.confirmed, true, button.mismatch)
+  const keyboard = await genericReplay('generic-next-button', { actions: [NAV('/'), { type: 'press', key: 'ArrowRight' }], expect: { type: 'rendered-state-changes' } })
+  assert.equal(keyboard.confirmed, false); assert.match(keyboard.mismatch, /did not change/)
+})
+test('(g3) a five-step deck: traversal, saved-label matches and mismatches, and a button that stops at the last step', { timeout: 600_000 }, async () => {
+  const forwardAndBack = await genericReplay('generic-five-step', { actions: [NAV('/'), { type: 'click', text: 'Next' }, { type: 'mark', label: 'second' }, { type: 'click', text: 'Next' }, { type: 'click', text: 'Previous' }], expect: { type: 'rendered-state-matches', label: 'second' } })
+  assert.equal(forwardAndBack.confirmed, true, forwardAndBack.mismatch)
+  const differs = await genericReplay('generic-five-step', { actions: [NAV('/'), { type: 'mark', label: 'first' }, { type: 'click', text: 'Next' }], expect: { type: 'rendered-state-matches', label: 'first' } })
+  assert.equal(differs.confirmed, false); assert.match(differs.mismatch, /does not match the one saved as first/)
+  const end = await genericReplay('generic-five-step', { actions: [NAV('/'), ...Array.from({ length: 5 }, () => ({ type: 'click', text: 'Next' }))], expect: { type: 'text-present', text: 'Step 5 of 5' } })
+  assert.equal(end.confirmed, true, end.mismatch)
+  const beyond = await genericReplay('generic-five-step', { actions: [NAV('/'), ...Array.from({ length: 6 }, () => ({ type: 'click', text: 'Next' }))], expect: { type: 'text-present', text: 'Step 6' } })
+  assert.equal(beyond.confirmed, false)
+})
+test('(g4) selector visibility and hiding are judged from the rendered page', { timeout: 600_000 }, async () => {
+  const hidden = await genericReplay('generic-route', { actions: [NAV('/tour'), { type: 'click', text: 'Toggle note' }], expect: { type: 'selector-hidden', selector: '#note' } })
+  assert.equal(hidden.confirmed, true, hidden.mismatch)
+  const stillVisible = await genericReplay('generic-route', { actions: [NAV('/tour'), { type: 'click', text: 'Next' }], expect: { type: 'selector-hidden', selector: '#note' } })
+  assert.equal(stillVisible.confirmed, false)
+  const visible = await genericReplay('generic-route', { actions: [NAV('/tour')], expect: { type: 'selector-visible', selector: '#note' } })
+  assert.equal(visible.confirmed, true, visible.mismatch)
+  const missingTarget = await genericReplay('generic-route', { actions: [NAV('/tour'), { type: 'click', text: 'No such control' }], expect: { type: 'rendered-state-changes' } })
+  assert.equal(missingTarget.confirmed, false); assert.match(missingTarget.mismatch, /click target was not found/)
+})
+test('(g5) a pass whose replay does not reproduce on the real page counts as failed through browser judging', { timeout: 600_000 }, async () => {
+  const { baseUrl, close } = await serve('generic-five-step')
+  try {
+    const vote = id => ({ id, verdict: 'pass', rationale: 'it works', evidence: ['saw it'], replay: { actions: [{ type: 'navigate', path: '/' }, { type: 'click', text: 'Next' }], expect: { type: 'text-present', text: 'Step 9 of 9' } } })
+    const invoke = async request => JSON.stringify({ results: request.criteria.map(vote) })
+    const panel = [{ family: 'claude', model: 'a', effort: 'h' }, { family: 'claude', model: 'b', effort: 'h' }, { family: 'codex', model: 'c', effort: 'h' }]
+    const session = createBrowserSession(async () => createAxiBrowserDriver({ baseUrl }))
+    const result = await runBrowserJudging({ rubric: { criterion_sources: { A: { owner: 'eval', reason: 'works' } }, gates: [] }, inventory: { items: [] }, url: baseUrl, panel, decider: { family: 'claude', model: 'd', effort: 'h' }, invoke, session, jobs: [{ id: 'j', criteria: ['A'] }] })
+    assert.equal(result.verdicts.A.verdict, 'fail'); assert.equal(result.verdicts.A.basis, 'replay-mismatch'); assert.match(result.verdicts.A.mismatch, /was not present/)
+  } finally { await close() }
+})

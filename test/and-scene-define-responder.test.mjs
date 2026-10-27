@@ -126,7 +126,8 @@ test('INT-001: stub claude replays a clean recorded whole-turn response across s
   const conversation = JSON.parse(await readFile(join(poc, 'conversation.json'), 'utf8'))
   const exchanges = conversation.exchanges
   const recorded = await readFile(join(poc, 'turns/02-simuser.stdout.jsonl'), 'utf8')
-  const stub = await claudeStub(t, [{ stdout: recorded }])
+  // The draft and the reply check both return the recorded reply.
+  const stub = await claudeStub(t, [{ stdout: recorded }, { stdout: recorded }])
   const controller = new AbortController()
   const done = runResponder({ ...dirs, signal: controller.signal, deadline: Date.now() + 10000, invoke: createSimulatedUser({ ...stub, runDir: dirs.runDir }) })
   t.after(() => { controller.abort(); return done.catch(() => {}) })

@@ -12,6 +12,7 @@ const steps = DEMO_CONTRACT.step_titles.map((title, index) => ({ title, caption:
 // browser driver rather than the evaluator, and the input-* variants serve the
 // input-hygiene deck.
 const pageFile = variant === 'driver-primitives' ? 'driver-primitives.html'
+  : variant.startsWith('generic-') ? 'generic-replay.html'
   : (variant.startsWith('input-') ? 'input-hygiene.html' : 'presentation.html')
 const page = (await readFile(new URL(`./pages/${pageFile}`, import.meta.url), 'utf8'))
   .replace('<script>', `<script>window.VARIANT=${JSON.stringify(variant)};window.STEPS=${JSON.stringify(steps)};</script>\n<script>`)
@@ -19,6 +20,8 @@ const page = (await readFile(new URL(`./pages/${pageFile}`, import.meta.url), 'u
 const server = createServer((request, response) => {
   const path = new URL(request.url, 'http://x').pathname
   response.setHeader('content-type', 'text/html; charset=utf-8')
+  // Generic variants are products no reference preference describes: any route, and the page itself carries the deck.
+  if (variant.startsWith('generic-')) return path === '/' || path === '/tour' || path === '/nested/deck' ? response.end(page) : (response.statusCode = 404, response.end('not found'))
   if (path === '/') return response.end(`<!doctype html><a href="/${DEMO_CONTRACT.route}">demo</a>`)
   if (path === `/${DEMO_CONTRACT.route}`) return response.end(page)
   response.statusCode = 404
