@@ -192,13 +192,13 @@ When the workflow fails after `define` completed, definition scoring still runs,
 ### Delivery repository and token
 
 - **One-time setup:** a GitHub App installed on Codagent-AI with "Only select repositories" and none selected.
-  - Repository permissions: Administration write, Contents write, Pull requests write, Checks read, Commit statuses read, Metadata read. There is no Workflows permission, so a candidate cannot push `.github/workflows/`.
+  - Repository permissions: Administration write, Contents write, Pull requests write, Workflows write, Checks read, Commit statuses read, Metadata read. Workflows lets a candidate push the CI its definition calls for; without it GitHub rejects any push that adds `.github/workflows/`, and delivery fails.
   - Organization permission to create repositories.
   - GitHub grants an App access to the repositories it creates, so the installation only ever reaches delivery repositories.
   - The host supplies `AND_SCENE_E2E_APP_ID` and `AND_SCENE_E2E_APP_KEY_FILE`.
 - **Minting:** `provisioning.mjs` signs an RS256 App JWT with Node `crypto` (no new dependency), resolves the Codagent-AI installation, and mints installation tokens.
   - **Provisioning token:** unrestricted within the installation and used only on the host.
-  - **Run token:** `repositories: [<repo>]` with Contents write, Pull requests write, Checks read, Statuses read and Metadata read.
+  - **Run token:** `repositories: [<repo>]` with Contents write, Pull requests write, Workflows write, Checks read, Statuses read and Metadata read.
   - Tokens are never logged, never written under the run directory except `.github-auth/token` (mode 0600, removed after each invocation), and never retained in evidence.
 - **Preflight reach check:** it lists the installation's repositories and fails if any name lacks the `e2e-run-` prefix.
 - **Creation:** `POST /orgs/Codagent-AI/repos` creates `e2e-run-<run-id>`, private, with issues, projects and wiki disabled. The name matches no contamination pattern, and preflight asserts this against the pinned list.

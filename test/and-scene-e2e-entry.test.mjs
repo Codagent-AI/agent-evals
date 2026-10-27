@@ -46,7 +46,7 @@ test('E2E-001 a dry run prints the planned provisioning and sandbox invocation a
   const runId = state.run_id
   assert.match(stdout, new RegExp(`Codagent-AI/e2e-run-${runId}`))
   const planned = JSON.parse(stdout.slice(stdout.indexOf('{\n')))
-  assert.deepEqual(planned.planned_provisioning.run_token_permissions, { contents: 'write', pull_requests: 'write', checks: 'read', statuses: 'read', metadata: 'read' })
+  assert.deepEqual(planned.planned_provisioning.run_token_permissions, { contents: 'write', pull_requests: 'write', workflows: 'write', checks: 'read', statuses: 'read', metadata: 'read' })
   assert.deepEqual(planned.planned_provisioning.run_token_repositories, [`e2e-run-${runId}`])
   assert.equal(planned.dry_run, true)
   assert.match(stdout, /sandbox-driver\.sh/); assert.match(stdout, /openspec:change/); assert.match(stdout, /--docker-run-arg/); assert.match(stdout, /\.github-auth:\/github-auth:ro/)

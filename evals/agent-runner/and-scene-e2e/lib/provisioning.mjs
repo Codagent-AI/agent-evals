@@ -8,7 +8,8 @@ import { join } from 'node:path'
 import { ORGANIZATION, REPOSITORY_PREFIX } from './files.mjs'
 import { compilePatterns } from '../../../lib/define-run/canary.mjs'
 
-export const RUN_TOKEN_PERMISSIONS = Object.freeze({ contents: 'write', pull_requests: 'write', checks: 'read', statuses: 'read', metadata: 'read' })
+// Workflows write lets a candidate deliver the CI its definition calls for; without it GitHub rejects the whole push.
+export const RUN_TOKEN_PERMISSIONS = Object.freeze({ contents: 'write', pull_requests: 'write', workflows: 'write', checks: 'read', statuses: 'read', metadata: 'read' })
 export const APP_PERMISSIONS = Object.freeze({ administration: 'write', ...RUN_TOKEN_PERMISSIONS })
 const b64url = value => Buffer.from(value).toString('base64url')
 export function signAppJwt({ appId, privateKey, now = Date.now() }) {

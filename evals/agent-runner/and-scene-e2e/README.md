@@ -100,9 +100,10 @@ node evals/agent-runner/and-scene-e2e/compare.mjs DIR DIR [...]
 ## GitHub App setup (one time, by an organization owner)
 
 Create a GitHub App on `Codagent-AI` with repository permissions Administration
-(write), Contents (write), Pull requests (write), Checks (read), Commit statuses
-(read) and Metadata (read), and organization permission to create repositories.
-Do **not** grant Workflows. Install it on `Codagent-AI` with **Only select
+(write), Contents (write), Pull requests (write), Workflows (write), Checks (read),
+Commit statuses (read) and Metadata (read), and organization permission to create
+repositories. Workflows lets a candidate push the CI its definition calls for;
+without it GitHub rejects the whole push. Install it on `Codagent-AI` with **Only select
 repositories** and none selected, so it reaches only the repositories it creates.
 Store the private key on the host (mode 0600) and record the App in
 `~/.config/and-scene-e2e/app.json` (mode 0600):

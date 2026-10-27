@@ -355,7 +355,7 @@ Run the adversarial suite once at the end of the suite PR, after running it on t
 - Reason: creating a GitHub App on Codagent-AI and installing it needs Paul's organization-owner authority and produces a private key only he can hold.
 - Prerequisites: INT-004 passing; the design's permission list. This is a prerequisite of acceptance.
 - Instructions:
-  1. Create the App with Administration write, Contents write, Pull requests write, Checks read, Commit statuses read and Metadata read, and organization permission to create repositories.
+  1. Create the App with Administration write, Contents write, Pull requests write, Workflows write, Checks read, Commit statuses read and Metadata read, and organization permission to create repositories.
   2. Install it on Codagent-AI with "Only select repositories" and none selected.
   3. Store the key file on the host, and export `AND_SCENE_E2E_APP_ID` and `AND_SCENE_E2E_APP_KEY_FILE`.
   4. Run `run.sh --dry-run`.
