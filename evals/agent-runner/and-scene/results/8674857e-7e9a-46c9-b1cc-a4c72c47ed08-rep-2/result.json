@@ -3,10 +3,11 @@
   "run_id": "8674857e-7e9a-46c9-b1cc-a4c72c47ed08-rep-2",
   "run_kind": "candidate",
   "mode": "agent-runner",
-  "evaluation_status": "pending-human-review",
-  "product_verdict": "unavailable",
-  "label": "PENDING HUMAN REVIEW",
+  "evaluation_status": "complete",
+  "product_verdict": "pass",
+  "label": "PASS",
   "score_denominator": 100,
+  "official_score": 88.375,
   "automated_subtotal": {
     "points": 62.375,
     "possible": 70,
@@ -51,6 +52,20 @@
       "event": "cleanup-complete",
       "evaluation_status": "pending-human-review",
       "product_verdict": "unavailable",
+      "phase": null,
+      "reason": null
+    },
+    {
+      "event": "product-verdict",
+      "evaluation_status": "complete",
+      "product_verdict": "pass",
+      "phase": null,
+      "reason": null
+    },
+    {
+      "event": "cleanup-complete",
+      "evaluation_status": "complete",
+      "product_verdict": "pass",
       "phase": null,
       "reason": null
     }
@@ -3033,13 +3048,29 @@
     "automated_pass_threshold": 40,
     "automated_pass": true,
     "automated_failures": [],
-    "human_review": null,
-    "official_score": null,
-    "official_pass": null,
+    "human_review": {
+      "applicable": true,
+      "points_awarded": 26,
+      "points_possible": 30,
+      "points": 26,
+      "possible": 30,
+      "floor": 15,
+      "ratings": [
+        4,
+        4,
+        5,
+        5,
+        4,
+        5,
+        4
+      ],
+      "lowest_rating": 4,
+      "complete": true
+    },
+    "official_score": 88.375,
+    "official_pass": true,
     "pass_failures": [],
-    "incomplete": [
-      "human-review"
-    ],
+    "incomplete": [],
     "harness": {
       "judge_retries": {
         "demo-integration": 0,
@@ -3051,9 +3082,155 @@
         "assumption-handling": 0
       },
       "failed_judge_jobs": [],
-      "browser_bounds_exceeded": [],
-      "source_scan_budget_exceeded": []
+      "browser_bounds_exceeded": []
     }
+  },
+  "human_review": {
+    "schema_version": 1,
+    "candidate": {
+      "candidate_identity": "de8d7e82cc24752b796846551041b22265cfd871d5dee5ebb48c1459498bdc2a",
+      "run_id": "8674857e-7e9a-46c9-b1cc-a4c72c47ed08-rep-2"
+    },
+    "rubric": {
+      "rubric_id": "and-scene-human-review",
+      "version": "2.1.0",
+      "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
+    },
+    "readiness_confirmed": true,
+    "responses": [
+      {
+        "id": "text-appearance",
+        "number": 1,
+        "dimension": "text-appearance",
+        "question_text": "Across the full presentation, how good do the titles, captions, labels, and other content text look and read? Judge whether important content text is visibly present, typography, sizing, weight, spacing, line breaks, contrast, legibility, visual hierarchy, and whether the wording is clear, intentional, and audience-ready rather than sounding like an internal annotation. Do not judge navigation controls or presentation chrome here, and do not judge the placement or styling of non-text elements.",
+        "rating": 4,
+        "rationale": "typography bit small"
+      },
+      {
+        "id": "element-appearance",
+        "number": 2,
+        "dimension": "element-appearance",
+        "question_text": "How well designed are the individual scene elements, such as boxes, arrows, icons, illustrations, and diagram nodes? Judge their shapes, proportions, fills, borders, detail, consistency, and overall craft. Do not judge their text, placement, movement, or navigation chrome here.",
+        "rating": 4,
+        "rationale": ""
+      },
+      {
+        "id": "composition",
+        "number": 3,
+        "dimension": "composition",
+        "question_text": "At a normal wide viewport, how well are the text and visual elements arranged relative to one another? Judge alignment, spacing, grouping, balance, focal points, use of space, and whether anything feels crowded, disconnected, clipped, or unintentionally overlapping. Judge viewport adaptation separately under responsive visual quality.",
+        "rating": 5,
+        "rationale": ""
+      },
+      {
+        "id": "motion",
+        "number": 4,
+        "dimension": "motion",
+        "question_text": "As you advance through the presentation, how well do the animations and scene changes work? Judge smoothness, pacing, meaningful entrances and exits, continuity of persistent elements, and whether each step visibly evolves the existing scene instead of feeling like an unrelated replacement.",
+        "rating": 5,
+        "rationale": ""
+      },
+      {
+        "id": "visual-identity",
+        "number": 5,
+        "dimension": "visual-identity",
+        "question_text": "Taken as a whole, how strong is the presentation’s visual identity? Judge its color palette, background treatment, stylistic consistency, brand character, polish, memorability, and whether it feels intentionally designed and finished. Judge the craft of individual scene elements separately.",
+        "rating": 4,
+        "rationale": ""
+      },
+      {
+        "id": "navigation-chrome",
+        "number": 6,
+        "dimension": "navigation-chrome",
+        "question_text": "How clear, discoverable, and visually integrated are the presentation controls and chrome? Judge progress indicators, previous/next controls, table of contents, mode switching, and attribution. Focus on their appearance and ease of understanding, not whether every input method technically works or how content captions are styled.",
+        "rating": 5,
+        "rationale": ""
+      },
+      {
+        "id": "responsive",
+        "number": 7,
+        "dimension": "responsive",
+        "question_text": "Compare the presentation at wide and narrow viewport sizes. How well does its hierarchy and composition adapt? Judge scaling, density, readability, control accessibility, clipping, overlap, and whether the narrow version still feels intentionally composed. Judge baseline wide-screen composition separately.",
+        "rating": 4,
+        "rationale": ""
+      }
+    ],
+    "score": {
+      "complete": true,
+      "subtotals": [
+        {
+          "id": "text-appearance",
+          "title": "Text appearance, hierarchy, and wording",
+          "points": 3,
+          "points_possible": 4,
+          "ratings": [
+            4
+          ]
+        },
+        {
+          "id": "element-appearance",
+          "title": "Visual design of elements",
+          "points": 3,
+          "points_possible": 4,
+          "ratings": [
+            4
+          ]
+        },
+        {
+          "id": "composition",
+          "title": "Composition and placement",
+          "points": 5,
+          "points_possible": 5,
+          "ratings": [
+            5
+          ]
+        },
+        {
+          "id": "motion",
+          "title": "Motion and scene evolution",
+          "points": 6,
+          "points_possible": 6,
+          "ratings": [
+            5
+          ]
+        },
+        {
+          "id": "visual-identity",
+          "title": "Overall visual identity",
+          "points": 3.75,
+          "points_possible": 5,
+          "ratings": [
+            4
+          ]
+        },
+        {
+          "id": "navigation-chrome",
+          "title": "Navigation and presentation chrome",
+          "points": 3,
+          "points_possible": 3,
+          "ratings": [
+            5
+          ]
+        },
+        {
+          "id": "responsive",
+          "title": "Responsive visual quality",
+          "points": 2.25,
+          "points_possible": 3,
+          "ratings": [
+            4
+          ]
+        }
+      ],
+      "total": 26,
+      "possible": 30,
+      "floor": 15,
+      "lowest_rating": 4,
+      "gate_passed": true,
+      "gate_failures": []
+    },
+    "complete": true,
+    "completed_at": "2026-10-27T01:31:27.393Z"
   },
   "browser_evaluation": {
     "criteria": [
@@ -127896,9 +128073,9 @@
     }
   },
   "completeness": {
-    "score": "automated-complete",
+    "score": "complete",
     "evidence": "complete",
-    "human_review": "pending",
+    "human_review": "complete",
     "implementation_usage": "complete",
     "implementation_cost": "complete",
     "implementation_identity": "partial",
@@ -127917,9 +128094,29 @@
   "baseline": null,
   "artifacts": [
     {
-      "path": ".factory/active-job-pgid",
-      "bytes": 4,
-      "sha256": "8ba48da128a05fc906b023153699a1d100fbb0325bd7ec13c024b1792a98a058"
+      "path": ".factory/heartbeat.json",
+      "bytes": 86,
+      "sha256": "c686688a9831073a41d34647b18037363e3fe9620c64a1f8b5fb63fbf76affc8"
+    },
+    {
+      "path": ".factory/job-1.offset",
+      "bytes": 7,
+      "sha256": "36fb8083c1fa0df479b2ef1b168f546b81afae9fc4e72e8db187c62beb0c427c"
+    },
+    {
+      "path": ".factory/job/1/DONE",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".factory/job/1/exit-code",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": ".factory/job/1/files.txt",
+      "bytes": 2064456,
+      "sha256": "bbc981793b78f0f9f2b6cd8e618b962f01bbc3a0a0432f4e16a17c55b3dc3f03"
     },
     {
       "path": ".factory/job/1/job.log",
@@ -127945,6 +128142,31 @@
       "path": ".factory/job/1/versions.json",
       "bytes": 138,
       "sha256": "fa1799459e4402bc2414483c8d407755e0a692af1542c1519f321817d11da089"
+    },
+    {
+      "path": ".factory/launcher-exit-code",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": ".factory/launcher.log",
+      "bytes": 1723,
+      "sha256": "f1d1f61bb2de9685c5ba71b024938ef2725ef2a6421bbb89859115f4158d71a1"
+    },
+    {
+      "path": ".factory/machine.json",
+      "bytes": 519,
+      "sha256": "20eed320d8a47574c4b8d9d8c86a0badf6c0302fc926d013f106ee0e084aa6cb"
+    },
+    {
+      "path": ".factory/manifest.json",
+      "bytes": 1758,
+      "sha256": "62478d66ddd16ee50ea9523674a625b37c21e17fb37035dbbfaca8576f52b6d7"
+    },
+    {
+      "path": ".factory/parsed-launch.json",
+      "bytes": 5165,
+      "sha256": "0c62f94b9e4c2b704f56a189955270e8c618f527900b48f6ad4a9cc57da5636a"
     },
     {
       "path": "ambiguity-ledger.json",
@@ -128450,6 +128672,21 @@
       "path": "evidence/judge-views/testing-evidence/packet.txt",
       "bytes": 147149,
       "sha256": "9dbc9dff959786348e87b459ee1b1f970169adaacd7df96f31f640ded3d70aa5"
+    },
+    {
+      "path": "factory-suite.log",
+      "bytes": 1720645,
+      "sha256": "4f7a5260fe331daced962950f7219f77bb8c0f24e9e47cd335b861da37c95cb6"
+    },
+    {
+      "path": "guest-exit-code",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "human-review.json",
+      "bytes": 5534,
+      "sha256": "1248f40759cd56f2587c65b4c8ae18bd8edcbbd4d432d8508364ce61788dd5ca"
     },
     {
       "path": "implementation.diff",
@@ -129188,8 +129425,8 @@
     },
     {
       "path": "run-state.json",
-      "bytes": 79180,
-      "sha256": "032670ebba55ba2b7e2a0f7f0cb3ef73d259e746bd571105d05c23807850c61a"
+      "bytes": 87692,
+      "sha256": "740b446a87dc8c2f8378bebdfdda3858d8945a169d9cfeb34074650db32e30ea"
     }
   ],
   "run_state": {
@@ -129197,15 +129434,15 @@
     "state_kind": "and-scene-run-state",
     "run_id": "8674857e-7e9a-46c9-b1cc-a4c72c47ed08-rep-2",
     "run_kind": "candidate",
-    "updated_at": "2026-10-26T05:14:21.306Z",
+    "updated_at": "2026-10-27T01:31:27.507Z",
     "resume": {
       "eligible": true,
       "reason": null
     },
     "outcome": {
       "schema_version": 3,
-      "evaluation_status": "pending-human-review",
-      "product_verdict": "unavailable",
+      "evaluation_status": "complete",
+      "product_verdict": "pass",
       "run_kind": "candidate",
       "applicability": {
         "delivery": true,
@@ -129214,10 +129451,10 @@
         "assumption_handling": true
       },
       "score_denominator": 100,
-      "official_score": null,
+      "official_score": 88.375,
       "automated_subtotal": 62.375,
       "product_failure": null,
-      "verdict_durable": false,
+      "verdict_durable": true,
       "failed_phase": null,
       "failure": null,
       "resumable": null,
@@ -129249,6 +129486,20 @@
           "event": "cleanup-complete",
           "evaluation_status": "pending-human-review",
           "product_verdict": "unavailable",
+          "phase": null,
+          "reason": null
+        },
+        {
+          "event": "product-verdict",
+          "evaluation_status": "complete",
+          "product_verdict": "pass",
+          "phase": null,
+          "reason": null
+        },
+        {
+          "event": "cleanup-complete",
+          "evaluation_status": "complete",
+          "product_verdict": "pass",
           "phase": null,
           "reason": null
         }
@@ -129429,10 +129680,23 @@
         "outputs": []
       },
       "cleanup-result": {
-        "state": "in-progress",
-        "completed_at": null,
+        "state": "complete",
+        "completed_at": "2026-10-26T05:14:21.594Z",
         "error": null,
-        "outputs": []
+        "outputs": [
+          {
+            "path": "result.json",
+            "sha256": "f127338b864e3dbaf5ed762d245264d7c6221d0ae04e2c5913b1bd04edc2fa6a"
+          },
+          {
+            "path": "report.html",
+            "sha256": "4da041852899e2faba9261248afbdcaa12c6df82c09c3e881d31f3b151692570"
+          },
+          {
+            "path": "artifact-manifest.json",
+            "sha256": "2a1195ac184456f7a419301508375b252b41509118bb7eff77cc33d2599979c0"
+          }
+        ]
       }
     },
     "events": [
@@ -130127,6 +130391,218 @@
         "input_fingerprint": "465f0fc31934edb3ccd4e1f39a92033e65225718ba29fef311972bc13c06b8ae",
         "dependency_fingerprint": "956a5c623225aaa6b7ca45afa832fc64bd58123904cee4ebe3689d96ba0b6789",
         "at": "2026-10-26T05:14:21.306Z"
+      },
+      {
+        "type": "phase-completed",
+        "owner": "evaluation-harness",
+        "phase": "cleanup-result",
+        "outputs": [
+          {
+            "path": "result.json",
+            "sha256": "f127338b864e3dbaf5ed762d245264d7c6221d0ae04e2c5913b1bd04edc2fa6a"
+          },
+          {
+            "path": "report.html",
+            "sha256": "4da041852899e2faba9261248afbdcaa12c6df82c09c3e881d31f3b151692570"
+          },
+          {
+            "path": "artifact-manifest.json",
+            "sha256": "2a1195ac184456f7a419301508375b252b41509118bb7eff77cc33d2599979c0"
+          }
+        ],
+        "at": "2026-10-26T05:14:21.594Z"
+      },
+      {
+        "type": "outcome-updated",
+        "owner": "evaluation-harness",
+        "outcome": {
+          "schema_version": 3,
+          "evaluation_status": "pending-human-review",
+          "product_verdict": "unavailable",
+          "run_kind": "candidate",
+          "applicability": {
+            "delivery": true,
+            "product_verdict": true,
+            "testing_evidence": true,
+            "assumption_handling": true
+          },
+          "score_denominator": 100,
+          "official_score": null,
+          "automated_subtotal": 62.375,
+          "product_failure": null,
+          "verdict_durable": false,
+          "failed_phase": null,
+          "failure": null,
+          "resumable": null,
+          "cleanup": {
+            "completed": true,
+            "phase": "cleanup",
+            "error": null
+          },
+          "delivery": {
+            "candidate_branch": null,
+            "pull_request": null,
+            "final_sha": null,
+            "retained_for_manual_cleanup": true
+          },
+          "history": [
+            {
+              "event": "created",
+              "evaluation_status": "pending-human-review",
+              "product_verdict": "unavailable"
+            },
+            {
+              "event": "automated-scoring-complete",
+              "evaluation_status": "pending-human-review",
+              "product_verdict": "unavailable",
+              "phase": null,
+              "reason": null
+            },
+            {
+              "event": "cleanup-complete",
+              "evaluation_status": "pending-human-review",
+              "product_verdict": "unavailable",
+              "phase": null,
+              "reason": null
+            }
+          ]
+        },
+        "at": "2026-10-26T05:14:21.595Z"
+      },
+      {
+        "type": "outcome-updated",
+        "owner": "evaluation-harness",
+        "outcome": {
+          "schema_version": 3,
+          "evaluation_status": "complete",
+          "product_verdict": "pass",
+          "run_kind": "candidate",
+          "applicability": {
+            "delivery": true,
+            "product_verdict": true,
+            "testing_evidence": true,
+            "assumption_handling": true
+          },
+          "score_denominator": 100,
+          "official_score": 88.375,
+          "automated_subtotal": 62.375,
+          "product_failure": null,
+          "verdict_durable": true,
+          "failed_phase": null,
+          "failure": null,
+          "resumable": null,
+          "cleanup": {
+            "completed": true,
+            "phase": "cleanup",
+            "error": null
+          },
+          "delivery": {
+            "candidate_branch": null,
+            "pull_request": null,
+            "final_sha": null,
+            "retained_for_manual_cleanup": true
+          },
+          "history": [
+            {
+              "event": "created",
+              "evaluation_status": "pending-human-review",
+              "product_verdict": "unavailable"
+            },
+            {
+              "event": "automated-scoring-complete",
+              "evaluation_status": "pending-human-review",
+              "product_verdict": "unavailable",
+              "phase": null,
+              "reason": null
+            },
+            {
+              "event": "cleanup-complete",
+              "evaluation_status": "pending-human-review",
+              "product_verdict": "unavailable",
+              "phase": null,
+              "reason": null
+            },
+            {
+              "event": "product-verdict",
+              "evaluation_status": "complete",
+              "product_verdict": "pass",
+              "phase": null,
+              "reason": null
+            }
+          ]
+        },
+        "at": "2026-10-27T01:31:27.408Z"
+      },
+      {
+        "type": "outcome-updated",
+        "owner": "evaluation-harness",
+        "outcome": {
+          "schema_version": 3,
+          "evaluation_status": "complete",
+          "product_verdict": "pass",
+          "run_kind": "candidate",
+          "applicability": {
+            "delivery": true,
+            "product_verdict": true,
+            "testing_evidence": true,
+            "assumption_handling": true
+          },
+          "score_denominator": 100,
+          "official_score": 88.375,
+          "automated_subtotal": 62.375,
+          "product_failure": null,
+          "verdict_durable": true,
+          "failed_phase": null,
+          "failure": null,
+          "resumable": null,
+          "cleanup": {
+            "completed": true,
+            "phase": "cleanup",
+            "error": null
+          },
+          "delivery": {
+            "candidate_branch": null,
+            "pull_request": null,
+            "final_sha": null,
+            "retained_for_manual_cleanup": true
+          },
+          "history": [
+            {
+              "event": "created",
+              "evaluation_status": "pending-human-review",
+              "product_verdict": "unavailable"
+            },
+            {
+              "event": "automated-scoring-complete",
+              "evaluation_status": "pending-human-review",
+              "product_verdict": "unavailable",
+              "phase": null,
+              "reason": null
+            },
+            {
+              "event": "cleanup-complete",
+              "evaluation_status": "pending-human-review",
+              "product_verdict": "unavailable",
+              "phase": null,
+              "reason": null
+            },
+            {
+              "event": "product-verdict",
+              "evaluation_status": "complete",
+              "product_verdict": "pass",
+              "phase": null,
+              "reason": null
+            },
+            {
+              "event": "cleanup-complete",
+              "evaluation_status": "complete",
+              "product_verdict": "pass",
+              "phase": null,
+              "reason": null
+            }
+          ]
+        },
+        "at": "2026-10-27T01:31:27.507Z"
       }
     ]
   },
@@ -130372,8 +130848,8 @@
     "retained_for_manual_cleanup": true
   },
   "candidate_server": {
-    "pid": 21398,
-    "url": "http://127.0.0.1:37531/",
+    "pid": 48834,
+    "url": "http://127.0.0.1:57880/",
     "candidate_identity": "de8d7e82cc24752b796846551041b22265cfd871d5dee5ebb48c1459498bdc2a"
   },
   "report": {
