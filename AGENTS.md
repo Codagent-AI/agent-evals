@@ -89,8 +89,8 @@ consult `run.sh --help` before constructing an unfamiliar invocation.
 ## Experiment baseline and human review
 
 - The current experiment baseline is `evals/agent-runner/and-scene/experiments/baseline.json`
-  (the audited implement-change workflow v2.3; see the suite README, "Experiment
-  baseline"). Compare new candidates against it with
+  (the lighter change v3 implement workflow without Agent Validator, with a
+  gpt-6.1-sol implementor; see the suite README, "Experiment baseline"). Compare new candidates against it with
   `experiments.mjs compare --eval-issue <owner/repo#N> <result-dir>...`, as
   described in the suite README section "Compare an experiment with the current baseline".
 - Keep the and-scene draft PRs of the baseline repetitions open. Rescores need
