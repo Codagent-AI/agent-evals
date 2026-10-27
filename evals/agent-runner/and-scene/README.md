@@ -1324,15 +1324,16 @@ Exit code 0 means success, including `show` and `--help`; 1 means an admission
 refusal; 2 means a usage, invalid-record, or I/O error. Refusals are JSON lines
 on stderr. Writes are atomic and the record is intended for git review.
 
-The current baseline (`experiments/baseline.json`) is the audited
-implement-change workflow v2.3 (recorded as `core:audited-implement-change` at
-its pinned Runner commit; that workflow is now `core:implement-change` v2.0):
-the three Fly repetitions of factory eval agent-evals#133, set with `--source accepted-candidate`. Rep 2, the median, is
-human-reviewed 20.75/30. Automated mean 63.75/70 (sd 1.09). Its cost and active
-time are incomplete: those runs predate the eval's support for the
-`agent_session_context` run-metrics field, so their metrics were rejected. The
-anchor is still the definition-only starting line (automated mean 56.13/70). `experiments.mjs` only maintains this record;
-comparing a candidate's repetitions against it is not implemented yet.
+The current baseline (`experiments/baseline.json`) is the lighter change v3
+implement workflow (`core:implement-change` at Runner `8927934`) without Agent
+Validator, with a `codex:gpt-6.1-sol:medium` implementor, a
+`claude:claude-sonnet-5-5:high` lead, a `codex:gpt-6.1-sol:high` crosscheck,
+and a `codex:gpt-6-luna:medium` tester: the two Fly repetitions of factory
+eval agent-evals#163, set with `--source profile-change`. Rep 2, the median, is
+human-reviewed 26/30 (official 88.38). Automated mean 62.75/70 (sd 0.53),
+mean cost $3.85, mean active time 70 minutes. The profile change cleared the
+anchor, so the record has none. Compare candidates against it as described in
+"Compare an experiment with the current baseline".
 To publish a local repetition for the record, copy its curated result files
 into `results/<run-id>/` with the same file set as the other published
 repetitions (the reviewed median also carries `human-review.json`).

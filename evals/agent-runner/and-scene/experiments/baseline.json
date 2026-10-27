@@ -1,18 +1,18 @@
 {
   "schema_version": 1,
   "current": {
-    "source": "accepted-candidate",
-    "reason": "audited implement-change v2.3 from factory eval agent-evals#133 (runner ba3705e, skills a48227c, fixture 20edd64; tester codex gpt-6-luna medium); rep 2, the median, human-reviewed 20.75/30",
-    "set_at": "2026-10-21T03:34:33.672Z",
+    "source": "profile-change",
+    "reason": "Lighter change v3 implement workflow (core:implement-change) without Agent Validator, gpt-6.1-sol implementor (Codagent-AI/agent-evals#163); adopted over the Sonnet implementor variant on score, cost, and time",
+    "set_at": "2026-10-27T01:42:53.905Z",
     "identity": {
-      "runner_commit": "ba3705e2adda63f62947f691e8f9a4084f3f77ea",
-      "skills_commit": "a48227c8f8936c8bf27d414c26f70ca25d7de077",
+      "runner_commit": "8927934ba4ee327214a3cf6bfc76e15eb2d0d319",
+      "skills_commit": "9109c2db42f045ad117705961bdeedde6568257c",
       "workflow": {
-        "workflow": "core:audited-implement-change",
-        "workflow_path": "b9d50d0445a33a2cddc6215cb91687e376a7ae874676d17ecf21dca4e3631414",
-        "task_level_compliance": "required",
-        "final_validator": "required",
-        "skip_validator": "false"
+        "workflow": "core:implement-change",
+        "workflow_path": "559d56f8535f68469045604462b368d0d4a59500c8ca86fbadbf7ed5060d9300",
+        "task_level_compliance": "skipped",
+        "final_validator": "skipped",
+        "skip_validator": "true"
       },
       "fixture_commit": "20edd643be69cd87ed3ff667cec71b841a3075e6",
       "roles": {
@@ -34,8 +34,8 @@
         },
         "implementor": {
           "configured": {
-            "cli": "claude",
-            "model": "claude-sonnet-5-5",
+            "cli": "codex",
+            "model": "gpt-6.1-sol",
             "effort": "medium",
             "agent": "implementor"
           }
@@ -64,19 +64,19 @@
     },
     "reps": [
       {
-        "run_id": "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-1",
-        "added_at": "2026-10-21T03:34:33.649Z",
+        "run_id": "8674857e-7e9a-46c9-b1cc-a4c72c47ed08-rep-1",
+        "added_at": "2026-10-27T01:42:53.893Z",
         "added_by": "set",
-        "execution_run_id": "audited-implement-change-2026-10-18T22-38-54-57008848Z",
+        "execution_run_id": "implement-change-2026-10-26T01-47-16-976948955Z",
         "rescored_from": null,
-        "runner_commit": "ba3705e2adda63f62947f691e8f9a4084f3f77ea",
-        "skills_commit": "a48227c8f8936c8bf27d414c26f70ca25d7de077",
+        "runner_commit": "8927934ba4ee327214a3cf6bfc76e15eb2d0d319",
+        "skills_commit": "9109c2db42f045ad117705961bdeedde6568257c",
         "workflow": {
-          "workflow": "core:audited-implement-change",
-          "workflow_path": "b9d50d0445a33a2cddc6215cb91687e376a7ae874676d17ecf21dca4e3631414",
-          "task_level_compliance": "required",
-          "final_validator": "required",
-          "skip_validator": "false"
+          "workflow": "core:implement-change",
+          "workflow_path": "559d56f8535f68469045604462b368d0d4a59500c8ca86fbadbf7ed5060d9300",
+          "task_level_compliance": "skipped",
+          "final_validator": "skipped",
+          "skip_validator": "true"
         },
         "fixture_commit": "20edd643be69cd87ed3ff667cec71b841a3075e6",
         "roles": {
@@ -87,7 +87,9 @@
               "effort": "high",
               "agent": "lead"
             },
-            "observed_models": []
+            "observed_models": [
+              "claude-sonnet-5-5"
+            ]
           },
           "crosscheck": {
             "configured": {
@@ -96,16 +98,20 @@
               "effort": "high",
               "agent": "crosscheck"
             },
-            "observed_models": []
+            "observed_models": [
+              "gpt-6.1-sol"
+            ]
           },
           "implementor": {
             "configured": {
-              "cli": "claude",
-              "model": "claude-sonnet-5-5",
+              "cli": "codex",
+              "model": "gpt-6.1-sol",
               "effort": "medium",
               "agent": "implementor"
             },
-            "observed_models": []
+            "observed_models": [
+              "gpt-6.1-sol"
+            ]
           },
           "tester": {
             "configured": {
@@ -114,7 +120,9 @@
               "effort": "medium",
               "agent": "tester"
             },
-            "observed_models": []
+            "observed_models": [
+              "gpt-6-luna"
+            ]
           }
         },
         "rubrics": {
@@ -130,7 +138,7 @@
           }
         },
         "automated_score": {
-          "points": 65,
+          "points": 63.125,
           "possible": 70,
           "complete": true
         },
@@ -163,17 +171,38 @@
           "human_review_carried_from": null
         },
         "tokens": {
-          "complete": false,
-          "totals": null,
-          "detail": null,
-          "by_provider": {}
+          "complete": true,
+          "totals": {
+            "input": 20773417,
+            "output": 175316,
+            "total": 20948733
+          },
+          "detail": {
+            "input": 20773417,
+            "cached_input": 20277778,
+            "output": 175316,
+            "reasoning": 55482,
+            "cache_write": 80783
+          },
+          "by_provider": {
+            "openai": {
+              "input": 19246546,
+              "output": 147501,
+              "total": 19394047
+            },
+            "anthropic": {
+              "input": 1526871,
+              "output": 27815,
+              "total": 1554686
+            }
+          }
         },
-        "active_duration_ms": null,
+        "active_duration_ms": 4188660,
         "cost": {
-          "state": "unavailable",
-          "complete": false,
-          "estimated_api_cost_usd": null,
-          "known_cost_subtotal_usd": 0
+          "state": "available",
+          "complete": true,
+          "estimated_api_cost_usd": 4.19983424,
+          "known_cost_subtotal_usd": 4.19983424
         },
         "failure": {
           "failure": null,
@@ -183,19 +212,19 @@
         "mismatch": null
       },
       {
-        "run_id": "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-2",
-        "added_at": "2026-10-21T03:34:33.661Z",
+        "run_id": "8674857e-7e9a-46c9-b1cc-a4c72c47ed08-rep-2",
+        "added_at": "2026-10-27T01:42:53.905Z",
         "added_by": "set",
-        "execution_run_id": "audited-implement-change-2026-10-19T01-19-53-635587334Z",
+        "execution_run_id": "implement-change-2026-10-26T03-32-14-991527899Z",
         "rescored_from": null,
-        "runner_commit": "ba3705e2adda63f62947f691e8f9a4084f3f77ea",
-        "skills_commit": "a48227c8f8936c8bf27d414c26f70ca25d7de077",
+        "runner_commit": "8927934ba4ee327214a3cf6bfc76e15eb2d0d319",
+        "skills_commit": "9109c2db42f045ad117705961bdeedde6568257c",
         "workflow": {
-          "workflow": "core:audited-implement-change",
-          "workflow_path": "b9d50d0445a33a2cddc6215cb91687e376a7ae874676d17ecf21dca4e3631414",
-          "task_level_compliance": "required",
-          "final_validator": "required",
-          "skip_validator": "false"
+          "workflow": "core:implement-change",
+          "workflow_path": "559d56f8535f68469045604462b368d0d4a59500c8ca86fbadbf7ed5060d9300",
+          "task_level_compliance": "skipped",
+          "final_validator": "skipped",
+          "skip_validator": "true"
         },
         "fixture_commit": "20edd643be69cd87ed3ff667cec71b841a3075e6",
         "roles": {
@@ -206,7 +235,9 @@
               "effort": "high",
               "agent": "lead"
             },
-            "observed_models": []
+            "observed_models": [
+              "claude-sonnet-5-5"
+            ]
           },
           "crosscheck": {
             "configured": {
@@ -215,16 +246,20 @@
               "effort": "high",
               "agent": "crosscheck"
             },
-            "observed_models": []
+            "observed_models": [
+              "gpt-6.1-sol"
+            ]
           },
           "implementor": {
             "configured": {
-              "cli": "claude",
-              "model": "claude-sonnet-5-5",
+              "cli": "codex",
+              "model": "gpt-6.1-sol",
               "effort": "medium",
               "agent": "implementor"
             },
-            "observed_models": []
+            "observed_models": [
+              "gpt-6.1-sol"
+            ]
           },
           "tester": {
             "configured": {
@@ -233,7 +268,9 @@
               "effort": "medium",
               "agent": "tester"
             },
-            "observed_models": []
+            "observed_models": [
+              "gpt-6-luna"
+            ]
           }
         },
         "rubrics": {
@@ -249,7 +286,7 @@
           }
         },
         "automated_score": {
-          "points": 63.25,
+          "points": 62.375,
           "possible": 70,
           "complete": true
         },
@@ -277,141 +314,43 @@
         "outcome": {
           "evaluation_status": "complete",
           "product_verdict": "pass",
-          "official_score": 84,
+          "official_score": 88.375,
           "human_review_complete": true,
           "human_review_carried_from": null
         },
         "tokens": {
-          "complete": false,
-          "totals": null,
-          "detail": null,
-          "by_provider": {}
-        },
-        "active_duration_ms": null,
-        "cost": {
-          "state": "unavailable",
-          "complete": false,
-          "estimated_api_cost_usd": null,
-          "known_cost_subtotal_usd": 0
-        },
-        "failure": {
-          "failure": null,
-          "failed_phase": null,
-          "product_failure": null
-        },
-        "mismatch": null
-      },
-      {
-        "run_id": "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-3",
-        "added_at": "2026-10-21T03:34:33.672Z",
-        "added_by": "set",
-        "execution_run_id": "audited-implement-change-2026-10-19T03-51-48-100871243Z",
-        "rescored_from": null,
-        "runner_commit": "ba3705e2adda63f62947f691e8f9a4084f3f77ea",
-        "skills_commit": "a48227c8f8936c8bf27d414c26f70ca25d7de077",
-        "workflow": {
-          "workflow": "core:audited-implement-change",
-          "workflow_path": "b9d50d0445a33a2cddc6215cb91687e376a7ae874676d17ecf21dca4e3631414",
-          "task_level_compliance": "required",
-          "final_validator": "required",
-          "skip_validator": "false"
-        },
-        "fixture_commit": "20edd643be69cd87ed3ff667cec71b841a3075e6",
-        "roles": {
-          "lead": {
-            "configured": {
-              "cli": "claude",
-              "model": "claude-sonnet-5-5",
-              "effort": "high",
-              "agent": "lead"
-            },
-            "observed_models": []
+          "complete": true,
+          "totals": {
+            "input": 30659103,
+            "output": 242760,
+            "total": 30901863
           },
-          "crosscheck": {
-            "configured": {
-              "cli": "codex",
-              "model": "gpt-6.1-sol",
-              "effort": "high",
-              "agent": "crosscheck"
-            },
-            "observed_models": []
+          "detail": {
+            "input": 30659103,
+            "cached_input": 29997515,
+            "output": 242760,
+            "reasoning": 83078,
+            "cache_write": 93522
           },
-          "implementor": {
-            "configured": {
-              "cli": "claude",
-              "model": "claude-sonnet-5-5",
-              "effort": "medium",
-              "agent": "implementor"
+          "by_provider": {
+            "openai": {
+              "input": 27951030,
+              "output": 209852,
+              "total": 28160882
             },
-            "observed_models": []
-          },
-          "tester": {
-            "configured": {
-              "cli": "codex",
-              "model": "gpt-6-luna",
-              "effort": "medium",
-              "agent": "tester"
-            },
-            "observed_models": []
-          }
-        },
-        "rubrics": {
-          "automated": {
-            "rubric_id": "and-scene-automated-product",
-            "version": "15.0.0",
-            "sha256": "4ccfed10569bd3a39ae07703507a4b894fd115b868542962d1c6d99ef13162be"
-          },
-          "human": {
-            "rubric_id": "and-scene-human-review",
-            "version": "2.1.0",
-            "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
-          }
-        },
-        "automated_score": {
-          "points": 63,
-          "possible": 70,
-          "complete": true
-        },
-        "gates": {
-          "passed": true,
-          "verdicts": [
-            {
-              "id": "verification-build-whole-app",
-              "verdict": "pass"
-            },
-            {
-              "id": "verification-sample-outline",
-              "verdict": "pass"
-            },
-            {
-              "id": "verification-every-produced-step-renders",
-              "verdict": "pass"
-            },
-            {
-              "id": "verification-clear-outcome",
-              "verdict": "pass"
+            "anthropic": {
+              "input": 2708073,
+              "output": 32908,
+              "total": 2740981
             }
-          ]
+          }
         },
-        "outcome": {
-          "evaluation_status": "pending-human-review",
-          "product_verdict": "unavailable",
-          "official_score": null,
-          "human_review_complete": false,
-          "human_review_carried_from": null
-        },
-        "tokens": {
-          "complete": false,
-          "totals": null,
-          "detail": null,
-          "by_provider": {}
-        },
-        "active_duration_ms": null,
+        "active_duration_ms": 4217208,
         "cost": {
-          "state": "unavailable",
-          "complete": false,
-          "estimated_api_cost_usd": null,
-          "known_cost_subtotal_usd": 0
+          "state": "available",
+          "complete": true,
+          "estimated_api_cost_usd": 3.49821546,
+          "known_cost_subtotal_usd": 3.49821546
         },
         "failure": {
           "failure": null,
@@ -421,641 +360,73 @@
         "mismatch": null
       }
     ],
-    "median_rep": "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-2",
+    "median_rep": "8674857e-7e9a-46c9-b1cc-a4c72c47ed08-rep-2",
     "summary": {
-      "repetitions": 3,
+      "repetitions": 2,
       "automated_points": {
         "complete": true,
-        "mean": 63.75,
-        "min": 63,
-        "max": 65,
-        "stddev": 1.0897247358851685
+        "mean": 62.75,
+        "min": 62.375,
+        "max": 63.125,
+        "stddev": 0.5303300858899106
       },
       "tokens_total": {
-        "complete": false,
-        "missing_run_ids": [
-          "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-1",
-          "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-2",
-          "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-3"
-        ]
+        "complete": true,
+        "mean": 25925298,
+        "min": 20948733,
+        "max": 30901863,
+        "stddev": 7037925.717031262
       },
       "tokens_by_provider": {
-        "complete": false,
-        "missing_run_ids": [
-          "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-1",
-          "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-2",
-          "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-3"
-        ]
+        "complete": true,
+        "providers": {
+          "anthropic": {
+            "complete": true,
+            "mean": 2147833.5,
+            "min": 1554686,
+            "max": 2740981,
+            "stddev": 838837.2389876954
+          },
+          "openai": {
+            "complete": true,
+            "mean": 23777464.5,
+            "min": 19394047,
+            "max": 28160882,
+            "stddev": 6199088.478043566
+          }
+        }
       },
       "active_duration_ms": {
-        "complete": false,
-        "missing_run_ids": [
-          "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-1",
-          "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-2",
-          "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-3"
-        ]
+        "complete": true,
+        "mean": 4202934,
+        "min": 4188660,
+        "max": 4217208,
+        "stddev": 20186.48438931356
       },
       "estimated_cost_usd": {
-        "complete": false,
-        "missing_run_ids": [
-          "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-1",
-          "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-2",
-          "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-3"
-        ]
+        "complete": true,
+        "mean": 3.84902485,
+        "min": 3.49821546,
+        "max": 4.19983424,
+        "stddev": 0.49611939714583275
       }
     },
     "human_review": {
-      "run_id": "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-2",
-      "official_score": 84,
-      "points": 20.75,
+      "run_id": "8674857e-7e9a-46c9-b1cc-a4c72c47ed08-rep-2",
+      "official_score": 88.375,
+      "points": 26,
       "possible": 30,
       "rubric": {
         "rubric_id": "and-scene-human-review",
         "version": "2.1.0",
         "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
       },
-      "completed_at": "2026-10-21T03:33:17.960Z",
+      "completed_at": "2026-10-27T01:31:27.393Z",
       "is_current_median": true,
       "carried_from": null
     }
   },
-  "anchor": {
-    "source": "profile-change",
-    "reason": "definition-only starting line (plan then implement), factory default roles, runner 5e34be9, skills 6b65b34, fixture ba19a6a; rep 2 local (evals e7c224f), reps 3-4 from factory eval agent-evals#100; rep 1 discarded after the step-count hook drift fix",
-    "set_at": "2026-10-12T14:53:08.382Z",
-    "identity": {
-      "runner_commit": "5e34be9df055cd9ee4239f5f996fee328c28e067",
-      "skills_commit": "6b65b3420699ac742ba2a3b79a51989366abdbaa",
-      "workflow": {
-        "workflow": "core:plan-and-implement-change",
-        "workflow_path": "b3cad4349e99b57a12d1d37b70216f0ab8660725417664a7080de153f11b26a7",
-        "task_level_compliance": "required",
-        "final_validator": "required",
-        "skip_validator": "false"
-      },
-      "fixture_commit": "ba19a6ac3d6eca4034571cd23c87ce44f884b2e8",
-      "roles": {
-        "lead": {
-          "configured": {
-            "cli": "claude",
-            "model": "claude-sonnet-5-5",
-            "effort": "high",
-            "agent": "lead"
-          }
-        },
-        "crosscheck": {
-          "configured": {
-            "cli": "codex",
-            "model": "gpt-6.1-sol",
-            "effort": "high",
-            "agent": "crosscheck"
-          }
-        },
-        "implementor": {
-          "configured": {
-            "cli": "codex",
-            "model": "gpt-6-luna",
-            "effort": "medium",
-            "agent": "implementor"
-          }
-        },
-        "tester": {
-          "configured": {
-            "cli": "codex",
-            "model": "gpt-6-luna",
-            "effort": "medium",
-            "agent": "tester"
-          }
-        }
-      },
-      "rubrics": {
-        "automated": {
-          "rubric_id": "and-scene-automated-product",
-          "version": "15.0.0",
-          "sha256": "4ccfed10569bd3a39ae07703507a4b894fd115b868542962d1c6d99ef13162be"
-        },
-        "human": {
-          "rubric_id": "and-scene-human-review",
-          "version": "2.1.0",
-          "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
-        }
-      }
-    },
-    "reps": [
-      {
-        "run_id": "baseline-def-rep2",
-        "added_at": "2026-10-12T14:53:08.355Z",
-        "added_by": "set",
-        "execution_run_id": "plan-and-implement-change-2026-10-11T23-49-54-202921549Z",
-        "rescored_from": null,
-        "runner_commit": "5e34be9df055cd9ee4239f5f996fee328c28e067",
-        "skills_commit": "6b65b3420699ac742ba2a3b79a51989366abdbaa",
-        "workflow": {
-          "workflow": "core:plan-and-implement-change",
-          "workflow_path": "b3cad4349e99b57a12d1d37b70216f0ab8660725417664a7080de153f11b26a7",
-          "task_level_compliance": "required",
-          "final_validator": "required",
-          "skip_validator": "false"
-        },
-        "fixture_commit": "ba19a6ac3d6eca4034571cd23c87ce44f884b2e8",
-        "roles": {
-          "lead": {
-            "configured": {
-              "cli": "claude",
-              "model": "claude-sonnet-5-5",
-              "effort": "high",
-              "agent": "lead"
-            },
-            "observed_models": [
-              "claude-sonnet-5-5"
-            ]
-          },
-          "crosscheck": {
-            "configured": {
-              "cli": "codex",
-              "model": "gpt-6.1-sol",
-              "effort": "high",
-              "agent": "crosscheck"
-            },
-            "observed_models": [
-              "gpt-6.1-sol"
-            ]
-          },
-          "implementor": {
-            "configured": {
-              "cli": "codex",
-              "model": "gpt-6-luna",
-              "effort": "medium",
-              "agent": "implementor"
-            },
-            "observed_models": [
-              "gpt-6-luna"
-            ]
-          },
-          "tester": {
-            "configured": {
-              "cli": "codex",
-              "model": "gpt-6-luna",
-              "effort": "medium",
-              "agent": "tester"
-            },
-            "observed_models": [
-              "gpt-6-luna"
-            ]
-          }
-        },
-        "rubrics": {
-          "automated": {
-            "rubric_id": "and-scene-automated-product",
-            "version": "15.0.0",
-            "sha256": "4ccfed10569bd3a39ae07703507a4b894fd115b868542962d1c6d99ef13162be"
-          },
-          "human": {
-            "rubric_id": "and-scene-human-review",
-            "version": "2.1.0",
-            "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
-          }
-        },
-        "automated_score": {
-          "points": 54.9375,
-          "possible": 70,
-          "complete": true
-        },
-        "gates": {
-          "passed": true,
-          "verdicts": [
-            {
-              "id": "verification-build-whole-app",
-              "verdict": "pass"
-            },
-            {
-              "id": "verification-sample-outline",
-              "verdict": "pass"
-            },
-            {
-              "id": "verification-every-produced-step-renders",
-              "verdict": "pass"
-            },
-            {
-              "id": "verification-clear-outcome",
-              "verdict": "pass"
-            }
-          ]
-        },
-        "outcome": {
-          "evaluation_status": "complete",
-          "product_verdict": "pass",
-          "official_score": 74.9375,
-          "human_review_complete": true,
-          "human_review_carried_from": null
-        },
-        "tokens": {
-          "complete": false,
-          "totals": {
-            "input": 25726606,
-            "output": 231583,
-            "total": 25941449
-          },
-          "detail": {
-            "input": 25726606,
-            "cached_input": 25310572,
-            "cache_write": 688264,
-            "output": 231583,
-            "reasoning": 86862
-          },
-          "by_provider": {
-            "anthropic": {
-              "input": 5182589,
-              "output": 46811,
-              "total": 5229400
-            },
-            "openai": {
-              "input": 20544017,
-              "output": 168032,
-              "total": 20712049
-            },
-            "unknown": {
-              "input": 0,
-              "output": 16740,
-              "total": 0
-            }
-          }
-        },
-        "active_duration_ms": 5115874,
-        "cost": {
-          "state": "available",
-          "complete": true,
-          "estimated_api_cost_usd": 5.06232374,
-          "known_cost_subtotal_usd": 5.06232374
-        },
-        "failure": {
-          "failure": null,
-          "failed_phase": null,
-          "product_failure": null
-        },
-        "mismatch": null
-      },
-      {
-        "run_id": "60d571ea-259d-4c89-a77e-6050cef9293f-rep-1",
-        "added_at": "2026-10-12T14:53:08.369Z",
-        "added_by": "set",
-        "execution_run_id": "plan-and-implement-change-2026-10-12T01-33-02-679399141Z",
-        "rescored_from": null,
-        "runner_commit": "5e34be9df055cd9ee4239f5f996fee328c28e067",
-        "skills_commit": "6b65b3420699ac742ba2a3b79a51989366abdbaa",
-        "workflow": {
-          "workflow": "core:plan-and-implement-change",
-          "workflow_path": "b3cad4349e99b57a12d1d37b70216f0ab8660725417664a7080de153f11b26a7",
-          "task_level_compliance": "required",
-          "final_validator": "required",
-          "skip_validator": "false"
-        },
-        "fixture_commit": "ba19a6ac3d6eca4034571cd23c87ce44f884b2e8",
-        "roles": {
-          "lead": {
-            "configured": {
-              "cli": "claude",
-              "model": "claude-sonnet-5-5",
-              "effort": "high",
-              "agent": "lead"
-            },
-            "observed_models": [
-              "claude-sonnet-5-5"
-            ]
-          },
-          "crosscheck": {
-            "configured": {
-              "cli": "codex",
-              "model": "gpt-6.1-sol",
-              "effort": "high",
-              "agent": "crosscheck"
-            },
-            "observed_models": [
-              "gpt-6.1-sol"
-            ]
-          },
-          "implementor": {
-            "configured": {
-              "cli": "codex",
-              "model": "gpt-6-luna",
-              "effort": "medium",
-              "agent": "implementor"
-            },
-            "observed_models": [
-              "gpt-6-luna"
-            ]
-          },
-          "tester": {
-            "configured": {
-              "cli": "codex",
-              "model": "gpt-6-luna",
-              "effort": "medium",
-              "agent": "tester"
-            },
-            "observed_models": [
-              "gpt-6-luna"
-            ]
-          }
-        },
-        "rubrics": {
-          "automated": {
-            "rubric_id": "and-scene-automated-product",
-            "version": "15.0.0",
-            "sha256": "4ccfed10569bd3a39ae07703507a4b894fd115b868542962d1c6d99ef13162be"
-          },
-          "human": {
-            "rubric_id": "and-scene-human-review",
-            "version": "2.1.0",
-            "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
-          }
-        },
-        "automated_score": {
-          "points": 54.5625,
-          "possible": 70,
-          "complete": true
-        },
-        "gates": {
-          "passed": true,
-          "verdicts": [
-            {
-              "id": "verification-build-whole-app",
-              "verdict": "pass"
-            },
-            {
-              "id": "verification-sample-outline",
-              "verdict": "pass"
-            },
-            {
-              "id": "verification-every-produced-step-renders",
-              "verdict": "pass"
-            },
-            {
-              "id": "verification-clear-outcome",
-              "verdict": "pass"
-            }
-          ]
-        },
-        "outcome": {
-          "evaluation_status": "pending-human-review",
-          "product_verdict": "unavailable",
-          "official_score": null,
-          "human_review_complete": false,
-          "human_review_carried_from": null
-        },
-        "tokens": {
-          "complete": true,
-          "totals": {
-            "input": 66716228,
-            "output": 243081,
-            "total": 66959309
-          },
-          "detail": {
-            "input": 66716228,
-            "cached_input": 64564482,
-            "cache_write": 689596,
-            "output": 243081,
-            "reasoning": 69834
-          },
-          "by_provider": {
-            "anthropic": {
-              "input": 3606582,
-              "output": 45020,
-              "total": 3651602
-            },
-            "openai": {
-              "input": 62059846,
-              "output": 179885,
-              "total": 62239731
-            },
-            "unknown": {
-              "input": 1049800,
-              "output": 18176,
-              "total": 1067976
-            }
-          }
-        },
-        "active_duration_ms": 11924192,
-        "cost": {
-          "state": "available",
-          "complete": true,
-          "estimated_api_cost_usd": 5.05800912,
-          "known_cost_subtotal_usd": 5.05800912
-        },
-        "failure": {
-          "failure": null,
-          "failed_phase": null,
-          "product_failure": null
-        },
-        "mismatch": null
-      },
-      {
-        "run_id": "60d571ea-259d-4c89-a77e-6050cef9293f-rep-2",
-        "added_at": "2026-10-12T14:53:08.382Z",
-        "added_by": "set",
-        "execution_run_id": "plan-and-implement-change-2026-10-12T05-43-40-833564916Z",
-        "rescored_from": null,
-        "runner_commit": "5e34be9df055cd9ee4239f5f996fee328c28e067",
-        "skills_commit": "6b65b3420699ac742ba2a3b79a51989366abdbaa",
-        "workflow": {
-          "workflow": "core:plan-and-implement-change",
-          "workflow_path": "b3cad4349e99b57a12d1d37b70216f0ab8660725417664a7080de153f11b26a7",
-          "task_level_compliance": "required",
-          "final_validator": "required",
-          "skip_validator": "false"
-        },
-        "fixture_commit": "ba19a6ac3d6eca4034571cd23c87ce44f884b2e8",
-        "roles": {
-          "lead": {
-            "configured": {
-              "cli": "claude",
-              "model": "claude-sonnet-5-5",
-              "effort": "high",
-              "agent": "lead"
-            },
-            "observed_models": [
-              "claude-sonnet-5-5"
-            ]
-          },
-          "crosscheck": {
-            "configured": {
-              "cli": "codex",
-              "model": "gpt-6.1-sol",
-              "effort": "high",
-              "agent": "crosscheck"
-            },
-            "observed_models": [
-              "gpt-6.1-sol"
-            ]
-          },
-          "implementor": {
-            "configured": {
-              "cli": "codex",
-              "model": "gpt-6-luna",
-              "effort": "medium",
-              "agent": "implementor"
-            },
-            "observed_models": [
-              "gpt-6-luna"
-            ]
-          },
-          "tester": {
-            "configured": {
-              "cli": "codex",
-              "model": "gpt-6-luna",
-              "effort": "medium",
-              "agent": "tester"
-            },
-            "observed_models": [
-              "gpt-6-luna"
-            ]
-          }
-        },
-        "rubrics": {
-          "automated": {
-            "rubric_id": "and-scene-automated-product",
-            "version": "15.0.0",
-            "sha256": "4ccfed10569bd3a39ae07703507a4b894fd115b868542962d1c6d99ef13162be"
-          },
-          "human": {
-            "rubric_id": "and-scene-human-review",
-            "version": "2.1.0",
-            "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
-          }
-        },
-        "automated_score": {
-          "points": 58.875,
-          "possible": 70,
-          "complete": true
-        },
-        "gates": {
-          "passed": true,
-          "verdicts": [
-            {
-              "id": "verification-build-whole-app",
-              "verdict": "pass"
-            },
-            {
-              "id": "verification-sample-outline",
-              "verdict": "pass"
-            },
-            {
-              "id": "verification-every-produced-step-renders",
-              "verdict": "pass"
-            },
-            {
-              "id": "verification-clear-outcome",
-              "verdict": "pass"
-            }
-          ]
-        },
-        "outcome": {
-          "evaluation_status": "pending-human-review",
-          "product_verdict": "unavailable",
-          "official_score": null,
-          "human_review_complete": false,
-          "human_review_carried_from": null
-        },
-        "tokens": {
-          "complete": true,
-          "totals": {
-            "input": 39290756,
-            "output": 189511,
-            "total": 39480267
-          },
-          "detail": {
-            "input": 39290756,
-            "cached_input": 37440994,
-            "cache_write": 716281,
-            "output": 189511,
-            "reasoning": 56498
-          },
-          "by_provider": {
-            "anthropic": {
-              "input": 4415979,
-              "output": 42750,
-              "total": 4458729
-            },
-            "openai": {
-              "input": 34005241,
-              "output": 133601,
-              "total": 34138842
-            },
-            "unknown": {
-              "input": 869536,
-              "output": 13160,
-              "total": 882696
-            }
-          }
-        },
-        "active_duration_ms": 9244126,
-        "cost": {
-          "state": "available",
-          "complete": true,
-          "estimated_api_cost_usd": 4.57833134,
-          "known_cost_subtotal_usd": 4.57833134
-        },
-        "failure": {
-          "failure": null,
-          "failed_phase": null,
-          "product_failure": null
-        },
-        "mismatch": null
-      }
-    ],
-    "median_rep": "baseline-def-rep2",
-    "summary": {
-      "repetitions": 3,
-      "automated_points": {
-        "complete": true,
-        "mean": 56.125,
-        "min": 54.5625,
-        "max": 58.875,
-        "stddev": 2.388939356702049
-      },
-      "tokens_total": {
-        "complete": false,
-        "missing_run_ids": [
-          "baseline-def-rep2"
-        ]
-      },
-      "tokens_by_provider": {
-        "complete": false,
-        "missing_run_ids": [
-          "baseline-def-rep2"
-        ]
-      },
-      "active_duration_ms": {
-        "complete": true,
-        "mean": 8761397.333333334,
-        "min": 5115874,
-        "max": 11924192,
-        "stddev": 3429733.039392036
-      },
-      "estimated_cost_usd": {
-        "complete": true,
-        "mean": 4.899554733333334,
-        "min": 4.57833134,
-        "max": 5.06232374,
-        "stddev": 0.27819598362462417
-      }
-    },
-    "human_review": {
-      "run_id": "baseline-def-rep2",
-      "official_score": 74.9375,
-      "points": 20,
-      "possible": 30,
-      "rubric": {
-        "rubric_id": "and-scene-human-review",
-        "version": "2.1.0",
-        "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
-      },
-      "completed_at": "2026-10-12T14:51:58.580Z",
-      "is_current_median": true,
-      "carried_from": null
-    },
-    "anchored_at": "2026-10-12T14:53:18.226Z",
-    "anchor_reason": "first definition-start baseline"
-  },
+  "anchor": null,
   "history": [
     {
       "kind": "current",
@@ -1635,6 +1006,1072 @@
           "is_current_median": true,
           "carried_from": null
         }
+      }
+    },
+    {
+      "kind": "current",
+      "replaced_at": "2026-10-27T01:42:53.905Z",
+      "replacement_reason": "Lighter change v3 implement workflow (core:implement-change) without Agent Validator, gpt-6.1-sol implementor (Codagent-AI/agent-evals#163); adopted over the Sonnet implementor variant on score, cost, and time",
+      "record": {
+        "source": "accepted-candidate",
+        "reason": "audited implement-change v2.3 from factory eval agent-evals#133 (runner ba3705e, skills a48227c, fixture 20edd64; tester codex gpt-6-luna medium); rep 2, the median, human-reviewed 20.75/30",
+        "set_at": "2026-10-21T03:34:33.672Z",
+        "identity": {
+          "runner_commit": "ba3705e2adda63f62947f691e8f9a4084f3f77ea",
+          "skills_commit": "a48227c8f8936c8bf27d414c26f70ca25d7de077",
+          "workflow": {
+            "workflow": "core:audited-implement-change",
+            "workflow_path": "b9d50d0445a33a2cddc6215cb91687e376a7ae874676d17ecf21dca4e3631414",
+            "task_level_compliance": "required",
+            "final_validator": "required",
+            "skip_validator": "false"
+          },
+          "fixture_commit": "20edd643be69cd87ed3ff667cec71b841a3075e6",
+          "roles": {
+            "lead": {
+              "configured": {
+                "cli": "claude",
+                "model": "claude-sonnet-5-5",
+                "effort": "high",
+                "agent": "lead"
+              }
+            },
+            "crosscheck": {
+              "configured": {
+                "cli": "codex",
+                "model": "gpt-6.1-sol",
+                "effort": "high",
+                "agent": "crosscheck"
+              }
+            },
+            "implementor": {
+              "configured": {
+                "cli": "claude",
+                "model": "claude-sonnet-5-5",
+                "effort": "medium",
+                "agent": "implementor"
+              }
+            },
+            "tester": {
+              "configured": {
+                "cli": "codex",
+                "model": "gpt-6-luna",
+                "effort": "medium",
+                "agent": "tester"
+              }
+            }
+          },
+          "rubrics": {
+            "automated": {
+              "rubric_id": "and-scene-automated-product",
+              "version": "15.0.0",
+              "sha256": "4ccfed10569bd3a39ae07703507a4b894fd115b868542962d1c6d99ef13162be"
+            },
+            "human": {
+              "rubric_id": "and-scene-human-review",
+              "version": "2.1.0",
+              "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
+            }
+          }
+        },
+        "reps": [
+          {
+            "run_id": "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-1",
+            "added_at": "2026-10-21T03:34:33.649Z",
+            "added_by": "set",
+            "execution_run_id": "audited-implement-change-2026-10-18T22-38-54-57008848Z",
+            "rescored_from": null,
+            "runner_commit": "ba3705e2adda63f62947f691e8f9a4084f3f77ea",
+            "skills_commit": "a48227c8f8936c8bf27d414c26f70ca25d7de077",
+            "workflow": {
+              "workflow": "core:audited-implement-change",
+              "workflow_path": "b9d50d0445a33a2cddc6215cb91687e376a7ae874676d17ecf21dca4e3631414",
+              "task_level_compliance": "required",
+              "final_validator": "required",
+              "skip_validator": "false"
+            },
+            "fixture_commit": "20edd643be69cd87ed3ff667cec71b841a3075e6",
+            "roles": {
+              "lead": {
+                "configured": {
+                  "cli": "claude",
+                  "model": "claude-sonnet-5-5",
+                  "effort": "high",
+                  "agent": "lead"
+                },
+                "observed_models": []
+              },
+              "crosscheck": {
+                "configured": {
+                  "cli": "codex",
+                  "model": "gpt-6.1-sol",
+                  "effort": "high",
+                  "agent": "crosscheck"
+                },
+                "observed_models": []
+              },
+              "implementor": {
+                "configured": {
+                  "cli": "claude",
+                  "model": "claude-sonnet-5-5",
+                  "effort": "medium",
+                  "agent": "implementor"
+                },
+                "observed_models": []
+              },
+              "tester": {
+                "configured": {
+                  "cli": "codex",
+                  "model": "gpt-6-luna",
+                  "effort": "medium",
+                  "agent": "tester"
+                },
+                "observed_models": []
+              }
+            },
+            "rubrics": {
+              "automated": {
+                "rubric_id": "and-scene-automated-product",
+                "version": "15.0.0",
+                "sha256": "4ccfed10569bd3a39ae07703507a4b894fd115b868542962d1c6d99ef13162be"
+              },
+              "human": {
+                "rubric_id": "and-scene-human-review",
+                "version": "2.1.0",
+                "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
+              }
+            },
+            "automated_score": {
+              "points": 65,
+              "possible": 70,
+              "complete": true
+            },
+            "gates": {
+              "passed": true,
+              "verdicts": [
+                {
+                  "id": "verification-build-whole-app",
+                  "verdict": "pass"
+                },
+                {
+                  "id": "verification-sample-outline",
+                  "verdict": "pass"
+                },
+                {
+                  "id": "verification-every-produced-step-renders",
+                  "verdict": "pass"
+                },
+                {
+                  "id": "verification-clear-outcome",
+                  "verdict": "pass"
+                }
+              ]
+            },
+            "outcome": {
+              "evaluation_status": "pending-human-review",
+              "product_verdict": "unavailable",
+              "official_score": null,
+              "human_review_complete": false,
+              "human_review_carried_from": null
+            },
+            "tokens": {
+              "complete": false,
+              "totals": null,
+              "detail": null,
+              "by_provider": {}
+            },
+            "active_duration_ms": null,
+            "cost": {
+              "state": "unavailable",
+              "complete": false,
+              "estimated_api_cost_usd": null,
+              "known_cost_subtotal_usd": 0
+            },
+            "failure": {
+              "failure": null,
+              "failed_phase": null,
+              "product_failure": null
+            },
+            "mismatch": null
+          },
+          {
+            "run_id": "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-2",
+            "added_at": "2026-10-21T03:34:33.661Z",
+            "added_by": "set",
+            "execution_run_id": "audited-implement-change-2026-10-19T01-19-53-635587334Z",
+            "rescored_from": null,
+            "runner_commit": "ba3705e2adda63f62947f691e8f9a4084f3f77ea",
+            "skills_commit": "a48227c8f8936c8bf27d414c26f70ca25d7de077",
+            "workflow": {
+              "workflow": "core:audited-implement-change",
+              "workflow_path": "b9d50d0445a33a2cddc6215cb91687e376a7ae874676d17ecf21dca4e3631414",
+              "task_level_compliance": "required",
+              "final_validator": "required",
+              "skip_validator": "false"
+            },
+            "fixture_commit": "20edd643be69cd87ed3ff667cec71b841a3075e6",
+            "roles": {
+              "lead": {
+                "configured": {
+                  "cli": "claude",
+                  "model": "claude-sonnet-5-5",
+                  "effort": "high",
+                  "agent": "lead"
+                },
+                "observed_models": []
+              },
+              "crosscheck": {
+                "configured": {
+                  "cli": "codex",
+                  "model": "gpt-6.1-sol",
+                  "effort": "high",
+                  "agent": "crosscheck"
+                },
+                "observed_models": []
+              },
+              "implementor": {
+                "configured": {
+                  "cli": "claude",
+                  "model": "claude-sonnet-5-5",
+                  "effort": "medium",
+                  "agent": "implementor"
+                },
+                "observed_models": []
+              },
+              "tester": {
+                "configured": {
+                  "cli": "codex",
+                  "model": "gpt-6-luna",
+                  "effort": "medium",
+                  "agent": "tester"
+                },
+                "observed_models": []
+              }
+            },
+            "rubrics": {
+              "automated": {
+                "rubric_id": "and-scene-automated-product",
+                "version": "15.0.0",
+                "sha256": "4ccfed10569bd3a39ae07703507a4b894fd115b868542962d1c6d99ef13162be"
+              },
+              "human": {
+                "rubric_id": "and-scene-human-review",
+                "version": "2.1.0",
+                "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
+              }
+            },
+            "automated_score": {
+              "points": 63.25,
+              "possible": 70,
+              "complete": true
+            },
+            "gates": {
+              "passed": true,
+              "verdicts": [
+                {
+                  "id": "verification-build-whole-app",
+                  "verdict": "pass"
+                },
+                {
+                  "id": "verification-sample-outline",
+                  "verdict": "pass"
+                },
+                {
+                  "id": "verification-every-produced-step-renders",
+                  "verdict": "pass"
+                },
+                {
+                  "id": "verification-clear-outcome",
+                  "verdict": "pass"
+                }
+              ]
+            },
+            "outcome": {
+              "evaluation_status": "complete",
+              "product_verdict": "pass",
+              "official_score": 84,
+              "human_review_complete": true,
+              "human_review_carried_from": null
+            },
+            "tokens": {
+              "complete": false,
+              "totals": null,
+              "detail": null,
+              "by_provider": {}
+            },
+            "active_duration_ms": null,
+            "cost": {
+              "state": "unavailable",
+              "complete": false,
+              "estimated_api_cost_usd": null,
+              "known_cost_subtotal_usd": 0
+            },
+            "failure": {
+              "failure": null,
+              "failed_phase": null,
+              "product_failure": null
+            },
+            "mismatch": null
+          },
+          {
+            "run_id": "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-3",
+            "added_at": "2026-10-21T03:34:33.672Z",
+            "added_by": "set",
+            "execution_run_id": "audited-implement-change-2026-10-19T03-51-48-100871243Z",
+            "rescored_from": null,
+            "runner_commit": "ba3705e2adda63f62947f691e8f9a4084f3f77ea",
+            "skills_commit": "a48227c8f8936c8bf27d414c26f70ca25d7de077",
+            "workflow": {
+              "workflow": "core:audited-implement-change",
+              "workflow_path": "b9d50d0445a33a2cddc6215cb91687e376a7ae874676d17ecf21dca4e3631414",
+              "task_level_compliance": "required",
+              "final_validator": "required",
+              "skip_validator": "false"
+            },
+            "fixture_commit": "20edd643be69cd87ed3ff667cec71b841a3075e6",
+            "roles": {
+              "lead": {
+                "configured": {
+                  "cli": "claude",
+                  "model": "claude-sonnet-5-5",
+                  "effort": "high",
+                  "agent": "lead"
+                },
+                "observed_models": []
+              },
+              "crosscheck": {
+                "configured": {
+                  "cli": "codex",
+                  "model": "gpt-6.1-sol",
+                  "effort": "high",
+                  "agent": "crosscheck"
+                },
+                "observed_models": []
+              },
+              "implementor": {
+                "configured": {
+                  "cli": "claude",
+                  "model": "claude-sonnet-5-5",
+                  "effort": "medium",
+                  "agent": "implementor"
+                },
+                "observed_models": []
+              },
+              "tester": {
+                "configured": {
+                  "cli": "codex",
+                  "model": "gpt-6-luna",
+                  "effort": "medium",
+                  "agent": "tester"
+                },
+                "observed_models": []
+              }
+            },
+            "rubrics": {
+              "automated": {
+                "rubric_id": "and-scene-automated-product",
+                "version": "15.0.0",
+                "sha256": "4ccfed10569bd3a39ae07703507a4b894fd115b868542962d1c6d99ef13162be"
+              },
+              "human": {
+                "rubric_id": "and-scene-human-review",
+                "version": "2.1.0",
+                "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
+              }
+            },
+            "automated_score": {
+              "points": 63,
+              "possible": 70,
+              "complete": true
+            },
+            "gates": {
+              "passed": true,
+              "verdicts": [
+                {
+                  "id": "verification-build-whole-app",
+                  "verdict": "pass"
+                },
+                {
+                  "id": "verification-sample-outline",
+                  "verdict": "pass"
+                },
+                {
+                  "id": "verification-every-produced-step-renders",
+                  "verdict": "pass"
+                },
+                {
+                  "id": "verification-clear-outcome",
+                  "verdict": "pass"
+                }
+              ]
+            },
+            "outcome": {
+              "evaluation_status": "pending-human-review",
+              "product_verdict": "unavailable",
+              "official_score": null,
+              "human_review_complete": false,
+              "human_review_carried_from": null
+            },
+            "tokens": {
+              "complete": false,
+              "totals": null,
+              "detail": null,
+              "by_provider": {}
+            },
+            "active_duration_ms": null,
+            "cost": {
+              "state": "unavailable",
+              "complete": false,
+              "estimated_api_cost_usd": null,
+              "known_cost_subtotal_usd": 0
+            },
+            "failure": {
+              "failure": null,
+              "failed_phase": null,
+              "product_failure": null
+            },
+            "mismatch": null
+          }
+        ],
+        "median_rep": "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-2",
+        "summary": {
+          "repetitions": 3,
+          "automated_points": {
+            "complete": true,
+            "mean": 63.75,
+            "min": 63,
+            "max": 65,
+            "stddev": 1.0897247358851685
+          },
+          "tokens_total": {
+            "complete": false,
+            "missing_run_ids": [
+              "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-1",
+              "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-2",
+              "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-3"
+            ]
+          },
+          "tokens_by_provider": {
+            "complete": false,
+            "missing_run_ids": [
+              "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-1",
+              "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-2",
+              "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-3"
+            ]
+          },
+          "active_duration_ms": {
+            "complete": false,
+            "missing_run_ids": [
+              "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-1",
+              "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-2",
+              "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-3"
+            ]
+          },
+          "estimated_cost_usd": {
+            "complete": false,
+            "missing_run_ids": [
+              "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-1",
+              "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-2",
+              "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-3"
+            ]
+          }
+        },
+        "human_review": {
+          "run_id": "3ea9d7f8-ec19-4c97-9884-0e124badc2b6-rep-2",
+          "official_score": 84,
+          "points": 20.75,
+          "possible": 30,
+          "rubric": {
+            "rubric_id": "and-scene-human-review",
+            "version": "2.1.0",
+            "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
+          },
+          "completed_at": "2026-10-21T03:33:17.960Z",
+          "is_current_median": true,
+          "carried_from": null
+        }
+      }
+    },
+    {
+      "kind": "anchor",
+      "replaced_at": "2026-10-27T01:42:53.905Z",
+      "replacement_reason": "Lighter change v3 implement workflow (core:implement-change) without Agent Validator, gpt-6.1-sol implementor (Codagent-AI/agent-evals#163); adopted over the Sonnet implementor variant on score, cost, and time",
+      "record": {
+        "source": "profile-change",
+        "reason": "definition-only starting line (plan then implement), factory default roles, runner 5e34be9, skills 6b65b34, fixture ba19a6a; rep 2 local (evals e7c224f), reps 3-4 from factory eval agent-evals#100; rep 1 discarded after the step-count hook drift fix",
+        "set_at": "2026-10-12T14:53:08.382Z",
+        "identity": {
+          "runner_commit": "5e34be9df055cd9ee4239f5f996fee328c28e067",
+          "skills_commit": "6b65b3420699ac742ba2a3b79a51989366abdbaa",
+          "workflow": {
+            "workflow": "core:plan-and-implement-change",
+            "workflow_path": "b3cad4349e99b57a12d1d37b70216f0ab8660725417664a7080de153f11b26a7",
+            "task_level_compliance": "required",
+            "final_validator": "required",
+            "skip_validator": "false"
+          },
+          "fixture_commit": "ba19a6ac3d6eca4034571cd23c87ce44f884b2e8",
+          "roles": {
+            "lead": {
+              "configured": {
+                "cli": "claude",
+                "model": "claude-sonnet-5-5",
+                "effort": "high",
+                "agent": "lead"
+              }
+            },
+            "crosscheck": {
+              "configured": {
+                "cli": "codex",
+                "model": "gpt-6.1-sol",
+                "effort": "high",
+                "agent": "crosscheck"
+              }
+            },
+            "implementor": {
+              "configured": {
+                "cli": "codex",
+                "model": "gpt-6-luna",
+                "effort": "medium",
+                "agent": "implementor"
+              }
+            },
+            "tester": {
+              "configured": {
+                "cli": "codex",
+                "model": "gpt-6-luna",
+                "effort": "medium",
+                "agent": "tester"
+              }
+            }
+          },
+          "rubrics": {
+            "automated": {
+              "rubric_id": "and-scene-automated-product",
+              "version": "15.0.0",
+              "sha256": "4ccfed10569bd3a39ae07703507a4b894fd115b868542962d1c6d99ef13162be"
+            },
+            "human": {
+              "rubric_id": "and-scene-human-review",
+              "version": "2.1.0",
+              "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
+            }
+          }
+        },
+        "reps": [
+          {
+            "run_id": "baseline-def-rep2",
+            "added_at": "2026-10-12T14:53:08.355Z",
+            "added_by": "set",
+            "execution_run_id": "plan-and-implement-change-2026-10-11T23-49-54-202921549Z",
+            "rescored_from": null,
+            "runner_commit": "5e34be9df055cd9ee4239f5f996fee328c28e067",
+            "skills_commit": "6b65b3420699ac742ba2a3b79a51989366abdbaa",
+            "workflow": {
+              "workflow": "core:plan-and-implement-change",
+              "workflow_path": "b3cad4349e99b57a12d1d37b70216f0ab8660725417664a7080de153f11b26a7",
+              "task_level_compliance": "required",
+              "final_validator": "required",
+              "skip_validator": "false"
+            },
+            "fixture_commit": "ba19a6ac3d6eca4034571cd23c87ce44f884b2e8",
+            "roles": {
+              "lead": {
+                "configured": {
+                  "cli": "claude",
+                  "model": "claude-sonnet-5-5",
+                  "effort": "high",
+                  "agent": "lead"
+                },
+                "observed_models": [
+                  "claude-sonnet-5-5"
+                ]
+              },
+              "crosscheck": {
+                "configured": {
+                  "cli": "codex",
+                  "model": "gpt-6.1-sol",
+                  "effort": "high",
+                  "agent": "crosscheck"
+                },
+                "observed_models": [
+                  "gpt-6.1-sol"
+                ]
+              },
+              "implementor": {
+                "configured": {
+                  "cli": "codex",
+                  "model": "gpt-6-luna",
+                  "effort": "medium",
+                  "agent": "implementor"
+                },
+                "observed_models": [
+                  "gpt-6-luna"
+                ]
+              },
+              "tester": {
+                "configured": {
+                  "cli": "codex",
+                  "model": "gpt-6-luna",
+                  "effort": "medium",
+                  "agent": "tester"
+                },
+                "observed_models": [
+                  "gpt-6-luna"
+                ]
+              }
+            },
+            "rubrics": {
+              "automated": {
+                "rubric_id": "and-scene-automated-product",
+                "version": "15.0.0",
+                "sha256": "4ccfed10569bd3a39ae07703507a4b894fd115b868542962d1c6d99ef13162be"
+              },
+              "human": {
+                "rubric_id": "and-scene-human-review",
+                "version": "2.1.0",
+                "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
+              }
+            },
+            "automated_score": {
+              "points": 54.9375,
+              "possible": 70,
+              "complete": true
+            },
+            "gates": {
+              "passed": true,
+              "verdicts": [
+                {
+                  "id": "verification-build-whole-app",
+                  "verdict": "pass"
+                },
+                {
+                  "id": "verification-sample-outline",
+                  "verdict": "pass"
+                },
+                {
+                  "id": "verification-every-produced-step-renders",
+                  "verdict": "pass"
+                },
+                {
+                  "id": "verification-clear-outcome",
+                  "verdict": "pass"
+                }
+              ]
+            },
+            "outcome": {
+              "evaluation_status": "complete",
+              "product_verdict": "pass",
+              "official_score": 74.9375,
+              "human_review_complete": true,
+              "human_review_carried_from": null
+            },
+            "tokens": {
+              "complete": false,
+              "totals": {
+                "input": 25726606,
+                "output": 231583,
+                "total": 25941449
+              },
+              "detail": {
+                "input": 25726606,
+                "cached_input": 25310572,
+                "cache_write": 688264,
+                "output": 231583,
+                "reasoning": 86862
+              },
+              "by_provider": {
+                "anthropic": {
+                  "input": 5182589,
+                  "output": 46811,
+                  "total": 5229400
+                },
+                "openai": {
+                  "input": 20544017,
+                  "output": 168032,
+                  "total": 20712049
+                },
+                "unknown": {
+                  "input": 0,
+                  "output": 16740,
+                  "total": 0
+                }
+              }
+            },
+            "active_duration_ms": 5115874,
+            "cost": {
+              "state": "available",
+              "complete": true,
+              "estimated_api_cost_usd": 5.06232374,
+              "known_cost_subtotal_usd": 5.06232374
+            },
+            "failure": {
+              "failure": null,
+              "failed_phase": null,
+              "product_failure": null
+            },
+            "mismatch": null
+          },
+          {
+            "run_id": "60d571ea-259d-4c89-a77e-6050cef9293f-rep-1",
+            "added_at": "2026-10-12T14:53:08.369Z",
+            "added_by": "set",
+            "execution_run_id": "plan-and-implement-change-2026-10-12T01-33-02-679399141Z",
+            "rescored_from": null,
+            "runner_commit": "5e34be9df055cd9ee4239f5f996fee328c28e067",
+            "skills_commit": "6b65b3420699ac742ba2a3b79a51989366abdbaa",
+            "workflow": {
+              "workflow": "core:plan-and-implement-change",
+              "workflow_path": "b3cad4349e99b57a12d1d37b70216f0ab8660725417664a7080de153f11b26a7",
+              "task_level_compliance": "required",
+              "final_validator": "required",
+              "skip_validator": "false"
+            },
+            "fixture_commit": "ba19a6ac3d6eca4034571cd23c87ce44f884b2e8",
+            "roles": {
+              "lead": {
+                "configured": {
+                  "cli": "claude",
+                  "model": "claude-sonnet-5-5",
+                  "effort": "high",
+                  "agent": "lead"
+                },
+                "observed_models": [
+                  "claude-sonnet-5-5"
+                ]
+              },
+              "crosscheck": {
+                "configured": {
+                  "cli": "codex",
+                  "model": "gpt-6.1-sol",
+                  "effort": "high",
+                  "agent": "crosscheck"
+                },
+                "observed_models": [
+                  "gpt-6.1-sol"
+                ]
+              },
+              "implementor": {
+                "configured": {
+                  "cli": "codex",
+                  "model": "gpt-6-luna",
+                  "effort": "medium",
+                  "agent": "implementor"
+                },
+                "observed_models": [
+                  "gpt-6-luna"
+                ]
+              },
+              "tester": {
+                "configured": {
+                  "cli": "codex",
+                  "model": "gpt-6-luna",
+                  "effort": "medium",
+                  "agent": "tester"
+                },
+                "observed_models": [
+                  "gpt-6-luna"
+                ]
+              }
+            },
+            "rubrics": {
+              "automated": {
+                "rubric_id": "and-scene-automated-product",
+                "version": "15.0.0",
+                "sha256": "4ccfed10569bd3a39ae07703507a4b894fd115b868542962d1c6d99ef13162be"
+              },
+              "human": {
+                "rubric_id": "and-scene-human-review",
+                "version": "2.1.0",
+                "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
+              }
+            },
+            "automated_score": {
+              "points": 54.5625,
+              "possible": 70,
+              "complete": true
+            },
+            "gates": {
+              "passed": true,
+              "verdicts": [
+                {
+                  "id": "verification-build-whole-app",
+                  "verdict": "pass"
+                },
+                {
+                  "id": "verification-sample-outline",
+                  "verdict": "pass"
+                },
+                {
+                  "id": "verification-every-produced-step-renders",
+                  "verdict": "pass"
+                },
+                {
+                  "id": "verification-clear-outcome",
+                  "verdict": "pass"
+                }
+              ]
+            },
+            "outcome": {
+              "evaluation_status": "pending-human-review",
+              "product_verdict": "unavailable",
+              "official_score": null,
+              "human_review_complete": false,
+              "human_review_carried_from": null
+            },
+            "tokens": {
+              "complete": true,
+              "totals": {
+                "input": 66716228,
+                "output": 243081,
+                "total": 66959309
+              },
+              "detail": {
+                "input": 66716228,
+                "cached_input": 64564482,
+                "cache_write": 689596,
+                "output": 243081,
+                "reasoning": 69834
+              },
+              "by_provider": {
+                "anthropic": {
+                  "input": 3606582,
+                  "output": 45020,
+                  "total": 3651602
+                },
+                "openai": {
+                  "input": 62059846,
+                  "output": 179885,
+                  "total": 62239731
+                },
+                "unknown": {
+                  "input": 1049800,
+                  "output": 18176,
+                  "total": 1067976
+                }
+              }
+            },
+            "active_duration_ms": 11924192,
+            "cost": {
+              "state": "available",
+              "complete": true,
+              "estimated_api_cost_usd": 5.05800912,
+              "known_cost_subtotal_usd": 5.05800912
+            },
+            "failure": {
+              "failure": null,
+              "failed_phase": null,
+              "product_failure": null
+            },
+            "mismatch": null
+          },
+          {
+            "run_id": "60d571ea-259d-4c89-a77e-6050cef9293f-rep-2",
+            "added_at": "2026-10-12T14:53:08.382Z",
+            "added_by": "set",
+            "execution_run_id": "plan-and-implement-change-2026-10-12T05-43-40-833564916Z",
+            "rescored_from": null,
+            "runner_commit": "5e34be9df055cd9ee4239f5f996fee328c28e067",
+            "skills_commit": "6b65b3420699ac742ba2a3b79a51989366abdbaa",
+            "workflow": {
+              "workflow": "core:plan-and-implement-change",
+              "workflow_path": "b3cad4349e99b57a12d1d37b70216f0ab8660725417664a7080de153f11b26a7",
+              "task_level_compliance": "required",
+              "final_validator": "required",
+              "skip_validator": "false"
+            },
+            "fixture_commit": "ba19a6ac3d6eca4034571cd23c87ce44f884b2e8",
+            "roles": {
+              "lead": {
+                "configured": {
+                  "cli": "claude",
+                  "model": "claude-sonnet-5-5",
+                  "effort": "high",
+                  "agent": "lead"
+                },
+                "observed_models": [
+                  "claude-sonnet-5-5"
+                ]
+              },
+              "crosscheck": {
+                "configured": {
+                  "cli": "codex",
+                  "model": "gpt-6.1-sol",
+                  "effort": "high",
+                  "agent": "crosscheck"
+                },
+                "observed_models": [
+                  "gpt-6.1-sol"
+                ]
+              },
+              "implementor": {
+                "configured": {
+                  "cli": "codex",
+                  "model": "gpt-6-luna",
+                  "effort": "medium",
+                  "agent": "implementor"
+                },
+                "observed_models": [
+                  "gpt-6-luna"
+                ]
+              },
+              "tester": {
+                "configured": {
+                  "cli": "codex",
+                  "model": "gpt-6-luna",
+                  "effort": "medium",
+                  "agent": "tester"
+                },
+                "observed_models": [
+                  "gpt-6-luna"
+                ]
+              }
+            },
+            "rubrics": {
+              "automated": {
+                "rubric_id": "and-scene-automated-product",
+                "version": "15.0.0",
+                "sha256": "4ccfed10569bd3a39ae07703507a4b894fd115b868542962d1c6d99ef13162be"
+              },
+              "human": {
+                "rubric_id": "and-scene-human-review",
+                "version": "2.1.0",
+                "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
+              }
+            },
+            "automated_score": {
+              "points": 58.875,
+              "possible": 70,
+              "complete": true
+            },
+            "gates": {
+              "passed": true,
+              "verdicts": [
+                {
+                  "id": "verification-build-whole-app",
+                  "verdict": "pass"
+                },
+                {
+                  "id": "verification-sample-outline",
+                  "verdict": "pass"
+                },
+                {
+                  "id": "verification-every-produced-step-renders",
+                  "verdict": "pass"
+                },
+                {
+                  "id": "verification-clear-outcome",
+                  "verdict": "pass"
+                }
+              ]
+            },
+            "outcome": {
+              "evaluation_status": "pending-human-review",
+              "product_verdict": "unavailable",
+              "official_score": null,
+              "human_review_complete": false,
+              "human_review_carried_from": null
+            },
+            "tokens": {
+              "complete": true,
+              "totals": {
+                "input": 39290756,
+                "output": 189511,
+                "total": 39480267
+              },
+              "detail": {
+                "input": 39290756,
+                "cached_input": 37440994,
+                "cache_write": 716281,
+                "output": 189511,
+                "reasoning": 56498
+              },
+              "by_provider": {
+                "anthropic": {
+                  "input": 4415979,
+                  "output": 42750,
+                  "total": 4458729
+                },
+                "openai": {
+                  "input": 34005241,
+                  "output": 133601,
+                  "total": 34138842
+                },
+                "unknown": {
+                  "input": 869536,
+                  "output": 13160,
+                  "total": 882696
+                }
+              }
+            },
+            "active_duration_ms": 9244126,
+            "cost": {
+              "state": "available",
+              "complete": true,
+              "estimated_api_cost_usd": 4.57833134,
+              "known_cost_subtotal_usd": 4.57833134
+            },
+            "failure": {
+              "failure": null,
+              "failed_phase": null,
+              "product_failure": null
+            },
+            "mismatch": null
+          }
+        ],
+        "median_rep": "baseline-def-rep2",
+        "summary": {
+          "repetitions": 3,
+          "automated_points": {
+            "complete": true,
+            "mean": 56.125,
+            "min": 54.5625,
+            "max": 58.875,
+            "stddev": 2.388939356702049
+          },
+          "tokens_total": {
+            "complete": false,
+            "missing_run_ids": [
+              "baseline-def-rep2"
+            ]
+          },
+          "tokens_by_provider": {
+            "complete": false,
+            "missing_run_ids": [
+              "baseline-def-rep2"
+            ]
+          },
+          "active_duration_ms": {
+            "complete": true,
+            "mean": 8761397.333333334,
+            "min": 5115874,
+            "max": 11924192,
+            "stddev": 3429733.039392036
+          },
+          "estimated_cost_usd": {
+            "complete": true,
+            "mean": 4.899554733333334,
+            "min": 4.57833134,
+            "max": 5.06232374,
+            "stddev": 0.27819598362462417
+          }
+        },
+        "human_review": {
+          "run_id": "baseline-def-rep2",
+          "official_score": 74.9375,
+          "points": 20,
+          "possible": 30,
+          "rubric": {
+            "rubric_id": "and-scene-human-review",
+            "version": "2.1.0",
+            "sha256": "d748112c257fd2e233bd63b505b52fce42ea044740f0e533aa54c8861d43bbd4"
+          },
+          "completed_at": "2026-10-12T14:51:58.580Z",
+          "is_current_median": true,
+          "carried_from": null
+        },
+        "anchored_at": "2026-10-12T14:53:18.226Z",
+        "anchor_reason": "first definition-start baseline"
       }
     }
   ]
