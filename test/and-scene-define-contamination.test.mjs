@@ -247,3 +247,11 @@ c.commit()
 os._exit(0)`, db])
   assert.deepEqual(cursorRecords(db, { immutable: true }), [{ source: 'manifest' }])
 })
+
+test('regex evidence excerpts include the full matched text rather than the regex source length', () => {
+  const value = 'private ' + 'x'.repeat(400)
+  const patterns = { version: 1, patterns: [{ id: 'long', kind: 'locator', type: 'regex', value: '^private x+$' }] }
+  const audit = auditContamination({ transcripts: [{ session_id: 's', source: 's.jsonl', calls: [{ id: 'read', name: 'Read', input: '', output: 'before\n' + value + '\nafter' }] }], conversation: [], patterns })
+  assert.equal(audit.matches.length, 1)
+  assert.ok(audit.matches[0].excerpt.endsWith(value))
+})

@@ -35,9 +35,9 @@ export class LocalSandbox {
     const output = requireCommand(this.command('bash', args, { env: this.env, maxBuffer: 16 * 1024 * 1024 }), 'sandbox dry-run').stdout
     return { command: ['bash', ...args], output }
   }
-  async isActive() {
+  async activeContainers() {
     const ids = requireCommand(this.command('docker', ['ps', '--quiet'], { env: this.env }), 'Docker active-run probe').stdout.trim().split('\n').filter(Boolean)
-    if (!ids.length) return false
+    if (!ids.length) return []
     const containers = JSON.parse(requireCommand(this.command('docker', ['inspect', ...ids], { env: this.env }), 'Docker active-run inspection').stdout)
     let artifactPath
     try { artifactPath = realpathSync(this.artifactDir) } catch (error) {
@@ -49,7 +49,10 @@ export class LocalSandbox {
         artifactPath = this.artifactDir
       }
     }
-    return containers.some(container => container.Mounts?.some(mount => mount.Source === artifactPath || mount.Source === this.artifactDir))
+    return containers.flatMap((container, index) => container.Mounts?.some(mount => mount.Source === artifactPath || mount.Source === this.artifactDir) ? [container.Id ?? ids[index]] : [])
+  }
+  async isActive() {
+    return (await this.activeContainers()).length > 0
   }
   async start(profiles, mode) {
     const log = await open(join(this.runDir, 'logs/sandbox.log'), 'a')
@@ -63,10 +66,26 @@ export class LocalSandbox {
   }
   wait() { return this.completion }
   async stop() {
-    if (!this.child || this.child.exitCode !== null || this.child.signalCode !== null) return
-    try { process.kill(-this.child.pid, 'SIGTERM') } catch (error) { if (error.code !== 'ESRCH') throw error }
-    const timer = setTimeout(() => { try { process.kill(-this.child.pid, 'SIGKILL') } catch {} }, 5000)
-    try { await this.completion } finally { clearTimeout(timer) }
+    try {
+      if (this.child && this.child.exitCode === null && this.child.signalCode === null) {
+        try { process.kill(-this.child.pid, 'SIGTERM') } catch (error) { if (error.code !== 'ESRCH') throw error }
+        const timer = setTimeout(() => { try { process.kill(-this.child.pid, 'SIGKILL') } catch {} }, 5000)
+        try { await this.completion } finally { clearTimeout(timer) }
+      }
+    } finally {
+      // Killing the Docker CLI's process group does not stop its container.
+      // Include orphaned containers even when the launcher has already exited.
+      const ids = await this.activeContainers()
+      if (ids.length) {
+        const result = this.command('docker', ['kill', ...ids], { env: this.env })
+        // --rm may remove a container between inspection and kill. Ignore only
+        // that completed cleanup; a still-running sandbox must be reported.
+        if ((await this.activeContainers()).length) {
+          requireCommand(result, 'Docker sandbox termination')
+          throw new Error('Docker sandbox termination left an active container')
+        }
+      }
+    }
   }
   async retrieve(paths) {
     const output = []

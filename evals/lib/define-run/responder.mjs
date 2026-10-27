@@ -17,6 +17,7 @@ export async function runResponder({ runDir, exchangeDir, deadline, invoke, inpu
   const statePath = join(runDir, 'responder-state.json')
   let activeStep = null
   let pendingReplyPath
+  let pendingExchange
   try {
     await mkdir(runDir, { recursive: true })
     const stateText = await optionalText(statePath)
@@ -42,6 +43,7 @@ export async function runResponder({ runDir, exchangeDir, deadline, invoke, inpu
       // The exchange directory exists before Runner starts; no sandbox knowledge.
       for (const name of (await readdir(exchangeDir)).filter(name => name.endsWith('.request.json')).sort()) {
         if (processed.has(name)) continue
+        pendingExchange = undefined
         pendingReplyPath = join(exchangeDir, name.replace(/\.request\.json$/, '.reply.json'))
         const path = join(exchangeDir, name)
         if (!(await lstat(path)).isFile()) throw new Error('external-user request must be a regular file')
@@ -57,6 +59,7 @@ export async function runResponder({ runDir, exchangeDir, deadline, invoke, inpu
         let exchange = recorded.get(identity)
         const existingText = await optionalText(pendingReplyPath)
         if (exchange && exchange.agent_message !== request.agent_message) throw new Error('replayed request message differs from conversation')
+        pendingExchange = exchange
         if (existingText) {
           const existing = JSON.parse(existingText)
           if (!exchange || existing.schema_version !== 1 || existing.text !== exchange.text || Object.keys(existing).length !== 2) throw new Error('pre-existing reply differs from durable conversation')
@@ -92,6 +95,7 @@ export async function runResponder({ runDir, exchangeDir, deadline, invoke, inpu
           }
           await appendDurable(conversationPath, exchange)
           conversation.push(exchange); recorded.set(identity, exchange)
+          pendingExchange = exchange
           await onExchangeDurable(exchange)
         }
         if (signal?.aborted) return { status: 'stopped', last_active_step: activeStep, runner_run_id: runnerRunId }
@@ -107,8 +111,8 @@ export async function runResponder({ runDir, exchangeDir, deadline, invoke, inpu
     if (signal?.aborted) return { status: 'stopped', last_active_step: activeStep, runner_run_id: runnerRunId }
     const elapsed = error instanceof ElapsedTimeLimit
     if (pendingReplyPath) {
-      try { await atomicJson(pendingReplyPath, { schema_version: 1, action: 'abort', reason: elapsed ? 'elapsed-time limit' : error.message }) }
-      catch (publicationError) { return { status: 'evaluation-harness-failed', reason: `${error.message}; abort publication failed: ${publicationError.message}`, last_active_step: activeStep, runner_run_id: runnerRunId } }
+      try { await atomicJson(pendingReplyPath, pendingExchange ? { schema_version: 1, text: pendingExchange.text } : { schema_version: 1, action: 'abort', reason: elapsed ? 'elapsed-time limit' : error.message }) }
+      catch (publicationError) { return { status: 'evaluation-harness-failed', reason: `${error.message}; reply publication failed: ${publicationError.message}`, last_active_step: activeStep, runner_run_id: runnerRunId } }
     }
     return { status: elapsed ? 'elapsed-time-limit' : 'evaluation-harness-failed', reason: error.message, last_active_step: activeStep, runner_run_id: runnerRunId }
   }

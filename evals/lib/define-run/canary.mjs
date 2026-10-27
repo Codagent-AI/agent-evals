@@ -7,6 +7,8 @@ import { repoGit } from './starting-repo.mjs'
 
 // Tracked skill assets such as screenshots exceed execFileSync's 1 MiB default.
 const MAX_BLOB_BYTES = 64 * 1024 * 1024
+// Batch output includes the contents of every object, not just one blob.
+const MAX_REPOSITORY_BYTES = 256 * 1024 * 1024
 
 export function compilePatterns(data) {
   if (!Number.isInteger(data.version) || data.version < 1) throw new Error('pattern list requires a positive version')
@@ -16,12 +18,20 @@ export function compilePatterns(data) {
     ids.add(pattern.id)
     if (pattern.type === 'literal' && typeof pattern.value === 'string' && pattern.value.length) {
       const value = pattern.value.toLowerCase()
-      return { ...pattern, matches: text => text.toLowerCase().includes(value) }
+      const locate = text => {
+        const index = text.toLowerCase().indexOf(value)
+        return index < 0 ? null : { index, length: pattern.value.length }
+      }
+      return { ...pattern, matches: text => locate(text) !== null, locate }
     }
     if (pattern.type === 'regex' && pattern.value?.startsWith('^') && pattern.value.endsWith('$')) {
       const regex = new RegExp(pattern.value, 'im')
       if (regex.test('')) throw new Error(`empty regex pattern: ${pattern.id}`)
-      return { ...pattern, matches: text => regex.test(text) }
+      const locate = text => {
+        const match = regex.exec(text)
+        return match ? { index: match.index, length: match[0].length } : null
+      }
+      return { ...pattern, matches: text => locate(text) !== null, locate }
     }
     throw new Error(`pattern must be literal or anchored regex: ${pattern.id}`)
   })
@@ -37,7 +47,9 @@ export async function scanCanaries({ stagedDir, skillsDir, credentialFiles = [],
   const scanGitObjects = (repo, label) => {
     // --batch-all-objects includes unreachable loose and packed objects. The
     // batch framing uses byte lengths, so binary blobs cannot split records.
-    const output = repoGit(repo, ['cat-file', '--batch-all-objects', '--batch'], { encoding: null, maxBuffer: 64 * 1024 * 1024 })
+    let output
+    try { output = repoGit(repo, ['cat-file', '--batch-all-objects', '--batch'], { encoding: null, maxBuffer: MAX_REPOSITORY_BYTES }) }
+    catch (error) { throw new Error(`Git object scan incomplete: ${label}; unable to read all objects (batch limit ${MAX_REPOSITORY_BYTES} bytes): ${error.message}`, { cause: error }) }
     let offset = 0
     while (offset < output.length) {
       const headerEnd = output.indexOf(10, offset)
