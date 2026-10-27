@@ -10,7 +10,9 @@ const goldens = JSON.parse(await readFile(new URL('./fixtures/extraction/define-
 const files = async dir => (await readdir(join(root, dir))).filter(name => name.endsWith('.mjs')).sort()
 
 test('INT-001 the define-run modules produce byte-identical outputs at their new location and through the old import paths', async () => {
-  // The goldens were recorded before the modules moved: rubric build and check, scoring, discovery, the contamination
+  // Originally recorded before extraction; correction-aware rubric, score, ledger,
+  // job and report hashes were refreshed for policy v5 / rubric v11. Other hashes remain unchanged.
+  // The goldens cover: rubric build and check, scoring, discovery, the contamination
   // audit, reconciliation, Runner metrics ingestion, report rendering, comparison, judge jobs, the starting snapshot,
   // inventory and version checks, canary patterns, transcript parsing and the outcome/publication rules.
   const current = await compute(join(root, 'evals/lib/define-run'))

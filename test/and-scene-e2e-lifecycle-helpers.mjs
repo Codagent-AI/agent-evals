@@ -89,14 +89,14 @@ export async function lifecycle(t, { limitMs, stallMs, transcripts = {}, inspect
   const base = index => async req => {
     judgeCalls.push({ job: req.job, stage: req.audit_stage, index })
     if (req.audit_stage) return JSON.stringify({ results: req.criteria.map(id => ({ id, classification: harness.classification?.(req) ?? 'confirmed', rationale: 'matches', evidence: ['x'] })) })
-    if (req.job === 'discovery') return JSON.stringify({ results: req.criteria.map((id, n) => ({ id, asked: false, rationale: 'not asked', citations: [] })) })
+    if (req.job === 'discovery') return JSON.stringify({ results: req.criteria.map((id, n) => ({ id, asked: harness.asked?.(id) ?? false, rationale: 'not asked', citations: harness.asked?.(id) ? [{ path: null, start_line: null, end_line: null, gate: null, exchange: harness.exchangeId }] : [] })) })
     return JSON.stringify({ results: req.criteria.map(id => {
       if (req.job === 'disclosure-audit') {
-        const flagged = harness.leak?.(id, index)
-        return result(id, flagged ? 'met' : 'missing', flagged ? [{ path: null, start_line: null, end_line: null, gate: null, exchange: harness.exchangeId }] : [])
+        const flagged = harness.leak?.(id, index) || harness.corrected?.(id, index) || harness.overCorrection && id.startsWith('over-correction:')
+        return { ...result(id, flagged ? 'met' : 'missing', flagged ? [{ path: null, start_line: null, end_line: null, gate: null, exchange: harness.exchangeId }] : []), subject_id: id.startsWith('corrected:') ? id.slice(10) : null }
       }
       if (req.job === 'fidelity') return result(id, 'missing', [{ path: null, start_line: null, end_line: null, gate: null, exchange: harness.exchangeId }])
-      return result(id, 'met')
+      return result(id, harness.coverage?.(id) ?? 'met')
     }) })
   }
   // One simulated-user exchange, recorded consistently by the host, the Runner and the lead transcript.

@@ -28,17 +28,18 @@
     },
     "simulated-user-policy": {
       "path": "hidden/simulated-user-policy.md",
-      "version": 4,
+      "version": 5,
       "hashes": {
         "1": "dd144b83082dd1fc27c619aafbb412aec233b159bc2cbbfef26a5ecd64bf8d50",
         "2": "2eff2853ac4eda3cfbc1fb67ac972f7e50812c4919dd7ecaee573de020696548",
         "3": "80c5a2dbb111093da43397517e836cdc3be2024235e3ce9f4d0f6e0276a58c1e",
-        "4": "058968d5dc9d11d81282d213d70a077957d88b01eaf0678a102742afc959ef3a"
+        "4": "058968d5dc9d11d81282d213d70a077957d88b01eaf0678a102742afc959ef3a",
+        "5": "29804937b08ca76816a83c26e2abc4a39734099fc1a2c5d5226792ede4bd8994"
       }
     },
     "rubric": {
       "path": "rubric.json",
-      "version": 10,
+      "version": 11,
       "hashes": {
         "1": "8c1a28e2feaf4a5cbee01e0a94130033c5655bf212af7695f9c36adfb0d269d0",
         "2": "343a69925088dd2139da70513fcd8dc97d46df8dbfac98cbd93bfc41ab6470e1",
@@ -49,7 +50,8 @@
         "7": "3e19e6edee6b682b4e4011b954e4c5ebe88d23c8e2e0fb6d7749a53c85dbc0ec",
         "8": "213a73965d30c18f30d57c0c63bfc7cc5f15cb459e9e0ff372968cfa99b19399",
         "9": "f1b341c26f9377acc83d46b1ac203665edb42a9d419ad081af8faeaf83e70cd2",
-        "10": "402664141c6a9bf7dfd57927a22447b8d809abd211c405af85e4d6c56d0faca9"
+        "10": "402664141c6a9bf7dfd57927a22447b8d809abd211c405af85e4d6c56d0faca9",
+        "11": "f3781c6e1dd61fefb3d261c4b4cdbf63a4eb50fe69a1aade0b60c2db2441b3f2"
       }
     }
   }

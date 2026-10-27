@@ -152,3 +152,50 @@ test('a complete score is the result: no verdict field, and it is publishable on
   await writeResultArtifacts({ runDir, result })
   assert.match(await readFile(join(runDir, 'report.html'), 'utf8'), /81 \/ 100/)
 })
+
+import { rescoreEvaluation } from '../evals/agent-runner/and-scene-define/lib/rescore.mjs'
+import { sha256 } from '../evals/lib/define-run/files.mjs'
+import { buildRubric } from '../evals/lib/define-run/rubric.mjs'
+import { scoreDefinition } from '../evals/lib/define-run/scoring.mjs'
+test('INT-003 a retained v4/v10 run rescores with v11, empty corrections and unchanged arithmetic without publishing', async t => {
+  const root = await temp(t); const source = join(root, 'old'); const target = join(root, 'rescored')
+  const identity = { run_id: 'old', series_identity: { policy: 4, rubric: 10 }, candidate: { profiles: {} } }
+  const artifact = 'A single evolving scene.'
+  const contents = {
+    'conversation.jsonl': '', 'collected/proposal.md': artifact,
+    'phases/collection.json': JSON.stringify({ files: [{ path: 'proposal.md', sha256: sha256(artifact) }] }),
+    'evidence/identity.json': JSON.stringify(identity), 'evidence/runner/external-user/exchanges.jsonl': '', 'evidence/runner/audit.log': '',
+  }
+  for (const [path, text] of Object.entries(contents)) { await mkdir(join(source, path, '..'), { recursive: true }); await writeFile(join(source, path), text) }
+  await json(source, 'evidence-manifest.json', { schema_version: 1, identity, files: Object.entries(contents).map(([path, text]) => ({ path, sha256: sha256(text) })), invocations: [], outputs: [] })
+  const inventory = JSON.parse(await readFile('evals/agent-runner/and-scene-define/hidden/inventory.json', 'utf8'))
+  const rubric = JSON.parse(await readFile('evals/agent-runner/and-scene-define/rubric.json', 'utf8'))
+  const coverage = rubric.coverage.map(x => ({ id: x.id, verdict: 'met' })); const quality = rubric.quality.map(x => ({ id: x.id, verdict: 'met' }))
+  const oldScore = scoreDefinition({ rubric: { ...rubric, rubric_version: 10 }, coverage, quality, fidelity: [], gates: [] })
+  delete oldScore.corrected_items
+  oldScore.coverage = oldScore.coverage.map(({ corrected, correction_citations, earned_points, ...x }) => x)
+  const old = { ...identity, ...oldScore, mode: 'candidate' }
+  await json(source, 'judges/score.json', oldScore); await json(source, 'audits/disclosure.json', { status: 'clean', leaked_items: [], flags: [] }); await json(source, 'result.json', old)
+  const oldHtml = renderReport(old); await writeFile(join(source, 'report.html'), oldHtml)
+  const invoke = async req => JSON.stringify({ results: req.criteria.map(id => req.job === 'discovery' ? { id, asked: false, rationale: 'No question.', citations: [] } : { id, verdict: req.job === 'disclosure-audit' ? 'missing' : 'met', rationale: 'Committed in proposal.', evidence: ['proposal'], citations: req.job === 'disclosure-audit' ? [] : [{ path: 'proposal.md', start_line: 1, end_line: 1, gate: null, exchange: null }], subject_id: null, added_scope: [] }) })
+  const judges = { panel: ['claude', 'codex', 'codex'].map(family => ({ family, model: 'stub', effort: 'high', invoke })), decider: { family: 'claude', model: 'stub', effort: 'high', invoke } }
+  const { result } = await rescoreEvaluation({ runDir: target, rescoreFrom: source }, { judges, inspectEvaluator: async () => ({ seriesIdentity: { policy: 5, rubric: 11 } }), loadInputs: async () => ({ inventory, rubric, artifacts: { 'proposal.md': artifact }, conversation: [] }), gateCommand: async () => ({ status: 0 }) })
+  assert.equal(result.evaluation_status, 'complete', result.observed_error); assert.equal(result.rubric_version, 11)
+  assert.equal(result.total, old.total); assert.deepEqual(result.components, old.components)
+  assert.deepEqual(result.corrected_items, []); assert.equal(result.corrected_count, 0)
+  assert.match(await readFile(join(target, 'report.html'), 'utf8'), /Corrected items/)
+  assert.equal(await readFile(join(source, 'report.html'), 'utf8'), oldHtml)
+  assert.deepEqual(JSON.parse(await readFile(join(source, 'result.json'), 'utf8')), old)
+  await assert.rejects(readFile(join(target, 'publication.json')), { code: 'ENOENT' })
+  assert.equal(compareResults([old, result]).pairs[0].comparable, false)
+  const pair = compareResults([old, { ...result, series_identity: old.series_identity }]).pairs[0]
+  assert.equal(pair.comparable, true); assert.deepEqual(pair.runs.map(x => x.corrected_count), [0, 0])
+})
+test('corrected result fields and flags appear in the define report headline', async t => {
+  const runDir = await temp(t)
+  await json(runDir, 'audits/disclosure.json', { corrected_items: ['INV-001'], flags: [{ type: 'over-correction', rationale: '<wrong>', citations: [] }] })
+  const result = await assembleResult({ runDir, outcome: { evaluation_status: 'complete' } })
+  assert.deepEqual(result.corrected_items, ['INV-001']); assert.equal(result.corrected_count, 1)
+  const html = renderReport(result)
+  assert.match(html, /Corrected items/); assert.match(html, /over-correction/); assert.match(html, /&lt;wrong&gt;/)
+})

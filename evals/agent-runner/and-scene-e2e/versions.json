@@ -24,19 +24,21 @@
     },
     "define-inputs": {
       "path": "../and-scene-define/versions.json",
-      "version": 4,
+      "version": 5,
       "hashes": {
         "1": "1f9b527f4a1762acf8c4092261aa12760c63a96a12d9e110c855fd86d81e3676",
         "2": "b012fa001f1dc9661c68fc1410cc0ad1ab97b9b14e215b8d19da9c28fe8e35a6",
         "3": "2495f5173de417bd38a3e11aaf3ccefe1292cc49f6769e40cd7a5d9ac99cf9f0",
-        "4": "74114b05a1df3b9bd1bcfacca76d62b27567c7faaa904a8558e37e55092cc40b"
+        "4": "74114b05a1df3b9bd1bcfacca76d62b27567c7faaa904a8558e37e55092cc40b",
+        "5": "2b4828b212b9af3fbcb0290f99b961b90d5252362e937c5bc625bac1877b5083"
       }
     },
     "define-rubric": {
       "path": "../and-scene-define/rubric.json",
-      "version": 1,
+      "version": 2,
       "hashes": {
-        "1": "402664141c6a9bf7dfd57927a22447b8d809abd211c405af85e4d6c56d0faca9"
+        "1": "402664141c6a9bf7dfd57927a22447b8d809abd211c405af85e4d6c56d0faca9",
+        "2": "f3781c6e1dd61fefb3d261c4b4cdbf63a4eb50fe69a1aade0b60c2db2441b3f2"
       }
     },
     "human-rubric": {

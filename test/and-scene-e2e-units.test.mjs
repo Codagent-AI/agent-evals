@@ -298,3 +298,20 @@ test('I-57 eval-owned usage is reported only in its own ledger, never in the wor
   assert.deepEqual(result.eval_owned_usage.map(entry => entry.kind), ['simulated-user', 'judge']); assert.equal(result.eval_owned_usage_errors.length, 1)
   assert.ok(!JSON.stringify(result.workflow_metrics).includes('simulated-user')); assert.ok(!JSON.stringify(result.workflow_metrics).includes('scene-kit'))
 })
+
+test('INT-004 e2e pins the updated define ledger and rubric while retaining earlier hashes', async t => {
+  const ledger = JSON.parse(await readFile(join(E2E, 'versions.json'), 'utf8'))
+  assert.deepEqual(await checkVersions(), [])
+  for (const [name, version] of [['define-inputs', 5], ['define-rubric', 2]]) {
+    const entry = ledger.inputs[name]
+    assert.equal(entry.version, version)
+    for (let old = 1; old <= version; old++) assert.match(entry.hashes[old], /^[a-f0-9]{64}$/)
+    assert.equal(entry.hashes[version], createHash('sha256').update(await readFile(join(E2E, entry.path))).digest('hex'))
+  }
+  const root = await temp(t, 'e2e-correction-pins-'); const suiteRoot = join(root, 'and-scene-e2e')
+  await cp(E2E, suiteRoot, { recursive: true, filter: source => !source.includes('/results/') && !source.endsWith('/results') })
+  await cp(DEFINE_ROOT, join(root, 'and-scene-define'), { recursive: true, filter: source => !source.includes('/results/') && !source.endsWith('/results') })
+  await symlink(join(E2E, '../and-scene'), join(root, 'and-scene'))
+  await writeFile(join(root, 'and-scene-define/versions.json'), '{}')
+  assert.match((await checkVersions({ suiteRoot, previous: ledger })).join('\n'), /define-inputs: content hash differs/)
+})

@@ -284,7 +284,7 @@ async function phaseFixture(t) {
   const calls = []; let failure = false
   let override = null
   const invoke = index => async req => {
-    if (override) return override(req, base(index))
+    if (override) return override(req, base(index), index)
     return base(index)(req)
   }
   const base = index => async req => {
@@ -310,7 +310,7 @@ async function phaseFixture(t) {
     calls.push({ index: 3, job: req.job })
     const ruled = ruling?.(req)
     if (ruled) return ruled
-    return JSON.stringify({ results: req.criteria.map(id => req.job === 'discovery' ? { id, asked: true, rationale: 'Question in exchange', citations: [exchangeCitation] } : result(id, 'met', [exchangeCitation])) })
+    return JSON.stringify({ results: req.criteria.map(id => req.job === 'discovery' ? { id, asked: true, rationale: 'Question in exchange', citations: [exchangeCitation] } : ({ ...result(id, 'met', [exchangeCitation]), subject_id: id.startsWith('corrected:') ? id.slice(10) : null })) })
   } } }
   const phases = createJudgingPhases({ runDir, judges, getCheckpoint: () => checkpoint, setCheckpoint: x => { checkpoint = x }, persist: async () => {},
     loadInputs: async () => ({ inventory: subset, rubric, artifacts: inputs.artifacts, conversation: [exchange], reference: [], policy: 'Answer only what was asked.' }),
@@ -398,7 +398,7 @@ test('discovery retries asked without exchange and computes all five non-scoring
   } })
   assert.equal(calls, 2); assert.equal(output.results[0].asked, true)
   const ledger = discoveryLedger({ coverage: ['met','partial','missing','missing','leaked'].map((verdict,n) => ({ id: String(n), verdict })), asked: [true,false,false,true,false].map((asked,n) => ({ id: String(n), asked, citations: [] })) })
-  assert.deepEqual(ledger.counts, { discovered: 1, inferred: 1, missed: 1, 'asked-not-captured': 1, leaked: 1 })
+  assert.deepEqual(ledger.counts, { discovered: 1, inferred: 1, missed: 1, 'asked-not-captured': 1, leaked: 1, corrected: 0, 'corrected-not-captured': 0 })
 })
 test('gate execution failures are harness failures; invalid definitions remain diagnostic product gates', async t => {
   const f = await phaseFixture(t)
@@ -452,7 +452,7 @@ test('committed rubric records the approved settings and calibration limits', as
 })
 test('recorded settings round-trip while coverage criteria stay generated from the inventory', () => {
   const quality_points = Object.fromEntries(buildRubric(inventory).quality.map((x, n) => [x.id, [10, 8, 6, 3, 3][n]]))
-  const settings = { rubric_version: 4, provisional: true, components: { coverage: 50, artifact_quality: 30, fidelity: 20 }, weights: { mandatory: 3, 'acceptable-alternative': 1.5 }, quality_points,
+  const settings = { correction_fraction: 0.5, rubric_version: 4, provisional: true, components: { coverage: 50, artifact_quality: 30, fidelity: 20 }, weights: { mandatory: 3, 'acceptable-alternative': 1.5 }, quality_points,
     fidelity: { deduction_per_exchange: 4, floor: 2 }, calibration: { restructured_tolerance_items: 4, max_spread: 6, provisional: false, note: 'Calibrated by E2E-003.', expected_fail: ['variant-a'], approval: 'awaiting HT-002' },
     calibration_evidence: { report: 'calibration/run/report.html', input_hashes: { reference: 'abc' } } }
   const rubric = buildRubric(inventory, settings)
@@ -662,4 +662,95 @@ test('INT-007 a failed define job stops new jobs and lets in-flight jobs settle 
   // Fidelity is queued behind the failed quality job and never starts.
   assert.equal(units.fidelity, undefined)
   assert.ok(!f.log.some(x => x.job === 'fidelity'))
+})
+
+import { validateRubricSettings } from '../evals/lib/define-run/rubric.mjs'
+import { disclosureReport } from '../evals/lib/define-run/judging.mjs'
+import { validateFinding } from '../evals/lib/define-run/judge-jobs.mjs'
+test('correction fraction is declared, validated, rebuilt and does not change verdicts or possible points', () => {
+  for (const correction_fraction of [0, 1, -1, NaN, Infinity, '0.5', null]) assert.ok(validateRubricSettings({ ...RUBRIC_SETTINGS_DEFAULTS, correction_fraction }).some(x => /correction_fraction/.test(x)))
+  for (const correction_fraction of [0.01, 0.5, 0.99]) assert.deepEqual(validateRubricSettings({ ...RUBRIC_SETTINGS_DEFAULTS, correction_fraction }), [])
+  const rubric = buildRubric(inventory)
+  const data = { rubric, coverage: rubric.coverage.map(x => result(x.id, 'met')), quality: rubric.quality.map(x => result(x.id, 'met')), fidelity: [], gates: [] }
+  const id = rubric.coverage[0].id; const weight = rubric.coverage[0].weight
+  const plain = scoreDefinition(data)
+  assert.equal(plain.total, 100); assert.deepEqual(plain.corrected_items, [])
+  assert.deepEqual(scoreDefinition({ ...data, corrected: [] }), plain)
+  for (const verdict of ['met', 'partial', 'missing']) {
+    const coverage = data.coverage.map(x => x.id === id ? { ...x, verdict } : x)
+    const before = scoreDefinition({ ...data, coverage })
+    const scored = scoreDefinition({ ...data, coverage, corrected: [{ id, citations: [exchangeCitation] }] })
+    assert.equal(scored.coverage[0].verdict, verdict)
+    assert.equal(scored.coverage[0].earned_points, weight * rubric.verdict_values[verdict] * 0.5)
+    assert.equal(scored.components.coverage.possible, before.components.coverage.possible)
+    assert.equal(before.components.coverage.earned - scored.components.coverage.earned, weight * rubric.verdict_values[verdict] * 0.5)
+  }
+  const leaked = scoreDefinition({ ...data, leaked: [id], corrected: [{ id, citations: [exchangeCitation] }] })
+  assert.deepEqual(leaked.corrected_items, []); assert.equal(leaked.coverage[0].corrected, false)
+  assert.equal(leaked.components.coverage.possible, plain.components.coverage.possible - weight)
+  assert.throws(() => scoreDefinition({ ...data, corrected: [{ id: 'unknown' }] }), /unknown corrected/)
+})
+test('ledger distinguishes corrected, not captured, found by asking and never raised; leaks win', () => {
+  const coverage = ['met', 'partial', 'missing', 'met', 'missing', 'leaked'].map((verdict, n) => ({ id: String(n), verdict, corrected: n < 3 || n === 5, correction_citations: [exchangeCitation] }))
+  const ledger = discoveryLedger({ coverage, asked: coverage.map((c, n) => ({ id: c.id, asked: n === 1 || n === 3, citations: [] })) })
+  assert.deepEqual(ledger.items.map(x => x.outcome), ['corrected', 'corrected', 'corrected-not-captured', 'discovered', 'missed', 'leaked'])
+  for (const entry of ledger.items.slice(0, 3)) { assert.equal(entry.corrected, true); assert.deepEqual(entry.citations, [exchangeCitation]); assert.equal(typeof entry.asked, 'boolean') }
+  assert.equal(ledger.items[5].corrected, false)
+})
+test('correction audit fields separate flags, dissent and corrections, with leak precedence', () => {
+  const correction = id => result(`corrected:${id}`, 'met', [exchangeCitation])
+  const a = correction('A'); const b = correction('B'); const flag = result(`over-correction:${exchangeIdentity(exchange)}`, 'met', [exchangeCitation])
+  const clean = disclosureReport({ results: [a], votes: [a] })
+  assert.equal(clean.status, 'clean'); assert.deepEqual(clean.corrected_items, ['A']); assert.deepEqual(clean.flags, [])
+  assert.equal(clean.panel_corrections.length, 1)
+  const report = disclosureReport({ results: [a, b, result('leak:B', 'met', [exchangeCitation]), flag], votes: [a, b, flag] })
+  assert.deepEqual(report.corrected_items, ['A']); assert.deepEqual(report.corrections, [{ id: 'A', citations: [exchangeCitation] }]); assert.equal(report.status, 'flagged')
+  assert.ok(report.flags.some(x => x.type === 'over-correction')); assert.ok(report.panel_flags.some(x => x.type === 'over-correction'))
+  assert.ok(report.flags.every(x => x.type !== 'corrected'))
+})
+test('audit builds binary correction criteria and requires matching exchange citations', () => {
+  const job = makeJobs({ inventory, rubric: buildRubric(inventory), artifacts: {}, conversation: [exchange], gates: [] }).find(x => x.kind === 'disclosure')
+  assert.ok(job.criteria.includes(`corrected:${item.id}`)); assert.ok(job.criteria.includes(`over-correction:${exchangeIdentity(exchange)}`))
+  assert.ok(!job.criteria.some(id => id === `corrected:${inventory.items.find(x => x.class === 'preference').id}`))
+  const corrected = { ...result(`corrected:${item.id}`, 'met', [exchangeCitation]), subject_id: item.id }
+  assert.equal(validateFinding(corrected, job), true)
+  assert.throws(() => validateFinding({ ...corrected, verdict: 'partial' }, job), /binary/)
+  assert.throws(() => validateFinding({ ...corrected, citations: [] }, job), /exchange/)
+  const over = result(`over-correction:${exchangeIdentity(exchange)}`, 'met', [exchangeCitation])
+  assert.equal(validateFinding(over, job), true)
+  assert.throws(() => validateFinding({ ...over, id: 'over-correction:other' }, job), /different exchange/)
+})
+test('INT-001 real judging lifecycle settles corrections, preserves leak precedence and passes fidelity inputs', async t => {
+  const f = await phaseFixture(t); const [A, B, C, D] = f.subset.items.map(x => x.id)
+  let correctionInputs
+  f.rule(req => req.job === 'discovery' ? JSON.stringify({ results: req.criteria.map(id => ({ id, asked: false, rationale: 'Not asked', citations: [] })) }) : null)
+  f.override(async (req, base, index) => {
+    if (req.audit_stage) return base(req)
+    if (req.job === 'discovery') return JSON.stringify({ results: req.criteria.map(id => ({ id, asked: false, rationale: 'Not asked', citations: [] })) })
+    if (req.job === 'fidelity') {
+      const packet = JSON.parse(req.prompt.split('# BEGIN UNTRUSTED JOB INPUTS\n')[1].split('\n# END UNTRUSTED JOB INPUTS')[0])
+      correctionInputs = packet.correction_exchanges
+      return base(req)
+    }
+    if (req.job === 'disclosure-audit') return JSON.stringify({ results: req.criteria.map(id => {
+      const corrected = id.startsWith('corrected:') && [A, B, C].includes(id.slice(10))
+      // Claude plus one Codex for A; Codex only for B; consensus for C.
+      const met = id === `leak:${C}` || id.startsWith('over-correction:') || corrected && (id === `corrected:${A}` ? index !== 2 : id === `corrected:${B}` ? index !== 0 : true)
+      return { ...result(id, met ? 'met' : 'missing', met ? [exchangeCitation] : []), subject_id: corrected ? id.slice(10) : null }
+    }) })
+    if (req.job.startsWith('coverage:')) return JSON.stringify({ results: req.criteria.map(id => result(id, [B, D].includes(id) ? 'missing' : 'met', [citation])) })
+    return base(req)
+  })
+  await f.phases['disclosure-audit'](); await f.phases['gates-and-judging'](); await f.phases.discovery()
+  const audit = JSON.parse(await readFile(join(f.runDir, 'audits/disclosure.json'), 'utf8'))
+  const score = JSON.parse(await readFile(join(f.runDir, 'judges/score.json'), 'utf8'))
+  const ledger = JSON.parse(await readFile(join(f.runDir, 'discovery/ledger.json'), 'utf8'))
+  assert.deepEqual(audit.corrected_items, [A, B]); assert.deepEqual(audit.leaked_items, [C]); assert.equal(audit.status, 'flagged')
+  assert.deepEqual(score.corrected_items, [A, B]); assert.equal(score.coverage[0].earned_points, f.rubric.coverage[0].weight * 0.5)
+  assert.equal(score.coverage[1].earned_points, 0); assert.equal(score.coverage[1].verdict, 'missing')
+  assert.deepEqual(correctionInputs, [exchangeIdentity(exchange)])
+  assert.deepEqual(ledger.items.slice(0, 4).map(x => x.outcome), ['corrected', 'corrected-not-captured', 'leaked', 'missed'])
+  assert.deepEqual(ledger.items[1].citations, [exchangeCitation])
+  const uncorrected = scoreDefinition({ rubric: f.rubric, coverage: score.coverage.map(x => ({ ...x, verdict: x.coverage_verdict ?? x.verdict })), quality: score.quality, fidelity: score.fidelity, leaked: [C], gates: score.gates })
+  assert.equal(uncorrected.components.coverage.earned - score.components.coverage.earned, f.rubric.coverage[0].weight * 0.5)
 })

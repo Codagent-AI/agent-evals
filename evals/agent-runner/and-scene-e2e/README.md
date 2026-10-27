@@ -199,3 +199,14 @@ npm run check
 The real-browser cases for the generic replay live in
 `test/real-browser/adversarial.test.mjs`; run them by hand, one at a time, per the
 repository `AGENTS.md`.
+
+
+The requirement trace retains boolean `asked` and adds `asked_part`: `yes`,
+`corrected`, or `no`. A settled correction wins over the raw asked decision and
+carries `correction_citations`. A corrected item missing from the definition is
+`discovered-not-defined`, even when no question was asked. Outcome names and the
+product score are unchanged. Reports print `asked: corrected` and list corrected
+items and report-only over-correction flags. The shared define rubric v11 applies
+half credit to corrected coverage while keeping the verdict and possible points.
+Corrections and over-correction flags never end a run at the define checkpoint;
+only settled leaks do. Old results with no correction fields mean no corrections.

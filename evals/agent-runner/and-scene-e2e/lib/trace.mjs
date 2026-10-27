@@ -20,13 +20,14 @@ export function buildTrace({ inventory, rubric, asked, coverage, product }) {
     // Delivery follows the mapped criteria alone, never a further judgment; an empty mapping is never a vacuous pass.
     const delivery = !product ? 'unavailable' : !criteria.length ? 'not-graded' : observed.length < criteria.length ? 'unavailable' : observed.every(verdict => verdict === 'pass') ? 'delivered' : observed.some(verdict => verdict === 'pass') ? 'partly-delivered' : 'not-delivered'
     const verdict = cover?.verdict ?? 'missing'
+    const asked_part = cover?.corrected ? 'corrected' : decision?.asked ? 'yes' : 'no'
     let outcome
-    if (!covered(verdict)) outcome = decision?.asked ? 'discovered-not-defined' : 'not-discovered'
+    if (!covered(verdict)) outcome = asked_part !== 'no' ? 'discovered-not-defined' : 'not-discovered'
     else if (delivery === 'unavailable') outcome = 'delivery-unavailable'
     else if (delivery === 'not-graded') outcome = 'not-graded-in-product'
     else outcome = { delivered: 'delivered', 'partly-delivered': 'partially-delivered', 'not-delivered': 'defined-not-delivered' }[delivery]
     const shared = criteria.filter(id => itemsOfCriterion.get(id).length > 1).map(id => ({ criterion: id, shared_with: itemsOfCriterion.get(id).filter(other => other !== item.id) }))
-    return { id: item.id, class: item.class, title: item.title, asked: Boolean(decision?.asked), exchange_citations: decision?.asked ? decision.citations ?? [] : [], coverage_verdict: verdict, product_delivery: delivery, mapped_criteria: criteria, shared_criteria: shared, outcome }
+    return { id: item.id, class: item.class, title: item.title, asked: Boolean(decision?.asked), asked_part, correction_citations: cover?.correction_citations ?? [], exchange_citations: decision?.asked ? decision.citations ?? [] : [], coverage_verdict: verdict, product_delivery: delivery, mapped_criteria: criteria, shared_criteria: shared, outcome }
   })
   const counts = Object.fromEntries(OUTCOMES.map(outcome => [outcome, items.filter(item => item.outcome === outcome).length]))
   return { scoring: false, counts, items }

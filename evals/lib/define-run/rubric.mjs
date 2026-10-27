@@ -18,6 +18,7 @@ export const QUALITY_CRITERIA = [
 // rubric has no pass threshold.
 export const CALIBRATION_LIMITS_NOTE = 'Provisional limits pending E2E-003 calibration evidence and maintainer approval (HT-002). restructured_tolerance_items: total coverage weight the restructured reference may lose versus the reference. max_spread: total-score points by which repeated judging of one input may differ.'
 export const RUBRIC_SETTINGS_DEFAULTS = Object.freeze({
+  correction_fraction: 0.5,
   rubric_version: 3, provisional: true,
   components: { coverage: 70, artifact_quality: 15, fidelity: 15 },
   weights: { mandatory: 2, 'acceptable-alternative': 1 },
@@ -30,7 +31,7 @@ export const RUBRIC_SETTINGS_DEFAULTS = Object.freeze({
 export function rubricSettings(rubric = {}) {
   const d = RUBRIC_SETTINGS_DEFAULTS
   const quality = Array.isArray(rubric.quality) ? Object.fromEntries(rubric.quality.map(x => [x.id, x.points])) : null
-  return { rubric_version: rubric.rubric_version ?? d.rubric_version, provisional: rubric.provisional ?? d.provisional,
+  return { correction_fraction: rubric.correction_fraction ?? d.correction_fraction, rubric_version: rubric.rubric_version ?? d.rubric_version, provisional: rubric.provisional ?? d.provisional,
     components: { ...d.components, ...rubric.components }, weights: { ...d.weights, ...rubric.weights },
     quality_points: quality ?? { ...d.quality_points },
     fidelity: { deduction_per_exchange: rubric.fidelity?.deduction_per_exchange ?? d.fidelity.deduction_per_exchange, floor: rubric.fidelity?.floor ?? d.fidelity.floor },
@@ -41,6 +42,7 @@ const finite = (value, min = 0) => typeof value === 'number' && Number.isFinite(
 const near = (a, b) => Math.abs(a - b) < 1e-9
 export function validateRubricSettings(settings) {
   const errors = []
+  if (!finite(settings.correction_fraction) || settings.correction_fraction <= 0 || settings.correction_fraction >= 1) errors.push('rubric correction_fraction must be strictly between 0 and 1')
   const { components, weights, quality_points: points, fidelity, calibration } = settings
   if (!['coverage', 'artifact_quality', 'fidelity'].every(key => finite(components?.[key])) || Object.keys(components ?? {}).length !== 3) errors.push('rubric components must be coverage, artifact_quality and fidelity points')
   else if (!near(components.coverage + components.artifact_quality + components.fidelity, 100)) errors.push('rubric components must sum to 100 points')
@@ -58,6 +60,8 @@ export function buildRubric(inventory, overrides = {}) {
   return { rubric_version: settings.rubric_version, inventory_version: inventory.inventory_version,
     provisional: settings.provisional, components: { ...settings.components },
     weights: { ...settings.weights }, verdict_values: { met: 1, partial: 0.5, missing: 0 },
+    correction_fraction: settings.correction_fraction,
+    corrected_items: 'Multiply earned coverage points by correction_fraction; keep possible points and verdicts unchanged. Leaks take precedence.',
     leaked_items: 'Drop from earned and possible coverage; scale over remaining items. If none remain, coverage and the total are unavailable.',
     coverage: inventory.items.filter(x => x.class !== 'preference').map(x => ({ id: x.id, area: x.area, class: x.class, weight: settings.weights[x.class], anchors: x.anchors })),
     quality: QUALITY_CRITERIA.map(x => ({ ...x, points: settings.quality_points?.[x.id] })),

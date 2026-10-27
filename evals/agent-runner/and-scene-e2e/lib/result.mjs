@@ -44,6 +44,7 @@ export async function assembleResult({ runDir, outcome, checkpoint, rubric = nul
     product_score: delivered, product: product ? { ...product, rubric: { id: rubric?.rubric_id ?? product.score.rubric_id, version: rubric?.version ?? product.score.rubric_version, provisional: rubric?.provisional ?? product.score.provisional, exclusions: rubric?.exclusions ?? [] } } : null,
     requirement_trace: scored ? trace : null,
     contamination_audit: { pass_1: pass1, pass_2: pass2 }, disclosure_audit: disclosure, reconciliation,
+    corrected_items: disclosure?.corrected_items ?? (scored ? definitionScore?.corrected_items : null) ?? [], corrected_count: (disclosure?.corrected_items ?? (scored ? definitionScore?.corrected_items : null) ?? []).length,
     leaked_items: disclosure?.leaked_items ?? outcome.leaked_items ?? [], residual_risk: RESIDUAL_RISK,
     provenance: { evidence_manifest: manifest, define_evidence_manifest: defineManifest, collection, pinned_inputs: checkpoint?.series_identity ?? null },
     workflow_metrics: metrics, eval_owned_usage: eval_owned.records, eval_owned_usage_errors: eval_owned.errors,

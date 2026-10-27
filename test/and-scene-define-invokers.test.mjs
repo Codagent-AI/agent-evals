@@ -111,7 +111,7 @@ test('a failed session continuation retries in a new session from the full conve
 test('policy content is version pinned; tampering without a bump fails', async t => {
   assert.deepEqual(await checkVersions(), [])
   const inputs = await loadSimulatedUserInputs()
-  assert.equal(inputs.policyVersion, 4)
+  assert.equal(inputs.policyVersion, 5)
   const stub = await claudeStub(t, [])
   const root = resolve('evals/agent-runner/and-scene-define')
   const ledger = JSON.parse(await readFile(join(root, 'versions.json'), 'utf8'))

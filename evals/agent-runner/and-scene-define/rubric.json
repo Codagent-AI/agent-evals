@@ -1,5 +1,5 @@
 {
-  "rubric_version": 10,
+  "rubric_version": 11,
   "inventory_version": 6,
   "provisional": false,
   "components": {
@@ -16,6 +16,8 @@
     "partial": 0.5,
     "missing": 0
   },
+  "correction_fraction": 0.5,
+  "corrected_items": "Multiply earned coverage points by correction_fraction; keep possible points and verdicts unchanged. Leaks take precedence.",
   "leaked_items": "Drop from earned and possible coverage; scale over remaining items. If none remain, coverage and the total are unavailable.",
   "coverage": [
     {

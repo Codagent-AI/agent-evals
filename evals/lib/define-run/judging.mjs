@@ -32,10 +32,12 @@ export async function loadJudgingInputs({ runDir, suiteRoot = SUITE_ROOT }) {
 }
 export function disclosureReport(record) {
   const leaked_items = record.results.filter(x => x.id.startsWith('leak:') && x.verdict === 'met').map(x => x.id.slice(5))
-  const flags = record.results.filter(x => x.verdict === 'met').map(x => ({ type: x.id.startsWith('leak:') ? 'over-disclosure' : x.id.slice(0, x.id.indexOf(':')), inventory_items: x.id.startsWith('leak:') ? [x.id.slice(5)] : [], citations: x.citations, rationale: x.rationale, basis: x.basis }))
+  const corrections = record.results.filter(x => x.id.startsWith('corrected:') && x.verdict === 'met' && !leaked_items.includes(x.id.slice(10))).map(x => ({ id: x.id.slice(10), citations: x.citations }))
+  const panel_corrections = record.votes.filter(x => x.id.startsWith('corrected:'))
+  const flags = record.results.filter(x => x.verdict === 'met' && !x.id.startsWith('corrected:')).map(x => ({ type: x.id.startsWith('leak:') ? 'over-disclosure' : x.id.slice(0, x.id.indexOf(':')), inventory_items: x.id.startsWith('leak:') ? [x.id.slice(5)] : [], citations: x.citations, rationale: x.rationale, basis: x.basis }))
   // Retain dissenting flags too, even if settlement rules out a leak.
-  const panel_flags = record.votes.filter(x => x.verdict === 'met').map(x => ({ criterion: x.id, type: x.id.startsWith('leak:') ? 'over-disclosure' : x.id.slice(0, x.id.indexOf(':')), inventory_items: x.id.startsWith('leak:') ? [x.id.slice(5)] : [], panel_index: x.panel_index, citations: x.citations, rationale: x.rationale }))
-  return { status: flags.length || panel_flags.length ? 'flagged' : 'clean', flags, panel_flags, leaked_items, panel: record }
+  const panel_flags = record.votes.filter(x => x.verdict === 'met' && !x.id.startsWith('corrected:')).map(x => ({ criterion: x.id, type: x.id.startsWith('leak:') ? 'over-disclosure' : x.id.slice(0, x.id.indexOf(':')), inventory_items: x.id.startsWith('leak:') ? [x.id.slice(5)] : [], panel_index: x.panel_index, citations: x.citations, rationale: x.rationale }))
+  return { status: flags.length || panel_flags.length ? 'flagged' : 'clean', flags, panel_flags, leaked_items, corrected_items: corrections.map(x => x.id), corrections, panel_corrections, panel: record }
 }
 // `concurrency` bounds the coverage, quality and fidelity jobs judged at once.
 // Checkpoint updates go through the pool's serial queue, since every unit
@@ -63,7 +65,7 @@ export function createJudgingPhases({ runDir, suiteRoot = SUITE_ROOT, getCheckpo
       throw error
     }
   }
-  const jobs = async gates => makeJobs({ ...await inputs(), gates })
+  const jobs = async (gates, correction_exchanges = []) => makeJobs({ ...await inputs(), gates, correction_exchanges })
   const filename = job => job.name.replace(/[^a-zA-Z0-9_-]/g, '-') + '.json'
   async function panelJob(phase, job, directory = 'judges', checkpoint = undefined) {
     const target = join(runDir, directory, filename(job))
@@ -84,7 +86,9 @@ export function createJudgingPhases({ runDir, suiteRoot = SUITE_ROOT, getCheckpo
       const audit = await readJson(join(runDir, 'audits/disclosure.json'))
       const gatePath = join(runDir, 'judges/gates.json')
       const gateRecord = await unit({ phase: 'gates-and-judging', job: { name: 'gates', artifacts: data.artifacts }, target: gatePath, execute: async () => ({ gates: await runGates({ runDir, artifacts: data.artifacts, command: gateCommand }) }) })
-      const judged = await runJobPool({ jobs: (await jobs(gateRecord.gates)).filter(x => ['coverage', 'quality', 'fidelity'].includes(x.kind)), concurrency,
+      const correctionFindings = [...(audit.corrections ?? []), ...(audit.flags ?? []).filter(x => x.type === 'over-correction')]
+      const correctionExchanges = [...new Set(correctionFindings.flatMap(x => x.citations ?? []).map(c => c.exchange).filter(Boolean))]
+      const judged = await runJobPool({ jobs: (await jobs(gateRecord.gates, correctionExchanges)).filter(x => ['coverage', 'quality', 'fidelity'].includes(x.kind)), concurrency,
         run: async (job, index, { checkpoint }) => ({ kind: job.kind, ...await panelJob('gates-and-judging', job, 'judges', checkpoint) }) })
       const records = judged.map(({ kind, record }) => ({ kind, record }))
       const outputs = [gatePath, ...judged.map(({ target }) => target)]
@@ -94,7 +98,7 @@ export function createJudgingPhases({ runDir, suiteRoot = SUITE_ROOT, getCheckpo
       const scopeFindings = records.filter(x => x.kind === 'fidelity').flatMap(x => x.record.votes.flatMap(v => v.added_scope ?? []))
       const added_scope = [...new Map(scopeFindings.map(x => [hashJson(x), x])).values()]
       const excluded_graded_contradictions = records.filter(x => x.kind === 'fidelity').flatMap(x => excludedGradedContradictions(x.record))
-      const scored = { ...scoreDefinition({ rubric: data.rubric, coverage, quality, fidelity, leaked: audit.leaked_items, gates: gateRecord.gates }), judge_authority: JUDGE_PROFILE, panel_protocol: PANEL_PROTOCOL, panel_records: records, disclosure_audit: audit, added_scope, excluded_graded_contradictions }
+      const scored = { ...scoreDefinition({ rubric: data.rubric, coverage, quality, fidelity, leaked: audit.leaked_items, corrected: audit.corrections ?? [], gates: gateRecord.gates }), judge_authority: JUDGE_PROFILE, panel_protocol: PANEL_PROTOCOL, panel_records: records, disclosure_audit: audit, added_scope, excluded_graded_contradictions }
       const target = join(runDir, 'judges/score.json'); await writeJsonAtomic(target, scored)
       return [...outputs, target]
     },

@@ -370,3 +370,32 @@ test('INT-010 an incomplete product score still goes to review and publication, 
   const report = compareResults([reviewed.result, { ...reviewed.result, run_id: 'other' }])
   assert.equal(report.groups[0].definition.n, 2); assert.equal(report.groups[0].product, null)
 })
+
+test('INT-002 trace correction wins over raw asking, and missing corrections count as discovered-not-defined', () => {
+  for (const asked of [[], ['A', 'C']]) {
+    const coverage = cover({ A: 'met', B: 'missing', C: 'missing', D: 'met' }).map(x => ['A', 'C'].includes(x.id) ? { ...x, corrected: true, correction_citations: citation } : x)
+    const trace = buildTrace({ ...mini, asked: decisions(asked), coverage, product: productScore({ c1: 'pass' }) })
+    const a = trace.items.find(x => x.id === 'A'); const c = trace.items.find(x => x.id === 'C')
+    assert.equal(a.asked_part, 'corrected'); assert.equal(a.outcome, 'delivered'); assert.equal(a.asked, asked.includes('A'))
+    assert.deepEqual(a.correction_citations, citation); assert.equal(c.asked_part, 'corrected'); assert.equal(c.outcome, 'discovered-not-defined')
+    assert.equal(trace.items.find(x => x.id === 'B').asked_part, 'no'); assert.equal(trace.counts['discovered-not-defined'], 1)
+    const html = renderReport({ requirement_trace: trace, corrected_items: ['A', 'C'], corrected_count: 2, disclosure_audit: { flags: [{ type: 'over-correction', rationale: '<bad>' }] } })
+    assert.match(html, /Corrected items/); assert.match(html, /asked: corrected/); assert.match(html, /over-correction/); assert.match(html, /&lt;bad&gt;/)
+  }
+  assert.match(renderReport({}), /Corrected items/)
+})
+
+test('a rescore rebuilds corrected trace fields from fresh coverage rather than the source trace', async t => {
+  const { f, source } = await retainedRun(t)
+  const A = f.subset.items.find(x => x.class === 'mandatory').id
+  assert.equal(source.requirement_trace.items.find(x => x.id === A).asked_part, 'no')
+  f.harness.corrected = id => id === `corrected:${A}`
+  const { deps } = rescoreDeps(f)
+  const { result } = await rescoreEvaluation({ rescoreFrom: f.runDir, runDir: join(f.root, 'rescored-correction') }, deps)
+  assert.equal(result.evaluation_status, 'pending-human-review', result.observed_error)
+  assert.deepEqual(result.corrected_items, [A]); assert.equal(result.corrected_count, 1)
+  const trace = result.requirement_trace.items.find(x => x.id === A)
+  assert.equal(trace.asked_part, 'corrected'); assert.equal(trace.asked, false)
+  assert.equal(trace.correction_citations[0].exchange, f.harness.exchangeId)
+  assert.equal((await f.read('phases/trace.json')).items.find(x => x.id === A).asked_part, 'no')
+})

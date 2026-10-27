@@ -2,7 +2,7 @@
 
 Implement on the change's feature branch. The task must leave `npm run check` green.
 
-- [ ] 1. Simulated-user corrections of stated exclusions and contradictions, with scoring, ledger, trace, and diagnostics in both suites
+- [x] 1. Simulated-user corrections of stated exclusions and contradictions, with scoring, ledger, trace, and diagnostics in both suites
 
 These are not implementor tasks. They run after this task:
 

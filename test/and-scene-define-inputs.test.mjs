@@ -243,3 +243,28 @@ test('version history surfaces git log and git show failures instead of omitting
     assert.match(errors.join('\n'), new RegExp(` ${command} `))
   }
 })
+
+import { loadSimulatedUserInputs } from '../evals/lib/define-run/simulated-user-inputs.mjs'
+import { verifyJudgingInputs } from '../evals/lib/define-run/rubric.mjs'
+test('INT-004 pins policy v5 and rubric v11, preserves prior hashes and rejects unversioned edits', async t => {
+  const { root } = await versionRepository(t)
+  const { cp } = await import('node:fs/promises')
+  await cp(join(suite, 'hidden/reference'), join(root, 'hidden/reference'), { recursive: true })
+  const ledger = JSON.parse(await readFile(join(root, 'versions.json'), 'utf8'))
+  assert.deepEqual(await checkVersions({ suiteRoot: root, previous: ledger }), [])
+  await cp(join(suite, 'hidden/reference.json'), join(root, 'hidden/reference.json'))
+  const inputs = await loadSimulatedUserInputs({ suiteRoot: root })
+  assert.equal(inputs.policyVersion, 5)
+  assert.equal(ledger.inputs.rubric.version, 11)
+  for (const [name, count] of [['simulated-user-policy', 5], ['rubric', 11]]) for (let version = 1; version <= count; version++) assert.match(ledger.inputs[name].hashes[version], /^[a-f0-9]{64}$/)
+  const rubric = JSON.parse(await readFile(join(root, 'rubric.json'), 'utf8'))
+  const inventory = JSON.parse(await readFile(join(root, 'hidden/inventory.json'), 'utf8'))
+  verifyJudgingInputs({ inventory, rubric })
+  await writeFile(join(root, 'hidden/simulated-user-policy.md'), 'unversioned edit')
+  assert.match((await checkVersions({ suiteRoot: root, previous: ledger })).join('\n'), /simulated-user-policy: content hash differs/)
+  await cp(join(suite, 'hidden/simulated-user-policy.md'), join(root, 'hidden/simulated-user-policy.md'))
+  rubric.correction_fraction = 1
+  await writeFile(join(root, 'rubric.json'), JSON.stringify(rubric))
+  assert.match((await checkVersions({ suiteRoot: root, previous: ledger })).join('\n'), /rubric: content hash differs/)
+  assert.throws(() => verifyJudgingInputs({ inventory, rubric }), /correction_fraction/)
+})

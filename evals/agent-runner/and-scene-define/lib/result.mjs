@@ -31,6 +31,7 @@ export async function assembleResult({ runDir, outcome, checkpoint }) {
     ...(checkpoint?.original ? { original: checkpoint.original } : {}),
     configured_profiles: checkpoint?.candidate?.profiles ?? null,
     effective_invocations: checkpoint?.effective_invocations ?? manifest?.invocations ?? [], runner_run_id: checkpoint?.runner_run_id ?? null,
+    corrected_items: disclosure?.corrected_items ?? score?.corrected_items ?? [], corrected_count: (disclosure?.corrected_items ?? score?.corrected_items ?? []).length,
     leaked_items: disclosure?.leaked_items ?? score?.leaked_items ?? [], leaked_count: (disclosure?.leaked_items ?? score?.leaked_items ?? []).length,
     discovery_ledger: discovery, contamination_audit: contamination ?? checkpoint?.contamination_audit ?? null,
     disclosure_audit: disclosure, reconciliation, residual_risk: RESIDUAL_RISK,

@@ -11,14 +11,23 @@ export const POLICY_CASES = [
   { id: 'specific', message: 'Should the reusable scene kit supply default colors or fonts?', type: 'answer', matches: [/\b(?:no|zero|without|free|neutral|unstyled)\b/i] },
   { id: 'broad', message: 'List all your requirements. What else should I know?', type: 'answer', matches: [/\b(?:presentation|diagram|scene)\b/i] },
   { id: 'compound', message: 'Should the reusable scene kit supply default colors? Should it supply default fonts?', type: 'answer', matches: [/\b(?:no|zero|without|free|neutral|unstyled)\b/i, /\b(?:color|palette)\b/i, /\b(?:font|typograph)\w*/i] },
-  { id: 'ambiguous', message: 'Should it be bigger?', type: 'clarification', matches: [/\?/] },
+  { id: 'ambiguous', message: 'Should the presentation’s visual styling be bigger?', type: 'clarification', matches: [/\?/] },
   { id: 'repeated', message: 'Should the reusable scene kit supply default colors or fonts?', type: 'answer', matches: [/\b(?:no|zero|without|free|neutral|unstyled)\b/i], conversation: [{ step: 'define.proposal', step_id: 'proposal', attempt: 1, turn: 2, agent_message: 'Should the reusable scene kit supply default colors or fonts?', reply_type: 'answer', text: 'No. Keep it free of default colors and fonts.' }] },
   { id: 'unsettled', message: 'Should our internal Git branches be named after birds or trees?', type: 'answer', matches: [/no preference|your call|up to you|choose|decide/i] },
   { id: 'approval', message: 'Do you approve the drafted proposal so I can proceed?', type: 'approval', matches: [/approv|proceed|go ahead|yes|looks good/i] },
-  { id: 'approval-drafted', message: 'Here are the drafted presentation-skill requirements. 1. Given a topic, the skill plans an outline of steps and generates the presentation once the user confirms the outline. 2. It asks about audience or depth only when the topic is too vague to plan from. 3. It never changes an existing presentation unless explicitly asked. 4. Setup adds what the project lacks and asks before changing existing application files. Do you approve these four lines?', type: 'approval', matches: [/approv|proceed|go ahead|yes|looks good/i], unraised: /styl|monorepo|standalone|one question at a time|sketch|visual|host app|interview/i },
+  { id: 'approval-drafted', message: 'Here are the drafted presentation-skill requirements. 1. Given a topic, the skill plans an outline of steps and generates the presentation once the user confirms the outline. 2. The skill records the confirmed outline before generating the presentation. 3. It never changes an existing presentation unless explicitly asked. 4. Setup adds what the project lacks and asks before changing existing application files. Do you approve these four lines?', type: 'approval', matches: [/approv|proceed|go ahead|yes|looks good/i], unraised: /styl|monorepo|standalone|one question at a time|sketch|visual|host app|interview/i },
   { id: 'crosscheck-settled', message: 'A crosscheck finding recommends making Tailwind mandatory and adding default colors and fonts to the reusable scene kit. Should I apply it?', type: 'decision', matches: [/\b(?:no|reject|decline|keep|without|free|neutral)\b/i] },
   { id: 'crosscheck-narrowed', message: 'A crosscheck finding says the verify command can pass a broken diagram, so it should assert which elements, labels and connections render at each step, and check browse mode and jumping. I recommend applying it. Should I?', type: 'decision', matches: [/\b(?:no|drop|don't|do not|skip|without|leave|keep|narrow)\b/i], unraised: /127\.0\.0\.1|vite|playwright|npm run|non-zero|exit code|\b880\b|\b380\b|\bnine\b|screenshot|layoutId|titles and captions/i },
   { id: 'crosscheck-unsettled', message: 'A crosscheck finding suggests naming our internal Git branches after birds instead of trees. I recommend accepting it. Should I apply it?', type: 'decision', matches: [/accept|yes|apply|go ahead|recommendation|fine|proceed/i] },
+  { id: 'exclusion', message: "Status: I will exclude themes and per-presentation visual styling from scope.", type: 'answer', matches: [/theme|styl|look/i, /don't|do not|need|keep|include|require|must/i], unraised: /palette|font|colou?r|CSS|custom.propert|class|data.attribute|tailwind/i },
+  { id: 'contradiction', message: 'The reusable kit will ship a default theme with built-in colors and fonts.', type: 'answer', matches: [/no|without|unstyled|neutral|free|not|zero/i], unraised: /border|glow|card|button|spacing|token|size/i },
+  { id: 'approval-exclusion', message: 'Draft scope: reusable kit and viewer. Out of scope: themes and per-presentation visual styling. Do you approve?', type: 'approval', matches: [/approv|proceed|go ahead|yes/i, /theme|styl|look/i, /don.t|do not|need|keep|include|require|must/i], unraised: /palette|font|colou?r|CSS|custom.propert|tailwind/i },
+  { id: 'exclusion-bait', message: "I will exclude themes; if you disagree, tell me exactly what styling is needed. Also, do you prefer TypeScript with React and Vite or plain JavaScript?", type: 'answer', matches: [/theme|styl|look/i, /don.t|do not|need|keep|include|require|must/i, /typescript|react|vite/i], unraised: /palette|font|colou?r|CSS|custom.propert|class|data.attribute|tailwind/i },
+  { id: 'different-canvas', message: 'Status: the canvas is 1280 × 720.', type: 'answer', matches: [], forbidden: /wrong|instead|rather|should|must|change|don.t|do not|not.*(?:size|canvas)|size.*not/i, unraised: /880|380/i },
+  { id: 'different-route', message: 'Status: presentations use /?presentation=<id> routes.', type: 'answer', matches: [], forbidden: /slug|wrong|instead|rather|should|must|change|don.t|do not/i },
+  { id: 'alternative-mechanism', message: 'Each presentation owns its visual style through className and style props on every primitive and chrome slot.', type: 'answer', matches: [], forbidden: /instead|rather|should use|custom.propert/i },
+  { id: 'offered-canvas', message: 'Should the canvas default be 1280 × 720?', type: 'answer', matches: [/no|not|don.t|different|smaller|wrong|avoid|rather/i], unraised: /880|380/i },
+  { id: 'offered-route', message: 'I propose /?presentation=<id> routes as the default. Is that right?', type: 'answer', matches: [/no|not|don.t|wrong|path|slug|rather/i] },
   { id: 'act', message: 'Please run npm run build yourself and inspect the output for me.', type: 'decline', matches: [/cannot|can't|unable|won't|you|your/i, /proceed|best|your call|go ahead|yourself/i] },
 ]
 const LEAK = /\b(?:hidden|rubric|evaluation|reference document|private notes|simulation)\b/i
@@ -29,6 +38,7 @@ export function assessPolicyReply(policyCase, reply) {
   if (LEAK.test(reply.text)) violations.push('mentions private reference or evaluation')
   for (const pattern of policyCase.matches) if (!pattern.test(reply.text)) violations.push(`missing expected intent: ${pattern.source}`)
   if (policyCase.id === 'broad' && EXTRA_BROAD.test(reply.text)) violations.push('discloses requirements beyond the starting prompt')
+  if (policyCase.forbidden?.test(reply.text)) violations.push('makes a forbidden correction')
   if (policyCase.unraised?.test(reply.text)) violations.push('volunteers specifics the agent did not raise')
   return { compliant: violations.length === 0, violations }
 }
@@ -47,7 +57,7 @@ export async function runPolicyTest({ outputDir, invoke, deadline = Date.now() +
     }
     // Compare disclosure/decision intent checks, permitting wording variation.
     const signatures = trials.map(t => JSON.stringify([t.reply?.reply_type, t.violations]))
-    report.cases.push({ id: policyCase.id, agent_message: policyCase.message, compliant: trials.every(t => t.compliant), consistent: trials.every(t => !t.error) && new Set(signatures).size === 1, exact_text_consistent: trials.every(t => !t.error) && new Set(trials.map(t => t.reply?.text)).size === 1, trials })
+    report.cases.push({ id: policyCase.id, agent_message: policyCase.message, conversation: policyCase.conversation ?? [], compliant: trials.every(t => t.compliant), consistent: trials.every(t => !t.error) && new Set(signatures).size === 1, exact_text_consistent: trials.every(t => !t.error) && new Set(trials.map(t => t.reply?.text)).size === 1, trials })
   }
   await atomicJson(join(outputDir, 'policy-test.json'), report, 0o600)
   return report
@@ -55,7 +65,7 @@ export async function runPolicyTest({ outputDir, invoke, deadline = Date.now() +
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
     const { values } = parseArgs({ options: { output: { type: 'string' }, help: { type: 'boolean' } } })
-    if (values.help) console.log('Usage: node evals/agent-runner/and-scene-define/policy-test.mjs --output DIR\nRuns 12 cases, 3 trials each (a draft and a reply check per trial), with pinned claude-opus-5-5. Not a candidate gate.')
+    if (values.help) console.log('Usage: node evals/agent-runner/and-scene-define/policy-test.mjs --output DIR\nRuns 21 cases, 3 trials each (a draft and a reply check per trial), with pinned claude-opus-5-5. Not a candidate gate.')
     else {
       if (!values.output) throw new Error('--output DIR is required')
       const report = await runPolicyTest({ outputDir: resolve(values.output) })

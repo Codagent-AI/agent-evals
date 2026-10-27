@@ -16,7 +16,7 @@ export function compareResults(results) {
     const a = comparable[i]; const b = comparable[j]
     const same = a.series_identity != null && b.series_identity != null && hashJson(a.series_identity) === hashJson(b.series_identity)
     pairs.push({ run_ids: [a.run_id, b.run_id], comparable: same, reason: same ? null : 'different or unavailable series identities: not comparable',
-      ...(same ? { candidate_differences: differences(a.candidate, b.candidate), runs: [a, b].map(r => ({ run_id: r.run_id, evaluation_status: r.evaluation_status, total: r.total ?? null, components: r.components ?? null, leaked_count: r.leaked_count ?? null })) } : { series_differences: differences(a.series_identity, b.series_identity) }) })
+      ...(same ? { candidate_differences: differences(a.candidate, b.candidate), runs: [a, b].map(r => ({ run_id: r.run_id, evaluation_status: r.evaluation_status, total: r.total ?? null, components: r.components ?? null, leaked_count: r.leaked_count ?? null, corrected_count: r.corrected_count ?? r.corrected_items?.length ?? 0 })) } : { series_differences: differences(a.series_identity, b.series_identity) }) })
   }
   return { pairs, unscored }
 }

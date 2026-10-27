@@ -17,9 +17,11 @@ function headline(result) {
   if (Array.isArray(result.leaked_items)) scores.push(row('Leaked items', escape(`${result.leaked_count ?? result.leaked_items.length}${result.leaked_items.length ? `: ${result.leaked_items.join(', ')}` : ''}`)))
   else scores.push(row('Leaked items', escape(result.leaked_count ?? 0)))
   if (result.excluded_graded_contradictions?.length) scores.push(row('Excluded graded contradictions', escape(result.excluded_graded_contradictions.map(x => x.subject_id).join(', '))))
+  scores.push(row('Corrected items', escape(`${result.corrected_count ?? result.corrected_items?.length ?? 0}${result.corrected_items?.length ? `: ${result.corrected_items.join(', ')}` : ''}`)))
+  const auditFlags = (result.disclosure_audit?.flags ?? []).map(flag => row(flag.type, escape(`${flag.rationale ?? ''} ${JSON.stringify(flag.citations ?? [])}`)))
   const gates = (result.gates ?? []).map(g => row(g.id ?? 'gate', `<span class="${g.passed ? 'ok' : 'bad'}">${g.passed ? 'passed' : 'failed'}</span>${g.passed || !g.reason ? '' : ` — ${escape(g.reason)}`}`))
   const discovery = Object.entries(result.discovery_ledger?.counts ?? {}).map(([name, count]) => row(name, escape(count)))
-  return `<section class="headline"><h2>Summary</h2>${table('Outcome', outcome)}${table('Scores', scores)}${table('Gates', gates)}${table('Discovery ledger (non-scoring)', discovery)}</section>`
+  return `<section class="headline"><h2>Summary</h2>${table('Outcome', outcome)}${table('Scores', scores)}${table('Gates', gates)}${table('Disclosure flags', auditFlags)}${table('Discovery ledger (non-scoring)', discovery)}</section>`
 }
 // Inline every result field, including detailed panels and provenance. No assets
 // or executable content are required to inspect a copied report offline.

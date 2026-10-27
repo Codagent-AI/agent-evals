@@ -456,3 +456,31 @@ test('I-19 the token directory is removed after a failed invocation as well', as
   const { filesUnder } = await import('../evals/agent-runner/and-scene-e2e/lib/files.mjs')
   for (const file of await filesUnder(f.runDir)) assert.ok(!/run-token-\d|prov-token/.test(await readFile(file, 'utf8').catch(() => '')), file)
 })
+
+for (const asked of [false, true]) test(`INT-002 corrections and over-correction continue through implementation, trace and result (asked=${asked})`, async t => {
+  const f = await lifecycle(t); f.harness.withExchange()
+  const baseline = await lifecycle(t); baseline.harness.withExchange()
+  const A = f.subset.items.find(x => x.class === 'mandatory').id
+  const B = f.subset.items.filter(x => x.class !== 'preference').find(x => x.id !== A).id
+  f.harness.corrected = id => [`corrected:${A}`, `corrected:${B}`].includes(id)
+  f.harness.overCorrection = true; f.harness.asked = id => id === A && asked
+  f.harness.coverage = id => id === B ? 'missing' : 'met'
+  baseline.harness.coverage = f.harness.coverage
+  const original = (await runEvaluation(baseline.options, baseline.deps)).result
+  const { result } = await runEvaluation(f.options, f.deps)
+  assert.equal(result.evaluation_status, 'pending-human-review', result.observed_error)
+  assert.ok(f.sandbox.starts.some(x => x.until === 'implement')); assert.deepEqual(result.leaked_items, [])
+  assert.deepEqual(result.corrected_items, [A, B]); assert.equal(result.corrected_count, 2)
+  const coverage = result.definition_score.coverage.find(x => x.id === A)
+  assert.equal(coverage.earned_points, coverage.weight * 0.5)
+  assert.equal(result.definition_score.components.coverage.possible, original.definition_score.components.coverage.possible)
+  assert.equal(original.definition_score.components.coverage.earned - result.definition_score.components.coverage.earned, coverage.weight * 0.5)
+  assert.deepEqual(result.product_score, original.product_score)
+  const trace = result.requirement_trace.items.find(x => x.id === A)
+  assert.equal(trace.asked_part, 'corrected'); assert.equal(trace.asked, asked); assert.equal(trace.outcome, 'delivered')
+  assert.equal(trace.correction_citations[0].exchange, f.harness.exchangeId)
+  const missing = result.requirement_trace.items.find(x => x.id === B)
+  assert.equal(missing.asked_part, 'corrected'); assert.equal(missing.asked, false); assert.equal(missing.outcome, 'discovered-not-defined')
+  const html = await readFile(join(f.runDir, 'report.html'), 'utf8')
+  assert.match(html, /Corrected items/); assert.match(html, /over-correction/); assert.match(html, /asked: corrected/)
+})

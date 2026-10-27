@@ -132,6 +132,57 @@ Outcomes also carry `last_active_step` and `runner_run_id`. The controller owns
 sandbox termination and final evaluation status. The loop uses no external-user
 timeout and has no policy-test prerequisite.
 
+
+Policy v5 corrects unsolicited explicit exclusions and direct contradictions of
+required intent, including in drafts put up for approval, and approves the rest.
+It stays silent about omissions and different mechanisms, values, names, sizes,
+routes, layouts and samples. Answers to asked questions and replies to offered
+options or defaults retain their existing rules. The reply check keeps required
+corrections but removes replacement details and unsolicited corrections of choices
+that still serve the intent.
+
+The disclosure panel settles `corrected` only when the reply first establishes
+the item's position; an earlier substantive answer or confirmation establishes
+it, while a clarification, no-preference answer or decline does not. Leaks win
+when an item is both leaked and corrected. `over-correction` flags are report-only;
+corrections alone leave the audit clean. Fidelity exempts only the correcting part
+of unsolicited corrections; questions and offered defaults still bind even within
+the same reply.
+
+Rubric v11 declares `correction_fraction: 0.5`, strictly between zero and one.
+Corrected coverage earns half the points of its unchanged verdict and retains its
+possible points. The discovery ledger records `corrected` for met/partial items
+and `corrected-not-captured` for missing ones, with correction citations. Leaked
+items take precedence. Raw `asked` remains a boolean. Results and reports show
+corrected items and over-correction flags.
+
+The private correction audit stability diagnostic uses retained policy replies:
+
+```sh
+node evals/agent-runner/and-scene-define/scripts/correction-audit-stability.mjs \
+  --policy-test /absolute/diagnostic-dir/policy-test.json \
+  --output /absolute/private-stability-dir --repetitions 3
+```
+
+It assembles a conversation labelled synthetic: a theme exclusion after a
+clarifying question, the same position corrected after establishment, an
+over-correction, a rejected offered default, and a mixed correction/preference
+answer. These shapes must exist in the retained replies; it refuses missing
+shapes rather than inventing replies. In particular, a fully compliant policy
+run may provide no over-correction and be refused. Retained noncompliant trials
+are usable evidence for that shape. Inspect the retained text for semantic fit.
+
+Three repetitions cost roughly 3 × (3 panel judges plus the decider and any
+checks), with fresh calls through the production panel each time. `stability.json`
+retains the synthetic conversation, panel records, per-item/per-exchange verdict
+vectors, flip counts (repetitions differing from the first), adjacent transitions,
+coverage scores and their spread, and pinned versions. Fixed all-met coverage
+isolates the correction/leak effect. Output must be outside the repo and outside
+run or `results` directories because it can quote private requirements. It never
+publishes or starts a candidate run, and is never a preflight gate. Do not claim
+the penalty is stable until the diagnostic has been run and reviewed; later real
+v5 runs should also be rescored repeatedly.
+
 `responder-state.json` retains the Runner run ID on the host. A controller with an
 already recorded ID should pass `runnerRunId`; any discrepancy fails. Conversation
 identity uses JSON `step`, `step_id`, `attempt`, and `turn`, regardless of filename.
@@ -142,15 +193,18 @@ the pending request is processed again; corruption in earlier records fails the
 run. A complete final record missing only its newline is retained and durably
 separated from later appends. Run only one responder per artifact directory.
 
-Run the optional maintainer policy diagnostic manually (30 paid Claude calls):
+Run the optional maintainer policy diagnostic manually (126 paid Claude calls):
 
 ```sh
 node evals/agent-runner/and-scene-define/policy-test.mjs --output /absolute/diagnostic-dir
 ```
 
 Its own directory holds `policy-test.json` and its eval-owned usage ledger.
-Ten fixed cases each run three times, covering disclosure, repetition across
-steps, approval, settled and unsettled crosscheck findings, and refusal to act.
+Twenty-one fixed cases each run three times, with a draft and a reply check
+per trial (63 trials, 126 calls). They cover disclosure, repetition, approval,
+crosscheck decisions, refusal to act, exclusions, contradictions, approval with
+an exclusion, replacement-detail bait, different canvas and route choices, an
+alternative styling mechanism, and the paired offered canvas and route defaults.
 The report checks expected reply types and intent patterns, known over-disclosure,
 and private-reference mentions. `consistent` compares these intent checks, while
 `exact_text_consistent` compares wording. These are heuristics: inspect the retained
