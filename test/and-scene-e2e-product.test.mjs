@@ -5,7 +5,8 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { git, temp } from './and-scene-e2e-helpers.mjs'
-import { evaluateProduct, fileUnits, ProductHarnessError } from '../evals/agent-runner/and-scene-e2e/lib/product-evaluation.mjs'
+import { evaluateProduct, fileUnits, ProductHarnessError, PRODUCT_EVALUATION_VERSION } from '../evals/agent-runner/and-scene-e2e/lib/product-evaluation.mjs'
+import { hashJson } from '../evals/lib/panel-judging/hash.mjs'
 import { NotEvaluableError, resolveBuildPlan } from '../evals/agent-runner/and-scene-e2e/lib/build-plan.mjs'
 import { containerArgs } from '../evals/agent-runner/and-scene-e2e/lib/container.mjs'
 import { loadProductInputs, EVIDENCE_JOBS, criteriaForJob } from '../evals/agent-runner/and-scene-e2e/lib/product-rubric.mjs'
@@ -232,6 +233,24 @@ test('INT-009 a packet overflow marks only that component incomplete and scores 
   assert.match(incomplete[0].incomplete_reason, /overflowed/)
   assert.equal(result.score.automated_score, null); assert.equal(result.score.complete, false)
   assert.equal(result.score.complete_components_score, 62)
+})
+
+// Run 6's testing-evidence overflow came from a harness defect; after the fix, resume must judge that job again.
+test('INT-009 resume reuses a judge overflow only when the current evaluator version recorded it', async t => {
+  const world = await deliver(t, ROOT_APP)
+  await (await evaluate(t, ROOT_APP, { runDirOverride: world })).run()
+  const path = join(world.runDir, 'phases/product/judge-testing-evidence.json')
+  const { input_hash } = JSON.parse(await readFile(path, 'utf8'))
+  const record = value => writeFile(path, JSON.stringify({ input_hash, output_hash: hashJson(value), value }))
+  const overflow = { ok: false, overflow: 'testing-evidence source audit: overflow', panel: {} }
+  await record({ ...overflow, evaluator: PRODUCT_EVALUATION_VERSION })
+  const kept = await evaluate(t, ROOT_APP, { runDirOverride: world })
+  assert.equal((await kept.run()).score.complete, false)
+  assert.ok(!kept.judges.seen.includes('testing-evidence'), 'a current-version overflow is reused')
+  await record(overflow)
+  const rejudged = await evaluate(t, ROOT_APP, { runDirOverride: world })
+  assert.equal((await rejudged.run()).score.complete, true)
+  assert.deepEqual([...new Set(rejudged.judges.seen)], ['testing-evidence'], 'only the stale overflow is judged again')
 })
 
 test('INT-009 the automated score arithmetic: tier weights, gate inputs earn nothing, an unobserved criterion makes its component incomplete', () => {

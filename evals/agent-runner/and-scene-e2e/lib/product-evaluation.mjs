@@ -19,8 +19,9 @@ import { runContainer } from './container.mjs'
 export const PRODUCT_JUDGE_CONCURRENCY = 3
 // Bumped when a harness fix changes what product evaluation records, so a retained result from before the fix is
 // recomputed on resume (cached judge jobs whose inputs are unchanged are still reused). 2: verifier exit status kept,
-// and evidence images copied as bytes and left out of the text budget.
-export const PRODUCT_EVALUATION_VERSION = 2
+// and evidence images copied as bytes and left out of the text budget. 3: a cited binary file is named by a marker
+// in judge packets instead of decoded into them.
+export const PRODUCT_EVALUATION_VERSION = 3
 const IMAGE = /\.(?:png|jpe?g|gif|webp)$/i
 export class ProductHarnessError extends Error {
   constructor(message, { failures = {}, resumable = true } = {}) { super(message); Object.assign(this, { failures, resumable, owner: 'evaluation-harness', code: 'product-judging-failed' }) }
@@ -121,9 +122,10 @@ export async function evaluateProduct({ runDir, rubric, inventory, bundlePath, c
         audit: ({ request: next, invoke }) => runJudgeJob({ request: next, invoke }), validateCitations: result => validateSourceCitations(result, request) }).catch(error => ({ ok: false, failure: judgeFailure(error), record: { failure: judgeFailure(error) } }))
       if (outcome.ok) return { ok: true, results: outcome.results.map(({ id, verdict, rationale, citations, basis, votes }) => ({ id, verdict, rationale, citations: citations ?? [], basis, votes })), panel: outcome.record }
       // An overflow raised by an audit or check inside the shared engine leaves only this job's component incomplete.
-      if (outcome.failure?.code === 'packet-overflow') return { ok: false, overflow: outcome.failure.message, panel: outcome.record }
+      if (outcome.failure?.code === 'packet-overflow') return { ok: false, overflow: outcome.failure.message, panel: outcome.record, evaluator: PRODUCT_EVALUATION_VERSION }
       return { ok: false, failure: outcome.failure ?? { message: 'judge output exhausted' } }
-    }, { cache: value => value.ok !== false || Boolean(value.overflow) })
+    // An overflow recorded before a harness fix may not recur, so only one from this evaluator version is reused.
+    }, { cache: value => value.ok !== false || Boolean(value.overflow), verify: value => !value.overflow || value.evaluator === PRODUCT_EVALUATION_VERSION })
     return { id: job.id, value }
   } })
   for (const entry of judged) {
