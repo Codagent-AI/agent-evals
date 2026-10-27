@@ -175,3 +175,22 @@ test('the starting tree carries a Validator config that agent-validator accepts'
   assert.match(config, /^entry_points:\n {2}- path: \.$/m)
   assert.doesNotMatch(config, /entry_points: \[\]/)
 })
+
+test('Git object scan handles aggregate content over the former 64 MiB limit', async t => {
+  const root = await temporary(t)
+  const repo = join(root, 'repo'); await mkdir(repo)
+  git(repo, 'init', '--template=')
+  // Unreachable blobs exercise the all-objects scan without a large working tree.
+  const content = Buffer.alloc(34 * 1024 * 1024, 120)
+  execFileSync('git', ['-C', repo, 'hash-object', '-w', '--stdin'], { input: content })
+  content.write('Codagent-AI/and-scene\n', 0)
+  const oid = execFileSync('git', ['-C', repo, 'hash-object', '-w', '--stdin'], { input: content, encoding: 'utf8' }).trim()
+  const matches = await scanCanaries({ stagedDir: repo })
+  assert.ok(matches.some(match => match.file.endsWith(`::${oid}`) && match.pattern === 'fixture-repository'))
+})
+test('a failed Git object read clearly reports an incomplete scan', async t => {
+  const root = await temporary(t)
+  await mkdir(join(root, '.git'))
+  await writeFile(join(root, '.git/HEAD'), 'not a repository')
+  await assert.rejects(scanCanaries({ stagedDir: root }), /Git object scan incomplete:.*unable to read all objects/)
+})

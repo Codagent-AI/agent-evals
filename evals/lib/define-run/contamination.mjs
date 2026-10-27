@@ -14,9 +14,10 @@ export function auditContamination({ transcripts, outputs = [], conversation, pa
     const text = typeof call[field] === 'string' ? call[field] : JSON.stringify(call[field] ?? '')
     for (const pattern of compiled) {
       if (pattern.kind === 'canary' && (excluded.includes(pattern.id) || writingTool(call.name))) continue
-      if (!pattern.matches(text)) continue
-      const index = pattern.type === 'literal' ? text.toLowerCase().indexOf(pattern.value.toLowerCase()) : text.search(new RegExp(pattern.value, 'im'))
-      matches.push({ session: source.session, source: source.source, tool_call: call.id, tool: call.name, field, pattern: pattern.id, kind: pattern.kind, excerpt: text.slice(Math.max(0, index - 80), index + Math.max(pattern.value.length, 160)) })
+      const match = pattern.locate(text)
+      if (!match) continue
+      const { index, length } = match
+      matches.push({ session: source.session, source: source.source, tool_call: call.id, tool: call.name, field, pattern: pattern.id, kind: pattern.kind, excerpt: text.slice(Math.max(0, index - 80), index + Math.max(length, 160)) })
     }
   }
   matches.sort((a, b) => JSON.stringify(a) < JSON.stringify(b) ? -1 : JSON.stringify(a) > JSON.stringify(b) ? 1 : 0)
