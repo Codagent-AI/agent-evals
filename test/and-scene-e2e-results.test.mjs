@@ -72,6 +72,8 @@ async function publicationWorld(t, options = {}) {
   const origin = join(f.root, 'origin.git'); const repo = join(f.root, 'checkout')
   execFileSync('git', ['init', '--quiet', '--bare', '--initial-branch=main', origin])
   execFileSync('git', ['clone', '--quiet', origin, repo]); await writeFile(join(repo, 'README.md'), 'x'); git(repo, ['checkout', '-B', 'main']); git(repo, ['add', '-A']); git(repo, ['commit', '--quiet', '-m', 'init']); git(repo, ['push', '--quiet', '-u', 'origin', 'main'])
+  // Publication commits with the checkout's configured identity, which a CI host does not have globally.
+  git(repo, ['config', 'user.name', 't']); git(repo, ['config', 'user.email', 't@example.invalid'])
   await writeFile(join(repo, 'unrelated-staged.txt'), 'staged'); git(repo, ['add', 'unrelated-staged.txt']); await writeFile(join(repo, 'README.md'), 'modified, unstaged')
   f.options.repoDir = repo; f.harness.humanReview = { eligible: false, reason: 'the product could not be built: test' }
   const calls = []

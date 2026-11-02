@@ -131,7 +131,7 @@ test('I-11 preflight fails each dependency independently, naming the check, befo
   // Every other command keeps the world's fake, so the case never reaches the host's Docker or CLIs.
   hostCli.base.command = (cmd, args, options) => cmd === 'claude' ? { ok: false, status: 1, stdout: '', stderr: 'not logged in' } : hostCliFake(cmd, args, options)
   await failsWith(hostCli.base, 'judge and simulated-user authentication', /host claude/)
-  const noCreds = await preflightWorld(t); noCreds.base.app = null; noCreds.base.env = { PATH: process.env.PATH, HOME: noCreds.home }
+  const noCreds = await preflightWorld(t); noCreds.base.app = null; noCreds.base.env = { PATH: noCreds.base.env.PATH, HOME: noCreds.home, AND_SCENE_HOST_CHROME: noCreds.base.env.AND_SCENE_HOST_CHROME }
   await failsWith(noCreds.base, 'provisioning credentials', /AND_SCENE_E2E_APP_ID/)
 })
 test('I-12 missing Claude authentication for Validator reviews fails preflight even when every role uses codex', async t => {
