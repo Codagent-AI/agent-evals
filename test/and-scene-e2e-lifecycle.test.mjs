@@ -263,6 +263,21 @@ test('INT-005 a controller interrupted during implement reports a resumable fail
   assert.equal(result.evaluation_status, 'implementation-workflow-failed'); assert.equal(result.resumable, true); assert.match(result.observed_error, /interrupted/)
 })
 
+test('a sandbox cleanup failure after an interrupt is reported with the interruption, not lost', async t => {
+  const f = await lifecycle(t)
+  const abort = new AbortController(); f.deps.signal = abort.signal
+  const stopOnce = f.sandbox.stop
+  // Only the interrupted implement invocation's cleanup fails; it finishes after the interrupt handler started it.
+  f.sandbox.stop = async function () {
+    if (!abort.signal.aborted) return stopOnce.call(this)
+    this.interruptedStops = (this.interruptedStops ?? 0) + 1; await new Promise(resolve => setTimeout(resolve, 20)); this.release?.({ code: null, signal: 'SIGTERM' }); throw new Error('container cleanup failed')
+  }
+  f.harness.plans.implement.push(hang(0, { during: () => abort.abort() }))
+  const { result } = await runEvaluation(f.options, f.deps)
+  assert.equal(f.sandbox.interruptedStops, 1)
+  assert.equal(result.evaluation_status, 'implementation-workflow-failed'); assert.equal(result.resumable, true); assert.match(result.observed_error, /interrupted/); assert.match(result.observed_error, /container cleanup failed/)
+})
+
 import { scanCanaries } from '../evals/lib/define-run/canary.mjs'
 import { loadJudgingInputs } from '../evals/lib/define-run/judging.mjs'
 import { DEFINE_ROOT } from '../evals/agent-runner/and-scene-e2e/lib/files.mjs'

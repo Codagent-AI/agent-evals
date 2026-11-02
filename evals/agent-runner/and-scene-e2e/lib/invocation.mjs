@@ -15,9 +15,10 @@ export async function runInvocation({ sandbox, profiles, mode, until, readOutcom
     if (clock.exhausted()) throw new InvocationError(`elapsed-time limit reached (${limitMs}ms)`, { kind: 'time-limit', step: state.last_active_step ?? null, resumable: false, limit: limitMs })
     const stall = new StallDetector({ windowMs: stallWindowMs, latestActivityMs: activity, now })
     const abort = new AbortController()
-    let stopped = false; let timer; let reason = null
-    const stop = async () => { if (!stopped) { stopped = true; await sandbox.stop() } }
-    const interrupt = () => { reason ??= 'interrupted'; abort.abort(); void stop() }
+    let stopping; let timer; let reason = null; let failure
+    // Every caller awaits the same stop, so a cleanup failure that began on an interrupt is still reported.
+    const stop = () => (stopping ??= sandbox.stop())
+    const interrupt = () => { reason ??= 'interrupted'; abort.abort(); stop().catch(() => {}) }
     signal?.addEventListener('abort', interrupt, { once: true })
     clock.start()
     let responder
@@ -62,10 +63,15 @@ export async function runInvocation({ sandbox, profiles, mode, until, readOutcom
         continue
       }
       throw new InvocationError(outcome.reason ?? `Runner exited ${exit.code ?? exit.signal}`, { kind: 'failed', step, resumable: Boolean(runnerState) })
-    } finally {
-      clearInterval(timer); abort.abort(); signal?.removeEventListener('abort', interrupt); await stop()
+    } catch (error) { failure = error; throw error } finally {
+      clearInterval(timer); abort.abort(); signal?.removeEventListener('abort', interrupt)
+      let stopError = null
+      try { await stop() } catch (error) { stopError = error }
       if (responder) await responder.catch(() => {})
       if (clock.startedAt !== null) { clock.stop(); state.active_ms = clock.usedMs }
+      // The original failure keeps its classification (kind, resumability, limit); the cleanup failure is added to it.
+      if (stopError && failure && failure !== stopError) { failure.message = `${failure.message}; stopping the sandbox also failed: ${stopError.message}`; failure.cleanupError = stopError }
+      if (stopError && !failure) throw stopError
     }
   }
 }
