@@ -2,6 +2,70 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { runInNewContext } from 'node:vm'
 
+for (const method of ['open', 'replay', 'routes']) {
+  test(`the AXI driver selects a fresh blank tab once before ${method}`, async () => {
+    const { createAxiBrowserDriver } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
+    const calls = []
+    const driver = createAxiBrowserDriver({ baseUrl: 'http://127.0.0.1:4319/', command: async (args) => {
+      calls.push(args)
+      if (args[0] === 'pages') return { status: 0, stdout: 'pages[2]{id,url,selected}:\n  2,https://example.com,false\n  1,about:blank,false\nhelp[1]: select a tab\n' }
+      if (args[0] === 'console') return { status: 0, stdout: '<no console messages found>\n' }
+      const result = method === 'routes' ? [] : method === 'replay'
+        ? { observations: [{ stepIndex: 0 }, { stepIndex: 1 }], trace: [] } : {}
+      return { status: 0, stdout: JSON.stringify(result) }
+    } })
+    const open = () => method === 'replay'
+      ? driver.replay([{ type: 'navigate', path: '/' }], { type: 'step-index-equals', value: 1 })
+      : driver[method]('/')
+    await open()
+    await open()
+    assert.deepEqual(calls.slice(0, 2), [['pages'], ['selectpage', '1']])
+    assert.equal(calls.filter(([name]) => name === 'pages').length, 1)
+    assert.equal(calls.filter(([name]) => name === 'selectpage').length, 1)
+    assert.ok(calls.findIndex(([name]) => name === 'run') > 1)
+  })
+}
+
+for (const { name, pages, selected } of [
+  { name: 'keeps an already selected tab', pages: '1,about:blank,false\n2,https://example.com/a,b,true', selected: null },
+  { name: 'allows an empty browser to create a tab', pages: 'pages[0]{id,url,selected}:\nhelp[1]: open a page', selected: null },
+  { name: 'selects the first tab when there is no blank tab', pages: '7,https://example.com/a,b,false\n8,https://example.org,false', selected: '7' },
+]) {
+  test(`the AXI driver ${name}`, async () => {
+    const { createAxiBrowserDriver } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
+    const calls = []
+    const driver = createAxiBrowserDriver({ baseUrl: 'http://127.0.0.1:4319/', command: async (args) => {
+      calls.push(args)
+      return { status: 0, stdout: args[0] === 'pages' ? pages : '{}' }
+    } })
+    await driver.open('/')
+    assert.deepEqual(calls[0], ['pages'])
+    assert.deepEqual(calls.filter(([name]) => name === 'selectpage'), selected ? [['selectpage', selected]] : [])
+    assert.ok(calls.some(([name]) => name === 'run'))
+  })
+}
+
+for (const failedCommand of ['pages', 'selectpage']) {
+  test(`the AXI driver reports a resumable ${failedCommand} failure and retries selection`, async () => {
+    const { createAxiBrowserDriver, BrowserDriverError } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
+    const calls = []
+    let failing = true
+    const driver = createAxiBrowserDriver({ baseUrl: 'http://127.0.0.1:4319/', command: async (args) => {
+      calls.push(args)
+      if (failing && args[0] === failedCommand) return { status: 1, stderr: 'adapter unavailable' }
+      return { status: 0, stdout: args[0] === 'pages' ? '1,about:blank,false' : '{}' }
+    } })
+    await assert.rejects(driver.open('/'), (error) => error instanceof BrowserDriverError
+      && error.resumable === true && error.owner === 'evaluation-harness'
+      && /could not select the browser's starting tab:.*adapter unavailable/.test(error.message))
+    assert.ok(!calls.some(([name]) => name === 'run'))
+    failing = false
+    await driver.open('/')
+    assert.equal(calls.filter(([name]) => name === 'pages').length, 2)
+    assert.ok(calls.some(([name]) => name === 'run'))
+  })
+}
+
 test('browser replay validates actions and checks a fresh-page observation', async () => {
   const { createAxiBrowserDriver } = await import('../evals/agent-runner/and-scene/lib/axi-browser-driver.mjs')
   const scripts = []
@@ -142,7 +206,7 @@ test('the AXI driver opens the candidate route and returns structured browser st
   ]
   const command = async (args, input) => {
     calls.push({ args, input })
-    if (args[0] === 'resize') return { status: 0, stdout: '', stderr: '' }
+    if (['pages', 'resize'].includes(args[0])) return { status: 0, stdout: '', stderr: '' }
     return { status: 0, stdout: `${responses.shift()}\n`, stderr: '' }
   }
   const driver = module.createAxiBrowserDriver({
@@ -160,16 +224,17 @@ test('the AXI driver opens the candidate route and returns structured browser st
     '[data-presentation-arrow]', '[data-presentation-frame]', '[data-presentation-emphasis]',
     '[data-presentation-symbol-chip]',
   ])
-  assert.deepEqual(calls[1].args, ['resize', '1280', '720'])
-  assert.match(calls[2].input, /http:\/\/127\.0\.0\.1:4319\/how-to-make-a-presentation/)
-  assert.match(calls[2].input, /initialMode/)
-  assert.doesNotMatch(calls[2].input, /page\.press\(/)
-  assert.match(calls[3].input, /data-step-count/)
-  assert.match(calls[3].input, /data-entity-id/)
-  assert.match(calls[3].input, /data-scene-node/)
-  assert.doesNotMatch(calls[3].input, /page\.press\(/)
+  assert.ok(calls.some(({ args }) => args.join(' ') === 'resize 1280 720'))
+  const scripts = calls.filter(({ args }) => args[0] === 'run')
+  assert.match(scripts[1].input, /http:\/\/127\.0\.0\.1:4319\/how-to-make-a-presentation/)
+  assert.match(scripts[1].input, /initialMode/)
+  assert.doesNotMatch(scripts[1].input, /page\.press\(/)
+  assert.match(scripts[2].input, /data-step-count/)
+  assert.match(scripts[2].input, /data-entity-id/)
+  assert.match(scripts[2].input, /data-scene-node/)
+  assert.doesNotMatch(scripts[2].input, /page\.press\(/)
   assert.doesNotMatch(
-    calls[3].input,
+    scripts[2].input,
     /const wasBrowsing = await page\.eval\(\(\) => Boolean\(document\.querySelector/,
   )
 })

@@ -551,6 +551,7 @@ export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {
   // The token of the keydown instrumentation last installed, which tells a
   // document that replaced the instrumented one from the instrumented one.
   let keyInstrumentationToken = null
+  let selectedPageEnsured = false
 
   async function invoke(args, input = '') {
     const result = await command(args, input)
@@ -558,6 +559,27 @@ export function createAxiBrowserDriver({ baseUrl, command = defaultCommand } = {
       throw new BrowserDriverError(`browser adapter failed: ${failureMessage(result)}`)
     }
     return result.stdout ?? ''
+  }
+
+  async function ensureSelectedPage() {
+    if (selectedPageEnsured) return
+    // A fresh AXI browser has an unselected about:blank tab. Select it before
+    // resize or page.open, which otherwise fail with no page currently selected
+    // or lose the page when the product rewrites its URL.
+    try {
+      const output = await invoke(['pages'])
+      const pages = output.split('\n').flatMap((line) => {
+        const row = line.trim().match(/^(\d+),(.*),(true|false)$/)
+        return row ? [{ id: row[1], url: row[2], selected: row[3] === 'true' }] : []
+      })
+      if (!pages.some((page) => page.selected)) {
+        const page = pages.find((page) => page.url === 'about:blank') ?? pages[0]
+        if (page) await invoke(['selectpage', page.id])
+      }
+      selectedPageEnsured = true
+    } catch (error) {
+      throw new BrowserDriverError(`could not select the browser's starting tab: ${error.message}`)
+    }
   }
 
   async function run(script) {
@@ -662,6 +684,7 @@ replay: {
 ${actions.map((action) => `${actionSource(action)}\n${sleepSource(50)}\ntrace.push(${JSON.stringify(action)}); observations.push(await ${observe});`).join('\n')}
 }
 console.log(JSON.stringify({ observations, trace, product_failure: productFailure }));`
+      await ensureSelectedPage()
       const result = await run(script)
       const productFailure = typeof result?.product_failure === 'string' && result.product_failure
         ? result.product_failure : null
@@ -704,6 +727,7 @@ console.log(JSON.stringify({ observations, trace, product_failure: productFailur
     },
 
     async routes() {
+      await ensureSelectedPage()
       const routes = await run(`
 await page.open(${JSON.stringify(base.href)});
 ${sleepSource(50)}
@@ -721,6 +745,7 @@ console.log(JSON.stringify([...new Set(routes)]));
     },
 
     async open(route) {
+      await ensureSelectedPage()
       await invoke(['resize', '1280', '720'])
       const opened = await run(`
 const opened = await page.open(${JSON.stringify(routeUrl(route))});
