@@ -120,14 +120,16 @@ test('I-11 preflight fails each dependency independently, naming the check, befo
   await failsWith(noExternal.base, 'Agent Runner capability', /missing --external-user/)
   const noSandboxOption = await preflightWorld(t); await script(join(noSandboxOption.runner, 'scripts/sandbox-run.sh'), 'echo "--auth-only"'); git(noSandboxOption.runner, ['add', '-A']); git(noSandboxOption.runner, ['commit', '--quiet', '-m', 'old'])
   await failsWith(noSandboxOption.base, 'Agent Runner capability', /sandbox capability: missing --hide-source/)
-  const docker = await preflightWorld(t); docker.base.command = (cmd, args, options) => cmd === 'docker' ? { ok: false, status: 1, stdout: '', stderr: 'no daemon' } : runTimed(cmd, args, options)
+  const docker = await preflightWorld(t); const dockerFake = docker.base.command; docker.base.command = (cmd, args, options) => cmd === 'docker' ? { ok: false, status: 1, stdout: '', stderr: 'no daemon' } : dockerFake(cmd, args, options)
   await failsWith(docker.base, 'Docker', /Docker availability/); await inspectInputs({ ...docker.base, dryRun: true })
   const browser = await preflightWorld(t)
   await failsWith({ ...browser.base, env: { ...browser.base.env, AND_SCENE_HOST_CHROME: join(browser.root, 'missing-chrome') } }, 'host browser', /not executable/)
   await failsWith({ ...browser.base, env: { ...browser.base.env, PATH: process.env.PATH.split(':').filter(dir => !existsSync(join(dir, 'chrome-devtools-axi'))).join(':') } }, 'host browser', /chrome-devtools-axi is not on PATH/)
   assert.equal(browser.provisioning.tokens, 0, 'no provisioning before the browser check')
   const codexAuth = await preflightWorld(t); await rm(join(codexAuth.home, '.codex/auth.json')); await failsWith(codexAuth.base, 'authentication', /missing regular credential file/)
-  const hostCli = await preflightWorld(t); hostCli.base.command = (cmd, args, options) => cmd === 'claude' ? { ok: false, status: 1, stdout: '', stderr: 'not logged in' } : runTimed(cmd, args, options)
+  const hostCli = await preflightWorld(t); const hostCliFake = hostCli.base.command
+  // Every other command keeps the world's fake, so the case never reaches the host's Docker or CLIs.
+  hostCli.base.command = (cmd, args, options) => cmd === 'claude' ? { ok: false, status: 1, stdout: '', stderr: 'not logged in' } : hostCliFake(cmd, args, options)
   await failsWith(hostCli.base, 'judge and simulated-user authentication', /host claude/)
   const noCreds = await preflightWorld(t); noCreds.base.app = null; noCreds.base.env = { PATH: process.env.PATH, HOME: noCreds.home }
   await failsWith(noCreds.base, 'provisioning credentials', /AND_SCENE_E2E_APP_ID/)
