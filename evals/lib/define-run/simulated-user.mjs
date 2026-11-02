@@ -110,7 +110,12 @@ export function createSimulatedUser({ runDir, command = 'claude', inputs, env = 
     const until = deadlineMs(deadline)
     const knowledge = inputs ?? await loadSimulatedUserInputs()
     await mkdir(sessionDir, { recursive: true, mode: 0o700 })
-    if (session === undefined) { const text = await optionalText(sessionPath); session = text ? JSON.parse(text) : null }
+    if (session === undefined) {
+      // The session file only caches where to continue; an unreadable one means starting a new session.
+      const text = await optionalText(sessionPath)
+      try { session = text ? JSON.parse(text) : null } catch { session = null }
+      if (typeof session?.session_id !== 'string') session = null
+    }
     let calls = 0
     // Runs one stage (draft or check) with its own three-failure budget and capacity backoff.
     async function stage(name, argsFor) {

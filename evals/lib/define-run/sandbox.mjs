@@ -66,24 +66,31 @@ export class LocalSandbox {
   }
   wait() { return this.completion }
   async stop() {
+    let failure
     try {
       if (this.child && this.child.exitCode === null && this.child.signalCode === null) {
         try { process.kill(-this.child.pid, 'SIGTERM') } catch (error) { if (error.code !== 'ESRCH') throw error }
         const timer = setTimeout(() => { try { process.kill(-this.child.pid, 'SIGKILL') } catch {} }, 5000)
         try { await this.completion } finally { clearTimeout(timer) }
       }
-    } finally {
-      // Killing the Docker CLI's process group does not stop its container.
-      // Include orphaned containers even when the launcher has already exited.
-      const ids = await this.activeContainers()
-      if (ids.length) {
-        const result = this.command('docker', ['kill', ...ids], { env: this.env })
-        // --rm may remove a container between inspection and kill. Ignore only
-        // that completed cleanup; a still-running sandbox must be reported.
-        if ((await this.activeContainers()).length) {
-          requireCommand(result, 'Docker sandbox termination')
-          throw new Error('Docker sandbox termination left an active container')
+    } catch (error) { failure = error; throw error } finally {
+      try {
+        // Killing the Docker CLI's process group does not stop its container.
+        // Include orphaned containers even when the launcher has already exited.
+        const ids = await this.activeContainers()
+        if (ids.length) {
+          const result = this.command('docker', ['kill', ...ids], { env: this.env })
+          // --rm may remove a container between inspection and kill. Ignore only
+          // that completed cleanup; a still-running sandbox must be reported.
+          if ((await this.activeContainers()).length) {
+            requireCommand(result, 'Docker sandbox termination')
+            throw new Error('Docker sandbox termination left an active container')
+          }
         }
+      } catch (cleanupError) {
+        // Report both, so a failed container cleanup does not hide why stopping the launcher failed.
+        if (failure) throw new AggregateError([failure, cleanupError], 'Docker sandbox stop failed, and so did its container cleanup')
+        throw cleanupError
       }
     }
   }

@@ -95,6 +95,17 @@ test('later turns continue the run session with only the new agent turn; a diffe
   assert.equal(JSON.parse(calls[6].argv.at(-1)).conversation.length, 1)
 })
 
+test('an unreadable recorded session starts a new session from the full conversation', async t => {
+  const stub = await claudeStub(t, [stream(), stream()])
+  await mkdir(join(stub.runDir, '.runtime'), { recursive: true })
+  await writeFile(join(stub.runDir, '.runtime/simulated-user-session.json'), '{"session_id":')
+  const opening = exchange(1, 'What?', { text: 'Build it.', reply_type: 'answer' })
+  await createSimulatedUser(stub)({ conversation: [opening], request: { step: 'define.proposal', step_id: 'proposal', attempt: 1, turn: 2, agent_message: 'Second?' }, deadline: Date.now() + 10000 })
+  const [draft] = await stub.calls()
+  assert.equal(argAfter(draft, '--resume'), undefined)
+  assert.equal(JSON.parse(draft.argv.at(-1)).conversation.length, 1)
+})
+
 test('a failed session continuation retries in a new session from the full conversation', async t => {
   const stub = await claudeStub(t, [stream(), stream(), { stdout: '', stderr: 'No conversation found', code: 1 }, stream(), stream()])
   const opening = exchange(1, 'What?', { text: 'Build it.', reply_type: 'answer' })
