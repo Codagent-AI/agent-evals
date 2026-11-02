@@ -121,6 +121,15 @@ test('INT-005 the elapsed limit stops a define invocation as definition-workflow
   assert.match((await runEvaluation({ ...f.options, resume: true }, f.deps)).result.observed_error, /cannot be resumed/)
 })
 
+test('a sandbox cleanup failure when the elapsed limit stops an invocation keeps the limit non-resumable', async t => {
+  const f = await lifecycle(t, { limitMs: H })
+  f.harness.plans.define.push(hang(2 * H))
+  f.sandbox.stop = async function () { this.stops = (this.stops ?? 0) + 1; this.release?.({ code: null, signal: 'SIGTERM' }); throw new Error('container cleanup failed') }
+  const { result } = await runEvaluation(f.options, f.deps)
+  assert.equal(result.evaluation_status, 'definition-workflow-failed'); assert.equal(result.resumable, false); assert.equal(result.time_limit_ms, H)
+  assert.match(result.observed_error, /elapsed-time limit reached/); assert.match(result.observed_error, /container cleanup failed/)
+})
+
 test('INT-005 the elapsed limit during implement is implementation-workflow-failed, names the step and limit, and reports the definition score', async t => {
   const f = await lifecycle(t, { limitMs: H })
   f.harness.plans.implement.push(hang(2 * H))

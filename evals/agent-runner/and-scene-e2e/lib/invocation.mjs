@@ -20,6 +20,14 @@ export async function runInvocation({ sandbox, profiles, mode, until, readOutcom
     const stop = () => (stopping ??= sandbox.stop())
     const interrupt = () => { reason ??= 'interrupted'; abort.abort(); stop().catch(() => {}) }
     signal?.addEventListener('abort', interrupt, { once: true })
+    // The failure an invocation the controller ended (time limit, stall, harness failure, interrupt) reports.
+    const endedError = (step, response) => {
+      if (reason === 'time-limit') return new InvocationError(`elapsed-time limit reached (${limitMs}ms)`, { kind: 'time-limit', step, resumable: false, limit: limitMs })
+      if (reason === 'stall') return new InvocationError(`no activity for the ${stallWindowMs}ms stall window`, { kind: 'stall', step, window: stallWindowMs })
+      if (response?.status === 'evaluation-harness-failed') return Object.assign(new Error(response.reason), { resumable: false, step, workflow: false, harness: true })
+      if (reason === 'interrupted') return new InvocationError('controller interrupted', { kind: 'interrupted', step })
+      return null
+    }
     clock.start()
     let responder
     try {
@@ -39,7 +47,8 @@ export async function runInvocation({ sandbox, profiles, mode, until, readOutcom
       if (finished.type !== 'exit') {
         // Give the responder a moment to publish an abort for a pending request before stopping the sandbox.
         if (finished.type === 'deadline') await Promise.race([responder, sleepReal(300)])
-        await stop()
+        // A failed stop must not replace why the invocation was ended; finally adds the stop failure to it.
+        try { await stop() } catch (error) { throw endedError(state.last_active_step ?? null, finished.response) ?? error }
       }
       abort.abort()
       const response = await responder
@@ -48,10 +57,8 @@ export async function runInvocation({ sandbox, profiles, mode, until, readOutcom
       const { runnerState, outcome } = await readOutcome()
       const step = response.last_active_step ?? outcome.step ?? state.last_active_step ?? null
       if (step) { state.last_active_step = step; onStep(step) }
-      if (reason === 'time-limit') throw new InvocationError(`elapsed-time limit reached (${limitMs}ms)`, { kind: 'time-limit', step, resumable: false, limit: limitMs })
-      if (reason === 'stall') throw new InvocationError(`no activity for the ${stallWindowMs}ms stall window`, { kind: 'stall', step, window: stallWindowMs })
-      if (response.status === 'evaluation-harness-failed') throw Object.assign(new Error(response.reason), { resumable: false, step, workflow: false, harness: true })
-      if (reason === 'interrupted') throw new InvocationError('controller interrupted', { kind: 'interrupted', step })
+      const ended = endedError(step, response)
+      if (ended) throw ended
       if (outcome.kind === 'capped' && exit.code === 0) return { runnerState, outcome, exit, response }
       // A failed invocation may be a Claude usage limit with an explicit near reset: wait it out, outside active time and stall accounting.
       const audit = runnerState?.session_dir ? await readFile(join(runnerState.session_dir, 'audit.log'), 'utf8').catch(() => '') : ''
