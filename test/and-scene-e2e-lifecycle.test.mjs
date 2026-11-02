@@ -121,12 +121,16 @@ test('INT-005 the elapsed limit stops a define invocation as definition-workflow
   assert.match((await runEvaluation({ ...f.options, resume: true }, f.deps)).result.observed_error, /cannot be resumed/)
 })
 
-test('a sandbox cleanup failure when the elapsed limit stops an invocation keeps the limit non-resumable', async t => {
+test('a sandbox cleanup failure when the elapsed limit stops an invocation keeps the limit non-resumable and names the step', async t => {
   const f = await lifecycle(t, { limitMs: H })
-  f.harness.plans.define.push(hang(2 * H))
-  f.sandbox.stop = async function () { this.stops = (this.stops ?? 0) + 1; this.release?.({ code: null, signal: 'SIGTERM' }); throw new Error('container cleanup failed') }
+  f.harness.plans.implement.push(hang(2 * H))
+  const stopOnce = f.sandbox.stop
+  let failing = false
+  f.harness.plans.implement[0].before = () => { failing = true }
+  // Only the implement invocation's cleanup fails.
+  f.sandbox.stop = async function () { if (!failing) return stopOnce.call(this); this.release?.({ code: null, signal: 'SIGTERM' }); throw new Error('container cleanup failed') }
   const { result } = await runEvaluation(f.options, f.deps)
-  assert.equal(result.evaluation_status, 'definition-workflow-failed'); assert.equal(result.resumable, false); assert.equal(result.time_limit_ms, H)
+  assert.equal(result.evaluation_status, 'implementation-workflow-failed'); assert.equal(result.resumable, false); assert.equal(result.time_limit_ms, H); assert.equal(result.last_active_step, 'implement')
   assert.match(result.observed_error, /elapsed-time limit reached/); assert.match(result.observed_error, /container cleanup failed/)
 })
 

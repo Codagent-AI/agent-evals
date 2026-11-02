@@ -48,7 +48,13 @@ export async function runInvocation({ sandbox, profiles, mode, until, readOutcom
         // Give the responder a moment to publish an abort for a pending request before stopping the sandbox.
         if (finished.type === 'deadline') await Promise.race([responder, sleepReal(300)])
         // A failed stop must not replace why the invocation was ended; finally adds the stop failure to it.
-        try { await stop() } catch (error) { throw endedError(state.last_active_step ?? null, finished.response) ?? error }
+        try { await stop() } catch (error) {
+          // Name the same step a successful stop would, reading the Runner state when it is still readable.
+          let step = finished.response?.last_active_step ?? null
+          if (!step) try { step = (await readOutcome())?.outcome?.step ?? null } catch {}
+          step ??= state.last_active_step ?? null
+          throw endedError(step, finished.response) ?? error
+        }
       }
       abort.abort()
       const response = await responder
