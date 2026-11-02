@@ -753,8 +753,9 @@ console.log(JSON.stringify({ observations, trace, product_failure: productFailur
               : [...document.querySelectorAll('button, a[href], [role="button"], summary, input[type="button"]')]
                 .find((element) => (element.getAttribute('aria-label') || element.textContent || element.value || '').replace(/\\s+/g, ' ').trim().toLowerCase().includes(wanted.toLowerCase()));
             if (!node) return false;
-            // A person's click also focuses the control, which changes where later keys go.
-            node.focus?.({ preventScroll: true }); node.click(); return true;
+            // A person's click also focuses the control, which changes where later keys go, but draws no focus ring,
+            // so a forward-and-back replay of clicks still matches the state it saved.
+            node.focus?.({ preventScroll: true, focusVisible: false }); node.click(); return true;
           }))) { productFailure = 'replay click target was not found'; break replay; }`
           case 'press': return `await page.press(${JSON.stringify([...PRESS_MODIFIERS.filter((modifier) => action.modifiers?.includes(modifier)), action.key].join('+'))});`
           case 'keys': return `await page.type(${JSON.stringify(action.text)});`
