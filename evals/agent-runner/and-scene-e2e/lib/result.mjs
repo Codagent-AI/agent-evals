@@ -20,6 +20,15 @@ export function productTotal(product) {
   const human = product.human_review?.complete ? product.human_review.points : product.human_review?.skipped ? 0 : null
   return product.score.automated_score !== null && human !== null ? product.score.automated_score + human : null
 }
+// The per-sample panel records stay in the run directory (judges/score.json, audits/disclosure.json and
+// phases/product-result.json) and are not published. The result keeps each decided verdict once, with its votes,
+// rationale and citations; the disclosure audit appears once, at the top level.
+export function withoutPanelRecords(result) {
+  const definition = result.definition_score && (({ panel_records, disclosure_audit, ...kept }) => kept)(result.definition_score)
+  const disclosure = result.disclosure_audit && (({ panel, ...kept }) => kept)(result.disclosure_audit)
+  const product = result.product && (({ panel_records, browser, ...kept }) => ({ ...kept, ...(browser ? { browser: (({ records, judged, ...rest }) => rest)(browser) } : {}) }))(result.product)
+  return { ...result, definition_score: definition, product, disclosure_audit: disclosure }
+}
 // The definition and product scores are reported separately; no combined total exists anywhere in the result.
 export async function assembleResult({ runDir, outcome, checkpoint, rubric = null }) {
   const status = outcome.evaluation_status
@@ -32,7 +41,7 @@ export async function assembleResult({ runDir, outcome, checkpoint, rubric = nul
   const eval_owned = await usage(runDir)
   const product = scored && productResult ? { ...productResult, human_review: human ?? productResult.human_review ?? null } : null
   const delivered = product ? { automated_score: product.score.automated_score, human_points: human?.points ?? (product.human_review?.skipped ? 0 : null), score: productTotal(product), incomplete: product.score.automated_score === null } : null
-  return {
+  return withoutPanelRecords({
     schema_version: 1, mode: checkpoint?.kind ?? 'candidate', ...outcome,
     run_id: checkpoint?.run_id ?? outcome.run_id ?? null, series_identity: checkpoint?.series_identity ?? null, candidate: checkpoint?.candidate ?? null,
     ...(checkpoint?.original ? { original: checkpoint.original } : {}),
@@ -48,7 +57,7 @@ export async function assembleResult({ runDir, outcome, checkpoint, rubric = nul
     provenance: { evidence_manifest: manifest, define_evidence_manifest: defineManifest, collection, pinned_inputs: checkpoint?.series_identity ?? null },
     workflow_metrics: metrics, eval_owned_usage: eval_owned.records, eval_owned_usage_errors: eval_owned.errors,
     provisional_rubric: rubric?.provisional ?? product?.score?.provisional ?? null,
-  }
+  })
 }
 export async function writeResultArtifacts({ runDir, result }) {
   await writeJsonAtomic(join(runDir, 'result.json'), result)

@@ -150,12 +150,38 @@ test('INT-010 pending, failed and complete results all carry the required sectio
     for (const pattern of RISK) assert.match(result.residual_risk, pattern, scenario)
     const html = (await readFile(join(f.runDir, 'report.html'), 'utf8')).replaceAll('&#39;', "'")
     for (const pattern of RISK) assert.ok(pattern.test(html), `${scenario}: report lacks ${pattern}`)
-    for (const section of ['Evaluation status', 'Scores', 'Gates', 'Requirement trace', 'Audits', 'Residual risk', 'delivery_repository', 'series_identity', 'candidate', 'provenance', 'workflow_metrics', 'eval_owned_usage', 'prohibited_effects']) assert.ok(html.includes(section), `${scenario}: ${section}`)
+    for (const section of ['Evaluation status', 'Scores', 'Definition criteria', 'Product criteria', 'Gates', 'Requirement trace', 'Audits', 'Residual risk', 'Delivery repository', 'Series identity', 'Candidate', 'Provenance', 'Workflow metrics', 'Eval-owned usage', 'Prohibited effects']) assert.ok(html.includes(section), `${scenario}: ${section}`)
     assert.ok(!/<script|<link|\ssrc=|\shref=/.test(html), `${scenario}: the report must be self-contained`); assert.ok(!/combined_total|"total_score"/.test(JSON.stringify(result)))
     if (scenario === 'failed') { assert.equal(typeof result.owning_phase, 'string'); assert.equal(typeof result.observed_error, 'string'); assert.equal(result.resumable, true); assert.ok(/Resumable/.test(html)) }
     assert.equal(result.provisional_rubric, true); assert.ok(/provisional/.test(html))
     if (scenario !== 'failed') { assert.equal(result.eval_owned_usage.length, 0); assert.ok(result.workflow_metrics) }
   }
+})
+test('INT-010 the result leaves per-sample panel records in the run directory and the report summarizes rather than repeating the result', async t => {
+  const f = await lifecycle(t)
+  // A real product evaluation also records per-sample panel and browser-judge records.
+  const stub = f.deps.handlers['product-evaluation']
+  f.deps.handlers['product-evaluation'] = async (...args) => {
+    const [target] = await stub(...args); const value = JSON.parse(await readFile(target, 'utf8'))
+    await writeFile(target, JSON.stringify({ ...value, panel_records: { 'scene-kit': { samples: [] }, 'browser:demo': { samples: [] } }, judge_records: { 'browser:demo': [] }, browser: { verdicts: {}, records: { demo: { samples: [] } }, judged: { 'browser:demo': [] } } }))
+    return [target]
+  }
+  const { result } = await runEvaluation(f.options, f.deps)
+  assert.equal(result.evaluation_status, 'pending-human-review', result.observed_error)
+  const saved = JSON.parse(await readFile(join(f.runDir, 'result.json'), 'utf8'))
+  for (const value of [result, saved]) {
+    assert.ok(Number.isFinite(value.definition_score.total) && value.definition_score.coverage.length)
+    assert.ok(!('panel_records' in value.definition_score) && !('disclosure_audit' in value.definition_score), 'the definition score carries no panel records and no second disclosure audit')
+    assert.ok(value.disclosure_audit.status && Array.isArray(value.disclosure_audit.flags) && !('panel' in value.disclosure_audit))
+    assert.ok(value.product.score && value.product.judge_records && !('panel_records' in value.product), 'decided judge records stay; panel records do not')
+    assert.deepEqual(Object.keys(value.product.browser), ['verdicts'], 'browser verdicts stay; their panel records and the judged copy do not')
+  }
+  const kept = path => readFile(join(f.runDir, path), 'utf8').then(JSON.parse)
+  assert.ok((await kept('judges/score.json')).panel_records); assert.ok((await kept('audits/disclosure.json')).panel); assert.ok((await kept('phases/product-result.json')).panel_records)
+  const html = await readFile(join(f.runDir, 'report.html'), 'utf8')
+  const item = result.definition_score.coverage[0]
+  assert.ok(html.includes(`<th scope="row">${item.id}</th><td>${item.verdict}`), 'each definition criterion is listed with its verdict')
+  assert.ok(!html.includes('<pre>') && !html.includes('&quot;votes&quot;'), 'the report does not inline the result as JSON')
 })
 test('INT-010 identical verdicts with different asked parts give identical definition and product scores', async t => {
   const totals = []
