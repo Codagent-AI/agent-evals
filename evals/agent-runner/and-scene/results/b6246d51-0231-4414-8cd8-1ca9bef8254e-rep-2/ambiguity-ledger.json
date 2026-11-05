@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-11-05T17-06-15-470429238Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Attribution-warning coverage is reported incomplete, but no underlying assumption or context gap is documented.",
+      "evidence": [
+        "visual-helper-attribution-warning: fail — Attribution missing/default/size warning is incomplete.",
+        "attribution-default-link: pass — Default attribution label and target https://github.com/Codagent-AI/and-scene are present."
+      ],
+      "handling": "No implementation rationale or response to this failure is supplied.",
+      "consequence": "The warning check failed; the evidence does not identify which attribution condition was inadequately handled.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The result establishes incomplete warning coverage, but without requirements, source code, or agent discussion it cannot distinguish an assumption from an implementation defect or specification gap.",
+      "resolution": "unresolved",
+      "id": "765be6e14742d57d"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Modifier-key pass-through is reported failing without evidence explaining the implementation decision.",
+      "evidence": [
+        "input-modifier-keys-pass-through: fail"
+      ],
+      "handling": "No agent explanation, implementation detail, or remediation is supplied.",
+      "consequence": "The product failed the modifier-key pass-through check; affected key combinations and observed behavior are unspecified.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure alone does not establish whether requirements were ambiguous, repository context was missed, or implementation behavior was simply defective.",
+      "resolution": "unresolved",
+      "id": "1032761bd35d1cf1"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Ignoring swipes originating from controls is reported failing without evidence of an underlying assumption.",
+      "evidence": [
+        "input-swipe-from-control-ignored: fail"
+      ],
+      "handling": "No agent explanation, implementation detail, or remediation is supplied.",
+      "consequence": "The product failed the control-origin swipe check; the triggering control and resulting behavior are unspecified.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The supplied workflow entries contain no reported assumptions, and the product result cannot distinguish a specification gap, missing context, or implementation defect. No additional artifacts were a…",
+      "resolution": "unresolved",
+      "id": "b63643edebecc749"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
