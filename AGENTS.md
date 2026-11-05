@@ -93,6 +93,10 @@ consult `run.sh --help` before constructing an unfamiliar invocation.
   gpt-6.1-sol implementor; see the suite README, "Experiment baseline"). Compare new candidates against it with
   `experiments.mjs compare --eval-issue <owner/repo#N> <result-dir>...`, as
   described in the suite README section "Compare an experiment with the current baseline".
+- When a new baseline changes its role profiles or Validator mode, update
+  `[eval.defaults]` in Agent Factory's `config/codagent.toml` to match, then
+  deploy the factory. Until then, factory evals that omit a role still run the
+  old defaults.
 - Keep the and-scene draft PRs of the baseline repetitions open. Rescores need
   them.
 - To review from another machine, run `human-review.sh --no-publish --run-dir
