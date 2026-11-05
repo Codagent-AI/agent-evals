@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-11-05T19-31-47-900203549Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err",
+      "output/_resolve-findings_.out",
+      "output/_session-report_.err"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": "_resolve-findings_",
+        "agent_role": "implementation agent",
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "A remediation command encountered an execution restriction whose prior visibility is unknown.",
+      "evidence": [
+        "output/_resolve-findings_.err reports: &quot;rejected: rm -f style commands are not permitted. Use a safer approach&quot;.",
+        "The rejected command is truncated and combines checklist updates with other remediation work."
+      ],
+      "handling": "The command was rejected. The supplied excerpt does not show a successful retry.",
+      "consequence": "This remediation attempt could not execute; completion of its intended changes is unconfirmed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The rejection establishes a workflow interruption, but the artifacts do not establish whether the restriction was discoverable beforehand or whether the command matched it accurately. It does not est…",
+      "resolution": "unresolved",
+      "id": "36c396ba6959af52"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Verification failed the required IPv4-loopback address check.",
+      "evidence": [
+        "Product evidence: &quot;verification-ipv4-loopback: fail — Verification must use 127.0.0.1 and must not use localhost.&quot;",
+        "The visible inspection script obtains its address through preview() and navigates to `${p.base}/${slug}`; the preview implementation is not supplied."
+      ],
+      "handling": "The visible script delegates address selection to a helper. No explanation of that selection is shown.",
+      "consequence": "The address-specific verification check failed, although the whole-app build and every-produced-step rendering checks passed.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check establishes a verification mismatch. Without the helper implementation or original instructions, it cannot establish whether this arose from an assumption, missed repository context,…",
+      "resolution": "unresolved",
+      "id": "2806c0268cbac64d"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "_resolve-findings_",
+        "agent_role": "implementation agent",
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The visible inspection-helper source and the product-check results cannot be reconciled from the supplied artifacts.",
+      "evidence": [
+        "The command reading scripts/inspect-presentation.mjs returns source that launches a browser and saves screenshots for each step.",
+        "That source includes an &quot;overlap:&quot; warning, recognition of [data-presentation-allow-overlap], and a comparison of active and inactive navigation styles.",
+        "Product evidence marks quality-project-local-screenshot-helper, visual-helper-overlap-warning, visual-helper-active-state-warning, and visual-helper-attribution-warning as failed.",
+        "The source excerpt ends during the active-state comparison."
+      ],
+      "handling": "The agent inspected the helper while announcing that it would address findings. The subsequent implementation and verification results are not visible.",
+      "consequence": "The supplied product report records four helper-related failures, but the excerpt cannot establish which functionality was absent from the evaluated deliverable.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The artifacts could reflect different revisions, unmet helper-contract details, or check-detection limitations. They do not distinguish these explanations or establish a specification gap.",
+      "resolution": "unresolved",
+      "id": "4457be389f2963ba"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "Modifier-key pass-through failed despite the broader navigation checks passing.",
+      "evidence": [
+        "Product evidence: &quot;input-modifier-keys-pass-through: fail&quot;.",
+        "Product evidence marks demo-supported-navigation and demo-navigation-boundaries-and-control-keys as passed."
+      ],
+      "handling": "No modifier-key implementation, explanation, or correction is visible.",
+      "consequence": "Modifier-key pass-through remained a reported product failure.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure identifies a specific input-behavior problem, but does not reveal an underlying assumption or whether the relevant requirement or repository convention was available to the agent.",
+      "resolution": "unresolved",
+      "id": "3f1b85b1963c147c"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": null,
+        "agent_role": null,
+        "task": null
+      },
+      "source": "judge-discovered",
+      "concern": "The check requiring swipes originating from controls to be ignored failed.",
+      "evidence": [
+        "Product evidence: &quot;input-swipe-from-control-ignored: fail&quot;.",
+        "Product evidence marks demo-control-semantics and demo-mode-interaction-reliability as passed."
+      ],
+      "handling": "No relevant gesture-handler source, explanation, or correction is supplied.",
+      "consequence": "The control-origin swipe check remained a reported product failure.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The result establishes a narrow interaction failure. It does not establish whether the cause was an assumed gesture policy, missing context, or an implementation defect. The supplied agent messages c…",
+      "resolution": "unresolved",
+      "id": "075cbf45c89ac2de"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
