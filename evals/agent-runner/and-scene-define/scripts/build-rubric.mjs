@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { join } from 'node:path'
-import { buildRubric, checkRubric, rubricSettings } from '../lib/rubric.mjs'
-import { SUITE_ROOT, readJson, writeJson } from '../lib/files.mjs'
+import { buildRubric, checkRubric, rubricSettings } from '../../../lib/define-run/rubric.mjs'
+import { SUITE_ROOT, readJson, writeJson } from '../../../lib/define-run/files.mjs'
 const inventory = await readJson(join(SUITE_ROOT, 'hidden/inventory.json'))
 const path = join(SUITE_ROOT, 'rubric.json')
 const existing = await readJson(path).catch(error => { if (error.code !== 'ENOENT') throw error; return {} })

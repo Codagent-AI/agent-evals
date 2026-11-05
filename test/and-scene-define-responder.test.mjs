@@ -126,7 +126,8 @@ test('INT-001: stub claude replays a clean recorded whole-turn response across s
   const conversation = JSON.parse(await readFile(join(poc, 'conversation.json'), 'utf8'))
   const exchanges = conversation.exchanges
   const recorded = await readFile(join(poc, 'turns/02-simuser.stdout.jsonl'), 'utf8')
-  const stub = await claudeStub(t, [{ stdout: recorded }])
+  // The draft and the reply check both return the recorded reply.
+  const stub = await claudeStub(t, [{ stdout: recorded }, { stdout: recorded }])
   const controller = new AbortController()
   const done = runResponder({ ...dirs, signal: controller.signal, deadline: Date.now() + 10000, invoke: createSimulatedUser({ ...stub, runDir: dirs.runDir }) })
   t.after(() => { controller.abort(); return done.catch(() => {}) })
@@ -230,4 +231,22 @@ test('a complete final record missing its newline is retained and separated from
   const records = (await readFile(join(dirs.runDir, 'conversation.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse)
   assert.equal(records.length, 2)
   assert.equal(records[0].text, 'Opening')
+})
+
+for (const mode of ['deadline', 'publication-error']) test(`durable reply remains authoritative after ${mode} in the write-ahead window`, async t => {
+  const dirs = await setup(t); const inputs = await loadSimulatedUserInputs()
+  await publish(dirs.exchangeDir, 'pending', request(1))
+  const deadline = Date.now() + 10000
+  const originalNow = Date.now
+  t.after(() => { Date.now = originalNow })
+  const result = await runResponder({ ...dirs, inputs, deadline, onExchangeDurable: () => {
+    if (mode === 'deadline') Date.now = () => deadline + 1
+    else throw new Error('failure after durable append')
+  } })
+  Date.now = originalNow
+  assert.equal(result.status, mode === 'deadline' ? 'elapsed-time-limit' : 'evaluation-harness-failed')
+  const published = await reply(dirs.exchangeDir, 'pending')
+  assert.deepEqual(published, { schema_version: 1, text: inputs.startingPrompt })
+  const durable = JSON.parse((await readFile(join(dirs.runDir, 'conversation.jsonl'), 'utf8')).trim())
+  assert.equal(published.text, durable.text); assert.equal(published.action, undefined)
 })

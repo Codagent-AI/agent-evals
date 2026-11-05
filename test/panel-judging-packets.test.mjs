@@ -97,6 +97,17 @@ test('audit, check and decider packets are compact and quote evidence as numbere
   }
 })
 
+// Run 6 overflowed the testing-evidence audit: a judge cited acceptance
+// screenshots, whose bytes decoded as text filled the packet.
+test('a source audit names a cited binary file with an omitted marker instead of its bytes', async () => {
+  const png = Buffer.alloc(LIMIT, 0xff)
+  png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  const root = await tree({ a: 'mechanism', 'shot.png': png })
+  const audit = await buildSourceAuditRequest({ request: sourceRequest(root, ['x']), primaryResults: [vote('x', 'pass', { citations: ['a', 'shot.png'] })] })
+  const files = JSON.parse(section(audit.prompt, 'CLOSED-WORLD SOURCE PACKET'))
+  assert.deepEqual(files, [{ path: 'a', content: 'mechanism' }, { path: 'shot.png', content: `[omitted: shot.png, binary file of ${LIMIT} bytes, not readable as text]` }])
+})
+
 test('an evidence decider inlines each file as one string of numbered lines', async () => {
   const root = await makeTempDir(join(tmpdir(), 'panel-packets-view-'))
   await writeFile(join(root, 'packet.txt'), 'first line\nsecond line')

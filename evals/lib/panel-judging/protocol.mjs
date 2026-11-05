@@ -459,6 +459,15 @@ export async function citationTarget(sourceRoot, citation) {
   return canonicalTarget
 }
 
+// A cited file as packet text. A binary file such as a screenshot is not text:
+// decoded, its bytes fill the packet with noise and can overflow it, so a
+// marker naming the file stands in for its contents.
+export const binaryMarker = (path, size) => `[omitted: ${path}, binary file of ${size} bytes, not readable as text]`
+export async function readCitedText(target, path) {
+  const bytes = await readFile(target)
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes) } catch { return binaryMarker(path, bytes.length) }
+}
+
 // The cited files of each criterion's claim, read in full. A criterion's
 // claim carries the paths it cites now and those it cited in an earlier focused
 // cycle; `priorCitations` is either one list for every claim or a map by id.
@@ -478,7 +487,7 @@ async function sourceAuditClaims({ request, primaryResults, priorCitations = [] 
   for (const citation of paths) {
     const target = await citationTarget(sourceRoot, citation)
     try {
-      contents.set(citation, await readFile(target, 'utf8'))
+      contents.set(citation, await readCitedText(target, citation))
     } catch (error) {
       throw new JudgeOutputError(
         `${request.job} source citation cannot be read: ${citation}: ${error.message}`,
@@ -1393,7 +1402,7 @@ async function quoteSpans(results, inventory, job, maps = null) {
   const files = new Map()
   const fileOf = async (path) => {
     if (!files.has(path)) {
-      const text = await readFile(await citationTarget(inventory.root, path), 'utf8')
+      const text = await readCitedText(await citationTarget(inventory.root, path), path)
       files.set(path, { lines: text.split('\n'),
         layout: inventory.kind === 'evidence view' && path === PACKET_PATH ? packetLayout(text) : null })
     }
@@ -2049,7 +2058,7 @@ export async function runTiebreak({ request, criteria, invoke, attempts = JUDGE_
 // An inventory file read in full; one that cannot be read is missing material.
 async function readInventoryFile(inventory, path, job, criteria) {
   try {
-    return await readFile(await citationTarget(inventory.root, path), 'utf8')
+    return await readCitedText(await citationTarget(inventory.root, path), path)
   } catch (error) {
     throw new HarnessMaterialError(`${job} cannot read ${inventory.kind} file ${path} for ${criteria.join(', ')}: ${omissionReason(error)}`,
       'missing-material', criteria)
@@ -2065,7 +2074,7 @@ async function settleTiebreak({ request, criteria, invoke, attempts, validateVer
     const files = []
     let size = 0
     for (const path of inventory.paths) {
-      const file = numberedFile(path, await readFile(await citationTarget(inventory.root, path), 'utf8'))
+      const file = numberedFile(path, await readCitedText(await citationTarget(inventory.root, path), path))
       size += file.length
       if (size > MAX_DECIDER_PACKET_CHARS) {
         throw new PacketOverflowError(`${request.job} decider evidence cannot fit within the ${MAX_DECIDER_PACKET_CHARS}-character packet limit; pending criteria: ${criteria.join(', ')}`, criteria)

@@ -1,0 +1,8 @@
+{
+  "reference_ref": "171c7def1e12aca2a5f605a5e5feafb20d4e4d19",
+  "repository": "Codagent-AI/and-scene",
+  "excluded": [
+    "docs",
+    "openspec"
+  ]
+}

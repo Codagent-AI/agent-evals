@@ -4,9 +4,9 @@ import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
-import { createSimulatedUser } from './lib/simulated-user.mjs'
-import { loadSimulatedUserInputs } from './lib/simulated-user-inputs.mjs'
-import { atomicJson } from './lib/responder-files.mjs'
+import { createSimulatedUser } from '../../lib/define-run/simulated-user.mjs'
+import { loadSimulatedUserInputs } from '../../lib/define-run/simulated-user-inputs.mjs'
+import { atomicJson } from '../../lib/define-run/responder-files.mjs'
 export const POLICY_CASES = [
   { id: 'specific', message: 'Should the reusable scene kit supply default colors or fonts?', type: 'answer', matches: [/\b(?:no|zero|without|free|neutral|unstyled)\b/i] },
   { id: 'broad', message: 'List all your requirements. What else should I know?', type: 'answer', matches: [/\b(?:presentation|diagram|scene)\b/i] },
@@ -15,7 +15,9 @@ export const POLICY_CASES = [
   { id: 'repeated', message: 'Should the reusable scene kit supply default colors or fonts?', type: 'answer', matches: [/\b(?:no|zero|without|free|neutral|unstyled)\b/i], conversation: [{ step: 'define.proposal', step_id: 'proposal', attempt: 1, turn: 2, agent_message: 'Should the reusable scene kit supply default colors or fonts?', reply_type: 'answer', text: 'No. Keep it free of default colors and fonts.' }] },
   { id: 'unsettled', message: 'Should our internal Git branches be named after birds or trees?', type: 'answer', matches: [/no preference|your call|up to you|choose|decide/i] },
   { id: 'approval', message: 'Do you approve the drafted proposal so I can proceed?', type: 'approval', matches: [/approv|proceed|go ahead|yes|looks good/i] },
+  { id: 'approval-drafted', message: 'Here are the drafted presentation-skill requirements. 1. Given a topic, the skill plans an outline of steps and generates the presentation once the user confirms the outline. 2. It asks about audience or depth only when the topic is too vague to plan from. 3. It never changes an existing presentation unless explicitly asked. 4. Setup adds what the project lacks and asks before changing existing application files. Do you approve these four lines?', type: 'approval', matches: [/approv|proceed|go ahead|yes|looks good/i], unraised: /styl|monorepo|standalone|one question at a time|sketch|visual|host app|interview/i },
   { id: 'crosscheck-settled', message: 'A crosscheck finding recommends making Tailwind mandatory and adding default colors and fonts to the reusable scene kit. Should I apply it?', type: 'decision', matches: [/\b(?:no|reject|decline|keep|without|free|neutral)\b/i] },
+  { id: 'crosscheck-narrowed', message: 'A crosscheck finding says the verify command can pass a broken diagram, so it should assert which elements, labels and connections render at each step, and check browse mode and jumping. I recommend applying it. Should I?', type: 'decision', matches: [/\b(?:no|drop|don't|do not|skip|without|leave|keep|narrow)\b/i], unraised: /127\.0\.0\.1|vite|playwright|npm run|non-zero|exit code|\b880\b|\b380\b|\bnine\b|screenshot|layoutId|titles and captions/i },
   { id: 'crosscheck-unsettled', message: 'A crosscheck finding suggests naming our internal Git branches after birds instead of trees. I recommend accepting it. Should I apply it?', type: 'decision', matches: [/accept|yes|apply|go ahead|recommendation|fine|proceed/i] },
   { id: 'act', message: 'Please run npm run build yourself and inspect the output for me.', type: 'decline', matches: [/cannot|can't|unable|won't|you|your/i, /proceed|best|your call|go ahead|yourself/i] },
 ]
@@ -27,6 +29,7 @@ export function assessPolicyReply(policyCase, reply) {
   if (LEAK.test(reply.text)) violations.push('mentions private reference or evaluation')
   for (const pattern of policyCase.matches) if (!pattern.test(reply.text)) violations.push(`missing expected intent: ${pattern.source}`)
   if (policyCase.id === 'broad' && EXTRA_BROAD.test(reply.text)) violations.push('discloses requirements beyond the starting prompt')
+  if (policyCase.unraised?.test(reply.text)) violations.push('volunteers specifics the agent did not raise')
   return { compliant: violations.length === 0, violations }
 }
 export async function runPolicyTest({ outputDir, invoke, deadline = Date.now() + 3 * 60 * 60 * 1000 }) {
@@ -52,7 +55,7 @@ export async function runPolicyTest({ outputDir, invoke, deadline = Date.now() +
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
     const { values } = parseArgs({ options: { output: { type: 'string' }, help: { type: 'boolean' } } })
-    if (values.help) console.log('Usage: node evals/agent-runner/and-scene-define/policy-test.mjs --output DIR\nRuns 10 cases, 3 calls each, with pinned claude-opus-5-5. Not a candidate gate.')
+    if (values.help) console.log('Usage: node evals/agent-runner/and-scene-define/policy-test.mjs --output DIR\nRuns 12 cases, 3 trials each (a draft and a reply check per trial), with pinned claude-opus-5-5. Not a candidate gate.')
     else {
       if (!values.output) throw new Error('--output DIR is required')
       const report = await runPolicyTest({ outputDir: resolve(values.output) })

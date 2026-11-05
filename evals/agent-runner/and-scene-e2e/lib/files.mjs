@@ -1,0 +1,12 @@
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+export { sha256, writeJson, contained, filesUnder } from '../../../lib/define-run/files.mjs'
+// With an optional fallback returned when the file is absent.
+export { readJson } from '../../../lib/define-run/persistence.mjs'
+export const SUITE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
+export const DEFINE_ROOT = join(SUITE_ROOT, '../and-scene-define')
+export const SCENE_ROOT = join(SUITE_ROOT, '../and-scene')
+export const REPO_ROOT = join(SUITE_ROOT, '../../..')
+export const CHANGE_NAME = 'add-presentation-skill'
+export const ORGANIZATION = 'Codagent-AI'
+export const REPOSITORY_PREFIX = 'e2e-run-'

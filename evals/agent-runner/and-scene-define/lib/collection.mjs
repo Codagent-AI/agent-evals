@@ -1,8 +1,8 @@
 import { mkdir, readFile, rm, rename } from 'node:fs/promises'
 import { join, relative } from 'node:path'
-import { filesUnder, contained } from './files.mjs'
-import { repoGit, CHANGE_NAME } from './starting-repo.mjs'
-import { hashString, writeJsonAtomic, writeTextAtomic } from './persistence.mjs'
+import { filesUnder, contained } from '../../../lib/define-run/files.mjs'
+import { repoGit, CHANGE_NAME } from '../../../lib/define-run/starting-repo.mjs'
+import { hashString, writeJsonAtomic, writeTextAtomic } from '../../../lib/define-run/persistence.mjs'
 export async function collectArtifacts({ repoDir, runDir }) {
   const source = join(repoDir, 'openspec/changes', CHANGE_NAME)
   const staged = join(runDir, '.collected-staging')

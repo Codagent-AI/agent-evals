@@ -13,9 +13,9 @@ import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { SUITE_ROOT, readJson } from '../lib/files.mjs'
-import { loadJudgingInputs } from '../lib/judging.mjs'
-import { makeJobs, checkRetainedDefinitionRuling, JUDGE_PROFILE } from '../lib/judge-jobs.mjs'
+import { SUITE_ROOT, readJson } from '../../../lib/define-run/files.mjs'
+import { loadJudgingInputs } from '../../../lib/define-run/judging.mjs'
+import { makeJobs, checkRetainedDefinitionRuling, JUDGE_PROFILE } from '../../../lib/define-run/judge-jobs.mjs'
 import { createClaudeJudgeInvoker } from '../../../lib/panel-judging/claude-invoker.mjs'
 
 export const RETAINED_RULING_HELP = `Usage: node evals/agent-runner/and-scene-define/scripts/check-retained-ruling.mjs --record <run-dir>/judges/<job>.json --criterion <id> [options]

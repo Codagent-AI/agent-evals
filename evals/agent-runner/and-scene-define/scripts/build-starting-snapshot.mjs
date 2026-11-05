@@ -3,9 +3,9 @@ import { mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { SUITE_ROOT, sha256, writeJson } from '../lib/files.mjs'
-import { FIXTURE, withFixture, fixtureFile, cliOptions } from '../lib/fixture.mjs'
-import { CHANGE_NAME, initializeTree } from '../lib/starting-repo.mjs'
+import { SUITE_ROOT, sha256, writeJson } from '../../../lib/define-run/files.mjs'
+import { FIXTURE, withFixture, fixtureFile, cliOptions } from '../../../lib/define-run/fixture.mjs'
+import { CHANGE_NAME, initializeTree } from '../../../lib/define-run/starting-repo.mjs'
 
 export const ALLOWLIST = [
   '.gitignore', '.npmrc', '.validator/config.yml', 'AGENTS.md', 'CLAUDE.md', 'README.md',

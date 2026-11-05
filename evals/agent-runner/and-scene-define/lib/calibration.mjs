@@ -8,8 +8,8 @@
 // publication refuses (publicationEligibility requires mode 'candidate').
 import { readdir, readFile, lstat } from 'node:fs/promises'
 import { join, relative } from 'node:path'
-import { filesUnder, sha256 } from './files.mjs'
-import { rubricSettings } from './rubric.mjs'
+import { filesUnder, sha256 } from '../../../lib/define-run/files.mjs'
+import { rubricSettings } from '../../../lib/define-run/rubric.mjs'
 
 export const CALIBRATION_MODE = 'calibration'
 export const CALIBRATION_SCHEMA_VERSION = 1

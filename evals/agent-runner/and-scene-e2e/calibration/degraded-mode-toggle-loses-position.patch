@@ -1,0 +1,26 @@
+diff --git a/skills/presentation/templates/bootstrap/src/presentation-kit/usePresentationNav.ts b/skills/presentation/templates/bootstrap/src/presentation-kit/usePresentationNav.ts
+index af1130c..da9fb6b 100644
+--- a/skills/presentation/templates/bootstrap/src/presentation-kit/usePresentationNav.ts
++++ b/skills/presentation/templates/bootstrap/src/presentation-kit/usePresentationNav.ts
+@@ -23,7 +23,7 @@ export function usePresentationNav(stepCount: number, initialMode: Mode = 'brows
+   const next = useCallback(() => setStep((s) => Math.min(last, s + 1)), [last])
+   const prev = useCallback(() => setStep((s) => Math.max(0, s - 1)), [])
+   const toggleMode = useCallback(
+-    () => setMode((m) => (m === 'browse' ? 'present' : 'browse')),
++    () => { setStep(0); setMode((m) => (m === 'browse' ? 'present' : 'browse')) },
+     [],
+   )
+ 
+diff --git a/src/presentation-kit/usePresentationNav.ts b/src/presentation-kit/usePresentationNav.ts
+index af1130c..da9fb6b 100644
+--- a/src/presentation-kit/usePresentationNav.ts
++++ b/src/presentation-kit/usePresentationNav.ts
+@@ -23,7 +23,7 @@ export function usePresentationNav(stepCount: number, initialMode: Mode = 'brows
+   const next = useCallback(() => setStep((s) => Math.min(last, s + 1)), [last])
+   const prev = useCallback(() => setStep((s) => Math.max(0, s - 1)), [])
+   const toggleMode = useCallback(
+-    () => setMode((m) => (m === 'browse' ? 'present' : 'browse')),
++    () => { setStep(0); setMode((m) => (m === 'browse' ? 'present' : 'browse')) },
+     [],
+   )
+ 

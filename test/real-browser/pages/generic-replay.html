@@ -1,0 +1,27 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>generic replay page</title>
+<style>body{font:16px system-ui;margin:2rem} #note{margin-top:1rem;padding:.5rem;background:#eee} button{margin:.25rem}</style>
+<h1 id="title"></h1>
+<p id="caption"></p>
+<div><button id="prev" type="button">Previous</button><button id="next" type="button">Next</button><button id="toggle" type="button">Toggle note</button></div>
+<div id="note">A note that the Toggle button hides.</div>
+<script>
+const variant = window.VARIANT
+const count = variant === 'generic-five-step' ? 5 : 7
+let index = 0
+const title = document.getElementById('title'); const caption = document.getElementById('caption'); const next = document.getElementById('next'); const prev = document.getElementById('prev')
+function render() {
+  title.textContent = `Step ${index + 1} of ${count}`
+  caption.textContent = `Caption for step ${index + 1}`
+  document.body.dataset.pos = String(index)
+  next.disabled = index === count - 1; prev.disabled = index === 0
+  document.body.style.background = `hsl(${index * 40}, 60%, 92%)`
+}
+next.addEventListener('click', () => { if (index < count - 1) { index++; render() } })
+prev.addEventListener('click', () => { if (index > 0) { index--; render() } })
+document.getElementById('toggle').addEventListener('click', () => { const note = document.getElementById('note'); note.style.display = note.style.display === 'none' ? '' : 'none' })
+// Only the keyboard variants listen for keys; the Next-button deck ignores them.
+if (variant !== 'generic-next-button') window.addEventListener('keydown', event => { if (event.key === 'ArrowRight') next.click(); if (event.key === 'ArrowLeft') prev.click() })
+render()
+</script>
