@@ -39,7 +39,7 @@ function metricsCell(summary) {
 }
 function workflowMetrics(metrics) {
   if (!metrics) return [row('State', 'not recorded')]
-  const rows = [row('State', escape(`${metrics.state}${metrics.reason ? ` (${metrics.reason})` : ''}`)), row('Complete', escape(metrics.complete ? 'yes' : 'no')), row('History complete', escape(metrics.history_complete ? 'yes' : 'no')), row('Active duration', escape(minutes(metrics.active_duration_ms)))]
+  const rows = [row('State', escape(`${metrics.state ?? 'unknown'}${metrics.reason ? ` (${metrics.reason})` : ''}`)), row('Complete', escape(metrics.complete ? 'yes' : 'no')), row('History complete', escape(metrics.history_complete ? 'yes' : 'no')), row('Active duration', escape(minutes(metrics.active_duration_ms)))]
   for (const [step, summary] of Object.entries(metrics.by_step ?? {})) rows.push(row(`Step ${step}`, metricsCell(summary)))
   for (const [role, summary] of Object.entries(metrics.by_role ?? {})) rows.push(row(`Role ${role}`, metricsCell(summary)))
   rows.push(row('Total', metricsCell(metrics.total)))
@@ -61,7 +61,7 @@ function evalUsage(records, errors) {
     if (Number.isFinite(cost)) { group.cost += cost; group.costed++ }
     groups.set(key, group)
   }
-  const rows = [...groups].map(([key, group]) => row(key, escape(`${group.calls} calls; ${tokens(group.tokens)} tokens${group.uncounted ? ` (${group.uncounted} calls without token counts)` : ''}${group.costed ? `; cost ${usd(group.cost)}` : ''}`)))
+  const rows = [...groups].map(([key, group]) => row(key, escape(`${group.calls} calls; ${tokens(group.tokens)} tokens${group.uncounted ? ` (${group.uncounted} calls without token counts)` : ''}${group.costed ? `; cost ${group.costed < group.calls ? `at least ${usd(group.cost)} (${group.calls - group.costed} calls without a cost)` : usd(group.cost)}` : ''}`)))
   if (errors?.length) rows.push(row('Unreadable usage lines', escape(errors.length)))
   return rows
 }
