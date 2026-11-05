@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "run_id": "implement-change-2026-11-05T14-17-53-748906651Z",
+  "coverage": {
+    "state": "incomplete",
+    "findings_observed": true,
+    "artifact_state": "available",
+    "artifacts_examined": [
+      "output/_check-findings-not-blocked_.err",
+      "output/_check-findings-not-blocked_.out",
+      "output/_resolve-findings_.err",
+      "output/_resolve-findings_.out",
+      "output/_session-report_.err",
+      "output/_session-report_.out",
+      "output/_verify-change__sub_verify-change__verify-acceptance-handoff_.err",
+      "output/_verify-change__sub_verify-change__verify-acceptance-handoff_.out",
+      "output/_verify-change__sub_verify-change__verify-assumptions-handoff_.err",
+      "output/_verify-change__sub_verify-change__verify-assumptions-handoff_.out"
+    ],
+    "reasons": [
+      "ambiguity artifacts exceed 200000 total bytes",
+      "ambiguity artifact scan stopped after 1000 entries"
+    ]
+  },
+  "findings": [
+    {
+      "origin": {
+        "run_id": null,
+        "step": "Product verification",
+        "agent_role": null,
+        "task": "Presentation input handling"
+      },
+      "source": "judge-discovered",
+      "concern": "Modifier-key pass-through failed verification without a visible explanation of the underlying input-handling decision.",
+      "evidence": [
+        "Product evidence records: &quot;input-modifier-keys-pass-through: fail&quot;.",
+        "The supplied session-report excerpt ends before any reported assumptions or context-gap findings; the referenced implementor-decisions.md contents are not available."
+      ],
+      "handling": "No handling or subsequent correction of this failure is visible in the supplied artifacts.",
+      "consequence": "The delivered product failed the modifier-key pass-through check. Specific affected shortcuts and runtime symptoms are not shown.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failed check establishes a product issue, but the available evidence cannot distinguish an implementation defect from an assumption arising from missing requirements or repository context. The tr…",
+      "resolution": "unresolved",
+      "id": "2277818c5edf08e3"
+    },
+    {
+      "origin": {
+        "run_id": null,
+        "step": "Product verification",
+        "agent_role": null,
+        "task": "Presentation gesture handling"
+      },
+      "source": "judge-discovered",
+      "concern": "Ignoring swipes originating on controls failed verification without a visible explanation of the gesture-boundary decision.",
+      "evidence": [
+        "Product evidence records: &quot;input-swipe-from-control-ignored: fail&quot;.",
+        "The supplied resolve-findings excerpt shows an intention to address six findings, but does not expose their full contents or establish a correction for this failure."
+      ],
+      "handling": "The available implementation excerpt does not show gesture filtering or a resolution of this failed check.",
+      "consequence": "The delivered product failed the control-origin swipe check. The exact controls and resulting interaction are not documented.",
+      "classification": "unresolved-insufficient-evidence",
+      "rationale": "The failure shows a material input-behavior mismatch, but no relevant requirement, implementation rationale, or detailed test trace is supplied. Its cause and prior reporting status therefore cannot …",
+      "resolution": "unresolved",
+      "id": "b2ba8f9b35967aef"
+    }
+  ],
+  "fixture_improvement_proposals": [],
+  "fixture_mutated": false,
+  "scoring_effect": "none",
+  "points": 0,
+  "gate": false,
+  "affects_product_verdict": false
+}
