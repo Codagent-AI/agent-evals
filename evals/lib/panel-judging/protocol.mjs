@@ -64,8 +64,8 @@ const MAX_SOURCE_PATH_CHARS = 500
 export const MAX_AUDIT_PACKET_CHARS = 300_000
 // A decider re-reads a job's whole evidence packet, line-numbered, beside its
 // material. An and-scene evidence packet that grows to hold whole primary
-// records reaches 400,000 characters, so the decider's packet has room for it.
-export const MAX_DECIDER_PACKET_CHARS = 600_000
+// records reaches 540,000 characters, so the decider's packet has room for it.
+export const MAX_DECIDER_PACKET_CHARS = 800_000
 
 export class JudgeOutputError extends Error {
   constructor(message, { missing = null, partial = null } = {}) {

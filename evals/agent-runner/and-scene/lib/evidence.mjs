@@ -1506,7 +1506,7 @@ export const JUDGE_PACKET_MAX_CHARS = 220_000
 // The verified index and the primary records are never cut, so when they and
 // the omission markers outgrow the budget the packet grows to this hard limit,
 // and supporting artifacts fill the room left beside the primary records.
-export const JUDGE_PACKET_PRIMARY_MAX_CHARS = 400_000
+export const JUDGE_PACKET_PRIMARY_MAX_CHARS = 540_000
 const JUDGE_PACKET_ARTIFACT_MAX_CHARS = 50_000
 // An approved requirement document the assumption judge receives as reference
 // must arrive whole; a longer one fails the job rather than being cut.

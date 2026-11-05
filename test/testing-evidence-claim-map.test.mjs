@@ -91,7 +91,7 @@ const deepRecord = () => [
   { role: 'findings-history', name: 'findings-history.md', text: '# Findings\nF1 resolved.\n' },
   { role: 'acceptance-flow-record', name: 'acceptance-flow.md', text: '# Flow record\nStep 1: opened the deck; saw step 1.\n' },
   { role: 'session-audit', name: 'session-report.md', text: `# Session report\n${filler('session', 70_000)}\nSESSION TAIL\n` },
-  ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ role: 'referenced-material', name: `ref-${n}.md`, text: `# Ref ${n}\n${filler(`ref${n}`, 45_000)}\n` })),
+  ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((n) => ({ role: 'referenced-material', name: `ref-${n}.md`, text: `# Ref ${n}\n${filler(`ref${n}`, 45_000)}\n` })),
 ]
 
 const lineOf = (packet, needle) => packet.split('\n').findIndex((line) => line.includes(needle)) + 1
@@ -118,11 +118,11 @@ test('the testing packet holds the four claim-bearing records first and in full,
   const cutLine = lineOf(packet.slice(packet.indexOf('# BEGIN VERIFIED INDEX')), truncated)
   assert.ok(cutLine > 0)
   // The budget runs out among the references: one is cut and one dropped.
-  const omitted = `[omitted: ${idOf('ref-8.md')} (referenced-material), `
+  const omitted = `[omitted: ${idOf('ref-11.md')} (referenced-material), `
   assert.ok(packet.includes(`${omitted}`))
   const cuts = packetCuts(packet, { atStart: true })
   assert.deepEqual(cuts.map(({ id, kind }) => [kind, id]), [
-    ['truncated', idOf('session-report.md')], ['truncated', idOf('ref-7.md')], ['omitted', idOf('ref-8.md')]])
+    ['truncated', idOf('session-report.md')], ['truncated', idOf('ref-10.md')], ['omitted', idOf('ref-11.md')]])
   for (const { marker } of cuts) assert.equal(packet.split(marker).length, 4, `${marker} is in the index, layout and in place`)
   // The layout labels lines with the artifact they lie in and its marker.
   const layout = packetLayout(packet)
@@ -599,7 +599,7 @@ test('a decider reporting missing material fails the criterion before its audits
   const { views, idOf } = await evidenceViews({ artifacts: deepRecord() })
   const { proof, honest } = fixtureOneRulings(views['testing-evidence'].packet)
   const outcome = await judgeTestingOnly(views, { seat: toDecider, stages: {
-    tiebreak: () => out(proof, { ...honest, missing_material: `[omitted: ${idOf('ref-8.md')} (referenced-material)]` }) } })
+    tiebreak: () => out(proof, { ...honest, missing_material: `[omitted: ${idOf('ref-11.md')} (referenced-material)]` }) } })
   assert.equal(outcome.failures['testing-evidence'].code, 'missing-material')
   assert.deepEqual(outcome.failures['testing-evidence'].criteria, [HONEST])
   assert.equal(ofStage(outcome.seen, 'tiebreak-span-audit').length, 0)
